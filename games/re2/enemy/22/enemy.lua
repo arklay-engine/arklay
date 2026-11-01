@@ -1,0 +1,1570 @@
+-- The licker on the floor, `Em_22` (entity id 0x22).
+--
+-- The state machine, its tables and its effects. The engine keeps the licker's
+-- animation, collision and tongue blend, and runs them after `update`. The walls
+-- and the ceiling (`Routine_1` 1, 7, 0xB, 0xD, 0x10-0x12, 0x15-0x17, `Em22_Damage`
+-- 2 and 5, `Em22_Die` 2-4) need the body's `Super_matrix`, which isn't ported.
+--
+-- Everything that lasts past a tick lives on the entity: `e:var` and `e:set_var`
+-- are the fields of the original's work that the engine doesn't read.
+
+local TARGET <const> = 0 -- `+0x228`: it has someone to go after.
+local AWARE <const> = 1 -- `+0x219`: 1 has heard, 2 knows where.
+local WAIT <const> = 2 -- `+0x22e`: the wait before the next attack.
+local WEAPON <const> = 3 -- `+0x22f`: the weapon of the last hit.
+local TURN <const> = 4 -- `+0x230`: which way it's turning along a wall.
+local GUN_AREA <const> = 5 -- `+0x232`: where a shot can aim.
+local COUNT <const> = 6 -- `+0x233`.
+local AFTER <const> = 7 -- `+0x23c`: what runs after each tick's move.
+local SLOWING <const> = 8 -- `+0x241`: the jump's slowing.
+local GRAVITY <const> = 9 -- `+0x242`.
+local LEFT_Y <const> = 10 -- `+0x244`: the height it left from.
+local TIMER0 <const> = 11 -- `Timer0`.
+local BITE_BEHIND <const> = 12 -- `FUN_00466100`'s turn: the side the bite came from.
+
+local AFTER_BITE <const> = 1 -- `FUN_00466100`: the jump's bite bleeds.
+local AFTER_FLAMES <const> = 2 -- `FUN_00467370`: a burning weapon's flames.
+
+-- `Be_flg`: no pushes, none given, no `Sca_ck_em`.
+local BE_NO_OBA <const> = 2
+local BE_NO_PUSH <const> = 4
+local BE_NO_SCA <const> = 8
+local BE_SUPER <const> = 0x2000000
+
+-- `+0x22c`: the shot that hurt it wasn't a surprise, it stands on its hind legs,
+-- it fell off a wall, and it's in the air.
+local FLAG_KNOWS <const> = 1
+local FLAG_UP <const> = 2
+local FLAG_FALLING <const> = 0x40
+local FLAG_JUMPING <const> = 0x200
+-- What `Em22_Damage` clears when the hit does more than hurt.
+local FLAGS_KEPT <const> = 0xFD0F
+
+-- `Em22_Life` and its easy table.
+local LIFE <const> = {
+    [0] = 87, 101, 81, 75, 110, 115, 99, 101, 101, 99, 81, 101, 115, 110, 87, 101,
+}
+local LIFE_EASY <const> = {
+    [0] = 65, 65, 70, 70, 75, 69, 62, 90, 80, 75, 82, 97, 89, 101, 90, 100,
+}
+
+-- `WORD_00527c46`, by `Routine_3`: how far the tongue reaches as it goes out.
+local TONGUE_REACH <const> = {
+    [0] = 3500, 4600, 4500, 4200, 3500, 3000, 2500, 2000,
+}
+
+-- `DAT_00527c90`, by weapon: how many hits of blood, which points they pick from
+-- from the front and from behind, the mask, and the effect's kind, row and size.
+local BLOOD <const> = {
+    [0] = { 0, 0, 0, 0, 0, 6, 0x2000 },
+    { 0, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 5, 0, 0, 24, 0, 6, 0x2000 },
+    { 8, 0, 0, 24, 0, 6, 0x2000 },
+    { 4, 0, 12, 12, 5, 4, 0x1400 },
+    { 6, 0, 0, 24, 5, 4, 0x1800 },
+    { 4, 0, 0, 24, 4, 9, 0x2800 },
+    { 0, 0, 12, 12, 0, 6, 0x2000 },
+    { 1, 0, 12, 12, 0, 6, 0x2000 },
+    { 0, 0, 12, 12, 6, 0, 0x1000 },
+    { 1, 0, 0, 24, 0, 6, 0x2000 },
+    { 6, 0, 0, 24, 5, 4, 0x1800 },
+    { 1, 0, 8, 12, 5, 6, 0x2000 },
+    { 1, 0, 8, 12, 0, 6, 0x2000 },
+    { 1, 0, 8, 12, 0, 6, 0x2000 },
+}
+
+-- `pVec`: the points on the body that bleed, and their parts.
+local BLOOD_POINTS <const> = {
+    [0] = { -300, 0, 0, 7 },
+    { 0, -200, 0, 4 },
+    { 0, 200, 200, 6 },
+    { 0, -300, 0, 8 },
+    { -300, 0, 0, 10 },
+    { 300, 100, 0, 11 },
+    { 0, 200, 200, 6 },
+    { 0, -300, 0, 13 },
+    { 300, -100, 0, 5 },
+    { -200, -600, 0, 6 },
+    { 300, 400, 0, 12 },
+    { 0, 0, -100, 13 },
+    { 0, 0, -400, 0 },
+    { -400, 0, -300, 0 },
+    { -300, 0, 200, 2 },
+    { -300, 0, -200, 2 },
+    { -500, -300, 200, 2 },
+    { -200, -600, -400, 2 },
+    { -200, 600, -200, 14 },
+    { 0, 600, 200, 18 },
+    { 0, 0, 0, 16 },
+    { 0, 0, 0, 20 },
+    { -400, 200, 0, 18 },
+    { -100, 400, -200, 18 },
+}
+
+-- `FUN_00466100`'s points on the player, `y` and `z`.
+local BITE_POINTS <const> = {
+    [0] = { -400, 400 }, { -300, 250 }, { -200, 100 }, { -100, -50 },
+}
+
+-- `DAT_00527ba8`: the entries of its sixteen that catch, one a tick.
+local FLAMES <const> = {
+    [4] = { 0, 100, 100, 6 },
+    [6] = { -100, 0, -100, 15 },
+    [8] = { -200, 0, 200, 1 },
+    [11] = { -300, -600, -200, 2 },
+    [15] = { 0, 0, 0, 20 },
+}
+
+local mv
+
+-- `Branch`.
+local function branch(value, first, second, third)
+    if value < first then
+        return 0
+    elseif value < second then
+        return 1
+    elseif value < third then
+        return 2
+    end
+    return 3
+end
+
+-- The original's division, which goes toward zero.
+local function quot(value, by)
+    local q = value // by
+    if q < 0 and q * by ~= value then
+        q = q + 1
+    end
+    return q
+end
+
+local function has_flag(e, flag)
+    return e:flags() & flag ~= 0
+end
+
+local function raise_flag(e, flag)
+    e:set_flags(e:flags() | flag)
+end
+
+local function lower_flag(e, flag)
+    e:set_flags(e:flags() & ~flag)
+end
+
+local function r2(e)
+    return e:routine(2)
+end
+
+local function set_r2(e, value)
+    e:set_routine(2, value)
+end
+
+local function r3(e)
+    return e:routine(3)
+end
+
+local function set_r3(e, value)
+    e:set_routine(3, value)
+end
+
+local function next_r3(e)
+    local value = (e:routine(3) + 1) & 0xFF
+    e:set_routine(3, value)
+    return value
+end
+
+-- `Routine_3` moves on when the animation ends.
+local function step_r3(e, ended)
+    if ended then
+        e:set_routine(3, e:routine(3) + 1)
+    end
+end
+
+-- `Mot_play2`.
+local function mot_play(e, clip, hokan, reverse)
+    if e:move_no() ~= clip then
+        e:clip(clip, 0, hokan)
+    end
+    return e:joint(0x1000 // (hokan + 1), reverse)
+end
+
+-- `Mot_play2_sp`.
+local function mot_play_sp(e, clip, hokan)
+    if e:move_no() ~= clip then
+        e:clip(clip, 0, hokan)
+    end
+    e:spd()
+    if e:joint(0x1000 // (hokan + 1)) then
+        return true
+    end
+    e:add_speed_xyz()
+    return false
+end
+
+-- `Em22_Atd_set_1`.
+local function atd_set(e)
+    e:set_atd(0, 0, 0x250, 600, 1000)
+    e:set_atd(1, -0x180, 0x180, 0x180, 0x180)
+end
+
+-- `Gunarea_chg`.
+local function gunarea_chg(e)
+    local area = e:var(GUN_AREA)
+    local be_flg = e:be_flg()
+    if area == 0 then
+        be_flg = (be_flg & 0xF3FFFFFF) | 0x10000000
+    elseif area == 1 then
+        be_flg = (be_flg & 0xFBFFFFFF) | 0x18000000
+    elseif area == 2 then
+        be_flg = (be_flg & 0xEBFFFFFF) | 0x8000000
+    elseif area == 3 then
+        be_flg = (be_flg & 0xEFFFFFFF) | 0xC000000
+    elseif area == 4 then
+        local weapon = e:weapon()
+        if weapon == 7 or weapon == 8 then
+            be_flg = (be_flg & 0xEFFFFFFF) | 0xC000000
+        else
+            be_flg = (be_flg & 0xE7FFFFFF) | 0x4000000
+        end
+    elseif area == 5 then
+        be_flg = be_flg & 0xE3FFFFFF
+    end
+    e:set_be_flg(be_flg)
+end
+
+-- `FUN_00466100`.
+local function bite_blood(e)
+    local count = e:var(COUNT)
+    if count & 1 == 0 then
+        local point = BITE_POINTS[count >> 1]
+        local turn = e:var(BITE_BEHIND) ~= 0 and 0x800 or 0
+        local x, z = e:rotate(turn, 0x15E, point[2])
+        local at_x, at_y, at_z = e:player_root_point(x, point[1], z)
+        if at_x then
+            e:call_effect(0, 2, 0x2400, 0, at_x, at_y, at_z)
+        end
+    end
+    e:set_var(COUNT, count + 1)
+    if count + 1 == 7 then
+        e:set_var(AFTER, 0)
+    end
+end
+
+-- `FUN_00467370`: the first tick only sets it going.
+local function flames(e)
+    local count = e:var(COUNT)
+    if count ~= 0 then
+        local flame = FLAMES[(count - 1) % 16]
+        if flame then
+            e:effect(6, 0, e:rnd() * 2 + 0x1000, 0, flame[4], flame[1], flame[2], flame[3])
+        end
+        if count == 0x10 then
+            e:set_var(AFTER, 0)
+            e:set_var(COUNT, 0x11)
+            return
+        end
+    end
+    e:set_var(COUNT, count + 1)
+end
+
+-- `FUN_004671f0`: the blood of a hit.
+local function hit_blood(e, behind)
+    local weapon = e:var(WEAPON)
+    local blood = BLOOD[weapon] or BLOOD[0]
+    local from = behind and blood[3] or blood[2]
+    for _ = 1, blood[1] do
+        local pick = e:rnd() & ((blood[4] - 1) & 0xFF)
+        local point = BLOOD_POINTS[pick + from]
+        e:effect(blood[5], blood[6], blood[7], 0, point[4], point[1], point[2], point[3])
+    end
+    e:set_var(COUNT, 0)
+    if weapon == 0xE then
+        e:set_var(AFTER, AFTER_FLAMES)
+    end
+end
+
+-- `FUN_00463490`: whether it notices the player, who is the only target.
+local function spots(e)
+    if e:player_life() < 0 then
+        return false
+    end
+    if e:routine(0) == 7 then
+        e:set_var(AWARE, 0)
+        return false
+    end
+    if has_flag(e, FLAG_KNOWS) then
+        return true
+    end
+    if e:touching() then
+        e:set_var(AWARE, 1)
+        return true
+    end
+    local noise = e:noise() & 0xFF
+    local heard
+    if branch(e:distance(), 3000, 9000, 0x238C) == 0 then
+        heard = noise & 0x17
+    else
+        heard = noise & 5
+    end
+    if heard == 0 then
+        return false
+    end
+    e:set_var(AWARE, 1)
+    return true
+end
+
+-- `FUN_004641f0`.
+local function spots_close(e)
+    if e:player_life() < 0 then
+        return false
+    end
+    if e:routine(0) == 7 then
+        e:set_var(AWARE, 0)
+        return false
+    end
+    if has_flag(e, FLAG_KNOWS) then
+        e:set_var(AWARE, 1)
+        return true
+    end
+    if e:touching() then
+        e:set_var(AWARE, 2)
+        return true
+    end
+    local noise = e:noise() & 0xFF
+    local near = branch(e:distance(), 3000, 5000, 7000)
+    local noticed
+    if near == 0 then
+        noticed = e:pl_routine(1) ~= 0
+    elseif near == 1 then
+        noticed = noise & 0x17 ~= 0
+    else
+        noticed = noise & 5 ~= 0
+    end
+    if noticed then
+        e:set_var(AWARE, 2)
+    end
+    return noticed
+end
+
+local function set_target(e, target)
+    e:set_var(TARGET, target and 1 or 0)
+end
+
+-- `FUN_00463540`: turn away from what's ahead.
+local function turn_at_wall(e, step)
+    local here_x, here_y, here_z = e:pos()
+    local angle = e:angle()
+    local ahead_x, ahead_z = e:rotate(angle, 0x708, 0)
+    local x, z, width, depth = e:first_wall(here_x + ahead_x, here_y, here_z + ahead_z, 400)
+    if not x then
+        e:set_var(TURN, 0)
+        return
+    end
+    if e:var(TURN) == 0 then
+        local along = quot((here_x - x) * depth, width > 1 and width or 1)
+        local over = here_z - z
+        local beyond = over - depth
+        local side
+        if over <= along then
+            if -beyond == along or -along < beyond then
+                side = 0
+            else
+                side = 1
+            end
+        elseif -along < beyond then
+            side = 3
+        else
+            side = 2
+        end
+        local off = (angle & 0xFFF) - (((side - 2) * 0x400) & 0xFFF)
+        if off > 0x800 or off < -0x800 then
+            off = off - 0x1000
+        end
+        e:set_var(TURN, off == 0 and -step or step)
+    end
+    e:set_angle(angle + e:var(TURN))
+end
+
+local function idle(e)
+    e:set_var(GUN_AREA, 4)
+    local target = spots(e)
+    set_target(e, target)
+    if target then
+        local aware = e:var(AWARE)
+        if aware == 1 then
+            e:go(0xE)
+        elseif aware == 2 then
+            e:go(0xF)
+        end
+        return
+    end
+    local state = r2(e)
+    if state == 0 or state == 3 then
+        local count = r3(e) + 1
+        raise_flag(e, FLAG_UP)
+        e:set_var(TURN, 0)
+        e:clip(3, 0, 0x2F)
+        set_r3(e, count)
+        if count < 2 then
+            set_r2(e, 1)
+            state = 1
+        else
+            set_r2(e, 4)
+            set_r3(e, 0)
+            e:clip(1, 0, 0x1F)
+            state = 4
+        end
+    end
+    if state == 4 then
+        turn_at_wall(e, 0xC)
+        e:spd()
+        if e:joint(0x80) and e:rnd() & 3 == 0 then
+            set_r2(e, 0)
+            set_r3(e, 0)
+        end
+        e:add_speed_xyz()
+    elseif state == 1 then
+        e:spd()
+        if e:joint(0x55) then
+            set_r2(e, 3)
+        end
+        e:add_speed_xz()
+    elseif state == 2 then
+        e:step(e:joint(0x400, true))
+    end
+end
+
+local function turn_to(e)
+    local state = r2(e)
+    if state == 0 then
+        lower_flag(e, FLAG_UP)
+        e:clip(2, 0, 0xF)
+        e:set_var(GUN_AREA, 3)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        e:goto_player(0x60)
+        e:spd()
+        local x, y, z = e:speed()
+        e:set_speed(quot(x, 4), y, quot(z, 4))
+        e:step(e:joint(0x100))
+        e:add_speed_xyz()
+        return
+    end
+    if state == 2 then
+        e:clip(4, 0, 0xF)
+        set_r2(e, 3)
+        set_r3(e, 0)
+        state = 3
+    end
+    if state == 3 then
+        local count = r3(e) + 1
+        set_r3(e, count)
+        e:joint(0x100)
+        if count > 4 then
+            e:go(0xF)
+        end
+    end
+end
+
+local function get_up(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:clip(6, 0, 0xF)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 1)
+    elseif state ~= 1 then
+        return
+    end
+    if e:var(TARGET) ~= 0 then
+        e:goto_player(0x20)
+    end
+    if e:joint(0x100, true) then
+        lower_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 3)
+        e:go(5)
+    end
+end
+
+local function get_down(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:clip(5, 0, 0xF)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 1)
+    elseif state ~= 1 then
+        return
+    end
+    if e:joint(0x100) then
+        e:go(0)
+    end
+end
+
+-- `LAB_00463918`.
+local function hesitate_step(e)
+    local turn = 1
+    if e:turn_to_player(0x200) == 0 then
+        if e:distance_now() < 4000 then
+            turn = e:turn_to_player(0x40)
+        else
+            turn = e:turn_to_player(0x10)
+            set_r3(e, r3(e) + 1)
+        end
+        e:set_angle(e:angle() + turn)
+        local _, y = e:speed()
+        e:set_speed(-40, y, 0)
+        e:add_speed_xz()
+    else
+        e:go(0x13)
+    end
+    e:joint(0x100)
+    if turn == 0 then
+        e:go(2)
+    end
+    if r3(e) > 0x20 then
+        e:go(5)
+    end
+end
+
+local function hesitate(e)
+    local state = r2(e)
+    local waiting = state == 1
+    if state == 0 then
+        lower_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 3)
+        if e:var(TARGET) == 0 then
+            e:clip(4, 0, 0xF)
+            set_r2(e, 1)
+            waiting = true
+        end
+    elseif state > 2 then
+        return
+    end
+    if waiting then
+        local target = spots(e)
+        set_target(e, target)
+        local count = r3(e) + 1
+        set_r3(e, count)
+        e:joint(0x100)
+        if not target then
+            if count >= 0x79 then
+                e:go(4)
+                e:clip(2, 0, 0xF)
+            end
+            return
+        end
+    end
+    if state ~= 2 then
+        e:clip(2, 0, 0xF)
+        set_r2(e, 2)
+    end
+    hesitate_step(e)
+end
+
+local function back_off(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:clip(1, 0, 0xF)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 1)
+    elseif state ~= 1 then
+        return
+    end
+    if e:var(WAIT) == 0 and e:distance() < 2000 then
+        if e:turn_to_player(0x300) == 0 then
+            e:go(9)
+        else
+            e:go(2)
+        end
+        return
+    end
+    if e:distance() > 4000 then
+        if e:player_life() > 99 then
+            if e:rnd() & 7 < 3 then
+                e:go(0xA)
+            elseif e:rnd() & 2 == 0 then
+                e:go(8)
+            else
+                e:go(0x14)
+            end
+        end
+        if e:player_life() < 100 then
+            if e:rnd() & 7 < 2 then
+                e:go(0xA)
+            else
+                e:go(0x14)
+            end
+        end
+    end
+    e:spd_reversed()
+    e:add_speed_xz()
+    e:joint(0x100, true)
+    if e:move_cnt() == 0x2E then
+        e:go(0xF)
+    end
+end
+
+-- The tongue's and the slash's end: `Pl_damage`, `Routine_1` 0 or 1.
+local function hurt_player(e, down)
+    local behind = e:cdir_player()
+    e:pl_hold()
+    e:pl_set_routine(2, behind and 1 or 0, 0, 0)
+    if e:pl_life_down(down) & 2 ~= 0 then
+        e:pl_set_routine(3, 0, 0, 0)
+    end
+    e:set_var(WAIT, 0x28)
+    e:set_var(TIMER0, 1)
+end
+
+local function tongue_attack(e)
+    local state = r2(e)
+    if state == 0 then
+        set_r3(e, 0)
+        if has_flag(e, FLAG_UP) then
+            e:goto_player(0x10)
+            e:step(mot_play(e, 6, 0xF, true))
+            state = 0xFF
+        else
+            set_r2(e, 1)
+            state = 1
+        end
+    end
+    if state == 1 then
+        if e:tongue_owner() == 0 then
+            e:set_tongue_owner(e:slot() + 2)
+            lower_flag(e, FLAG_UP)
+            e:tongue_out()
+            e:clip(7, 0, 3)
+            e:set_var(GUN_AREA, 3)
+            e:set_var(TIMER0, 0)
+            set_r2(e, 2)
+            set_r3(e, 0)
+            state = 2
+        else
+            e:go(0xF)
+            state = 0xFF
+        end
+    end
+    if state == 2 then
+        e:spd()
+        e:goto_player(8)
+        e:step(e:joint(0x400))
+        e:add_speed_xz()
+        if e:move_cnt() == 0x11 then
+            e:effect(0, 0x14, 0x1800, 0, 9, 200, 0, 0)
+            e:sound(5)
+        end
+    end
+    if state == 3 and e:tongue() == 0 then
+        e:go(0xF)
+    end
+    local count = next_r3(e)
+    if count > 0x11
+        and count < 0x1A
+        and e:var(TIMER0) == 0
+        and e:pl_damage_cnt() == 0
+        and e:turn_to_player(0x100) == 0
+        and e:distance() < TONGUE_REACH[count - 0x12]
+    then
+        hurt_player(e, 0x19)
+    end
+end
+
+local function slash(e)
+    local state = r2(e)
+    if state == 0 then
+        set_r3(e, 0)
+        if not has_flag(e, FLAG_UP) then
+            e:step(mot_play(e, 6, 0xF, false))
+            return
+        end
+        set_r2(e, 1)
+    elseif state > 2 then
+        return
+    end
+    if r2(e) == 1 then
+        raise_flag(e, FLAG_UP)
+        e:clip(0x15, 0, 3)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 2)
+        e:set_var(TIMER0, 0)
+    end
+    e:spd()
+    e:goto_player(8)
+    if e:joint(0x400) then
+        e:go(0xF)
+    end
+    e:add_speed_xz()
+    local count = next_r3(e)
+    if e:pl_damage_cnt() == 0
+        and e:var(TIMER0) == 0
+        and count >= 2
+        and count <= 6
+        and e:turn_to_player(0x154) == 0
+        and e:distance() <= 0xAEF
+        and e:player_life() >= 0
+    then
+        local x, y, z = e:part_point(13, 0, 200, 0)
+        if x then
+            e:call_effect(0, 0, 0x2400, 0, x, y, z)
+        end
+        hurt_player(e, 0xF)
+    end
+end
+
+-- `FUN_0047dbb0`.
+local function angle_to_player(e)
+    local off = e:angle_to_player()
+    if off > 0x800 then
+        return off - 0x1000
+    end
+    return off
+end
+
+-- The jump's bite, which takes the most of anything.
+local function bite(e)
+    e:set_var(AFTER, AFTER_BITE)
+    e:set_var(COUNT, 0)
+    e:set_var(TIMER0, 1)
+    e:pl_hold()
+    e:pl_life_down(e:player_life() > 0x6E and 100 or 0x50)
+    e:sound(10)
+    local behind = e:cdir_player()
+    if e:player_life() < 0 then
+        e:set_var(BITE_BEHIND, behind and 1 or 0)
+        e:pl_set_routine(3, 0, 0, 0)
+        e:pl_held_kill()
+        e:set_player_life(-1)
+    else
+        if e:player_life() < 0x28 then
+            e:set_player_life(0x28)
+        end
+        e:pl_set_routine(2, behind and 3 or 2, 0, 0)
+    end
+end
+
+local function jump(e)
+    local state = r2(e)
+    if state == 0 then
+        local _, y = e:pos()
+        e:set_var(LEFT_Y, y)
+        e:set_speed(0, 0, 0)
+        e:set_var(SLOWING, 0)
+        e:set_var(GRAVITY, 0)
+        e:set_var(TIMER0, 0)
+        if has_flag(e, FLAG_UP) then
+            e:clip(6, 0, 3)
+            set_r2(e, 1)
+            state = 1
+        else
+            set_r2(e, 2)
+            state = 2
+        end
+    end
+    if state == 1 then
+        e:step(e:joint(0x400, true))
+    end
+    if state == 2 then
+        lower_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 3)
+        e:set_var(SLOWING, -10)
+        e:set_var(GRAVITY, 0)
+        e:sound(8)
+        set_r2(e, 3)
+        state = 3
+    end
+    if state == 3 then
+        e:step(mot_play(e, 0x1F, 0, false))
+        e:goto_player(6)
+    end
+    if state == 4 then
+        raise_flag(e, FLAG_JUMPING)
+        local _, _, z = e:speed()
+        e:set_speed(0x226, -0xF5, z)
+        e:set_var(SLOWING, -8)
+        e:set_var(GRAVITY, 0x23)
+        e:add_pos(0, -0x72F, 0)
+        set_r2(e, 5)
+        state = 5
+    end
+    if state == 5 then
+        e:step(mot_play(e, 0x20, 0, false))
+        e:goto_player(0x20)
+        local count = e:move_cnt()
+        local angle = angle_to_player(e)
+        if e:pl_damage_cnt() == 0
+            and count >= 0xB
+            and count <= 0xE
+            and angle >= -199
+            and angle <= 0x2C7
+            and e:distance() <= 0x897
+            and e:var(TIMER0) == 0
+        then
+            bite(e)
+        end
+    end
+    if state == 6 then
+        e:clip(0x20, 0x1C, 0)
+        local _, y = e:pos()
+        if y > e:var(LEFT_Y) - 0x60F then
+            lower_flag(e, FLAG_JUMPING)
+            e:set_var(SLOWING, -60)
+            e:set_pos_y(e:var(LEFT_Y))
+            local x, _, z = e:speed()
+            e:set_speed(x, 0, z)
+            e:set_var(GRAVITY, 0)
+            set_r2(e, 7)
+            state = 7
+        end
+    end
+    if state == 7 and mot_play(e, 0x21, 0, false) then
+        e:go(0xF)
+    end
+    local _, up = e:speed()
+    e:add_pos(0, up, 0)
+    e:add_speed_xz()
+    local x, y, z = e:speed()
+    x = x + e:var(SLOWING)
+    if x < 0 then
+        x = 0
+        e:set_var(SLOWING, 0)
+    end
+    e:set_speed(x, y + e:var(GRAVITY), z)
+end
+
+local function stalk_on(e)
+    if e:distance() < 0x9C4 then
+        e:go(0xF)
+    end
+    e:goto_player(0x40)
+    e:spd()
+    if e:joint(0x1000) then
+        if e:distance() > 8000 then
+            e:set_var(AWARE, 1)
+            e:go(0)
+            return
+        end
+        if e:distance() < 2000 then
+            e:go(0xF)
+            e:add_speed_xyz()
+            return
+        end
+        local draw = e:rnd()
+        set_r2(e, 2)
+        set_r3(e, 0)
+        if draw & 3 == 0 then
+            e:clip(0, 0, 0)
+        end
+    end
+    e:add_speed_xyz()
+end
+
+local function stalk(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:clip(6, 5, 3)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 1)
+        set_r3(e, 0)
+        state = 1
+    end
+    if state == 1 then
+        if e:joint(0x400) then
+            e:clip(0, 0, 0)
+            set_r2(e, 2)
+            set_r3(e, 0)
+        end
+        e:goto_player(0x40)
+    elseif state == 2 then
+        stalk_on(e)
+    elseif state == 3 then
+        local count = r3(e) + 1
+        set_r3(e, count)
+        if count > 5 then
+            e:clip(0, 0, 0)
+            set_r2(e, 2)
+            set_r3(e, 0)
+        end
+    end
+end
+
+local function listen(e)
+    local state = r2(e)
+    if state == 0 then
+        lower_flag(e, FLAG_UP)
+        e:clip(4, 0, 0xF)
+        e:set_var(GUN_AREA, 3)
+        set_r2(e, 1)
+        set_r3(e, 0)
+        e:set_var(TIMER0, 0)
+    end
+    if state <= 1 then
+        if e:joint(0x100) then
+            e:clip(4, 0, 3)
+            set_r2(e, r2(e) + 1)
+        end
+    elseif state == 2 and e:joint(0x400) then
+        e:go(4)
+    end
+    local count = next_r3(e)
+    if count > 10 then
+        local target = spots_close(e)
+        set_target(e, target)
+        if target then
+            e:go(0xF)
+        end
+    end
+end
+
+local function decide_near(e, side)
+    if e:var(WAIT) ~= 0 then
+        e:go(6)
+    elseif e:rnd() & 3 ~= 0 then
+        e:go(side < 2 and 6 or 2)
+    else
+        e:go(9)
+    end
+end
+
+local function decide_middle(e, side, life)
+    if side == 0 then
+        if e:var(WAIT) ~= 0 then
+            e:go(0x13)
+            return
+        end
+        if life > 99 then
+            if e:rnd() & 7 < 3 then
+                e:go(0xA)
+            elseif e:rnd() & 2 ~= 0 then
+                e:go(0x13)
+            else
+                e:go(8)
+            end
+        end
+        if life < 100 then
+            e:go(e:rnd() & 7 > 1 and 8 or 0xA)
+        end
+    elseif side == 1 then
+        if e:var(WAIT) == 0 then
+            e:go(8)
+        elseif e:rnd() & 1 ~= 0 then
+            e:go(6)
+        else
+            e:go(0x13)
+        end
+    else
+        e:go(2)
+    end
+end
+
+local function decide_far(e, side, life)
+    if side == 0 then
+        if has_flag(e, FLAG_KNOWS) then
+            e:go(0x13)
+            return
+        end
+        if life > 99 then
+            e:go(e:rnd() & 7 > 4 and 0x13 or 0xA)
+        end
+        if life < 100 then
+            e:go(e:rnd() & 7 > 1 and 0x13 or 0xA)
+        end
+    elseif side == 1 then
+        e:go(e:rnd() & 3 ~= 0 and 0x13 or 2)
+    else
+        e:go(0x14)
+    end
+end
+
+local function decide_farthest(e, side, life)
+    if e:distance() < 10000 or e:var(AWARE) ~= 2 then
+        e:set_var(AWARE, 2)
+        if side < 3 then
+            if life > 99 then
+                e:go(e:rnd() & 7 > 4 and 0x14 or 0xA)
+            end
+            if life < 100 then
+                e:go(e:rnd() & 7 > 1 and 0x14 or 0xA)
+            end
+        else
+            e:go(0xC)
+        end
+    else
+        e:go(0xC)
+    end
+end
+
+local function decide(e)
+    local life = e:player_life()
+    if life < 0 or e:routine(0) == 7 then
+        e:go(0xE)
+    elseif e:kind() & 0x10 ~= 0 and e:life() < 0x32 and e:rnd() & 3 == 0 then
+        -- `Routine_1` 1, up a wall.
+        e:go(0xE)
+    else
+        local off = e:angle_to_player()
+        if off > 0x800 then
+            off = 0x1000 - off
+        end
+        local side = branch(off, 0x100, 0x200, 0x600)
+        local range = branch(e:distance(), 0x9C4, 0x1194, 0x1964)
+        if range == 0 then
+            decide_near(e, side)
+        elseif range == 1 then
+            decide_middle(e, side, life)
+        elseif range == 2 then
+            decide_far(e, side, life)
+        else
+            decide_farthest(e, side, life)
+        end
+    end
+    if e:routine(1) ~= 0xF then
+        mv(e)
+    end
+    lower_flag(e, FLAG_KNOWS)
+end
+
+local function chase(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 4)
+        e:clip(1, 0, 0xF)
+        set_r2(e, 1)
+    elseif state ~= 1 then
+        return
+    end
+    e:goto_player(0x10)
+    e:spd()
+    e:add_speed_xz()
+    if e:joint(0x100) then
+        e:go(0xF)
+    end
+    if e:distance() > 4000 then
+        e:go(0x14)
+        return
+    end
+    if e:var(WAIT) == 0 and e:distance() < 2000 then
+        e:go(9)
+    end
+end
+
+local function run_at(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 4)
+        e:clip(0x1E, 0, 0xF)
+        e:set_var(TIMER0, 0)
+        e:set_timer1(0)
+        e:set_var(TURN, 0)
+        set_r2(e, 1)
+    elseif state ~= 1 then
+        return
+    end
+    if e:sca_info() & 1 == 0 then
+        e:set_timer1(0)
+    else
+        e:set_timer1(e:timer1() + 1)
+    end
+    local stuck = e:timer1()
+    if stuck < 6 then
+        if e:rnd() & 2 == 0 then
+            e:goto_dest(0x32)
+        else
+            e:goto_player(0x32)
+        end
+    else
+        e:set_var(TIMER0, e:var(TIMER0) + 1)
+        if stuck > 0x14 then
+            if stuck == 0x15 then
+                e:set_var(TURN, 0)
+            end
+            turn_at_wall(e, 0x32)
+        else
+            e:goto_dest(0x32)
+        end
+    end
+    e:spd()
+    e:joint(0x100)
+    e:add_speed_xz()
+    e:set_var(TIMER0, e:var(TIMER0) + 1)
+    if e:var(TIMER0) > 0xB3 then
+        e:go(0)
+        return
+    end
+    if e:distance() < 0x898 then
+        e:go(0xF)
+    end
+end
+
+-- `Em22_Move`, by `Routine_1`.
+local MOVES <const> = {
+    [0] = idle,
+    [2] = turn_to,
+    [3] = get_up,
+    [4] = get_down,
+    [5] = hesitate,
+    [6] = back_off,
+    [8] = tongue_attack,
+    [9] = slash,
+    [0xA] = jump,
+    [0xC] = stalk,
+    [0xE] = listen,
+    [0xF] = decide,
+    [0x13] = chase,
+    [0x14] = run_at,
+}
+
+mv = function(e)
+    local move = MOVES[e:routine(1)]
+    if move then
+        move(e)
+    else
+        -- A wall or the ceiling, which isn't ported: it stays and listens.
+        e:go(0xE)
+    end
+end
+
+-- `FUN_00467040`, on the floor.
+local function pick_damage(e)
+    if has_flag(e, FLAG_FALLING) then
+        e:set_damage_no(0)
+        return
+    end
+    if has_flag(e, FLAG_JUMPING) then
+        e:set_damage_no(7)
+        return
+    end
+    local behind = e:cdir_player()
+    local weapon = e:var(WEAPON)
+    if weapon == 1 or weapon == 2 or weapon == 3 or weapon == 0xD or weapon == 0x10
+        or weapon == 0x12 or weapon == 0x13
+    then
+        e:set_damage_no(0)
+    elseif (weapon >= 5 and weapon <= 9) or weapon == 0xB then
+        if e:rnd() & 0xF > 4 then
+            e:set_damage_no(behind and 4 or 3)
+        else
+            e:set_damage_no(1)
+        end
+    elseif weapon == 4 or weapon == 0xC or weapon == 0xE or weapon == 0xF then
+        e:set_damage_no(1)
+    elseif weapon == 0xA or weapon == 0x11 then
+        local flg = e:damage_flg() & ~0x20
+        if behind then
+            flg = flg | 0x20
+        end
+        e:set_damage_flg(flg)
+        e:set_damage_no(6)
+    end
+end
+
+-- Case 0: it barely notices.
+local function hurt(e)
+    if e:life() < 0 then
+        e:routines(3, 0, 0, 0)
+        return
+    end
+    e:restore_routine()
+    e:sound(7)
+    hit_blood(e, false)
+    if e:routine(1) ~= 0xFF then
+        raise_flag(e, FLAG_KNOWS)
+        mv(e)
+        lower_flag(e, FLAG_KNOWS)
+    end
+end
+
+-- `Spd_x`, as a speed along the shooter's facing.
+local function along_shot(e, speed)
+    local x, z = e:rotate(e:player_angle(), speed, 0)
+    e:set_speed(x, 0, z)
+end
+
+-- `Goto00_ck` with the player as its subject: how far the player must turn to
+-- face the licker. `FUN_004675f0`.
+local function after_hurt(e)
+    local state
+    if e:distance() < 0x9C4 then
+        if e:player_turn_here(0x140) == 0 then
+            raise_flag(e, FLAG_KNOWS)
+            state = 0x13
+        elseif e:rnd() & 1 == 0 then
+            state = 0xF
+        else
+            state = 0xC
+        end
+    elseif e:player_turn_here(0x1E0) == 0 then
+        state = 0x14
+    else
+        state = 0xC
+    end
+    e:go(state)
+end
+
+-- Cases 1 and 6, which go by the side the shot came from.
+local function knocked(e)
+    local state = r3(e)
+    if state == 0 then
+        local behind = e:damage_flg() & 0x20 ~= 0
+        e:sound(7)
+        hit_blood(e, behind)
+        e:set_speed(100, 0, 0)
+        local shooter = e:player_angle()
+        e:goto_angle(behind and shooter or shooter + 0x800, 0x80)
+        lower_flag(e, FLAG_UP)
+        set_r3(e, 1)
+        e:clip(8, 0, 3)
+    elseif state == 2 then
+        if e:life() < 0 then
+            e:routines(3, 0, 0, 0)
+        else
+            after_hurt(e)
+        end
+        return
+    elseif state ~= 1 then
+        return
+    end
+    local speed, y, z = e:speed()
+    if speed > 0 then
+        speed = speed - 6
+        e:set_speed(speed, y, z)
+    end
+    local x, along = e:rotate(e:player_angle(), speed, 0)
+    e:add_pos(x, 0, along)
+    step_r3(e, e:joint(0x400))
+end
+
+local function flinch_slide(e)
+    step_r3(e, e:joint(0x1000))
+    if e:reach() > -800 then
+        e:set_reach(e:reach() - 0x28)
+    end
+    e:set_var(GUN_AREA, 3)
+    local x, _, z = e:speed()
+    e:add_pos(x, 0, z)
+end
+
+-- Case 3: thrown on its back.
+local function flinch(e)
+    local state = r3(e)
+    if state == 0 then
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:sound(7)
+        hit_blood(e, false)
+        along_shot(e, 0x32)
+        e:goto_angle(e:player_angle() + 0x800, 0x80)
+        local draw = e:rnd()
+        raise_flag(e, FLAG_UP)
+        e:set_var(TIMER0, draw & 0x11)
+        e:clip(9, 0, 0)
+        set_r3(e, 1)
+        flinch_slide(e)
+    elseif state == 1 then
+        flinch_slide(e)
+    elseif state == 2 then
+        if e:life() < 0 then
+            set_r3(e, 0)
+            set_r2(e, r2(e) + 1)
+            return
+        end
+        e:set_var(TIMER0, e:var(TIMER0) - 1)
+        if e:var(TIMER0) < 1 then
+            e:clip(0x16, 0, 3)
+            e:set_var(TIMER0, 0)
+            set_r3(e, 3)
+        end
+    elseif state == 3 then
+        e:set_var(TIMER0, e:var(TIMER0) + 1)
+        if e:reach() < -500 then
+            e:set_reach(e:reach() + 0x50)
+        end
+        e:spd()
+        if e:joint(0x400) then
+            e:set_reach(-500)
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+            e:set_var(GUN_AREA, 3)
+            after_hurt(e)
+        end
+        e:add_speed_xz()
+    end
+end
+
+local function reared_slide(e)
+    local ended = e:joint(0x400)
+    e:set_var(TIMER0, e:var(TIMER0) + 1)
+    step_r3(e, ended)
+    if e:var(TIMER0) == 4 then
+        along_shot(e, 0x32)
+    end
+    local x, _, z = e:speed()
+    e:add_pos(x, 0, z)
+end
+
+local function reared_up(e)
+    if e:joint(0x100, true) then
+        e:set_var(GUN_AREA, 3)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        after_hurt(e)
+    end
+end
+
+-- Case 4: back on its hind legs.
+local function reared(e)
+    local state = r3(e)
+    if state == 0 then
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:sound(7)
+        hit_blood(e, true)
+        along_shot(e, 100)
+        e:goto_angle(e:player_angle(), 0x80)
+        raise_flag(e, FLAG_UP)
+        e:set_var(TIMER0, 0)
+        e:clip(0xA, 0, 3)
+        set_r3(e, 1)
+        reared_slide(e)
+    elseif state == 1 then
+        reared_slide(e)
+    elseif state == 2 then
+        if e:life() < 0 then
+            set_r3(e, 0)
+            set_r2(e, r2(e) + 1)
+            return
+        end
+        raise_flag(e, FLAG_UP)
+        e:clip(5, 0, 0xF)
+        set_r3(e, 3)
+        reared_up(e)
+    elseif state == 3 then
+        reared_up(e)
+    end
+end
+
+-- Case 7: shot in the air.
+local function shot_down(e)
+    local state = r3(e)
+    if state == 0 then
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:sound(7)
+        hit_blood(e, false)
+        raise_flag(e, FLAG_UP)
+        e:set_speed(0, 0, 0)
+        e:clip(0x19, 0, 0)
+        e:add_pos(0, 0x546, 0)
+        set_r3(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        e:joint(0x1000)
+        e:set_move_cnt(0)
+        local _, y = e:pos()
+        if e:var(LEFT_Y) <= y then
+            atd_set(e)
+            e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+            set_r3(e, 2)
+            e:clip(0x19, 0, 0)
+            state = 2
+        end
+    end
+    if state == 2 then
+        step_r3(e, e:joint(0x400))
+    elseif state == 3 then
+        if e:life() < 0 then
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+            e:set_var(GUN_AREA, 3)
+            e:set_be_flg(e:be_flg() & ~(BE_NO_PUSH | BE_NO_SCA))
+            set_r2(e, r2(e) + 1)
+        else
+            e:clip(0x16, 0, 0)
+            set_r3(e, 4)
+            step_r3(e, e:joint(0x1000))
+        end
+    elseif state == 4 then
+        step_r3(e, e:joint(0x1000))
+    elseif state == 5 then
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        e:set_var(GUN_AREA, 3)
+        e:set_be_flg(e:be_flg() & ~(BE_NO_PUSH | BE_NO_SCA))
+        after_hurt(e)
+    end
+    local ground = e:var(LEFT_Y)
+    local _, y = e:pos()
+    local x, speed, z = e:speed()
+    if speed + 0x48 + y < ground then
+        speed = speed + 0x30
+        e:set_speed(x, speed, z)
+        e:add_pos(x, speed, z)
+    else
+        e:set_pos_y(ground)
+    end
+end
+
+-- `Em22_Damage`.
+local function damage(e)
+    if e:routine(1) ~= 0xFF then
+        e:set_var(WEAPON, e:routine(1))
+        e:set_var(TARGET, 1)
+        if e:tongue_owner() == e:slot() + 2 then
+            e:set_tongue_owner(0)
+        end
+        e:set_var(AWARE, 2)
+        e:set_routine(1, 0xFF)
+        pick_damage(e)
+        if e:damage_no() ~= 0 then
+            e:set_flags(e:flags() & FLAGS_KEPT)
+            e:set_be_flg(e:be_flg() & ~(BE_NO_OBA | BE_NO_PUSH | BE_NO_SCA))
+        end
+    end
+    local kind = e:damage_no()
+    if kind == 0 then
+        hurt(e)
+    elseif kind == 1 or kind == 6 then
+        knocked(e)
+    elseif kind == 3 then
+        flinch(e)
+    elseif kind == 4 then
+        reared(e)
+    elseif kind == 7 then
+        shot_down(e)
+    end
+end
+
+local function die_front(e)
+    local state = r2(e)
+    if state == 0 then
+        e:sound(8)
+        hit_blood(e, false)
+        e:set_be_flg(e:be_flg() | BE_NO_OBA)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        e:step(mot_play_sp(e, 0x1C, 0))
+        if e:reach() > -1000 then
+            e:set_reach(e:reach() - 0x32)
+        end
+    end
+    if state == 2 then
+        set_r2(e, 3)
+        state = 3
+    end
+    if state == 3 and mot_play(e, 0xB, 0xF, false) then
+        e:set_fading(1)
+        set_r2(e, 4)
+    end
+end
+
+local function die_back(e)
+    local state = r2(e)
+    if state == 0 then
+        e:sound(8)
+        hit_blood(e, true)
+        e:set_be_flg(e:be_flg() | BE_NO_OBA)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        e:step(mot_play_sp(e, 0x1D, 0xF))
+        if e:reach() < -100 then
+            e:set_reach(e:reach() + 0x19)
+        end
+    elseif state == 2 then
+        e:set_fading(1)
+        set_r2(e, 3)
+    end
+end
+
+local function die_in_air(e)
+    local state = r2(e)
+    if state == 0 then
+        shot_down(e)
+    elseif state == 1 then
+        e:sound(8)
+        set_r2(e, 2)
+    elseif state == 2 and mot_play(e, 0xB, 0xF, false) then
+        e:set_fading(1)
+        set_r2(e, 3)
+    end
+end
+
+-- `Em22_Die`.
+local function die(e)
+    if e:routine(1) ~= 0xFF then
+        e:set_var(WEAPON, e:routine(1))
+        e:set_routine(1, 0xFF)
+        e:set_var(TARGET, 1)
+        e:set_died()
+        if has_flag(e, FLAG_JUMPING) then
+            e:set_damage_no(5)
+        else
+            e:set_damage_no(e:cdir_player() and 1 or 0)
+        end
+    end
+    local kind = e:damage_no()
+    if kind == 0 then
+        die_front(e)
+    elseif kind == 1 then
+        die_back(e)
+    elseif kind == 5 then
+        die_in_air(e)
+    end
+end
+
+-- `Em22_Init`.
+local function init(e)
+    e:set_damage_flg(0)
+    e:set_damage_cnt(0)
+    e:clip(1, 0, 0)
+    e:joint(0x100)
+    e:set_be_flg(e:be_flg() | BE_SUPER)
+    e:clear_neck()
+    e:set_tongue_owner(0)
+    local easy = e:easy()
+    local life_table = easy and LIFE_EASY or LIFE
+    local down = 0
+    if e:common_a4() then
+        down = easy and 20 or 10
+    end
+    e:set_life(life_table[e:rnd() & 0xF] - down)
+    e:set_var(TARGET, 1)
+    e:set_reach(-500)
+    e:set_be_flg(e:be_flg() & ~(BE_NO_OBA | BE_NO_SCA))
+    e:routines(1, 0, 0, 0)
+    atd_set(e)
+    e:set_be_flg((e:be_flg() & 0xEFFFFFFF) | 0xC000000)
+    e:init_parts()
+end
+
+function update(e)
+    local wait = e:var(WAIT)
+    if wait > 0 then
+        e:set_var(WAIT, wait - 1)
+    end
+    local routine = e:routine(0)
+    if routine == 0 then
+        init(e)
+    elseif routine == 1 or routine == 4 then
+        mv(e)
+    elseif routine == 2 then
+        damage(e)
+    elseif routine == 3 then
+        die(e)
+    end
+    gunarea_chg(e)
+    local after = e:var(AFTER)
+    if after == AFTER_BITE then
+        bite_blood(e)
+    elseif after == AFTER_FLAMES then
+        flames(e)
+    end
+end

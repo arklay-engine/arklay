@@ -15,11 +15,12 @@ pub fn tick(
     room: &RoomState,
     pack: &Pack,
     npc_models: &mut EntityModelCache,
+    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
 ) {
-    init(game, room, pack, npc_models);
+    init(game, room, pack, npc_models, lua.as_deref_mut());
     // A door's load ends behind its animation, and `fg_stop` stays up a tick more.
     if std::mem::take(&mut game.re2.door_stop) {
-        run_load_stop(game, room, pack, npc_models);
+        run_load_stop(game, room, pack, npc_models, lua.as_deref_mut());
         return;
     }
     let scenario = game.id.player_flag & 1;
@@ -51,7 +52,16 @@ pub fn tick(
         let model = npc_models.get(pack, character.id, scenario);
         if let Some(mut zombie) = character.zombie.take() {
             if let Some(model) = model.filter(|_| moves(&character)) {
-                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                run_zombie(
+                    game,
+                    room,
+                    pack,
+                    lua.as_deref_mut(),
+                    &mut character,
+                    &mut zombie,
+                    slot,
+                    &model,
+                );
             }
             character.zombie = Some(zombie);
             game.re2.characters.0[slot] = Some(character);
@@ -402,9 +412,12 @@ fn sce_blood(game: &mut GameState, character: &mut Character) {
 }
 
 /// `Game_loop`'s call of `Em_Zombie`, with its view of the rest of the game.
+#[allow(clippy::too_many_arguments)]
 fn run_zombie(
     game: &mut GameState,
     room: &RoomState,
+    pack: &Pack,
+    lua: Option<&mut crate::enemy::LuaEnemyHost>,
     character: &mut Character,
     zombie: &mut crate::zombie2::Zombie,
     slot: usize,
@@ -468,6 +481,8 @@ fn run_zombie(
         tongue_owner: &mut re2.tongue_owner,
         common_a4,
         scene_target,
+        pack,
+        lua,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let knocks = std::mem::take(&mut world.knocks);
@@ -554,6 +569,7 @@ pub fn init(
     room: &RoomState,
     pack: &Pack,
     npc_models: &mut EntityModelCache,
+    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
 ) {
     let scenario = game.id.player_flag & 1;
     for slot in run_order() {
@@ -567,11 +583,29 @@ pub fn init(
                 character.with_room = false;
                 let held = character.work.kind & player2::KIND_NOT_MOVED;
                 character.work.kind &= !player2::KIND_NOT_MOVED;
-                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                run_zombie(
+                    game,
+                    room,
+                    pack,
+                    lua.as_deref_mut(),
+                    &mut character,
+                    &mut zombie,
+                    slot,
+                    &model,
+                );
                 let (start, flags) = character.start;
                 if start != 0 {
                     player2::spl_start(&mut character.work, start, flags);
-                    run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                    run_zombie(
+                        game,
+                        room,
+                        pack,
+                        lua.as_deref_mut(),
+                        &mut character,
+                        &mut zombie,
+                        slot,
+                        &model,
+                    );
                 }
                 character.work.kind |= held;
                 character.zombie = Some(zombie);
@@ -591,7 +625,7 @@ pub fn init(
     if std::mem::take(&mut game.re2.load_pass) {
         game.re2.tick_before();
         game.re2.tick_effects(room.sca.as_ref());
-        run_load_stop(game, room, pack, npc_models);
+        run_load_stop(game, room, pack, npc_models, lua);
     }
 }
 
@@ -601,6 +635,7 @@ fn run_load_stop(
     room: &RoomState,
     pack: &Pack,
     npc_models: &mut EntityModelCache,
+    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
 ) {
     let scenario = game.id.player_flag & 1;
     let was_stopped = game.re2.enemies_stopped();
@@ -613,7 +648,16 @@ fn run_load_stop(
             && let Some(mut zombie) = character.zombie.take()
         {
             if let Some(model) = npc_models.get(pack, character.id, scenario) {
-                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                run_zombie(
+                    game,
+                    room,
+                    pack,
+                    lua.as_deref_mut(),
+                    &mut character,
+                    &mut zombie,
+                    slot,
+                    &model,
+                );
             }
             character.zombie = Some(zombie);
         }

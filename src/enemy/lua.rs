@@ -181,6 +181,37 @@ mod imp {
             }
         }
 
+        /// Run `update(e)` of RE2's entity `id` with its `e`, as [`Self::update`]
+        /// does for RE1's entity slots.
+        pub fn update_re2<T: UserData + 'static>(
+            &mut self,
+            pack: &Pack,
+            id: u8,
+            e: &mut T,
+        ) -> bool {
+            self.pack.set(pack as *const Pack);
+            let Some(function) = self.function(pack, id) else {
+                return false;
+            };
+            self.budget.begin();
+            let result = {
+                let lua = self.lua.as_ref().expect("a compiled function implies a VM");
+                lua.scope(|scope| {
+                    let e = scope.create_userdata_ref_mut(e)?;
+                    function.call::<()>(e)
+                })
+            };
+            match result {
+                Ok(()) => true,
+                Err(err) => {
+                    eprintln!("[enemy] {id:02x} update disabled: {err}");
+                    self.failed.insert(id);
+                    self.scripts.remove(&id);
+                    false
+                }
+            }
+        }
+
         /// The compiled `update` function of `id`, loading the script from the
         /// pack on first use.
         fn function(&mut self, pack: &Pack, id: u8) -> Option<Function> {
