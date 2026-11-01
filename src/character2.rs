@@ -17,6 +17,11 @@ pub fn tick(
     npc_models: &mut EntityModelCache,
 ) {
     init(game, room, pack, npc_models);
+    // A door's load ends behind its animation, and `fg_stop` stays up a tick more.
+    if std::mem::take(&mut game.re2.door_stop) {
+        run_load_stop(game, room, pack, npc_models);
+        return;
+    }
     let scenario = game.id.player_flag & 1;
     for slot in run_order() {
         // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
@@ -53,11 +58,13 @@ pub fn tick(
             continue;
         }
         if let Some(model) = model.filter(|_| moves(&character)) {
-            let tick = tick_of(room, game, &character, slot, &model);
+            let held = character.held_bank.clone();
+            let tick = tick_of(room, game, &character, slot, &model, held.as_deref());
             let arrived = spl(&mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
+            sce_blood(game, &mut character);
             // `_Spl`'s `Sca_ck_em`.
             if let Some(sca) = &room.sca {
                 let body = &mut character.body;
@@ -292,6 +299,110 @@ pub fn take_hit(game: &mut GameState) {
     }
 }
 
+/// Where `player_work[index]` stands, for a script's `Sce_free3`.
+fn body_of(game: &GameState, index: i16) -> Option<[i32; 3]> {
+    let slot = match index {
+        0 => return Some(game.entities[0].pos),
+        1 => SPLAYER_SLOT,
+        _ => usize::try_from(index - 2).ok()?,
+    };
+    let character = game.re2.characters.0.get(slot)?.as_deref()?;
+    Some(character.body.pos)
+}
+
+/// The end of `FUN_00459ef0`'s grab: the body named goes to `FUN_004f6800` on
+/// the zombie's own clips, from the zombie's base.
+fn grab(game: &mut GameState, index: i16, base: [i16; 3], model: &Emd) {
+    let slot = match index {
+        1 => SPLAYER_SLOT,
+        _ => match usize::try_from(index - 2) {
+            Ok(slot) => slot,
+            Err(_) => return,
+        },
+    };
+    let (Some(Some(character)), Some(bank)) =
+        (game.re2.characters.0.get_mut(slot), model.banks.get(1))
+    else {
+        return;
+    };
+    character.work.base = base;
+    character.work.routine = [player2::MODE_SCENARIO, 0x20, 0, 0];
+    character.be_flg |= crate::zombie2::BE_HOLDING;
+    character.held_bank = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
+        keyframes: std::sync::Arc::new(bank.keyframes.clone()),
+        clips: std::sync::Arc::new(bank.clips.clone()),
+    }));
+}
+
+/// `Sce_espr_on`'s `Esp_call`s on someone's matrix: what the scripts just asked.
+pub fn run_esprs(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+) {
+    let scenario = game.id.player_flag & 1;
+    for (call, matrix) in std::mem::take(&mut game.re2.pending_esprs) {
+        let world = match matrix.slot {
+            None => None,
+            Some(slot) => game
+                .re2
+                .characters
+                .0
+                .get_mut(slot)
+                .and_then(Option::take)
+                .map(|mut character| {
+                    let model = npc_models.get(pack, character.id, scenario);
+                    let world = model.zip(matrix.part).and_then(|(model, part)| {
+                        let held = character.held_bank.clone();
+                        let tick = tick_of(room, game, &character, slot, &model, held.as_deref());
+                        let character = &mut *character;
+                        player2::part_world(&mut character.work, &mut character.body, &tick, part)
+                    });
+                    let root = (character.body.pos, character.body.angle);
+                    game.re2.characters.0[slot] = Some(character);
+                    world.unwrap_or_else(|| root_matrix(root.0, root.1))
+                }),
+        };
+        let world = world.unwrap_or_else(|| {
+            let player = &game.entities[0];
+            root_matrix(player.pos, player.angle)
+        });
+        let at = call.at.map(i32::from);
+        let at = std::array::from_fn(|axis| {
+            let turned: i32 = (0..3).map(|i| i32::from(world.m[axis][i]) * at[i]).sum();
+            (world.t[axis] + (turned >> 12)) as i16
+        });
+        game.re2
+            .effects
+            .call(call.kind, call.row, call.size, call.dir, at, false);
+    }
+}
+
+fn root_matrix(pos: [i32; 3], angle: u16) -> player2::Matrix {
+    player2::Matrix {
+        m: player2::rot_matrix([0, angle as i16, 0]),
+        t: pos,
+    }
+}
+
+/// `FUN_004f6800`'s `Esp_call`s, on the `Rnd` it had no hold of.
+fn sce_blood(game: &mut GameState, character: &mut Character) {
+    let Some((spray, at)) = character.work.sce_blood.take() else {
+        return;
+    };
+    let re2 = &mut game.re2;
+    let dir = i16::from(re2.rnd.draw()) << 4;
+    if spray {
+        re2.effects.call(0, 0, 0x1000, dir, at, false);
+        let dir = i16::from(re2.rnd.draw()) << 4;
+        re2.effects.call(0, 0, 0x1400, dir, at, false);
+    } else {
+        let size = u16::from(re2.rnd.draw()) * 8 + 0x400;
+        re2.effects.call(0, 0, size, dir, at, false);
+    }
+}
+
 /// `Game_loop`'s call of `Em_Zombie`, with its view of the rest of the game.
 fn run_zombie(
     game: &mut GameState,
@@ -301,8 +412,9 @@ fn run_zombie(
     slot: usize,
     model: &Emd,
 ) {
-    let tick = tick_of(room, game, character, slot, model);
+    let tick = tick_of(room, game, character, slot, model, None);
     let player = game.entities[0].pos;
+    let scene_target = body_of(game, character.work.dest[1]).unwrap_or(character.body.pos);
     let mut bodies = vec![crate::zombie2::Oba {
         slot: crate::zombie2::PLAYER_BODY,
         be_flg: game.re2.player.be_flg,
@@ -357,6 +469,7 @@ fn run_zombie(
         weapon,
         tongue_owner: &mut re2.tongue_owner,
         common_a4,
+        scene_target,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let knocks = std::mem::take(&mut world.knocks);
@@ -370,6 +483,9 @@ fn run_zombie(
             keyframes: std::sync::Arc::new(bank.keyframes.clone()),
             clips: std::sync::Arc::new(bank.clips.clone()),
         }));
+    }
+    if let Some(base) = zombie.grabbed.take() {
+        grab(game, character.work.dest[1], base, model);
     }
     let re2 = &mut game.re2;
     if std::mem::take(&mut zombie.died) && zombie.dead_flag != NO_ENEMY_FLAG {
@@ -464,7 +580,7 @@ pub fn init(
                 game.re2.characters.0[slot] = Some(character);
                 continue;
             }
-            let tick = tick_of(room, game, &character, slot, &model);
+            let tick = tick_of(room, game, &character, slot, &model, None);
             let arrived = em_init_move(&mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
@@ -551,6 +667,7 @@ pub fn tick_of<'a>(
     character: &Character,
     slot: usize,
     model: &'a Emd,
+    held: Option<&'a crate::game::PlayerDamageBank>,
 ) -> Tick<'a> {
     let empty: (&[Clip], &[Keyframe]) = (&[], &[]);
     let room_anim = room
@@ -568,7 +685,9 @@ pub fn tick_of<'a>(
                 .first()
                 .map_or(empty, |bank| (&bank.clips, &bank.keyframes)),
             room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
-            held: empty,
+            held: held.map_or(empty, |bank| {
+                (bank.clips.as_slice(), bank.keyframes.as_slice())
+            }),
         },
         input: Default::default(),
         options: game.player_options,
@@ -600,6 +719,7 @@ mod tests {
             sound_type: 0,
             distance: 0,
             with_room: false,
+            held_bank: None,
             zombie: None,
         };
         assert!(moves(&character));

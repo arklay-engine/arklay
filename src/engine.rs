@@ -5746,6 +5746,8 @@ impl GameSession {
         self.transition = Some(session);
         if frame.load {
             self.enter_transition_destination(pack);
+            // A door's load ends behind its animation: `door_stop` is that pass.
+            self.game.re2.load_pass = false;
             crate::character2::init(
                 &mut self.game,
                 &self.loaded.room,
@@ -5799,6 +5801,7 @@ impl GameSession {
             return;
         };
         self.game.re2.door_settling = session.door.re2.is_some();
+        self.game.re2.door_stop = session.door.re2.is_some();
         if session.camera_only {
             finish_transition(
                 &mut session,
@@ -6438,7 +6441,11 @@ impl GameSession {
                 } else {
                     self.game.rand_state
                 },
-                self.game.rand_seed,
+                if self.game.is_re2_room {
+                    self.game.re2.random as u16
+                } else {
+                    self.game.rand_seed
+                },
                 &self.game.entities[..],
             ),
         };
@@ -14147,6 +14154,8 @@ fn run_re2_init(
     game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;
     game.re2.load_pass = true;
+    // `Sce_scheduler_set` rolls `Sce_rnd` before the room's first scripts.
+    game.re2.sce_rnd_set();
     let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
@@ -14169,9 +14178,14 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     if std::mem::take(&mut context.game.re2.door_settling) {
         return;
     }
+    // And doesn't run at all once the player's death has stopped the routines.
+    if *context.game.re2.fg_stop_mut() & 0x0200_0000 != 0 {
+        return;
+    }
     let Some(mut vm) = context.game.re2.vm.take() else {
         return;
     };
+    context.game.re2.sce_rnd_set();
     // `Sce_scheduler` starts the room's second main procedure every tick.
     vm.exec_event(0, 1);
     for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
@@ -14185,6 +14199,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     }
     context.game.re2.clear_tick_flags();
     context.game.re2.vm = Some(vm);
+    crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
         apply_re2_cut_edit(context.room, edit);
     }
@@ -16531,7 +16546,14 @@ fn render_frame_on(
         else {
             continue;
         };
-        let tick = crate::character2::tick_of(room, game, character, slot, &model);
+        let tick = crate::character2::tick_of(
+            room,
+            game,
+            character,
+            slot,
+            &model,
+            character.held_bank.as_deref(),
+        );
         let (clips, keyframes) = tick.banks.get(character.work.bank);
         let Some(mut keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
             continue;

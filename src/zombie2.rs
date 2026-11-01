@@ -74,6 +74,8 @@ pub const TYPE_HELD: u16 = 0x4000;
 pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
 const BE_NO_SCA: u32 = 8;
+/// `Be_flg`'s bit on both bodies of a grab.
+pub const BE_HOLDING: u32 = 0x1000;
 /// The word at `+0x21a`.
 /// `At_em_no` when nothing's touching, and the player's number.
 pub const NO_BODY: u8 = 0xFF;
@@ -203,6 +205,17 @@ pub struct PulledArm {
     hold: [i32; 3],
 }
 
+/// What `Sce_parts_down` asks of `Parts_down`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScriptDrop {
+    pub part: u8,
+    pub angle: i16,
+    pub along: i16,
+    pub up: i16,
+    pub gravity: u8,
+    pub rest: [i16; 3],
+}
+
 impl ThrownPart {
     fn new(
         part: u8,
@@ -289,6 +302,8 @@ pub struct Zombie {
     pub licker: Option<Box<licker::Licker>>,
     /// Parts it has thrown that are still falling.
     pub thrown: Vec<ThrownPart>,
+    /// `Sce_parts_down`s since it last ran.
+    pub script_drops: Vec<ScriptDrop>,
     pulled: Option<PulledArm>,
     pub life: i16,
     /// The last shot was aimed up, which `Em10Dm02` and `FUN_00458d40` read
@@ -300,6 +315,8 @@ pub struct Zombie {
     /// `Ground` when `Em10Dm02` started, to land on again.
     blast_ground: i32,
     at_em_no: u8,
+    /// `FUN_00459ef0` took hold of its body this tick, from this base.
+    pub grabbed: Option<[i16; 3]>,
     /// The first byte at `+0x218`: the walks' clip.
     walk: u8,
     /// `+0x21a`.
@@ -472,6 +489,8 @@ pub struct World<'a> {
     pub tongue_owner: &'a mut u8,
     /// `fg_common`'s `0xa4`, which takes some life off a licker.
     pub common_a4: bool,
+    /// Where the body a script's `Sce_free3` names stands.
+    pub scene_target: [i32; 3],
 }
 
 /// One tick's zombie: the state the original keeps in the work and globals.
@@ -519,6 +538,20 @@ impl Em<'_, '_, '_> {
     }
 
     fn run(&mut self) {
+        // The scripts run first, and `Workm` stops following the skeleton from
+        // what the last tick left there.
+        for drop in std::mem::take(&mut self.z.script_drops) {
+            if let Some(matrix) = self.mover.part_matrix(usize::from(drop.part)) {
+                self.z.thrown.push(ThrownPart::new(
+                    drop.part,
+                    matrix,
+                    (drop.angle as u16).wrapping_sub(0x800),
+                    (drop.along, drop.up),
+                    i16::from(drop.gravity as i8),
+                    drop.rest,
+                ));
+            }
+        }
         self.root_ck();
         if self.world.stopped {
             return;
@@ -538,6 +571,7 @@ impl Em<'_, '_, '_> {
             2 => self.em10_damage(),
             3 => self.em10_die(),
             7 => self.em10_corpse(),
+            8 => self.em10_scene(),
             // `Spl_Scenario`, on the model's own bank.
             4 => {
                 self.work().bank = Bank::Pld;
@@ -1652,6 +1686,139 @@ impl Em<'_, '_, '_> {
         }
         if self.joint(Bank::Weapon, 0x80) {
             self.work().routine[2] = 2 + u8::from(self.z.timers.3 != 0);
+        }
+    }
+
+    /// `FUN_00459df0`, the routine scripts hand a zombie to. Its table's last
+    /// entry, `FUN_0045a240`, no room's script asks for.
+    fn em10_scene(&mut self) {
+        match self.work().routine[1] {
+            0 => self.scene_stand(),
+            1 => self.scene_walk(),
+            2 => self.scene_grab(),
+            3 => self.scene_eat(),
+            _ => {}
+        }
+    }
+
+    /// `FUN_00459e10`.
+    fn scene_stand(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                self.clip(0, 0, 0xF);
+                self.work().routine[2] = 1;
+            }
+            1 => {}
+            _ => return,
+        }
+        let planted = self.mover.foot_position();
+        self.joint(Bank::Weapon, 0x100);
+        if self.work().hokan == 0 {
+            self.mover.foot_set(planted);
+        }
+    }
+
+    /// `FUN_00459e70`: on to `Dest_x`, `Dest_z`.
+    fn scene_walk(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                self.work().routine[2] = 1;
+                let walk = self.z.walk;
+                self.clip(walk, 0, 0xF);
+            }
+            1 => {}
+            _ => return,
+        }
+        let [x, z] = self.work().dest.map(i32::from);
+        self.goto(x, z, 0x24);
+        self.spd(Bank::Pld);
+        self.joint(Bank::Pld, 0x100);
+        self.mover.add_speed_xz();
+    }
+
+    /// `FUN_00459ef0`: at the body `Sce_free3` names, and take hold of it.
+    fn scene_grab(&mut self) {
+        match self.work().routine[2] {
+            0 | 1 => {
+                if self.work().routine[2] == 0 {
+                    self.clip(10, 0, 0xF);
+                    self.work().routine[2] = 1;
+                    let [x, _, z] = self.world.scene_target;
+                    self.goto(x, z, 0x400);
+                    self.z.timers.0 = 0;
+                    self.z.sounds.push(10);
+                    self.z.damage_cnt |= 0x80;
+                }
+                self.z.timers.0 = self.z.timers.0.wrapping_add(1);
+                if self.z.timers.0 & 1 == 0 {
+                    self.work().spd[0] >>= 2;
+                } else {
+                    self.spd(Bank::Weapon);
+                }
+                let ended = self.joint(Bank::Weapon, 0x100);
+                self.step(ended);
+                self.mover.add_speed_xz();
+                if self.work().move_cnt == 0x11 {
+                    self.work().routine[2] = 2;
+                }
+            }
+            2 | 3 => {
+                if self.work().routine[2] == 2 {
+                    self.clip(0x18, 0, 0xF);
+                    self.work().routine[2] = 3;
+                    self.work().bank = Bank::Weapon;
+                    self.z.grabbed = Some(self.mover.set_base_pos());
+                    *self.be_flg |= BE_HOLDING;
+                }
+                self.mover.null_pos_set(0);
+                let ended = self.joint(Bank::Weapon, 0x100);
+                self.step(ended);
+            }
+            4 => self.work().routine = [8, 3, 2, 0],
+            _ => {}
+        }
+    }
+
+    /// `FUN_0045a070`: over the body `Sce_free3` names, eating it.
+    fn scene_eat(&mut self) {
+        const CLIPS: [u8; 8] = [0x12, 0x13, 0x14, 0x12, 0x13, 0x14, 0x12, 0x13];
+        match self.work().routine[2] {
+            0 | 1 => {
+                if self.work().routine[2] == 0 {
+                    self.work().routine[2] = 1;
+                    let count = self.rnd() & 7;
+                    self.clip(0x15, count, 0xF);
+                    self.z.damage_cnt |= 0x80;
+                }
+                let [x, _, z] = self.world.scene_target;
+                self.goto(x, z, 0x10);
+                self.work().bank = Bank::Weapon;
+                let ended = self.mover.joint_move_late_reversed(0x100, true);
+                self.step(ended);
+            }
+            2 | 3 => {
+                if self.work().routine[2] == 2 {
+                    self.work().routine[2] = 3;
+                    let clip = self.rnd() & 7;
+                    self.clip(CLIPS[usize::from(clip)], 0, 7);
+                }
+                let planted = self.mover.foot_position();
+                let ended = self.joint(Bank::Weapon, 0x200);
+                self.step(ended);
+                if self.work().hokan == 0 {
+                    self.mover.foot_set(planted);
+                }
+                if self.mover.now_seq() & SEQ_BLOOD != 0 {
+                    let dir = i16::from(self.rnd()) << 4;
+                    self.blood(0, 0x17B8, dir, 8, [200, 0, 0]);
+                }
+            }
+            4 => {
+                let clip = self.rnd() & 7;
+                self.work().routine[2] = 1;
+                self.clip(CLIPS[usize::from(clip)], 3, 0);
+            }
+            _ => {}
         }
     }
 
@@ -3842,6 +4009,7 @@ mod tests {
             sound_type: 0,
             distance: 0,
             with_room: false,
+            held_bank: None,
             zombie: None,
         };
         let mut zombie = Zombie {

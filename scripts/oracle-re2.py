@@ -68,6 +68,7 @@ STAGE = 0x0098EB14
 ROOM = 0x0098EB16
 CUT = 0x0098EB18
 RANDOM = 0x00988610  # `Rnd`'s state
+RANDOM_BASE = 0x00695E58  # `Sce_rnd_set`'s state
 
 ENTITY_ROUTINES = 0x04
 ENTITY_ID = 0x08
@@ -472,7 +473,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"t={tick}",
         f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",
         f"rng={game.u32(RANDOM) & 0xFFFF}",
-        "rseed=0",
+        f"rseed={game.u32(RANDOM_BASE) & 0xFFFF}",
         "fade=0:-1",
         f"p={x},{y},{z},{angle},{routines[0]},{routines[1]},{life}",
         f"cam={game.u16(CUT) & 0xFF}",
@@ -668,7 +669,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         for item in args.give:
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
-                if settled and args.no_enemies:
+                if (
+                    settled
+                    and args.no_enemies
+                    and args.no_enemies_room in (None, game.u16(ROOM))
+                ):
                     remove_enemies(game, set(args.keep_enemy))
                 if tick < 0:
                     if boot_tick > BOOT_TICKS:
@@ -871,6 +876,9 @@ def main() -> int:
             help="run with sound into a private sink: writes the audio and the music's log beside the trace",
         )
         command.add_argument("--no-enemies", action="store_true")
+        command.add_argument(
+            "--no-enemies-room", type=lambda text: int(text, 0), default=None
+        )
         command.add_argument("--keep-enemy", action="append", type=int, default=[])
         command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
         command.add_argument(
