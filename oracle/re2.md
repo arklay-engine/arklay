@@ -49,10 +49,11 @@ tick, and a pad value given for tick `t` first shows in line `t + 1`.
 
 `--no-enemies` clears bit 0 of every enemy's `be_flg` at each stop, so nothing
 runs them or collides with them. That leaves the player alone to compare with
-arklay until enemies are ported. `oracle/inputs-re2/` holds the scripts in use,
-and `street_wander.txt` is a random walk through room 100.
+arklay, which is how the routes are checked; the zombie recordings run with them
+left on. `oracle/inputs-re2/` holds the scripts in use, and `street_wander.txt`
+is a random walk through room 100.
 
-`--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. The zombies can't touch the player in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
+`--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. A zombie left running would attack the player on the route, so this doesn't show the scene with them.
 
 `street_shoot.txt` aims the handgun in room 100 and fires until it's empty, with the zombies running. Over 2000 ticks, with the input long since ended, the zombies come for the player and kill them: damage, death and corpses, six grabs with bites and shove-offs, the player dying in a zombie's hands, the others eating the body and `Die`'s stops. Everything matches through the end of the game over at tick 1997 (`--fields rng,p.x,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5`), apart from slot 1's one angle on the first tick. The original then returns to the title. With `--sound`, `snd=` lists each tick's `SsPlay`s as `type:index:volume:pan`; without it the game has no audio device and plays none. arklay's trace has the same field, so sound is compared like the rest. `neck=` starts with the same flags, joint, whether it has a target and turn on both sides. `pixels` compares the game over's frames too: `YOU DIED` within a few levels of the original, and `die=` in the trace holds `Die`'s phase and the text's state.
 
@@ -110,10 +111,11 @@ any tick is available through `--shot-dir` and `--shot-every`.
 ## What compares today
 
 `scenario` compares `room`, `cam`, the player's x, y, z, angle, `beh`, `as` and
-health, and `mot` (`--fields`). The other fields describe things arklay doesn't
-model RE2's way yet: its random stream isn't `Rnd`, and it has no enemies. Add
-each one to the default in `RE2_FIELDS` when the milestone that makes it
-comparable lands. arklay doesn't emit the `fg*` flag banks yet.
+health, and `mot` (`--fields`). The enemy and presentation fields are opt-in:
+`rng` for the shared random stream, `e`, `em` and `es` for the enemy slots,
+`neck` for the player's neck, and the `snd` and `die` traces for sound and the
+game over. arklay doesn't emit the `fg*` flag banks yet. Add each new field to
+the default in `RE2_FIELDS` when the milestone that makes it comparable lands.
 
 ## Classic Rebirth
 
