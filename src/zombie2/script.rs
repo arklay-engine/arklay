@@ -3,7 +3,7 @@
 
 use mlua::{UserData, UserDataMethods};
 
-use super::licker::{Licker, VARS};
+use super::licker::Licker;
 use super::{Atd, Em, PLAYER_BODY, direction_ck, goto, square_root0, turn_within};
 use crate::player2::{self, Bank};
 
@@ -11,6 +11,7 @@ use crate::player2::{self, Bank};
 /// `Lua::scope` seals the userdata so the script can't keep it.
 pub(super) struct Api {
     em: *mut Em<'static, 'static, 'static>,
+    /// Null on a zombie, which keeps its `var`s and `flags` on the `Zombie`.
     l: *mut Licker,
 }
 
@@ -20,6 +21,14 @@ impl Api {
         Self { em: em.cast(), l }
     }
 
+    pub(super) fn zombie(em: &mut Em<'_, '_, '_>) -> Self {
+        let em: *mut Em<'_, '_, '_> = em;
+        Self {
+            em: em.cast(),
+            l: std::ptr::null_mut(),
+        }
+    }
+
     fn em(&mut self) -> &mut Em<'static, 'static, 'static> {
         // SAFETY: `new` took these from live borrows that outlast the script
         // call this `Api` exists for, and `&mut self` makes this the only path
@@ -27,17 +36,41 @@ impl Api {
         unsafe { &mut *self.em }
     }
 
-    fn l(&mut self) -> &mut Licker {
+    fn l(&mut self) -> mlua::Result<&mut Licker> {
         // SAFETY: as in `em`; the `Licker` is out of the `Em` for the call.
-        unsafe { &mut *self.l }
+        unsafe { self.l.as_mut() }
+            .ok_or_else(|| mlua::Error::RuntimeError("this isn't a licker".to_owned()))
+    }
+
+    fn var(&mut self, index: i64) -> mlua::Result<&mut i32> {
+        let vars: &mut [i32] = if self.l.is_null() {
+            &mut self.em().z.vars
+        } else {
+            &mut self.l()?.vars
+        };
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| vars.get_mut(index))
+            .ok_or_else(|| mlua::Error::RuntimeError(format!("no var {index}")))
+    }
+
+    fn flags(&mut self) -> &mut u16 {
+        // SAFETY: as in `l`.
+        match unsafe { self.l.as_mut() } {
+            Some(l) => &mut l.flags,
+            None => &mut self.em().z.flags,
+        }
     }
 }
 
-fn var_index(index: i64) -> mlua::Result<usize> {
-    usize::try_from(index)
-        .ok()
-        .filter(|index| *index < VARS)
-        .ok_or_else(|| mlua::Error::RuntimeError(format!("no var {index}")))
+/// The numbers scripts have for the original's motion tables.
+fn bank(index: i64) -> mlua::Result<Bank> {
+    match index {
+        0 => Ok(Bank::Pld),
+        1 => Ok(Bank::Weapon),
+        2 => Ok(Bank::Room),
+        _ => Err(mlua::Error::RuntimeError(format!("no bank {index}"))),
+    }
 }
 
 fn routine_index(index: i64) -> mlua::Result<usize> {
@@ -50,9 +83,9 @@ fn routine_index(index: i64) -> mlua::Result<usize> {
 impl UserData for Api {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         // The fields the engine doesn't read.
-        methods.add_method_mut("var", |_, e, index: i64| Ok(e.l().vars[var_index(index)?]));
+        methods.add_method_mut("var", |_, e, index: i64| Ok(*e.var(index)?));
         methods.add_method_mut("set_var", |_, e, (index, value): (i64, i32)| {
-            e.l().vars[var_index(index)?] = value;
+            *e.var(index)? = value;
             Ok(())
         });
 
@@ -235,28 +268,28 @@ impl UserData for Api {
         });
 
         // `Em_22`'s end of the work.
-        methods.add_method_mut("flags", |_, e, ()| Ok(e.l().flags));
+        methods.add_method_mut("flags", |_, e, ()| Ok(*e.flags()));
         methods.add_method_mut("set_flags", |_, e, flags: i64| {
-            e.l().flags = flags as u16;
+            *e.flags() = flags as u16;
             Ok(())
         });
-        methods.add_method_mut("reach", |_, e, ()| Ok(e.l().reach));
+        methods.add_method_mut("reach", |_, e, ()| Ok(e.l()?.reach));
         methods.add_method_mut("set_reach", |_, e, reach: i16| {
-            e.l().reach = reach;
+            e.l()?.reach = reach;
             Ok(())
         });
-        methods.add_method_mut("timer1", |_, e, ()| Ok(e.l().timer1));
+        methods.add_method_mut("timer1", |_, e, ()| Ok(e.l()?.timer1));
         methods.add_method_mut("set_timer1", |_, e, timer: i16| {
-            e.l().timer1 = timer;
+            e.l()?.timer1 = timer;
             Ok(())
         });
         methods.add_method_mut("set_fading", |_, e, fading: i64| {
-            e.l().fading = fading as u8;
+            e.l()?.fading = fading as u8;
             Ok(())
         });
-        methods.add_method_mut("tongue", |_, e, ()| Ok(e.l().tongue));
+        methods.add_method_mut("tongue", |_, e, ()| Ok(e.l()?.tongue));
         methods.add_method_mut("tongue_out", |_, e, ()| {
-            e.l().tongue = 1;
+            e.l()?.tongue = 1;
             Ok(())
         });
         methods.add_method_mut(
@@ -272,14 +305,14 @@ impl UserData for Api {
                 if which == 0 {
                     e.em().z.atd = atd;
                 } else {
-                    e.l().head = atd;
+                    e.l()?.head = atd;
                 }
                 Ok(())
             },
         );
         methods.add_method_mut("init_parts", |_, e, ()| {
             let pos = e.em().mover.player.pos;
-            let l = e.l();
+            let l = e.l()?;
             l.part0 = pos;
             l.part1 = pos;
             Ok(())
@@ -354,8 +387,8 @@ impl UserData for Api {
             e.em().world.pl.held_kill = true;
             Ok(())
         });
-        methods.add_method_mut("pl_life_down", |_, e, down: i32| {
-            Ok(e.em().pl_life_down(down, false))
+        methods.add_method_mut("pl_life_down", |_, e, (down, low): (i32, Option<bool>)| {
+            Ok(e.em().pl_life_down(down, low.unwrap_or(false)))
         });
         methods.add_method_mut("player_root_point", |_, e, (x, y, z): (i32, i32, i32)| {
             let point = [x, y, z];
@@ -375,6 +408,325 @@ impl UserData for Api {
         methods.add_method_mut("noise", |_, e, ()| Ok(e.em().world.noise));
         methods.add_method_mut("easy", |_, e, ()| Ok(e.em().world.easy));
         methods.add_method_mut("common_a4", |_, e, ()| Ok(e.em().world.common_a4));
+
+        // `Em_Zombie`'s end of the work: `Timer0` to `Timer3`, which keep their
+        // own widths.
+        methods.add_method_mut("timer", |_, e, index: i64| {
+            let timers = e.em().z.timers;
+            match index {
+                0 => Ok(i64::from(timers.0)),
+                1 => Ok(i64::from(timers.1)),
+                2 => Ok(i64::from(timers.2)),
+                3 => Ok(i64::from(timers.3)),
+                _ => Err(mlua::Error::RuntimeError(format!("no timer {index}"))),
+            }
+        });
+        methods.add_method_mut("set_timer", |_, e, (index, value): (i64, i64)| {
+            let timers = &mut e.em().z.timers;
+            match index {
+                0 => timers.0 = value as u16,
+                1 => timers.1 = value as u16,
+                2 => timers.2 = value as u8,
+                3 => timers.3 = value as i8,
+                _ => return Err(mlua::Error::RuntimeError(format!("no timer {index}"))),
+            }
+            Ok(())
+        });
+        methods.add_method_mut("last_routine", |_, e, index: i64| {
+            Ok(e.em().z.last_routine[routine_index(index)?])
+        });
+        methods.add_method_mut("d_life", |_, e, index: usize| {
+            let d_life = e.em().z.d_life;
+            d_life
+                .get(index)
+                .copied()
+                .ok_or_else(|| mlua::Error::RuntimeError(format!("no d_life {index}")))
+        });
+        methods.add_method_mut("set_d_life", |_, e, value: i64| {
+            e.em().z.d_life = [value as u8; 3];
+            Ok(())
+        });
+        methods.add_method_mut("shot_high", |_, e, ()| Ok(e.em().z.shot_high));
+        methods.add_method_mut("in_sight", |_, e, ()| {
+            Ok(e.em().z.status & super::STATUS_IN_SIGHT != 0)
+        });
+        methods.add_method_mut("at_em_no", |_, e, ()| Ok(e.em().z.at_em_no));
+        methods.add_method_mut("knock", |_, e, slot: i64| {
+            e.em().world.knocks.push(slot as u8);
+            Ok(())
+        });
+        // `Atd[0]`'s size, leaving where it stands.
+        methods.add_method_mut("body_box", |_, e, ()| {
+            let atd = e.em().z.atd;
+            Ok((atd.ofs_y, atd.at_w, atd.at_h, atd.w))
+        });
+        methods.add_method_mut(
+            "set_body_box",
+            |_, e, (ofs_y, at_w, at_h, w): (i16, u16, u16, u16)| {
+                let atd = &mut e.em().z.atd;
+                atd.ofs_y = ofs_y;
+                atd.at_w = at_w;
+                atd.at_h = at_h;
+                atd.w = w;
+                Ok(())
+            },
+        );
+        methods.add_method_mut("pool", |_, e, ()| Ok(e.em().z.pool));
+        methods.add_method_mut("set_pool", |_, e, pool: i64| {
+            e.em().z.pool = pool as u16;
+            Ok(())
+        });
+        methods.add_method_mut("charred", |_, e, ()| Ok(e.em().z.charred));
+        methods.add_method_mut("set_charred", |_, e, charred: i64| {
+            e.em().z.charred = charred as u8;
+            Ok(())
+        });
+        methods.add_method_mut("set_burnt", |_, e, burnt: bool| {
+            e.em().z.burnt = burnt;
+            Ok(())
+        });
+        methods.add_method_mut("model_type", |_, e, ()| Ok(e.em().z.model_type));
+        methods.add_method_mut("set_skin", |_, e, skin: i64| {
+            e.em().z.skin = skin as u8;
+            Ok(())
+        });
+        methods.add_method_mut(
+            "light_flame",
+            |_, e, (size, part, x, y, z): (u16, u8, i32, i32, i32)| {
+                e.em().light_flame(size, part, [x, y, z]);
+                Ok(())
+            },
+        );
+
+        // The work, as `Em_Zombie` uses it.
+        methods.add_method_mut("set_kind", |_, e, kind: i64| {
+            e.em().work().kind = kind as u16;
+            Ok(())
+        });
+        methods.add_method_mut("set_move_no", |_, e, clip: i64| {
+            e.em().work().move_no = clip as u8;
+            Ok(())
+        });
+        methods.add_method_mut("hokan", |_, e, ()| Ok(e.em().work().hokan));
+        methods.add_method_mut("set_hokan", |_, e, hokan: i64| {
+            e.em().work().hokan = hokan as u8;
+            Ok(())
+        });
+        methods.add_method_mut("neck_flags", |_, e, ()| Ok(e.em().work().neck.flags));
+        methods.add_method_mut("set_neck_flags", |_, e, flags: i64| {
+            e.em().work().neck.flags = flags as _;
+            Ok(())
+        });
+        methods.add_method_mut("set_lean", |_, e, lean: i64| {
+            e.em().work().lean = lean as i16;
+            Ok(())
+        });
+        methods.add_method_mut("set_sce_flg", |_, e, flags: i64| {
+            e.em().work().sce_flg = flags as u16;
+            Ok(())
+        });
+        methods.add_method_mut("sce_free", |_, e, index: usize| {
+            let free = e.em().work().sce_free;
+            free.get(index)
+                .copied()
+                .ok_or_else(|| mlua::Error::RuntimeError(format!("no sce_free {index}")))
+        });
+        methods.add_method_mut("set_sce_free", |_, e, (index, value): (usize, i64)| {
+            let free = e.em().work().sce_free.get_mut(index);
+            *free.ok_or_else(|| mlua::Error::RuntimeError(format!("no sce_free {index}")))? =
+                value as i16;
+            Ok(())
+        });
+        methods.add_method_mut("set_parts0_y", |_, e, scale: i32| {
+            e.em().work().set_parts0_y(scale);
+            Ok(())
+        });
+        methods.add_method_mut("hidden_parts", |_, e, ()| Ok(e.em().work().hidden_parts));
+        methods.add_method_mut("set_hidden_parts", |_, e, parts: i64| {
+            e.em().work().hidden_parts = parts as u32;
+            Ok(())
+        });
+        // A part the original throws away as a part of its own, just no longer
+        // drawn.
+        methods.add_method_mut("hide_part", |_, e, part: i64| {
+            player2::set_part_flags(e.em().work(), part as u8, 0);
+            Ok(())
+        });
+        // Where `pSin_parts_ptr[part]` hangs from its parent.
+        methods.add_method_mut("part_offset", |_, e, part: usize| {
+            let [x, y, z] = e
+                .em()
+                .mover
+                .tick
+                .skeleton
+                .relative
+                .get(part)
+                .map_or([0; 3], |at| at.map(i32::from));
+            Ok((x, y, z))
+        });
+
+        // The motion, on any of the banks.
+        methods.add_method_mut("set_bank", |_, e, index: i64| {
+            e.em().work().bank = bank(index)?;
+            Ok(())
+        });
+        methods.add_method_mut(
+            "joint_bank",
+            |_, e, (index, late, reverse): (i64, i64, Option<bool>)| {
+                let em = e.em();
+                let bank = bank(index)?;
+                Ok(match reverse {
+                    Some(reverse) => {
+                        em.work().bank = bank;
+                        em.mover.joint_move_late_reversed(late as u16, reverse)
+                    }
+                    None => em.joint(bank, late as u16),
+                })
+            },
+        );
+        methods.add_method_mut("spd_bank", |_, e, index: i64| {
+            let bank = bank(index)?;
+            e.em().spd(bank);
+            Ok(())
+        });
+        methods.add_method_mut("speed_x", |_, e, ()| Ok(e.em().work().spd[0]));
+        methods.add_method_mut("set_speed_x", |_, e, x: i64| {
+            e.em().work().spd[0] = x as i16;
+            Ok(())
+        });
+        methods.add_method_mut("add_speed_xz_at", |_, e, dir: i64| {
+            e.em().mover.add_speed_xz_at(dir as u16);
+            Ok(())
+        });
+        methods.add_method_mut("skip_frame", |_, e, ()| {
+            e.em().mover.skip_frame();
+            Ok(())
+        });
+        methods.add_method_mut("now_seq", |_, e, ()| Ok(e.em().mover.now_seq()));
+        methods.add_method_mut("root_y", |_, e, ()| Ok(e.em().mover.root_y()));
+        methods.add_method_mut("foot_position", |_, e, ()| {
+            Ok(e.em()
+                .mover
+                .foot_position()
+                .map_or((None, None, None), |[x, y, z]| (Some(x), Some(y), Some(z))))
+        });
+        methods.add_method_mut(
+            "foot_set",
+            |_, e, (x, y, z): (Option<i32>, Option<i32>, Option<i32>)| {
+                let planted = x.zip(y).zip(z).map(|((x, y), z)| [x, y, z]);
+                e.em().mover.foot_set(planted);
+                Ok(())
+            },
+        );
+        methods.add_method_mut("null_pos_set", |_, e, turn: i64| {
+            e.em().mover.null_pos_set(turn as u16);
+            Ok(())
+        });
+        // `Spl_Scenario`, on the model's own bank.
+        methods.add_method_mut("scenario", |_, e, ()| {
+            let em = e.em();
+            em.work().bank = Bank::Pld;
+            em.mover.scenario();
+            Ok(())
+        });
+
+        // Turning.
+        methods.add_method_mut("goto_point", |_, e, (x, z, rate): (i32, i32, i32)| {
+            e.em().goto(x, z, rate);
+            Ok(())
+        });
+        // `Goto01_ck`: 0 once within `rate` of `angle`, or the way to turn.
+        methods.add_method_mut("turn_to", |_, e, (angle, rate): (i64, i32)| {
+            Ok(turn_within(e.em().mover.player.angle, angle as u16, rate))
+        });
+        methods.add_method_mut("direction_to_player", |_, e, ()| {
+            let em = e.em();
+            let body = em.mover.player.pos;
+            let [x, _, z] = em.world.player;
+            Ok(direction_ck(body[0], body[2], x, z))
+        });
+        // `Dir_pos_ck`.
+        methods.add_method_mut("player_within", |_, e, (angle, within): (i64, i32)| {
+            Ok(e.em().player_within(angle as u16, within))
+        });
+
+        // Parts leaving the body.
+        methods.add_method_mut(
+            "throw_part",
+            |_, e, (part, along, up, gravity): (usize, i16, i16, i16)| {
+                e.em().throw_part(part, along, up, gravity);
+                Ok(())
+            },
+        );
+        // Both arms, as `FUN_00458d40` reads them before it starts its clip.
+        methods.add_method_mut("keep_arms", |_, e, ()| {
+            let em = e.em();
+            em.kept_arms = [em.mover.part_matrix(9), em.mover.part_matrix(12)];
+            Ok(())
+        });
+        methods.add_method_mut(
+            "throw_kept_arm",
+            |_, e, (part, along, up, gravity): (usize, i16, i16, i16)| {
+                let em = e.em();
+                let kept = em.kept_arms[usize::from(part != 9)];
+                em.throw_matrix(part, kept, along, up, gravity);
+                Ok(())
+            },
+        );
+        methods.add_method_mut("pull_part", |_, e, (part, behind): (usize, bool)| {
+            e.em().start_pull(part, behind);
+            Ok(())
+        });
+
+        // The player, in a grab.
+        methods.add_method_mut("same_floor", |_, e, ()| {
+            let em = e.em();
+            Ok(em.z.floor == em.world.player_floor)
+        });
+        methods.add_method_mut("player_id", |_, e, ()| Ok(e.em().world.player_id));
+        methods.add_method_mut("gacha", |_, e, ()| Ok(e.em().world.gacha));
+        methods.add_method_mut("pl_set_damage_cnt", |_, e, value: i64| {
+            e.em().world.pl.damage_cnt = value as u8;
+            Ok(())
+        });
+        methods.add_method_mut("pl_set_routine_at", |_, e, (index, value): (i64, i64)| {
+            e.em().world.pl.routine[routine_index(index)?] = value as u8;
+            Ok(())
+        });
+        methods.add_method_mut("pl_or_be_flg", |_, e, bits: i64| {
+            e.em().world.pl.be_flg |= bits as u32;
+            Ok(())
+        });
+        methods.add_method_mut("pl_set_timer", |_, e, (index, value): (usize, i64)| {
+            let timer = e.em().world.pl.timers.get_mut(index);
+            *timer.ok_or_else(|| mlua::Error::RuntimeError(format!("no timer {index}")))? =
+                value as u16;
+            Ok(())
+        });
+        // `Set_base_pos`, for the player's hold and for a body a script names.
+        methods.add_method_mut("pl_set_base", |_, e, ()| {
+            let em = e.em();
+            em.world.pl.base = em.mover.set_base_pos();
+            Ok(())
+        });
+        methods.add_method_mut("grab_body", |_, e, ()| {
+            let em = e.em();
+            em.z.grabbed = Some(em.mover.set_base_pos());
+            Ok(())
+        });
+        methods.add_method_mut("let_go", |_, e, ()| {
+            e.em().let_go();
+            Ok(())
+        });
+
+        // The room.
+        methods.add_method_mut("partner", |_, e, ()| Ok(e.em().world.partner));
+        methods.add_method_mut("enemies", |_, e, ()| Ok(e.em().world.enemies));
+        methods.add_method_mut("has_guides", |_, e, ()| Ok(!e.em().world.guides.is_empty()));
+        methods.add_method_mut("scene_target", |_, e, ()| {
+            let [x, y, z] = e.em().world.scene_target;
+            Ok((x, y, z))
+        });
 
         // `Esp_call`.
         methods.add_method_mut(
@@ -399,15 +751,52 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const LICKER: &str = include_str!("../../games/re2/enemy/22/enemy.lua");
+    const SCRIPTS: [&str; 2] = [
+        include_str!("../../games/re2/enemy/22/enemy.lua"),
+        include_str!("../../games/re2/lib/zombie.lua"),
+    ];
 
     #[test]
-    fn the_licker_calls_only_what_the_sandbox_has() {
-        for library in ["math.", "os.", "io.", "utf8.", "debug.", "coroutine."] {
-            assert!(!LICKER.contains(library), "{library} isn't in the sandbox");
-        }
+    fn each_zombie_id_runs_the_shared_driver() {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
-        lua.load(LICKER).exec().unwrap();
+        for script in [
+            include_str!("../../games/re2/enemy/10/enemy.lua"),
+            include_str!("../../games/re2/enemy/11/enemy.lua"),
+            include_str!("../../games/re2/enemy/12/enemy.lua"),
+            include_str!("../../games/re2/enemy/13/enemy.lua"),
+            include_str!("../../games/re2/enemy/15/enemy.lua"),
+            include_str!("../../games/re2/enemy/16/enemy.lua"),
+            include_str!("../../games/re2/enemy/17/enemy.lua"),
+            include_str!("../../games/re2/enemy/18/enemy.lua"),
+            include_str!("../../games/re2/enemy/1e/enemy.lua"),
+            include_str!("../../games/re2/enemy/1f/enemy.lua"),
+        ] {
+            let ran: bool = lua
+                .load(format!(
+                    "local ran = false
+                     local function require(name)
+                         assert(name == '/lib/zombie')
+                         return {{ run = function(e, v) ran = type(v) == 'table' end }}
+                     end
+                     {script}
+                     update(nil)
+                     return ran"
+                ))
+                .eval()
+                .unwrap();
+            assert!(ran);
+        }
+    }
+
+    #[test]
+    fn the_scripts_call_only_what_the_sandbox_has() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        for script in SCRIPTS {
+            for library in ["math.", "os.", "io.", "utf8.", "debug.", "coroutine."] {
+                assert!(!script.contains(library), "{library} isn't in the sandbox");
+            }
+            lua.load(script).exec().unwrap();
+        }
         let method: mlua::Function = lua
             .load("return function(e, name) return e[name] end")
             .eval()
@@ -418,11 +807,15 @@ mod tests {
         };
         lua.scope(|scope| {
             let e = scope.create_userdata_ref_mut(&mut api)?;
-            for call in LICKER.split("e:").skip(1) {
+            for call in SCRIPTS.iter().flat_map(|script| script.split("e:").skip(1)) {
                 let name: String = call
                     .chars()
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
                     .collect();
+                // The end of a word, in a comment.
+                if name.is_empty() {
+                    continue;
+                }
                 let found: mlua::Value = method.call((&e, name.as_str()))?;
                 assert!(!found.is_nil(), "e:{name} has no binding");
             }
