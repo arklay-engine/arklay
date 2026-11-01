@@ -16653,9 +16653,12 @@ fn render_frame_on(
     }
 
     // The characters in RE2's enemy slots, which scripts drive.
-    crate::character2::init(game, room, pack, npc_models, None);
+    crate::character2::init_for_draw(game, room, pack, npc_models);
     for (slot, character) in game.re2.characters.0.iter().enumerate() {
-        let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
+        let Some(character) = character
+            .as_deref()
+            .filter(|c| c.be_flg & 1 != 0 && !crate::character2::awaits_script(c))
+        else {
             continue;
         };
         let skin = character

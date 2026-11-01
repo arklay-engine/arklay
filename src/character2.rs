@@ -629,6 +629,25 @@ pub fn init(
     }
 }
 
+/// A zombie's first run is a script, and a frame has no VM to run it with.
+pub fn awaits_script(character: &Character) -> bool {
+    character.with_room && character.zombie.is_some()
+}
+
+/// [`init`] for a frame drawn before its tick. With a zombie still to start, it
+/// leaves the whole pass to the tick, so that it runs in its one order.
+pub fn init_for_draw(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+) {
+    let characters = &game.re2.characters.0;
+    if !characters.iter().flatten().any(|c| awaits_script(c)) {
+        init(game, room, pack, npc_models, None);
+    }
+}
+
 /// The tick the load's `fg_stop` ends: the enemies do no more than a `Root_ck`.
 fn run_load_stop(
     game: &mut GameState,

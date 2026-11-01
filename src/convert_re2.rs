@@ -554,6 +554,50 @@ fn copy_text(
         ),
         ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         (
+            "lib/zombie.lua",
+            include_str!("../games/re2/lib/zombie.lua"),
+        ),
+        (
+            "enemy/10/enemy.lua",
+            include_str!("../games/re2/enemy/10/enemy.lua"),
+        ),
+        (
+            "enemy/11/enemy.lua",
+            include_str!("../games/re2/enemy/11/enemy.lua"),
+        ),
+        (
+            "enemy/12/enemy.lua",
+            include_str!("../games/re2/enemy/12/enemy.lua"),
+        ),
+        (
+            "enemy/13/enemy.lua",
+            include_str!("../games/re2/enemy/13/enemy.lua"),
+        ),
+        (
+            "enemy/15/enemy.lua",
+            include_str!("../games/re2/enemy/15/enemy.lua"),
+        ),
+        (
+            "enemy/16/enemy.lua",
+            include_str!("../games/re2/enemy/16/enemy.lua"),
+        ),
+        (
+            "enemy/17/enemy.lua",
+            include_str!("../games/re2/enemy/17/enemy.lua"),
+        ),
+        (
+            "enemy/18/enemy.lua",
+            include_str!("../games/re2/enemy/18/enemy.lua"),
+        ),
+        (
+            "enemy/1e/enemy.lua",
+            include_str!("../games/re2/enemy/1e/enemy.lua"),
+        ),
+        (
+            "enemy/1f/enemy.lua",
+            include_str!("../games/re2/enemy/1f/enemy.lua"),
+        ),
+        (
             "enemy/22/enemy.lua",
             include_str!("../games/re2/enemy/22/enemy.lua"),
         ),
