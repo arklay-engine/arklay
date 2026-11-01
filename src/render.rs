@@ -2216,16 +2216,21 @@ impl Framebuffer {
             v,
             color: [1.0; 4],
         };
+        let [[ax, ay], [bx, by], [cx, cy], [dx, dy]] = quad
+            .corners
+            .map_or([[x, y], [x1, y], [x, y1], [x1, y1]], |corners| {
+                corners.map(|point| point.map(|v| v as f32))
+            });
         let triangles = [
             [
-                corner(x, y, u0, v0),
-                corner(x1, y, u1, v0),
-                corner(x, y1, u0, v1),
+                corner(ax, ay, u0, v0),
+                corner(bx, by, u1, v0),
+                corner(cx, cy, u0, v1),
             ],
             [
-                corner(x, y1, u0, v1),
-                corner(x1, y, u1, v0),
-                corner(x1, y1, u1, v1),
+                corner(cx, cy, u0, v1),
+                corner(bx, by, u1, v0),
+                corner(dx, dy, u1, v1),
             ],
         ];
         let rgba = &mut self.rgba;
@@ -3712,6 +3717,9 @@ pub struct EffectQuad {
     pub pos: [i32; 2],
     /// Scaled screen size in pixels.
     pub size: [i32; 2],
+    /// A turned quad's corners, top left, top right, bottom left, bottom right
+    /// in the texture, instead of `pos` and `size`.
+    pub corners: Option<[[i32; 2]; 4]>,
     /// Per-channel tint record multiplier.
     pub tint: [u8; 3],
     /// `0x00` opaque or `0x80` half blend.
@@ -6449,6 +6457,7 @@ mod tests {
             tint,
             blend,
             sheet: [0, 256],
+            corners: None,
         }
     }
 

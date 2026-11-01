@@ -6,7 +6,7 @@ use crate::game::GameState;
 use crate::model::{Clip, Emd, Keyframe};
 use crate::pack::Pack;
 use crate::player2::{self, Banks, Tick};
-use crate::scd2::host::{Character, NO_ENEMY_FLAG, SPLAYER_SLOT};
+use crate::scd2::host::{Character, EsprCall, NO_ENEMY_FLAG, SPLAYER_SLOT};
 use crate::state::RoomState;
 
 /// `Game_loop`'s pass over the enemy slots, for the characters `_Spl` runs.
@@ -373,9 +373,7 @@ pub fn run_esprs(
             let turned: i32 = (0..3).map(|i| i32::from(world.m[axis][i]) * at[i]).sum();
             (world.t[axis] + (turned >> 12)) as i16
         });
-        game.re2
-            .effects
-            .call(call.kind, call.row, call.size, call.dir, at, false);
+        game.re2.effects.call_placed(EsprCall { at, ..call });
     }
 }
 

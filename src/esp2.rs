@@ -299,6 +299,18 @@ fn core_tile(sheet: &mut Sheet, clut: u16, v: u8) -> (u8, u8) {
     (row, v)
 }
 
+/// A `Sce_espr_on`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EsprCall {
+    pub kind: u8,
+    pub row: u8,
+    pub size: u16,
+    pub dir: i16,
+    pub at: [i16; 3],
+    pub rotation: [i16; 3],
+    pub group: u8,
+}
+
 /// A live slot of the pool.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Slot {
@@ -331,6 +343,8 @@ struct Slot {
     /// `+0x1c`, `+0x1e`: what `Esp_call` was asked for.
     kind: u8,
     row: u8,
+    /// `+0x1d`: the id `Esp_call2` gave it, for `Esp_kill2`.
+    group: u8,
     /// `+0x1f`: the block reached within `blocks`.
     block: u8,
     /// `+0x20`: ticks left on this frame.
@@ -351,6 +365,8 @@ struct Slot {
     pos: [i16; 3],
     /// `+0x3a`: the size from the script.
     size: u16,
+    /// `+0x44`: how `Esp_call3D` turned it.
+    rotation: [i16; 3],
     /// `+0x78`: this slot's group of blocks, in the motion table.
     blocks: usize,
     /// `+0x14` while it falls: `Sca_ck_hit`'s height, under it at the last look.
@@ -465,6 +481,23 @@ impl Effects {
         Some(first)
     }
 
+    /// `Esp_call2`, `Esp_call3D` and `Esp_call3D2`: `Esp_call` with an id for
+    /// [`Self::kill_group`] and a turn for what's drawn in 3D.
+    pub fn call_placed(&mut self, call: EsprCall) -> Option<usize> {
+        let EsprCall {
+            rotation, group, ..
+        } = call;
+        let first = self.call(call.kind, call.row, call.size, call.dir, call.at, false)?;
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.rotation = rotation;
+                slot.group = group;
+            }
+        }
+        Some(first)
+    }
+
     /// A slot and those that die with it follow a matrix `Esp_call` was given.
     pub fn move_to(&mut self, index: usize, at: [i16; 3]) {
         for (other, slot) in self.slots.iter_mut().enumerate() {
@@ -482,6 +515,15 @@ impl Effects {
     pub fn kill(&mut self, kind: u8, row: u8) {
         for slot in &mut self.slots {
             if slot.kind == kind && slot.row == row {
+                slot.kill();
+            }
+        }
+    }
+
+    /// `Esp_kill2`.
+    pub fn kill_group(&mut self, group: u8) {
+        for slot in &mut self.slots {
+            if slot.group == group {
                 slot.kill();
             }
         }
@@ -932,18 +974,18 @@ impl Effects {
 
     /// `Eff_sprt_trans` and `Esp_trans_main`: this frame's billboards, each
     /// frame's tiles one quad, and the pages they sample. `in_view` is
-    /// `Hit_ck_point4` on the cut. The 3D ones (`Esp_trans_3d`) aren't drawn.
+    /// `Hit_ck_point4` on the cut, and `depth_bias` what `Esp_trans_3d` adds to
+    /// the depth of the 3D ones.
     pub fn quads(
         &self,
         camera: &Camera,
+        depth_bias: i32,
         in_view: impl Fn(i32, i32) -> bool,
     ) -> (Vec<EffectQuad>, Vec<Page>) {
         let mut quads = Vec::new();
         let mut pages = Vec::new();
         for slot in self.slots.iter().rev() {
-            if slot.flags & (FLAG_LIVE | FLAG_VISIBLE) != FLAG_LIVE | FLAG_VISIBLE
-                || slot.flags & FLAG_3D != 0
-            {
+            if slot.flags & (FLAG_LIVE | FLAG_VISIBLE) != FLAG_LIVE | FLAG_VISIBLE {
                 continue;
             }
             let [x, y, z] = slot.pos.map(i32::from);
@@ -965,6 +1007,38 @@ impl Effects {
             if count == 0 || size == 0 {
                 continue;
             }
+            let (blend, op) = if slot.flags & FLAG_SEMI == 0 {
+                (0, EffectBlend::Normal)
+            } else {
+                // The PC's table has only the two (`DWORD_00524e24`).
+                match (slot.tpage >> 5) & 3 {
+                    1 => (0, EffectBlend::Add),
+                    _ => (0x80, EffectBlend::Normal),
+                }
+            };
+            if slot.flags & FLAG_3D != 0 {
+                for tile in sprite.tiles.iter().skip(first).take(count) {
+                    let Some((corners, key)) = corners_3d(slot, camera, tile, size, depth_bias)
+                    else {
+                        break;
+                    };
+                    let (row, v) = core_tile(&mut sheet, slot.clut, tile[1]);
+                    quads.push(EffectQuad {
+                        key,
+                        page: page_index(&mut pages, Page { sheet, row }),
+                        uv: [tile[0], v, 0, 0],
+                        source: [(size - 1) as u8; 2],
+                        pos: corners[0],
+                        size: [1, 1],
+                        corners: Some(corners),
+                        tint: [0xff; 3],
+                        blend,
+                        op,
+                        sheet: [0, 0xffff],
+                    });
+                }
+                continue;
+            }
             let depth = camera.view_position([x, y, z])[2];
             if depth < 0x200 {
                 continue;
@@ -981,36 +1055,21 @@ impl Effects {
                 size - u32::from(texel[0] > 0x1ffff),
                 size - u32::from(texel[1] > 0x1ffff),
             ];
-            let (blend, op) = if slot.flags & FLAG_SEMI == 0 {
-                (0, EffectBlend::Normal)
-            } else {
-                // The PC's table has only the two (`DWORD_00524e24`).
-                match (slot.tpage >> 5) & 3 {
-                    1 => (0, EffectBlend::Add),
-                    _ => (0x80, EffectBlend::Normal),
-                }
-            };
             for tile in sprite.tiles.iter().skip(first).take(count) {
                 let (row, v) = core_tile(&mut sheet, slot.clut, tile[1]);
-                let page = Page { sheet, row };
-                let page_index = pages
-                    .iter()
-                    .position(|known| *known == page)
-                    .unwrap_or_else(|| {
-                        pages.push(page);
-                        pages.len() - 1
-                    });
+                let page = page_index(&mut pages, Page { sheet, row });
                 let left = (i64::from(screen_x) << 16) + i64::from(tile[2] as i8) * texel[0];
                 let top = (i64::from(screen_y) << 16) + i64::from(tile[3] as i8) * texel[1];
                 let (x0, y0) = ((left >> 16) as i32, (top >> 16) as i32);
                 let (x1, y1) = (((left + width) >> 16) as i32, ((top + height) >> 16) as i32);
                 quads.push(EffectQuad {
                     key: ((depth.min(0x7fff) as u32) >> 5) << 5,
-                    page: page_index,
+                    page,
                     uv: [tile[0], v, 0, 0],
                     source: [source[0] as u8, source[1] as u8],
                     pos: [x0, y0],
                     size: [x1 - x0, y1 - y0],
+                    corners: None,
                     tint: [0xff; 3],
                     blend,
                     op,
@@ -1023,6 +1082,60 @@ impl Effects {
         quads.reverse();
         (quads, pages)
     }
+}
+
+/// A page's place in the frame's list.
+fn page_index(pages: &mut Vec<Page>, page: Page) -> usize {
+    pages
+        .iter()
+        .position(|known| *known == page)
+        .unwrap_or_else(|| {
+            pages.push(page);
+            pages.len() - 1
+        })
+}
+
+/// `Esp_trans_3d` on one tile: its corners on the screen, and its depth key.
+/// `None` where the original stops drawing the slot, too near the camera.
+fn corners_3d(
+    slot: &Slot,
+    camera: &Camera,
+    tile: &[u8; 4],
+    size: u32,
+    depth_bias: i32,
+) -> Option<([[i32; 2]; 4], u32)> {
+    let per_size = u32::from(slot.size).wrapping_mul(camera.fov as u32 >> 4) as i32;
+    let width = (i64::from(slot.scale[0]) * i64::from(per_size)) as i32 >> 12;
+    let height = (i64::from(slot.scale[1]) * i64::from(per_size)) as i32 >> 12;
+    let (left, top) = (
+        ((tile[2] as i8 as i32).wrapping_mul(width) >> 12) as i16,
+        ((tile[3] as i8 as i32).wrapping_mul(height) >> 12) as i16,
+    );
+    let right = ((width as u32).wrapping_mul(size) >> 12) as i16;
+    let bottom = ((height as u32).wrapping_mul(size) >> 12) as i16;
+    let (right, bottom) = (left.wrapping_add(right), top.wrapping_add(bottom));
+    let turn = crate::player2::rot_matrix(slot.rotation);
+    let at: [i32; 3] =
+        std::array::from_fn(|axis| i32::from(slot.offset[axis]) + i32::from(slot.base[axis]));
+    let mut corners = [[0; 2]; 4];
+    let mut depths = 0;
+    for (corner, (x, y)) in
+        corners
+            .iter_mut()
+            .zip([(left, top), (right, top), (left, bottom), (right, bottom)])
+    {
+        let world: [i32; 3] = std::array::from_fn(|axis| {
+            let [ax, ay, _] = turn[axis].map(i32::from);
+            at[axis] + ((ax * i32::from(x) + ay * i32::from(y)) >> 12)
+        });
+        *corner = camera.project(world)?;
+        depths += camera.view_position(world)[2] >> 2;
+    }
+    let depth = (depths / 4).min(0x1fff);
+    if depth < 0x100 {
+        return None;
+    }
+    Some((corners, (depth_bias + depth * 4).max(0) as u32))
 }
 
 /// The record lengths of a set: each runs up to the next, in file order, and
@@ -1324,6 +1437,72 @@ mod tests {
         let slot = effects.slots[slot];
         assert_eq!((slot.anim, slot.update), (0, 0));
         assert_eq!(slot.flags & FLAG_INTEGRATE, 0);
+    }
+
+    #[test]
+    fn a_kill_by_group_takes_only_that_group() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
+        let one = effects
+            .call_placed(EsprCall {
+                kind: 7,
+                row: 0,
+                size: 0x1000,
+                dir: 0,
+                at: [0; 3],
+                rotation: [0; 3],
+                group: 2,
+            })
+            .unwrap();
+        let other = effects
+            .call_placed(EsprCall {
+                kind: 7,
+                row: 0,
+                size: 0x1000,
+                dir: 0,
+                at: [0; 3],
+                rotation: [0; 3],
+                group: 3,
+            })
+            .unwrap();
+        effects.kill_group(2);
+        assert!(!effects.slots[one].live());
+        assert!(effects.slots[other].live());
+    }
+
+    #[test]
+    fn a_3d_effect_turns_on_its_rotation_and_sorts_by_its_depth() {
+        let camera = Camera::from_points([0, 0, -8000], [0, 0, 0], 208);
+        let slot = Slot {
+            scale: [4096, 4096],
+            size: 0x1000,
+            ..Slot::default()
+        };
+        let tile = [0, 0, 0xf0, 0xf0];
+        let (flat, key) = corners_3d(&slot, &camera, &tile, 32, 0).unwrap();
+        assert_ne!(flat[0][0], flat[1][0]);
+        assert_eq!(flat[0][1], flat[1][1]);
+        assert!((7990..=8000).contains(&key), "{key}");
+        let (_, biased) = corners_3d(&slot, &camera, &tile, 32, 2000).unwrap();
+        assert_eq!(biased, key + 2000);
+        let edge_on = Slot {
+            rotation: [0, 0x400, 0],
+            ..slot
+        };
+        let (turned, _) = corners_3d(&edge_on, &camera, &tile, 32, 0).unwrap();
+        assert!((turned[0][0] - turned[1][0]).abs() <= 8);
+        assert!((flat[0][0] - flat[1][0]).abs() > 8);
+    }
+
+    #[test]
+    fn a_3d_effect_too_near_the_camera_is_not_drawn() {
+        let camera = Camera::from_points([0, 0, -500], [0, 0, 0], 100);
+        let slot = Slot {
+            scale: [4096, 4096],
+            size: 0x100,
+            ..Slot::default()
+        };
+        assert!(corners_3d(&slot, &camera, &[0, 0, 0xf0, 0xf0], 32, 0).is_none());
     }
 
     #[test]

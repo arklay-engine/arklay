@@ -637,6 +637,12 @@ mod imp {
                 Ok(())
             });
 
+            // `set_re2_sce_rnd(value)`: the same for `Sce_rnd_set`'s state.
+            methods.add_method_mut("set_re2_sce_rnd", |_lua, game, value: u32| {
+                game.re2.random = value;
+                Ok(())
+            });
+
             // `set_flag_bank(bank, bytes)`: the raw bytes of one bank, from a
             // Lua string or a sequence table of byte values, for state the
             // named methods do not reach.
