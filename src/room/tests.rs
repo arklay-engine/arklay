@@ -887,3 +887,18 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     let expected = Loaded::from_rdt(&pack, id, data).unwrap();
     assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }
+
+/// A room the XML loses a field of falls back to a raw RDT at conversion.
+#[test]
+fn an_re2_rooms_guide_areas_survive_the_xml() {
+    let mut source = crate::rdt2::read(&crate::rdt2::tests::sample()).unwrap();
+    source.guides = vec![crate::state::Guide {
+        x0: -100,
+        z0: 200,
+        x1: 3000,
+        z1: 4000,
+        links: 0xA005,
+    }];
+    let text = xml::write(&source).unwrap();
+    assert_eq!(xml::parse(&text).unwrap(), source);
+}
