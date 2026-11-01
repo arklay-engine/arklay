@@ -283,6 +283,11 @@ impl Loaded {
             state.room_anim = crate::rdt2::room_anim(&data)
                 .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok());
             state.character_anims = crate::rdt2::character_anims(&data);
+            state.omodel_slot_count = source::RE2_OBJECT_SLOTS;
+            state.object_models = crate::rdt2::object_models(&data)
+                .into_iter()
+                .filter_map(|(slot, tim, md1)| source::re2_object(slot, tim, md1).ok())
+                .collect();
             return Ok(Self {
                 id,
                 state,
@@ -642,7 +647,8 @@ pub fn convert_rdt2(
     if back != source {
         bail_difference("does not read back as the same definition", &source, &back)?;
     }
-    let anim = source::re2_anim_files(data, id);
+    let mut anim = source::re2_anim_files(data, id);
+    anim.extend(source::re2_object_files(data, id));
     let mut writer = crate::pack::PackWriter::new();
     for (path, bytes) in &anim {
         writer.add(path, bytes.clone())?;

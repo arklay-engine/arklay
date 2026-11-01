@@ -557,6 +557,19 @@ impl RoomSource {
             pack,
             &mut model_warnings,
         )?;
+        let (omodel_slot_count, object_models) = if self.dialect == Dialect::Re2 {
+            let models = (0..usize::from(RE2_OBJECT_SLOTS)).filter_map(|slot| {
+                let stem = slot_stem(&kind("object"), slot);
+                let tim = pack.read(&format!("{stem}.tim")).ok()?;
+                let md1 = pack.read(&format!("{stem}.md1")).ok()?;
+                re2_object(slot, &tim, &md1)
+                    .map_err(|error| model_warnings.push(format!("object {stem}: {error:#}")))
+                    .ok()
+            });
+            (RE2_OBJECT_SLOTS, models.collect())
+        } else {
+            (omodel_slot_count, object_models)
+        };
         let anim = self
             .slots
             .file("anim", PLAYER_ANIMATION)
@@ -977,6 +990,33 @@ fn build_anim(stem: &str, pack: &Pack, dialect: Dialect) -> Result<crate::model:
         Dialect::Re1 => emd::parse_room_anim_files(&emr, &edd),
         Dialect::Re2 => crate::emd2::parse_room_anim(&emr, &edd),
     }
+}
+
+/// The pack entries of an RE2 room's object models, as `(entry, bytes)`.
+pub(super) fn re2_object_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> {
+    let dir = format!("{}/object", id.rdt_dir());
+    let mut files = Vec::new();
+    for (slot, tim, md1) in crate::rdt2::object_models(data) {
+        if re2_object(slot, tim, md1).is_ok() {
+            let stem = slot_stem(&dir, slot);
+            files.push((format!("{stem}.tim"), tim.to_vec()));
+            files.push((format!("{stem}.md1"), md1.to_vec()));
+        }
+    }
+    files
+}
+
+/// The slots of `pOm` a room's scripts can use, whatever models it has.
+pub(super) const RE2_OBJECT_SLOTS: u8 = 32;
+
+/// An RE2 object's model, of `Om_disp`'s first part.
+pub(super) fn re2_object(slot: usize, tim: &[u8], md1: &[u8]) -> Result<ObjectAsset> {
+    Ok(ObjectAsset {
+        pair_index: slot,
+        model: crate::emd2::parse_md1(md1)?,
+        texture: crate::tim::decode_8bpp(tim)?,
+        hd_name: None,
+    })
 }
 
 /// The pack entries of an RE2 room's own player animations, as `(entry, bytes)`.

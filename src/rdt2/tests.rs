@@ -255,3 +255,21 @@ fn reads_the_last_room_animations_for_the_player() {
     assert_eq!(emr, [4u8; 4]);
     assert_eq!(edd, [5u8; 4]);
 }
+
+#[test]
+fn object_models_end_where_the_next_thing_starts() {
+    let mut data = vec![0u8; 0x100];
+    data[2] = 2;
+    let slot = 8 + super::MODELS_SLOT * 4;
+    data[slot..slot + 4].copy_from_slice(&0x60u32.to_le_bytes());
+    // The first pair, and a second without a model.
+    data[0x60..0x64].copy_from_slice(&0x80u32.to_le_bytes());
+    data[0x64..0x68].copy_from_slice(&0x90u32.to_le_bytes());
+    data[0x68..0x6C].copy_from_slice(&0xA0u32.to_le_bytes());
+    let models = super::object_models(&data);
+    assert_eq!(models.len(), 1);
+    let (index, tim, md1) = models[0];
+    assert_eq!(index, 0);
+    assert_eq!(tim.len(), 0x10);
+    assert_eq!(md1.len(), 0x10);
+}

@@ -23,6 +23,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 ## Collision
 
 - **The floor.** A body's floor comes from its height. The original keeps it in `nFloor`, which rounds differently on a slope (`Sca_hit_slope`).
+- **Script objects.** `obj_model_set` places and draws a room's models, and the scripts can move them through `work_set`, but they don't collide or get pushed (`Om_move`, `Oma_ck_oba`, `Om_move_box`). They draw darker than the original's, for instance the plant pots in room 116. Not ported: water (`Mizu_trans`), colour changes (`Cc_work`) and an object parented to an enemy.
 - **Objects and other bodies.** Only the room's SCA records block. `Sca_ck_hit`'s object models (`Omd_in_check`) and `Oba_ck_em2`'s other bodies don't.
 - **Offsets.** `Sca_hit_*` add `Atd`'s `Ofs_x` and `Ofs_z`, which are zero for the player. Other bodies will need them.
 

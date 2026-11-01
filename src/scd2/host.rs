@@ -42,6 +42,9 @@ pub struct Re2State {
     pub door_stop: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
+    /// Each task's `Speed_set`s: speeds of position and rotation, then what
+    /// `Add_aspeed` adds to them. `Work_set` clears them.
+    pub speeds: [[i16; 12]; TASK_SLOTS],
     /// A scripted move of the player, applied at the next tick.
     pub pending_player: PendingPlayer,
     /// `Key`, the pad as the scripts read it.
@@ -121,7 +124,19 @@ pub enum Work {
     #[default]
     Player,
     Character(u8),
+    /// `pOm`'s slot.
+    Object(u8),
     Other,
+}
+
+/// What `kage_set` asks of a body's `KAGE_WORK`. A script makes a corpse's pool
+/// of blood with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kage {
+    pub color: u32,
+    pub half: (i32, i32),
+    /// `Off_x` and `Off_z`, which `MulKage` turns with the body.
+    pub off: (i32, i32),
 }
 
 /// `_Spl`'s character: a body and a `PLAYER_WORK`, driven by the room's scripts.
@@ -146,6 +161,8 @@ pub struct Character {
     pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
     /// What it needs if `Em_Zombie` runs it.
     pub zombie: Option<crate::zombie2::Zombie>,
+    /// The last `kage_set`, in place of `Em_init`'s shadow.
+    pub kage: Option<Kage>,
 }
 
 /// `xa_on`'s line, which `wsleep` waits out. A save doesn't hold it, so a line
@@ -272,6 +289,7 @@ impl Default for Re2State {
             door_settling: false,
             door_stop: false,
             work: [Work::Player; TASK_SLOTS],
+            speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
             key: 0,
             key_trg: 0,
@@ -756,6 +774,7 @@ impl EsprMatrix {
 const WK_PLAYER: i64 = 1;
 const WK_SPLAYER: i64 = 2;
 const WK_ENEMY: i64 = 3;
+const WK_OBJECT: i64 = 4;
 
 /// The work members holding the position (`Member_set_branch`).
 const MEMBER_POS_X: usize = 0x0B;
@@ -1019,6 +1038,7 @@ impl GameHost<'_> {
             distance: 0,
             with_room: self.game.re2.room_loading,
             held_bank: None,
+            kage: None,
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
@@ -1073,6 +1093,9 @@ impl GameHost<'_> {
         if let Some(character) = self.task_character(task) {
             return character_member(character, member);
         }
+        if let Some(object) = self.task_object(task) {
+            return object_member(object, member);
+        }
         if !self.work_is_player(task) {
             return None;
         }
@@ -1113,9 +1136,102 @@ impl GameHost<'_> {
     fn set_member(&mut self, task: usize, member: u8, value: i32) {
         if let Some(character) = self.task_character(task) {
             set_character_member(character, member, value);
+        } else if let Some(object) = self.task_object(task) {
+            set_object_member(object, member, value);
         } else if self.work_is_player(task) {
             self.set_player_member(member, value);
         }
+    }
+
+    /// The object `task`'s work is, if it is one.
+    fn task_object(&mut self, task: usize) -> Option<&mut crate::objects::ObjectRecord> {
+        match self.game.re2.work.get(task) {
+            Some(Work::Object(slot)) => self.game.objects.record_mut(usize::from(*slot)),
+            _ => None,
+        }
+    }
+
+    /// `Add_speed`: the task's speeds, onto its work's position and rotation.
+    fn add_speed(&mut self, task: usize) {
+        let Some(speeds) = self.game.re2.speeds.get(task).copied() else {
+            return;
+        };
+        if let Some(object) = self.task_object(task) {
+            for axis in 0..3 {
+                object.pos[axis] = object.pos[axis].wrapping_add(i32::from(speeds[axis]));
+                object.rotation[axis] = object.rotation[axis].wrapping_add(speeds[axis + 3]);
+            }
+        } else if let Some(character) = self.task_character(task) {
+            for (pos, speed) in character.body.pos.iter_mut().zip(speeds) {
+                *pos = pos.wrapping_add(i32::from(speed));
+            }
+            character.body.angle = character.body.angle.wrapping_add(speeds[4] as u16);
+        } else if self.work_is_player(task) {
+            let mut pos = self
+                .game
+                .re2
+                .pending_player
+                .pos
+                .unwrap_or(self.game.entities[0].pos);
+            for (pos, speed) in pos.iter_mut().zip(speeds) {
+                *pos = pos.wrapping_add(i32::from(speed));
+            }
+            self.game.re2.pending_player.pos = Some(pos);
+            if speeds[4] != 0 {
+                let angle = self
+                    .game
+                    .re2
+                    .pending_player
+                    .angle
+                    .unwrap_or(self.game.entities[0].angle);
+                self.game.re2.pending_player.angle =
+                    Some(angle.wrapping_add(speeds[4] as u16) & 0x0FFF);
+            }
+        }
+    }
+
+    /// `Obj_model_set`: a second call on a slot in use takes it away.
+    fn obj_model_set(&mut self, at: impl Fn(usize) -> i64) {
+        let slot = at(0) as usize;
+        let stage_room = (self.game.id.stage, self.game.id.room);
+        let Some(record) = self.game.objects.record_mut(slot) else {
+            return;
+        };
+        let attr = at(8) as u16;
+        let mut be_flg = if record.be_flg == 0 {
+            (at(7) as i16 as i32 | 1) as u32
+        } else {
+            0
+        };
+        if attr & 0x20 != 0 {
+            be_flg &= !1;
+        }
+        let selector = (at(5) as u16 >> 8) as u8;
+        let parent = match selector & 0xC0 {
+            0x40 => 0xFE,
+            0xC0 => selector & 0x3F,
+            _ => 0xFF,
+        };
+        let mut y = at(10) as i32;
+        // `Obj_model_set` and `Om_trans`' own room: a floor of its first four.
+        if stage_room == (2, 3) && slot < 4 {
+            y -= 0x28;
+        }
+        *record = crate::objects::ObjectRecord {
+            flag: if be_flg & 1 != 0 {
+                crate::objects::OBJECT_FLAG_ACTIVE
+            } else {
+                0
+            },
+            model: slot as u8,
+            parent,
+            pos: [at(9) as i32, y, at(11) as i32],
+            rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
+            asset: Some(slot as u8),
+            be_flg,
+            draw_lift: if at(1) == 2 { 900 } else { 0 },
+            ..crate::objects::ObjectRecord::default()
+        };
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -1267,14 +1383,59 @@ impl Host for GameHost<'_> {
                     Work::Character(SPLAYER_SLOT as u8)
                 } else if at(0) == WK_ENEMY && self.character_mut(at(1) as u8).is_some() {
                     Work::Character(at(1) as u8)
+                } else if at(0) == WK_OBJECT && self.game.objects.record(at(1) as usize).is_some() {
+                    Work::Object(at(1) as u8)
                 } else {
                     Work::Other
                 };
                 if let Some(slot) = self.game.re2.work.get_mut(task) {
                     *slot = work;
                 }
+                if let Some(speeds) = self.game.re2.speeds.get_mut(task) {
+                    *speeds = [0; 12];
+                }
             }
             "sce_em_set" => self.sce_em_set(at),
+            "obj_model_set" => self.obj_model_set(at),
+            "speed_set" => {
+                if let Some(speed) = self
+                    .game
+                    .re2
+                    .speeds
+                    .get_mut(task)
+                    .and_then(|speeds| speeds.get_mut(at(0) as usize))
+                {
+                    *speed = at(1) as i16;
+                }
+            }
+            "add_aspeed" => {
+                if let Some(speeds) = self.game.re2.speeds.get_mut(task) {
+                    for index in 0..6 {
+                        speeds[index] = speeds[index].wrapping_add(speeds[index + 6]);
+                    }
+                }
+            }
+            "add_speed" => self.add_speed(task),
+            // The game only ever gives this to enemies (kind 3).
+            "kage_set" if at(0) == 3 => {
+                if let Some(character) = self.character_mut(at(1) as u8) {
+                    character.kage = Some(Kage {
+                        color: at(2) as u32 | (at(3) as u32) << 8 | (at(4) as u32) << 16,
+                        half: (at(5) as i32, at(6) as i32),
+                        off: (at(7) as i32, at(8) as i32),
+                    });
+                }
+            }
+            "pos_set" if self.task_object(task).is_some() => {
+                if let Some(object) = self.task_object(task) {
+                    object.pos = [at(1) as i32, at(2) as i32, at(3) as i32];
+                }
+            }
+            "dir_set" if self.task_object(task).is_some() => {
+                if let Some(object) = self.task_object(task) {
+                    object.rotation = [at(1) as i16, at(2) as i16, at(3) as i16];
+                }
+            }
             "xa_on" => {
                 let stage = if at(0) == 0 { self.game.id.stage } else { 0 };
                 let player = u8::from(self.game.re2.flag(STATUS_BANK, STATUS_PLAYER));
@@ -1567,6 +1728,33 @@ impl Host for GameHost<'_> {
 }
 
 /// `Load_member_branch` on a character.
+/// `Load_member_branch` on an object: `Be_flg`, its position and its rotation.
+fn object_member(object: &crate::objects::ObjectRecord, member: u8) -> Option<i32> {
+    match member {
+        0 => Some(i32::from(object.be_flg as u16)),
+        1 => Some(i32::from((object.be_flg >> 16) as u16)),
+        0x0B..=0x0D => Some(object.pos[usize::from(member) - 0x0B]),
+        0x0E..=0x10 => Some(i32::from(object.rotation[usize::from(member) - 0x0E])),
+        _ => None,
+    }
+}
+
+/// `Member_set_branch` on an object. `Be_flg`'s bit 19 is `Om_trans`' not drawn.
+fn set_object_member(object: &mut crate::objects::ObjectRecord, member: u8, value: i32) {
+    match member {
+        0 => object.be_flg = object.be_flg & 0xFFFF_0000 | u32::from(value as u16),
+        1 => object.be_flg = object.be_flg & 0xFFFF | u32::from(value as u16) << 16,
+        0x0B..=0x0D => object.pos[usize::from(member) - 0x0B] = value,
+        0x0E..=0x10 => object.rotation[usize::from(member) - 0x0E] = value as i16,
+        _ => return,
+    }
+    object.flag = if object.be_flg & 1 != 0 && object.be_flg & 0x8_0000 == 0 {
+        crate::objects::OBJECT_FLAG_ACTIVE
+    } else {
+        0
+    };
+}
+
 fn character_member(character: &Character, member: u8) -> Option<i32> {
     if let Some(axis) = usize::from(member)
         .checked_sub(MEMBER_POS_X)
@@ -1625,6 +1813,63 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    #[test]
+    fn obj_model_set_places_an_object_and_a_second_call_clears_it() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [
+            4, 2, 0, 0, 0, 0x4000, 0, 0x10, 0, 100, -200, 300, 1, 2, 3, 0, 0, 0, 0, 0, 0,
+        ];
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(4).unwrap();
+        assert_eq!(object.be_flg, 0x11);
+        assert_eq!(object.pos, [100, -200, 300]);
+        assert_eq!(object.rotation, [1, 2, 3]);
+        assert_eq!(object.parent, 0xFE, "0x40 follows the player");
+        assert_eq!(object.draw_lift, 900, "Id 2 draws higher");
+        assert_ne!(object.flag, 0);
+
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(4).unwrap();
+        assert_eq!(object.be_flg, 0);
+        assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn a_script_moves_its_object_through_the_work() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [4, 0, 0, 0, 0, 0, 0, 0, 0, 10, 20, 30, 0, 0, 0];
+        exec(&mut game, "obj_model_set", &call);
+        exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+        exec(&mut game, "pos_set", &[0, 5, 6, 7]);
+        let object = game.objects.record_mut(4).unwrap();
+        assert_eq!(object.pos, [5, 6, 7]);
+        assert_eq!(object_member(object, 0x0C), Some(6));
+        set_object_member(object, 0x0F, 99);
+        assert_eq!(object.rotation[1], 99);
+    }
+
+    #[test]
+    fn kage_set_makes_a_body_s_pool() {
+        let mut game = GameState::default();
+        spawn_character(&mut game, 31, 255);
+        exec(
+            &mut game,
+            "kage_set",
+            &[3, 0, 16, 191, 191, 2000, 1500, 7, 9],
+        );
+        let character = game.re2.characters.0[0].as_deref().unwrap();
+        assert_eq!(
+            character.kage,
+            Some(Kage {
+                color: crate::zombie2::POOL_COLOR,
+                half: (2000, 1500),
+                off: (7, 9),
+            })
+        );
     }
 
     #[test]

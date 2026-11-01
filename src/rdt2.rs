@@ -47,6 +47,8 @@ const RVD_SLOT: usize = 8;
 const LIT_SLOT: usize = 9;
 /// Section slot of the footstep zones (FLR, `rdt + 0x34`).
 const FLR_SLOT: usize = 11;
+/// The script objects' models: `rdt + 0x30`, pairs of a TIM and an MD1.
+const MODELS_SLOT: usize = 10;
 /// The guide areas `Guide_check` reads: `rdt + 0x38`.
 const GUIDE_SLOT: usize = 12;
 const GUIDE_SIZE: usize = 12;
@@ -290,6 +292,43 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
         dialect: Dialect::Re2,
         ..RoomSource::default()
     })
+}
+
+/// The room's object models, what `Obj_model_set` binds: `rdt[2]` pairs of a
+/// TIM and an MD1 by slot, of which one with no MD1 is a slot left empty.
+pub fn object_models(data: &[u8]) -> Vec<(usize, &[u8], &[u8])> {
+    let count = usize::from(data.get(2).copied().unwrap_or(0));
+    let Ok(base) = offset(data, MODELS_SLOT) else {
+        return Vec::new();
+    };
+    let pair = |slot: usize| {
+        let at = base as usize + slot * 8;
+        Some((u32_at(data, at).ok()?, u32_at(data, at + 4).ok()?))
+    };
+    // A model has no length of its own: it ends where the next thing starts.
+    let mut starts: Vec<u32> = (0..OFFSET_COUNT)
+        .filter_map(|slot| offset(data, slot).ok())
+        .chain(
+            (0..count)
+                .filter_map(pair)
+                .flat_map(|(tim, md1)| [tim, md1]),
+        )
+        .collect();
+    starts.sort_unstable();
+    let span = |start: u32| {
+        let next = starts.iter().find(|next| **next > start);
+        let end = next.map_or(data.len(), |next| *next as usize);
+        data.get(start as usize..end.min(data.len()))
+    };
+    (0..count)
+        .filter_map(|slot| {
+            let (tim, md1) = pair(slot)?;
+            if tim == 0 || md1 == 0 {
+                return None;
+            }
+            Some((slot, span(tim)?, span(md1)?))
+        })
+        .collect()
 }
 
 /// The guide areas at `offset`: a count, then rectangles and their links.
