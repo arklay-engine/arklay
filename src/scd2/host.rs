@@ -116,6 +116,20 @@ pub enum CutEdit {
     SetGate { cut: u8, index: u8, value: u8 },
     /// `cut_replace`: swap two values across every zone's gate and floor.
     Replace { a: u8, b: u8 },
+    /// `light_*_set`: light `index` of camera `cut`'s record.
+    Light {
+        cut: u8,
+        index: u8,
+        change: LightChange,
+    },
+}
+
+/// What `light_pos_set`, `light_kido_set` and `light_color_set` write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightChange {
+    Pos { axis: u8, value: i16 },
+    Radius(u16),
+    Color([u8; 3]),
 }
 
 /// A `work_set` target: the player, or a character in an enemy slot.
@@ -947,6 +961,16 @@ impl GameHost<'_> {
         ));
     }
 
+    /// Queue a light's change, on `cut` or the camera in use (`scd_var_cut`).
+    fn light_edit(&mut self, cut: Option<i64>, index: i64, change: LightChange) {
+        let cut = cut.map_or(self.game.camera.current_cut as u8, |cut| cut as u8);
+        let index = index as u8;
+        self.game
+            .re2
+            .pending_cuts
+            .push(CutEdit::Light { cut, index, change });
+    }
+
     /// `cut_chg`: a scripted camera, which stays until a `cut_auto` or
     /// `cut_old`.
     fn change_cut(&mut self, cut: u8) {
@@ -1366,6 +1390,22 @@ impl Host for GameHost<'_> {
             "weapon_chg" => self
                 .game
                 .set_equipped(Some(at(0) as u8).filter(|&id| id != 0)),
+            "light_pos_set" => self.light_edit(None, at(1), light_pos(at(2), at(3))),
+            "light_kido_set" => self.light_edit(None, at(0), LightChange::Radius(at(1) as u16)),
+            "light_color_set" => self.light_edit(
+                None,
+                at(0),
+                LightChange::Color(light_rgb(at(1), at(2), at(3))),
+            ),
+            "light_pos_set2" => self.light_edit(Some(at(0)), at(1), light_pos(at(2), at(3))),
+            "light_kido_set2" => {
+                self.light_edit(Some(at(1)), at(2), LightChange::Radius(at(3) as u16))
+            }
+            "light_color_set2" => self.light_edit(
+                Some(at(0)),
+                at(1),
+                LightChange::Color(light_rgb(at(2), at(3), at(4))),
+            ),
             "cut_be_set" => self.game.re2.pending_cuts.push(CutEdit::SetGate {
                 cut: at(0) as u8,
                 index: at(1) as u8,
@@ -1727,6 +1767,18 @@ impl Host for GameHost<'_> {
     }
 }
 
+/// A `light_pos_set`'s axis is the member number: `0x0B` x, `0x0C` y, `0x0D` z.
+fn light_pos(member: i64, value: i64) -> LightChange {
+    LightChange::Pos {
+        axis: (member as u8).wrapping_sub(0x0B),
+        value: value as i16,
+    }
+}
+
+fn light_rgb(red: i64, green: i64, blue: i64) -> [u8; 3] {
+    [red as u8, green as u8, blue as u8]
+}
+
 /// `Load_member_branch` on a character.
 /// `Load_member_branch` on an object: `Be_flg`, its position and its rotation.
 fn object_member(object: &crate::objects::ObjectRecord, member: u8) -> Option<i32> {
@@ -1850,6 +1902,37 @@ mod tests {
         assert_eq!(object_member(object, 0x0C), Some(6));
         set_object_member(object, 0x0F, 99);
         assert_eq!(object.rotation[1], 99);
+    }
+
+    #[test]
+    fn the_light_ops_name_the_camera_in_use_or_their_own() {
+        let mut game = GameState::default();
+        game.camera.current_cut = 3;
+        exec(&mut game, "light_pos_set", &[0, 1, 0x0C, -900]);
+        exec(&mut game, "light_kido_set", &[2, 20000]);
+        exec(&mut game, "light_color_set", &[0, 10, 20, 30, 0]);
+        exec(&mut game, "light_pos_set2", &[5, 1, 0x0D, 7]);
+        exec(&mut game, "light_kido_set2", &[0, 5, 2, 3000]);
+        exec(&mut game, "light_color_set2", &[5, 0, 1, 2, 3]);
+        let light = |cut, index, change| CutEdit::Light { cut, index, change };
+        assert_eq!(
+            game.re2.pending_cuts,
+            vec![
+                light(
+                    3,
+                    1,
+                    LightChange::Pos {
+                        axis: 1,
+                        value: -900
+                    }
+                ),
+                light(3, 2, LightChange::Radius(20000)),
+                light(3, 0, LightChange::Color([10, 20, 30])),
+                light(5, 1, LightChange::Pos { axis: 2, value: 7 }),
+                light(5, 2, LightChange::Radius(3000)),
+                light(5, 0, LightChange::Color([1, 2, 3])),
+            ]
+        );
     }
 
     #[test]

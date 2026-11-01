@@ -2809,7 +2809,8 @@ pub fn draw_gameplay_scene_with_effects<'a>(
         // The room's own object and item models come first in the list (the
         // original's room pass, which uses its own D3D light setup); every
         // later mesh is an entity and uses the world-space dot.
-        let room_object = texture < mirror_from;
+        // RE2 gives its objects the same world-space dot as its bodies (`Om_trans`).
+        let room_object = texture < mirror_from && lighting.lights[0].re2_gain.is_none();
         for (index, (object, joint)) in mesh.mesh.objects.iter().zip(mesh.joints).enumerate() {
             if !mesh.joint_visible(index) {
                 continue;
@@ -3519,10 +3520,12 @@ impl Lighting {
             .sqrt()
             .max(1.0);
             let gain = light.re2_gain.map_or(1.0, f64::from);
+            // `Set_Light_data` gives the GTE the vector as it is.
+            let y_sign = if light.re2_gain.is_some() { 1.0 } else { -1.0 };
             EntityLightSource {
                 dir: [
                     (f64::from(offset[0]) / length * 4096.0 * gain) as i32,
-                    (-f64::from(offset[1]) / length * 4096.0 * gain) as i32,
+                    (y_sign * f64::from(offset[1]) / length * 4096.0 * gain) as i32,
                     (f64::from(offset[2]) / length * 4096.0 * gain) as i32,
                 ],
                 color: color.map(|channel| channel.min(0x80)),
