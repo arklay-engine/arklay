@@ -14278,6 +14278,18 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
                 gate.flag = value;
             }
         }
+        // `Om_disp` with attribute 2: every packet of the model blends.
+        CutEdit::BlendObject { slot } => {
+            for asset in &mut room.object_models {
+                if asset.pair_index == usize::from(slot) {
+                    for object in &mut asset.model.objects {
+                        for prim in &mut object.prims {
+                            prim.blend = true;
+                        }
+                    }
+                }
+            }
+        }
         CutEdit::Replace { a, b } => {
             let swap = |value: &mut u8| {
                 if *value == a {
@@ -16722,7 +16734,10 @@ fn render_frame_on(
             // `cmd_omodel_set`'s armed override (the water-tank surface) wins
             // over it, exactly like `GetTmdBlendMode` + `DAT_004d2be0`; the
             // creator's remap lives in `record_blend_weight`.
-            blend_weight: render::record_blend_weight(&asset.model, record.blend_override),
+            // RE2 blends only by half.
+            blend_weight: (!game.is_re2_room)
+                .then(|| render::record_blend_weight(&asset.model, record.blend_override))
+                .flatten(),
             hidden_joints: 0,
             // `update_entity_lighting(record + 0x34)`: the record's own
             // position, not the composed one, so a parented object lights
@@ -16732,7 +16747,10 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
-            fixed_light: None,
+            // `Om_disp`'s bit 4 leaves the lights out: the colour alone, whose
+            // `Om_init` value is white at Marni's doubling.
+            fixed_light: (game.is_re2_room && record.attr & 0x10 != 0)
+                .then_some(render::FULL_BRIGHT_LIGHT),
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });

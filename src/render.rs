@@ -2346,7 +2346,7 @@ pub fn re2_door_light(camera: &Camera) -> EntityLight {
 
 /// The light of a full-bright door part: an ambient of 255 and no sources,
 /// every texel as stored.
-const FULL_BRIGHT_LIGHT: EntityLight = EntityLight {
+pub(crate) const FULL_BRIGHT_LIGHT: EntityLight = EntityLight {
     ambient: [CHANNEL_MAX; 3],
     sources: [EntityLightSource {
         dir: [0; 3],

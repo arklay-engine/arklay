@@ -134,6 +134,8 @@ pub struct PendingPlayer {
 /// An edit of the room's camera switch zones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CutEdit {
+    /// `obj_model_set`'s attribute 2: the object's model blends.
+    BlendObject { slot: u8 },
     /// `cut_be_set`: entry `index` of camera `cut`'s zones gets gate `value`.
     SetGate { cut: u8, index: u8, value: u8 },
     /// `cut_replace`: swap two values across every zone's gate and floor.
@@ -1248,10 +1250,16 @@ impl GameHost<'_> {
     fn obj_model_set(&mut self, at: impl Fn(usize) -> i64) {
         let slot = at(0) as usize;
         let stage_room = (self.game.id.stage, self.game.id.room);
+        let attr = at(8) as u16;
+        if attr & 2 != 0 {
+            self.game
+                .re2
+                .pending_cuts
+                .push(CutEdit::BlendObject { slot: slot as u8 });
+        }
         let Some(record) = self.game.objects.record_mut(slot) else {
             return;
         };
-        let attr = at(8) as u16;
         let mut be_flg = if record.be_flg == 0 {
             (at(7) as i16 as i32 | 1) as u32
         } else {
@@ -1283,6 +1291,7 @@ impl GameHost<'_> {
             rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
             asset: Some(slot as u8),
             be_flg,
+            attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
             ..crate::objects::ObjectRecord::default()
         };
@@ -1931,6 +1940,8 @@ mod tests {
         exec(&mut game, "obj_model_set", &call);
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0x11);
+        assert_eq!(object.attr, 0);
+        assert!(game.re2.pending_cuts.is_empty());
         assert_eq!(object.pos, [100, -200, 300]);
         assert_eq!(object.rotation, [1, 2, 3]);
         assert_eq!(object.parent, 0xFE, "0x40 follows the player");
@@ -1941,6 +1952,19 @@ mod tests {
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0);
         assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn an_objects_attribute_asks_for_a_blended_model() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [3, 0, 0, 0, 0, 0, 0, 0, 0x12, 0, 0, 0, 0, 0, 0];
+        exec(&mut game, "obj_model_set", &call);
+        assert_eq!(game.objects.record_mut(3).unwrap().attr, 0x12);
+        assert_eq!(
+            game.re2.pending_cuts,
+            vec![CutEdit::BlendObject { slot: 3 }]
+        );
     }
 
     #[test]

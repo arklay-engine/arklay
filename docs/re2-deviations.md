@@ -23,7 +23,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 ## Collision
 
 - **The floor.** A body's floor comes from its height. The original keeps it in `nFloor`, which rounds differently on a slope (`Sca_hit_slope`).
-- **Script objects.** `obj_model_set` places and draws a room's models, and the scripts can move them through `work_set`, but they don't collide or get pushed (`Om_move`, `Oma_ck_oba`, `Om_move_box`). The plant pots in room 116 still draw about 20% darker than the original's. Not ported: water (`Mizu_trans`), colour changes (`Cc_work`) and an object parented to an enemy.
+- **Script objects.** `obj_model_set` places and draws a room's models, and the scripts can move them through `work_set`, but they don't collide or get pushed (`Om_move`, `Oma_ck_oba`, `Om_move_box`). The plant pots in room 116 still draw about 20% darker than the original's. Not ported: water (`Mizu_trans`), colour changes (`Cc_work`) and an object parented to an enemy. `Om_disp`'s attribute 0x10 draws an object unlit and attribute 2 blends it by half. A blended object draws full bright even without attribute 0x10, which the original lights (nine campaign objects). Blended objects don't get its nearer sort key or the different blend of rooms 302 and 30A, and `Om_disp`'s per-model modes aren't ported. Room 60D's floor mist is brighter in the original than here, and the cause isn't known.
 - **Objects and other bodies.** Only the room's SCA records block. `Sca_ck_hit`'s object models (`Omd_in_check`) and `Oba_ck_em2`'s other bodies don't.
 - **Offsets.** `Sca_hit_*` add `Atd`'s `Ofs_x` and `Ofs_z`, which are zero for the player. Other bodies will need them.
 
