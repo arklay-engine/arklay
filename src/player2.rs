@@ -39,7 +39,7 @@ const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
 /// `Pl_dead`.
 const MODE_DEAD_BODY: u8 = 7;
-const MODE_SCENARIO: u8 = 4;
+pub(crate) const MODE_SCENARIO: u8 = 4;
 /// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
 pub(crate) const MODE_HELD: u8 = 5;
 pub(crate) const MODE_HELD_DIE: u8 = 6;
@@ -288,6 +288,9 @@ pub struct Work {
     /// enemies: its top bit is also an enemy having hold of them.
     pub(crate) damage_cnt: u8,
     status_flg: u16,
+    /// `FUN_004f6800`'s blood this tick, whose `Rnd` the caller holds: whether
+    /// it's the spray, and where.
+    pub(crate) sce_blood: Option<(bool, [i16; 3])>,
     /// The part `Mag_set` drops.
     pub(crate) magazine: Option<Magazine>,
     /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
@@ -625,6 +628,7 @@ impl Default for Work {
             root: None,
             damage_cnt: 0,
             status_flg: 0,
+            sce_blood: None,
             magazine: None,
             fired: false,
             reloaded: false,
@@ -2903,8 +2907,36 @@ impl Mover<'_, '_> {
             0x0B => self.spl_sce_mv04(Bank::Pld),
             0x0C | 0x0D => self.spl_sce_mv04(Bank::Weapon),
             0x15 => self.spl_sce15(),
+            0x20 => self.spl_sce20(),
             _ => {}
         }
+    }
+
+    /// `FUN_004f6800`: in a zombie's hands, on the clips of its grab, losing
+    /// blood. The height it changes, `Null_pos_set` overwrites.
+    fn spl_sce20(&mut self) {
+        match self.work.routine[2] {
+            0 => {
+                self.work.routine[2] = 1;
+                self.work.bank = Bank::Held;
+                self.held_clip(0xD, 0xF);
+                self.work.neck.flags |= 1;
+                self.work.timers[0] = 0x800;
+            }
+            1 => {}
+            _ => return,
+        }
+        self.held_null_pos();
+        let ended = self.joint_move_late(0x100);
+        self.work.routine[2] += u8::from(ended);
+        let count = self.work.move_cnt;
+        let spray = match count {
+            0x29..=98 if count & 1 == 0 => false,
+            100..=104 => true,
+            _ => return,
+        };
+        let at = self.part_point(8, [0; 3]).unwrap_or(self.player.pos);
+        self.work.sce_blood = Some((spray, at.map(|axis| axis as i16)));
     }
 
     /// `Spl_sce_mv00`: a clip on the spot.
@@ -3363,6 +3395,23 @@ pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind
         stairs: None,
     };
     mover.joint_move_late(SPL_INIT_STEP);
+}
+
+/// `Workm` of a work's part, as the last tick left it.
+pub(crate) fn part_world(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    part: usize,
+) -> Option<Matrix> {
+    let mover = Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    };
+    mover.part_matrix(part)
 }
 
 /// Whether it has no routine yet, which `_Spl` starts with `Spl_Init`.

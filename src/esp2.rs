@@ -696,6 +696,17 @@ impl Effects {
                 this.velocity[0] = 0;
                 this.accel[0] = 0;
             }
+            // `Esp_27`: what fell hits the ground, and breaks there.
+            0x27 => {
+                self.slots[index].anim = 0x54;
+                self.slots[index].update = 0;
+                self.call(0x14, 0, slot.size, 0, slot.pos, true);
+            }
+            // `Esp_54`: and is gone, leaving a second burst.
+            0x54 => {
+                self.slots[index].kill();
+                self.call(0x14, 0, slot.size, 0, slot.pos, true);
+            }
             // `Esp_2A`: then two more.
             0x2A => {
                 for (step, size) in [(3, 0xC00u16), (4, 0xA00)] {
@@ -1222,6 +1233,30 @@ mod tests {
             assert!(effects.slots[slot].frame < 2);
             assert!(effects.slots[slot].live());
         }
+    }
+
+    #[test]
+    fn falling_glass_breaks_on_the_ground_and_goes() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[1] = 5;
+        block[2] = 0x27;
+        block[3] = 0x27;
+        block[9] = 12;
+        block[18..20].copy_from_slice(&0xb003u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        let slot = effects.call(7, 0, 0x800, 0, [0, -100, 0], false).unwrap();
+        let mut ticks = 0;
+        while effects.slots[slot].live() {
+            effects.tick(&mut Default::default(), None);
+            ticks += 1;
+            assert!(
+                ticks < 100,
+                "still falling at {:?}",
+                effects.slots[slot].pos
+            );
+        }
+        assert_eq!(effects.slots[slot].update, 0);
     }
 
     #[test]

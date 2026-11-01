@@ -38,6 +38,8 @@ pub struct Re2State {
     pub pending_sca: Vec<(u8, u16)>,
     /// A door has just handed back, and `fg_stop` hasn't come down yet.
     pub door_settling: bool,
+    /// The same tick, as the enemy slots see it.
+    pub door_stop: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// A scripted move of the player, applied at the next tick.
@@ -85,6 +87,9 @@ pub struct Re2State {
     pub enemy_bank: Option<u8>,
     /// The room's load has yet to finish: its last pass runs `Esp_move`.
     pub load_pass: bool,
+    /// `Sce_espr_on`s whose `Get_matrix` is someone's, for the characters' models
+    /// to answer.
+    pub pending_esprs: Vec<(EsprCall, EsprMatrix)>,
 }
 
 /// One sound `se_on` asked for, and where.
@@ -137,6 +142,8 @@ pub struct Character {
     pub with_room: bool,
     /// `+0x1F0`: how far it was from the player when it last ran.
     pub distance: u32,
+    /// `pSub1_kan_t_ptr` once a zombie has hold of it: that zombie's own.
+    pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
     /// What it needs if `Em_Zombie` runs it.
     pub zombie: Option<crate::zombie2::Zombie>,
 }
@@ -263,6 +270,7 @@ impl Default for Re2State {
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             door_settling: false,
+            door_stop: false,
             work: [Work::Player; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
             key: 0,
@@ -286,6 +294,7 @@ impl Default for Re2State {
             sound_types: [0; 2],
             enemy_bank: None,
             load_pass: false,
+            pending_esprs: Vec::new(),
         }
     }
 }
@@ -307,6 +316,15 @@ impl Re2State {
         out.extend_from_slice(&self.random.to_le_bytes());
         out.push(u8::from(self.scenario_b));
         out
+    }
+
+    /// `Sce_rnd_set`. Extreme Battle's `Rnd` branch isn't ported.
+    pub fn sce_rnd_set(&mut self) {
+        let base = self.random;
+        let twice = base.wrapping_mul(2);
+        let sum = ((base & 0x7FFF_FFFF) >> 15).wrapping_add(base);
+        self.random = ((sum ^ twice) & 0xFFFF) ^ twice;
+        self.vars[usize::from(crate::scd2::vm::RANDOM_VAR)] = self.random as u16;
     }
 
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
@@ -689,6 +707,51 @@ fn probe_flags(sat: u8) -> u8 {
     flags
 }
 
+/// A `Sce_espr_on`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EsprCall {
+    pub kind: u8,
+    pub row: u8,
+    pub size: u16,
+    pub dir: i16,
+    pub at: [i16; 3],
+}
+
+/// `Get_matrix`: whose, and which of its parts, or the work's own `M`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EsprMatrix {
+    /// `None` for the player, else the slot in `Characters`.
+    pub slot: Option<usize>,
+    pub part: Option<usize>,
+}
+
+impl EsprMatrix {
+    /// `None` for `GsIdMatrix`, and for an object's, which still spawns at the
+    /// origin.
+    fn of(matrix: i8, id: u8) -> Option<Self> {
+        let slot = |who| match who {
+            0 => Some(None),
+            1 => Some(Some(SPLAYER_SLOT)),
+            2 => Some(Some(usize::from(id))),
+            _ => None,
+        };
+        if matrix < 0 {
+            let part = Some((matrix & 0x1F) as usize);
+            return Some(Self {
+                slot: slot((matrix >> 5) & 3)?,
+                part,
+            });
+        }
+        match matrix {
+            1..=3 => Some(Self {
+                slot: slot(matrix - 1)?,
+                part: None,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// `work_set`'s kind byte for the player (`WK_PLAYER`).
 const WK_PLAYER: i64 = 1;
 const WK_SPLAYER: i64 = 2;
@@ -698,6 +761,8 @@ const WK_ENEMY: i64 = 3;
 const MEMBER_POS_X: usize = 0x0B;
 /// The member that reads and writes `cdir.y`.
 const MEMBER_ANGLE: u8 = 0x0F;
+/// The word at `+0x21a`, which on a zombie is [`crate::zombie2::Zombie::flags`].
+const MEMBER_ZOMBIE_FLAGS: u8 = 0x2A;
 /// The room's flag bank, which `plc_dest` raises its arrival flag in.
 const ROOM_BANK: u8 = 5;
 
@@ -953,6 +1018,7 @@ impl GameHost<'_> {
             sound_type,
             distance: 0,
             with_room: self.game.re2.room_loading,
+            held_bank: None,
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
@@ -1150,9 +1216,8 @@ impl Host for GameHost<'_> {
     }
 
     fn random(&mut self) -> u16 {
-        let state = &mut self.game.re2.random;
-        *state = state.wrapping_mul(0x41C6_4E6D).wrapping_add(0x3039);
-        (*state >> 16) as u16
+        self.game.re2.sce_rnd_set();
+        self.game.re2.random as u16
     }
 
     fn exec(&mut self, task: usize, op: &'static Op, operands: &[i64]) -> Step {
@@ -1271,14 +1336,45 @@ impl Host for GameHost<'_> {
             // type and its high byte the row.
             "sce_espr_on" => {
                 let [kind, row] = (at(1) as u16).to_le_bytes();
-                self.game.re2.effects.call(
+                let call = EsprCall {
                     kind,
                     row,
-                    at(3) as u16,
-                    at(7) as i16,
-                    [at(4) as i16, at(5) as i16, at(6) as i16],
-                    false,
-                );
+                    size: at(3) as u16,
+                    dir: at(7) as i16,
+                    at: [at(4) as i16, at(5) as i16, at(6) as i16],
+                };
+                let [matrix, id] = (at(2) as u16).to_le_bytes();
+                match EsprMatrix::of(matrix as i8, id) {
+                    Some(matrix) => self.game.re2.pending_esprs.push((call, matrix)),
+                    None => {
+                        self.game
+                            .re2
+                            .effects
+                            .call(call.kind, call.row, call.size, call.dir, call.at, false);
+                    }
+                }
+            }
+            // `Sce_parts_bomb`: the pieces `Parts_bomb` flings about aren't drawn.
+            "sce_parts_bomb" => {
+                let part = at(1) as u8;
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::set_part_flags(&mut character.work, part, 0);
+                }
+            }
+            "sce_parts_down" => {
+                if let Some(zombie) = self
+                    .task_character(task)
+                    .and_then(|character| character.zombie.as_mut())
+                {
+                    zombie.script_drops.push(crate::zombie2::ScriptDrop {
+                        part: at(0) as u8,
+                        angle: at(1) as i16,
+                        along: at(2) as i16,
+                        up: at(3) as i16,
+                        gravity: at(4) as u8,
+                        rest: [at(6) as i16, at(7) as i16, at(8) as i16],
+                    });
+                }
             }
             "sce_espr_kill" => {
                 self.game.re2.effects.kill(at(0) as u8, at(1) as u8);
@@ -1410,6 +1506,22 @@ impl Host for GameHost<'_> {
             "plc_cnt" if self.work_is_player(task) => {
                 self.game.re2.player.move_cnt = at(0) as u8;
             }
+            // `Dir_ck`: a target within `range` of the way the work faces.
+            "dir_ck" => {
+                let member = |host: &mut Self, member| host.member(task, member);
+                if let (Some(x), Some(z), Some(angle)) = (
+                    member(self, MEMBER_POS_X as u8),
+                    member(self, MEMBER_POS_X as u8 + 2),
+                    member(self, MEMBER_ANGLE),
+                ) {
+                    let to = crate::player2::direction_ck(x, z, at(1) as i32, at(2) as i32);
+                    let range = at(3) as i32;
+                    let off = (i32::from(to) - angle + range) & 0xFFF;
+                    if off >= range * 2 {
+                        return Step::False;
+                    }
+                }
+            }
             "member_copy" => {
                 let value = self.member(task, at(1) as u8).unwrap_or(0);
                 self.set_var(at(0) as u8, value as u16);
@@ -1465,6 +1577,10 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
     match member {
         0 => Some(character.be_flg as i32),
         MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
+        MEMBER_ZOMBIE_FLAGS => character
+            .zombie
+            .as_ref()
+            .map(|zombie| i32::from(zombie.flags)),
         _ => crate::player2::member(&character.work, member),
     }
 }
@@ -1481,6 +1597,11 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
     match member {
         0 => character.be_flg = value as u32,
         MEMBER_ANGLE => character.body.angle = value as u16,
+        MEMBER_ZOMBIE_FLAGS => {
+            if let Some(zombie) = character.zombie.as_mut() {
+                zombie.flags = value as u16;
+            }
+        }
         _ => {
             crate::player2::set_member(&mut character.work, member, value);
         }
@@ -1531,6 +1652,70 @@ mod tests {
         assert_eq!(character.body.pos, [5, 6, 7]);
         assert_eq!(character.be_flg, 5);
         assert!(!game.re2.flag(ROOM_BANK, 33));
+    }
+
+    #[test]
+    fn the_scripts_random_steps_as_sce_rnd_set_does() {
+        let mut state = Re2State::default();
+        state.sce_rnd_set();
+        let base = 0x1382_01C3u32;
+        let expected = ((((base >> 15) + base) ^ (base * 2)) & 0xFFFF) ^ (base * 2);
+        assert_eq!(state.random, expected);
+        assert_eq!(state.vars[29], expected as u16);
+    }
+
+    #[test]
+    fn get_matrix_reads_its_word() {
+        let of = |word: u16| {
+            let [matrix, id] = word.to_le_bytes();
+            EsprMatrix::of(matrix as i8, id)
+        };
+        assert_eq!(of(0), None);
+        assert_eq!(of(0x300), None);
+        assert_eq!(of(0x304), None);
+        let enemy = EsprMatrix {
+            slot: Some(1),
+            part: Some(11),
+        };
+        assert_eq!(of(459), Some(enemy));
+        let splayer = EsprMatrix {
+            slot: Some(SPLAYER_SLOT),
+            part: Some(11),
+        };
+        assert_eq!(of(171), Some(splayer));
+        let root = EsprMatrix {
+            slot: Some(0),
+            part: None,
+        };
+        assert_eq!(of(3), Some(root));
+    }
+
+    #[test]
+    fn dir_ck_asks_whether_the_work_faces_the_point() {
+        let mut game = GameState::default();
+        spawn_character(&mut game, 72, 0);
+        let op = crate::scd2::opcode::by_mnemonic("dir_ck").unwrap();
+        let mut host = GameHost { game: &mut game };
+        let angle = host.member(0, MEMBER_ANGLE).unwrap();
+        let (x, z) = (
+            host.member(0, MEMBER_POS_X as u8).unwrap(),
+            host.member(0, MEMBER_POS_X as u8 + 2).unwrap(),
+        );
+        let ahead = (0..0x1000)
+            .step_by(16)
+            .map(|n| n as f64 * std::f64::consts::TAU / 4096.0)
+            .map(|a| (x + (a.cos() * 3000.0) as i32, z + (a.sin() * 3000.0) as i32))
+            .min_by_key(|(px, pz)| {
+                let to = i32::from(crate::player2::direction_ck(x, z, *px, *pz));
+                ((to - angle + 0x800) & 0xFFF).abs_diff(0x800)
+            })
+            .unwrap();
+        let behind = (2 * x - ahead.0, 2 * z - ahead.1);
+        let check = |host: &mut GameHost<'_>, point: (i32, i32)| {
+            host.exec(0, op, &[0, i64::from(point.0), i64::from(point.1), 350])
+        };
+        assert!(check(&mut host, ahead) != Step::False);
+        assert!(check(&mut host, behind) == Step::False);
     }
 
     #[test]

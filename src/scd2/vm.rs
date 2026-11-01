@@ -609,7 +609,7 @@ impl Vm {
 }
 
 /// The script variable `sce_rnd` writes.
-const RANDOM_VAR: u8 = 29;
+pub const RANDOM_VAR: u8 = 29;
 
 /// `Calc_branch`.
 fn calc(host: &mut impl Host, operation: u8, index: u8, value: i16) {
