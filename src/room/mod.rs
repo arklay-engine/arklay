@@ -282,6 +282,7 @@ impl Loaded {
             let mut state = crate::rdt2::read(&data)?.build(id, pack)?;
             state.room_anim = crate::rdt2::room_anim(&data)
                 .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok());
+            state.character_anims = crate::rdt2::character_anims(&data);
             return Ok(Self {
                 id,
                 state,

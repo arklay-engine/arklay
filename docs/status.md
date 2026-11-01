@@ -916,7 +916,8 @@ no longer match their skin.
 
 The RE2 pack follows the RE1 pack's conventions (convert version 9): each
 room is a `room.xml` (`game="re2"`, converted through `rdt2` and checked to
-read back and build the same room), each enemy texture an indexed
+read back and build the same room; one that doesn't stays a raw RDT, with a
+warning, and every retail room converts), each enemy texture an indexed
 `enemy_<s>.bmp` page plus a 16x16 palette swatch `enemy_<s>_clut_<nn>.bmp`
 per further CLUT row (a 256-entry BMP palette holds one row; the 118 retail
 textures read back exactly), and each BGM a numbered `bgm/<id:03x>.wav`

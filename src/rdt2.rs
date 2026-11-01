@@ -157,6 +157,19 @@ pub fn splayer_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
     room_anim_of(data, RBJ_PLAYER << 1)
 }
 
+/// The parsed room animations of the enemy slots and then `splayer_work`,
+/// as `RoomState::character_anims` holds them.
+pub fn character_anims(data: &[u8]) -> Vec<(u8, crate::model::RoomAnim)> {
+    (0..crate::scd2::host::SPLAYER_SLOT as u8)
+        .map(|slot| (slot, character_anim(data, slot)))
+        .chain([(crate::scd2::host::SPLAYER_SLOT as u8, splayer_anim(data))])
+        .filter_map(|(slot, pair)| {
+            let (emr, edd) = pair?;
+            Some((slot, crate::emd2::parse_room_anim(emr, edd).ok()?))
+        })
+        .collect()
+}
+
 fn room_anim_of(data: &[u8], wanted: u32) -> Option<(&[u8], &[u8])> {
     let start = offset(data, RBJ_SLOT).ok()? as usize;
     if start == 0 {

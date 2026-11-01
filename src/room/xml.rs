@@ -228,6 +228,24 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
     w.close("footsteps");
 
+    // RE2's guide areas; RE1 rooms have none.
+    if !room.guides.is_empty() {
+        w.open("guides", &[]);
+        for guide in &room.guides {
+            w.empty(
+                "guide",
+                &[
+                    ("x0", dec(guide.x0)),
+                    ("z0", dec(guide.z0)),
+                    ("x1", dec(guide.x1)),
+                    ("z1", dec(guide.z1)),
+                    ("links", hex(guide.links)),
+                ],
+            );
+        }
+        w.close("guides");
+    }
+
     write_slots(&mut w, &room.slots);
     write_strings(&mut w, &room.strings);
     w.close("room");
@@ -853,6 +871,20 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
                     })
                     .collect::<Result<_>>()?;
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
+            }
+            "guides" => {
+                room.guides = children(node, "guide")?
+                    .map(|guide| {
+                        check_attributes(guide, &["x0", "z0", "x1", "z1", "links"])?;
+                        Ok(crate::state::Guide {
+                            x0: attr(guide, "x0")?,
+                            z0: attr(guide, "z0")?,
+                            x1: attr(guide, "x1")?,
+                            z1: attr(guide, "z1")?,
+                            links: attr(guide, "links")?,
+                        })
+                    })
+                    .collect::<Result<_>>()?;
             }
             "slots" => room.slots = parse_slots(node)?,
             "strings" => room.strings = parse_strings(node)?,
