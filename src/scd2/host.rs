@@ -34,6 +34,8 @@ pub struct Re2State {
     pub pending_damage: Vec<([i16; 4], u8, i16)>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
+    /// Collision-record edits waiting for the room (`sca_id_set`).
+    pub pending_sca: Vec<(u8, u16)>,
     /// A door has just handed back, and `fg_stop` hasn't come down yet.
     pub door_settling: bool,
     /// What each task's `work_set` selected.
@@ -169,6 +171,10 @@ const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 5;
 const TASK_SLOTS: usize = super::vm::TASKS;
 /// `set 2, 7`: `FG_STOP_DISABLE_INPUT`, a cutscene holding the player's input.
 const STOP_BANK: u8 = 2;
+/// `Pri_be_flg`: a bank per camera, 13 onwards, with a bit per mask group.
+const MASK_BANK: usize = 13;
+/// How many cameras `Pri_be_flg` has a bank for.
+const MASK_BANKS: usize = 16;
 const STOP_INPUT: u8 = 7;
 /// `Spl_Init`'s `Atd[0].W`, by id from 0x40.
 const CHARACTER_SIZES: [u16; 28] = [
@@ -241,7 +247,11 @@ pub const SCE_DAMAGE: u8 = 11;
 impl Default for Re2State {
     fn default() -> Self {
         Self {
-            banks: [[0; 8]; BANKS],
+            banks: {
+                let mut banks = [[0; 8]; BANKS];
+                banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
+                banks
+            },
             vars: [0; 256],
             gates: [ActionGate::default(); ROOM_ACTION_SLOTS],
             door_locks: [0; 2],
@@ -251,6 +261,7 @@ impl Default for Re2State {
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             pending_cuts: Vec::new(),
+            pending_sca: Vec::new(),
             door_settling: false,
             work: [Work::Player; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
@@ -578,6 +589,26 @@ impl Re2State {
             0 => self.player.neck.position,
             1 => character(SPLAYER_SLOT),
             n => character(n - 2),
+        })
+    }
+
+    /// `Sce_work_clr_set`: every room starts with all of its mask groups on.
+    pub fn reset_mask_groups(&mut self) {
+        self.banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
+    }
+
+    /// `Psp_trans`'s `Flg_ck`: which of a camera's mask groups a script has
+    /// left on, as bits for [`crate::mask::group_active`].
+    pub fn mask_groups(&self, cut: usize) -> u32 {
+        if cut >= MASK_BANKS {
+            return u32::MAX;
+        }
+        (1..=32u8).fold(0, |bits, group| {
+            if self.flag((MASK_BANK + cut) as u8, group) {
+                bits | 1 << (group - 1)
+            } else {
+                bits
+            }
         })
     }
 
@@ -1163,6 +1194,7 @@ impl Host for GameHost<'_> {
                 a: at(0) as u8,
                 b: at(1) as u8,
             }),
+            "sca_id_set" => self.game.re2.pending_sca.push((at(0) as u8, at(1) as u16)),
             "work_set" => {
                 let work = if at(0) == WK_PLAYER {
                     Work::Player

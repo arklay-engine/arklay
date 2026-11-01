@@ -86,6 +86,7 @@ pub fn parse(data: &[u8]) -> Result<Emd> {
         banks: Vec::new(),
         mesh,
         texture,
+        morphs: Vec::new(),
     })
 }
 

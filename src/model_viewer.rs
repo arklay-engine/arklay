@@ -380,6 +380,7 @@ mod tests {
                 palettes: Vec::new(),
                 stp: Vec::new(),
             },
+            morphs: Vec::new(),
         }
     }
 

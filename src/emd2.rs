@@ -36,8 +36,8 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::emd::{chunk_slice, parse_clips, parse_skeleton, read_u16, read_u32, vec3};
 use crate::model::{
-    AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, Plw, Texture8, Tmd, TmdObject,
-    TmdPrim,
+    AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, PartMorph, Plw, Texture8, Tmd,
+    TmdObject, TmdPrim,
 };
 use crate::{bmp, tim};
 
@@ -186,6 +186,7 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
         .collect::<Result<Vec<_>>>()?;
     let mesh = parse_md1(&data[chunks[7]..chunks[8]]).context("EMD mesh")?;
     let first = banks.remove(0);
+    let morphs = parse_morphs(&data[chunks[0]..chunks[1]], &mesh);
     Ok(Emd {
         skeleton,
         keyframes: first.keyframes,
@@ -195,7 +196,62 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
         banks,
         mesh,
         texture,
+        morphs,
     })
+}
+
+/// A chunk's `pSa_dat`, as `Sa_dat_set` walks it: a mask of the parts that
+/// have a block, then each block's offset of its base vertices, the length of
+/// a shape, its number of targets and their weights. A shape's vertices are
+/// three `i16`s, padded to four bytes. Whatever doesn't fit its chunk or its
+/// part isn't a morph, and is left out.
+fn parse_morphs(chunk: &[u8], mesh: &Tmd) -> Vec<PartMorph> {
+    let word = |at: usize| read_u32(chunk, at).ok().map(|word| word as usize);
+    let Some(mask) = word(0) else {
+        return Vec::new();
+    };
+    let mut morphs = Vec::new();
+    let mut at = 12;
+    for (part, object) in mesh.objects.iter().enumerate().take(32) {
+        if mask & (1 << part) == 0 {
+            continue;
+        }
+        let (Some(base), Some(stride), Some(targets)) = (word(at), word(at + 4), word(at + 8))
+        else {
+            break;
+        };
+        let count = object.vertices.len();
+        if stride < count * 6 || targets > chunk.len() / stride.max(1) {
+            break;
+        }
+        let shapes = (1..=targets)
+            .map(|target| {
+                let start = base.checked_add(target.checked_mul(stride)?)?;
+                let bytes = chunk.get(start..start.checked_add(count * 6)?)?;
+                Some(
+                    bytes
+                        .as_chunks::<6>()
+                        .0
+                        .iter()
+                        .map(|vertex| {
+                            std::array::from_fn(|axis| {
+                                i16::from_le_bytes([vertex[axis * 2], vertex[axis * 2 + 1]])
+                            })
+                        })
+                        .collect(),
+                )
+            })
+            .collect::<Option<Vec<_>>>();
+        let Some(shapes) = shapes else {
+            break;
+        };
+        morphs.push(PartMorph {
+            part: part as u8,
+            targets: shapes,
+        });
+        at += (3 + targets) * 4;
+    }
+    morphs
 }
 
 /// Parse an RE2 player PLD: the character's skeleton, its one animation
@@ -215,6 +271,7 @@ pub fn parse_pld(data: &[u8]) -> Result<Emd> {
         banks: Vec::new(),
         mesh,
         texture,
+        morphs: Vec::new(),
     })
 }
 
@@ -318,6 +375,7 @@ pub fn with_weapon(pld: &Emd, plw: &Plw) -> Emd {
         banks,
         mesh,
         texture: weapon_texture(&pld.texture, &plw.texture),
+        morphs: Vec::new(),
     }
 }
 

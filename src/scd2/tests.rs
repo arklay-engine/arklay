@@ -347,3 +347,16 @@ fn numbers_reject_doubled_signs() {
     let error = akscr::compile("#version 2\n").unwrap_err().to_string();
     assert!(error.contains("unsupported"), "{error}");
 }
+
+#[test]
+fn a_room_starts_with_its_mask_groups_on_and_a_script_turns_them_off() {
+    let mut state = super::host::Re2State::default();
+    assert_eq!(state.mask_groups(5), u32::MAX);
+    // `set 18, 3, 0`: bank 18 is camera 5, and the index is the group's number.
+    state.set_flag(18, 3, 0);
+    assert_eq!(state.mask_groups(5), !0b100);
+    assert_eq!(state.mask_groups(4), u32::MAX);
+    assert_eq!(state.mask_groups(16), u32::MAX);
+    state.reset_mask_groups();
+    assert_eq!(state.mask_groups(5), u32::MAX);
+}

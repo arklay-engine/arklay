@@ -14,8 +14,11 @@ const BE_NO_PUSH: u32 = 4;
 const BE_NO_SCA: u32 = 8;
 const BE_SUPER: u32 = 0x200_0000;
 
-/// The tongue's part, which is hidden as its drawing isn't ported.
-const TONGUE_PART: u32 = 0x16;
+/// The tongue's part, which isn't in the skeleton: `Em22_Init` hangs it from
+/// the part below, turned this way.
+pub const TONGUE_PART: u8 = 0x16;
+pub const TONGUE_PARENT: usize = 8;
+pub const TONGUE_TURN: [i16; 3] = [0x400, 0, 0x400];
 
 /// `+0x22c`: the shot that hurt it wasn't a surprise, it stands on its hind
 /// legs, its feet make no sound, it fell off a wall, and it's in the air.
@@ -130,6 +133,8 @@ pub struct Licker {
     tongue: u8,
     /// `+0x240`.
     tongue_count: u8,
+    /// The weights of the tongue's nine shapes (`pSa_dat_head[3..]`).
+    tongue_shape: [i16; 9],
     /// `+0x22e`: the wait before the next attack.
     wait: u8,
     /// `+0x22f`: the weapon of the last hit.
@@ -188,6 +193,62 @@ pub fn before(
 }
 
 impl Licker {
+    /// `tongue_move`'s states and shapes, and whether it has just gone in.
+    fn step_tongue(&mut self) -> bool {
+        let l = self;
+        match l.tongue {
+            1 => {
+                l.tongue_count = 1;
+                l.tongue = 2;
+            }
+            2 => {
+                l.tongue_count += 1;
+                if l.tongue_count == 0x11 {
+                    l.tongue = 3;
+                    l.tongue_count = 0;
+                }
+            }
+            3 => {
+                l.tongue_shape[0] += 0x800;
+                l.tongue_count += 1;
+                if l.tongue_count == 2 {
+                    l.tongue = 4;
+                    l.tongue_count = 0;
+                }
+            }
+            4 => {
+                l.tongue_shape[1] += 0x400;
+                l.tongue_count += 1;
+                if l.tongue_count == 4 {
+                    l.tongue = 5;
+                    l.tongue_count = 4;
+                }
+            }
+            5 => {
+                l.tongue_shape[usize::from(l.tongue_count) - 2] += 0x1000;
+                l.tongue_count += 1;
+                if l.tongue_count == 11 {
+                    l.tongue = 6;
+                    l.tongue_count = 0;
+                    l.tongue_shape[..8].fill(0);
+                }
+            }
+            6 => {
+                l.tongue_shape[8] = 0;
+                l.tongue = 0;
+                return true;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    /// The tongue's shape while it's out: `Be_flg` is up from the first shape
+    /// `tongue_move` blends to its last.
+    pub fn tongue_weights(&self) -> Option<&[i16; 9]> {
+        (self.tongue_shape != [0; 9]).then_some(&self.tongue_shape)
+    }
+
     /// Where `MulKage` puts the shadow, `Off_x` ahead of the third part.
     pub fn shadow_at(&self, angle: u16) -> [i32; 3] {
         let (x, z) = player2::rotate(angle, 0xFA, 0);
@@ -258,7 +319,6 @@ impl Em22<'_, '_, '_, '_> {
         self.em.z.life = table[usize::from(self.em.rnd() & 0xF)] - down;
         self.l.target = true;
         self.l.reach = -500;
-        self.em.work().hidden_parts |= 1 << TONGUE_PART;
         *self.em.be_flg &= !(BE_NO_OBA | BE_NO_SCA);
         self.em.work().routine = [1, 0, 0, 0];
         self.atd_set();
@@ -302,49 +362,10 @@ impl Em22<'_, '_, '_, '_> {
         };
     }
 
-    /// `tongue_move`, without its shape.
+    /// `tongue_move`.
     fn tongue_move(&mut self) {
-        let l = &mut *self.l;
-        match l.tongue {
-            1 => {
-                l.tongue_count = 1;
-                l.tongue = 2;
-            }
-            2 => {
-                l.tongue_count += 1;
-                if l.tongue_count == 0x11 {
-                    l.tongue = 3;
-                    l.tongue_count = 0;
-                }
-            }
-            3 => {
-                // Two ticks of `+0x800`.
-                l.tongue_count += 1;
-                if l.tongue_count == 2 {
-                    l.tongue = 4;
-                    l.tongue_count = 0;
-                }
-            }
-            4 => {
-                // Four of `+0x400`.
-                l.tongue_count += 1;
-                if l.tongue_count == 4 {
-                    l.tongue = 5;
-                    l.tongue_count = 4;
-                }
-            }
-            5 => {
-                l.tongue_count += 1;
-                if l.tongue_count == 11 {
-                    l.tongue = 6;
-                    l.tongue_count = 0;
-                }
-            }
-            6 => {
-                l.tongue = 0;
-                *self.em.world.tongue_owner = 0;
-            }
-            _ => {}
+        if self.l.step_tongue() {
+            *self.em.world.tongue_owner = 0;
         }
     }
 
@@ -402,7 +423,7 @@ impl Em22<'_, '_, '_, '_> {
         let [old_x, old_z] = self.l.sca_old;
         let prev = [old_x, self.em.mover.player.pos[1], old_z];
         let radius = i32::from(self.em.z.atd.w);
-        let floor = crate::sca::floor_of(prev[1]);
+        let floor = self.em.z.floor;
         let resolved = crate::sca::resolve_on_floor(sca, super::MASK, prev, at, radius, floor);
         let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
         let body = &mut *self.em.mover.player;
@@ -1146,6 +1167,7 @@ impl Em22<'_, '_, '_, '_> {
         if self.player_life() < 0 {
             self.l.bite_behind = behind;
             self.em.world.pl.routine = [3, 0, 0, 0];
+            self.em.world.pl.held_kill = true;
             *self.em.world.player_life = -1;
         } else {
             if self.player_life() < 0x28 {
@@ -1921,6 +1943,31 @@ mod tests {
         assert_eq!(rnd, start, "a dead licker draws nothing");
         before(&mut licker, 1, &mut be_flg, &mut rnd, &mut effects);
         assert_ne!(rnd, start);
+    }
+
+    #[test]
+    fn the_tongue_blends_out_shape_by_shape_and_goes_at_the_end() {
+        let mut licker = Licker {
+            tongue: 3,
+            ..Licker::default()
+        };
+        let mut steps = 0;
+        let mut seen = Vec::new();
+        assert_eq!(licker.tongue_weights(), None);
+        while licker.tongue != 0 {
+            licker.step_tongue();
+            seen.push(licker.tongue_shape);
+            steps += 1;
+            assert!(steps < 20);
+        }
+        // Two ticks, four, seven, and the one that puts it away.
+        assert_eq!(steps, 14);
+        assert_eq!(seen[0][0], 0x800);
+        assert_eq!(seen[1][0], 0x1000);
+        assert_eq!(seen[5][1], 0x1000);
+        assert_eq!(seen[6][2], 0x1000);
+        assert_eq!(seen[12], [0, 0, 0, 0, 0, 0, 0, 0, 0x1000]);
+        assert_eq!(licker.tongue_weights(), None);
     }
 
     #[test]

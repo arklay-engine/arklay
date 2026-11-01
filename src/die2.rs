@@ -16,14 +16,25 @@ const STOP_ALL: u32 = 0xFF00_0000;
 const STOP_STROBE: u32 = 0xFC00_0000;
 /// The stops the white-out leaves on once it's over.
 const STOP_AFTER: u32 = 0x4000_0000;
-/// `Die_move_fade_out`'s wait for a player killed by a zombie, `PTR_DAT_00525b18`.
-const HELD_WAIT: i16 = 95;
-/// `Die_move_pause`'s length, the zombie row of `DWORD_00525b38`.
-const PAUSE: i16 = 91;
+/// `BYTE_00525cdc`: who killed the player, which picks a row of the tables here.
+const KILLERS: [u8; 15] = [
+    0, 0x10, 0x22, 0x20, 0x30, 0x27, 0x2E, 0x33, 0x31, 0x23, 0x2A, 0x2B, 0x34, 0x36, 0x24,
+];
+/// `Die_move_fade_out`'s wait, `PTR_DAT_00525b18`.
+const HELD_WAITS: [i16; 15] = [180, 95, 10, 90, 145, 145, 0, 84, 81, 0, 0, 90, 95, 100, 10];
+/// `Die_move_pause`'s length, in `DWORD_00525b38`.
+const PAUSES: [i16; 15] = [
+    91, 91, 96, 86, 150, 120, 120, 86, 82, 75, 83, 81, 81, 85, 96,
+];
+/// What a killer below `0x20` waits, whichever zombie it is.
+const ZOMBIE_ROW: usize = 1;
 const MAIN: i16 = 0xAA;
 const OUT_FADE: i16 = 0x6E;
 const OUT: i16 = 0xA2;
 const LEVEL_FULL: u16 = 0x7FFF;
+
+/// `Be_flg`'s bit that keeps a character from being drawn.
+pub const BE_HIDDEN: u32 = 0x8_0000;
 
 /// `Die_enemy_set`: those near `player` lose their collisions (`Be_flg`'s 8) and
 /// the rest aren't drawn. The one holding the body is always near.
@@ -31,7 +42,6 @@ pub fn enemy_set<'a>(
     characters: impl Iterator<Item = &'a mut crate::scd2::host::Character>,
     player: [i32; 3],
 ) {
-    const BE_HIDDEN: u32 = 0x8_0000;
     /// The id `Die_enemy_set` leaves alone when far.
     const ID_KEPT: u8 = 0x29;
     for character in characters.filter(|character| character.be_flg & 1 != 0) {
@@ -120,8 +130,10 @@ pub struct DieTick {
 pub struct Die {
     /// `WORD_0099cee2`.
     phase: u8,
-    /// `fg_system`'s `0x100`: killed in a zombie's hands.
+    /// `fg_system`'s `0x100`: killed in an enemy's hands.
     held: bool,
+    /// `Die_move_pause`'s length.
+    pause: i16,
     /// `WORD_0099cee4`.
     count: i16,
     /// `WORD_0099cee0`.
@@ -140,16 +152,35 @@ pub struct Die {
     text: Option<Box<DieText>>,
 }
 
+/// The killer's row: a search from the end, which stops at the first when
+/// there's no match. The `0x34` of `Em34`'s second form isn't told apart.
+fn killer_row(id: u8) -> usize {
+    let id = if id == 0x39 { 0x2E } else { id };
+    KILLERS
+        .iter()
+        .rposition(|&killer| killer == id)
+        .unwrap_or(0)
+}
+
 impl Die {
-    pub fn new(held: bool) -> Self {
+    /// `killer` is the id of whatever had hold of the player, when something
+    /// did: `fg_system`'s `0x100`.
+    pub fn new(killer: Option<u8>) -> Self {
+        let held = killer.is_some();
+        let (wait, pause) = killer.map_or((0, PAUSES[ZOMBIE_ROW]), |id| {
+            let row = killer_row(id);
+            let wait_row = if id < 0x20 { ZOMBIE_ROW } else { row };
+            (HELD_WAITS[wait_row], PAUSES[row])
+        });
         Self {
             phase: 0,
             held,
+            pause,
             count: 0,
             speed: 0,
             level: 0x400,
             strobe: 0,
-            wait: if held { HELD_WAIT } else { 0 },
+            wait,
             sleep: 0,
             white_done: false,
             text: None,
@@ -213,7 +244,7 @@ impl Die {
             // `Die_move_pause`.
             3 => {
                 self.count += 1;
-                if self.count > PAUSE {
+                if self.count > self.pause {
                     self.phase = 4;
                     self.count = 0;
                 }
@@ -285,6 +316,7 @@ impl Die {
         self.strobe = 0;
         self.count = 0;
         self.white_done = true;
+        re2.player.be_flg |= crate::player2::BE_NO_SCA;
         out.set_enemies = true;
         self.sleep = 1;
     }
@@ -689,12 +721,25 @@ mod tests {
         assert_eq!(image.rgba[0], 0);
     }
 
+    #[test]
+    fn the_killer_picks_the_wait_and_the_pause() {
+        let zombie = Die::new(Some(0x10));
+        assert_eq!((zombie.wait, zombie.pause), (95, 91));
+        // A zombie this table has no row for waits as the others do.
+        let other = Die::new(Some(0x1E));
+        assert_eq!((other.wait, other.pause), (95, 91));
+        let licker = Die::new(Some(0x22));
+        assert_eq!((licker.wait, licker.pause), (10, 96));
+        let none = Die::new(None);
+        assert_eq!((none.wait, none.held), (0, false));
+    }
+
     /// The ticks the original's `fg_stop` changes on after a zombie's kill,
     /// counted from the kill.
     #[test]
     fn a_held_death_stops_the_routines_when_the_original_does() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(true);
+        let mut die = Die::new(Some(0x10));
         let mut changes = Vec::new();
         let mut last = 0;
         let mut end = None;
@@ -721,7 +766,7 @@ mod tests {
     #[test]
     fn the_white_climbs_to_full_then_clears_and_ends_in_black() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(true);
+        let mut die = Die::new(Some(0x10));
         let mut whites = Vec::new();
         let mut others = Vec::new();
         for tick in 0..546 {
@@ -740,7 +785,7 @@ mod tests {
     #[test]
     fn a_death_outside_a_zombies_hands_has_no_wait_or_pause() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(false);
+        let mut die = Die::new(None);
         die.tick(&mut re2);
         die.tick(&mut re2);
         assert_eq!(*re2.fg_stop_mut(), 0xFF00_0000);

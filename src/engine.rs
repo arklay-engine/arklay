@@ -3786,8 +3786,16 @@ impl GameSession {
     fn tick_re2_die(&mut self, pack: &Pack) {
         if self.re2_die.is_none() && self.game.entities[0].health < 0 && !self.game.debug.invincible
         {
-            let held = self.game.re2.player.routine[0] == crate::player2::MODE_HELD_DIE;
-            self.re2_die = Some(crate::die2::Die::new(held));
+            let player = &self.game.re2.player;
+            let held = player.routine[0] == crate::player2::MODE_HELD_DIE || player.held_kill;
+            let killer = held.then(|| {
+                player
+                    .held_by
+                    .and_then(|slot| self.game.re2.characters.0.get(slot))
+                    .and_then(|character| character.as_deref())
+                    .map_or(0x10, |character| character.id)
+            });
+            self.re2_die = Some(crate::die2::Die::new(killer));
         }
         let Some(die) = self.re2_die.as_mut() else {
             return;
@@ -3816,6 +3824,14 @@ impl GameSession {
                     .map(|c| &mut **c),
                 player,
             );
+            // The killer stays whatever else it's been told, and stops colliding.
+            let killer = self.game.re2.player.held_by;
+            if let Some(character) = killer
+                .and_then(|slot| self.game.re2.characters.0.get_mut(slot))
+                .and_then(|character| character.as_deref_mut())
+            {
+                character.be_flg = character.be_flg & !crate::die2::BE_HIDDEN | 8;
+            }
         }
         if out.load_sounds {
             let player = u8::from(self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
@@ -12656,6 +12672,37 @@ fn play_re2_sounds(
 }
 
 /// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`.
+/// A licker's tongue while it's out, `Sa_parts_allmv`'s shape of its part as
+/// its own mesh, and where that part hangs.
+fn re2_tongue(
+    character: &crate::scd2::host::Character,
+    model: &Emd,
+    joints: &[anim::Mat4x3],
+) -> Option<(crate::model::Tmd, Vec<anim::Mat4x3>)> {
+    use crate::zombie2::licker::{TONGUE_PARENT, TONGUE_PART, TONGUE_TURN};
+    let weights = character
+        .zombie
+        .as_ref()?
+        .licker
+        .as_ref()?
+        .tongue_weights()?;
+    let morph = model
+        .morphs
+        .iter()
+        .find(|morph| morph.part == TONGUE_PART)?;
+    let mut object = model.mesh.objects.get(usize::from(TONGUE_PART))?.clone();
+    object.vertices = morph.shape(&object.vertices, weights);
+    let turn = anim::Mat4x3 {
+        r: crate::player2::rot_matrix(TONGUE_TURN).map(|row| row.map(i32::from)),
+        t: [0; 3],
+    };
+    let joint = anim::compose(joints.get(TONGUE_PARENT)?, &turn);
+    let mesh = crate::model::Tmd {
+        objects: vec![object],
+    };
+    Some((mesh, vec![joint]))
+}
+
 fn re2_player_shadow<'a>(
     game: &game::GameState,
     room: &RoomState,
@@ -14067,9 +14114,11 @@ fn run_re2_init(
         return;
     };
     game.re2.gates = Default::default();
+    game.re2.reset_mask_groups();
     game.re2.pending_events.clear();
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
+    game.re2.pending_sca.clear();
     game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
@@ -14138,6 +14187,16 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     context.game.re2.vm = Some(vm);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
         apply_re2_cut_edit(context.room, edit);
+    }
+    for (index, id) in std::mem::take(&mut context.game.re2.pending_sca) {
+        if let Some(record) = context
+            .room
+            .sca
+            .as_mut()
+            .and_then(|sca| sca.records.get_mut(usize::from(index)))
+        {
+            record.set_id(id);
+        }
     }
     let moved = std::mem::take(&mut context.game.re2.pending_player);
     if let Some(pos) = moved.pos {
@@ -14636,6 +14695,15 @@ fn tick_room_timed(
     // The stairway (`action_behavior` 0x11) skips both passes as well: its
     // clip carries the player through the stairs' own collision volume.
     if context.game.re2.player.climbing() {
+        context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
+        context.game.entities[0].pos = context.player.pos;
+    } else if context.game.is_re2_room
+        && context.game.re2.player.be_flg & crate::player2::BE_NO_SCA != 0
+    {
+        // `Sca_ck_em` only remembers where the body is.
+        if let Some(pre) = context.player.collision_pre.take() {
+            context.player.pos = pre.step;
+        }
         context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
         context.game.entities[0].pos = context.player.pos;
     } else if context.game.entities[0].state() != 5
@@ -16145,7 +16213,11 @@ fn render_frame_on(
         camera: room.current_cut,
         cut,
         page,
-        active: cut.mask_active,
+        active: if game.is_re2_room {
+            cut.mask_active & game.re2.mask_groups(room.current_cut)
+        } else {
+            cut.mask_active
+        },
     });
 
     // Every ground shadow is submitted through the same fade-sprite path: the
@@ -16315,6 +16387,7 @@ fn render_frame_on(
     // The parsed NPC models are held in `models` so the mesh references built
     // below stay alive for the draw call.
     let mut models: Vec<Arc<Emd>> = Vec::new();
+    let mut npc_tongues: Vec<(usize, crate::model::Tmd, Vec<anim::Mat4x3>)> = Vec::new();
     let mut npc_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
     let mut npc_hidden: Vec<u32> = Vec::new();
     let mut npc_tints: Vec<[u8; 3]> = Vec::new();
@@ -16487,6 +16560,9 @@ fn render_frame_on(
             joints.first().map_or(character.body.pos, |root| root.t),
             false,
         ));
+        if let Some(tongue) = re2_tongue(character, &model, &joints) {
+            npc_tongues.push((models.len(), tongue.0, tongue.1));
+        }
         models.push(model);
         npc_joints.push(joints);
         npc_hidden.push(hidden_parts);
@@ -16622,6 +16698,25 @@ fn render_frame_on(
             light_rotation: None,
             fixed_light: None,
             joint_colours: *joint_colours,
+            hd_name: None,
+        });
+    }
+    for (index, tongue, joints) in &npc_tongues {
+        let (light_pos, per_joint_light) = npc_lights[*index];
+        meshes.push(EntityMesh {
+            mesh: tongue,
+            texture: &models[*index].texture,
+            joints,
+            tint: npc_tints[*index],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: Some(light_pos),
+            per_joint_light,
+            complex_object: None,
+            aliased_light: false,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
     }
@@ -26013,6 +26108,7 @@ return M
                     palettes: Vec::new(),
                     stp: Vec::new(),
                 },
+                morphs: Vec::new(),
             },
             emw: Emw {
                 skeleton: Skeleton::default(),
@@ -32375,6 +32471,7 @@ end
                 palettes: vec![[0, 0, 0, 255], [200, 80, 80, 255]],
                 stp: Vec::new(),
             },
+            morphs: Vec::new(),
         }
     }
 
