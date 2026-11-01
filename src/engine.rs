@@ -12732,6 +12732,13 @@ fn re2_player_shadow<'a>(
     )
 }
 
+/// `MulKage`'s offset of a shadow from its body, turned with the body.
+fn kage_at(at: [i32; 3], (off_x, off_z): (i32, i32), angle: u16) -> [i32; 3] {
+    let turn = crate::player2::rot_matrix([0, angle as i16, 0]);
+    let along = |row: [i16; 3]| (i32::from(row[0]) * off_x + i32::from(row[2]) * off_z) >> 12;
+    [at[0] + along(turn[0]), at[1], at[2] + along(turn[2])]
+}
+
 /// A body's shadow in an RE2 room, at the ground under it (`MulKage`), if
 /// `Kage_work_sort` finds it in the camera's zone.
 #[allow(clippy::too_many_arguments)]
@@ -15938,9 +15945,13 @@ fn visible_objects<'a>(
         // The camera-switch cull uses the composed world translation, the
         // original's `is_entity_in_switch_zone(record + 0x54)`.
         let mut world = objects::world_matrix(objects, slot, player_pos, player_angle);
-        if !debug_view::unculled() && !enemy::in_camera_zone(room, camera, world.t) {
+        if !debug_view::unculled()
+            && record.be_flg & 0x10 == 0
+            && !enemy::in_camera_zone(room, camera, world.t)
+        {
             continue;
         }
+        world.t[1] -= record.draw_lift;
         if object_render_skipped(room, camera, record) {
             continue;
         }
@@ -16258,7 +16269,11 @@ fn render_frame_on(
                 .as_ref()
                 .filter(|_| character.work.routine[0] == 7)
                 .map(|zombie| i32::from(zombie.pool));
-            let (half_x, half_z) = crate::player2::character_shadow(character.id);
+            let kage = character.kage;
+            let (half_x, half_z) = kage.map_or_else(
+                || crate::player2::character_shadow(character.id),
+                |kage| kage.half,
+            );
             let grown = pool.unwrap_or(0);
             let at = character
                 .zombie
@@ -16267,13 +16282,19 @@ fn render_frame_on(
                 .map_or(character.body.pos, |licker| {
                     licker.shadow_at(character.body.angle)
                 });
+            let at = kage.map_or(at, |kage| kage_at(at, kage.off, character.body.angle));
+            let color = match (pool, kage) {
+                (Some(_), _) => crate::zombie2::POOL_COLOR,
+                (None, Some(kage)) => kage.color,
+                (None, None) => shadow::PLAYER_COLOR,
+            };
             let shadow = re2_shadow(
                 room,
                 &character.body,
                 at,
                 (half_x + grown, half_z + grown),
                 crate::character2::sca_mask(character.id),
-                pool.map_or(shadow::PLAYER_COLOR, |_| crate::zombie2::POOL_COLOR),
+                color,
                 tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
                 tween,
                 texture,

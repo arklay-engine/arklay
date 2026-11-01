@@ -3998,6 +3998,7 @@ mod tests {
     fn a_shot_takes_life_and_starts_the_damage_or_the_dying_state() {
         let mut character = Character {
             id: 0x10,
+            kage: None,
             be_flg: 1,
             work: Work::default(),
             body: crate::player::spawn(

@@ -715,6 +715,7 @@ mod tests {
             work: player2::Work::default(),
             body: crate::player::spawn(RoomId::parse("1140").unwrap(), &RoomState::default()),
             kind: 0,
+            kage: None,
             start: (0, 0),
             sound_type: 0,
             distance: 0,

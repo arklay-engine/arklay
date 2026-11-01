@@ -283,6 +283,10 @@ pub struct ObjectRecord {
     /// (stage 2F and its return) room 0x0A slot 1 arms `0x30` (the water
     /// tank's surface, 81% opaque instead of the authored half blend).
     pub blend_override: Option<u8>,
+    /// RE2's `Be_flg`: bit 4 draws it out of the camera's zone too.
+    pub be_flg: u32,
+    /// RE2's `Om_trans`: how far above its position a push box draws.
+    pub draw_lift: i32,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
 }
@@ -310,6 +314,8 @@ impl Default for ObjectRecord {
             tint: [0; 3],
             light_scale: 0,
             blend_override: None,
+            be_flg: 0,
+            draw_lift: 0,
             tween: TweenScratch::default(),
         }
     }
@@ -452,6 +458,8 @@ impl ObjectTable {
             tint: [0; 3],
             light_scale: 0,
             blend_override,
+            be_flg: 0,
+            draw_lift: 0,
             tween: TweenScratch::default(),
         };
         self.built = self.built.wrapping_add(1);
