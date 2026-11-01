@@ -406,13 +406,15 @@ fn parse_cameras(data: &[u8], offset: u32, count: u8) -> Result<Vec<Camera>> {
 }
 
 /// One camera's LIT record (see the module docs), on the RE1 scales.
+/// A LIT colour byte on the RE1 room's scale, where `0x80` is full.
+pub(crate) fn light_colour(value: u8) -> u8 {
+    (u32::from(value) * 0x80).div_ceil(255) as u8
+}
+
 fn parse_light(data: &[u8], at: usize) -> Result<CameraLight> {
     let record = bytes(data, at, LIGHT_SIZE)?;
     let colour = |index: usize| -> [u8; 3] {
-        std::array::from_fn(|channel| {
-            let value = u32::from(record[4 + index * 3 + channel]);
-            (value * 0x80).div_ceil(255) as u8
-        })
+        std::array::from_fn(|channel| light_colour(record[4 + index * 3 + channel]))
     };
     let ambient = std::array::from_fn(|channel| {
         let value = u32::from(record[13 + channel]);

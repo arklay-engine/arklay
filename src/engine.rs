@@ -14261,6 +14261,27 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
                 swap(&mut gate.floor);
             }
         }
+        CutEdit::Light { cut, index, change } => {
+            use crate::scd2::host::LightChange;
+            let light = room
+                .cuts
+                .get_mut(usize::from(cut))
+                .and_then(|cut| cut.light.as_mut())
+                .and_then(|light| light.lights.get_mut(usize::from(index)));
+            if let Some(light) = light {
+                match change {
+                    LightChange::Pos { axis, value } => {
+                        if let Some(at) = light.pos.get_mut(usize::from(axis)) {
+                            *at = i32::from(value);
+                        }
+                    }
+                    LightChange::Radius(radius) => light.radius = radius,
+                    LightChange::Color(color) => {
+                        light.color = color.map(crate::rdt2::light_colour);
+                    }
+                }
+            }
+        }
     }
 }
 
