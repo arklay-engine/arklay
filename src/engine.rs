@@ -2005,6 +2005,8 @@ struct GameSession {
     /// The room the GPU residency was last recorded for; a change retires
     /// the previous room's uploads.
     gpu_room: Option<RoomId>,
+    /// The room and camera as this tick began: what RE2 draws.
+    drawn_cut: Option<(RoomId, usize)>,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -2575,6 +2577,7 @@ impl GameSession {
             freeze_room_frame: false,
             gpu_backend: false,
             gpu_room: None,
+            drawn_cut: None,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -2812,6 +2815,7 @@ impl GameSession {
     /// the menu bits (`0x100`/`0x40`); while the menu is up the room stays
     /// frozen and the same input drives the menu.
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
+        self.drawn_cut = Some((self.loaded.id, self.loaded.room.current_cut));
         if self
             .cutscene_skip
             .is_some_and(|skip| skip.phase == CutsceneSkipPhase::FastForward)
@@ -3103,6 +3107,14 @@ impl GameSession {
             return;
         }
         let cut_key = (self.loaded.id, self.loaded.room.current_cut);
+        // The band snaps with the picture, on the tick RE2 first draws the cut.
+        if self.game.is_re2_room
+            && self.drawn_cut.is_some_and(|(room, _)| room == cut_key.0)
+            && self.drawn_cut != Some(cut_key)
+        {
+            self.view_prev = self.view;
+            return;
+        }
         let snap = self.view_cut != Some(cut_key) || self.view.height != aspect.height();
         self.view_cut = Some(cut_key);
         // The band keeps following through a cutscene: a wider aspect draws
@@ -6738,7 +6750,16 @@ impl GameSession {
             } else {
                 None
             };
-            self.gpu_scene_visible = render_frame_on(
+            // RE2's new view comes in at the frame's swap (`Bg_loadPC`), so the
+            // tick that changes the cut still draws the old one.
+            let cut = self.loaded.room.current_cut;
+            if let Some((_, drawn)) = self
+                .drawn_cut
+                .filter(|(room, _)| self.game.is_re2_room && *room == self.loaded.id)
+            {
+                self.loaded.room.current_cut = drawn;
+            }
+            let visible = render_frame_on(
                 &mut self.framebuffer,
                 gpu,
                 pack,
@@ -6752,7 +6773,9 @@ impl GameSession {
                 &mut self.shadows,
                 &mut self.effect_pages,
                 &mut self.tween,
-            )?;
+            );
+            self.loaded.room.current_cut = cut;
+            self.gpu_scene_visible = visible?;
             // The cutscene letterbox bars sit on the scene after the
             // room-entry fade has darkened it: `main_loop` draws the fading
             // rect first (0x0042... at the fade block) and then the two
