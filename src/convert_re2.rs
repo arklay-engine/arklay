@@ -554,6 +554,10 @@ fn copy_text(
         ),
         ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         (
+            "enemy/22/enemy.lua",
+            include_str!("../games/re2/enemy/22/enemy.lua"),
+        ),
+        (
             "ui/char_select.lua",
             include_str!("../games/re2/ui/char_select.lua"),
         ),

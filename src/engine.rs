@@ -5785,6 +5785,7 @@ impl GameSession {
                 &self.loaded.room,
                 pack,
                 &mut self.npc_models,
+                Some(&mut self.enemy_lua),
             );
         }
         if let Some(spd) = carried {
@@ -14233,7 +14234,13 @@ fn run_re2_init(
 /// applies.
 fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     // The load's `Em_init_move` comes first: its fires are the pool's top slots.
-    crate::character2::init(context.game, context.room, context.pack, context.npc_models);
+    crate::character2::init(
+        context.game,
+        context.room,
+        context.pack,
+        context.npc_models,
+        context.enemy_lua.as_deref_mut(),
+    );
     // `Sce_scheduler` skips the first tick after a door: `fg_stop` is still up.
     if std::mem::take(&mut context.game.re2.door_settling) {
         return;
@@ -14725,7 +14732,13 @@ fn tick_room_timed(
         .copied();
     // `Game_loop` runs the enemy slots whether or not the player may move.
     if context.game.is_re2_room {
-        crate::character2::tick(context.game, context.room, context.pack, context.npc_models);
+        crate::character2::tick(
+            context.game,
+            context.room,
+            context.pack,
+            context.npc_models,
+            context.enemy_lua.as_deref_mut(),
+        );
     }
     if state != 1 || frozen {
         // The pad-driven idle did not run this tick, so its reference scratch
@@ -16640,7 +16653,7 @@ fn render_frame_on(
     }
 
     // The characters in RE2's enemy slots, which scripts drive.
-    crate::character2::init(game, room, pack, npc_models);
+    crate::character2::init(game, room, pack, npc_models, None);
     for (slot, character) in game.re2.characters.0.iter().enumerate() {
         let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
             continue;

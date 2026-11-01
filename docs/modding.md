@@ -1533,6 +1533,10 @@ every active monster slot (`0x00..=0x16`) and runs its
 top-level `lib/**.lua` are ordinary pack modules: a script imports one with the
 sandboxed, pack-scoped `require(name)`.
 
+### RE2's enemies
+
+An RE2 pack keeps behaviour in the same place: `enemy/22/enemy.lua` is the licker's state machine and its tables. Its `update(e)` runs once per tick for each licker, after the engine's `Root_ck` and before the engine's tongue blend, pushes and joints. A licker keeps no state in Lua: `e:var(i)` and `e:set_var(i, value)` are thirteen integers of its own, and `e:routine(i)` the original's `Routine_0` to `Routine_3`. The other calls are the low-level steps the original's own code is built from (`e:clip`, `e:joint`, `e:spd`, `e:rnd`, `e:effect`, `e:first_wall`, `e:pl_life_down` and so on), listed in `src/zombie2/script.rs`. The zombie and the other families are still in the engine, and RE1's `e` calls don't exist here.
+
 ### Enemy folders
 
 Everything about one entity id lives in its own folder, named by the id in

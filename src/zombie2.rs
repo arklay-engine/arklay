@@ -99,6 +99,7 @@ const SEQ_SOUND: u32 = 0x800_0000;
 const SEQ_BLOOD: u32 = 0x1_0000;
 
 pub mod licker;
+mod script;
 
 /// A collision body, `AT_DATA`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -491,6 +492,9 @@ pub struct World<'a> {
     pub common_a4: bool,
     /// Where the body a script's `Sce_free3` names stands.
     pub scene_target: [i32; 3],
+    /// The pack the behaviour scripts come from, and their VM. `None` parks them.
+    pub pack: &'a crate::pack::Pack,
+    pub lua: Option<&'a mut crate::enemy::LuaEnemyHost>,
 }
 
 /// One tick's zombie: the state the original keeps in the work and globals.
