@@ -181,6 +181,36 @@ pub struct Emd {
     pub banks: Vec<AnimBank>,
     pub mesh: Tmd,
     pub texture: Texture8,
+    /// An RE2 EMD's vertex animations (`pSa_dat`), from its first chunk.
+    pub morphs: Vec<PartMorph>,
+}
+
+/// The shapes a part of the mesh can blend between (`Sa_parts_allmv`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PartMorph {
+    pub part: u8,
+    /// Each target's vertices, in the part's order.
+    pub targets: Vec<Vec<[i16; 3]>>,
+}
+
+impl PartMorph {
+    /// The vertices of `base` blended through each target in turn by its
+    /// weight, where 0x1000 is all of it (`LoadAverageShort12`).
+    pub fn shape(&self, base: &[[i16; 3]], weights: &[i16]) -> Vec<[i16; 3]> {
+        let mut shape = base.to_vec();
+        for (target, &weight) in self.targets.iter().zip(weights) {
+            if weight == 0 {
+                continue;
+            }
+            for (vertex, to) in shape.iter_mut().zip(target) {
+                *vertex = std::array::from_fn(|axis| {
+                    let keep = i32::from(vertex[axis]) * (0xFFF - i32::from(weight));
+                    ((keep + i32::from(to[axis]) * i32::from(weight)) >> 12) as i16
+                });
+            }
+        }
+        shape
+    }
 }
 
 /// One animation bank: a keyframe table and the clips that index it.

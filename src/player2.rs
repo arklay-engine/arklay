@@ -43,6 +43,8 @@ const MODE_SCENARIO: u8 = 4;
 /// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
 pub(crate) const MODE_HELD: u8 = 5;
 pub(crate) const MODE_HELD_DIE: u8 = 6;
+/// `Be_flg`'s 8, which keeps `Sca_ck_em` from running.
+pub(crate) const BE_NO_SCA: u32 = 8;
 /// `routine[1]` under [`MODE_MOVE`]: the `pl_br_*` and `pl_mv_*` tables.
 const MOVE_IDLE: u8 = 0;
 const MOVE_FORWARD: u8 = 1;
@@ -312,6 +314,9 @@ pub struct Work {
     pub be_flg: u32,
     /// `DAT_0098a0a4`: the slot of the enemy that has hold of the player.
     pub held_by: Option<usize>,
+    /// `fg_system`'s `0x100` when no hold of `MODE_HELD_DIE` set it: a bite that
+    /// killed outright.
+    pub held_kill: bool,
     /// `+0x164`, which `Null_pos_set` adds a clip's movement to.
     pub base: [i16; 3],
     /// `Timer0`, `Timer1` and `Timer2` of the held states.
@@ -595,6 +600,7 @@ impl Default for Work {
             key_trg: 0,
             be_flg: 1,
             held_by: None,
+            held_kill: false,
             base: [0; 3],
             timers: [0; 3],
             at_em_flg: 0,

@@ -424,3 +424,41 @@ fn a_full_palette_row_never_maps_a_weapon_colour_to_the_transparent_slot() {
     let texture = weapon_texture(&player, &weapon);
     assert_ne!(texture.indices[224 * 256 + 128 + 72], 0);
 }
+
+#[test]
+fn a_part_blends_through_the_shapes_it_is_given() {
+    let object = TmdObject {
+        vertices: vec![[0; 3]; 2],
+        ..TmdObject::default()
+    };
+    let mesh = Tmd {
+        objects: vec![TmdObject::default(), object],
+    };
+    // Part 1's block, one weight long, then its base and one target, each
+    // padded to the stride of 16.
+    let mut chunk = Vec::new();
+    for word in [0b10u32, 0, 0, 28, 16, 1, 0] {
+        put32(&mut chunk, word);
+    }
+    for value in [1u16, 2, 3, 4, 5, 6, 0, 0] {
+        put16(&mut chunk, value);
+    }
+    for value in [0x1000u16, 0x2000, 0x3000, 0, 0xFFFF, 6, 0, 0] {
+        put16(&mut chunk, value);
+    }
+    let morphs = parse_morphs(&chunk, &mesh);
+    assert_eq!(morphs.len(), 1);
+    assert_eq!(morphs[0].part, 1);
+    assert_eq!(
+        morphs[0].targets,
+        [vec![[0x1000, 0x2000, 0x3000], [0, -1, 6]]]
+    );
+
+    let base = [[0x100, 0, 0], [0, 0, 0x100]];
+    assert_eq!(morphs[0].shape(&base, &[0]), base);
+    // `LoadAverageShort12`: 0x800 of the target, and 0x7FF of what was there.
+    let half = morphs[0].shape(&base, &[0x800]);
+    assert_eq!(half[0], [0x87F, 0x1000, 0x1800]);
+    // A table that runs off the chunk gives no shapes rather than a wrong one.
+    assert!(parse_morphs(&chunk[..50], &mesh).is_empty());
+}

@@ -437,6 +437,12 @@ impl ScaRect {
     pub fn shape(&self) -> u8 {
         (self.id & 0xF) as u8
     }
+
+    /// `Sca_id_set`: a script gives the record new bits to block with, and the
+    /// low seven, with its shape, stay.
+    pub fn set_id(&mut self, id: u16) {
+        self.id = (self.id & 0x7F) | (id & !0x7F);
+    }
 }
 
 /// One of RE2's guide areas: a rectangle, and by bit those it opens onto.
@@ -702,6 +708,24 @@ mod tests {
             height: rows.len() as u32,
             rgba: rows.iter().flat_map(|&row| [row, 0, 0, 255]).collect(),
         }
+    }
+
+    #[test]
+    fn a_script_changes_what_a_record_blocks_but_not_its_shape() {
+        let mut record = ScaRect {
+            x: 0,
+            z: 0,
+            width: 0,
+            depth: 0,
+            id: 0x0405,
+            kind: 0,
+            floor: 0,
+        };
+        record.set_id(0);
+        assert_eq!(record.id, 5);
+        record.set_id(0x1234);
+        assert_eq!(record.id, 0x1205);
+        assert_eq!(record.shape(), 5);
     }
 
     fn reds(image: &Image) -> Vec<u8> {
