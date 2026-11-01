@@ -12,6 +12,8 @@ const BANKS: usize = 32;
 /// RE2's script state, which has no RE1 counterpart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Re2State {
+    /// `fg_room_enemy`'s low byte: what the room's dogs told each other.
+    pub room_enemy: u8,
     /// The flag banks; a bit is `0x80000000 >> (index & 31)` of word
     /// `(index >> 5) & 7`.
     pub banks: [[u32; 8]; BANKS],
@@ -309,6 +311,7 @@ pub const SCE_DAMAGE: u8 = 11;
 impl Default for Re2State {
     fn default() -> Self {
         Self {
+            room_enemy: 0,
             banks: {
                 let mut banks = [[0; 8]; BANKS];
                 banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
@@ -1045,7 +1048,7 @@ impl GameHost<'_> {
         // ported.
         let type_word = (at(3) as u16) | (at(4) as u16) << 8;
         let licker = id == 0x22 && type_word & 0x4F0F == 0;
-        let zombie = (0x10..0x20).contains(&id) || licker;
+        let zombie = (0x10..=0x20).contains(&id) || licker;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {
@@ -2182,8 +2185,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A dog, which isn't modelled.
-        spawn_character(&mut game, 0x20, 255);
+        // A crow, which isn't modelled.
+        spawn_character(&mut game, 0x21, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.

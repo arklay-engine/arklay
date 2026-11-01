@@ -203,10 +203,10 @@ impl Em22<'_, '_, '_, '_> {
         for other in self.em.world.bodies {
             let body = &mut self.em.mover.player.pos;
             let be_flg = *self.em.be_flg;
-            if super::oba_hit(other, be_flg, &mut self.em.z.atd, body) {
+            if super::oba_hit(other, be_flg, &mut self.em.z.atd, body, None) {
                 self.em.z.at_em_no = other.slot;
             }
-            if super::oba_hit(other, be_flg, &mut self.l.head, body) {
+            if super::oba_hit(other, be_flg, &mut self.l.head, body, None) {
                 self.em.z.at_em_no = other.slot;
             }
         }

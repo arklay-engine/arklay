@@ -260,10 +260,10 @@ fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
 
 /// `Wp_dmg_tbl`'s entry for the target.
 fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
-    let table = if id == LICKER_ID {
-        &LICKER_DAMAGE
-    } else {
-        &DAMAGE
+    let table = match id {
+        LICKER_ID => &LICKER_DAMAGE,
+        DOG_ID => &DOG_DAMAGE,
+        _ => &DAMAGE,
     };
     table.get(usize::from(weapon).checked_sub(2)?)
 }
@@ -318,6 +318,47 @@ const DAMAGE: [Damage; 7] = [
     },
 ];
 
+const DOG_ID: u8 = crate::zombie2::DOG_ID;
+const DOG_HANDGUN: [i32; 6] = [-4000, -2000, -3000, 2000, -500, 3000];
+const DOG_SHOTGUN: [i32; 6] = [-3000, 500, -3000, 2000, -500, 3000];
+/// The same rows for `Em_20`.
+const DOG_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00F0_4012,
+        stun: 0x078F_1E0A,
+        heights: DOG_HANDGUN,
+    },
+    Damage {
+        damage: 0x00F0_4012,
+        stun: 0x078F_1E0A,
+        heights: DOG_HANDGUN,
+    },
+    Damage {
+        damage: 0x00F0_4012,
+        stun: 0x0000_000A,
+        heights: DOG_HANDGUN,
+    },
+    Damage {
+        damage: 0x0C83_20C8,
+        stun: 0x078F_1E0A,
+        heights: DOG_HANDGUN,
+    },
+    Damage {
+        damage: 0x12C4_B12C,
+        stun: 0x078F_1E0A,
+        heights: DOG_HANDGUN,
+    },
+    Damage {
+        damage: 0x01E0_A03B,
+        stun: 0x078F_1E0A,
+        heights: DOG_SHOTGUN,
+    },
+    Damage {
+        damage: 0x0411_2D2C,
+        stun: 0x078F_1E0A,
+        heights: DOG_SHOTGUN,
+    },
+];
 const LICKER_ID: u8 = 0x22;
 const LICKER_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -500, 2000];
 /// The same rows for `Em_22`.
@@ -625,6 +666,15 @@ pub fn shoot_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_dog_takes_each_weapons_own_row() {
+        let damage = |weapon| damage_table(DOG_ID, weapon).unwrap().damage & 0x3FF;
+        assert_eq!(
+            [2, 3, 4, 5, 6, 7, 8].map(damage),
+            [18, 18, 18, 200, 300, 59, 300]
+        );
+    }
 
     #[test]
     fn shoot_camera_only_throws_when_the_gun_lines_up() {
