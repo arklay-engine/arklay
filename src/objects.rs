@@ -285,6 +285,9 @@ pub struct ObjectRecord {
     pub blend_override: Option<u8>,
     /// RE2's `Be_flg`: bit 4 draws it out of the camera's zone too.
     pub be_flg: u32,
+    /// RE2's attribute from `Obj_model_set`: for `Om_trans`, bit 4 draws it
+    /// unlit. Bit 1, which blends it, is a [`crate::scd2::host::CutEdit`].
+    pub attr: u16,
     /// RE2's `Om_trans`: how far above its position a push box draws.
     pub draw_lift: i32,
     /// The event VM's tween scratch the movement handlers mutate.
@@ -315,6 +318,7 @@ impl Default for ObjectRecord {
             light_scale: 0,
             blend_override: None,
             be_flg: 0,
+            attr: 0,
             draw_lift: 0,
             tween: TweenScratch::default(),
         }
@@ -459,6 +463,7 @@ impl ObjectTable {
             light_scale: 0,
             blend_override,
             be_flg: 0,
+            attr: 0,
             draw_lift: 0,
             tween: TweenScratch::default(),
         };

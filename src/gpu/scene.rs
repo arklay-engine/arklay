@@ -534,7 +534,22 @@ impl<'a> Sprites<'a> {
         key: f32,
     ) {
         let [x0, y0, x1, y1] = rect;
-        let corner = |x: f32, y: f32, u: f32, v: f32| {
+        let corners = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+        self.push_corners(corners, uv, depth, colour, mode, key);
+    }
+
+    /// [`Self::push_rect`] on a quad that needn't be square to the screen, its
+    /// corners in the order of [`render::EffectQuad::corners`].
+    fn push_corners(
+        &mut self,
+        corners: [[f32; 2]; 4],
+        uv: [f32; 4],
+        depth: f32,
+        colour: [f32; 4],
+        mode: u32,
+        key: f32,
+    ) {
+        let corner = |[x, y]: [f32; 2], u: f32, v: f32| {
             let [nx, ny] = ndc(x, y);
             SpriteVertex {
                 clip: [nx, ny, depth, 1.0],
@@ -544,10 +559,10 @@ impl<'a> Sprites<'a> {
                 key,
             }
         };
-        let a = corner(x0, y0, uv[0], uv[1]);
-        let b = corner(x1, y0, uv[2], uv[1]);
-        let c = corner(x0, y1, uv[0], uv[3]);
-        let d = corner(x1, y1, uv[2], uv[3]);
+        let a = corner(corners[0], uv[0], uv[1]);
+        let b = corner(corners[1], uv[2], uv[1]);
+        let c = corner(corners[2], uv[0], uv[3]);
+        let d = corner(corners[3], uv[2], uv[3]);
         self.vertices.extend([a, b, c, c, b, d]);
     }
 
@@ -675,8 +690,12 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
             let (u, v) = (f32::from(quad.uv[0]), f32::from(quad.uv[1]));
             let source = quad.source.map(|size| f32::from(size.max(1)));
             let (tint, alpha) = quad.colour();
-            sprites.push_rect(
-                [x, y, x + quad.size[0] as f32, y + quad.size[1] as f32],
+            let (x1, y1) = (x + quad.size[0] as f32, y + quad.size[1] as f32);
+            sprites.push_corners(
+                quad.corners
+                    .map_or([[x, y], [x1, y], [x, y1], [x1, y1]], |corners| {
+                        corners.map(|point| point.map(|v| v as f32))
+                    }),
                 [u, v, u + source[0], v + source[1]],
                 key_depth(quad.key),
                 [tint[0], tint[1], tint[2], alpha],
