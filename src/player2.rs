@@ -433,7 +433,7 @@ pub struct Neck {
     /// `+0x1B8`: whose head, in [`Necks`], `Pl_neck` has it look at. `None` is
     /// its own, so it follows its pose.
     pub target: Option<usize>,
-    /// The second joint's yaw, when the neck has two ([`DOG_NECK`]).
+    /// The second joint's yaw, when the neck has two (`DOG_NECK`).
     pub turn_two: Option<i16>,
     /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
     /// so a new room doesn't restart it.
