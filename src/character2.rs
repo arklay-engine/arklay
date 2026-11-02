@@ -258,6 +258,9 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 at_w: zombie.atd.at_w,
                 at_w1: if character.id == crate::zombie2::DOG_ID {
                     600
+                } else if character.id == crate::zombie2::CROW_ID {
+                    // `Em_21` never gives it an `Atd[1]`.
+                    0
                 } else {
                     zombie
                         .licker
@@ -468,6 +471,10 @@ fn run_zombie(
     let player_id = game.id.player_flag;
     let weapon = game.re2_weapon().id;
     let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
+    let claire = game.re2.flag(
+        crate::scd2::host::STATUS_BANK,
+        crate::scd2::host::STATUS_PLAYER,
+    );
     let re2 = &mut game.re2;
     let gacha = re2.key_trg & 0x34F != 0;
     let same_id = re2
@@ -504,6 +511,8 @@ fn run_zombie(
         sca,
         effects,
         weapon,
+        claire,
+        kin: Vec::new(),
         tongue_owner: &mut re2.tongue_owner,
         common_a4,
         scene_target,
@@ -512,8 +521,18 @@ fn run_zombie(
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let knocks = std::mem::take(&mut world.knocks);
+    let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
         re2.player.turn_to = Some(angle);
+    }
+    for call in &kin {
+        for other in re2.characters.0.iter_mut().flatten() {
+            if other.id == character.id
+                && let Some(other) = other.zombie.as_mut()
+            {
+                other.hear(call);
+            }
+        }
     }
     let pos = character.body.pos;
     if player2::is_held(&re2.player)
@@ -575,7 +594,7 @@ const FG_COMMON_LICKER: u8 = 0xA4;
 
 /// `Sca_ck_em`'s mask: the children's is lower, and a zombie's its own.
 pub fn sca_mask(id: u8) -> u16 {
-    if (0x10..=0x20).contains(&id) || id == 0x22 {
+    if (0x10..=0x22).contains(&id) {
         crate::zombie2::MASK
     } else if matches!(id, 0x45 | 0x4F) {
         crate::sca::CHARACTER_MASK_LOW

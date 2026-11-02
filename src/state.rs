@@ -699,6 +699,16 @@ pub struct RoomState {
 }
 
 impl RoomState {
+    /// `Hit_ck_point4` on the view quad `Ccut_searc` finds for the current cut.
+    /// `None` if the cut has none.
+    pub fn in_cut_view(&self, x: i32, z: i32) -> Option<bool> {
+        let zone = self
+            .zones
+            .iter()
+            .find(|zone| i32::from(zone.cam_from) == self.current_cut as i32)?;
+        Some(zone.contains_signed(x, z))
+    }
+
     /// The row of the original's per-room tables the room reads
     /// ([`RoomId::table_row`]).
     pub fn table_row(&self) -> usize {
@@ -738,6 +748,28 @@ mod tests {
             height: rows.len() as u32,
             rgba: rows.iter().flat_map(|&row| [row, 0, 0, 255]).collect(),
         }
+    }
+
+    /// `Ccut_searc` stops at the first zone of the cut: its group's header.
+    #[test]
+    fn the_view_of_a_cut_is_the_header_of_its_group() {
+        let zone = |cam_from, far| Zone {
+            cam_to: 0,
+            cam_from,
+            corners: [[0, 0], [0, far], [far, far], [far, 0]],
+        };
+        let room = RoomState {
+            zones: vec![zone(1, 10), zone(2, 100), zone(2, 1000)],
+            current_cut: 2,
+            ..Default::default()
+        };
+        assert_eq!(room.in_cut_view(50, 50), Some(true));
+        assert_eq!(room.in_cut_view(500, 500), Some(false));
+        let room = RoomState {
+            current_cut: 3,
+            ..room
+        };
+        assert_eq!(room.in_cut_view(50, 50), None);
     }
 
     #[test]

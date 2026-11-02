@@ -563,6 +563,13 @@ pub(crate) struct Magazine {
 }
 
 impl Work {
+    /// The first tick of `pl_mv_00` chose its clip by the life it began with.
+    pub(crate) fn begin_at_life(&mut self, life: i32) {
+        let level = life_level(life, false);
+        self.d_life_u = level;
+        self.move_no = IDLE_CLIPS[usize::from(level)];
+    }
+
     /// `Player_set`: the magazine is gone, and the next reload drops one if
     /// there's a round in the gun.
     pub(crate) fn enter_room(&mut self, loaded: bool) {
@@ -1059,6 +1066,17 @@ impl<'a, 'b> Mover<'a, 'b> {
     }
 }
 
+/// `D_life_u`: 0 fine, 1 caution, 2 danger.
+fn life_level(life: i32, poisoned: bool) -> u8 {
+    if life < DANGER_LIFE {
+        2
+    } else if life < CAUTION_LIFE || poisoned {
+        1
+    } else {
+        0
+    }
+}
+
 impl Mover<'_, '_> {
     fn set_routine(&mut self, routine: u8) {
         self.work.routine = [MODE_MOVE, routine, 0, 0];
@@ -1070,13 +1088,7 @@ impl Mover<'_, '_> {
             return;
         }
         let before = self.work.d_life_u;
-        let mut level = 0;
-        if self.tick.life < CAUTION_LIFE || self.tick.poisoned {
-            level = 1;
-        }
-        if self.tick.life < DANGER_LIFE {
-            level = 2;
-        }
+        let level = life_level(self.tick.life, self.tick.poisoned);
         self.work.d_life_u = level;
         if before != level {
             self.work.routine[2] = 0;
@@ -2621,6 +2633,10 @@ impl Mover<'_, '_> {
             self.em20_pldie();
             return;
         }
+        if held.holder_id == crate::zombie2::CROW_ID {
+            self.em21_held(held);
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -2629,6 +2645,42 @@ impl Mover<'_, '_> {
             0 | 1 => self.held_standing(held),
             2 | 3 => self.held_low(held),
             _ => self.held_dying(held),
+        }
+    }
+
+    /// `FUN_00463210`: with a crow on the head, until it lets go.
+    fn em21_held(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x200;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.bank = Bank::Held;
+                    self.held_clip(0, 7);
+                    self.work.routine[2] = 1;
+                }
+                if self.joint_move_late(LATE) {
+                    self.held_clip(1, 7);
+                    self.work.routine[2] = 2;
+                }
+            }
+            2 => {
+                self.joint_move_late(LATE);
+            }
+            3 | 4 => {
+                if self.work.routine[2] == 3 {
+                    if *held.life < 0 {
+                        self.work.routine = [MODE_DEAD, 0, 0, 0];
+                        return;
+                    }
+                    self.held_clip(2, 7);
+                    self.work.routine[2] = 4;
+                }
+                if self.joint_move_late(LATE) {
+                    self.held_clip(1, 7);
+                    self.held_end(held);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3691,6 +3743,15 @@ mod tests {
             neck: pos,
             distance,
         }
+    }
+
+    #[test]
+    fn the_life_levels_read_danger_before_poison() {
+        assert_eq!(life_level(DANGER_LIFE - 1, false), 2);
+        assert_eq!(life_level(DANGER_LIFE - 1, true), 2);
+        assert_eq!(life_level(CAUTION_LIFE - 1, false), 1);
+        assert_eq!(life_level(CAUTION_LIFE, true), 1);
+        assert_eq!(life_level(CAUTION_LIFE, false), 0);
     }
 
     #[test]

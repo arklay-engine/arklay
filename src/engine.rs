@@ -5341,6 +5341,12 @@ impl GameSession {
         }
         if script.is_some() {
             self.game.sync_player(&mut self.player);
+            let life = self
+                .game
+                .entities
+                .first()
+                .map_or(0, |player| i32::from(player.health));
+            self.game.re2.player.begin_at_life(life);
         }
         Ok(())
     }
@@ -16483,9 +16489,18 @@ fn render_frame_on(
                 .filter(|_| character.work.routine[0] == 7)
                 .map(|zombie| i32::from(zombie.pool));
             let kage = character.kage;
-            let (half_x, half_z) = kage.map_or_else(
-                || crate::player2::character_shadow(character.id),
-                |kage| kage.half,
+            let own = character.zombie.as_ref().and_then(|z| z.shadow_half);
+            if own == Some(0) {
+                continue;
+            }
+            let (half_x, half_z) = own.map_or_else(
+                || {
+                    kage.map_or_else(
+                        || crate::player2::character_shadow(character.id),
+                        |kage| kage.half,
+                    )
+                },
+                |half| (half, half),
             );
             let grown = pool.unwrap_or(0);
             let at = character
@@ -16496,6 +16511,10 @@ fn render_frame_on(
                     licker.shadow_at(character.body.angle)
                 });
             let at = kage.map_or(at, |kage| kage_at(at, kage.off, character.body.angle));
+            // `Kage_work_sort`.
+            if !debug_view::unculled() && !room.in_cut_view(at[0], at[2]).unwrap_or(true) {
+                continue;
+            }
             let color = match (pool, kage) {
                 (Some(_), _) => crate::zombie2::POOL_COLOR,
                 (None, Some(kage)) => kage.color,
@@ -16804,10 +16823,20 @@ fn render_frame_on(
             continue;
         };
         character.work.apply_to_pose(&mut keyframe);
-        let matrix =
-            anim::entity_matrix_rotated_scaled(character.body.pos, 0, character.body.angle, 0, 0);
+        let [pitch, roll] = character
+            .zombie
+            .as_ref()
+            .map_or([0; 2], |zombie| zombie.tilt);
+        let matrix = anim::entity_matrix_rotated_scaled(
+            character.body.pos,
+            pitch,
+            character.body.angle,
+            roll,
+            0,
+        );
         let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
         let mut hidden_parts = character.work.hidden_parts;
+        let mut flung = 0;
         for (part, matrix) in character.zombie.iter().flat_map(|zombie| zombie.detached()) {
             let moved = anim::detach_joint(
                 &model.skeleton,
@@ -16817,6 +16846,21 @@ fn render_frame_on(
                 matrix,
             );
             hidden_parts &= !moved;
+            if character
+                .zombie
+                .as_ref()
+                .is_some_and(|zombie| zombie.flung(part))
+            {
+                flung |= moved;
+            }
+        }
+        // `Joint_trans2`: out of the cut's view, only the parts `Parts_down`
+        // has (`Be_flg`'s `0x1000`) still go to `ko_joint_trans2` and draw.
+        let [at_x, _, at_z] = character.body.pos;
+        let in_view = debug_view::unculled()
+            || (character.be_flg & 0x80000 == 0 && room.in_cut_view(at_x, at_z).unwrap_or(true));
+        if !in_view {
+            hidden_parts = !flung;
         }
         tween.joints(
             tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
@@ -16827,7 +16871,7 @@ fn render_frame_on(
             joints.first().map_or(character.body.pos, |root| root.t),
             false,
         ));
-        if let Some(tongue) = re2_tongue(character, &model, &joints) {
+        if let Some(tongue) = re2_tongue(character, &model, &joints).filter(|_| in_view) {
             npc_tongues.push((models.len(), tongue.0, tongue.1));
         }
         models.push(model);
@@ -17508,12 +17552,7 @@ fn render_frame_on(
             _ => 0,
         };
         let (re2_quads, re2_pages) = game.re2.effects.quads(&camera, depth_bias, |x, z| {
-            debug_view::unculled()
-                || room
-                    .zones
-                    .iter()
-                    .find(|zone| i32::from(zone.cam_from) == room.current_cut as i32)
-                    .is_some_and(|zone| zone.contains_signed(x, z))
+            debug_view::unculled() || room.in_cut_view(x, z).unwrap_or(false)
         });
         let first = page_refs.len();
         page_refs.extend(re2_pages.iter().map(|page| re2_images.images.get(page)));

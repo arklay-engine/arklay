@@ -665,6 +665,18 @@ impl UserData for Api {
                 Ok(())
             },
         );
+        methods.add_method_mut("blow_part", |_, e, (part, dir): (usize, i32)| {
+            e.em().blow_part(part, dir as u16);
+            Ok(())
+        });
+        methods.add_method_mut(
+            "fling_part",
+            |_, e, (part, dir, along, gravity, rest): (usize, i32, i16, i16, i32)| {
+                e.em()
+                    .fling_part(part, dir as u16, along, gravity, rest as i16);
+                Ok(())
+            },
+        );
         // Both arms, as `FUN_00458d40` reads them before it starts its clip.
         methods.add_method_mut("keep_arms", |_, e, ()| {
             let em = e.em();
@@ -824,6 +836,69 @@ impl UserData for Api {
             Ok((x, y, z))
         });
 
+        // `Em_21`'s end of the work.
+        methods.add_method_mut("line_to_player", |_, e, mask: i64| {
+            let em = e.em();
+            let from = em.mover.player.pos;
+            Ok(!super::sca_ck_line_plan(
+                em.world.sca,
+                from,
+                em.world.player,
+                mask as u16,
+            ))
+        });
+        methods.add_method_mut("wall_side", |_, e, return_to: i32| {
+            Ok(e.em().wall_side(return_to))
+        });
+        methods.add_method_mut("tilt", |_, e, ()| {
+            let [pitch, roll] = e.em().z.tilt;
+            Ok((pitch, roll))
+        });
+        methods.add_method_mut("set_tilt", |_, e, (pitch, roll): (i64, i64)| {
+            e.em().z.tilt = [pitch as u16, roll as u16];
+            Ok(())
+        });
+        methods.add_method_mut("set_shadow", |_, e, half: i32| {
+            e.em().z.shadow_half = Some(half);
+            Ok(())
+        });
+        // The player's `Ground`.
+        methods.add_method_mut("player_ground", |_, e, ()| {
+            let em = e.em();
+            let at = em.world.player;
+            Ok(em.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+                crate::sca::ground_at(sca, at, 0, crate::sca::PLAYER_MASK).height
+            }))
+        });
+        methods.add_method_mut("direction_from_player", |_, e, ()| {
+            let em = e.em();
+            let [x, _, z] = em.mover.player.pos;
+            let [from_x, _, from_z] = em.world.player;
+            Ok(direction_ck(from_x, from_z, x, z))
+        });
+        methods.add_method_mut("scenario_claire", |_, e, ()| Ok(e.em().world.claire));
+        // `FUN_00463070`: every body of this id, but those with `skip` in
+        // `flags`, gets `bits` there and two fields cleared.
+        methods.add_method_mut(
+            "call_kin",
+            |_, e, (flags, skip, bits, one, two): (usize, i32, i32, usize, usize)| {
+                if flags.max(one).max(two) >= super::VARS {
+                    return Err(mlua::Error::RuntimeError(format!("no var {flags}")));
+                }
+                let em = e.em();
+                let call = super::KinCall {
+                    flags,
+                    skip,
+                    bits,
+                    clear: [one, two],
+                };
+                // It hears itself as it calls, before it can change what keeps it out.
+                em.z.hear(&call);
+                em.world.kin.push(call);
+                Ok(())
+            },
+        );
+
         // `Esp_call`.
         methods.add_method_mut(
             "effect",
@@ -847,8 +922,9 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 3] = [
+    const SCRIPTS: [&str; 4] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
+        include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/22/enemy.lua"),
         include_str!("../../games/re2/lib/zombie.lua"),
     ];

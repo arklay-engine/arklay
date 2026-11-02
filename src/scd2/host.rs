@@ -235,6 +235,8 @@ const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 5;
 const TASK_SLOTS: usize = super::vm::TASKS;
 /// `set 2, 7`: `FG_STOP_DISABLE_INPUT`, a cutscene holding the player's input.
 const STOP_BANK: u8 = 2;
+/// `fg_stop`'s `0x10000000`, which holds `Esp_move`.
+const STOP_EFFECTS: u8 = 3;
 /// `Pri_be_flg`: a bank per camera, 13 onwards, with a bit per mask group.
 const MASK_BANK: usize = 13;
 /// How many cameras `Pri_be_flg` has a bank for.
@@ -601,18 +603,29 @@ impl Re2State {
                 continue;
             };
             let (rnd, effects) = (&mut self.rnd, &mut self.effects);
+            let mut off = Vec::new();
             zombie.thrown.retain_mut(|thrown| {
+                if off.contains(&thrown.part) {
+                    return false;
+                }
                 let falling = thrown.fall(rnd, effects, sca);
                 if !falling {
-                    // Its children go with it, up to the arm's last.
-                    for part in thrown.part..=thrown.part / 3 * 3 + 2 {
-                        crate::player2::set_part_flags(&mut character.work, part, 0);
+                    crate::player2::set_part_flags(&mut character.work, thrown.part, 0);
+                    if thrown.takes_below() {
+                        for &part in &thrown.below {
+                            crate::player2::set_part_flags(&mut character.work, part, 0);
+                            off.push(part);
+                        }
                     }
                 }
                 falling
             });
         }
-        self.effects.tick(&mut self.rnd, sca);
+        if self.flag(STOP_BANK, STOP_EFFECTS) {
+            self.effects.tick_stopped(&mut self.rnd, sca);
+        } else {
+            self.effects.tick(&mut self.rnd, sca);
+        }
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
                 let pos = pos.map(i32::from);
@@ -1048,7 +1061,7 @@ impl GameHost<'_> {
         // ported.
         let type_word = (at(3) as u16) | (at(4) as u16) << 8;
         let licker = id == 0x22 && type_word & 0x4F0F == 0;
-        let zombie = (0x10..=0x20).contains(&id) || licker;
+        let zombie = (0x10..=0x21).contains(&id) || licker;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {
@@ -2185,8 +2198,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A crow, which isn't modelled.
-        spawn_character(&mut game, 0x21, 255);
+        // A spider, which isn't modelled.
+        spawn_character(&mut game, 0x23, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.
