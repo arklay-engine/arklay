@@ -623,8 +623,12 @@ mod imp {
             methods.add_method_mut(
                 "set_re2_flag",
                 |_lua, game, (bank, index, value): (u8, u8, Option<bool>)| {
-                    game.re2
-                        .set_flag(bank, index, u8::from(value.unwrap_or(true)));
+                    let value = value.unwrap_or(true);
+                    game.re2.set_flag(bank, index, u8::from(value));
+                    // A room's start writes `FG_STATUS_SCENARIO` from this.
+                    if bank == 1 && index == 1 {
+                        game.re2.scenario_b = value;
+                    }
                     Ok(())
                 },
             );

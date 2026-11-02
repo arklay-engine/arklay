@@ -41,6 +41,8 @@ pub const TYPE_HELD: u16 = 0x4000;
 pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
 const BE_NO_SCA: u32 = 8;
+/// `Sca_ck_em` pushed the body along z.
+const BE_PUSHED_Z: u32 = 0x4000;
 /// `Be_flg`'s bit on both bodies of a grab.
 pub const BE_HOLDING: u32 = 0x1000;
 /// `At_em_no` when nothing's touching, and the player's number.
@@ -169,6 +171,21 @@ pub struct ThrownPart {
     /// The rotation it turns to, and `Hokan_flg`: how far it has to go.
     rest: [[i16; 3]; 3],
     turning: i8,
+    /// `Be_flg`'s `0x4A`: it goes to `Parts_bomb` instead.
+    blown: Option<BlownPart>,
+    /// The parts under it, which `ko_joint_trans2` turns off when it has gone.
+    pub(crate) below: Vec<u8>,
+}
+
+/// What `Parts_bomb` reads: `FUN_00461f40`'s fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BlownPart {
+    /// `+0x98`.
+    dir: u16,
+    /// `+0x9c`, which `+0xa4` takes down to nothing.
+    speed: i16,
+    /// `+0xa0`.
+    count: u16,
 }
 
 /// `FUN_0045bd20`'s arm: the player has pulled it off the zombie that was on
@@ -222,7 +239,50 @@ impl ThrownPart {
             bounces: 3,
             rest: player2::rot_matrix(rest),
             turning: 0xF,
+            blown: None,
+            below: Vec::new(),
         }
+    }
+
+    /// `FUN_00461f40`: on its way to `Parts_bomb`.
+    fn blown(part: u8, matrix: player2::Matrix, dir: u16) -> Self {
+        Self {
+            part,
+            matrix,
+            velocity: [0; 3],
+            gravity: 10,
+            bounces: 0,
+            rest: player2::rot_matrix([0; 3]),
+            turning: -1,
+            blown: Some(BlownPart {
+                dir,
+                speed: 800,
+                count: 0,
+            }),
+            below: Vec::new(),
+        }
+    }
+
+    /// Whether the parts under it go when it does. `Parts_bomb` clears all of
+    /// its own `Be_flg`, so `ko_joint_trans2` doesn't see its `0x20`.
+    pub fn takes_below(&self) -> bool {
+        self.blown.is_none()
+    }
+
+    /// `Parts_bomb`, and whether it's still there. It draws no `Rnd`.
+    fn blow(&mut self, mut blown: BlownPart) -> bool {
+        let there = blown.count < 0x1D;
+        if there {
+            blown.count += 1;
+        }
+        self.velocity[1] = self.velocity[1].wrapping_add(self.gravity);
+        self.matrix.t[1] += i32::from(self.velocity[1]);
+        blown.speed = (blown.speed - 100).max(0);
+        let (x, z) = player2::rotate(blown.dir, i32::from(blown.speed), 0);
+        self.matrix.t[0] += x;
+        self.matrix.t[2] += z;
+        self.blown = Some(blown);
+        there
     }
 
     /// `Parts_down`, and whether it's still there.
@@ -232,6 +292,9 @@ impl ThrownPart {
         effects: &mut crate::esp2::Effects,
         sca: Option<&crate::state::Sca>,
     ) -> bool {
+        if let Some(blown) = self.blown {
+            return self.blow(blown);
+        }
         let before = self.matrix.t;
         let ground = sca.map_or(0, |sca| {
             crate::sca::ground_at(sca, before, 100, PARTS_MASK).height
@@ -287,6 +350,8 @@ const PARTS_MASK: u16 = 0x2000;
 const VARS: usize = 23;
 /// The dog, whose script is `enemy/20/enemy.lua`.
 pub const DOG_ID: u8 = 0x20;
+/// The crow, whose script is `enemy/21/enemy.lua`.
+pub const CROW_ID: u8 = 0x21;
 /// `+0x230`, which `Em_20` counts up while the dog is stuck.
 const DOG_STUCK: usize = 18;
 /// `Ground`, which `Game_loop` finds under each body between ticks.
@@ -338,6 +403,13 @@ pub struct Zombie {
     status: u16,
     /// `Sca_info`.
     sca_info: u32,
+    /// What `pSca_hit_data` points at: the first record's place and size.
+    sca_hit: Option<[i32; 4]>,
+    /// `Cdir_x` and `Cdir_z`, which only a crow turns.
+    pub tilt: [u16; 2],
+    /// `pKage_work`'s `Half_x` and `Half_z` for a body that sizes its own
+    /// shadow, 0 being `Be_flg`'s off.
+    pub shadow_half: Option<i32>,
     /// `Floor` at `sce_em_set`.
     pub floor: u8,
     pub atd: Atd,
@@ -356,6 +428,13 @@ pub struct Zombie {
 }
 
 impl Zombie {
+    /// Whether `Parts_down` has this part.
+    pub fn flung(&self, part: u8) -> bool {
+        self.thrown
+            .iter()
+            .any(|thrown| thrown.part == part && thrown.takes_below())
+    }
+
     /// The parts no longer on the skeleton, and where they are.
     pub fn detached(&self) -> impl Iterator<Item = (u8, crate::anim::Mat4x3)> + '_ {
         let pulled = self
@@ -436,6 +515,29 @@ impl Zombie {
     }
 }
 
+/// What a script called to the others of its id.
+#[derive(Debug, Clone, Copy)]
+pub struct KinCall {
+    /// The field to read and to add to, and the bits there that keep one out.
+    pub flags: usize,
+    pub skip: i32,
+    pub bits: i32,
+    /// Fields that go to 0.
+    pub clear: [usize; 2],
+}
+
+impl Zombie {
+    /// Hear what another of its id called.
+    pub fn hear(&mut self, call: &KinCall) {
+        if self.vars[call.flags] & call.skip == 0 {
+            self.vars[call.flags] |= call.bits;
+            for field in call.clear {
+                self.vars[field] = 0;
+            }
+        }
+    }
+}
+
 /// The rest of the game, as a zombie sees it.
 pub struct World<'a> {
     /// `Ck_em_id`: how many others of this id are in the room.
@@ -473,6 +575,10 @@ pub struct World<'a> {
     pub effects: &'a mut crate::esp2::Effects,
     /// `DAT_00989ffe`: the player's weapon.
     pub weapon: u8,
+    /// `IsScenarioClaire`.
+    pub claire: bool,
+    /// What this tick's script told the others of its id.
+    pub kin: Vec<KinCall>,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: &'a mut u8,
     /// `fg_common`'s `0xa4`, which takes some life off a licker.
@@ -566,6 +672,28 @@ impl Em<'_, '_, '_> {
         }
     }
 
+    /// `Em_21`, which leaves the rest to its script.
+    fn run_crow(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        let before = self.mover.player.pos;
+        self.old_pos = before;
+        self.z.vars[DOG_GROUND] = self
+            .mover
+            .tick
+            .room
+            .sca
+            .as_ref()
+            .map_or(0, |sca| crate::sca::ground_at(sca, before, 0, MASK).height);
+        self.script();
+        self.oba_ck_em();
+        self.sca_ck_em();
+    }
+
     /// `Root_ck` with its own target: the point, or with `by_area` the middle of
     /// a guide area. 0 finds no way, 1 has its target in this area and 2 is a
     /// tick without a look. The player's sight is still checked.
@@ -635,11 +763,15 @@ impl Em<'_, '_, '_> {
             self.run_dog();
             return;
         }
+        if self.mover.tick.id == CROW_ID {
+            self.run_crow();
+            return;
+        }
         // The scripts run first, and `Workm` stops following the skeleton from
         // what the last tick left there.
         for drop in std::mem::take(&mut self.z.script_drops) {
             if let Some(matrix) = self.mover.part_matrix(usize::from(drop.part)) {
-                self.z.thrown.push(ThrownPart::new(
+                self.push_thrown(ThrownPart::new(
                     drop.part,
                     matrix,
                     (drop.angle as u16).wrapping_sub(0x800),
@@ -714,6 +846,38 @@ impl Em<'_, '_, '_> {
         self.mover.player.angle as i16
     }
 
+    /// `FUN_004e2ec0`: which of the sides of `pSca_hit_data`'s record the body
+    /// is on. The original hands it a `SVECTOR` where it reads two `VECTOR`
+    /// fields, so its x is the short `y` and `x` together and its z is whatever
+    /// the stack holds past them: the caller's `return_to`.
+    fn wall_side(&self, return_to: i32) -> i32 {
+        let Some([x, z, width, depth]) = self.z.sca_hit else {
+            return 0;
+        };
+        if width == 0 {
+            return 0;
+        }
+        let [at_x, at_y, _] = self.mover.player.pos;
+        let first = (((at_y as u32 & 0xFFFF) << 16) | (at_x as u32 & 0xFFFF)) as i32;
+        let across = first
+            .wrapping_sub(x)
+            .wrapping_mul(depth)
+            .wrapping_div(width);
+        let along = return_to.wrapping_sub(z);
+        let beyond = along.wrapping_sub(depth);
+        if along <= across {
+            if beyond.wrapping_neg() == across || across.wrapping_neg() < beyond {
+                0
+            } else {
+                1
+            }
+        } else if across.wrapping_neg() < beyond {
+            3
+        } else {
+            2
+        }
+    }
+
     /// `Be_flg |= 0x1062`: what `Parts_down` then does with the part, moving
     /// `along` the way the body faces away and `up`.
     fn throw_part(&mut self, part: usize, along: i16, up: i16, gravity: i16) {
@@ -731,13 +895,46 @@ impl Em<'_, '_, '_> {
     ) {
         let facing = self.mover.player.angle;
         if let Some(matrix) = matrix {
-            self.z.thrown.push(ThrownPart::new(
+            self.push_thrown(ThrownPart::new(
                 part as u8,
                 matrix,
                 facing,
                 (along, up),
                 gravity,
                 [0, facing as i16, 0x400],
+            ));
+        }
+    }
+
+    fn push_thrown(&mut self, mut thrown: ThrownPart) {
+        let children = &self.mover.tick.skeleton.children;
+        let mut next = vec![usize::from(thrown.part)];
+        while let Some(part) = next.pop() {
+            for &child in children.get(part).into_iter().flatten() {
+                thrown.below.push(child);
+                next.push(usize::from(child));
+            }
+        }
+        self.z.thrown.push(thrown);
+    }
+
+    /// `FUN_00461f40`.
+    fn blow_part(&mut self, part: usize, dir: u16) {
+        if let Some(matrix) = self.mover.part_matrix(part) {
+            self.push_thrown(ThrownPart::blown(part as u8, matrix, dir));
+        }
+    }
+
+    /// `FUN_00461f90`: what `Parts_down` does with `+0x38` on its first tick.
+    fn fling_part(&mut self, part: usize, dir: u16, along: i16, gravity: i16, rest: i16) {
+        if let Some(matrix) = self.mover.part_matrix(part) {
+            self.push_thrown(ThrownPart::new(
+                part as u8,
+                matrix,
+                dir.wrapping_add(0x800),
+                (along, 0),
+                gravity,
+                [0, rest, 0],
             ));
         }
     }
@@ -779,7 +976,7 @@ impl Em<'_, '_, '_> {
             pos[2] + ahead_z,
         ];
         self.z.at_em_no = NO_BODY;
-        let old = (self.mover.tick.id == DOG_ID).then_some(self.old_pos);
+        let old = matches!(self.mover.tick.id, DOG_ID | CROW_ID).then_some(self.old_pos);
         for other in self.world.bodies {
             let body = &mut self.mover.player.pos;
             let mut other = *other;
@@ -808,14 +1005,27 @@ impl Em<'_, '_, '_> {
         let radius = i32::from(self.z.atd.w);
         let [ahead_x, ahead_z] = self.atd_ahead();
         let room = self.mover.tick.room;
+        let crow = self.mover.tick.id == CROW_ID;
         let body = &mut *self.mover.player;
         if *self.be_flg & BE_NO_SCA == 0
             && let Some(sca) = &room.sca
         {
+            *self.be_flg &= !BE_PUSHED_Z;
             let [old_x, old_z] = body.collision_mirror;
             let prev = [old_x, body.pos[1], old_z];
             let at = [body.pos[0] + ahead_x, body.pos[1], body.pos[2] + ahead_z];
             let floor = self.z.floor;
+            if crow {
+                self.z.sca_hit =
+                    crate::sca::first_hit(sca, MASK, at, radius, floor).map(|record| {
+                        [
+                            i32::from(record.x),
+                            i32::from(record.z),
+                            i32::from(record.width),
+                            i32::from(record.depth),
+                        ]
+                    });
+            }
             let resolved = crate::sca::resolve_on_floor(sca, MASK, prev, at, radius, floor);
             // `Sca_ck_info`'s push moves what `Null_pos_set` adds to as well.
             let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
@@ -825,6 +1035,9 @@ impl Em<'_, '_, '_> {
             // It moves the body through `Atd`, which others then push against.
             self.z.atd.at[0] += dx;
             self.z.atd.at[2] += dz;
+            if dz != 0 {
+                *self.be_flg |= BE_PUSHED_Z;
+            }
             body.pos[0] += dx;
             body.pos[1] = resolved.pos[1];
             body.pos[2] += dz;
@@ -978,7 +1191,7 @@ impl Em<'_, '_, '_> {
             let rest = [0, self.world.player_angle.wrapping_add(turn) as i16, -0x400];
             let facing = self.mover.player.angle;
             let world = root.comp(&arm.local);
-            self.z.thrown.push(ThrownPart::new(
+            self.push_thrown(ThrownPart::new(
                 arm.part,
                 world,
                 facing,
@@ -1233,34 +1446,50 @@ pub fn kara_rootck2(
     })
 }
 
+/// `BYTE_0053ad38`: the shapes `Sca_ck_line` doesn't test.
+const LINE_SKIPPED: [u8; 16] = [0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0];
+
 /// `Sca_ck_line`, without its answers beyond a hit: whether a box of `mask`
 /// stands between two points, in plan and from both sides.
 pub fn sca_ck_line(sca: &[ScaRect], from: [i32; 3], to: [i32; 3], mask: u16) -> bool {
-    /// `BYTE_0053ad38`: the shapes it doesn't test.
-    const SKIPPED: [u8; 16] = [0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0];
     sca.iter().any(|record| {
         record.id & mask != 0
-            && SKIPPED[usize::from(record.id & 0xF)] == 0
+            && LINE_SKIPPED[usize::from(record.id & 0xF)] == 0
             && line_hits(record, from, to)
     })
+}
+
+/// [`sca_ck_line`] with `param_4` zero: the line seen from above, at any height.
+pub fn sca_ck_line_plan(sca: &[ScaRect], from: [i32; 3], to: [i32; 3], mask: u16) -> bool {
+    sca.iter().any(|record| {
+        record.id & mask != 0
+            && LINE_SKIPPED[usize::from(record.id & 0xF)] == 0
+            && line_sides(record, from, to).is_some()
+    })
+}
+
+/// Whether the line crosses a record from above, and if so `DWORD_00689c88`:
+/// 2 if an end is inside it, otherwise 3.
+fn line_sides(record: &ScaRect, from: [i32; 3], to: [i32; 3]) -> Option<u32> {
+    let (x, z) = (i32::from(record.x), i32::from(record.z));
+    let (width, depth) = (i32::from(record.width), i32::from(record.depth));
+    let within = |value: i32, base: i32, size: i32| (value.wrapping_sub(base) as u32) < size as u32;
+    if (within(from[0], x, width) && within(from[2], z, depth))
+        || (within(to[0], x, width) && within(to[2], z, depth))
+    {
+        Some(2)
+    } else {
+        crosses(from[0], from[2], to[0], to[2], x, z, width, depth).then_some(3)
+    }
 }
 
 fn line_hits(record: &ScaRect, from: [i32; 3], to: [i32; 3]) -> bool {
     let (x, z) = (i32::from(record.x), i32::from(record.z));
     let (width, depth) = (i32::from(record.width), i32::from(record.depth));
     let within = |value: i32, base: i32, size: i32| (value.wrapping_sub(base) as u32) < size as u32;
-    let mut sides = 3u32;
-    let plan = if (within(from[0], x, width) && within(from[2], z, depth))
-        || (within(to[0], x, width) && within(to[2], z, depth))
-    {
-        sides = 2;
-        true
-    } else {
-        crosses(from[0], from[2], to[0], to[2], x, z, width, depth)
-    };
-    if !plan {
+    let Some(mut sides) = line_sides(record, from, to) else {
         return false;
-    }
+    };
     let mut floor = 0i32;
     if record.floor != 0 {
         floor = -0x708 * record.floor.trailing_zeros() as i32;
@@ -1389,6 +1618,29 @@ mod tests {
         twice.draw();
         twice.draw();
         assert_eq!(rnd, twice);
+    }
+
+    /// `Parts_bomb` runs out by count, wherever the ground is, and draws nothing.
+    #[test]
+    fn a_blown_part_slows_falls_and_goes_without_rnd() {
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t: [0, 1000, 0],
+        };
+        let mut part = ThrownPart::blown(3, matrix, 0);
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        let start = rnd;
+        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert_eq!(part.matrix.t, [700, 1010, 0]);
+        let mut ticks = 1;
+        while part.fall(&mut rnd, &mut effects, None) {
+            ticks += 1;
+        }
+        assert_eq!(ticks, 0x1D);
+        assert_eq!(part.matrix.t[0], 700 + 600 + 500 + 400 + 300 + 200 + 100);
+        assert_eq!(rnd, start);
+        assert!(!part.takes_below());
     }
 
     #[test]
@@ -1579,6 +1831,24 @@ mod tests {
         let other = Oba::default();
         let mut atd = Atd::default();
         assert!(!oba_hit(&other, 2, &mut atd, &mut [0; 3], None));
+    }
+
+    /// The crow's sight passes no height: a wall counts however far below it is.
+    #[test]
+    fn the_plan_only_line_ignores_a_walls_height() {
+        let wall = ScaRect {
+            x: 1000,
+            z: -500,
+            width: 100,
+            depth: 1000,
+            id: 0x2000,
+            kind: 0x40,
+            floor: 1,
+        };
+        let (from, to) = ([0, -9000, 0], [2000, -9000, 0]);
+        assert!(!sca_ck_line(&[wall], from, to, 0x2000));
+        assert!(sca_ck_line_plan(&[wall], from, to, 0x2000));
+        assert!(!sca_ck_line_plan(&[wall], from, to, 0x4000));
     }
 
     #[test]

@@ -42,6 +42,8 @@ const FLAG_SEMI: u16 = 0x1000;
 const FLAG_VISIBLE: u16 = 0x2000;
 /// `Esp_call3`'s: start on the next tick's second pass.
 const FLAG_DEFERRED: u16 = 0x4000;
+/// The kinds `Esp_move` still moves under `fg_stop`'s `0x10000000`.
+const MOVE_WHEN_STOPPED: [u8; 5] = [0x15, 0x16, 0x1A, 0x1C, 0x28];
 const FLAG_LIVE: u16 = 0x8000;
 /// What `Esp_call` leaves in a new slot.
 const FLAGS_NEW: u16 = 0xa003;
@@ -365,8 +367,14 @@ struct Slot {
     pos: [i16; 3],
     /// `+0x3a`: the size from the script.
     size: u16,
+    /// `+0x3c`: where it was drawn last.
+    last_pos: [i16; 3],
+    /// `+0x42`: which way `Esp_22` drifts next. `Esp_call` leaves it at 1.
+    sway: i8,
     /// `+0x44`: how `Esp_call3D` turned it.
     rotation: [i16; 3],
+    /// `+0x4a`: how fast `Esp_22` falls before it swings back.
+    sway_limit: i16,
     /// `+0x78`: this slot's group of blocks, in the motion table.
     blocks: usize,
     /// `+0x14` while it falls: `Sca_ck_hit`'s height, under it at the last look.
@@ -458,6 +466,7 @@ impl Effects {
             clut: sprite.clut.wrapping_add(u16::from(row & 0xf8) << 3),
             size,
             blocks: first_group,
+            sway: 1,
             ..Slot::default()
         };
         if let Some(block) = sprite.block(first_group, 0) {
@@ -515,6 +524,15 @@ impl Effects {
     pub fn kill(&mut self, kind: u8, row: u8) {
         for slot in &mut self.slots {
             if slot.kind == kind && slot.row == row {
+                slot.kill();
+            }
+        }
+    }
+
+    /// `Esp_die`: all go but kind 5's rows 2 and 3.
+    pub fn die(&mut self) {
+        for slot in &mut self.slots {
+            if slot.kind != 0 && (slot.kind != 5 || (slot.row != 3 && slot.row != 2)) {
                 slot.kill();
             }
         }
@@ -790,6 +808,23 @@ impl Effects {
             }
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
+            // `Esp_22`: a feather rocking from side to side as it falls.
+            0x22 => {
+                if slot.next_flags == 0 {
+                    if slot.velocity[1] < 1 {
+                        self.slots[index].next_flags = 1;
+                    }
+                } else if slot.velocity[1] < slot.sway_limit {
+                    self.feather_swing(index);
+                    self.slots[index].next_flags = 0;
+                }
+            }
+            // `Esp_24`: stopped by a wall, it swings back.
+            0x24 => {
+                self.feather_swing(index);
+                let this = &mut self.slots[index];
+                this.pos = this.last_pos;
+            }
             _ => {
                 if id < 128 && self.unported & 1 << id == 0 {
                     self.unported |= 1 << id;
@@ -797,6 +832,18 @@ impl Effects {
                 }
             }
         }
+    }
+
+    /// What `Esp_22` and `Esp_24` share: a new way to drift, the other way.
+    fn feather_swing(&mut self, index: usize) {
+        let across = i16::from(self.rnd()) % 0x46 + 0x32;
+        let along = i16::from(self.rnd()) % 0x32;
+        let down = i16::from(self.rnd()) % 0x14 + 0x28;
+        let this = &mut self.slots[index];
+        let sway = i16::from(this.sway);
+        this.velocity = [across * sway, down, along * sway];
+        this.sway_limit = down * -3 / 10;
+        this.sway = -this.sway;
     }
 
     /// `Sca_ck_hit`, at what's being tested for a landing.
@@ -856,6 +903,7 @@ impl Effects {
 
     /// `Esp_pos`, on the world's matrix.
     fn place(slot: &mut Slot) {
+        slot.last_pos = slot.pos;
         let [x, y, z] = slot.offset.map(i32::from);
         let [bx, by, bz] = slot.base;
         if slot.flags & FLAG_NO_TURN != 0 {
@@ -918,14 +966,22 @@ impl Effects {
     /// `Esp_move`: one tick, drawing on the game's `Rnd`.
     pub fn tick(&mut self, rnd: &mut crate::zombie2::Rnd, sca: Option<&Sca>) {
         self.random = *rnd;
-        self.move_slots(sca);
+        self.move_slots(sca, false);
         *rnd = self.random;
     }
 
-    fn move_slots(&mut self, sca: Option<&Sca>) {
+    /// `Esp_move` under `fg_stop`'s `0x10000000`: only some kinds still move.
+    pub fn tick_stopped(&mut self, rnd: &mut crate::zombie2::Rnd, sca: Option<&Sca>) {
+        self.random = *rnd;
+        self.move_slots(sca, true);
+        *rnd = self.random;
+    }
+
+    fn move_slots(&mut self, sca: Option<&Sca>, stopped: bool) {
+        let moves = |slot: &Slot| !stopped || MOVE_WHEN_STOPPED.contains(&slot.kind);
         for index in 0..self.slots.len() {
             let slot = self.slots[index];
-            if !slot.live() {
+            if !slot.live() || !moves(&slot) {
                 continue;
             }
             if slot.parent != 0 && self.slots[usize::from(slot.parent)].flags == 0 {
@@ -935,6 +991,9 @@ impl Effects {
             self.behave(index, anim, sca);
         }
         for index in 0..self.slots.len() {
+            if !moves(&self.slots[index]) {
+                continue;
+            }
             if self.slots[index].flags & FLAG_DEFERRED != 0 {
                 self.slots[index].flags = FLAGS_NEW;
                 let anim = self.slots[index].anim;
@@ -1280,6 +1339,10 @@ mod tests {
     /// A one-type bank: two frames, one tile, and a row with one group of
     /// `blocks`.
     fn bank(blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
+        bank_of(7, blocks)
+    }
+
+    fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
         let mut record = Vec::new();
         record.extend_from_slice(&3u16.to_le_bytes());
         record.extend_from_slice(&1u16.to_le_bytes());
@@ -1302,7 +1365,7 @@ mod tests {
             record.extend_from_slice(block);
         }
         let data = container(&[Part {
-            id: 7,
+            id: kind,
             record: &record,
             tim: &[],
         }]);
@@ -1336,6 +1399,40 @@ mod tests {
         assert_eq!(slot.tpage & 0x60, 0x20);
         assert_eq!(slot.anim, 0);
         assert_eq!(slot.pos, [100, 0, 0]);
+    }
+
+    /// `Esp_die` leaves only kind 5's rows 2 and 3.
+    #[test]
+    fn dying_kills_all_but_two_of_the_rows_of_kind_five() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block()]));
+        let call = |effects: &mut Effects, kind, row| {
+            let slot = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+            effects.tick(&mut Default::default(), None);
+            effects.slots[slot].kind = kind;
+            effects.slots[slot].row = row;
+            slot
+        };
+        let kept = [call(&mut effects, 5, 2), call(&mut effects, 5, 3)];
+        let gone = [call(&mut effects, 5, 0), call(&mut effects, 7, 2)];
+        effects.die();
+        assert!(kept.iter().all(|&slot| effects.slots[slot].live()));
+        assert!(!gone.iter().any(|&slot| effects.slots[slot].live()));
+    }
+
+    /// `Esp_move` under `fg_stop`: only five kinds carry on.
+    #[test]
+    fn a_stopped_tick_moves_only_the_kinds_that_carry_on() {
+        for (kind, carries_on) in [(7, false), (0x1A, true)] {
+            let mut effects = Effects::default();
+            effects.enter_room(bank_of(kind, &[fire_block()]));
+            let slot = effects.call(kind, 0, 0x1000, 0, [0; 3], false).unwrap();
+            effects.tick(&mut Default::default(), None);
+            let before = format!("{:?}", effects.slots[slot]);
+            effects.tick_stopped(&mut Default::default(), None);
+            let after = format!("{:?}", effects.slots[slot]);
+            assert_eq!(before != after, carries_on, "kind {kind}");
+        }
     }
 
     #[test]

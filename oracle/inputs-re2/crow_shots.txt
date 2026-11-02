@@ -1,0 +1,186 @@
+# room 109: the crows of scenario B, weapon 7, on the run (oracle/re2.md)
+384 up run
+424 left run
+434 right
+444 up run
+484 left run
+494 right
+504 up run
+544 left run
+554 right
+564 up run
+604 left run
+614 right
+624 up run
+664 left run
+674 right
+684 up run
+724 left run
+734 right
+744 up run
+784 left run
+794 right
+804 up run
+844 left run
+854 right
+864 up run
+904 left run
+914 right
+924 up run
+964 left run
+974 right
+984 up run
+1024 left run
+1034 right
+1000
+1200 aim
+1212 aim fire
+1217 aim
+1224 aim
+1236 aim fire
+1241 aim
+1248 aim
+1260 aim fire
+1265 aim
+1272 aim
+1284 aim fire
+1289 aim
+1296 aim
+1308 aim fire
+1313 aim
+1320 aim
+1332 aim fire
+1337 aim
+1344 aim
+1356 aim fire
+1361 aim
+1368 aim
+1380 aim fire
+1385 aim
+1392 aim
+1404 aim fire
+1409 aim
+1416 aim
+1428 aim fire
+1433 aim
+1440 aim
+1452 aim fire
+1457 aim
+1464 aim
+1476 aim fire
+1481 aim
+1488 aim
+1500 aim fire
+1505 aim
+1512 aim
+1524 aim fire
+1529 aim
+1536 aim
+1548 aim fire
+1553 aim
+1560 aim
+1572 aim fire
+1577 aim
+1584 aim
+1596 aim fire
+1601 aim
+1608 aim
+1620 aim fire
+1625 aim
+1632 aim
+1644 aim fire
+1649 aim
+1656 aim
+1668 aim fire
+1673 aim
+1680 aim
+1692 aim fire
+1697 aim
+1704 aim
+1716 aim fire
+1721 aim
+1728 aim
+1740 aim fire
+1745 aim
+1752 aim
+1764 aim fire
+1769 aim
+1776 aim
+1788 aim fire
+1793 aim
+1800 aim
+1812 aim fire
+1817 aim
+1824 aim
+1836 aim fire
+1841 aim
+1848 aim
+1860 aim fire
+1865 aim
+1872 aim
+1884 aim fire
+1889 aim
+1896 aim
+1908 aim fire
+1913 aim
+1920 aim
+1932 aim fire
+1937 aim
+1944 aim
+1956 aim fire
+1961 aim
+1968 aim
+1980 aim fire
+1985 aim
+1992 aim
+2004 aim fire
+2009 aim
+2016 aim
+2028 aim fire
+2033 aim
+2040 aim
+2052 aim fire
+2057 aim
+2064 aim
+2076 aim fire
+2081 aim
+2088 aim
+2100 aim fire
+2105 aim
+2112 aim
+2124 aim fire
+2129 aim
+2136 aim
+2148 aim fire
+2153 aim
+2160 aim
+2172 aim fire
+2177 aim
+2184 aim
+2196 aim fire
+2201 aim
+2208 aim
+2220 aim fire
+2225 aim
+2232 aim
+2244 aim fire
+2249 aim
+2256 aim
+2268 aim fire
+2273 aim
+2280 aim
+2292 aim fire
+2297 aim
+2304 aim
+2316 aim fire
+2321 aim
+2328 aim
+2340 aim fire
+2345 aim
+2352 aim
+2364 aim fire
+2369 aim
+2376 aim
+2388 aim fire
+2393 aim
+2400

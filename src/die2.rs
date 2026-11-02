@@ -316,6 +316,7 @@ impl Die {
         self.strobe = 0;
         self.count = 0;
         self.white_done = true;
+        re2.effects.die();
         re2.player.be_flg |= crate::player2::BE_NO_SCA;
         out.set_enemies = true;
         self.sleep = 1;

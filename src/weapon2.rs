@@ -263,6 +263,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     let table = match id {
         LICKER_ID => &LICKER_DAMAGE,
         DOG_ID => &DOG_DAMAGE,
+        CROW_ID => &CROW_DAMAGE,
         _ => &DAMAGE,
     };
     table.get(usize::from(weapon).checked_sub(2)?)
@@ -315,6 +316,47 @@ const DAMAGE: [Damage; 7] = [
         damage: 0x03C1_412C,
         stun: 0x078F_1E0A,
         heights: SHOTGUN_HEIGHTS,
+    },
+];
+
+const CROW_ID: u8 = crate::zombie2::CROW_ID;
+const CROW_HEIGHTS: [i32; 6] = [-6000, -3000, -4000, -500, -500, 3000];
+/// The same rows for `Em_21`, `Em_21_wp_tbl`.
+const CROW_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0C83_20C8,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x12C4_B12C,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_503C,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
+    },
+    Damage {
+        damage: 0x01E0_A078,
+        stun: 0x078F_1E0A,
+        heights: CROW_HEIGHTS,
     },
 ];
 
@@ -673,6 +715,15 @@ mod tests {
         assert_eq!(
             [2, 3, 4, 5, 6, 7, 8].map(damage),
             [18, 18, 18, 200, 300, 59, 300]
+        );
+    }
+
+    #[test]
+    fn a_crow_takes_each_weapons_own_row() {
+        let damage = |weapon| damage_table(CROW_ID, weapon).unwrap().damage & 0x3FF;
+        assert_eq!(
+            [2, 3, 4, 5, 6, 7, 8].map(damage),
+            [15, 15, 15, 200, 300, 60, 120]
         );
     }
 
