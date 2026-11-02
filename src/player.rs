@@ -67,6 +67,8 @@ const RUN_CLIP: usize = 3;
 /// EMD clip 3: the backward run. The original plays it from the body model,
 /// not the no-weapon EMW.
 const BACK_CLIP: usize = 3;
+/// EMD clip 2: the guarded backward walk, played while an enemy is in view.
+const BACK_GUARD_CLIP: usize = 2;
 /// EMW clip 4: the no-weapon reach animation of the 0x0c interaction
 /// (`player_behavior_0c_interact`, `attackAnim 4`).
 const INTERACT_CLIP: usize = 4;
@@ -76,8 +78,14 @@ const IDLE_SETTLE_TICKS: u32 = 100;
 
 /// Walk speed before the per-character footfall modulation.
 const WALK_SPEED: i32 = 0x5D;
-/// Backward walk speed.
+/// Backward walk speed with no enemy in view.
 const BACK_SPEED: i32 = 0x40;
+/// Backward walk speed with an enemy in view.
+const BACK_GUARD_SPEED: i32 = 0x3C;
+/// The half-angle of the backward walk's enemy scan.
+const BACK_VIEW_HALF_ANGLE: i16 = 0x200;
+/// The range of the backward walk's enemy scan.
+const BACK_VIEW_RANGE: i16 = 8000;
 /// Run speed.
 const RUN_SPEED: i32 = 0xD2;
 
@@ -222,10 +230,16 @@ pub struct Input {
     /// unbound and no default pad button reaches it, so in practice it only
     /// arrives through an attract reel's recorded pad word.
     pub lock_drop: bool,
+    /// The press edge of that bit (`g_PlayerPadHeld & 4`): the knife's turn to
+    /// a target and the lock-on fire's retarget.
+    pub lock_pressed: bool,
     /// `MSF2_EFFECT_ZONE` this tick: walk/run speeds halve and the locomotion
     /// animation advances only every other tick (the original's slow-motion
     /// variant).
     pub slow_motion: bool,
+    /// A message dismissal cleared the original's previous-pad word last tick,
+    /// so a held walk direction reads as a new press and restarts the walk.
+    pub direction_restart: bool,
     /// `g_message_flags` bit 8 clear this tick: a displayed message blocks the
     /// idle settle from blending into the breathe loop (the original's
     /// `player_behavior_00_idle` gate).
@@ -314,8 +328,8 @@ struct FootstepRule {
 /// The original's contact frames and footstep variant per behavior.
 ///
 /// The walk and in-place turn share the no-weapon walk cycle; the forward run
-/// uses its own run cycle and the B footstep; the backward run uses the body
-/// model's run cycle with the walk contact frames.
+/// uses its own run cycle and the B footstep. The backward walk picks its
+/// contact frames from its enemy scan ([`PlayerState::back_step`]).
 fn footstep_rule(behavior: u8) -> Option<FootstepRule> {
     match behavior {
         BEHAVIOR_WALK | BEHAVIOR_TURN_RIGHT | BEHAVIOR_TURN_LEFT => Some(FootstepRule {
@@ -329,12 +343,6 @@ fn footstep_rule(behavior: u8) -> Option<FootstepRule> {
             clip: RUN_CLIP,
             frames: &[0x00, 0x0A],
             sound_type: 1,
-        }),
-        BEHAVIOR_BACK => Some(FootstepRule {
-            source: ClipSource::Emd,
-            clip: BACK_CLIP,
-            frames: &[0x08, 0x16],
-            sound_type: 0,
         }),
         _ => None,
     }
@@ -696,6 +704,9 @@ pub struct PlayerState {
     /// Slow-motion animation cadence counter (the original's `attackDirection`
     /// reuse): 0 applies the frame and re-arms to 1, 1 skips the frame.
     pub slow_counter: i16,
+    /// The positions the backward walk's enemy scan tests this tick: every
+    /// active enemy that is alive and not hidden. Written by the engine.
+    pub enemy_view_points: Vec<[i32; 3]>,
     /// Remaining ticks of the run's four-tick decelerating stop; 0 outside a
     /// stop. The first stop tick switches the animation to the body idle clip
     /// with a fresh blend and sheds `RUN_STOP_DECEL` from the run speed.
@@ -796,6 +807,7 @@ pub fn spawn(id: RoomId, room: &RoomState) -> PlayerState {
         weapon: crate::weapons::WeaponState::default(),
         detached_clip: crate::weapons::DetachedClip::default(),
         slow_counter: 0,
+        enemy_view_points: Vec::new(),
         run_stop_ticks: 0,
         walk_reentry: None,
         fresh_entry: false,
@@ -868,8 +880,13 @@ pub fn update_with_options(
     // The push bit raised by `tick_objects` last tick forces the push
     // behaviour this tick, the original's one-frame hand-off.
     if player.object_push && player.locked == LockedAction::None {
+        // `player_input_to_behavior` only selects the behaviour: its handler
+        // runs from the next tick, under the frame-1 dispatch.
         player.locked = LockedAction::Push;
         player.action_state = 0;
+        player.last_behavior_id = 0;
+        player.trace_state = Some((0x10, 0, None));
+        return;
     }
     // The object pass keeps the push going while forward is held. Under the
     // analog stick, forward is a stick pointing within a quarter turn of the
@@ -995,10 +1012,10 @@ pub fn update_with_options(
 
     // Release ticks: the original's input mapping leaves `action_behavior`
     // untouched only when no direction survives its remap, so the previous
-    // behaviour's handler sees the cleared pad and runs its stop step - one
-    // more movement tick for the walk and the backpedal, one more rotation
-    // for the turn - then clears the behaviour and its sub-state without
-    // running the idle entry. That entry happens on the following tick.
+    // behaviour's handler sees the cleared pad and runs its stop step - a last
+    // footfall, one more movement tick for the walk and the backpedal, one
+    // more rotation for the turn - then clears the behaviour and its sub-state
+    // without running the idle entry. That entry happens on the following tick.
     if behavior == BEHAVIOR_IDLE {
         match player.behavior {
             BEHAVIOR_WALK => {
@@ -1006,6 +1023,7 @@ pub fn update_with_options(
                 // before the walk handler releases, so a released diagonal
                 // still turns once with the pad already clear.
                 player.angle = frame2_turn(player.angle, player.last_behavior_id);
+                player.emit_footstep(player.anim.frame as u8, 0);
                 player.locomotion_tick(room, BEHAVIOR_WALK, i32::from(player.move_speed_current));
                 player.enter_behavior(BEHAVIOR_IDLE);
                 player.set_clip(ClipSource::Emd, SETTLE_CLIP);
@@ -1018,6 +1036,7 @@ pub fn update_with_options(
                 // before the shared turn handler clears it, so the release
                 // tick still turns once even with the pad already clear.
                 player.angle = frame2_turn(player.angle, player.last_behavior_id);
+                player.emit_footstep(player.anim.frame as u8, 0);
                 player.enter_behavior(BEHAVIOR_IDLE);
                 player.set_clip(ClipSource::Emd, SETTLE_CLIP);
                 player.last_behavior_id = 0;
@@ -1029,7 +1048,8 @@ pub fn update_with_options(
                 // moves once more at the recorded speed before the body idle
                 // clip takes over.
                 player.angle = frame2_turn(player.angle, player.last_behavior_id);
-                player.locomotion_tick(room, BEHAVIOR_BACK, BACK_SPEED);
+                player.emit_footstep(player.anim.frame as u8, 0);
+                player.locomotion_tick(room, BEHAVIOR_BACK, i32::from(player.move_speed_current));
                 player.enter_behavior(BEHAVIOR_IDLE);
                 player.set_clip(ClipSource::Emd, SETTLE_CLIP);
                 player.last_behavior_id = 0;
@@ -1052,16 +1072,34 @@ pub fn update_with_options(
         return;
     }
 
-    if behavior != player.behavior {
+    let restart = input.direction_restart
+        && behavior == player.behavior
+        && matches!(behavior, BEHAVIOR_WALK | BEHAVIOR_BACK);
+    if behavior != player.behavior || restart {
         // A walk/run flip keeps the stride: the entry frame is the one that
         // continues the phase the abandoned clip was about to reach.
-        let stride = player.entry_stride(behavior, emw_clips);
+        let stride = if restart {
+            None
+        } else {
+            player.entry_stride(behavior, emw_clips)
+        };
         player.enter_behavior(behavior);
         player.set_clip(entry_clip_source(behavior), entry_clip(behavior));
         if let Some(frame) = stride {
             player.anim.frame = frame;
         } else if behavior == BEHAVIOR_RUN {
             player.anim.frame = RUN_ENTRY_FRAME;
+        }
+        // Each handler's entry state steps once in an effect zone. A run's
+        // hand-back enters the walk past that state.
+        if input.slow_motion && !(behavior == BEHAVIOR_WALK && stride.is_some()) {
+            match behavior {
+                BEHAVIOR_WALK | BEHAVIOR_TURN_RIGHT | BEHAVIOR_TURN_LEFT | BEHAVIOR_BACK => {
+                    player.emit_footstep(0, 0);
+                }
+                BEHAVIOR_RUN => player.emit_footstep(player.anim.frame as u8, 1),
+                _ => {}
+            }
         }
     }
 
@@ -1079,21 +1117,22 @@ pub fn update_with_options(
     let mut speed = match behavior {
         BEHAVIOR_WALK => walk_speed(player.radius, player.anim.frame),
         BEHAVIOR_TURN_RIGHT | BEHAVIOR_TURN_LEFT => 0,
-        BEHAVIOR_BACK => BACK_SPEED,
+        BEHAVIOR_BACK => player.back_step(),
         BEHAVIOR_RUN => RUN_SPEED,
         _ => 0,
     };
-    // `MSF2_EFFECT_ZONE` halves the walk and run speeds; the animation
-    // cadence below also drops to every other tick. The turn and backward
-    // behaviours have no slow variant in the original.
-    let slow_locomotion = input.slow_motion && matches!(behavior, BEHAVIOR_WALK | BEHAVIOR_RUN);
+    // `MSF2_EFFECT_ZONE` halves the walk, backward walk and run speeds; the
+    // animation cadence below also drops to every other tick. The turn has no
+    // slow variant in the original.
+    let slow_locomotion =
+        input.slow_motion && matches!(behavior, BEHAVIOR_WALK | BEHAVIOR_BACK | BEHAVIOR_RUN);
     if slow_locomotion {
         speed /= 2;
     }
-    // The released walk keeps the last walk tick's speed (the original's
+    // A released walk keeps the last tick's speed (the original's
     // `move_speed_current`), so the release tick and the stop segment can read
     // it back.
-    if matches!(behavior, BEHAVIOR_WALK | BEHAVIOR_RUN) {
+    if matches!(behavior, BEHAVIOR_WALK | BEHAVIOR_BACK | BEHAVIOR_RUN) {
         player.move_speed_current = speed.max(0) as u16;
     }
     // The original checks the pending animation frame and plays the footstep
@@ -1306,8 +1345,10 @@ fn run_stop_tick(
     let exit = player.run_stop_ticks == 1;
     player.trace_state = if exit {
         // The exit branch zeroes the speed before the tick's deceleration:
-        // `move_speed_current = 0`, then `-= 0x1e` -> 0xFFE2.
+        // `move_speed_current = 0`, then `-= 0x1e` -> 0xFFE2. It plays the
+        // last footfall where the player stands before that step.
         player.move_speed_current = 0;
+        player.emit_footstep(player.anim.frame as u8, 1);
         Some((0, 0, ticks))
     } else {
         Some((0x0D, 3, ticks))
@@ -1347,6 +1388,9 @@ impl PlayerState {
     }
 
     fn set_clip(&mut self, source: ClipSource, clip: usize) {
+        if self.clip_source != source {
+            self.anim.forget_pending_keyframes();
+        }
         self.clip_source = source;
         self.anim.set_clip(clip);
     }
@@ -1522,12 +1566,46 @@ impl PlayerState {
             return;
         };
         let frame = self.anim.frame;
-        if frame < clip.frames.len() && rule.frames.contains(&frame) {
+        // A frame held by the slow-motion cadence steps only once.
+        if self.slow_counter == 0 && frame < clip.frames.len() && rule.frames.contains(&frame) {
             self.footsteps.push(Footstep {
                 pos: self.pos,
                 frame: frame as u8,
                 sound_type: rule.sound_type,
             });
+        }
+    }
+
+    /// The backward walk's clip and footfall selection (the original's
+    /// `player_ctrl_behavior_run`): any enemy in view turns it into the guarded
+    /// walk, with its own clip, speed and contact frames. Returns the speed.
+    fn back_step(&mut self) -> i32 {
+        let frame = self.anim.frame;
+        let in_view = self.enemy_view_points.iter().any(|&point| {
+            crate::enemy::walk::view_wedge(
+                self.pos,
+                self.angle,
+                BACK_VIEW_HALF_ANGLE,
+                BACK_VIEW_RANGE,
+                point,
+            ) != 0
+        });
+        let clip = if in_view { BACK_GUARD_CLIP } else { BACK_CLIP };
+        if self.clip_source != ClipSource::Emd || self.anim.clip != clip {
+            self.set_clip(ClipSource::Emd, clip);
+        }
+        let contact = if in_view {
+            matches!(frame, 0x07 | 0x1B) && self.anim.timing == 1
+        } else {
+            matches!(frame, 0x08 | 0x16)
+        };
+        if contact && self.slow_counter == 0 {
+            self.emit_footstep(frame as u8, 0);
+        }
+        if in_view {
+            BACK_GUARD_SPEED
+        } else {
+            BACK_SPEED
         }
     }
 
@@ -2498,6 +2576,8 @@ impl PlayerState {
     /// carries the same pose state on the live clock, so the entity's words
     /// are copied onto it and the entry is marked as already run.
     pub(crate) fn adopt_scripted_handback(&mut self, entity: &crate::game::Entity) {
+        // The scripted clips step at 0x200; the pad-driven machine at 0x400.
+        self.anim.blend_step = 0x400;
         // `sys_multi(SYS_IDLE)` hands back at state 2: straight into the breathe,
         // with the countdown left at whatever the script's behaviour wrote.
         if entity.action_state == 2 {
@@ -3598,6 +3678,7 @@ mod tests {
             weapon: crate::weapons::WeaponState::default(),
             detached_clip: crate::weapons::DetachedClip::default(),
             slow_counter: 0,
+            enemy_view_points: Vec::new(),
             run_stop_ticks: 0,
             walk_reentry: None,
             fresh_entry: false,
@@ -3685,6 +3766,21 @@ mod tests {
     }
 
     #[test]
+    fn a_scripted_handback_blends_at_the_pad_driven_step() {
+        // The scripted clips step at 0x200 and the breathe it hands back to
+        // at 0x400: three blend ticks, not seven.
+        let mut player = player_at(0, 0);
+        player.anim.blend_step = 0x200;
+        let entity = crate::game::Entity {
+            action_state: 2,
+            ..crate::game::Entity::default()
+        };
+        player.adopt_scripted_handback(&entity);
+        assert_eq!(player.anim.blend_step, 0x400);
+        assert_eq!(player.anim.blend_counter, 3);
+    }
+
+    #[test]
     fn walk_release_holds_the_walk_pose_then_eases_into_settle() {
         let room = RoomState::default();
         let (emd, emw, keyframes) = blend_fixture();
@@ -3745,11 +3841,16 @@ mod tests {
         // only publishes the run's bytes, and the next tick runs the entry.
         blend_step(&mut player, &room, &emd, &emw, run);
         assert_eq!(player.behavior, BEHAVIOR_RUN_ENTRY);
+        let walk_pose = shown_pose(&player, &emd, &emw, &keyframes);
         blend_step(&mut player, &room, &emd, &emw, run);
         assert_eq!(player.behavior, BEHAVIOR_RUN);
         assert_eq!(player.move_speed_current, RUN_SPEED as u16);
         let run_pose = shown_pose(&player, &emd, &emw, &keyframes);
-        assert_eq!(run_pose, keyframes[2]);
+        assert_eq!(
+            run_pose,
+            blend_keyframes(&walk_pose, &keyframes[2], player.anim.blend_used, 0x400),
+            "the run eases out of the walk pose on screen",
+        );
         blend_step(&mut player, &room, &emd, &emw, run);
 
         // Release: four decelerating ticks on body clip 0. The first three
@@ -4016,7 +4117,7 @@ mod tests {
     }
 
     #[test]
-    fn slow_motion_does_not_touch_turning_or_backing() {
+    fn slow_motion_halves_the_backward_walk_and_its_cadence() {
         let room = RoomState::default();
         let clips = clips();
         let mut fast = player_at(1000, 1000);
@@ -4035,8 +4136,148 @@ mod tests {
             step(&mut fast, &room, &clips, fast_input);
             step(&mut slow, &room, &clips, slow_input);
         }
-        assert_eq!(fast.pos[0], slow.pos[0], "backing is not slowed");
+        assert_eq!(fast.pos[0] - 1000, -6 * 63);
+        assert_eq!(slow.pos[0] - 1000, -6 * 31);
+        assert_eq!(fast.anim.frame, 6);
+        assert_eq!(slow.anim.frame, 3);
+    }
+
+    #[test]
+    fn slow_motion_does_not_touch_turning() {
+        let room = RoomState::default();
+        let clips = clips();
+        let mut fast = player_at(1000, 1000);
+        fast.angle = 0;
+        let mut slow = fast.clone();
+        let fast_input = Input {
+            right: true,
+            ..Input::default()
+        };
+        let slow_input = Input {
+            right: true,
+            slow_motion: true,
+            ..Input::default()
+        };
+        for _ in 0..6 {
+            step(&mut fast, &room, &clips, fast_input);
+            step(&mut slow, &room, &clips, slow_input);
+        }
+        assert_eq!(fast.angle, slow.angle);
         assert_eq!(fast.anim.frame, slow.anim.frame);
+    }
+
+    #[test]
+    fn slow_motion_steps_once_on_entry_and_once_per_contact_frame() {
+        let room = RoomState::default();
+        let clips = clips();
+        let mut player = player_at(1000, 1000);
+        player.angle = 0;
+        let input = Input {
+            down: true,
+            slow_motion: true,
+            ..Input::default()
+        };
+        step(&mut player, &room, &clips, input);
+        assert_eq!(player.take_footsteps().len(), 1, "the entry state steps");
+        let mut contacts = Vec::new();
+        for _ in 0..20 {
+            step(&mut player, &room, &clips, input);
+            contacts.extend(player.take_footsteps().iter().map(|step| step.frame));
+        }
+        assert_eq!(contacts, [0x08], "a frame held for two ticks steps once");
+    }
+
+    #[test]
+    fn backward_walk_guards_while_an_enemy_is_in_view() {
+        let room = RoomState::default();
+        let clips = clips();
+        let mut player = player_at(10000, 10000);
+        player.angle = 0;
+        let input = Input {
+            down: true,
+            ..Input::default()
+        };
+        step(&mut player, &room, &clips, input);
+        assert_eq!(player.anim.clip, BACK_CLIP);
+
+        // Ahead of the player, inside the wedge and the range.
+        player.enemy_view_points = vec![[12000, 0, 10000]];
+        let before = player.pos[0];
+        step(&mut player, &room, &clips, input);
+        assert_eq!(player.anim.clip, BACK_GUARD_CLIP);
+        assert_eq!(before - player.pos[0], 59);
+        assert_eq!(player.move_speed_current, BACK_GUARD_SPEED as u16);
+
+        // Behind the player: out of the wedge, back to the plain clip.
+        player.enemy_view_points = vec![[8000, 0, 10000]];
+        let before = player.pos[0];
+        step(&mut player, &room, &clips, input);
+        assert_eq!(player.anim.clip, BACK_CLIP);
+        assert_eq!(before - player.pos[0], 63);
+
+        // In the wedge but past the range.
+        player.enemy_view_points = vec![[18001, 0, 10000]];
+        step(&mut player, &room, &clips, input);
+        assert_eq!(player.anim.clip, BACK_CLIP);
+    }
+
+    #[test]
+    fn a_direction_restart_reenters_the_walk() {
+        let room = RoomState::default();
+        let clips = clips();
+        let mut player = player_at(10000, 10000);
+        let walk = Input {
+            up: true,
+            ..Input::default()
+        };
+        for _ in 0..5 {
+            step(&mut player, &room, &clips, walk);
+        }
+        assert_eq!(player.anim.frame, 5);
+        step(
+            &mut player,
+            &room,
+            &clips,
+            Input {
+                direction_restart: true,
+                ..walk
+            },
+        );
+        assert_eq!(player.anim.frame, 1);
+    }
+
+    #[test]
+    fn stop_steps_play_on_release() {
+        let room = RoomState::default();
+        let clips = clips();
+        for held in [
+            Input {
+                up: true,
+                ..Input::default()
+            },
+            Input {
+                down: true,
+                ..Input::default()
+            },
+            Input {
+                right: true,
+                ..Input::default()
+            },
+            Input {
+                left: true,
+                ..Input::default()
+            },
+        ] {
+            let mut player = player_at(10000, 10000);
+            for _ in 0..3 {
+                step(&mut player, &room, &clips, held);
+            }
+            player.take_footsteps();
+            step(&mut player, &room, &clips, Input::default());
+            let steps = player.take_footsteps();
+            assert_eq!(steps.len(), 1, "release of {held:?}");
+            assert_eq!(steps[0].sound_type, 0);
+        }
     }
 
     #[test]

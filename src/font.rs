@@ -712,6 +712,17 @@ impl Font {
         framebuffer.draw_sprites(&mut sprites);
     }
 
+    /// The x the self-destruct clock draws at: the original places the same
+    /// string for each sheet's pitch (`Biohazard.exe` pushes `0x68` for its
+    /// 14-pixel cells, the USA build `0x84` for its 8-pixel ones).
+    pub fn countdown_x(&self) -> i32 {
+        if self.metrics.glyph_w == 14 {
+            0x68
+        } else {
+            0x84
+        }
+    }
+
     /// Queue one visible glyph drawn into `dst`, or draw it at once as an HD
     /// quad when the frame captures replacements and the sheet's HD page
     /// covers the cell. The replaced draw punches the HD glyph's own

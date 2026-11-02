@@ -241,8 +241,6 @@ pub struct Entity {
     /// The per-joint blood-scratch block `blood_splatter_physics` drives:
     /// counter, flags, X velocity and Y acceleration of the bleeding joint.
     pub joint_blood: [JointBlood; 32],
-    /// The per-joint gore strips `joint_setup_attack_effect` arms.
-    pub joint_trails: [JointTrail; 32],
     /// Per-joint `JointSetColorTint` colours (`r | g << 8 | b << 16`, each a
     /// 1/128 multiplier): a non-zero entry draws that joint unlit in the
     /// colour, the Hunter's blood-red claws after a lunge. Zero is untinted

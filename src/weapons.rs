@@ -752,6 +752,14 @@ fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
     });
 }
 
+/// `PlayEntitySnd(sound_type)` when `MSF2_EFFECT_ZONE` is up: a slow zone's
+/// water steps follow the weapon stances too.
+fn effect_zone_step(game: &GameState, player: &mut PlayerState, sound_type: u8) {
+    if game.flags[5].bit(MSF2_EFFECT_ZONE) {
+        player.emit_footstep(0, sound_type);
+    }
+}
+
 /// Spawn one billboard attached to the weapon hand.
 fn spawn_hand_fx(
     game: &mut GameState,
@@ -1001,7 +1009,10 @@ fn tick(
                 _ => Bank::Body,
             }
         };
-        adjust_weapon_joint_translation(game, player, clips, bank);
+        // The knife's handlers anchor their own pose, and not all on this hand.
+        if !knife {
+            adjust_weapon_joint_translation(game, player, clips, bank, 0);
+        }
         refresh_weapon_joint(game, player, clips, bank);
         if !knife && equipped_weapon(game) == Some(ITEM_FLAMETHROWER) {
             auto_aim_pitch(game, player, clips);
@@ -1020,20 +1031,22 @@ enum Bank {
     Body,
 }
 
-/// `EntityUpdateWeaponJoint(0)`: compose the weapon-hand chain and adjust the
+/// `EntityUpdateWeaponJoint(hand)`: compose a hand's chain and adjust the
 /// entity's translation so the hand keeps its composed position.
 ///
 /// The reference rebuilds the entity matrix from the facing, composes joints
-/// 0, 2, 3, 4 and 5 with the *current* pose, then moves the entity by the
-/// difference between that chain's translation and the *previous* frame's
-/// joint-5 world translation (which the render pass composed through the
-/// skeleton hierarchy). The hand stays put while the body animates, which is
-/// what creeps the player forward while aiming.
+/// 0, 2 and the hand's three (3, 4, 5, or 6, 7, 8 for hand 1) with the
+/// *current* pose, then moves the entity by the difference between that
+/// chain's translation and the *previous* frame's world translation of the
+/// hand's last joint (which the render pass composed through the skeleton
+/// hierarchy). The hand stays put while the body animates, which is what creeps
+/// the player forward while aiming.
 fn adjust_weapon_joint_translation(
     game: &mut GameState,
     player: &mut PlayerState,
     clips: &WeaponClips<'_>,
     bank: Bank,
+    hand: usize,
 ) {
     let (bank, keyframes, skeleton) = match bank {
         Bank::Weapon => (clips.weapon, clips.weapon_keyframes, clips.weapon_skeleton),
@@ -1044,14 +1057,15 @@ fn adjust_weapon_joint_translation(
     };
     let locals = crate::anim::joint_local_transforms(skeleton, &keyframe);
     let mut scratch = crate::anim::entity_matrix(player.pos, player.angle);
-    for index in [0usize, 2, 3, 4, 5] {
+    let last = hand * 3 + 5;
+    for index in [0usize, 2, last - 2, last - 1, last] {
         let Some(local) = locals.get(index) else {
             return;
         };
         scratch = crate::anim::compose(&scratch, local);
     }
     let previous = game.joint_worlds[0]
-        .get(5)
+        .get(last)
         .map_or([0, 0, 0], |world| world.t);
     let dx = scratch.t[0] - previous[0];
     let dz = scratch.t[2] - previous[2];
@@ -1248,6 +1262,7 @@ fn gun_aim(
             set_motion(player, 5);
             set_blend(player, 0x400);
             player.weapon.aim_flags = 0;
+            effect_zone_step(game, player, 0);
             match reticle_scan(game, player, room) {
                 Some(target) => {
                     player.weapon.target = Some(target);
@@ -1384,6 +1399,7 @@ fn gun_raise(game: &mut GameState, player: &mut PlayerState, clips: &WeaponClips
                     special_frame_update(game, player, 0, 0);
                 }
                 set_motion(player, motion);
+                effect_zone_step(game, player, 0);
             } else {
                 let _ = joint_move(player, clips, Bank::Weapon, 0x200, false);
                 if weapon > 0x6E {
@@ -1641,6 +1657,7 @@ fn autoaim_raise(
     let term = aim_dir_term(player.weapon.aim_flags);
     set_motion(player, usize::from(term.wrapping_add(2)) * 3);
     weapon_lockon_effect(game, player, room);
+    effect_zone_step(game, player, 1);
     autoaim_fire(game, player, room, clips, player.input);
 }
 
@@ -1927,6 +1944,7 @@ fn gun_quick_fire(
                 player.anim.frame = 0x0F;
                 player.weapon.special_countdown = 0x0F;
             }
+            effect_zone_step(game, player, 0);
         }
         1 => {}
         2 => {
@@ -1978,6 +1996,7 @@ fn gun_holster(
         if equipped_weapon(game).unwrap_or(0) > 0x6E {
             player.anim.frame = 0x1C;
         }
+        effect_zone_step(game, player, 0);
     }
     let done = joint_move(player, clips, Bank::Weapon, 0x400, true);
     if done {
@@ -1999,6 +2018,7 @@ fn gun_reload(game: &mut GameState, player: &mut PlayerState, clips: &WeaponClip
             player.weapon.action_tick = 1;
             set_motion(player, 0x0E);
             set_blend(player, 0x400);
+            effect_zone_step(game, player, 0);
         }
         1 => {
             let weapon = equipped_weapon(game).unwrap_or(0);
@@ -2247,6 +2267,7 @@ fn gun_click(game: &mut GameState, player: &mut PlayerState) {
         player.weapon.cooldown = 0x0F;
         let weapon = equipped_weapon(game).unwrap_or(0);
         play_weapon_sound(game, weapon, 9);
+        effect_zone_step(game, player, 0);
     }
     let previous = player.weapon.cooldown;
     player.weapon.cooldown = previous.wrapping_sub(1);
@@ -2264,7 +2285,7 @@ fn gun_lockon_fire(
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
-    if player.weapon.state != 0 && input.fire {
+    if player.weapon.state != 0 && input.lock_pressed {
         player_find_aim_target(game, player, room);
     }
     let up = (player.weapon.aim_flags & 0x20) >> 4;
@@ -2362,8 +2383,7 @@ fn knife_aim(
         reset_frame(player);
         player.move_speed_current = 1;
         player.weapon.state = 1;
-        // `attackDirection` is NOT reset here: the reference's state 0 leaves
-        // the shared byte alone.
+        player.weapon.cooldown = 0;
         player.weapon.action_tick = 0;
         set_motion(player, 5);
         set_blend(player, 0x400);
@@ -2400,6 +2420,7 @@ fn knife_aim(
         player.weapon.behavior = 0x13;
         player.weapon.state = 0;
     }
+    adjust_weapon_joint_translation(game, player, clips, Bank::Weapon, 0);
 
     if input.right {
         player.angle = player.angle.wrapping_add(0x20) & 0x0FFF;
@@ -2444,6 +2465,7 @@ fn knife_hold(
             reset_frame(player);
             player.weapon.action_tick = 0;
             set_blend(player, 0x100);
+            effect_zone_step(game, player, 0);
         }
         let _ = joint_move(player, clips, Bank::Weapon, 0x100, false);
     }
@@ -2455,6 +2477,7 @@ fn knife_hold(
         set_motion(player, usize::from(knife_motion(game)) + 9);
     }
     let _ = joint_move(player, clips, Bank::Weapon, 0x100, false);
+    adjust_weapon_joint_translation(game, player, clips, Bank::Weapon, 1);
 
     if player.weapon.cooldown != 0 {
         player.weapon.cooldown -= 1;
@@ -2470,7 +2493,7 @@ fn knife_hold(
         player.weapon.state = 0;
         return;
     }
-    if input.fire && player_find_aim_target(game, player, room) {
+    if input.lock_pressed && player_find_aim_target(game, player, room) {
         player.weapon.behavior = 0x16;
         player.weapon.state = 0;
         return;
@@ -2511,8 +2534,27 @@ fn knife_swing(
     }
 
     let frame = player.anim.frame as u8;
-    if frame == 7 && player.weapon.action_tick & 1 != 0 {
+    if frame == 7 && player.anim.timing & 1 != 0 {
         play_weapon_sound(game, ITEM_KNIFE, 0);
+    }
+
+    // The original's swing sounds above the room's reference height. Its 0x17
+    // billboards here stay with the other effect-zone dust, a recorded
+    // deviation.
+    if frame == 0
+        && player.anim.timing == 0
+        && game.flags[5].bit(MSF2_EFFECT_ZONE)
+        && game
+            .objects
+            .records
+            .first()
+            .is_some_and(|record| player.pos[1] - record.pos[1] > 1000)
+    {
+        if player.anim.clip == 7 {
+            player.emit_footstep(0, 1);
+        } else {
+            play_weapon_sound(game, ITEM_KNIFE, 2);
+        }
     }
 
     game.entities[0].is_being_attacked = 0;
@@ -2541,6 +2583,7 @@ fn knife_swing(
         player.weapon.behavior = 0x13;
         player.weapon.state = 0;
     }
+    adjust_weapon_joint_translation(game, player, clips, Bank::Weapon, 0);
 }
 
 /// `player_behavior_15_knife_holster`.
@@ -2568,7 +2611,7 @@ fn knife_holster(
     if done {
         holster_done(player);
     }
-    let _ = game;
+    adjust_weapon_joint_translation(game, player, clips, Bank::Weapon, 0);
 }
 
 /// `player_behavior_16_knife_turn`.
@@ -2579,7 +2622,7 @@ fn knife_turn(
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
-    if player.weapon.state != 0 && input.fire {
+    if player.weapon.state != 0 && input.lock_pressed {
         player_find_aim_target(game, player, room);
     }
     if player.weapon.state == 0 {
@@ -2597,6 +2640,7 @@ fn knife_turn(
             player.weapon.state = 2;
             set_blend(player, 0x100);
             set_motion(player, usize::from(knife_motion(game)) + 10);
+            effect_zone_step(game, player, 0);
         }
         2 if player.anim.blend_counter == 0 => {
             reset_frame(player);
@@ -4547,6 +4591,92 @@ mod tests {
             drive(&mut game, &mut player, input, 1);
             assert_eq!(game.player_flags & 0xE0, flag, "flags byte (up={up})");
         }
+    }
+
+    #[test]
+    fn a_slow_zone_steps_when_the_gun_is_raised_and_lowered() {
+        for zone in [false, true] {
+            let (mut game, mut player) = armed(2, 15);
+            if zone {
+                game.flags[5].apply(MSF2_EFFECT_ZONE, 0);
+            }
+            drive(&mut game, &mut player, aiming(false), 40);
+            assert_eq!(player.weapon.behavior, 0x13);
+            let raised = player.take_footsteps();
+            assert_eq!(raised.len(), usize::from(zone), "the raise (zone={zone})");
+            assert!(raised.iter().all(|step| step.sound_type == 0));
+            drive(&mut game, &mut player, Input::default(), 2);
+            let lowered = player.take_footsteps();
+            assert_eq!(
+                lowered.len(),
+                usize::from(zone),
+                "the holster (zone={zone})"
+            );
+        }
+    }
+
+    #[test]
+    fn the_knife_hold_steps_in_a_slow_zone_once_per_entry() {
+        let (mut game, mut player) = armed(1, 0);
+        game.flags[5].apply(MSF2_EFFECT_ZONE, 0);
+        drive(&mut game, &mut player, aiming(false), 40);
+        assert_eq!(player.weapon.behavior, 0x13);
+        assert_eq!(player.take_footsteps().len(), 1);
+    }
+
+    #[test]
+    fn the_knife_raise_clears_the_shared_cooldown() {
+        let (mut game, mut player) = armed(1, 0);
+        player.weapon.cooldown = 48;
+        player.weapon.knife = true;
+        player.weapon.behavior = 0x12;
+        drive(&mut game, &mut player, aiming(false), 1);
+        assert_eq!(player.weapon.cooldown, 0);
+    }
+
+    #[test]
+    fn the_knife_hold_ignores_fire_during_the_cooldown_with_a_target_in_reach() {
+        let (mut game, mut player) = armed(1, 0);
+        place_enemy(&mut game, 1, 0x00, [200, 0, 0]);
+        game.entities[1].has_enter_switch_zone = 1;
+        drive(&mut game, &mut player, aiming(false), 40);
+        assert_eq!(player.weapon.behavior, 0x13);
+        player.weapon.cooldown = 5;
+        drive(&mut game, &mut player, aiming(true), 1);
+        assert_eq!(
+            player.weapon.behavior, 0x13,
+            "fire doesn't turn to the target"
+        );
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                aim: true,
+                lock_pressed: true,
+                ..Input::default()
+            },
+            1,
+        );
+        assert_eq!(player.weapon.behavior, 0x16, "only the raw pad bit does");
+    }
+
+    #[test]
+    fn the_knife_swing_whistles_on_a_timed_frame_seven() {
+        let (mut game, mut player) = armed(1, 0);
+        drive(&mut game, &mut player, aiming(false), 40);
+        drive(&mut game, &mut player, aiming(true), 1);
+        game.entity_sounds.clear();
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                aim: true,
+                ..Input::default()
+            },
+            8,
+        );
+        assert_eq!(game.entity_sounds.len(), 1, "one whistle");
+        assert_eq!(game.entity_sounds[0].column, ITEM_KNIFE);
     }
 
     #[test]

@@ -1816,8 +1816,10 @@ sound and model tint (`e:play_enemy_sound(id)` for `Snd_em`'s group-offset
 enemy-bank cue, `e:play_3d_sound(bank, id)` and
 `e:play_3d_sound_at(bank, id, x, y, z)` for `Play3DSnd`'s room/character banks,
 `e:tint_model(r, g, b, word_a, word_b)`, `e:retarget_tint(r, g, b, word_a,
-word_b)` and `e:tint_joint(joint, a, b, rgb)`, whose per-joint colour pipeline
-is the documented renderer deferral and records nothing), randomness
+word_b)`, `e:tint_joint(joint, colour, b, rgb)`, which draws the joint unlit in
+the packed `colour` and ignores its last two arguments as the original does, and
+`e:tint_player_joint(joint, colour, b, rgb)`, the same on the player's body),
+randomness
 (`e:random()`, the
 next platform-stream draw the original's direct `rand()` calls consume,
 `e:srand(seed)` to reseed that stream before a scripted burst of draws, and
@@ -1830,7 +1832,8 @@ flags/effects (`e:flag_bit(bank, sel)`, `e:raise_flag(bank, sel)` for a raw
 `e:spawn_effect(...)`, `e:spawn_joint_effect(type, depth, joint, yaw)` to
 anchor a billboard at a posed joint,
 `e:spawn_joint_effect_at(type, depth, joint, x, y, z, yaw)` for one with a
-local offset, `e:spawn_world_effect(type, depth, x, y, z, yaw[, light])` for a
+local offset, `e:spawn_player_joint_effect(type, depth, joint, x, y, z, yaw)`
+for the same on the player's body, `e:spawn_world_effect(type, depth, x, y, z, yaw[, light])` for a
 billboard at a world point on the identity transform (the shared dead-move
 matrix the gore spawns use), `e:spawn_player_effect(type, depth, x, y,
 z, yaw)` to anchor one at the player, `e:tag_effect(slot, field, value)`,
@@ -2112,9 +2115,8 @@ death's smoke anchors. The exposed heart is a companion-arena clone:
 joint 1 (before the switch-zone refresh, exactly like the original),
 `e:tyrant_heart_drop()` integrates the rocket death's free fall and
 `e:tyrant_heart_set_speed(v)` re-arms its velocity. The render pass draws the
-ghost, limb and heart mesh objects from the scratch matrices; the ribbon's
-quads are computed for determinism but not rasterised (documented
-approximation).
+ghost, limb and heart mesh objects from the scratch matrices, and the
+ribbon's quads as half-alpha red polygons in the scene's depth sort.
 
 The player side of a Tyrant hit runs in the shared state-6 window:
 `e:latch_player_attacker(bias)` stores this entity as the attacker (with the

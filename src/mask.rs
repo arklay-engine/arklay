@@ -234,11 +234,16 @@ impl MaskTable {
 
     /// Visibility bits with every group active: bit `g - 1` for group `g`.
     pub fn active_bits(&self) -> u32 {
-        match self.groups.len() {
-            0 => 0,
-            groups if groups >= MAX_GROUPS => u32::MAX,
-            groups => (1u32 << groups) - 1,
-        }
+        all_active(self.groups.len())
+    }
+}
+
+/// Visibility bits for `groups` groups, all active.
+pub fn all_active(groups: usize) -> u32 {
+    match groups {
+        0 => 0,
+        groups if groups >= MAX_GROUPS => u32::MAX,
+        groups => (1u32 << groups) - 1,
     }
 }
 

@@ -140,14 +140,14 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
             let mut normals = prim
                 .normals
                 .map(|index| object.normals.get(usize::from(index)).copied());
-            let Some(substitute) = normals
+            // A packet with no normal at all (a burst joint's strips) shades
+            // the ambient alone, as a zero normal does.
+            let substitute = normals
                 .iter()
                 .flatten()
                 .copied()
                 .find(|normal| normal != &[0; 3])
-            else {
-                continue;
-            };
+                .unwrap_or([0; 3]);
             for normal in &mut normals {
                 if normal.is_none() || normal == &Some([0; 3]) {
                     *normal = Some(substitute);
@@ -215,13 +215,17 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
 pub struct DrawUniforms {
     /// `fov, shake_x, shake_y, near`.
     pub projection: [f32; 4],
+    /// The ambient in 0..255, then the [`EntityMesh::complex_object`] joint or
+    /// -1: the complex pool lists both windings, so its packets never cull.
     pub ambient: [f32; 4],
     pub light_colour: [[f32; 4]; 3],
     pub tint: [f32; 4],
     /// `hidden_joints, mode (`DRAW_*`), texture width, texture height`.
     pub flags: [u32; 4],
     /// Per joint: the three rows of the reference's object view transform
-    /// (`render::object_view`), then the three light vectors.
+    /// (`render::object_view`), then the three light vectors, whose `w` hold
+    /// the joint's `JointSetColorTint` red, green and blue in 0..255 scale, or
+    /// [`NOT_COLOURED`].
     pub joints: [[f32; 4]; MAX_JOINTS * 6],
 }
 
@@ -360,14 +364,25 @@ pub fn draw_uniforms(
                 translation[row] as f32,
             ];
         }
+        // The complex pool draws its object full-bright.
+        let complex = mesh.complex_object == Some(index);
+        let colour = complex.then_some(&[0x80; 3]).or(mesh
+            .joint_colours
+            .get(index)
+            .filter(|colour| **colour != render::NO_JOINT_COLOUR));
         for (slot, source) in light.sources.iter().enumerate() {
-            joints[base + 3 + slot] = light_vector(&stored, joint, source.dir, room_object);
+            let mut vector = light_vector(&stored, joint, source.dir, room_object);
+            vector[3] = colour.map_or(NOT_COLOURED, |colour| {
+                f32::from(colour[slot]) * 255.0 / 128.0
+            });
+            joints[base + 3 + slot] = vector;
         }
     }
     let ambient = light.ambient.map(|channel| channel as f32);
+    let complex = mesh.complex_object.map_or(-1.0, |object| object as f32);
     DrawUniforms {
         projection,
-        ambient: [ambient[0], ambient[1], ambient[2], 0.0],
+        ambient: [ambient[0], ambient[1], ambient[2], complex],
         light_colour: light.sources.map(|source| {
             let colour = source
                 .color
@@ -437,6 +452,9 @@ pub enum MeshPass {
     Additive,
 }
 
+/// A light vector's `w` when its joint carries no `JointSetColorTint` colour.
+pub const NOT_COLOURED: f32 = -1.0;
+
 /// `flags.y` bit: cull packets facing away.
 pub const DRAW_CULL: u32 = 1;
 /// `flags.y` bit: the mesh is a transparent record (`EntityMesh::blend_weight`):
@@ -492,7 +510,7 @@ pub struct SpriteRun<'a> {
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
-/// masks, shadows), `after` behind them (the effect billboards).
+/// masks), `after` behind them (the shadows and effect billboards, far to near).
 /// `mask_keys` draws first into the mask-key target: the masks again, each
 /// at [`mask_key_depth`] of its key, so the target keeps the nearest mask's
 /// key per pixel.
@@ -650,10 +668,12 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
 
     // The shadows keep their perspective-correct UVs: each projected corner
     // goes back to clip space with `w` = its view Z. They blend towards the
-    // tint by the page's coverage alpha, far to near.
-    let mut shadows = render::shadow_polys(scene.shadows, camera);
-    shadows.sort_by_key(|poly| std::cmp::Reverse(poly.key));
-    for poly in &shadows {
+    // tint by the page's coverage alpha, and draw among the effects after the
+    // meshes: a shadow nearer than a smoke puff darkens it.
+    let mut after = Vec::new();
+    let ribbon = render::ribbon_polys(scene.ribbon.0, scene.ribbon.1, camera);
+    let shadows = render::shadow_polys(scene.shadows, camera);
+    for poly in ribbon.iter().chain(&shadows) {
         let first = sprites.vertices.len();
         let depth = key_depth(poly.key);
         let corner = |vertex: &crate::raster::GlVertex| {
@@ -670,15 +690,14 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
         for triangle in &poly.triangles {
             sprites.vertices.extend(triangle.iter().map(corner));
         }
-        sprites.before.extend(sprites.run(poly.texture, first));
+        if let Some(run) = sprites.run(poly.texture, first) {
+            after.push((poly.key, run));
+        }
     }
 
-    // The effect billboards draw after the meshes, far to near, with the
-    // tint record and an optional half blend.
+    // The effect billboards, with the tint record and an optional half blend.
     if let Some(layer) = scene.effect_layer {
-        let mut quads: Vec<_> = layer.quads.to_vec();
-        quads.sort_by_key(|quad| std::cmp::Reverse(quad.key));
-        for quad in &quads {
+        for quad in layer.quads {
             let Some(page) = layer.pages.get(quad.page).copied().flatten() else {
                 continue;
             };
@@ -709,13 +728,14 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 // mask only covers one strictly behind it.
                 quad.key as f32 - 1.0,
             );
-            sprites.after.extend(
-                sprites
-                    .run(page, first)
-                    .map(|run| SpriteRun { op: quad.op, ..run }),
-            );
+            if let Some(run) = sprites.run(page, first) {
+                after.push((quad.key, SpriteRun { op: quad.op, ..run }));
+            }
         }
     }
+    // The painter's sort, stable with the shadows submitted first.
+    after.sort_by_key(|(key, _)| std::cmp::Reverse(*key));
+    sprites.after = after.into_iter().map(|(_, run)| run).collect();
 
     // The F4 debug triangles last, over everything but behind nearer meshes.
     if !scene.debug.is_empty() {
@@ -968,6 +988,22 @@ mod tests {
     }
 
     #[test]
+    fn a_packet_without_normals_is_kept() {
+        // The head burst's strips are built without normals: full-bright colour
+        // comes from their joint, not from the shade.
+        let tmd = Tmd {
+            objects: vec![TmdObject {
+                vertices: vec![[10, 20, 30], [40, 50, 60], [70, 80, 90]],
+                normals: vec![],
+                prims: vec![prim([0, 1, 2])],
+            }],
+        };
+        let built = mesh_vertices(&tmd);
+        assert_eq!(built.vertices.len(), 3);
+        assert_eq!(built.vertices[0].normal, [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
     fn quad_halves_carry_the_whole_packet_and_their_nudges() {
         // A quad's ring (0, 1, 3, 2) fans into (0, 1, 3) and (0, 3, 2).
         let quad = [0u16, 1, 2, 3];
@@ -1167,6 +1203,58 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn joint_colours_and_the_complex_object_reach_the_uniforms() {
+        let tmd = Tmd {
+            objects: vec![
+                TmdObject::default(),
+                TmdObject::default(),
+                TmdObject::default(),
+            ],
+        };
+        let texture = Texture8 {
+            width: 1,
+            height: 1,
+            indices: vec![0],
+            palettes: vec![],
+            stp: vec![],
+        };
+        let joints = [identity(), identity(), identity()];
+        let mut joint_colours = crate::render::NO_JOINT_COLOURS;
+        joint_colours[1] = [0x40, 0x80, 0x20];
+        let entity = EntityMesh {
+            mesh: &tmd,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours,
+            hd_name: None,
+            complex_object: Some(2),
+            aliased_light: false,
+            view_z_shift: 0,
+        };
+        let camera = Camera::from_points([0, 0, -5000], [0, 0, 0], 500);
+        let light = Lighting {
+            ambient: [0; 3],
+            lights: Default::default(),
+        }
+        .latched([0; 3]);
+        let uniforms = draw_uniforms(&camera, &entity, &light, false, None);
+        let colour = |joint: usize, slot: usize| uniforms.joints[joint * 6 + 3 + slot][3];
+        assert_eq!(colour(0, 0), NOT_COLOURED, "no colour keeps the lit shade");
+        assert_eq!(colour(1, 0), 127.5);
+        assert_eq!(colour(1, 1), 255.0);
+        assert_eq!(colour(1, 2), 63.75);
+        assert_eq!(colour(2, 0), 255.0, "the complex object is full-bright");
+        assert_eq!(uniforms.ambient[3], 2.0);
     }
 
     #[test]

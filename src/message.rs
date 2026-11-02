@@ -250,6 +250,9 @@ pub struct MessageWindow {
     line_counter: u8,
     char_delay: u8,
     char_timer: u8,
+    /// The yes/no row has drawn: the frame the stream reaches the prompt only
+    /// draws the text so far.
+    yes_no_shown: bool,
     speed_up: bool,
     menu: bool,
     selected_item: u8,
@@ -287,6 +290,7 @@ impl Default for MessageWindow {
             line_counter: 0,
             char_delay: 1,
             char_timer: 0,
+            yes_no_shown: false,
             speed_up: false,
             menu: false,
             selected_item: 0,
@@ -566,6 +570,7 @@ impl MessageWindow {
                 }
             }
             MessagePhase::YesNo => {
+                self.yes_no_shown = true;
                 if pressed_action {
                     self.menu_choice &= 0x7F;
                     self.active = false;
@@ -728,6 +733,7 @@ impl MessageWindow {
                 }
                 0x08 => {
                     self.phase = MessagePhase::YesNo;
+                    self.yes_no_shown = false;
                     return;
                 }
                 0xF8..=0xFA => {
@@ -903,7 +909,7 @@ impl MessageWindow {
                     );
                 }
             }
-            MessagePhase::YesNo => {
+            MessagePhase::YesNo if self.yes_no_shown => {
                 let cursor_x = if glyph_w > 8 { 0xA0 } else { 0xD0 };
                 // The label starts one cursor cell right of the first cursor,
                 // and the second cursor sits one glyph left of `No`; both

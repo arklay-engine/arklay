@@ -1222,9 +1222,8 @@ fn simple_recovery(
 /// death fade at `death_timer == 0xA0` and parks in the blocked state 4 at
 /// 0x20.
 ///
-/// Deviations: the original's `unk_bc` byte maps to `death_timer`; the
-/// per-joint tints have no port renderer (the same deferral the enemy
-/// scripts' `tint_joint` documents); the two entry sheets attached to joint 1
+/// Deviations: the original's `unk_bc` byte maps to `death_timer`; the two
+/// entry sheets attached to joint 1
 /// collapse to the player transform's ground sheets; the case-2 rotated
 /// -900 billboard shift has no port analogue because the ground quad carries
 /// no local offset, so only its recolour and shrink are kept; and case 1's
@@ -1257,6 +1256,9 @@ fn hunter_pounce_bite(
             }
             if game.entities[0].animation_frame_id < 10 {
                 spawn_player_blood(game, [0, -0x898, 0]);
+            }
+            if game.entities[0].animation_frame_id == 3 {
+                wound_player(game, &[0, 9, 12]);
             }
             if game.entities[0].animation_frame_id == 0x2A {
                 play_entity_thud(game, room);
@@ -1308,11 +1310,9 @@ fn hunter_pounce_bite(
 /// `velX` (bit 0x80 airborne, low three bits the bounce counter) and
 /// `move_speed[1]` its `velY`; the vertical drop, the kill, the bounce and
 /// the 30-unit slide are ported against the entity position. The case-0/1
-/// per-joint velocities, the joint-0 rotation curl, the joint-2 limb bounce
-/// and every `JointApplyColorTint` call are not modeled: the port's pose is
-/// clip-driven and has no per-joint colour pipeline (the same deferral the
-/// enemy scripts' `tint_joint` documents), so the case-1 joint-2 billboard
-/// that fires when its rotation crosses 0x100 is skipped with them.
+/// per-joint velocities, the joint-0 rotation curl and the joint-2 limb bounce
+/// are not modeled: the port's pose is clip-driven, so the case-1 joint-2
+/// billboard that fires when its rotation crosses 0x100 is skipped with them.
 /// `g_deathAnimationFlag` (the Plant 42 corpse pose on the DIED screen) has
 /// no port field; the death screen renders the ordinary corpse.
 fn plant42_eat(
@@ -1337,6 +1337,7 @@ fn plant42_eat(
                     entity.death_timer = 0;
                     entity.move_speed[1] = 0;
                 }
+                wound_player(game, &[0, 2, 1]);
                 play_player_sound(game, room, 3, 3);
                 // Bank 4 is the original's special/BGM pan update; the port
                 // has no `g_SndBank[0]` pan contract, so the call is inert.
@@ -1503,6 +1504,7 @@ fn tyrant_impale(game: &mut GameState, player: &mut PlayerState, room: &RoomStat
         1 => {
             if game.entities[0].animation_frame_id == 8 {
                 play_player_sound(game, room, 3, 3);
+                wound_player(game, &[0, 1, 2, 9, 12]);
             }
             if game.entities[0].animation_frame_id < 9 {
                 spawn_player_blood(game, [0, -0x5DC, 0]);
@@ -1846,6 +1848,7 @@ fn grabbed(game: &mut GameState, player: &mut PlayerState, emd_clips: &[Clip]) {
             let entity = &mut game.entities[0];
             entity.set_joint_flag(2, entity.joint_flag(2) | 0x0C);
             entity.action_state = 7;
+            wound_player(game, &[2]);
         }
         _ => return,
     }
@@ -2258,6 +2261,14 @@ fn tyrant_knockback_getup_reverse(
 
 /// A blood sheet attached to the current attacker's claw joint (its joint 8
 /// world matrix) with a local offset.
+/// `JointApplyColorTint` on the player's joints: the dark red of a killing
+/// wound, which stays on the body through the DIED screen.
+fn wound_player(game: &mut GameState, joints: &[usize]) {
+    for &joint in joints {
+        game.entities[0].tint_joint(joint, [0x30, 0, 0]);
+    }
+}
+
 fn spawn_claw_blood(game: &mut GameState, attacker: Option<usize>, offset: [i32; 3]) {
     let Some(slot) = attacker else {
         return;

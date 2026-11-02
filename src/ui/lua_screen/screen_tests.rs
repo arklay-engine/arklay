@@ -1707,8 +1707,8 @@ fn death_the_screen_machine_runs_its_states_in_order() {
     }
     assert_eq!(reveal, 87);
 
-    // The black ramp starts at zero; the strip starts stepping once the ramp
-    // passes the threshold, 21 ticks later.
+    // The tick the flash clears already ramps the black overlay; the strip
+    // starts stepping once the ramp passes the threshold, 20 ticks later.
     let mut first_strip = None;
     let mut stepped = 0;
     for tick in 0..200 {
@@ -1723,7 +1723,7 @@ fn death_the_screen_machine_runs_its_states_in_order() {
     }
     let (tick, alpha) = first_strip.expect("the strip draws");
     assert_eq!(alpha, 63, "the first strip frame is past the threshold");
-    assert_eq!(tick, 21);
+    assert_eq!(tick, 20);
     assert_eq!(stepped, 56, "59 down to 4 is 56 stepped frames");
 
     // The hold runs 49 frames at the settled amplitude.
@@ -1731,9 +1731,10 @@ fn death_the_screen_machine_runs_its_states_in_order() {
         assert_eq!(screen.update(&cx, neutral()), ScreenResult::Continue);
     }
     assert_eq!(death_state(&screen), 4);
-    // The black fade-out arms and re-waves the strip; the overlay holds the
-    // last ramped value.
+    // The black fade-out arms and re-waves the strip from the settled value in
+    // the same tick; the overlay holds the last ramped value.
     screen.update(&cx, neutral());
+    assert_eq!(death_strip(&screen), Some(4));
     assert_eq!(death_rect(&screen), 228);
     assert_eq!(death_overlay(&screen).0.as_deref(), Some("black"));
     let mut rewave = Vec::new();
@@ -1748,8 +1749,8 @@ fn death_the_screen_machine_runs_its_states_in_order() {
     assert_eq!(finished, Some(ScreenAction::Title));
     assert_eq!(
         rewave[..2],
-        [4, 5],
-        "the re-wave starts at the settled value"
+        [5, 6],
+        "the re-wave keeps climbing from the settled value"
     );
 }
 
@@ -4774,6 +4775,22 @@ fn main_menu_equipping_a_weapon_toggles_the_state_byte() {
     menu.confirm();
     assert_eq!(menu.game.equipped, None);
     assert_eq!(menu.game.inventory[0].quantity, 15);
+}
+
+#[test]
+fn main_menu_the_pad_returns_a_frame_after_the_equip_box_is_gone() {
+    let mut game = menu_game();
+    game.add_item(0x02, 15);
+    let mut menu = Menu::open(game);
+    menu.confirm();
+    menu.confirm();
+    while menu.eval::<i64>("return M.state.frames") > 0 {
+        assert_ne!(menu.mode(), MODE_NAVIGATION);
+        menu.tick();
+    }
+    assert_ne!(menu.mode(), MODE_NAVIGATION, "the box has only just gone");
+    menu.tick();
+    assert_eq!(menu.mode(), MODE_NAVIGATION);
 }
 
 #[test]

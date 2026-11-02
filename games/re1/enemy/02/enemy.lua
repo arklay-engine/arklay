@@ -1255,13 +1255,11 @@ local function beh_maul(e)
     end
     if frame == 0x66 then
         e.cb_blood = 6
-        -- The original greys four player joints and the dog's joint 4 with an
-        -- immediate colour. The port has no per-joint render tint; the calls
-        -- are transcribed and recorded as the joint-state contract only.
-        e:tint_joint(0, 0x30, 0x80820, 0x00606060)
-        e:tint_joint(1, 0x30, 0x80820, 0x00606060)
-        e:tint_joint(9, 0x30, 0x80820, 0x00606060)
-        e:tint_joint(0xC, 0x30, 0x80820, 0x00606060)
+        -- Four player joints and the dog's joint 4 take the wound.
+        e:tint_player_joint(0, 0x30, 0x80820, 0x00606060)
+        e:tint_player_joint(1, 0x30, 0x80820, 0x00606060)
+        e:tint_player_joint(9, 0x30, 0x80820, 0x00606060)
+        e:tint_player_joint(0xC, 0x30, 0x80820, 0x00606060)
         e:tint_joint(4, 0x30, 0x80820, 0x00606060)
         local px, py, pz = e:player_pos()
         e:play_3d_sound_at(3, 3, px, py, pz)

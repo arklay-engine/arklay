@@ -464,7 +464,9 @@ pub fn update_entity(
     let origin = look_at_joint_origin(game, slot);
     game.entity_anims[slot].slew_look_at(&mut game.entities[slot], origin);
     if game.entities[slot].look_at_flags != 0 {
-        let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+        let frozen = game
+            .tyrant
+            .frozen_joints(&game.entities[slot], &game.joint_trails[slot]);
         game.joint_worlds[slot] =
             game.entity_anims[slot].joint_worlds_frozen(&game.entities[slot], clips, &frozen);
         let mut worlds = std::mem::take(&mut game.joint_worlds[slot]);

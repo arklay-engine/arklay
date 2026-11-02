@@ -71,6 +71,7 @@ pub fn spawn_segments(game: &mut GameState, slot: usize) -> Vec<usize> {
             segment.pos = matrix.t;
         }
         game.entities[target] = segment;
+        game.joint_trails[target] = game.joint_trails[slot];
     }
     game.enemy_count = game.enemy_count.saturating_add(SEGMENT_COUNT as u8);
     free

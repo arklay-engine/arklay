@@ -470,7 +470,7 @@ pub const FADE_OUT_ALL_FRAMES: u8 = 6;
 /// [`crate::game::BgmState::stop_all`] edge: [`apply_live`] consumes it and
 /// calls `Mixer::stop_all_bgm`, so the script host can keep running without an
 /// audio device.
-fn fade_out_all(game: &mut GameState) {
+pub(crate) fn fade_out_all(game: &mut GameState) {
     for channel in &mut game.bgm.channels {
         *channel = BgmChannelState::default();
     }

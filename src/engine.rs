@@ -454,8 +454,8 @@ pub fn run_with_options(
             write_save_file(&game, path)?;
             return Ok(());
         }
-        drain_mask_toggles(&mut loaded.room, &mut game);
         apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        drain_mask_toggles(&mut loaded.room, &mut game);
         bgm::update_room_bgm(&mut game, id, None);
         timings.phases.load = load_start.elapsed();
 
@@ -520,8 +520,8 @@ pub fn run_with_options(
                         run_room_init(&mut loaded, &mut game);
                         apply_event_requests(&mut game, &mut event_vm);
                         call_lua_room_load(lua.as_ref(), &mut game, loaded.id);
-                        drain_mask_toggles(&mut loaded.room, &mut game);
                         apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+                        drain_mask_toggles(&mut loaded.room, &mut game);
                         bgm_sleep = update_transition_bgm(&mut game, &session, loaded.id, from);
                     } else {
                         door_transition = Some(session);
@@ -1773,11 +1773,11 @@ struct PickupView {
     reader: Option<Box<ui::lua_screen::LuaScreen>>,
     /// Where the flow is.
     phase: PickupPhase,
-    /// The viewer has yet to draw the reference's menu-entry random seed
-    /// (`g_RandSeed = rand()` at the top of the menu task's first frame).
-    entry_rand_pending: bool,
     /// The opening fade has yet to start.
     entry_hold: bool,
+    /// The prompt that just closed was the yes/no one, so the viewer plays its
+    /// answer's cue when it sees the close.
+    answered_yes_no: bool,
 }
 
 /// One gameplay session: the loaded room, game state, player and VMs.
@@ -1875,6 +1875,15 @@ enum LoadRequest {
     Slot(usize),
     /// A file the screen's save list chose, e.g. the CR-style folder screen.
     File(PathBuf),
+}
+
+/// The screen a free-play press asks the end of the frame to open.
+#[derive(Debug, Clone, Copy)]
+enum MenuRequest {
+    /// START's pause menu.
+    Menu,
+    /// The port's map button.
+    Map,
 }
 
 struct GameSession {
@@ -2114,6 +2123,9 @@ struct GameSession {
     return_title: Option<Box<ui::lua_screen::LuaScreen>>,
     /// A confirmed return to the title screen, taken once by the app.
     return_title_requested: bool,
+    /// A menu the last frame asked for and the message word to restore when
+    /// it opens.
+    menu_request: Option<(MenuRequest, u16)>,
     /// Whether the native in-game menu ([`gui::SystemMenu`], which the app
     /// owns and draws) is up: the room is frozen and the game sounds are
     /// paused while it is.
@@ -2635,6 +2647,7 @@ impl GameSession {
             debug_menu_memory: None,
             return_title: None,
             return_title_requested: false,
+            menu_request: None,
             system_menu_open: false,
             system_menu_requested: false,
             load_from_system_menu: false,
@@ -2708,12 +2721,12 @@ impl GameSession {
         // script and room edits applied) and before the first tick's movement.
         call_lua_room_load(self.lua.as_ref(), &mut self.game, self.loaded.id);
         self.game.sync_player(&mut self.player);
-        drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         // An RE2 room's first script pass has run, and may have picked a cut.
         if !self.game.is_re2_room {
             reset_room_camera_id(&mut self.game);
         }
         apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+        drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         // The original runs `update_room_bgm` after the destination's init
         // script (so a `room_bgm_state_set` it performs is visible) and after
         // the room's data is loaded. A transition defers this call to the end
@@ -2829,6 +2842,8 @@ impl GameSession {
     /// the menu bits (`0x100`/`0x40`); while the menu is up the room stays
     /// frozen and the same input drives the menu.
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
+        self.game.countdown_hud = None;
+        self.finish_menu_request(pack);
         self.drawn_cut = Some((self.loaded.id, self.loaded.room.current_cut));
         self.buffer_half ^= 1;
         if self
@@ -3381,10 +3396,13 @@ impl GameSession {
         // until the fade back to it begins.
         if self.menu_fade_phase != MenuFadePhase::None {
             // A pick-up's request reaches the main loop a frame after it is
-            // raised.
+            // raised. That frame is one more `game_loop` iteration, which
+            // draws `g_RandSeed = rand()` before the request hands over to the
+            // menu.
             if let Some(pickup) = self.pickup_view.as_mut()
                 && std::mem::take(&mut pickup.entry_hold)
             {
+                self.game.draw_frame_rand();
                 return Ok(());
             }
             let counts = match self.menu_fade_phase {
@@ -3457,22 +3475,23 @@ impl GameSession {
         let message_pauses_menu = (was_active && self.game.message.pause & START_MESSAGE_BITS != 0)
             || self.game.message_flags & START_MESSAGE_BITS != START_MESSAGE_BITS
             || self.menu_close_freeze > 0;
-        if ui.start && !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
-            // The reference draws this frame's random seed before its menu
-            // request is even detected (game_loop's first statement), then
-            // opens the menu at the end of the same tick. arklay opens the menu
-            // here, ahead of the room tick, so it must draw the seed itself or
-            // the shared stream falls one draw behind for the rest of the run.
-            self.game.draw_frame_rand();
-            self.begin_menu_open(pack);
-            return Ok(());
-        }
-        // The port's map button opens the map straight from free play,
-        // through the same gate and fade as START.
-        if ui.map && !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
-            self.game.draw_frame_rand();
-            self.begin_map_open(pack);
-            return Ok(());
+        // The request does not stop the frame: `game_loop` clears the player's
+        // bits for it, runs the rest of the tick, and only then leaves for the
+        // menu.
+        if !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
+            let request = if ui.start {
+                Some(MenuRequest::Menu)
+            } else if ui.map {
+                // The port's map button opens the map straight from free play,
+                // through the same gate and fade as START.
+                Some(MenuRequest::Map)
+            } else {
+                None
+            };
+            if let Some(kind) = request {
+                self.menu_request = Some((kind, self.game.message_flags));
+                self.game.message_flags &= 0xFF7A;
+            }
         }
         // The port's equip buttons and weapon cycle.
         if !was_active {
@@ -3482,33 +3501,18 @@ impl GameSession {
         // The press that dismissed a message last tick is swallowed until the
         // key is released, exactly like the original's cleared edge-detect
         // history. The release is seen on this tick so the room probe runs on
-        // the frame the key comes up. A dismissal last tick blanked the
-        // direction bits of a state-5/6 message into `game.dpad_blanked`;
-        // releasing a blanked direction restores it, a still-held one stays
-        // suppressed for this tick.
+        // the frame the key comes up. A dismissal last tick cleared the held
+        // directions from the original's previous-pad word: the pad is read
+        // afresh, so a still-held direction keeps working, as a new press.
         if !action {
             self.swallow_action = false;
         }
         let raw = input;
-        self.game.dpad_blanked &= game::dpad_word(&raw) & game::DPAD_DIRECTIONS;
-        let mut input = raw;
-        if self.game.dpad_blanked & 0x1 != 0 {
-            input.up = false;
-        }
-        if self.game.dpad_blanked & 0x2 != 0 {
-            input.down = false;
-        }
-        if self.game.dpad_blanked & 0x4 != 0 {
-            input.left = false;
-        }
-        if self.game.dpad_blanked & 0x8 != 0 {
-            input.right = false;
-        }
-        // A still-held blanked direction keeps the stick that drives it off
-        // the player too.
-        if self.game.dpad_blanked != 0 {
-            input.analog = None;
-        }
+        let input = player::Input {
+            direction_restart: self.game.dpad_blanked & game::dpad_word(&raw) != 0,
+            ..raw
+        };
+        self.game.dpad_blanked = 0;
         // The message freeze is applied inside the room tick, at the original's
         // point: the scripts still see the raw pad this frame, and the player's
         // state machine is skipped after the entity update. Only the dismissed
@@ -3519,6 +3523,16 @@ impl GameSession {
             input
         };
 
+        // The clock ran out: the task sits in `TimeoutDeathFadeOut` and the
+        // film, with no game frame until `die_state`.
+        if self.death.is_explosion() {
+            // The loop comes back round for the frame `die_state` starts in.
+            if self.death.explosion_ends() {
+                self.game.draw_frame_rand();
+            }
+            self.tick_death(pack, input);
+            return Ok(());
+        }
         let message_before = self.game.message.menu_choice_id() & 0x80 != 0;
         let transition = tick_room(
             &mut self.command_vm,
@@ -3741,7 +3755,7 @@ impl GameSession {
         }
         // The death machine runs at the end of the gameplay frame, after the
         // room tick noticed the health drop, exactly like the original.
-        self.tick_death(pack);
+        self.tick_death(pack, input);
         // `Die`'s cry, this tick.
         if self.game.is_re2_room && !self.game.re2.sounds.is_empty() {
             play_re2_sounds(
@@ -3779,7 +3793,7 @@ impl GameSession {
     /// The game-over machine's pre-screen phase: notice a dead player, raise
     /// the dead flag, start the sequence and advance its delay/fade. Once the
     /// fade completes the DIED screen opens over the corpse.
-    fn tick_death(&mut self, pack: &Pack) {
+    fn tick_death(&mut self, pack: &Pack, input: player::Input) {
         if self.death.finished || self.death_screen.is_some() {
             return;
         }
@@ -3792,6 +3806,7 @@ impl GameSession {
         // A scripted death variant isn't a death: it is how the game ends.
         if self.game.debug.invincible
             && self.death.is_idle()
+            && !self.game.countdown_at_explosion()
             && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
             && !self.game.flags[5].bit(game::MSF2_DEATH_VARIANT)
         {
@@ -3805,6 +3820,13 @@ impl GameSession {
             return;
         }
         if self.death.is_idle() {
+            if self.game.countdown_at_explosion() {
+                bgm::fade_out_all(&mut self.game);
+                self.game.message.active = false;
+                self.death
+                    .start_explosion(self.room_fade.counter(), self.room_fade.state());
+                return;
+            }
             let attract = self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
             let variant = self.game.flags[5].bit(game::MSF2_DEATH_VARIANT) || attract;
             self.death
@@ -3817,7 +3839,11 @@ impl GameSession {
             self.death.arm_fade_now();
         }
         match self.death.tick() {
-            ui::death::DeathTick::OpenScreen => self.open_death_screen(pack),
+            ui::death::DeathTick::OpenScreen => {
+                // `die_state` shows its first frame in the frame it starts.
+                self.open_death_screen(pack);
+                self.tick_death_screen(pack, UiInput::default(), input);
+            }
             ui::death::DeathTick::Finished => self.finish_death(),
             ui::death::DeathTick::None => {}
         }
@@ -3963,6 +3989,10 @@ impl GameSession {
         };
         self.play_ui_cue_names(pack, cues);
         if let ScreenResult::Done(_) = result {
+            self.death.end_screen(
+                screen.value("fade_counter") as i32,
+                screen.value("fade_state") as i16,
+            );
             self.finish_death();
             return;
         }
@@ -3982,6 +4012,13 @@ impl GameSession {
             entity.set_joint_flag(1, entity.joint_flag(1) & 0xFE);
         }
         self.game.hunter_grab_one_shot = false;
+        // `display_die_screen` loads the page over the room's RDT, whose header
+        // holds the lights: the corpse is lit by what the page's bytes read as.
+        if let Ok(page) = pack.read("ui/died.tim")
+            && let Ok(lights) = crate::rdt::parse_lights(&page)
+        {
+            self.loaded.room.lights = lights;
+        }
         let anchor = self.player.pos;
         let angle = self.player.angle;
         let fov = self
@@ -3996,6 +4033,13 @@ impl GameSession {
             ("z", ScreenArg::Int(i64::from(anchor[2]))),
             ("angle", ScreenArg::Int(i64::from(angle))),
             ("fov", ScreenArg::Int(i64::from(fov))),
+            // The explosion cleared the player's entity flags: no body.
+            (
+                "corpse",
+                ScreenArg::Int(i64::from(
+                    self.game.entities[0].status_flags | self.game.player_flags,
+                )),
+            ),
         ];
         let mut cx = self.ui_context(pack);
         let screen =
@@ -4254,8 +4298,6 @@ impl GameSession {
     /// darkens over `0xC00` (24 alpha per tick), then the menu fades in over
     /// `0xE800` (48 per tick) before it accepts input.
     fn begin_menu_open(&mut self, pack: &Pack) {
-        // The press frame is still a `game_loop` frame.
-        self.game.advance_play_timer();
         self.menu_fade_out_ticks = 0;
         if self.menu.is_some() || self.menu_fade_phase != MenuFadePhase::None {
             return;
@@ -4265,6 +4307,22 @@ impl GameSession {
             return;
         }
         self.arm_menu_open_fade();
+    }
+
+    /// The frame after a menu was requested: restore the message word the
+    /// request cleared and open it, unless that frame left the room.
+    fn finish_menu_request(&mut self, pack: &Pack) {
+        let Some((kind, message_flags)) = self.menu_request.take() else {
+            return;
+        };
+        self.game.message_flags = message_flags;
+        if self.transition.is_some() || self.movie.is_some() || !self.death.is_idle() {
+            return;
+        }
+        match kind {
+            MenuRequest::Menu => self.begin_menu_open(pack),
+            MenuRequest::Map => self.begin_map_open(pack),
+        }
     }
 
     /// Arm the START menu's opening fade-out over the frozen room.
@@ -4488,6 +4546,7 @@ impl GameSession {
         self.menu_fade_draw = self.menu_fade.overlay();
         if self.menu_fade_pending {
             self.menu_fade_pending = false;
+            self.menu_fade.set(2, 24 << 7, self.menu_fade.state());
             return;
         }
         // The opening/closing fades start from the room-entry fade's negative
@@ -4707,8 +4766,8 @@ impl GameSession {
 
     /// CLEAR GAME's ending flow from the live state, with the character the
     /// films play as: the real clear time and save counter, the
-    /// second-playthrough bit and a held special key carry over. The run's
-    /// infinite-launcher ownership is not tracked, so it is never set.
+    /// second-playthrough bit, a held special key and the permanent
+    /// infinite-launcher flag carry over.
     fn ending_flow(&self, id: u8) -> (EndingFlow, u8) {
         let character = game::scenario_of(self.game.player_choice().character);
         let flow = EndingFlow {
@@ -4719,7 +4778,11 @@ impl GameSession {
                 false,
             ),
             has_special_key: self.game.has_item(ending::ITEM_SPECIAL_KEY),
-            has_infinite_launcher: false,
+            has_infinite_launcher: self.game.flag_test(
+                game::BANK_SCENARIO,
+                weapons::SCENARIO_FLAG_INF_R_LAUNCHER,
+                false,
+            ),
         };
         (flow, character)
     }
@@ -5018,12 +5081,16 @@ impl GameSession {
             screen,
             reader,
             phase,
-            entry_rand_pending: true,
             entry_hold: true,
+            answered_yes_no: false,
         });
-        // The menu opens through the same fade as START's.
+        // The menu opens through the same fade as START's. Its request reaches
+        // the main loop two frames later, so the room's fade pair stays until
+        // the pending tick arms the counter.
         self.menu_fade_out_ticks = 0;
         self.arm_menu_open_fade();
+        self.menu_fade
+            .set(2, self.room_fade.counter(), self.room_fade.state());
     }
 
     /// One frozen tick of the pick-up viewer.
@@ -5038,17 +5105,20 @@ impl GameSession {
     /// character bank's confirm/cancel cue as it resolves, exactly like the
     /// original's viewer.
     fn tick_pickup_view(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) {
-        // The reference's pickup screen is main-menu state 8. The menu task's
-        // first frame is a `game_loop` iteration, which draws `g_RandSeed =
-        // rand()` before the request hands over to the menu; arklay opens the
-        // viewer at the end of the action's tick, so the draw belongs to this
-        // first frozen tick to keep the shared stream in step.
-        let entry_draw = self
+        // The menu task runs before the main loop's message update: a prompt
+        // the viewer raises types its first glyph this frame, and one that
+        // resolves this frame is only seen by the viewer on the next.
+        self.step_pickup_view(pack, ui);
+        // The original's state 4 runs `menu_draw_health_bar` after the viewer
+        // on every frame the viewer stays up, so the face and the EKG keep
+        // sweeping (and drawing from the shared `rand()`) under the model.
+        // The document reader is the panel-less state 8 and has no monitor.
+        if self
             .pickup_view
-            .as_mut()
-            .is_some_and(|pickup| std::mem::take(&mut pickup.entry_rand_pending));
-        if entry_draw {
-            self.game.draw_frame_rand();
+            .as_ref()
+            .is_some_and(|pickup| pickup.screen.is_some())
+        {
+            self.menu_signal(pack, "tick_monitor", ());
         }
         let was_active = self.game.message.active;
         let was_yes_no = self.game.message.phase() == crate::message::MessagePhase::YesNo;
@@ -5062,29 +5132,21 @@ impl GameSession {
             &self.loaded.room,
             &self.text,
         );
-        // The dismissal bookkeeping mirrors the room tick: a press that
-        // closes the prompt is swallowed until the key comes up.
-        if was_active && !self.game.message.active && action {
-            self.swallow_action = true;
-        }
-        self.step_pickup_view(pack, ui, was_active, was_yes_no);
-        // The original's state 4 runs `menu_draw_health_bar` after the viewer
-        // on every frame the viewer stays up, so the face and the EKG keep
-        // sweeping (and drawing from the shared `rand()`) under the model.
-        // The document reader is the panel-less state 8 and has no monitor.
-        if self
-            .pickup_view
-            .as_ref()
-            .is_some_and(|pickup| pickup.screen.is_some())
-        {
-            self.menu_signal(pack, "tick_monitor", ());
+        if was_active && !self.game.message.active {
+            // The dismissal bookkeeping mirrors the room tick: a press that
+            // closes the prompt is swallowed until the key comes up.
+            if action {
+                self.swallow_action = true;
+            }
+            if let Some(pickup) = self.pickup_view.as_mut() {
+                pickup.answered_yes_no = was_yes_no;
+            }
         }
     }
 
-    /// The pick-up viewer's phase machine for one frozen tick, after the
-    /// message window has advanced (`was_active` and `was_yes_no` describe the
-    /// message before it did).
-    fn step_pickup_view(&mut self, pack: &Pack, ui: UiInput, was_active: bool, was_yes_no: bool) {
+    /// The pick-up viewer's phase machine for one frozen tick, before the
+    /// message window advances.
+    fn step_pickup_view(&mut self, pack: &Pack, ui: UiInput) {
         let Some(phase) = self.pickup_view.as_ref().map(|pickup| pickup.phase) else {
             return;
         };
@@ -5160,10 +5222,14 @@ impl GameSession {
                         pickup.screen = Some(screen);
                     }
                 }
-                if !was_active || self.game.message.active {
+                if self.game.message.active {
                     return;
                 }
                 let kind = self.pickup_view.as_ref().map(|pickup| pickup.kind);
+                let was_yes_no = self
+                    .pickup_view
+                    .as_ref()
+                    .is_some_and(|pickup| pickup.answered_yes_no);
                 match kind {
                     Some(PickupKind::Take | PickupKind::DiscardKey) => {
                         // The original plays the character bank's confirm cue
@@ -5435,6 +5501,9 @@ impl GameSession {
             }
         }
         self.save_screen = None;
+        // Leaving the save screen runs `cut_set`, which rebuilds the room's
+        // sprite table.
+        self.game.mask_reload = true;
         // Backing out of the in-game menu's LOAD GAME returns to the menu.
         if std::mem::take(&mut self.load_from_system_menu) {
             self.system_menu_requested = true;
@@ -6335,6 +6404,7 @@ impl GameSession {
                     camera,
                     &lighting,
                     game.entities[0].joint_flags,
+                    &game.entities[0].mesh_joint_colours(),
                 );
                 return true;
             }
@@ -6362,7 +6432,7 @@ impl GameSession {
                 view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
-                joint_colours: crate::render::NO_JOINT_COLOURS,
+                joint_colours: game.entities[0].mesh_joint_colours(),
                 hd_name: None,
             }];
             let scene = render::GameplayScene {
@@ -6371,6 +6441,7 @@ impl GameSession {
                 colour: [255; 3],
                 meshes: &meshes,
                 shadows: &[],
+                ribbon: (&[], 0),
                 camera: &camera,
                 lighting: &lighting,
                 mask_layer: None,
@@ -6544,7 +6615,12 @@ impl GameSession {
             .map(|session| session.transition.fade());
         let (fade_counter, fade_state) = if let Some(fade) = door_fade {
             (fade.counter(), fade.state())
-        } else if !self.death.is_idle() {
+        } else if let Some(screen) = &self.death_screen {
+            (
+                screen.value("fade_counter") as i32,
+                screen.value("fade_state") as i16,
+            )
+        } else if self.death.owns_fade() {
             (self.death.fade_counter(), self.death.fade_state())
         } else if self.menu_fade_phase != MenuFadePhase::None {
             (self.menu_fade.counter(), self.menu_fade.state())
@@ -7143,6 +7219,16 @@ impl GameSession {
         }
         // The pause-menu open/close fade sits over the menu and its overlays.
         self.draw_menu_fade();
+        if let (Some(hud), Some(font)) = (&self.game.countdown_hud, &self.font) {
+            let tint = if hud.red {
+                font::Tint::Red
+            } else {
+                font::Tint::Green
+            };
+            self.framebuffer.with_screen(|screen| {
+                font.draw_text_8x14(screen, font.countdown_x(), 0x20, tint, hud.text.as_bytes());
+            });
+        }
         if self.draws_message_window()
             && let Some(font) = &self.font
         {
@@ -9880,10 +9966,10 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         let was_play = matches!(app.mode, Mode::Play(_));
         let in_transition =
             matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
-        // The reference emits no trace lines while the DIED screen runs: its
-        // display loop is outside `game_loop`, so the tick that opens the
-        // screen is the last traced one until the title cycles back into
-        // gameplay.
+        // The reference's `game_loop` hook emits no line while the DIED screen
+        // runs: its display loop is outside `game_loop`, so the tick that opens
+        // the screen is the last traced one until the title cycles back into
+        // gameplay. With scripted input it traces every frame, as for a door.
         let screen_before =
             matches!(&app.mode, Mode::Play(session) if session.death_screen.is_some());
         // The scripted `--input` word is keyed by the trace tick, exactly like
@@ -9917,8 +10003,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         // the creation frame.
         if let Mode::Play(session) = &app.mode
             && was_play
-            && (!in_transition || options.input.is_some())
-            && !screen_before
+            && ((!in_transition && !screen_before) || options.input.is_some())
         {
             let index = writer.tick_index();
             writer.write_tick(&session.trace_tick(&app.framebuffer))?;
@@ -11573,8 +11658,8 @@ pub fn simulate_door(
     seed_fresh_state(pack, &mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
-    drain_mask_toggles(&mut loaded.room, &mut game);
     apply_camera(&mut loaded.room, &mut game, None);
+    drain_mask_toggles(&mut loaded.room, &mut game);
 
     let door = game
         .doors
@@ -11657,8 +11742,8 @@ pub fn simulate_door(
     // groups, camera locks and scripted entity moves included).
     run_room_init(&mut loaded, &mut game);
     game.sync_player(&mut player_state);
-    drain_mask_toggles(&mut loaded.room, &mut game);
     apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    drain_mask_toggles(&mut loaded.room, &mut game);
     // `room_transition_load` runs the handoff after the destination's init and
     // camera setup and before the close SE, so the headless seam exposes the
     // same BGM selection as the interactive session.
@@ -12063,8 +12148,8 @@ fn simulate_loaded_with(
     let lua = load_lua(pack);
     call_lua_init(lua.as_ref(), &mut game);
     call_lua_room_load(lua.as_ref(), &mut game, id);
-    drain_mask_toggles(&mut loaded.room, &mut game);
     apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    drain_mask_toggles(&mut loaded.room, &mut game);
     // Match the engine's room boot: the per-room BGM state machine runs after
     // the init script, so a headless run sees the same channel state.
     bgm::update_room_bgm(&mut game, id, None);
@@ -12126,8 +12211,8 @@ fn simulate_loaded_with(
                 run_room_init(&mut loaded, &mut game);
                 apply_event_requests(&mut game, &mut event_vm);
                 call_lua_room_load(lua.as_ref(), &mut game, loaded.id);
-                drain_mask_toggles(&mut loaded.room, &mut game);
                 apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+                drain_mask_toggles(&mut loaded.room, &mut game);
                 bgm_sleep = update_transition_bgm(&mut game, &session, loaded.id, from);
                 transitions.push(loaded.id);
             } else {
@@ -12442,23 +12527,34 @@ pub fn simulate_death(pack: &Pack, id: RoomId, ticks: usize, hurt: i16) -> Resul
 
 /// Apply the mask-group toggles the scripts queued to the current cut.
 fn drain_mask_toggles(room: &mut RoomState, game: &mut game::GameState) {
-    let Some(cut) = room.cuts.get_mut(room.current_cut) else {
+    let current = room.current_cut;
+    let Some(cut) = room.cuts.get_mut(current) else {
         game.mask_toggles.clear();
         game.sprite_hide = 0;
         return;
     };
-    for toggle in game.mask_toggles.drain(..) {
-        mask::set_group_active(&mut cut.mask_active, toggle.group, toggle.active);
+    // `cut_set` rebuilds the sprite table with every group on each time a
+    // camera goes on screen, then consumes the `room_sprite_hide` mask. The
+    // init script runs before a room's first `cut_set`, so its `aot_switch`
+    // toggles land on a table that is about to be thrown away.
+    if room.mask_table_cut.is_none() {
+        game.mask_toggles.clear();
     }
-    // The queued `room_sprite_hide` mask: bits 0..16 each clear the group they
-    // name, then the mask is consumed. Bit 0 names no group and is inert.
-    if game.sprite_hide != 0 {
+    let reload = std::mem::take(&mut game.mask_reload);
+    if !game.is_re2_room && (room.mask_table_cut != Some(current) || reload) {
+        cut.mask_active = mask::all_active(usize::from(cut.mask_group_count));
+        room.mask_table_cut = Some(current);
+        // Bits 0..16 each clear the group they name, then the mask is
+        // consumed. Bit 0 names no group and is inert.
         for bit in 0..0x10u8 {
             if game.sprite_hide & (1 << bit) != 0 {
                 mask::set_group_active(&mut cut.mask_active, bit, false);
             }
         }
         game.sprite_hide = 0;
+    }
+    for toggle in game.mask_toggles.drain(..) {
+        mask::set_group_active(&mut cut.mask_active, toggle.group, toggle.active);
     }
 }
 
@@ -14490,6 +14586,13 @@ struct RoomContext<'a> {
 /// the action-key scan, the stair/ladder zone branch and then the locomotion
 /// (or weapon) machine run in the original's order.
 fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
+    context.player.enemy_view_points.clear();
+    context.player.enemy_view_points.extend(
+        context.game.entities[1..]
+            .iter()
+            .filter(|e| e.status_flags & 1 != 0 && e.health >= 0 && e.behavior_flags & 0x80 == 0)
+            .map(|e| e.pos),
+    );
     // `player_input_to_behavior`'s action-key scan runs at the top of the
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
@@ -14691,6 +14794,8 @@ fn tick_room_timed(
     } else {
         input
     };
+    // The queue the ribbon submits to lasts one frame.
+    context.game.tyrant.trail.quads.clear();
     // The original's `main_loop` rolls the screen-shake offset at the very top
     // of the rendered frame, before the game task runs its scripts and its
     // per-frame random draw. Doing it here (rather than at render time) keeps
@@ -14714,6 +14819,7 @@ fn tick_room_timed(
     // The special-room-light state advances once per gameplay frame, after the
     // previous frame's overlay was drawn (the original's `main_loop`).
     context.game.advance_special_light();
+    context.game.draw_frame_rand();
     // The original zeroes the per-frame item-use flag bank at the top of every
     // game frame, before the room scripts decide what is usable this frame.
     context.game.clear_item_use_flags();
@@ -14723,6 +14829,9 @@ fn tick_room_timed(
     context.game.check_desk_state();
     context.game.check_itembox_state();
     context.game.check_event_item_usage();
+    if !context.game.is_re2_room && context.game.tick_countdown() {
+        return None;
+    }
     tick_re2_scripts(&mut context);
     {
         let mut host = game::ScdGameHost::new(context.game);
@@ -15842,8 +15951,10 @@ impl InputState {
                 // The PC key map leaves the joystick button that feeds the raw
                 // pad's bit 4 unbound, so the keyboard never raises it.
                 lock_drop: false,
+                lock_pressed: false,
                 slow_motion: false,
                 message_blocked: false,
+                direction_restart: false,
                 analog: self.stick(),
                 quick_turn_pressed: pressed & KEY_QUICK_TURN != 0,
                 reload_pressed: pressed & KEY_RELOAD != 0,
@@ -16757,7 +16868,7 @@ fn render_frame_on(
                 entity.roll,
                 entity.joint_scale,
             );
-            let frozen = game.tyrant.frozen_joints(entity);
+            let frozen = game.tyrant.frozen_joints(entity, &game.joint_trails[slot]);
             let mut joints =
                 anim::joint_matrices_frozen(&model.skeleton, &keyframe, &entity_matrix, &frozen);
             apply_look_at(&mut joints, entity, &game.entity_anims[slot]);
@@ -16772,9 +16883,11 @@ fn render_frame_on(
             &joints,
         );
         tween.joints(tween::Key::Npc(slot, entity.id), &mut joints);
-        if let Some(strips) = crate::joint_trail::Strips::build(entity, &model.mesh, &joints, |t| {
-            debug_view::unculled() || enemy::in_camera_zone(room, room.current_cut, t)
-        }) {
+        if let Some(strips) =
+            crate::joint_trail::Strips::build(&game.joint_trails[slot], &model.mesh, &joints, |t| {
+                debug_view::unculled() || enemy::in_camera_zone(room, room.current_cut, t)
+            })
+        {
             trail_strips.push((Arc::clone(&model), strips));
         }
         models.push(model);
@@ -17281,7 +17394,7 @@ fn render_frame_on(
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
-            joint_colours: crate::render::NO_JOINT_COLOURS,
+            joint_colours: game.entities[0].mesh_joint_colours(),
             hd_name: None,
         });
     }
@@ -17634,6 +17747,7 @@ fn render_frame_on(
         colour: global_colour,
         meshes: &meshes,
         shadows: &shadow_list,
+        ribbon: (&game.tyrant.trail.quads, game.tyrant.trail.tint),
         camera: &camera,
         lighting: &lighting,
         mask_layer: layer.as_ref(),
@@ -21859,6 +21973,7 @@ mod tests {
                 mask_active: 0b0000_0111,
                 ..crate::state::Cut::default()
             }],
+            mask_table_cut: Some(0),
             ..RoomState::default()
         };
         let mut game = game::GameState::default();
@@ -21879,13 +21994,62 @@ mod tests {
 
         assert_eq!(room.cuts[0].mask_active, 0b0001_0101);
         assert!(game.mask_toggles.is_empty());
+    }
 
-        // `room_sprite_hide` (0x49) clears the named groups and is consumed;
-        // bit 0 names no group, and bits at or above 16 are not walked.
-        game.sprite_hide = 1 | (1 << 1) | (1 << 5) | (1 << 16);
+    #[test]
+    fn a_camera_going_on_screen_rebuilds_its_mask_table_and_consumes_the_hides() {
+        let cut = crate::state::Cut {
+            mask_group_count: 3,
+            mask_active: 0b111,
+            ..crate::state::Cut::default()
+        };
+        let mut room = RoomState {
+            cuts: vec![cut.clone(), cut],
+            ..RoomState::default()
+        };
+        let mut game = game::GameState::default();
+        // The init script's toggle precedes the room's first `cut_set`.
+        game.mask_toggles.push(game::MaskToggle {
+            group: 1,
+            active: false,
+        });
+        // Bit 0 names no group, and bits at or above 16 are not walked.
+        game.sprite_hide = 1 | (1 << 2) | (1 << 16);
         drain_mask_toggles(&mut room, &mut game);
-        assert_eq!(room.cuts[0].mask_active, 0b0000_0100);
+        assert_eq!(room.cuts[0].mask_active, 0b101);
         assert_eq!(game.sprite_hide, 0);
+
+        // A hide queued while the camera holds waits for the next `cut_set`;
+        // a toggle reaches the table on screen at once.
+        game.sprite_hide = 1 << 1;
+        game.mask_toggles.push(game::MaskToggle {
+            group: 3,
+            active: false,
+        });
+        drain_mask_toggles(&mut room, &mut game);
+        assert_eq!(room.cuts[0].mask_active, 0b001);
+        assert_eq!(game.sprite_hide, 1 << 1);
+
+        // Room 303's heliport: the hole's group was hidden while the camera
+        // was last up, and comes back when the camera does.
+        room.current_cut = 1;
+        drain_mask_toggles(&mut room, &mut game);
+        assert_eq!(room.cuts[1].mask_active, 0b110);
+        assert_eq!(game.sprite_hide, 0);
+        room.current_cut = 0;
+        drain_mask_toggles(&mut room, &mut game);
+        assert_eq!(room.cuts[0].mask_active, 0b111);
+
+        // `cutnext` to the camera already up still rebuilds.
+        game.mask_toggles.push(game::MaskToggle {
+            group: 2,
+            active: false,
+        });
+        drain_mask_toggles(&mut room, &mut game);
+        assert_eq!(room.cuts[0].mask_active, 0b101);
+        game.mask_reload = true;
+        drain_mask_toggles(&mut room, &mut game);
+        assert_eq!(room.cuts[0].mask_active, 0b111);
     }
 
     #[test]
@@ -27536,7 +27700,7 @@ off_0010:
     }
 
     #[test]
-    fn a_dismissed_message_blanks_a_held_direction_until_release() {
+    fn a_dismissed_message_restarts_a_held_direction() {
         let dir = TempDir::new();
         let pack_path = message_pack(&dir);
         let pack = Pack::open(&pack_path).unwrap();
@@ -27564,9 +27728,7 @@ off_0010:
             crate::message::MessagePhase::WaitInput
         );
 
-        // The dismissal happens after the script pass, so the dismissing
-        // tick's own direction reaches the room; the dismissal records the
-        // blank, which applies from the next tick.
+        // The dismissal records the blank for the next tick.
         session
             .tick(
                 &pack,
@@ -27592,24 +27754,12 @@ off_0010:
             "the dismissing tick's direction still reached the room"
         );
 
-        // Still held: the blank now suppresses the direction.
+        // Still held: the direction keeps working and the blank is spent.
         session
             .tick(&pack, UiInput::default(), held_up, false)
             .unwrap();
-        assert_eq!(session.game.dpad_held & 1, 0);
-
-        // Release, then press again: control resumes.
-        session
-            .tick(&pack, UiInput::default(), player::Input::default(), false)
-            .unwrap();
-        session
-            .tick(&pack, UiInput::default(), held_up, false)
-            .unwrap();
-        assert_eq!(
-            session.game.dpad_held & 1,
-            1,
-            "release restores the direction"
-        );
+        assert_eq!(session.game.dpad_held & 1, 1);
+        assert_eq!(session.game.dpad_blanked, 0);
     }
 
     #[test]
@@ -27718,9 +27868,13 @@ off_0010:
                 false,
             )
             .unwrap();
+        assert!(session.menu.is_none(), "the press frame still runs");
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         assert!(session.menu.is_some(), "START opens the menu");
         assert!(session.game.message_menu, "menu messages use the menu line");
-        assert_eq!(session.game.frame, before, "the menu froze the room");
+        assert_eq!(session.game.frame, before + 1, "the menu froze the room");
         settle_menu_fade(&mut session, &pack);
 
         for _ in 0..5 {
@@ -27736,7 +27890,7 @@ off_0010:
                 )
                 .unwrap();
         }
-        assert_eq!(session.game.frame, before, "the room stays frozen");
+        assert_eq!(session.game.frame, before + 1, "the room stays frozen");
         assert!(session.menu.is_some());
 
         session
@@ -27757,7 +27911,7 @@ off_0010:
         session
             .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
-        assert_eq!(session.game.frame, before + 1, "the room resumes");
+        assert_eq!(session.game.frame, before + 2, "the room resumes");
     }
 
     #[test]
@@ -27787,6 +27941,9 @@ off_0010:
                     false,
                 )
                 .unwrap();
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
             assert!(
                 session.menu.is_none(),
                 "START opened the menu with is_being_attacked={flag:#04x}"
@@ -27812,6 +27969,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         assert!(session.menu.is_some(), "START opens the menu once clear");
     }
 
@@ -27835,6 +27995,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         // The fade starts from the room-entry fade's negative leftover, so the
         // arming frame is inactive; the first step resets it to 0 and darkens
@@ -27934,6 +28097,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         settle_menu_fade(&mut session, &pack);
         assert!(session.menu.is_some());
         assert_eq!(session.music.as_ref().unwrap().active_sfx(), 0);
@@ -27979,6 +28145,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         settle_menu_fade(&mut session, &pack);
         let menu = session.menu.as_mut().unwrap();
         menu.test_set_value("viewing", 1);
@@ -28023,6 +28192,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         settle_menu_fade(&mut session, &pack);
         session
@@ -28157,7 +28329,6 @@ off_0010:
                 .unwrap();
         session.game.message_flags |= START_MESSAGE_BITS;
         session.game.add_item(ITEM_SWORD_KEY, 1);
-        session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
         // The spray slides into the key's slot once the key is used, so the
         // cursor sits on an item the mashed confirm could open.
         session.game.add_item(ITEM_FIRST_AID_SPRAY, 1);
@@ -28178,6 +28349,10 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
         settle_menu_fade(&mut session, &pack);
         session
             .tick(&pack, confirm, player::Input::default(), false)
@@ -29335,6 +29510,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         assert!(session.menu.is_some());
         settle_menu_fade(&mut session, &pack);
 
@@ -29429,6 +29607,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         settle_menu_fade(&mut session, &pack);
         session.open_item_view(&pack, 0x37);
@@ -30304,6 +30485,13 @@ off_0010:
             .tick(&pack, UiInput::default(), pressed(), true)
             .unwrap();
         assert!(
+            !session.game.has_item(ITEM_FIRST_AID_SPRAY),
+            "the viewer sees the message clear on the next frame"
+        );
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(
             session.game.has_item(ITEM_FIRST_AID_SPRAY),
             "closing the read awarded the item"
         );
@@ -30415,6 +30603,13 @@ off_0010:
         });
         session
             .tick(&pack, UiInput::default(), pressed(), true)
+            .unwrap();
+        assert!(
+            session.game.room_actions[1].is_some_and(|a| a.handler != 0),
+            "the viewer sees the message clear on the next frame"
+        );
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         assert!(
             session.game.room_actions[1].is_none_or(|a| a.handler == 0),
@@ -30793,7 +30988,6 @@ off_0010:
                 .unwrap();
         session.game.message_flags |= START_MESSAGE_BITS;
         session.game.add_item(ITEM_SWORD_KEY, 1);
-        session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
 
         session
             .tick(
@@ -30806,6 +31000,10 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
         settle_menu_fade(&mut session, &pack);
         // Confirm opens the submenu, confirm again uses the key: the original
         // sets the close bit and the menu exits through its fade.
@@ -30878,6 +31076,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         assert!(session.menu.is_some());
         settle_menu_fade(&mut session, &pack);
 
@@ -30893,6 +31094,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         assert!(session.map.is_some(), "the map tab opens");
         assert!(session.file.is_none());
@@ -30923,6 +31127,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         let file = session.file.as_ref().expect("the file tab opened");
         assert_eq!(file.value("slot"), 0);
@@ -31028,6 +31235,9 @@ off_0010:
                 false,
             )
             .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
         assert!(session.menu.is_none(), "START waits for the message");
         assert!(session.game.message.active);
     }
@@ -31055,6 +31265,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         assert!(session.menu.is_some(), "START opens the menu");
     }
@@ -31084,6 +31297,9 @@ off_0010:
                 player::Input::default(),
                 false,
             )
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         assert!(session.menu.is_some());
         settle_menu_fade(&mut session, &pack);
@@ -33157,8 +33373,9 @@ end
         let screen_open_at = screen_open_at.expect("the DIED screen opened");
         // The trigger tick starts the machine (the original's case 0 falls
         // through into case 1 and decrements once), 89 more delay ticks, then
-        // 128 fade steps with the first already applied on the arm tick.
-        assert_eq!(screen_open_at, 217);
+        // 128 fade steps with the first already applied on the arm tick. The
+        // screen opens on the frame after the last step.
+        assert_eq!(screen_open_at, 218);
         let title_at = title_at.expect("the title returned");
         assert!(title_at > screen_open_at, "the screen ran before the title");
         assert!(session.death_screen.is_none());
@@ -33213,7 +33430,7 @@ end
             }
         }
         let screen_open_at = screen_open_at.expect("the DIED screen opened");
-        assert_eq!(screen_open_at, 128, "the delay is skipped");
+        assert_eq!(screen_open_at, 129, "the delay is skipped");
     }
 
     /// The DIED screen draws its backdrop and wavy strip from the packed page

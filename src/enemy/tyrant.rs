@@ -11,9 +11,8 @@
 //! - [`Trail`] is the ribbon history: nine slots of a matrix pair, their
 //!   element-wise midpoint and a near/far blade pair, plus the timer word
 //!   whose `0x8000` bit arms the sweep and whose low bits count the tail down.
-//!   The final rasterisation has no consumer in the port (the original's D3D
-//!   strip path; see the ribbon notes in `docs/modding.md`); every value the
-//!   state machine produces is exact and observable.
+//!   The update leaves the tick's quads in [`Trail::quads`] for the renderer
+//!   (`render::ribbon_polys`).
 //! - [`Ghost`] is the two claw copies: one unscaled, one scaled by a pair of
 //!   counters that oscillate between 3000 and 6000 by a signed-byte step.
 //! - [`Limb`] is one severed joint: a free body with X/Y/Z velocity, gravity,
@@ -61,6 +60,7 @@ impl Default for Trail {
             far: [0, 1500, 0],
             tint: 0x70,
             allocated: false,
+            quads: Vec::new(),
         }
     }
 }
@@ -146,8 +146,7 @@ pub fn trail_store(
 /// The draw branch of the ribbon push: scroll the three matrix blocks up one
 /// slot (near/far deliberately do not scroll), write the fresh pair into slot
 /// zero, and walk the history newest-first computing each segment's band and
-/// flare blade corners. The corners are computed for determinism; the port
-/// has no rasterisation consumer (see the module comment).
+/// flare blade corners.
 pub fn trail_scroll(state: &mut TyrantState, a: &Mat4x3, b: &Mat4x3) -> Vec<[[i32; 3]; 4]> {
     let mut corners = Vec::new();
     if !state.trail.allocated {
@@ -360,8 +359,12 @@ impl TyrantState {
     /// The joints of `entity` that are free bodies rather than following the
     /// skeleton: the live severed limbs, once the rocket death set `ty_flags`
     /// bit 3.
-    pub fn frozen_joints(&self, entity: &crate::game::Entity) -> Vec<(usize, Mat4x3)> {
-        let mut held = crate::joint_trail::held_joints(entity);
+    pub fn frozen_joints(
+        &self,
+        entity: &crate::game::Entity,
+        trails: &[crate::game::JointTrail; 32],
+    ) -> Vec<(usize, Mat4x3)> {
+        let mut held = crate::joint_trail::held_joints(trails);
         if !matches!(entity.id, 0x0C | 0x10) || entity.ty_flags() & 8 == 0 {
             return held;
         }

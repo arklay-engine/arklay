@@ -123,8 +123,8 @@ reasons:
   `MSF2_ATTRACT_DEMO`/`MSF2_DEATH_VARIANT` skips and the room dispatch
   exactly. The attract branch is live: a demo reel boots with
   `MSF2_ATTRACT_DEMO` set, and its end raises the dead flag so the screen
-  takes the attract fade. The self-destruct countdown timer is still absent,
-  so the `MSF2_DEATH_VARIANT` branch is never taken.
+  takes the attract fade. The self-destruct clock's own branch is live too:
+  film 2, then the screen with no body.
 - **The sound fade.** `BuildSndFadeTbl`'s volume ramp is not modelled: the
   screen stops the room BGM through the mixer when it opens instead of fading
   it out over the delay. Gameplay audio ends abruptly rather than ramping.

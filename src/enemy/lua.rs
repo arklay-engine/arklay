@@ -166,11 +166,15 @@ mod imp {
             // between two entity updates, so the next tick's script (the
             // state-8 `EntityUpdateWeaponJoint` anchor reads them) and this
             // tick's later effect pass read exactly these matrices.
-            let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+            let frozen = game
+                .tyrant
+                .frozen_joints(&game.entities[slot], &game.joint_trails[slot]);
             let mut worlds =
                 game.entity_anims[slot].joint_worlds_frozen(&game.entities[slot], clips, &frozen);
             if crate::enemy::tyrant::freeze_launched_limbs(game, slot, clips, &worlds) {
-                let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+                let frozen = game
+                    .tyrant
+                    .frozen_joints(&game.entities[slot], &game.joint_trails[slot]);
                 worlds = game.entity_anims[slot].joint_worlds_frozen(
                     &game.entities[slot],
                     clips,
@@ -2353,7 +2357,7 @@ mod imp {
                 game.entities[slot].joint_armed = 0;
                 game.entities[slot].joint_flags_hi = [0; 32];
                 game.entities[slot].joint_blood = [crate::game::JointBlood::default(); 32];
-                game.entities[slot].joint_trails = [crate::game::JointTrail::default(); 32];
+                game.joint_trails[slot] = [crate::game::JointTrail::default(); 32];
                 game.entities[slot].joint_colours = [[0; 3]; 32];
                 game.entities[slot].black_joints = 0;
                 Ok(())
@@ -2911,7 +2915,7 @@ mod imp {
                     entity_pos,
                     [x as i32, 0, z as i32],
                 ) {
-                    crate::enemy::walk::ZonePath::Direct { zone } => Ok((0, zone, 0, 0, 0)),
+                    crate::enemy::walk::ZonePath::Direct { zone, .. } => Ok((0, zone, 0, 0, 0)),
                     crate::enemy::walk::ZonePath::Cross {
                         from,
                         next,
@@ -2931,6 +2935,10 @@ mod imp {
                 let room = unsafe { &*room };
                 let slot = api.slot;
                 let game = api.game();
+                // The GHOST cheat keeps the waypoint off the hidden player.
+                if game.entities[0].hidden_from_enemies {
+                    return Ok(());
+                }
                 crate::enemy::walk::zone_path_update(
                     room,
                     &mut game.zone_path_walk,
@@ -3914,6 +3922,27 @@ mod imp {
                 },
             );
 
+            // The same on one of the player's joints: a kill's sprays.
+            methods.add_method_mut(
+                "spawn_player_joint_effect",
+                |_lua,
+                 api,
+                 (effect_type, depth, joint, x, y, z, yaw): (i64, i64, i64, i64, i64, i64, i64)| {
+                    let game = api.game();
+                    let room_effects = Rc::clone(&game.room_effects);
+                    Ok(crate::effects::create_attached(
+                        game,
+                        &room_effects,
+                        effect_type as u8,
+                        depth as u8,
+                        Attach::Joint(0, joint as u8),
+                        [x as i32, y as i32, z as i32],
+                        yaw as i16,
+                        0,
+                    ))
+                },
+            );
+
             // A billboard at a world point with the identity transform, the
             // original's `g_deadMoveValue` sprite-info spawns.
             methods.add_method_mut(
@@ -3952,12 +3981,23 @@ mod imp {
                 "tint_joint",
                 |_lua, api, (joint, colour, _b, _rgb): (i64, i64, i64, i64)| {
                     let slot = api.slot;
-                    let entity = &mut api.game().entities[slot];
-                    if let Some(entry) = entity.joint_colours.get_mut(joint as usize) {
-                        *entry = [colour as u8, (colour >> 8) as u8, (colour >> 16) as u8];
-                        entity.black_joints &= !(1 << joint);
-                        entity.black_joints |= u32::from(*entry == [0; 3]) << joint;
-                    }
+                    api.game().entities[slot].tint_joint(
+                        joint as usize,
+                        [colour as u8, (colour >> 8) as u8, (colour >> 16) as u8],
+                    );
+                    Ok(())
+                },
+            );
+
+            // The same writer on one of the player's joints: the wound a kill
+            // leaves on the body.
+            methods.add_method_mut(
+                "tint_player_joint",
+                |_lua, api, (joint, colour, _b, _rgb): (i64, i64, i64, i64)| {
+                    api.game().entities[0].tint_joint(
+                        joint as usize,
+                        [colour as u8, (colour >> 8) as u8, (colour >> 16) as u8],
+                    );
                     Ok(())
                 },
             );
@@ -4836,7 +4876,8 @@ mod imp {
                     return Ok(());
                 };
                 let gated = !game.message_freezes_monsters();
-                crate::enemy::tyrant::trail_update(&mut game.tyrant, &claw, &scratch, gated);
+                game.tyrant.trail.quads =
+                    crate::enemy::tyrant::trail_update(&mut game.tyrant, &claw, &scratch, gated);
                 Ok(())
             });
 
@@ -11729,6 +11770,16 @@ mod zombie_tests {
         assert_eq!(entity.action_behavior, 5);
         assert_eq!(game.entities[0].state(), 1, "the player death pose");
         assert_eq!(game.entities[0].action_behavior, 200);
+        // `player_death_animations_tbl[0]`: the wound on the player, not the
+        // zombie.
+        let colours = game.entities[0].mesh_joint_colours();
+        assert_eq!(colours[12], [0x30, 0, 0]);
+        assert_eq!(colours[1], [0x30, 0, 0]);
+        assert_eq!(colours[2], crate::render::NO_JOINT_COLOUR);
+        assert_eq!(
+            game.entities[1].mesh_joint_colours(),
+            crate::render::NO_JOINT_COLOURS
+        );
     }
 
     #[test]
@@ -14531,6 +14582,36 @@ end
     }
 
     #[test]
+    fn ghost_keeps_the_zone_path_waypoint_off_the_player() {
+        let pack = pack_with(&[(
+            "enemy/06/enemy.lua",
+            r#"
+function update(e)
+    e:zone_path_update(4000, 5000)
+end
+"#,
+        )]);
+        let mut game = hunter(2);
+        game.entities[1].player_pos_x = 11;
+        game.entities[1].player_pos_z = 22;
+        game.entities[0].hidden_from_enemies = true;
+        let mut host = LuaEnemyHost::new();
+        assert!(step(&mut host, &mut game, &pack, 1));
+        assert_eq!(
+            (game.entities[1].player_pos_x, game.entities[1].player_pos_z),
+            (11, 22),
+            "the hidden player leaves the waypoint alone"
+        );
+
+        game.entities[0].hidden_from_enemies = false;
+        assert!(step(&mut host, &mut game, &pack, 1));
+        assert_eq!(
+            (game.entities[1].player_pos_x, game.entities[1].player_pos_z),
+            (4000, 5000)
+        );
+    }
+
+    #[test]
     fn hunter_script_sees_typed_scratch_properties() {
         let pack = pack_with(&[(
             "enemy/06/enemy.lua",
@@ -16543,7 +16624,10 @@ mod computer_arms_tests {
             assert_eq!(entity.health, 0x0BEA);
             assert_eq!(entity.yawn_form(), 1, "an in-room Yawn starts grown");
             assert_eq!(entity.ignore(), 1, "the init locks the selector");
-            assert_eq!(entity.action_behavior, 0, "the idle action");
+            assert_eq!(
+                entity.action_behavior, 1,
+                "the segments copy the init's action"
+            );
             assert_eq!(entity.sca_radius, 800);
             assert_eq!(entity.sca_half_height, 2000);
             assert_eq!((entity.shadow_half_x, entity.shadow_half_z), (1000, 1000));

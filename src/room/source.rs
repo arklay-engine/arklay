@@ -605,6 +605,7 @@ impl RoomSource {
             item_count,
             cuts,
             current_cut: 0,
+            mask_table_cut: None,
             room_sfx: 0,
             ambient: self.ambient,
             lights: self.lights,

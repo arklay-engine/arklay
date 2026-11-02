@@ -634,7 +634,7 @@ swallow = function(e)
             e:spawn_player_effect(0, 0, 0, 1000, 0, 0)
             e:spawn_player_effect(0, 0, 0, 1000, 0, 0)
             for k = 3, 8 do
-                e:tint_joint(k, 0x70, 0x484860, 0xA0A0A0)
+                e:tint_player_joint(k, 0x70, 0x484860, 0xA0A0A0)
             end
             e:play_enemy_sound(5)
             e:play_3d_sound_at(2, (e.player_character & 1) + 0x17,
@@ -1400,6 +1400,8 @@ local function init(e)
     e.yawn_hiss = 0
     e.yawn_bite_cool = 0
 
+    -- The segments copy the head's behaviour byte along with the rest.
+    e.action_behavior = 1
     e:yawn_spawn_segments()
     e:yawn_pose_init()
 

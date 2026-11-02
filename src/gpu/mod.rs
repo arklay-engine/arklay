@@ -74,7 +74,7 @@ use crate::draw2d::{self, DrawList};
 use crate::htexture;
 use crate::model::{Texture8, Tmd};
 use crate::pack::Pack;
-use crate::render::{Framebuffer, GameplayScene, root_position};
+use crate::render::{EntityLight, EntityMesh, Framebuffer, GameplayScene, root_position};
 use crate::state::Image;
 use crate::video;
 
@@ -2194,30 +2194,42 @@ impl GpuRenderer {
 
         // The opaque texels of every mesh, then the mirror copy, then the
         // STP texels of the blended packets in the same order.
-        let lights: Vec<_> = scene
-            .meshes
-            .iter()
-            .map(|mesh| {
-                mesh.fixed_light.unwrap_or_else(|| {
-                    scene
+        // A mesh lit per joint draws each joint under its own latched light.
+        let per_joint =
+            |mesh: &EntityMesh<'_>, draw: &dyn Fn(EntityLight) -> scene::DrawUniforms| {
+                if !mesh.per_joint_light {
+                    let light = scene
                         .lighting
-                        .latched(mesh.light_pos.unwrap_or(root_position(mesh.joints)))
-                })
-            })
-            .collect();
-        let lights = &lights;
-        let primary = scene.meshes.iter().enumerate().map(|(index, mesh)| {
-            (
-                index,
-                mesh,
+                        .latched(mesh.light_pos.unwrap_or(root_position(mesh.joints)));
+                    return vec![draw(light)];
+                }
+                mesh.joints
+                    .iter()
+                    .enumerate()
+                    .take(scene::MAX_JOINTS)
+                    .map(|(joint, world)| {
+                        let mut uniforms = draw(scene.lighting.latched(world.t));
+                        uniforms.flags[0] |= !(1u32 << joint);
+                        uniforms
+                    })
+                    .collect()
+            };
+        let per_joint = &per_joint;
+        let primary = scene.meshes.iter().enumerate().flat_map(|(index, mesh)| {
+            let room_object =
+                index < scene.mirror_from && scene.lighting.lights[0].re2_gain.is_none();
+            per_joint(mesh, &|light| {
                 scene::draw_uniforms(
                     scene.camera,
                     mesh,
-                    &lights[index],
-                    index < scene.mirror_from,
+                    &mesh.primary_light(light),
+                    room_object,
                     None,
-                ),
-            )
+                )
+            })
+            .into_iter()
+            .map(move |uniforms| (index, mesh, uniforms))
+            .collect::<Vec<_>>()
         });
         let mirrored = scene.mirror.into_iter().flat_map(|mirror| {
             scene
@@ -2225,18 +2237,19 @@ impl GpuRenderer {
                 .iter()
                 .enumerate()
                 .skip(scene.mirror_from)
-                .map(move |(index, mesh)| {
-                    (
-                        index,
-                        mesh,
+                .flat_map(move |(index, mesh)| {
+                    per_joint(mesh, &|light| {
                         scene::draw_uniforms(
                             &mirror.camera,
                             mesh,
-                            &lights[index],
+                            &mesh.fixed_light.unwrap_or(light),
                             false,
                             Some(mirror),
-                        ),
-                    )
+                        )
+                    })
+                    .into_iter()
+                    .map(move |uniforms| (index, mesh, uniforms))
+                    .collect::<Vec<_>>()
                 })
         });
         let draws: Vec<_> = primary.chain(mirrored).collect();
@@ -2245,7 +2258,13 @@ impl GpuRenderer {
             scene::MeshPass::Blend,
             scene::MeshPass::Additive,
         ] {
-            for &(index, mesh, ref uniforms) in &draws {
+            // The blended packets have no depth to settle their order: the
+            // painter's sort, by each draw's nearest stand-in, its root joint.
+            let mut ordered: Vec<_> = draws.iter().collect();
+            if mesh_pass != scene::MeshPass::Opaque {
+                ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
+            }
+            for &&(index, mesh, ref uniforms) in &ordered {
                 let Some((buffer, page)) = meshes[index] else {
                     continue;
                 };
@@ -3794,6 +3813,7 @@ mod tests {
             colour: [0x80; 3],
             meshes: &meshes,
             shadows: &[],
+            ribbon: (&[], 0),
             camera: &camera,
             lighting: &lighting,
             mask_layer: None,
@@ -3884,6 +3904,7 @@ mod tests {
                 colour: [255; 3],
                 meshes: &[],
                 shadows: &[],
+                ribbon: (&[], 0),
                 camera: &camera,
                 lighting: &lighting,
                 mask_layer: None,
@@ -3995,6 +4016,7 @@ mod tests {
             colour: [255; 3],
             meshes: &meshes,
             shadows: &[],
+            ribbon: (&[], 0),
             camera: &camera,
             lighting: &lighting,
             mask_layer: None,
@@ -4252,6 +4274,7 @@ mod tests {
             colour: [255; 3],
             meshes: &[],
             shadows: &[],
+            ribbon: (&[], 0),
             camera: &camera,
             lighting: &lighting,
             mask_layer: None,
@@ -4364,6 +4387,7 @@ mod tests {
             colour: [255; 3],
             meshes: &[],
             shadows: &[],
+            ribbon: (&[], 0),
             camera: &camera,
             lighting: &lighting,
             mask_layer: None,

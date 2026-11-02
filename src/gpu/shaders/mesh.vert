@@ -28,13 +28,14 @@ layout(location = 3) flat out float out_key;
 
 layout(std140, set = 1, binding = 0) uniform Draw {
     vec4 projection;    // fov, shake x, shake y, near limit
-    vec4 ambient;       // rgb in 0..255
+    vec4 ambient;       // rgb in 0..255, w = the joint that never culls, or -1
     vec4 light_colour[3]; // rgb * 255 / 128
     vec4 tint;          // rgb in 0..255
     uvec4 flags;        // x = hidden joints (bit per joint), y = mode
                         // (1 cull, 2 transparent record, 4 record blends),
                         // zw = texture page size
     vec4 joints[32 * 6]; // per joint: 3 view rows (xyz, w = t), then 3 light vectors
+                         // (w = the joint's colour channel in 0..255, or < 0)
 };
 
 // `RefProjection::project`: view-space point of a stored corner.
@@ -86,7 +87,7 @@ void main() {
     precise vec2 s0 = screen(v0);
     precise vec2 s1 = screen(v1);
     precise vec2 s2 = screen(v2);
-    if ((flags.y & 1u) != 0u) {
+    if ((flags.y & 1u) != 0u && float(joint) != ambient.w) {
         precise float area = (s1.x - s0.x) * (s2.y - s0.y) - (s2.x - s0.x) * (s1.y - s0.y);
         if (!(area > 0.0)) {
             drop_vertex();
@@ -115,7 +116,10 @@ void main() {
     bool blend = ((packed >> 24) & 1u) != 0u;
     bool additive = ((packed >> 31) & 1u) != 0u;
     vec3 shade;
-    if ((blend && !additive) || record) {
+    if (joints[base + 3u].w >= 0.0) {
+        // A `JointSetColorTint` colour replaces the lighting outright.
+        shade = vec3(joints[base + 3u].w, joints[base + 4u].w, joints[base + 5u].w);
+    } else if ((blend && !additive) || record) {
         // A semi-transparent packet and every packet of a transparent record
         // are full-bright: the mesh tint alone. An additive packet (an RE2
         // door part) is lit.

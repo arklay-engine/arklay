@@ -519,9 +519,12 @@ impl AnimPlayer {
         self.display_frame = 0;
         self.timing = 0;
         self.blend_counter = self.full_blend_counter();
-        // Pending steps name keyframes of the clip that was playing; they
-        // cannot be resolved against the new clip's table. Rotations already
-        // added to the joints stay.
+    }
+
+    /// Forget the queued keyframes when the caller is about to play another
+    /// keyframe table: they name entries of the old one. Rotations already
+    /// added to the joints stay.
+    pub fn forget_pending_keyframes(&mut self) {
         self.pending_pose
             .get_mut()
             .retain(|step| matches!(step, PoseStep::Rotate(_)));
@@ -1274,6 +1277,58 @@ mod tests {
         };
         let blended = blend_keyframes(&keyframe, &target, 8, 0x200);
         assert_eq!(blended.rotations[0], [0, 0, 0]);
+    }
+
+    #[test]
+    fn a_clip_that_ends_on_the_switch_tick_still_poses_its_last_frame() {
+        // Joint_move writes the joints as it runs, so the next clip's blend
+        // starts from the frame the finished clip applied that same tick.
+        let clips = vec![
+            Clip {
+                frames: vec![
+                    ClipFrame {
+                        keyframe: 0,
+                        timing: 1,
+                        flags: 0,
+                    },
+                    ClipFrame {
+                        keyframe: 1,
+                        timing: 1,
+                        flags: 0,
+                    },
+                ],
+            },
+            Clip {
+                frames: vec![
+                    ClipFrame {
+                        keyframe: 2,
+                        timing: 1,
+                        flags: 0,
+                    };
+                    4
+                ],
+            },
+        ];
+        let keyframe = |angle| Keyframe {
+            vertex: [0, 0, 0],
+            offset: [0, 0, 0],
+            rotations: vec![[angle, 0, 0]],
+        };
+        let keyframes = vec![keyframe(0), keyframe(0x400), keyframe(0)];
+
+        let mut player = AnimPlayer::new(0);
+        player.update(&clips);
+        player.pose_keyframe(&clips, &keyframes);
+        assert!(player.update(&clips), "the clip ends on this tick");
+        player.set_clip(1);
+        let pose = player.pose_keyframe(&clips, &keyframes).unwrap();
+        assert_eq!(pose.rotations[0], [0x400, 0, 0]);
+
+        // Another bank's table can't resolve the queued entry.
+        player.update(&clips);
+        player.forget_pending_keyframes();
+        let held = player.pose_keyframe(&clips, &keyframes).unwrap();
+        assert_eq!(held.rotations[0], [0x400, 0, 0]);
     }
 
     #[test]

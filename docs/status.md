@@ -239,7 +239,7 @@ The gore state contract is complete: the joint flag bytes (active bit, the
 `0x28` arm/explosion, the `0x0C` severed arm, the `0x88` vomiting head), the
 `0xCC`/`0x40` head tests, the blood scratch the vomit arms and the
 `blood_splatter_physics` fall with its wall/floor billboards and impact cue
-all run; the per-joint colour tints and the async joint-object chunks stay
+and the per-joint colour tints all run; the async joint-object chunks stay
 with the renderer's documented deferral, and the Director's Cut-only branches
 (third SCA record, double-step nibbles, behaviour 11) stay dormant with no DC
 mode in the port. The helpers the zombies needed landed with them: the state
@@ -424,8 +424,8 @@ signed-byte 3000..6000 scale pair, and the five severed limbs' free-body
 physics (X/Y/Z velocity, gravity, bounce budget and tumble rotation). The
 ribbon's and ghosts' state is exact and unit-tested; their rasterisation and
 the per-joint static tints they and the claw hits apply remain the documented
-approximations (the claw ghosts draw as two claw mesh objects, the ribbon's
-quads are computed but not rasterised). The exposed heart is a companion-arena
+approximations (the claw ghosts draw as two claw mesh objects; the ribbon's
+quads rasterise through `render::ribbon_polys` as half-alpha red). The exposed heart is a companion-arena
 clone riding joint 1 with its own 22-entry beat ramp, wobble scale and
 rocket-death drop; the render pass draws ghost, limb and heart meshes from
 their scratch matrices. On the player side the Tyrant's own state-6 table now
@@ -525,9 +525,9 @@ the control gate (death, hit pre-emption, poison), the fall and pool, the
 room-variant dispatch and the screen machine's frame counts and strip math;
 the real-asset `tests/real/death_real.rs` decodes the shipped page, captures the
 deterministic DIED screen, and kills ROOM100's player through the real damage
-helper to reach the screen and return to the title. Documented deviations: the
-Plant 42 DIED-screen joint-hide variant and the countdown-timer death branch
-stay deferred (see `docs/m18-deviations.md`).
+helper to reach the screen and return to the title. Documented deviation: the
+Plant 42 DIED-screen joint-hide variant stays deferred (see
+`docs/m18-deviations.md`).
 
 E7 ports the hound (id `0x02`) as `enemy/02/enemy.lua` and the chimera (id `0x09`)
 as `enemy/09/enemy.lua`. The hound script spells out the single 16-slot dispatch
@@ -838,9 +838,9 @@ chimera and Neptune holds (state 6), and the hound maul, hunter pounce, Plant
 reactions from the same bank. The Lua surface writes the original's field
 pairs (`set_player_animation`/`player_state`/`player_anim_frame_id` at
 `+0x84`, `player_attack_anim` at `+0xBD`), so a bite, grab or strike plays its
-recorded clips and always releases the player. The per-joint tints, joint
-billboards and joint-velocity physics those handlers use in the original stay
-the documented render-contract approximations.
+recorded clips and always releases the player. Their wounds tint the player's
+joints like the original's; the joint billboards and joint-velocity physics
+those handlers use stay the documented render-contract approximations.
 
 ## Road to enemies
 
@@ -861,8 +861,7 @@ Still open, by design:
   unset in normal play.
 - The DC-only Forest zombie (`0x16`) and the DC branches the port does not
   model.
-- The documented render contracts: per-joint colour tints and joint-object
-  gore chunks/trails, the ribbon rasterisation, the Plant 42 DIED-screen
+- The documented render contracts: joint-object gore chunks/trails, the ribbon rasterisation, the Plant 42 DIED-screen
   joint-hide pose, and the flamethrower/acid/rocket per-frame projectile
   damage. Each is catalogued in the module docs and
   `docs/m18-deviations.md`.

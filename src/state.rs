@@ -651,6 +651,9 @@ pub struct RoomState {
     pub item_count: u8,
     pub cuts: Vec<Cut>,
     pub current_cut: usize,
+    /// The cut whose mask groups were last rebuilt for the screen. `None`
+    /// until the room's first camera goes up.
+    pub mask_table_cut: Option<usize>,
     /// The live room-SFX pair index (`g_nextRoomSfxId`): 0 at boot, reloaded
     /// from every door record's sfx byte. Bank-0 `se_play_3d` resolves through
     /// this pair of [`crate::sfx::room_sfx`] entries.

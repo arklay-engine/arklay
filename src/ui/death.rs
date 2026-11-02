@@ -16,7 +16,7 @@
 //! the attract demo or the scripted death variant skips the screen entirely.
 //!
 use crate::state::RoomId;
-use crate::transition::{Fade, Overlay};
+use crate::transition::{Fade, FadeColor, Overlay};
 
 /// Frames the game-over machine waits before the fade in an ordinary room.
 pub const DEATH_DELAY: u8 = 0x5A;
@@ -26,6 +26,8 @@ const ATTRACT_FADE_OUT_COUNTER: i32 = 0x800;
 
 /// The pre-screen fade counter (a 2-alpha-per-frame white-out).
 const DEATH_FADE_OUT_COUNTER: i32 = 0x100;
+/// The ticks between the clock running out and the accumulator's -1.
+const EXPLOSION_DELAY: u8 = 2;
 /// Stage digit of the second mansion floor (the Yawn rooms).
 const STAGE_MANSION_2F: u8 = 2;
 /// The attic, where the first Yawn's death skips the delay.
@@ -77,7 +79,8 @@ pub enum DeathTick {
 /// The game-over machine (the original's death-state counter, delay and fade).
 #[derive(Debug, Clone)]
 pub struct DeathSequence {
-    /// 0 idle, 1 delay, 2 arm the fade, 3 fading, 4 screen, 5 done.
+    /// 0 idle, 1 delay, 2 arm the fade, 3 fading, 4 screen, 5 done, 6-7 the
+    /// explosion's wait.
     state: u8,
     /// The delay countdown.
     delay: u8,
@@ -87,6 +90,8 @@ pub struct DeathSequence {
     fade: Fade,
     /// The sequence ended; the caller should return to the title.
     pub finished: bool,
+    /// The explosion's standalone screen: nothing of the room shows.
+    blank: bool,
 }
 
 impl Default for DeathSequence {
@@ -104,6 +109,7 @@ impl DeathSequence {
             variant: false,
             fade: Fade::inactive(),
             finished: false,
+            blank: false,
         }
     }
 
@@ -144,6 +150,40 @@ impl DeathSequence {
         }
     }
 
+    /// `TimeoutDeathFadeOut`'s explosion branch: no fade. The task sleeps a
+    /// frame, parks the accumulator at -1 and the screen goes standalone, so
+    /// the room is gone until the DIED screen opens. `counter` and `state` are
+    /// the room fade's, which the original's single accumulator still holds.
+    pub fn start_explosion(&mut self, counter: i32, state: i16) {
+        self.fade.set(2, counter, state);
+        self.delay = EXPLOSION_DELAY;
+        self.state = 6;
+    }
+
+    /// `die_state`'s frame after the screen: no sprites queued, so black.
+    /// `counter` and `state` are the screen's last, which the original's single
+    /// accumulator still holds.
+    pub fn end_screen(&mut self, counter: i32, state: i16) {
+        self.fade.set(2, counter, state);
+        self.blank = true;
+    }
+
+    /// Whether the death machine has armed the single accumulator; until then
+    /// it still holds the room fade's values.
+    pub fn owns_fade(&self) -> bool {
+        self.state >= 3
+    }
+
+    /// Whether the explosion's wait owns the tick.
+    pub fn is_explosion(&self) -> bool {
+        matches!(self.state, 6 | 7)
+    }
+
+    /// Whether the explosion's wait ends this tick.
+    pub fn explosion_ends(&self) -> bool {
+        self.state == 7
+    }
+
     /// Advance the machine one tick (before the screen opens).
     pub fn tick(&mut self) -> DeathTick {
         match self.state {
@@ -163,8 +203,9 @@ impl DeathSequence {
                 self.arm_fade(1, DEATH_FADE_OUT_COUNTER);
                 self.state = 3;
             }
+            // The machine reads the accumulator before `main_loop` steps it,
+            // so the frame after the fade wraps still runs the room.
             3 => {
-                self.fade.tick();
                 if self.fade.state() < 0 {
                     self.state = 4;
                     if self.variant {
@@ -173,6 +214,21 @@ impl DeathSequence {
                     }
                     return DeathTick::OpenScreen;
                 }
+                self.fade.tick();
+            }
+            6 => {
+                self.blank = true;
+                self.delay -= 1;
+                if self.delay == 0 {
+                    self.fade.set_state(-1);
+                    self.state = 7;
+                }
+            }
+            7 => {
+                self.blank = false;
+                self.fade = Fade::inactive();
+                self.state = 4;
+                return DeathTick::OpenScreen;
             }
             _ => {}
         }
@@ -207,6 +263,16 @@ impl DeathSequence {
     /// draws with the accumulator's pre-step value (see
     /// [`Fade::drawn_overlay`]).
     pub fn drawn_overlay(&self) -> Option<Overlay> {
+        if self.blank {
+            return Some(Overlay {
+                alpha: 255,
+                color: FadeColor::from_id(2),
+            });
+        }
+        // The explosion's parked accumulator is not a fade.
+        if self.state == 6 {
+            return None;
+        }
         self.fade.drawn_overlay()
     }
 
@@ -225,12 +291,53 @@ impl DeathSequence {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transition::FadeColor;
 
     /// Room `text` in the original's numbering: 6xx and 7xx are the second
     /// mansion visit.
     fn room(text: &str) -> RoomId {
         RoomId::from_original(u16::from_str_radix(&format!("{text}0"), 16).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn the_explosion_blanks_the_room_and_opens_the_screen_without_a_fade() {
+        let mut death = DeathSequence::idle();
+        death.start_explosion(-6144, -4097);
+        assert_eq!(death.fade_counter(), -6144, "the room fade's accumulator");
+        assert_eq!(
+            death.drawn_overlay(),
+            None,
+            "the room shows on the tick it ends"
+        );
+        assert_eq!(death.tick(), DeathTick::None);
+        let black = death.drawn_overlay().expect("the screen went standalone");
+        assert_eq!((black.alpha, black.color), (255, FadeColor::from_id(2)));
+        assert_eq!(death.fade_state(), -4097);
+        assert_eq!(death.tick(), DeathTick::None);
+        assert_eq!(death.fade_state(), -1);
+        assert_eq!(death.tick(), DeathTick::OpenScreen);
+        assert_eq!(death.drawn_overlay(), None);
+    }
+
+    #[test]
+    fn the_frame_after_the_screen_is_black_and_keeps_the_screen_accumulator() {
+        let mut death = DeathSequence::idle();
+        death.start(true, false, false);
+        death.end_screen(0x180, -32512);
+        let black = death.drawn_overlay().expect("no sprites are queued");
+        assert_eq!((black.alpha, black.color), (255, FadeColor::from_id(2)));
+        assert_eq!((death.fade_counter(), death.fade_state()), (0x180, -32512));
+    }
+
+    #[test]
+    fn the_machine_holds_the_room_fade_until_it_arms_its_own() {
+        let mut death = DeathSequence::idle();
+        assert!(!death.owns_fade());
+        death.start(false, false, false);
+        assert!(!death.owns_fade(), "the fall still shows the room fade");
+        for _ in 0..DEATH_DELAY {
+            death.tick();
+        }
+        assert!(death.owns_fade());
     }
 
     #[test]
@@ -268,8 +375,8 @@ mod tests {
         assert_eq!(overlay.color, FadeColor::White);
         assert_eq!(overlay.alpha, 2);
         // 128 adds of 0x100 reach the alpha ceiling, then the accumulator
-        // wraps negative and the screen opens. The arm tick already applied
-        // the first step, so 127 more ticks follow.
+        // wraps negative and the screen opens on the frame after. The arm tick
+        // already applied the first step, so 127 more steps follow.
         let mut opened = None;
         for tick in 0..200 {
             if sequence.tick() == DeathTick::OpenScreen {
@@ -278,7 +385,7 @@ mod tests {
             }
         }
         let opened = opened.expect("the fade completes");
-        assert_eq!(opened, 126);
+        assert_eq!(opened, 127);
     }
 
     #[test]

@@ -11,7 +11,7 @@
 //! joint's world matrix through the shared mesh path.
 
 use crate::anim::Mat4x3;
-use crate::game::{Entity, GameState, JointsBeforeHit};
+use crate::game::{GameState, JointTrail, JointsBeforeHit};
 use crate::model::{Tmd, TmdObject, TmdPrim};
 
 /// The strip slots, shared by every entity (`g_trailSlotUsed`). A joint armed
@@ -36,13 +36,13 @@ pub fn arm(
     timer: i16,
     frame_match: u16,
 ) {
-    if joint >= 32 || game.entities[slot].joint_trails[joint].step & 0x80 != 0 {
+    if joint >= 32 || game.joint_trails[slot][joint].step & 0x80 != 0 {
         return;
     }
     let free = game
-        .entities
+        .joint_trails
         .iter()
-        .flat_map(|entity| &entity.joint_trails)
+        .flatten()
         .filter(|trail| trail.has_slot)
         .count()
         < SLOTS;
@@ -60,7 +60,7 @@ pub fn arm(
     } else {
         GORE
     };
-    let trail = &mut entity.joint_trails[joint];
+    let trail = &mut game.joint_trails[slot][joint];
     if starts {
         trail.active = true;
         trail.has_slot = free;
@@ -111,11 +111,11 @@ pub fn advance(game: &mut GameState) {
             continue;
         }
         for joint in 0..32 {
-            let mut trail = game.entities[slot].joint_trails[joint];
+            let mut trail = game.joint_trails[slot][joint];
             trail.drawn = None;
             if !trail.active || trail.after_compose {
                 trail.after_compose = false;
-                game.entities[slot].joint_trails[joint] = trail;
+                game.joint_trails[slot][joint] = trail;
                 continue;
             }
             // `rotate_entity`'s freeze on the first compose: the world matrix
@@ -145,15 +145,14 @@ pub fn advance(game: &mut GameState) {
                 let flag = entity.joint_flag(joint);
                 entity.set_joint_flag(joint, flag & 0xDE);
             }
-            game.entities[slot].joint_trails[joint] = trail;
+            game.joint_trails[slot][joint] = trail;
         }
     }
 }
 
 /// The joints the armed strips hold at a fixed world matrix, for the compose.
-pub fn held_joints(entity: &Entity) -> Vec<(usize, Mat4x3)> {
-    entity
-        .joint_trails
+pub fn held_joints(trails: &[JointTrail; 32]) -> Vec<(usize, Mat4x3)> {
+    trails
         .iter()
         .enumerate()
         .filter_map(|(joint, trail)| trail.compose_world.map(|world| (joint, world)))
@@ -250,16 +249,12 @@ impl Strips {
     /// `in_zone` tests a joint's world position against the camera's switch
     /// zone; a strip outside it does not draw that frame but keeps counting.
     pub fn build(
-        entity: &Entity,
+        trails: &[JointTrail; 32],
         mesh: &Tmd,
         joints: &[Mat4x3],
         in_zone: impl Fn([i32; 3]) -> bool,
     ) -> Option<Self> {
-        if !entity
-            .joint_trails
-            .iter()
-            .any(|trail| trail.drawn.is_some())
-        {
+        if !trails.iter().any(|trail| trail.drawn.is_some()) {
             return None;
         }
         let mut strips = Self {
@@ -271,7 +266,7 @@ impl Strips {
             hidden: u32::MAX,
         };
         let mut any = false;
-        for (index, trail) in entity.joint_trails.iter().enumerate() {
+        for (index, trail) in trails.iter().enumerate() {
             let Some(frame) = trail.drawn else {
                 continue;
             };

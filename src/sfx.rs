@@ -2967,12 +2967,14 @@ pub(crate) fn integer_sqrt(value: i32) -> i32 {
 ///
 /// Both bytes are in `0x1E..=0x7F`; equal bytes mean centred. Distance
 /// attenuates both channels by `dist3D / 500` while a wider angle pulls the
-/// near channel down towards `0x1E`.
+/// near channel down towards `0x1E`. The height term reads the menu camera's
+/// block (`MATRIX_00d22680`), not the room camera's: that eye height is 0 in
+/// play, so the distance ignores the room camera's height.
 pub fn scene_pan(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, u8) {
     let dx = i32::from((from[0] as i16).wrapping_sub(sound[0] as i16));
     let dz = i32::from((from[2] as i16).wrapping_sub(sound[2] as i16));
     let horiz_dist = integer_sqrt(dx * dx + dz * dz);
-    let dy = from[1] - sound[1];
+    let dy = -sound[1];
     let dist3d = integer_sqrt(horiz_dist * horiz_dist + dy * dy);
 
     let angle_to_sound = angle_between_xz(from[0], from[2], sound[0], sound[2]);
@@ -3241,6 +3243,16 @@ mod tests {
         // At the camera itself the angle is degenerate (0x400) and the pan
         // lands on the original's fallback: the right channel is pulled down.
         assert_eq!(scene_pan([0, 0, 0], [1000, 0, 0], [0, 0, 0]), (85, 127));
+    }
+
+    #[test]
+    fn scene_pan_measures_height_from_the_floor_not_the_camera() {
+        // The eye height the original reads is 0 in play, so a raised camera
+        // doesn't change the distance; the sound's own height still does.
+        let level = scene_pan([0, -3000, 0], [1000, 0, 0], [1000, 0, 0]);
+        assert_eq!(level, scene_pan([0, 0, 0], [1000, 0, 0], [1000, 0, 0]));
+        let raised = scene_pan([0, 0, 0], [1000, 0, 0], [1000, -5000, 0]);
+        assert!(raised.0 < level.0 && raised.1 < level.1);
     }
 
     #[test]

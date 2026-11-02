@@ -115,6 +115,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         item_count,
         cuts,
         current_cut: 0,
+        mask_table_cut: None,
         // A freshly parsed room boots with the wooden-door pair; a door
         // transition reloads it from the record's sfx byte.
         room_sfx: 0,
@@ -190,7 +191,7 @@ fn parse_ambient(data: &[u8]) -> Result<[i16; 3]> {
 }
 
 /// Parse the three room light records, defaulting to dark when absent.
-fn parse_lights(data: &[u8]) -> Result<[Light; LIGHT_COUNT]> {
+pub(crate) fn parse_lights(data: &[u8]) -> Result<[Light; LIGHT_COUNT]> {
     if data.len() < LIGHTS_OFFSET + LIGHT_COUNT * LIGHT_SIZE {
         return Ok([Light::default(); LIGHT_COUNT]);
     }

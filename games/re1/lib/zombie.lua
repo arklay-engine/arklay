@@ -236,6 +236,14 @@ local ATTACK_ANIM = {
     0x1A, 0x09, 0x0E,
 }
 
+-- 0x004bb3b8 - the two player joints a kill wounds, per attacking_direction.
+local DEATH_WOUNDS = {
+    [0] = { 12, 1 },
+    [1] = { 12, 1 },
+    [2] = { 4, 5 },
+    [3] = { 8, 9 },
+}
+
 -- 0x004bb3b0 - player attackDirection per direction; 0x7FFF keeps the
 -- player's facing.
 local ATTACK_DIR_OFFSET = { 0x7FFF, 0x0000, 0x7FFF, 0x0000 }
@@ -869,10 +877,13 @@ attack = function(e)
             e.player_action_behavior = 200
 
             e:spawn_joint_effect_at(0, 0, 2, 0, 0, 0, 0x200)
-            -- The player's death-pose joint tints swap the current entity to
-            -- the player in the original; the joint colour pipeline is the
-            -- documented renderer deferral.
-            e:tint_joint(0, 0x30, 0x80820, 0x606060)
+            -- The wound `player_death_animations_tbl` leaves, per attack
+            -- direction.
+            local wound = DEATH_WOUNDS[e.attacking_direction]
+            if wound then
+                e:tint_player_joint(wound[1], 0x30, 0x80820, 0x606060)
+                e:tint_player_joint(wound[2], 0x30, 0x80820, 0x606060)
+            end
         end
         return
     end
@@ -1701,10 +1712,10 @@ benddown_and_eat = function(e)
             e:play_enemy_sound(3)
         end
         if e.animation_frame_id == 0x0E then
-            -- The player joint tints and joint-anchored sprays are the
-            -- deferred joint-object half; the state contract is the timer
-            -- below.
-            e:tint_joint(0, 0x30, 0x80820, 0x606060)
+            e:tint_player_joint(0, 0x30, 0x80820, 0x606060)
+            e:spawn_player_joint_effect(0, 0, 0, 100, -700, 0, 0)
+            e:tint_player_joint(2, 0x30, 0x80820, 0x606060)
+            e:spawn_player_joint_effect(0, 0, 2, 100, -700, 0, 0)
         end
         local ticks = s16(e.action_ticks_counter)
         e.action_ticks_counter = ticks - 1

@@ -31,10 +31,11 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::game::{
     BgmState, CameraState, FLAG_BANK_COUNT, FlagBank, GameState, ITEM_BOX_SLOTS, InventoryItem,
-    STATE_BYTE_CHARACTER, STATE_BYTE_CUT, STATE_BYTE_ENT_ACTION, STATE_BYTE_EQUIPPED,
-    STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS, STATE_BYTE_MENU_CHOICE,
+    MSF_CHAR_VARIANT, STATE_BYTE_CHARACTER, STATE_BYTE_CUT, STATE_BYTE_ENT_ACTION,
+    STATE_BYTE_EQUIPPED, STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS, STATE_BYTE_MENU_CHOICE,
     STATE_BYTE_PICKED_ITEM, STATE_BYTE_ROOM_CAMERA, STATE_BYTE_SAVES, STATE_BYTE_SELECTED_ITEM,
-    STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES, VoiceState, character_max_health,
+    STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES, STATE_WORD_COUNTDOWN, VoiceState,
+    character_max_health,
 };
 use crate::state::RoomId;
 
@@ -169,7 +170,13 @@ impl SaveFile {
         );
         let mut file = Self {
             prefix: BIOCARD_PREFIX,
-            state_bytes: state.state_bytes,
+            state_bytes: {
+                // The clock's seconds are BioCard 0x21C: they outlive a reload.
+                let mut bytes = state.state_bytes;
+                let seconds = state.state_words[usize::from(STATE_WORD_COUNTDOWN)];
+                bytes[0x1C..0x1E].copy_from_slice(&seconds.to_le_bytes());
+                bytes
+            },
             // The block stores the original's 0-based `g_stageId`, whose
             // stages 6 and 7 are the second mansion visit; the port's
             // `RoomId.stage` is the 1-based RDT digit.
@@ -259,6 +266,11 @@ impl SaveFile {
         state.flags[3].bytes_mut().copy_from_slice(&self.enemies);
         state.flags[7].bytes_mut().copy_from_slice(&self.room_items);
         state.flags[8].bytes_mut()[..20].copy_from_slice(&self.room_flags);
+        // The load screen raises the Jill variant for her saves; the room
+        // scripts' `ck FG_STATUS, 8` tests select the spawns from it.
+        if self.character & 3 != 0 {
+            state.apply_flag(5, MSF_CHAR_VARIANT, 0);
+        }
 
         state.camera = CameraState {
             current_cut: usize::from(self.camera),
@@ -317,6 +329,8 @@ impl SaveFile {
         // bytes the port owns, exactly like the original's prefix-then-fields
         // memcpy. The state image's stage byte is the port's own 1-based digit.
         state.state_bytes = self.state_bytes;
+        state.state_words[usize::from(STATE_WORD_COUNTDOWN)] =
+            u16::from_le_bytes([self.state_bytes[0x1C], self.state_bytes[0x1D]]);
         state.state_bytes[0] = state.id.stage;
         state.state_bytes[1] = self.room;
         state.state_bytes[usize::from(STATE_BYTE_ROOM_CAMERA)] = self.camera;
@@ -1092,6 +1106,16 @@ mod tests {
     }
 
     #[test]
+    fn the_self_destruct_seconds_survive_a_reload() {
+        let mut state = GameState::new(RoomId::parse("3031").unwrap(), &RoomState::default());
+        state.state_words[usize::from(STATE_WORD_COUNTDOWN)] = 123;
+        let file = SaveFile::from_state(&state);
+        let mut loaded = GameState::new(RoomId::parse("3031").unwrap(), &RoomState::default());
+        file.apply_to(&mut loaded);
+        assert_eq!(loaded.state_words[usize::from(STATE_WORD_COUNTDOWN)], 123);
+    }
+
+    #[test]
     fn state_image_round_trips_the_dropped_bio_card_bytes() {
         let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
         // 0x208..0x20F: special-room light, character model id, last enemy
@@ -1106,6 +1130,7 @@ mod tests {
         for (index, byte) in state.state_bytes[0x20..0x24].iter_mut().enumerate() {
             *byte = 0x50 + index as u8;
         }
+        state.state_words[usize::from(STATE_WORD_COUNTDOWN)] = 0x3938;
         state.entities[0].health = 0x1234;
         state.state_bytes[0x2A] = 0x5C;
 
@@ -1207,6 +1232,7 @@ mod tests {
         state.entities[0].health = 96;
         state.entities[0].pos = [1234, 7, -2345];
         state.entities[0].angle = 0x456;
+        state.apply_flag(5, MSF_CHAR_VARIANT, 0);
         // Jill's derived maximum; the block does not carry it.
         state.max_health = 96;
         state.health_status = 0x20;
@@ -1305,6 +1331,10 @@ mod tests {
         let mut restored = GameState::default();
         file.apply_to(&mut restored);
         assert_eq!(restored.entities[0].id, 1);
+        assert!(
+            restored.flags[5].bit(MSF_CHAR_VARIANT),
+            "the Jill spawns need it"
+        );
 
         // And a Chris block restores zero even when the fresh state carried a
         // one: the block wins over the boot's own seeding.

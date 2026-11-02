@@ -1097,6 +1097,8 @@ pub enum ZonePath {
     Direct {
         /// The shared zone.
         zone: u8,
+        /// The point to walk to: the target, or the named zone's midpoint.
+        target: [i32; 2],
     },
     /// The next zone on the path and the midpoint of the edge it shares with
     /// the entity's zone.
@@ -1112,42 +1114,23 @@ pub enum ZonePath {
     Unreachable,
 }
 
-/// The original's zone-walk scratch block. `idx` is the zones on the current
-/// walk, `dir` the per-step scan bound, `best` the best-path zones,
-/// `step`/`prev` the per-step walk and previous-position X/Z pairs.
+/// The original's zone-walk scratch block (`g_zonePathIdx`, `g_zonePathBest`,
+/// `g_zonePathPt`): one block reused by every call in the process.
 ///
-/// `best` holds `step + 1` entries when the goal step is recorded, and `step`
-/// can reach 15 (the walk refuses to extend past index 15), so the array must
-/// hold the entry at index 16.
-///
-/// This is the original's shared scratch (`g_zonePathIdx`, `g_zonePathDir`,
-/// `g_zonePathBest`, `g_zonePathStep`, `g_zonePathPrev`): one block reused by
-/// every call in the process. A walk that finds the target adjacent writes
-/// only the head entries, so the *candidate cursors* left behind by the
-/// previous call are what the next call's scan starts from - a CW walk
-/// entered with a stale cursor can fail where a fresh one would have found a
-/// route. Keep the block on the game state and pass it to every walk.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+/// `idx[i]` is the zone at depth `i` of the current walk, and `idx[i + 1]` is
+/// also depth `i`'s scan cursor: the original addresses the one array at two
+/// bases, so a scan cursor *is* the zone the next depth extends into. `pt[i]`
+/// is the point the walk entered depth `i - 1` at (`pt[1]` is the entity).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ZoneWalk {
-    idx: [u8; 0x10],
-    dir: [u8; 0x10],
-    best: [u8; 0x11],
-    step: [[i16; 2]; 0x10],
-    prev: [[i16; 2]; 0x10],
+    idx: [u8; 0x20],
+    best: [u8; 0x20],
+    pt: [[i16; 2]; 0x20],
 }
 
-impl ZoneWalk {
-    /// A walk with the entity's zone and position seeded. The rest of the
-    /// block keeps whatever the previous walk left there, exactly like the
-    /// original's globals.
-    fn seed(&mut self, start: u8, pos: [i32; 3]) {
-        self.prev[0] = [pos[0] as i16, pos[2] as i16];
-        self.idx[0] = start;
-        self.best[0] = start;
-    }
-}
-
-/// The zone's adjacency word (`flags`), zero for an index outside the table.
+/// The zone's adjacency word (`flags`), zero for zone `0xFF`, "outside every
+/// zone". The original reads whatever file bytes sit at record `0xFF` there;
+/// rooms don't carry those, so a walk from outside finds no way.
 fn zone_flags(room: &RoomState, zone: u8) -> u32 {
     room.walk_zones
         .get(usize::from(zone))
@@ -1165,325 +1148,131 @@ fn sqrt0(value: i32) -> u32 {
 }
 
 /// The shared-edge crossing between two zones as the original's two scratch
-/// words (`g_playerDisplacement` = X, `player_distance_z` = Z).
-fn crossing_xz(room: &RoomState, a: u8, b: u8) -> (i16, i16) {
+/// words, which hold the record's unsigned shorts: a zone edge past `0x7FFF`
+/// measures as a large positive coordinate here but stores as a negative
+/// short in `pt`, like the original.
+fn crossing_xz(room: &RoomState, a: u8, b: u8) -> [i32; 2] {
     let (_, crossing) = walk_zone_shared_edge(room, a, b);
-    (crossing[0] as i16, crossing[1] as i16)
+    crossing.map(|value| i32::from(value as u16))
 }
 
-/// The distance from a walk position's previous-position pair to its current
-/// step pair, the segment length the ring walk subtracts on a backtrack.
-fn step_length(walk: &ZoneWalk, i: usize) -> u32 {
-    let dz = i32::from(walk.step[i][1]) - i32::from(walk.prev[i][1]);
-    let dx = i32::from(walk.step[i][0]) - i32::from(walk.prev[i][0]);
-    sqrt0(dz * dz + dx * dx)
+/// `|a - b|` by the original's `IMUL`/`IMUL`/`ADD` into `SquareRoot0`.
+fn zone_distance(a: [i32; 2], b: [i32; 2]) -> u32 {
+    let dx = a[0] - b[0];
+    let dz = a[1] - b[1];
+    sqrt0(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)))
 }
 
-/// `zone_walk_ccw`: the descending (counter-clockwise) ring walk. Starting
-/// from `walk.idx[0]`, each step probes adjacent zones in descending index
-/// order until the target zone is reached, keeping the shortest total path in
-/// `walk.best`. Returns the first step's zone index, or `0xFF` when no path
-/// exists. Fresh positions start at `count` so the descending scan has a clean
-/// top and can never re-probe a consumed candidate.
+/// `zone_walk_ccw` / `zone_walk_cw`: a depth-first search from `walk.idx[0]`
+/// to `target`, keeping the shortest path (edge midpoint to edge midpoint,
+/// then to the target point) in `walk.best`. Returns the first step's zone, or
+/// `0xFF` when no path exists.
 ///
-/// Every candidate scan is bounded and non-wrapping: a probe below zone 0 ends
-/// the scan instead of wrapping to `0xFF` and reading past the zone table the
-/// way the original's byte arithmetic does. The same clamp keeps the ascending
-/// walk below `count`.
-fn zone_walk_ccw(
+/// The original's two functions are one body with three differences: `cw`
+/// tries a zone's neighbours in ascending order (cursor seeded `0xFF`) and
+/// `ccw` in descending order (seeded with the zone count), the "anything left
+/// to try" mask is the bits above the cursor for `cw` and below it for `ccw`,
+/// and the seed written when a depth is entered.
+fn zone_walk(
     room: &RoomState,
     count: u8,
     target: u8,
-    target_x: i16,
-    target_z: i16,
+    target_point: [i32; 2],
+    cw: bool,
     walk: &mut ZoneWalk,
 ) -> u8 {
-    for k in 1..0x10 {
-        walk.idx[k] = count;
-    }
+    let seed = if cw { 0xFF } else { count };
+    let target_bit = 1u32 << (target & 0x1F);
+    let point = |walk: &ZoneWalk, i: usize| walk.pt[i].map(i32::from);
 
     let mut step: i32 = 0;
-    let mut best: u32 = u32::MAX;
-    let mut dist: u32 = 0;
+    let mut best = u32::MAX;
+    let mut dist = 0u32;
 
     loop {
         let i = step as usize;
         let flags = zone_flags(room, walk.idx[i]);
-        let target_bit = 1u32 << (target & 0x1F);
 
-        if flags & target_bit == 0 {
-            // Target not adjacent: extend the walk.
-            if flags & ((1u32 << (walk.dir[i] & 0x1F)) - 1) == 0 {
-                if i != 0 {
-                    dist = dist.wrapping_sub(step_length(walk, i));
-                }
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
+        if flags & target_bit != 0 {
+            // The target is a neighbour: record the path if it is shorter.
+            walk.idx[i + 1] = target;
+            let crossing = crossing_xz(room, walk.idx[i], target);
+            let back = zone_distance(point(walk, i + 1), crossing);
+            let goal = zone_distance(crossing, target_point);
+            dist = dist.wrapping_add(back).wrapping_add(goal);
+            if dist < best {
+                best = dist;
+                walk.best[1..=i + 1].copy_from_slice(&walk.idx[1..=i + 1]);
             }
-
-            let new_len = step + 1;
-            if new_len >= 0x10 {
-                return finish(best, walk);
+            if step != 0 {
+                dist = dist
+                    .wrapping_sub(goal)
+                    .wrapping_sub(back)
+                    .wrapping_sub(zone_distance(point(walk, i), point(walk, i + 1)));
             }
-            step = new_len;
-            let new_i = new_len as usize;
-
-            // Monotone descending scan of the valid zones: each probe is the
-            // previous candidate minus one.
-            let mut matched = None;
-            let mut candidate = walk.idx[new_i];
-            loop {
-                let zone = candidate.wrapping_sub(1);
-                if zone >= count {
-                    break;
-                }
-                walk.idx[new_i] = zone;
-                if flags & (1u32 << (zone & 0x1F)) != 0 {
-                    matched = Some(zone);
-                    break;
-                }
-                candidate = zone;
-            }
-            let Some(zone) = matched else {
-                if i != 0 {
-                    dist = dist.wrapping_sub(step_length(walk, i));
-                }
-                step = new_len - 2;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
+        } else {
+            // Anything left to try past this depth's cursor? `cw` adds one to
+            // the cursor as a byte, so its `0xFF` seed shifts by nothing and
+            // keeps the whole mask.
+            let mask = if cw {
+                !((1u32 << (walk.idx[i + 1].wrapping_add(1) & 0x1F)) - 1)
+            } else {
+                (1u32 << (walk.idx[i + 1] & 0x1F)) - 1
             };
 
-            // A zone already on the path truncates the walk there.
-            let mut visited = false;
-            let mut back = step - 1;
-            while back >= 0 {
-                if walk.idx[back as usize] == zone {
-                    visited = true;
-                    break;
+            if flags & mask == 0 || i + 2 >= walk.idx.len() {
+                // A dead end gives back the leg into this depth. The depth
+                // guard is the port's: no room's graph gets near it.
+                if step != 0 {
+                    dist = dist.wrapping_sub(zone_distance(point(walk, i), point(walk, i + 1)));
                 }
-                back -= 1;
-            }
-            if visited {
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            }
-
-            let (cross_x, cross_z) = crossing_xz(room, walk.idx[new_i], walk.idx[new_i - 1]);
-            let dx = i32::from(walk.step[new_i][0]) - i32::from(cross_x);
-            let dz = i32::from(walk.step[new_i][1]) - i32::from(cross_z);
-            let segment = sqrt0(dz * dz + dx * dx);
-            dist = dist.wrapping_add(segment);
-            if best <= dist {
-                dist = dist.wrapping_sub(segment);
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            }
-
-            walk.prev[new_i] = [cross_x, cross_z];
-            walk.dir[new_i] = count;
-            continue;
-        }
-
-        // Target adjacent: the goal step.
-        walk.dir[i] = target;
-        let (cross_x, cross_z) = crossing_xz(room, walk.idx[i], target);
-        let back_dx = i32::from(cross_x) - i32::from(walk.prev[i][0]);
-        let back_dz = i32::from(cross_z) - i32::from(walk.prev[i][1]);
-        let goal_dx = i32::from(cross_x) - i32::from(target_x);
-        let goal_dz = i32::from(cross_z) - i32::from(target_z);
-        dist = dist.wrapping_add(sqrt0(back_dz * back_dz + back_dx * back_dx));
-        dist = dist.wrapping_add(sqrt0(goal_dz * goal_dz + goal_dx * goal_dx));
-        if dist < best {
-            let mut n = step + 1;
-            loop {
-                // The original's scratch arrays overlap (idx[n] aliases
-                // dir[n-1]); the goal write above just set dir[i] to the
-                // target, so best[step+1] is the target zone itself.
-                walk.best[n as usize] = if n == step + 1 {
-                    target
-                } else {
-                    walk.idx[n as usize]
+            } else {
+                // Extend: advance this depth's cursor, which is `idx[s]`, to
+                // the next neighbour on its side.
+                step += 1;
+                let s = step as usize;
+                let zone = loop {
+                    let zone = if cw {
+                        walk.idx[s].wrapping_add(1)
+                    } else {
+                        walk.idx[s].wrapping_sub(1)
+                    };
+                    walk.idx[s] = zone;
+                    if flags & (1u32 << (zone & 0x1F)) != 0 {
+                        break zone;
+                    }
                 };
-                best = dist;
-                n -= 1;
-                if n == 0 {
-                    break;
+
+                // A zone already on the path is rejected, and this depth comes
+                // back with its cursor moved on.
+                if !walk.idx[..s - 1].contains(&zone) {
+                    let crossing = crossing_xz(room, walk.idx[s], walk.idx[s - 1]);
+                    let leg = zone_distance(point(walk, s), crossing);
+                    dist = dist.wrapping_add(leg);
+                    if dist < best {
+                        // Enter depth `s`: its entry point and a fresh cursor.
+                        walk.pt[s + 1] = crossing.map(|value| value as i16);
+                        walk.idx[s + 1] = seed;
+                        continue;
+                    }
+                    // Already no shorter than the best: prune.
+                    dist = dist.wrapping_sub(leg);
                 }
             }
         }
-        if step != 0 {
-            dist = dist.wrapping_sub(sqrt0(goal_dz * goal_dz + goal_dx * goal_dx));
-            dist = dist.wrapping_sub(sqrt0(back_dz * back_dz + back_dx * back_dx));
-            dist = dist.wrapping_sub(step_length(walk, i));
-        }
+
         step -= 1;
         if step < 0 {
-            return finish(best, walk);
+            return if best == u32::MAX { 0xFF } else { walk.best[1] };
         }
     }
-}
-
-/// `zone_walk_cw`: the ascending (clockwise) ring walk. Same shape as
-/// [`zone_walk_ccw`] with the scan inverted: each probe is the previous
-/// candidate plus one (a fresh position starts at zero, so zone 0 is skipped
-/// on the ascending scan exactly like the original, and the scan stops at
-/// `count` rather than wrapping through zero).
-fn zone_walk_cw(
-    room: &RoomState,
-    count: u8,
-    target: u8,
-    target_x: i16,
-    target_z: i16,
-    walk: &mut ZoneWalk,
-) -> u8 {
-    let mut step: i32 = 0;
-    let mut best: u32 = u32::MAX;
-    let mut dist: u32 = 0;
-
-    loop {
-        let i = step as usize;
-        let flags = zone_flags(room, walk.idx[i]);
-        let target_bit = 1u32 << (target & 0x1F);
-
-        if flags & target_bit == 0 {
-            if flags & !((1u32 << (walk.dir[i].wrapping_add(1) & 0x1F)) - 1) == 0 {
-                if i != 0 {
-                    dist = dist.wrapping_sub(step_length(walk, i));
-                }
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            }
-
-            let new_len = step + 1;
-            if new_len >= 0x10 {
-                return finish(best, walk);
-            }
-            step = new_len;
-            let new_i = new_len as usize;
-
-            let mut matched = None;
-            let mut candidate = walk.idx[new_i];
-            loop {
-                let zone = candidate.wrapping_add(1);
-                if zone >= count {
-                    break;
-                }
-                walk.idx[new_i] = zone;
-                if flags & (1u32 << (zone & 0x1F)) != 0 {
-                    matched = Some(zone);
-                    break;
-                }
-                candidate = zone;
-            }
-            let Some(zone) = matched else {
-                if i != 0 {
-                    dist = dist.wrapping_sub(step_length(walk, i));
-                }
-                step = new_len - 2;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            };
-
-            let mut visited = false;
-            let mut back = step - 1;
-            while back >= 0 {
-                if walk.idx[back as usize] == zone {
-                    visited = true;
-                    break;
-                }
-                back -= 1;
-            }
-            if visited {
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            }
-
-            let (cross_x, cross_z) = crossing_xz(room, walk.idx[new_i], walk.idx[new_i - 1]);
-            let dx = i32::from(walk.step[new_i][0]) - i32::from(cross_x);
-            let dz = i32::from(walk.step[new_i][1]) - i32::from(cross_z);
-            let segment = sqrt0(dz * dz + dx * dx);
-            dist = dist.wrapping_add(segment);
-            if best <= dist {
-                dist = dist.wrapping_sub(segment);
-                step -= 1;
-                if step < 0 {
-                    return finish(best, walk);
-                }
-                continue;
-            }
-
-            // The original stores the crossing in `step` on the ascending
-            // walk (the descending walk stores it in `prev`); both walks read
-            // it back the same way.
-            walk.step[new_i] = [cross_x, cross_z];
-            walk.dir[new_i] = 0xFF;
-            continue;
-        }
-
-        walk.dir[i] = target;
-        let (cross_x, cross_z) = crossing_xz(room, walk.idx[i], target);
-        let back_dx = i32::from(cross_x) - i32::from(walk.prev[i][0]);
-        let back_dz = i32::from(cross_z) - i32::from(walk.prev[i][1]);
-        let goal_dx = i32::from(cross_x) - i32::from(target_x);
-        let goal_dz = i32::from(cross_z) - i32::from(target_z);
-        dist = dist.wrapping_add(sqrt0(back_dz * back_dz + back_dx * back_dx));
-        dist = dist.wrapping_add(sqrt0(goal_dz * goal_dz + goal_dx * goal_dx));
-        if dist < best {
-            let mut n = step + 1;
-            loop {
-                walk.best[n as usize] = if n == step + 1 {
-                    target
-                } else {
-                    walk.idx[n as usize]
-                };
-                best = dist;
-                n -= 1;
-                if n == 0 {
-                    break;
-                }
-            }
-        }
-        if step != 0 {
-            dist = dist.wrapping_sub(sqrt0(goal_dz * goal_dz + goal_dx * goal_dx));
-            dist = dist.wrapping_sub(sqrt0(back_dz * back_dz + back_dx * back_dx));
-            dist = dist.wrapping_sub(step_length(walk, i));
-        }
-        step -= 1;
-        if step < 0 {
-            return finish(best, walk);
-        }
-    }
-}
-
-/// The walker exit: the best path's first step, or `0xFF` when none was found.
-fn finish(best: u32, walk: &ZoneWalk) -> u8 {
-    if best == u32::MAX { 0xFF } else { walk.best[1] }
 }
 
 /// `zone_path_find`: walk the zone adjacency graph from the entity's zone
 /// toward the target zone with the original's distance-weighted CW/CCW ring
 /// walks. Returns the next zone to walk into and the shared-edge crossing; the
-/// same zone is [`ZonePath::Direct`] and a point outside the grid or a
-/// disconnected target is [`ZonePath::Unreachable`].
+/// same zone is [`ZonePath::Direct`] and a disconnected target is
+/// [`ZonePath::Unreachable`].
 ///
 /// A `to.z == 0` target is the original's alternate entry: `to.x` names a zone
 /// index and the waypoint becomes that zone's midpoint. A start zone of 0
@@ -1495,27 +1284,28 @@ pub fn zone_path_find(
     to: [i32; 3],
 ) -> ZonePath {
     let count = room.walk_zones.len().min(0xFF) as u8;
-    let Some(start) = walk_zone_find(room, from[0], from[2]) else {
-        return ZonePath::Unreachable;
-    };
+    // A point outside every zone is the original's zone `0xFF`, which still
+    // walks. Two such points count as the same zone.
+    let start = walk_zone_find(room, from[0], from[2]).unwrap_or(0xFF);
 
     let (target, target_x, target_z) = if to[2] as i16 == 0 {
         let target = (to[0] & 0xFF) as u8;
         let Some(zone) = room.walk_zones.get(usize::from(target)) else {
             return ZonePath::Unreachable;
         };
-        let x = ((zone.x1 as u16).wrapping_add(zone.x2 as u16) >> 1) as i16;
-        let z = ((zone.z1 as u16).wrapping_add(zone.z2 as u16) >> 1) as i16;
+        let x = ((i32::from(zone.x1 as u16) + i32::from(zone.x2 as u16)) >> 1) as i16;
+        let z = ((i32::from(zone.z1 as u16) + i32::from(zone.z2 as u16)) >> 1) as i16;
         (target, x, z)
     } else {
-        let Some(target) = walk_zone_find(room, to[0], to[2]) else {
-            return ZonePath::Unreachable;
-        };
+        let target = walk_zone_find(room, to[0], to[2]).unwrap_or(0xFF);
         (target, to[0] as i16, to[2] as i16)
     };
 
     if target == start {
-        return ZonePath::Direct { zone: start };
+        return ZonePath::Direct {
+            zone: start,
+            target: [i32::from(target_x), i32::from(target_z)],
+        };
     }
 
     // The shortest way around the zone ring: a delta past half the count
@@ -1533,14 +1323,13 @@ pub fn zone_path_find(
         dir = -dir;
     }
 
-    walk.seed(start, from);
-    let first = if dir < 1 {
-        walk.dir[0] = count;
-        zone_walk_ccw(room, count, target, target_x, target_z, walk)
-    } else {
-        walk.dir[0] = 0xFF;
-        zone_walk_cw(room, count, target, target_x, target_z, walk)
-    };
+    walk.pt[1] = [from[0] as i16, from[2] as i16];
+    walk.idx[0] = start;
+    walk.best[0] = start;
+    let cw = dir >= 1;
+    walk.idx[1] = if cw { 0xFF } else { count };
+    let target_point = [i32::from(target_x), i32::from(target_z)];
+    let first = zone_walk(room, count, target, target_point, cw, walk);
     if first == 0xFF {
         return ZonePath::Unreachable;
     }
@@ -1884,7 +1673,7 @@ fn choose_heading(
     let entity_pos = entity.pos;
     let radius = i32::from(entity.sca_radius);
     let heading = match zone_path_find(room, walk, entity_pos, player_pos) {
-        ZonePath::Direct { zone } => {
+        ZonePath::Direct { zone, .. } => {
             entity.bob_speed = zone | 0x10;
             entity.player_pos_x = player_pos[0] as i16;
             entity.player_pos_z = player_pos[2] as i16;
@@ -2838,8 +2627,20 @@ pub fn angular_view_and_distance(
     max_distance: i16,
     target: [i32; 3],
 ) -> u8 {
-    let dx = target[0].wrapping_sub(entity.pos[0]);
-    let dz = target[2].wrapping_sub(entity.pos[2]);
+    view_wedge(entity.pos, entity.angle, fov_half, max_distance, target)
+}
+
+/// The body of [`angular_view_and_distance`], for a viewer at `pos` facing
+/// `angle`.
+pub(crate) fn view_wedge(
+    pos: [i32; 3],
+    angle: u16,
+    fov_half: i16,
+    max_distance: i16,
+    target: [i32; 3],
+) -> u8 {
+    let dx = target[0].wrapping_sub(pos[0]);
+    let dz = target[2].wrapping_sub(pos[2]);
     let abs_dx = (dx ^ (dx >> 31)).wrapping_sub(dx >> 31);
     let abs_dz = (dz ^ (dz >> 31)).wrapping_sub(dz >> 31);
     if i32::from(max_distance as u16) < abs_dx.wrapping_sub(dx >> 31).wrapping_add(abs_dz) {
@@ -2851,7 +2652,7 @@ pub fn angular_view_and_distance(
         t: [0; 3],
     };
     let forward = [2000, 0, 0];
-    let mut matrix = yaw(i32::from(entity.angle) - i32::from(fov_half));
+    let mut matrix = yaw(i32::from(angle) - i32::from(fov_half));
     let left = apply_matrix_lv(&matrix, forward);
     matrix = compose(&yaw(i32::from(fov_half) * 2), &matrix);
     let right = apply_matrix_lv(&matrix, forward);
@@ -3157,9 +2958,9 @@ pub fn zone_path_update(
     pz: i32,
 ) {
     match zone_path_find(room, walk, entity.pos, [px, 0, pz]) {
-        ZonePath::Direct { .. } => {
-            entity.player_pos_x = px as i16;
-            entity.player_pos_z = pz as i16;
+        ZonePath::Direct { target, .. } => {
+            entity.player_pos_x = target[0] as i16;
+            entity.player_pos_z = target[1] as i16;
         }
         ZonePath::Cross { crossing, .. } => {
             entity.player_pos_x = crossing[0] as i16;
@@ -4080,7 +3881,10 @@ mod tests {
         let room = corridor();
         assert_eq!(
             zone_path_find(&room, &mut ZoneWalk::default(), [50, 0, 50], [60, 0, 60]),
-            ZonePath::Direct { zone: 0 }
+            ZonePath::Direct {
+                zone: 0,
+                target: [60, 60]
+            }
         );
 
         let path = zone_path_find(&room, &mut ZoneWalk::default(), [50, 0, 50], [250, 0, 50]);
@@ -4113,16 +3917,14 @@ mod tests {
     #[test]
     fn zone_path_find_wraps_around_the_ring() {
         let room = ring();
-        // Zone 0 to zone 2 is not adjacent: the ring walk leaves through the
-        // NW neighbour. (Both two-hop routes are equal length; the CW walk's
-        // unwritten previous-position scratch is what selects zone 3, the same
-        // deterministic fresh-scratch result as the original's split arrays.)
+        // Zone 0 to zone 2 is not adjacent. Both two-hop routes are equally
+        // long, so the CW walk keeps the first it tries: the lower neighbour.
         assert_eq!(
             zone_path_find(&room, &mut ZoneWalk::default(), [50, 0, 50], [150, 0, 150]),
             ZonePath::Cross {
                 from: 0,
-                next: 3,
-                crossing: [50, 100]
+                next: 1,
+                crossing: [100, 50]
             }
         );
         // Zone 2 to zone 0 takes the same side of the ring back through
@@ -4133,6 +3935,44 @@ mod tests {
                 from: 2,
                 next: 3,
                 crossing: [100, 150]
+            }
+        );
+    }
+
+    #[test]
+    fn zone_path_find_leaves_a_zone_whose_only_way_out_is_downwards() {
+        // Zone 4 to zone 2 of five is the CW walk (a delta past half the
+        // count), whose scan cursor must be the next depth's zone for it to
+        // reach a neighbour below the start. A dirty scratch must not matter.
+        let room = chain(5);
+        let mut walk = ZoneWalk {
+            idx: [7; 0x20],
+            best: [7; 0x20],
+            pt: [[-1; 2]; 0x20],
+        };
+        assert_eq!(
+            zone_path_find(&room, &mut walk, [450, 0, 50], [2, 0, 0]),
+            ZonePath::Cross {
+                from: 4,
+                next: 3,
+                crossing: [400, 50]
+            }
+        );
+    }
+
+    #[test]
+    fn zone_path_find_treats_two_points_outside_every_zone_as_one_zone() {
+        let room = corridor();
+        assert_eq!(
+            zone_path_find(
+                &room,
+                &mut ZoneWalk::default(),
+                [5000, 0, 5000],
+                [6000, 0, 7000]
+            ),
+            ZonePath::Direct {
+                zone: 0xFF,
+                target: [6000, 7000]
             }
         );
     }
@@ -4169,8 +4009,8 @@ mod tests {
         // (the point [150, 0, 150] resolves into zone 2 as well).
         let expected = ZonePath::Cross {
             from: 0,
-            next: 3,
-            crossing: [50, 100],
+            next: 1,
+            crossing: [100, 50],
         };
         assert_eq!(
             zone_path_find(&room, &mut ZoneWalk::default(), [50, 0, 50], [2, 0, 0]),
@@ -4183,7 +4023,10 @@ mod tests {
         // Standing in the named zone is a direct path.
         assert_eq!(
             zone_path_find(&room, &mut ZoneWalk::default(), [150, 0, 150], [2, 0, 0]),
-            ZonePath::Direct { zone: 2 }
+            ZonePath::Direct {
+                zone: 2,
+                target: [150, 150]
+            }
         );
         // An index outside the table has no zone record to name.
         assert_eq!(
@@ -4215,7 +4058,7 @@ mod tests {
                 [1050, 0, 1050]
             ),
             ZonePath::Unreachable,
-            "a point outside every zone has no path"
+            "zone 0xFF has no neighbours: a walk from outside every zone finds no way"
         );
     }
 

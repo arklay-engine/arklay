@@ -134,6 +134,7 @@ function M.open(api, _args)
     s.pending_combine = nil
     -- A refusal message that closes the submenu when it dismisses.
     s.pending_close = false
+    s.close_hold = false
     -- The message task runs after the menu task in the original, so the
     -- answer reaches the menu one tick after the window hides it.
     s.pending_answer = false
@@ -265,7 +266,9 @@ function M.tick(api)
         if s.frames > 0 then
             s.frames = s.frames - 1
         end
-        if s.frames == 0 then
+        if s.frames == 0 and s.close_hold then
+            s.close_hold = false
+        elseif s.frames == 0 then
             s.closing = false
             s.mode = NAVIGATION
             refresh_selection(api)
@@ -403,9 +406,11 @@ local function apply_action(api)
         else
             api:equip(item)
         end
-        -- The equip toggle closes the submenu through its animation.
+        -- The equip toggle closes the submenu through its animation, and the
+        -- pad comes back a frame after the box is gone.
         s.closing = true
         s.from_action = true
+        s.close_hold = true
     elseif s.action == 0 then
         s.pending_use = true
     elseif s.action == 1 then

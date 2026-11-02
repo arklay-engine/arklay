@@ -412,6 +412,12 @@ pub const MSF2_ATTRACT_DEMO: u8 = 0x23;
 /// through `state_word_set` index 4); `game_loop` draws the timer and fires
 /// the explosion film while it is set. Selector `0x20 + 4 = 0x24`.
 pub const MSF2_COUNTDOWN_ACTIVE: u8 = 0x24;
+/// The `state_words` index of BioCard 0x21C, the seconds the clock has run.
+pub const STATE_WORD_COUNTDOWN: u8 = 4;
+/// The elapsed seconds at which the lab blows up: three minutes.
+pub const COUNTDOWN_EXPIRED: u16 = 180;
+/// The film the expired clock plays (the lab's explosion).
+const COUNTDOWN_FILM: u8 = 2;
 /// `main_state_flags2` bit 0x04000000 (`MSF2_COSTUME_VARIANT`): the player
 /// wears an alternate outfit, picked by [`GameState::costume_variant`]. The
 /// original's `RoomInit` raises it when the wardrobe stores model id `8`, and
@@ -1174,9 +1180,9 @@ pub struct RoomTransition {
 /// A mask-group visibility change requested by `aot_switch` (SCD 0x25).
 ///
 /// The engine applies pending toggles to the current camera cut's
-/// [`MaskLayer`](crate::render::MaskLayer) bits after the scripts run; a new
-/// camera reload starts from the cut's own all-active bits, matching the
-/// original's per-camera sprite table rebuild.
+/// [`MaskLayer`](crate::render::MaskLayer) bits after the scripts run. They
+/// last until a camera next goes on screen, which rebuilds the table with
+/// every group on (`cut_set`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MaskToggle {
     /// One-based mask group id.
@@ -1361,6 +1367,15 @@ mod entity;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
 impl Entity {
+    /// `JointSetColorTint`: the joint then draws unlit in `colour`.
+    pub fn tint_joint(&mut self, joint: usize, colour: [u8; 3]) {
+        if let Some(entry) = self.joint_colours.get_mut(joint) {
+            *entry = colour;
+            self.black_joints &= !(1 << joint);
+            self.black_joints |= u32::from(colour == [0; 3]) << joint;
+        }
+    }
+
     /// The per-joint colours as the renderer takes them.
     pub fn mesh_joint_colours(&self) -> [[u8; 3]; 32] {
         let mut colours = crate::render::NO_JOINT_COLOURS;
@@ -3038,6 +3053,32 @@ pub fn scenario_of(character: u8) -> u8 {
     }
 }
 
+/// The self-destruct clock as one tick draws it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CountdownHud {
+    /// The original's `"%2d:%02d:%d%d"`: minutes, seconds and two digits
+    /// that spin through the second's 30 ticks.
+    pub text: String,
+    /// The last minute's red; green until then.
+    pub red: bool,
+}
+
+impl CountdownHud {
+    fn new(seconds: i16, frame: i32) -> Self {
+        let seconds = i32::from(seconds);
+        Self {
+            text: format!(
+                "{:2}:{:02}:{}{}",
+                2 - seconds / 60,
+                59 - seconds.rem_euclid(60),
+                frame / -3 + 9,
+                (frame + 1) % 10
+            ),
+            red: seconds > 0x77,
+        }
+    }
+}
+
 /// The game state the SCD scripts read and write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameState {
@@ -3120,6 +3161,11 @@ pub struct GameState {
     /// state at every move, and an inline state overflowed the 1 MiB main
     /// thread stack on the `--room` boot.
     pub entities: Box<[Entity; ENTITY_COUNT]>,
+    /// Per-joint gore strips `joint_setup_attack_effect` arms, parallel to
+    /// [`GameState::entities`]: too large for the entity record itself, which
+    /// the debug build copies around the stack. They survive a room load like
+    /// the rest of a slot's record.
+    pub joint_trails: Box<[[JointTrail; 32]; ENTITY_COUNT]>,
     /// Per-slot animation clocks for the scripted entities, parallel to
     /// [`GameState::entities`]. The entity words stay authoritative; the clock
     /// remembers which frame the pose shows for the renderer.
@@ -3230,9 +3276,13 @@ pub struct GameState {
     /// word every tick). The mash consumers read this one: a held button only
     /// counts on the tick it rises.
     pub dpad_pressed: u16,
-    /// Direction bits a state-5/6 message dismissal blanked: while a bit stays
-    /// held the engine suppresses that direction, and releasing it restores
-    /// control, exactly like the original's cleared-and-held pad word.
+    /// The tick count inside the clock's current second (`DAT_004d2294`).
+    pub countdown_frame: i32,
+    /// The self-destruct clock this tick draws, if it ran. Cleared at the top
+    /// of the session tick: a menu or a door draws no clock.
+    pub countdown_hud: Option<CountdownHud>,
+    /// Direction bits a state-5/6 message dismissal cleared from the original's
+    /// previous-pad word: the next tick reads a still-held one as a new press.
     pub dpad_blanked: u16,
     /// Queued `0x3A` camera-switch-zone header rewrites.
     pub zone_edits: Vec<ZoneEdit>,
@@ -3285,9 +3335,7 @@ pub struct GameState {
     /// intro walk, written once when the intro behaviour starts.
     pub hunter_intro_jump_kind: u8,
     /// The pounce grab's one-shot flag (`DAT_004bd2b0`): the grab raises it
-    /// and the player's death screen consumes it while hiding the head. The
-    /// original's image value is non-zero, so the first death screen hides
-    /// the head even without a grab.
+    /// and the player's death screen consumes it while hiding the head.
     pub hunter_grab_one_shot: bool,
     /// `s_mpLastSides`: the shared monster-plant shift register of the sides
     /// previously chosen, so two consecutive poison-plant lunges do not pick
@@ -3341,6 +3389,9 @@ pub struct GameState {
     pub door_yield: Option<DoorYield>,
     /// Mask-group toggles requested by `aot_switch`, consumed by the engine.
     pub mask_toggles: Vec<MaskToggle>,
+    /// A `cut_set` that keeps the camera (`cutnext` to the current cut, leaving
+    /// the save screen) asked the engine to rebuild the mask table.
+    pub mask_reload: bool,
     /// The pending room-sprite hide mask queued by `room_sprite_hide` (0x49):
     /// one bit per group id. Consumed by the engine's mask pass, which clears
     /// the matching groups and empties the mask.
@@ -3559,6 +3610,10 @@ impl Default for GameState {
             stair_entry: None,
             stair_climb: false,
             entities: initial_entities(),
+            joint_trails: vec![[JointTrail::default(); 32]; ENTITY_COUNT]
+                .into_boxed_slice()
+                .try_into()
+                .expect("the trail table is a fixed-size block"),
             entity_anims: vec![crate::enemy::EntityAnim::default(); ENTITY_COUNT]
                 .into_boxed_slice()
                 .try_into()
@@ -3605,7 +3660,7 @@ impl Default for GameState {
             scaled_down_dist: 0,
             hunter_scream_latch: 0,
             hunter_intro_jump_kind: 0,
-            hunter_grab_one_shot: true,
+            hunter_grab_one_shot: false,
             monster_plant_sides: 0,
 
             entity_bkp: 0,
@@ -3623,6 +3678,7 @@ impl Default for GameState {
             transition_door: None,
             door_yield: None,
             mask_toggles: Vec::new(),
+            mask_reload: false,
             sprite_hide: 0,
             item_events: Vec::new(),
             last_interaction: None,
@@ -3634,6 +3690,8 @@ impl Default for GameState {
             special_light_masks: [0; 3],
             dpad_held: 0,
             dpad_pressed: 0,
+            countdown_frame: 0,
+            countdown_hud: None,
             dpad_blanked: 0,
             zone_edits: Vec::new(),
             room_light_edits: Vec::new(),
@@ -3775,6 +3833,13 @@ impl GameState {
         }
     }
 
+    /// A script's `cut_set`: the mask table is rebuilt, which also discards the
+    /// toggles the same step queued for the table it replaces.
+    fn cut_set_masks(&mut self) {
+        self.mask_toggles.clear();
+        self.mask_reload = true;
+    }
+
     /// Store the current room camera id in both the camera state and the
     /// BioCard byte the scripts read with `setb`/`cmpb`.
     pub fn set_camera_cut(&mut self, cut: usize) {
@@ -3866,6 +3931,49 @@ impl GameState {
     ///
     /// The engine's gameplay tick is the single consumer; a headless capture
     /// loop takes and drops the request so a film can never stall the run.
+    /// One tick of the original's self-destruct clock (`0x00480c6a`). The
+    /// seconds count all game; a script writing `0x7FFF` restarts them, and
+    /// `MSF2_COUNTDOWN_ACTIVE` only decides whether they are shown and end in
+    /// the explosion. Returns whether the clock ran out this tick: the
+    /// original then skips the frame's scripts, entities and player.
+    pub fn tick_countdown(&mut self) -> bool {
+        let word = usize::from(STATE_WORD_COUNTDOWN);
+        let dead = self.flags[5].bit(MSF_PLAYER_DEAD);
+        let mut seconds = self.state_words[word] as i16;
+        if self.countdown_frame > 29 || seconds == 0x7FFF {
+            self.countdown_frame = 0;
+            if seconds >= 0x7FFE {
+                seconds = 0;
+            } else if !dead {
+                seconds += 1;
+            }
+            self.state_words[word] = seconds as u16;
+        }
+        if self.flags[5].bit(MSF2_COUNTDOWN_ACTIVE) {
+            if self.state_words[word] == COUNTDOWN_EXPIRED {
+                self.player_flags = 0;
+                self.entities[0].status_flags = 0;
+                self.apply_flag(5, MSF_PLAYER_DEAD, 0);
+                self.apply_flag(5, MSF2_COUNTDOWN_ACTIVE, 1);
+                self.apply_flag(5, MSF_FMV_REQUEST, 0);
+                self.fmv.request = Some(COUNTDOWN_FILM);
+                return true;
+            }
+            self.countdown_hud = Some(CountdownHud::new(seconds, self.countdown_frame));
+        }
+        if !dead {
+            self.countdown_frame += 1;
+        }
+        false
+    }
+
+    /// Whether the seconds stand at the explosion. The original tests only
+    /// the count, so an ordinary death in that one second also takes the
+    /// explosion's way into the game over.
+    pub fn countdown_at_explosion(&self) -> bool {
+        self.state_words[usize::from(STATE_WORD_COUNTDOWN)] == COUNTDOWN_EXPIRED
+    }
+
     pub fn take_fmv_request(&mut self) -> Option<u8> {
         let id = self.fmv.request.take();
         if id.is_some() {
@@ -4313,11 +4421,8 @@ impl GameState {
     /// One native update per active entity slot (1..), called after the event
     /// VM and before the player's physics mirror. Monster slots run the pack's
     /// enemy scripts; character slots run the native driver and pause while a
-    /// message masks [`MESSAGE_FLAG_ENTITIES`]. The original draws `rand()`
-    /// once at the top of every gameplay frame, before any entity thinks; the
-    /// look-at scheduling and the effect behaviours read that frame's value and
-    /// the scripts read it back through the BioCard word that `cmpw 3` indexes.
-    /// Returns the number of slots updated.
+    /// message masks [`MESSAGE_FLAG_ENTITIES`]. Returns the number of slots
+    /// updated.
     pub fn tick_entities(
         &mut self,
         room: &RoomState,
@@ -4325,7 +4430,6 @@ impl GameState {
         pack: &crate::pack::Pack,
         lua: Option<&mut crate::enemy::LuaEnemyHost>,
     ) -> usize {
-        self.draw_frame_rand();
         // The clone chains only draw on the frames their parent script ticks
         // them; clear the live marks before the scripts run and let
         // `enemy::web::update` re-raise them.
@@ -4339,8 +4443,10 @@ impl GameState {
     }
 
     /// Draw this gameplay frame's platform random seed (`g_RandSeed = rand()`),
-    /// the original's first statement of every game_loop iteration. The menu
-    /// request is detected later in the same tick, so the frame START opens the
+    /// the original's first statement of every game_loop iteration, before the
+    /// scripts and the entities: the look-at scheduling and the effect
+    /// behaviours read this frame's value, and the scripts read it back through
+    /// the BioCard word that `cmpw 3` indexes. The menu request is detected later in the same tick, so the frame START opens the
     /// menu still consumes exactly one draw - arklay opens the menu before the
     /// room tick, so it must draw the seed here to keep the shared stream in
     /// step with the reference.
@@ -4996,7 +5102,7 @@ impl GameState {
         self.transition = None;
         self.transition_door = None;
         self.mask_toggles.clear();
-        self.sprite_hide = 0;
+        self.mask_reload = false;
         // A door-animation message is applied while the transition runs and
         // must survive the destination's room boot, so an active window is
         // kept; otherwise the message resets and only the BioCard menu-choice
@@ -8372,8 +8478,7 @@ impl GameState {
         // A dismissal (input, timer or an empty source) releases the pause
         // mask before any replacement the post-actions request. The original
         // blanks the held d-pad direction bits on a state-5/6 dismissal unless
-        // the message's flags bit 0 protects them; the bits stay suppressed
-        // until the key is released.
+        // the message's flags bit 0 protects them.
         if was_active && !self.message.active {
             if self.message_flags & 1 == 0 {
                 self.dpad_blanked |= self.dpad_held & DPAD_DIRECTIONS;
@@ -8846,6 +8951,7 @@ impl ScdHost for ScdGameHost<'_> {
                 self.state
                     .set_camera_cut(usize::from(operand_u8(operands, 0)));
                 self.state.camera.locked = true;
+                self.state.cut_set_masks();
                 StepResult::Continue
             }
             0x0A => {
@@ -8854,6 +8960,7 @@ impl ScdHost for ScdGameHost<'_> {
                     self.state.set_byte(STATE_BYTE_CUT, saved as u8);
                 }
                 self.state.camera.locked = false;
+                self.state.cut_set_masks();
                 StepResult::Continue
             }
             0x23 => {
@@ -9855,6 +9962,73 @@ mod tests {
 
     fn game() -> GameState {
         GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default())
+    }
+
+    #[test]
+    fn the_self_destruct_clock_counts_three_minutes_and_turns_red_for_the_last() {
+        let mut game = GameState::new(RoomId::parse("3031").unwrap(), &RoomState::default());
+        let word = usize::from(STATE_WORD_COUNTDOWN);
+        game.state_words[word] = 0x7FFF;
+        game.apply_flag(5, MSF2_COUNTDOWN_ACTIVE, 0);
+        assert!(!game.tick_countdown());
+        let hud = game.countdown_hud.clone().unwrap();
+        assert_eq!((hud.text.as_str(), hud.red), (" 2:59:91", false));
+        for _ in 0..29 {
+            assert!(!game.tick_countdown());
+        }
+        let hud = game.countdown_hud.clone().unwrap();
+        assert_eq!(
+            hud.text, " 2:59:00",
+            "the second's last tick: 29/-3+9, 30%10"
+        );
+        assert!(!game.tick_countdown());
+        assert_eq!(game.state_words[word], 1);
+        assert_eq!(game.countdown_hud.clone().unwrap().text, " 2:58:91");
+
+        game.state_words[word] = 0x77;
+        game.countdown_frame = 0;
+        game.tick_countdown();
+        assert!(!game.countdown_hud.clone().unwrap().red, "119 seconds in");
+        game.state_words[word] = 0x78;
+        game.tick_countdown();
+        assert!(game.countdown_hud.clone().unwrap().red, "120 seconds in");
+
+        // The second that reaches 180 ends it, without one more drawn.
+        game.state_words[word] = 179;
+        game.countdown_frame = 30;
+        game.countdown_hud = None;
+        game.player_flags = 0x12;
+        assert!(game.tick_countdown());
+        assert_eq!(game.countdown_hud, None);
+        assert_eq!(game.player_flags, 0);
+        assert!(game.flags[5].bit(MSF_PLAYER_DEAD));
+        assert!(!game.flags[5].bit(MSF2_COUNTDOWN_ACTIVE));
+        assert_eq!(game.take_fmv_request(), Some(2));
+        assert!(game.countdown_at_explosion());
+    }
+
+    #[test]
+    fn the_clock_runs_unseen_until_the_flag_and_stops_for_the_dead() {
+        let mut game = GameState::new(RoomId::parse("3031").unwrap(), &RoomState::default());
+        let word = usize::from(STATE_WORD_COUNTDOWN);
+        for _ in 0..31 {
+            assert!(!game.tick_countdown());
+        }
+        assert_eq!(game.state_words[word], 1, "it counts all game");
+        assert_eq!(game.countdown_hud, None, "and shows nothing");
+        game.state_words[word] = 179;
+        game.countdown_frame = 30;
+        assert!(!game.tick_countdown(), "no flag, no explosion");
+        assert_eq!(game.state_words[word], 180);
+
+        game.state_words[word] = 5;
+        game.countdown_frame = 30;
+        game.apply_flag(5, MSF_PLAYER_DEAD, 0);
+        game.tick_countdown();
+        assert_eq!(game.state_words[word], 5);
+        assert_eq!(game.countdown_frame, 0, "the second restarts, then stays");
+        game.tick_countdown();
+        assert_eq!(game.countdown_frame, 0);
     }
 
     #[test]
@@ -12542,12 +12716,7 @@ mod tests {
     #[test]
     fn the_frame_draw_lands_in_bio_card_word_three() {
         let mut state = game();
-        let room = RoomState::default();
-        let pack =
-            crate::pack::Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap())
-                .unwrap();
-        let mut models = crate::enemy::EntityModelCache::default();
-        state.tick_entities(&room, &mut models, &pack, None);
+        state.draw_frame_rand();
 
         // The frame draw is the stream's first value from the CRT default 1.
         let draw = 41u16;
@@ -18408,12 +18577,11 @@ mod tests {
         assert_eq!(entity.hunter_leap_flag(), 0xFF);
         assert_eq!(entity.alt_bias as u16 & 0xFF00, 0x1200);
 
-        // The shared one-shot and scratch defaults. The grab/death one-shot
-        // starts set: the original's image value is non-zero, so the first
-        // death screen hides the head even before any hunter grab.
+        // The shared one-shot and scratch defaults. Only a hunter grab raises
+        // the grab/death one-shot: its image value in Bio.exe is zero.
         let state = GameState::default();
         assert_eq!(state.attract_room_camera_id(), 0x1F);
-        assert!(state.hunter_grab_one_shot);
+        assert!(!state.hunter_grab_one_shot);
         assert_eq!(state.player_distance_z, 0);
         assert_eq!(state.player_displacement, 0);
         assert_eq!(state.scaled_down_dist, 0);

@@ -40,6 +40,9 @@ pub struct Trail {
     /// The alloc ran (the arm and update paths are gated on this in the port;
     /// the original gates on the pool pointer).
     pub allocated: bool,
+    /// The band and flare quads the update walked this tick, in world space:
+    /// what the renderer submits. Empty on a tick the ribbon does not run.
+    pub quads: Vec<[[i32; 3]; 4]>,
 }
 
 /// The two claw-ghost copies and their oscillation counters.

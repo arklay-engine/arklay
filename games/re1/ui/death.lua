@@ -4,11 +4,12 @@
 -- this screen over the corpse. It is the original's display state machine,
 -- stepped once per 30 Hz tick:
 --
--- - 1 waits for the entry white flash (counter 0xFE80 from 0x7FFF) to clear;
+-- - 1 waits for the entry white flash (counter 0xFE80 from 0x7FFF) to clear,
+--   then falls into 2 in the same tick;
 -- - 2 ramps the black overlay 3 per tick and, once it passes 0x3F, draws and
 --   steps the wave amplitude down from 59;
 -- - 3 holds the settled strip for 49 ticks;
--- - 4 arms the black fade-out (counter 0x180);
+-- - 4 arms the black fade-out (counter 0x180) and falls into 5;
 -- - 5 re-waves the strip while the fade runs, then finishes.
 --
 -- Confirm skips the rest at any state. The corpse spins 8 angle units a tick
@@ -23,7 +24,7 @@
 -- two halves fly in from above and below and settle into 16 ripples.
 --
 -- args: x, y, z (the corpse's position), angle (its yaw), fov (the room
--- camera's focal length).
+-- camera's focal length), corpse (zero when the explosion left no body).
 
 local Fade = require("lib/fade")
 
@@ -110,6 +111,7 @@ function M.open(api, args)
         from = { args.x + CAMERA_OFFSET_X, args.y - CAMERA_HEIGHT, args.z },
         to = { args.x, args.y - TARGET_HEIGHT, args.z },
         fov = args.fov,
+        corpse = args.corpse ~= 0,
     }
     s.fade:set(1, FLASH_COUNTER, 0x7FFF)
     M.state = s
@@ -123,13 +125,12 @@ end
 function M.update(api, input)
     -- Only the states that draw the strip set it.
     s.strip = nil
-    local armed = false
     local finished = false
-    if s.state == 1 then
-        if s.fade.state < 0 then
-            s.state = 2
-        end
-    elseif s.state == 2 then
+    if s.state == 1 and s.fade.state < 0 then
+        -- The reveal starts in the tick the flash clears.
+        s.state = 2
+    end
+    if s.state == 2 then
         if s.rect_color < RECT_MAX then
             s.rect = s.rect_color
         end
@@ -151,21 +152,24 @@ function M.update(api, input)
         end
     elseif s.state == 4 then
         s.fade:set(2, FADE_OUT_COUNTER, 0)
-        armed = true
         s.image_idx = WAVE_SETTLED
         s.state = 5
-    elseif s.state == 5 then
+    end
+    if s.state == 5 then
+        -- The tick that arms the fade-out draws the strip too.
         s.strip = s.image_idx
         s.image_idx = s.image_idx + 1
         finished = s.fade.state < 0
     end
-    if not armed then
+    if not finished then
         s.fade:tick()
     end
     if input.confirm then
-        s.fade:set(2, SKIP_COUNTER, 0)
+        s.fade:set(2, SKIP_COUNTER, -1)
         finished = true
     end
+    api:set("fade_counter", s.fade.counter)
+    api:set("fade_state", s.fade.state)
     if finished then
         api:exit("title")
         return
@@ -174,11 +178,11 @@ function M.update(api, input)
     api:set("spin", s.spin)
 end
 
---- The static backdrop, the corpse, the black overlay, the strip and the
+--- The static backdrop, the black overlay, the corpse, the strip and the
 --- screen's own fade. Without the page only the fade draws.
 function M.draw(api)
     api:clear()
-    s.fade:present(api)
+    api:overlay(s.fade:drawn_overlay())
     if not page then
         return
     end
@@ -189,9 +193,12 @@ function M.draw(api)
         api:page_sprite_mirrored(page, 0, BACKDROP_V, QUADRANT_W, QUADRANT_H,
             ox + x, oy + y, QUADRANT_W, QUADRANT_H, 0, 2, mirror_u, mirror_v)
     end
-    api:draw_actor("player", { from = s.from, to = s.to, fov = s.fov })
+    -- The overlay darkens the backdrop only: the body draws over it.
     if s.rect > 0 then
         api:rect(0, 0, width, height, 0, s.rect)
+    end
+    if s.corpse then
+        api:draw_actor("player", { from = s.from, to = s.to, fov = s.fov })
     end
     if s.strip then
         local base = M.strip_base(s.strip)

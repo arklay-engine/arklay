@@ -1727,6 +1727,7 @@ impl Framebuffer {
     /// [`Framebuffer::draw_model`] with a joint visibility mask: an object
     /// whose joint's bit is set is skipped entirely. The DIED screen hides
     /// the player's head joint through this path.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_model_hidden(
         &mut self,
         mesh: &Tmd,
@@ -1735,6 +1736,7 @@ impl Framebuffer {
         camera: &Camera,
         lighting: &Lighting,
         hidden: u32,
+        joint_colours: &[[u8; 3]; 32],
     ) {
         let mut triangles: Vec<Triangle> = Vec::new();
         let light = lighting.latched(root_position(joints));
@@ -1751,7 +1753,7 @@ impl Framebuffer {
                 true,
                 0,
                 [255; 3],
-                None,
+                joint_colours.get(index).copied(),
                 None,
                 false,
                 &mut triangles,
@@ -2482,6 +2484,7 @@ impl DoorScene {
             colour: [255; 3],
             meshes,
             shadows: &[],
+            ribbon: (&[], 0),
             camera: &self.camera,
             lighting: &self.lighting,
             mask_layer: None,
@@ -2503,21 +2506,13 @@ impl DoorScene {
 /// target * alpha) / 255`; truncating here leaves the door and room-entry
 /// fades one LSB dark over most of a fading frame.
 pub fn draw_fade_overlay(framebuffer: &mut Framebuffer, fade: &crate::door::vm::Fade) {
-    let alpha = (fade.state >> 7).clamp(0, 255) as u32;
-    if alpha == 0 {
-        return;
-    }
-    let colour: [u8; 3] = if fade.fade_type == 1 {
-        [255, 255, 255]
+    let alpha = (fade.state >> 7).clamp(0, 255) as u8;
+    let colour = if fade.fade_type == 1 {
+        crate::transition::FadeColor::White
     } else {
-        [0, 0, 0]
+        crate::transition::FadeColor::Black
     };
-    for pixel in framebuffer.rgba.as_chunks_mut::<4>().0 {
-        for (channel, &target) in pixel.iter_mut().zip(&colour) {
-            *channel = ((u32::from(*channel) * (255 - alpha) + u32::from(target) * alpha + 127)
-                / 255) as u8;
-        }
-    }
+    framebuffer.fade_to_color(colour, alpha);
 }
 
 /// A posed entity model ready to be interleaved with a room's mask layer.
@@ -2619,6 +2614,23 @@ impl EntityMesh<'_> {
         camera
     }
 
+    /// The light the primary pass draws this mesh under, from the room's
+    /// latched `light`: its [`fixed_light`](Self::fixed_light),
+    /// [`aliased_light`](Self::aliased_light) and
+    /// [`light_rotation`](Self::light_rotation).
+    pub(crate) fn primary_light(&self, light: EntityLight) -> EntityLight {
+        let light = self.fixed_light.unwrap_or(light);
+        let light = if self.aliased_light {
+            light.aliased_identity_product()
+        } else {
+            light
+        };
+        match &self.light_rotation {
+            Some(rotation) => light.rotated(rotation),
+            None => light,
+        }
+    }
+
     /// Whether joint `index` draws.
     pub(crate) fn joint_visible(&self, index: usize) -> bool {
         index < 32 && self.hidden_joints & (1 << index) == 0
@@ -2700,6 +2712,8 @@ pub struct GameplayScene<'a> {
     pub colour: [u8; 3],
     pub meshes: &'a [EntityMesh<'a>],
     pub shadows: &'a [Shadow<'a>],
+    /// The Tyrant's slash ribbon this tick and its tint byte ([`ribbon_polys`]).
+    pub ribbon: (&'a [[[i32; 3]; 4]], u8),
     pub camera: &'a Camera,
     pub lighting: &'a Lighting,
     pub mask_layer: Option<&'a MaskLayer<'a>>,
@@ -2727,13 +2741,14 @@ pub struct DebugVertex {
 impl GameplayScene<'_> {
     /// Rasterize the scene in software; see [`draw_gameplay_scene_with_effects`].
     pub fn draw(&self, framebuffer: &mut Framebuffer) {
-        draw_gameplay_scene_with_effects(
+        draw_gameplay_scene_with_ribbon(
             framebuffer,
             self.background,
             self.origin,
             self.colour,
             self.meshes,
             self.shadows,
+            self.ribbon,
             self.camera,
             self.lighting,
             self.mask_layer,
@@ -2812,6 +2827,41 @@ pub fn draw_gameplay_scene_with_effects<'a>(
     mirror_from: usize,
     mirror: Option<&MirrorPass>,
 ) {
+    draw_gameplay_scene_with_ribbon(
+        framebuffer,
+        background,
+        origin,
+        colour,
+        meshes,
+        shadows,
+        (&[], 0),
+        camera,
+        lighting,
+        mask_layer,
+        effect_layer,
+        mirror_from,
+        mirror,
+    );
+}
+
+/// [`draw_gameplay_scene_with_effects`] with the Tyrant's slash ribbon, which
+/// the update submits to the shared queue before the ground shadows.
+#[allow(clippy::too_many_arguments)]
+fn draw_gameplay_scene_with_ribbon<'a>(
+    framebuffer: &mut Framebuffer,
+    background: Option<&Image>,
+    origin: [i32; 2],
+    colour: [u8; 3],
+    meshes: &[EntityMesh<'_>],
+    shadows: &[Shadow<'a>],
+    ribbon: (&[[[i32; 3]; 4]], u8),
+    camera: &Camera,
+    lighting: &Lighting,
+    mask_layer: Option<&MaskLayer<'_>>,
+    effect_layer: Option<&EffectLayer<'_>>,
+    mirror_from: usize,
+    mirror: Option<&MirrorPass>,
+) {
     framebuffer.clear();
     if let Some(background) = background {
         framebuffer.draw_background(background, origin, colour);
@@ -2823,8 +2873,9 @@ pub fn draw_gameplay_scene_with_effects<'a>(
     // rounded key ties one wins the tie the way the original's later
     // submission into the shared ordering table does.
     items.extend(
-        shadow_polys(shadows, camera)
+        ribbon_polys(ribbon.0, ribbon.1, camera)
             .into_iter()
+            .chain(shadow_polys(shadows, camera))
             .map(SceneItem::Shadow),
     );
 
@@ -2850,16 +2901,7 @@ pub fn draw_gameplay_scene_with_effects<'a>(
             } else {
                 light
             };
-            let light = mesh.fixed_light.unwrap_or(light);
-            let light = if mesh.aliased_light {
-                light.aliased_identity_product()
-            } else {
-                light
-            };
-            let light = match &mesh.light_rotation {
-                Some(rotation) => light.rotated(rotation),
-                None => light,
-            };
+            let light = mesh.primary_light(light);
             collect_triangles(
                 object,
                 joint,
@@ -3018,6 +3060,114 @@ pub(crate) fn shadow_polys<'a>(shadows: &[Shadow<'a>], camera: &Camera) -> Vec<S
         })
         .collect()
 }
+
+/// The Tyrant's slash ribbon as painter's items: `tyrant_trail_submit`.
+///
+/// Each quad's corners rotate through the stored camera the way
+/// `ProjectEffectSprite` rotates a billboard, clip against view Z 128 around
+/// the quad's ring, and project with float divides truncated to whole pixels.
+/// The ribbon samples no real page: its colour is the tint byte over 128,
+/// red only, at a fixed half alpha ([`RIBBON_PAGE`]). The painter's key is the
+/// mean of the unclipped view Zs, held at the near plane so that a clipped
+/// quad never sorts behind the room.
+pub(crate) fn ribbon_polys(
+    quads: &[[[i32; 3]; 4]],
+    tint: u8,
+    camera: &Camera,
+) -> Vec<ShadowPoly<'static>> {
+    const RIBBON_NEAR: i32 = 128;
+    const RIBBON_LIMIT: i32 = 16000;
+    let (matrix, translation) = ref_camera(camera);
+    let red = (f32::from(tint) * (1.0 / 128.0)).min(1.0);
+    // The queue stores the colour as a truncated byte.
+    let red = f32::from((red * 255.0) as u8) * (1.0 / 255.0);
+    let focal = camera.fov as f32;
+    let page = RIBBON_PAGE.get_or_init(|| Image {
+        width: 2,
+        height: 2,
+        rgba: [255, 255, 255, 128].repeat(4),
+    });
+    let mut polys = Vec::with_capacity(quads.len());
+    for quad in quads {
+        let view = quad.map(|corner| {
+            let point = [corner[0], corner[1].wrapping_neg(), corner[2]];
+            let out: [i32; 3] = std::array::from_fn(|row| {
+                let sum = (0..3).fold(0i32, |sum, axis| {
+                    sum.wrapping_add((matrix[row][axis] << 2).wrapping_mul(point[axis]))
+                });
+                sum.wrapping_add((sum >> 31) & 0x3FFF) >> 14
+            });
+            let depth = match out[2].wrapping_add(translation[2]) {
+                0 => 1,
+                depth => depth,
+            };
+            [
+                out[0].wrapping_add(translation[0]),
+                translation[1].wrapping_sub(out[1]),
+                depth,
+            ]
+        });
+        let mut ring: Vec<[i32; 3]> = Vec::with_capacity(5);
+        for edge in 0..4 {
+            let (a, b) = (view[edge], view[(edge + 1) & 3]);
+            let a_in = a[2] >= RIBBON_NEAR;
+            if a_in {
+                ring.push(a);
+            }
+            if a_in != (b[2] >= RIBBON_NEAR) {
+                let t = ((RIBBON_NEAR - a[2]) << 12) / (b[2] - a[2]);
+                ring.push([
+                    a[0] + (((b[0] - a[0]) * t) >> 12),
+                    a[1] + (((b[1] - a[1]) * t) >> 12),
+                    RIBBON_NEAR,
+                ]);
+            }
+        }
+        if ring.len() < 3 {
+            continue;
+        }
+        let corner = |k: usize| {
+            let [x, y, z] = ring[k];
+            let project = |numerator: i32, centre: i32| {
+                let pixel = (numerator as f32 * focal / z as f32) as i32 + centre;
+                pixel.clamp(-RIBBON_LIMIT, RIBBON_LIMIT) as f32
+            };
+            let wz = z.min(30000) as f32;
+            crate::raster::GlVertex {
+                x: project(x, CENTER_X),
+                y: project(y, CENTER_Y),
+                depth: depth_ndc(wz),
+                w: wz,
+                u: 0.5,
+                v: 0.5,
+                color: [red, 0.0, 0.0, 1.0],
+            }
+        };
+        let last = ring.len() - 1;
+        let commands: &[[usize; 4]] = if ring.len() > 4 {
+            &[[0, 1, 2, 3], [0, 3, 4, 4]]
+        } else {
+            &[[0, 1, 2, 3]]
+        };
+        let mut triangles = Vec::with_capacity(4);
+        for command in commands {
+            let corners = command.map(|k| corner(k.min(last)));
+            triangles.push([corners[0], corners[1], corners[2]]);
+            triangles.push([corners[0], corners[2], corners[3]]);
+        }
+        let sum: i64 = view.iter().map(|corner| i64::from(corner[2])).sum();
+        polys.push(ShadowPoly {
+            key: triangle_depth_key((sum / 4).max(i64::from(RIBBON_NEAR)) as f64),
+            triangles,
+            texture: page,
+        });
+    }
+    polys
+}
+
+/// The white page `tyrant_trail_submit` draws the ribbon with, carrying the
+/// material's fixed alpha: `FUN_004865a0`'s 0.5 as the queue's byte.
+static RIBBON_PAGE: std::sync::OnceLock<Image> = std::sync::OnceLock::new();
 
 /// `DrawFadeSpr`'s queue order: a selection pass over the shadows' mean
 /// entity-corner depths (`RotAverage4`, clamped like the queue's sort key),
@@ -6136,6 +6286,54 @@ mod tests {
     }
 
     /// The ring corners of a single-command shadow: the fan (0,1,2) + (0,2,3).
+    fn ribbon_camera() -> Camera {
+        Camera::from_cut(&Cut {
+            look_at: [0, 0, 1000],
+            fov: 200,
+            ..Cut::default()
+        })
+    }
+
+    #[test]
+    fn the_ribbon_is_half_alpha_red_keyed_at_the_mean_view_depth() {
+        let quad = [
+            [-100, 0, 5000],
+            [100, 0, 5100],
+            [100, 0, 5200],
+            [-100, 0, 5300],
+        ];
+        let polys = ribbon_polys(&[quad], 0x70, &ribbon_camera());
+        assert_eq!(polys.len(), 1);
+        let poly = &polys[0];
+        assert_eq!(poly.triangles.len(), 2);
+        let colour = poly.triangles[0][0].color;
+        assert!((colour[0] - 223.0 / 255.0).abs() < 1e-6);
+        assert_eq!(colour[1..], [0.0, 0.0, 1.0]);
+        assert!(
+            poly.texture
+                .rgba
+                .chunks(4)
+                .all(|t| t == [255, 255, 255, 128])
+        );
+        assert!((5140..=5160).contains(&poly.key), "key {}", poly.key);
+    }
+
+    #[test]
+    fn a_ribbon_quad_behind_the_camera_is_dropped_and_a_clipped_one_held_at_the_near_plane() {
+        let camera = ribbon_camera();
+        let behind = [
+            [0, 0, -5000],
+            [100, 0, -5100],
+            [100, 0, -5200],
+            [0, 0, -5300],
+        ];
+        assert!(ribbon_polys(&[behind], 0x70, &camera).is_empty());
+        let clipped = [[0, 0, -3000], [100, 0, -3000], [100, 0, 200], [0, 0, 200]];
+        let polys = ribbon_polys(&[clipped], 0x70, &camera);
+        assert_eq!(polys.len(), 1);
+        assert_eq!(polys[0].key, 128);
+    }
+
     fn shadow_corners(poly: &ShadowPoly) -> Vec<crate::raster::GlVertex> {
         assert_eq!(poly.triangles.len(), 2);
         let [first, second] = [poly.triangles[0], poly.triangles[1]];
