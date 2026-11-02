@@ -3134,8 +3134,9 @@ pub struct GameState {
     /// The web-thread clone arena shared by the WebSpinner and the Black
     /// Tiger: full entity copies allocated outside the 30-slot enemy list,
     /// walked by [`crate::enemy::web::update`] and drawn by the clone render
-    /// pass. Cleared on every room load.
-    pub web_clones: Box<[Option<crate::enemy::web::WebClone>; crate::enemy::web::CLONE_CAP]>,
+    /// pass. Cleared on every room load. A slice, as cloning a boxed array
+    /// this size overflows a debug build's stack.
+    pub web_clones: Box<[Option<crate::enemy::web::WebClone>]>,
     /// The per-type web-joint registries (WebSpinner, Black Tiger): the leg
     /// joints already carrying a web thread. Reset on every room load.
     pub web_joint_registry: [[u8; 8]; 2],
@@ -3567,10 +3568,7 @@ impl Default for GameState {
             // slots are never materialised as one stack temporary: the debug
             // build's `Box::new(array::from_fn(..))` costs a stack copy of the
             // whole arena, which is what overflows a 1 MiB thread stack.
-            web_clones: vec![None; crate::enemy::web::CLONE_CAP]
-                .into_boxed_slice()
-                .try_into()
-                .expect("the web clone arena is a fixed-size block"),
+            web_clones: vec![None; crate::enemy::web::CLONE_CAP].into_boxed_slice(),
             web_joint_registry: [[0; 8]; 2],
             companions: vec![None; crate::enemy::companion::COMPANION_CAP]
                 .into_boxed_slice()
@@ -4982,13 +4980,13 @@ impl GameState {
         // The web-clone arena and the per-type web-joint registries reset with
         // the room (the original's room-data buffer is rebuilt on load), so no
         // thread or used-leg record leaks across a door.
-        *self.web_clones = std::array::from_fn(|_| None);
+        self.web_clones.fill(None);
         self.web_joint_registry = [[0; 8]; 2];
         self.web_cap_logged = false;
         // The Plant 42 companions live in the room-data buffer too: they reset
         // with the room and the shared body handle dies with them. The Tyrant
         // ribbon/ghost/limb scratch resets with it.
-        *self.companions = std::array::from_fn(|_| None);
+        self.companions.fill(None);
         self.plant42_shared_body = None;
         self.tyrant = crate::enemy::tyrant::TyrantState::default();
         self.player_attacker = None;
