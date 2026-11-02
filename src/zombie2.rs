@@ -61,6 +61,7 @@ mod script;
 /// A collision body, `AT_DATA`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Atd {
+    pub ofs_x: i16,
     pub ofs_y: i16,
     pub at_w: u16,
     pub at_h: u16,
@@ -75,12 +76,20 @@ pub struct Oba {
     pub slot: u8,
     pub be_flg: u32,
     pub atd: Atd,
+    pub pos: [i32; 3],
 }
 
-/// `Oba_ck_hit`: the push out of `other`. The original's extra push, when the
-/// body comes from over or under the other, reads a height nothing sets: on
-/// the level, which is what's ported, it never runs.
-pub fn oba_hit(other: &Oba, be_flg: u32, atd: &mut Atd, pos: &mut [i32; 3]) -> bool {
+/// `Oba_ck_hit`: the push out of `other`.
+///
+/// `old` is the body's place before this tick. A body that comes down onto
+/// another, from clear of its height, goes through to the far side of it.
+pub fn oba_hit(
+    other: &Oba,
+    be_flg: u32,
+    atd: &mut Atd,
+    pos: &mut [i32; 3],
+    old: Option<[i32; 3]>,
+) -> bool {
     if (be_flg | other.be_flg) & 2 != 0 || be_flg & other.be_flg & 0x1000 != 0 || be_flg & 4 != 0 {
         return false;
     }
@@ -101,6 +110,27 @@ pub fn oba_hit(other: &Oba, be_flg: u32, atd: &mut Atd, pos: &mut [i32; 3]) -> b
     }
     let mut push_x = (dx * over) / (distance + 1);
     let mut push_z = (dz * over) / (distance + 1);
+    if let Some(old) = old {
+        let was = i32::from(atd.ofs_y) + old[1] - other.atd.at[1];
+        if was <= -height || was >= height {
+            let through = i32::from(other.atd.at_w) * 2;
+            let crossed =
+                |old: i32, now: i32, at: i32| (old < at && at < now) || (at < old && now < at);
+            let beyond = |push: i32| {
+                if push >= 0 {
+                    push - through
+                } else {
+                    push + through
+                }
+            };
+            if crossed(old[0], pos[0], other.pos[0]) {
+                push_x = beyond(push_x);
+            }
+            if crossed(old[2], pos[2], other.pos[2]) {
+                push_z = beyond(push_z);
+            }
+        }
+    }
     if other.be_flg & 0x10_0000 != 0 {
         if push_x.abs() > 100 {
             if push_x < 0 {
@@ -254,7 +284,15 @@ fn joint_matrix(matrix: &player2::Matrix) -> crate::anim::Mat4x3 {
 const PARTS_MASK: u16 = 0x2000;
 
 /// How many of the work's fields the script keeps for itself.
-const VARS: usize = 12;
+const VARS: usize = 23;
+/// The dog, whose script is `enemy/20/enemy.lua`.
+pub const DOG_ID: u8 = 0x20;
+/// `+0x230`, which `Em_20` counts up while the dog is stuck.
+const DOG_STUCK: usize = 18;
+/// `Ground`, which `Game_loop` finds under each body between ticks.
+pub(crate) const DOG_GROUND: usize = 20;
+/// Part 4's place, which `Game_loop`'s `Joint_trans2` left there between ticks.
+pub(crate) const DOG_JAW: usize = 21;
 
 /// What a zombie keeps beyond a character's [`Work`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -400,6 +438,11 @@ impl Zombie {
 
 /// The rest of the game, as a zombie sees it.
 pub struct World<'a> {
+    /// `Ck_em_id`: how many others of this id are in the room.
+    pub same_id: u8,
+    pub room_enemy: &'a mut u8,
+    /// Where a script faced the player.
+    pub turn_player: Option<u16>,
     pub player: [i32; 3],
     pub player_neck: Option<[i32; 3]>,
     pub player_floor: u8,
@@ -448,6 +491,8 @@ struct Em<'a, 'b, 'c> {
     be_flg: &'a mut u32,
     world: &'a mut World<'c>,
     distance: i32,
+    /// `Old_x`: where the body was when the tick began.
+    old_pos: [i32; 3],
     /// `FUN_00458d40`'s two arms, as they stood before its clip.
     kept_arms: [Option<player2::Matrix>; 2],
 }
@@ -474,6 +519,7 @@ pub fn em_zombie(
         world,
         distance,
         kept_arms: [None; 2],
+        old_pos: [0; 3],
     };
     if let Some(mut body) = em.z.licker.take() {
         licker::run(&mut em, &mut body);
@@ -488,7 +534,107 @@ impl Em<'_, '_, '_> {
         self.mover.work
     }
 
+    /// `Em_20`, which leaves the rest to its script.
+    fn run_dog(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        let before = self.mover.player.pos;
+        self.old_pos = before;
+        self.z.vars[DOG_GROUND] = self
+            .mover
+            .tick
+            .room
+            .sca
+            .as_ref()
+            .map_or(0, |sca| crate::sca::ground_at(sca, before, 0, MASK).height);
+        if let Some([x, _, z]) = self.mover.part_point(4, [0, 0, 0]) {
+            self.z.vars[DOG_JAW] = x;
+            self.z.vars[DOG_JAW + 1] = z;
+        }
+        self.script();
+        self.oba_ck_em();
+        self.sca_ck_em();
+        let body = self.mover.player.pos;
+        if (body[0] == before[0] && body[2] == before[2]) || self.z.at_em_no != NO_BODY {
+            self.z.vars[DOG_STUCK] = (self.z.vars[DOG_STUCK] + 1) & 0xFF;
+        } else {
+            self.z.vars[DOG_STUCK] = 0;
+        }
+    }
+
+    /// `Root_ck` with its own target: the point, or with `by_area` the middle of
+    /// a guide area. 0 finds no way, 1 has its target in this area and 2 is a
+    /// tick without a look. The player's sight is still checked.
+    fn root_ck_to(&mut self, point: [i16; 2], area: Option<u8>) -> u8 {
+        if self.z.sight_turn & 0x7F == 0 {
+            self.z.sight_turn |= 7;
+        }
+        self.z.sight_turn = self.z.sight_turn.wrapping_sub(1);
+        if self.z.sight_turn & 0x80 == 0 {
+            self.z.status &= !STATUS_IN_SIGHT;
+            let from = self.mover.work.neck.position;
+            let to = self.world.player_neck;
+            if let (Some(from), Some(to)) = (from, to)
+                && !sca_ck_line(self.world.sca, from, to, 0x2000)
+            {
+                self.z.status |= STATUS_IN_SIGHT;
+            }
+        }
+        let kind = self.kind();
+        if kind & TYPE_STRAIGHT != 0 {
+            self.work().dest = point;
+            return 2;
+        }
+        if kind & TYPE_HELD != 0 || self.z.sight_turn & 0x80 != 0 {
+            return 2;
+        }
+        let body = self.mover.player.pos;
+        let here = guide_check(self.world.guides, body[0] as i16, body[2] as i16);
+        let middle = area
+            .and_then(|area| self.world.guides.get(usize::from(area)))
+            .map(|guide| {
+                [
+                    ((i32::from(guide.x1) + i32::from(guide.x0)) >> 1) as i16,
+                    ((i32::from(guide.z1) + i32::from(guide.z0)) >> 1) as i16,
+                ]
+            });
+        let (there, target) = match area {
+            Some(area) => (Some(area), middle.unwrap_or(point)),
+            None => (guide_check(self.world.guides, point[0], point[1]), point),
+        };
+        let (Some(here), Some(there)) = (here, there) else {
+            if area.is_none() {
+                return 0;
+            }
+            // Off the guides, heading for an area: `kara_rootck2` searches
+            // from a row past the table, finds no route and writes what its
+            // stack holds. The dog keeps its way here instead.
+            return if self.z.sight_turn == 0 { 1 } else { 2 };
+        };
+        if here == there {
+            self.work().dest = target;
+            return 1;
+        }
+        if self.z.sight_turn == 0 {
+            if let Some(dest) =
+                kara_rootck2(self.world.guides, here, there, [body[0], body[2]], target)
+            {
+                self.work().dest = dest;
+            }
+            return 1;
+        }
+        2
+    }
+
     fn run(&mut self) {
+        if self.mover.tick.id == DOG_ID {
+            self.run_dog();
+            return;
+        }
         // The scripts run first, and `Workm` stops following the skeleton from
         // what the last tick left there.
         for drop in std::mem::take(&mut self.z.script_drops) {
@@ -626,20 +772,41 @@ impl Em<'_, '_, '_> {
     /// `Oba_ck_em`.
     fn oba_ck_em(&mut self) {
         let pos = self.mover.player.pos;
-        self.z.atd.at = [pos[0], pos[1] + i32::from(self.z.atd.ofs_y), pos[2]];
+        let [ahead_x, ahead_z] = self.atd_ahead();
+        self.z.atd.at = [
+            pos[0] + ahead_x,
+            pos[1] + i32::from(self.z.atd.ofs_y),
+            pos[2] + ahead_z,
+        ];
         self.z.at_em_no = NO_BODY;
+        let old = (self.mover.tick.id == DOG_ID).then_some(self.old_pos);
         for other in self.world.bodies {
             let body = &mut self.mover.player.pos;
-            if oba_hit(other, *self.be_flg, &mut self.z.atd, body) {
+            let mut other = *other;
+            if other.slot == PLAYER_BODY {
+                other.be_flg = self.world.pl.be_flg;
+            }
+            if oba_hit(&other, *self.be_flg, &mut self.z.atd, body, old) {
                 self.z.at_em_no = other.slot;
             }
         }
     }
 
-    /// `Sca_ck_em`, with the zombies' `0x400`.
+    /// `Oba_set_ofs`: `Ofs_x` turned with the body. Only the dog has one.
+    fn atd_ahead(&self) -> [i32; 2] {
+        let along = i32::from(self.z.atd.ofs_x);
+        let angle = i32::from(self.mover.player.angle);
+        [
+            (along * player2::rcos(angle)) >> 12,
+            (-along * player2::rsin(angle)) >> 12,
+        ]
+    }
+
+    /// `Sca_ck_em`, with the zombies' `0x400`. It checks `Atd`, not `Pos`.
     fn sca_ck_em(&mut self) {
         self.z.sca_info = 0;
         let radius = i32::from(self.z.atd.w);
+        let [ahead_x, ahead_z] = self.atd_ahead();
         let room = self.mover.tick.room;
         let body = &mut *self.mover.player;
         if *self.be_flg & BE_NO_SCA == 0
@@ -647,19 +814,23 @@ impl Em<'_, '_, '_> {
         {
             let [old_x, old_z] = body.collision_mirror;
             let prev = [old_x, body.pos[1], old_z];
-            let resolved = crate::sca::resolve_masked(sca, MASK, prev, body.pos, radius);
+            let at = [body.pos[0] + ahead_x, body.pos[1], body.pos[2] + ahead_z];
+            let floor = self.z.floor;
+            let resolved = crate::sca::resolve_on_floor(sca, MASK, prev, at, radius, floor);
             // `Sca_ck_info`'s push moves what `Null_pos_set` adds to as well.
-            let (dx, dz) = (resolved.pos[0] - body.pos[0], resolved.pos[2] - body.pos[2]);
+            let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
             let base = &mut self.mover.work.base;
             base[0] = base[0].wrapping_add(dx as i16);
             base[2] = base[2].wrapping_add(dz as i16);
             // It moves the body through `Atd`, which others then push against.
             self.z.atd.at[0] += dx;
             self.z.atd.at[2] += dz;
-            body.pos = resolved.pos;
+            body.pos[0] += dx;
+            body.pos[1] = resolved.pos[1];
+            body.pos[2] += dz;
             self.z.sca_info = u32::from(resolved.hit);
         }
-        body.collision_mirror = [body.pos[0], body.pos[2]];
+        body.collision_mirror = [body.pos[0] + ahead_x, body.pos[2] + ahead_z];
     }
 
     /// `Root_ck`, toward the player.
@@ -1383,6 +1554,7 @@ mod tests {
     #[test]
     fn a_body_is_pushed_out_of_another() {
         let other = Oba {
+            pos: [0; 3],
             atd: Atd {
                 at_w: 500,
                 at_h: 0x5DC,
@@ -1398,7 +1570,7 @@ mod tests {
             ..Atd::default()
         };
         let mut pos = [600, 0, 0];
-        assert!(oba_hit(&other, 0, &mut atd, &mut pos));
+        assert!(oba_hit(&other, 0, &mut atd, &mut pos, None));
         assert_eq!(pos, [1006, 0, 0]);
     }
 
@@ -1406,7 +1578,7 @@ mod tests {
     fn a_body_with_its_flag_off_isnt_pushed() {
         let other = Oba::default();
         let mut atd = Atd::default();
-        assert!(!oba_hit(&other, 2, &mut atd, &mut [0; 3]));
+        assert!(!oba_hit(&other, 2, &mut atd, &mut [0; 3], None));
     }
 
     #[test]

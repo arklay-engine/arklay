@@ -3863,7 +3863,10 @@ impl GameSession {
     /// RE2's game over, after the tick's routines: `Game_loop` starts `Die`
     /// on the tick the player's life falls below zero.
     fn tick_re2_die(&mut self, pack: &Pack) {
-        if self.re2_die.is_none() && self.game.entities[0].health < 0 && !self.game.debug.invincible
+        if self.re2_die.is_none()
+            && self.game.entities[0].health < 0
+            && !self.game.re2.player.die_held_back
+            && !self.game.debug.invincible
         {
             let player = &self.game.re2.player;
             let held = player.routine[0] == crate::player2::MODE_HELD_DIE || player.held_kill;
@@ -5324,6 +5327,11 @@ impl GameSession {
         // A room's scripts read the flags and the stream as they start.
         if self.game.re2.banks != flags || self.game.re2.rnd != rnd {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
+            // The first pass's areas were armed by the flags as they stood.
+            if self.loaded.re2_vm.is_some() {
+                self.game.room_actions = [None; game::ROOM_ACTION_SLOTS];
+                self.game.doors = [None; game::ROOM_ACTION_SLOTS];
+            }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
                 &self.loaded.re2_effects,
@@ -14298,6 +14306,7 @@ fn run_re2_init(
     game.re2.set_flag(1, 1, scenario);
     game.re2.characters = Default::default();
     game.re2.enemies = 0;
+    game.re2.room_enemy = 0;
     game.re2.sound_types = [0; 2];
     game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;
@@ -14836,6 +14845,10 @@ fn tick_room_timed(
             context.npc_models,
             context.enemy_lua.as_deref_mut(),
         );
+        if let Some(angle) = context.game.re2.player.turn_to.take() {
+            context.player.angle = angle;
+            context.game.entities[0].angle = angle;
+        }
     }
     if state != 1 || frozen {
         // The pad-driven idle did not run this tick, so its reference scratch

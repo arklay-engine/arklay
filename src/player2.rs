@@ -320,6 +320,11 @@ pub struct Work {
     /// `fg_system`'s `0x100` when no hold of `MODE_HELD_DIE` set it: a bite that
     /// killed outright.
     pub held_kill: bool,
+    /// A dog's bite took the last life, but `fg_system`'s `0x4000000`, which
+    /// starts `Die`, waits until the dog has the player down.
+    pub die_held_back: bool,
+    /// The angle an enemy turned the player to this tick.
+    pub turn_to: Option<u16>,
     /// `+0x164`, which `Null_pos_set` adds a clip's movement to.
     pub base: [i16; 3],
     /// `Timer0`, `Timer1` and `Timer2` of the held states.
@@ -393,6 +398,8 @@ const SHOT_PART: usize = 11;
 
 /// `Neck_no`: the head's joint, the same for every player.
 pub const NECK_JOINT: usize = 8;
+/// `FUN_0045f5b0`: the dog turns two joints, and leaves `Neck_no` on the first.
+const DOG_NECK: [usize; 2] = [2, 3];
 /// `Pl_init`'s turn rates and limits of [`NECK_JOINT`], yaw then pitch.
 const NECK_RATES: [i32; 2] = [0x60, 0x60];
 const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
@@ -426,6 +433,8 @@ pub struct Neck {
     /// `+0x1B8`: whose head, in [`Necks`], `Pl_neck` has it look at. `None` is
     /// its own, so it follows its pose.
     pub target: Option<usize>,
+    /// The second joint's yaw, when the neck has two (`DOG_NECK`).
+    pub turn_two: Option<i16>,
     /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
     /// so a new room doesn't restart it.
     pub wait: u8,
@@ -454,6 +463,14 @@ impl Work {
 impl Neck {
     /// Add the turn to `pose`, as `Rot_neck` does around its `RotMatrix`.
     pub fn apply(&self, pose: &mut Keyframe) {
+        if let Some(turn_two) = self.turn_two {
+            for (joint, turn) in DOG_NECK.into_iter().zip([self.turn[0], turn_two]) {
+                if let Some(rotation) = pose.rotations.get_mut(joint) {
+                    rotation[1] = rotation[1].wrapping_add(turn);
+                }
+            }
+            return;
+        }
         if let Some(rotation) = pose.rotations.get_mut(NECK_JOINT) {
             rotation[1] = rotation[1].wrapping_add(self.turn[0]);
             rotation[2] = rotation[2].wrapping_add(self.turn[1]);
@@ -604,6 +621,8 @@ impl Default for Work {
             be_flg: 1,
             held_by: None,
             held_kill: false,
+            die_held_back: false,
+            turn_to: None,
             base: [0; 3],
             timers: [0; 3],
             at_em_flg: 0,
@@ -992,6 +1011,8 @@ pub fn is_held(work: &Work) -> bool {
 /// What [`player_held`] sees of the rest of the game.
 pub struct Held<'a> {
     pub holder: [i32; 3],
+    /// Its id, whose table says what becomes of the player.
+    pub holder_id: u8,
     pub rnd: &'a mut crate::zombie2::Rnd,
     pub life: &'a mut i16,
     /// `Be_flg`'s bits to clear from the holder: the hold has ended.
@@ -1635,21 +1656,47 @@ impl Mover<'_, '_> {
             self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
             return;
         }
-        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
-        let Some(pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
-            return;
-        };
-        let (Some(bone), Some(root)) = (
-            pose.rotations.get(NECK_JOINT).copied(),
-            pose.rotations.first().copied(),
-        ) else {
-            return;
-        };
         let from = self.chain_position(&[0, NECK_JOINT]);
+        let old = self.work.neck.turn[0];
+        if let Some(turn) = self.rot_joint_em(NECK_JOINT, from, old, target) {
+            self.work.neck.position = from;
+            self.work.neck.turn[0] = turn;
+        }
+    }
+
+    /// `FUN_0045f5b0`: `Rot_neck_em` on both of the dog's neck joints.
+    pub(crate) fn rot_neck_dog(&mut self, target: Option<[i32; 3]>) {
+        let [first, second] = DOG_NECK;
+        let from = self.part_point(first, [0, 0, 0]);
+        if self.work.neck.flags & 1 == 0 {
+            let old = self.work.neck.turn[0];
+            if let Some(turn) = self.rot_joint_em(first, from, old, target) {
+                self.work.neck.turn[0] = turn;
+            }
+            let old = self.work.neck.turn_two.unwrap_or(0);
+            let from_second = self.part_point(second, [0, 0, 0]);
+            if let Some(turn) = self.rot_joint_em(second, from_second, old, target) {
+                self.work.neck.turn_two = Some(turn);
+            }
+        }
+        self.work.neck.position = from;
+    }
+
+    /// One joint of `Rot_neck_em`: its new yaw, starting from `old`.
+    fn rot_joint_em(
+        &mut self,
+        joint: usize,
+        from: Option<[i32; 3]>,
+        old: i16,
+        target: Option<[i32; 3]>,
+    ) -> Option<i16> {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
+        let bone = pose.rotations.get(joint).copied()?;
+        let root = pose.rotations.first().copied()?;
         let bone = i32::from(bone[1]);
         let facing = i32::from(self.player.angle as i16) + i32::from(root[1]);
-        let neck = &mut self.work.neck;
-        neck.position = from;
+        let neck = &self.work.neck;
         let mut aim = match (from, target) {
             (Some(from), Some(target)) => neck_direction(from, target)[0],
             _ => 0,
@@ -1670,7 +1717,7 @@ impl Mover<'_, '_> {
                 facing - limit
             };
         }
-        let old = i32::from(neck.turn[0]);
+        let old = i32::from(old);
         let error = rate - old - bone - facing + aim;
         let mut turn = old - rate;
         if error & 0x800 == 0 {
@@ -1679,7 +1726,7 @@ impl Mover<'_, '_> {
         if error & 0xFFF < rate * 2 {
             turn = aim - bone - facing;
         }
-        neck.turn[0] = turn as i16;
+        Some(turn as i16)
     }
 
     /// `Pl_neck`: every so often, choose the nearest body the head can see in
@@ -2570,6 +2617,10 @@ impl Mover<'_, '_> {
     /// `FUN_0045a820`, `FUN_0045b000`: the zombie's table of what it does to the
     /// player it holds.
     fn em10_held(&mut self, held: &mut Held<'_>) {
+        if held.holder_id == crate::zombie2::DOG_ID {
+            self.em20_pldie();
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -2578,6 +2629,30 @@ impl Mover<'_, '_> {
             0 | 1 => self.held_standing(held),
             2 | 3 => self.held_low(held),
             _ => self.held_dying(held),
+        }
+    }
+
+    /// `Em20_pldie`: thrown down, behind the dog.
+    fn em20_pldie(&mut self) {
+        match self.work.routine[1] {
+            0 => {
+                self.work.routine[1] = 1;
+                self.work.bank = Bank::Held;
+                self.held_clip(0, 0x1F);
+                self.work.neck.flags |= 1;
+            }
+            1 => {
+                self.null_pos_set(0x800);
+                if let Some(sca) = &self.tick.room.sca {
+                    let at = self.player.pos;
+                    let ground = crate::sca::ground_at(sca, at, 0, crate::sca::PLAYER_MASK);
+                    self.player.pos[1] = ground.height;
+                }
+                if self.joint_move_late(0x80) {
+                    self.work.routine[1] = 2;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3797,6 +3872,7 @@ mod tests {
         for _ in 0..200 {
             let mut held = Held {
                 holder: [0; 3],
+                holder_id: 0x10,
                 rnd: &mut rnd,
                 life,
                 released: false,

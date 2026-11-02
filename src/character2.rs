@@ -93,6 +93,7 @@ pub fn tick(
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
 fn player_atd(pos: [i32; 3]) -> crate::zombie2::Atd {
     crate::zombie2::Atd {
+        ofs_x: 0,
         ofs_y: -0x5FA,
         at_w: PLAYER_WIDTH,
         at_h: 0x5FA,
@@ -110,6 +111,7 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
         .flat_map(|(slot, other)| {
             let atd = other.zombie.as_ref().map_or_else(
                 || crate::zombie2::Atd {
+                    ofs_x: 0,
                     ofs_y: -0x5FA,
                     at_w: other.body.radius as u16,
                     at_h: 0x5FA,
@@ -133,6 +135,7 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
                     slot: slot as u8,
                     be_flg: other.be_flg,
                     atd,
+                    pos: other.body.pos,
                 })
         })
         .collect()
@@ -144,7 +147,7 @@ pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState)
     let be_flg = game.re2.player.be_flg;
     let mut touching = 0;
     for other in slot_bodies(game) {
-        if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos) {
+        if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos, None) {
             touching |= 1 << other.slot;
         }
     }
@@ -182,9 +185,17 @@ pub fn player_held(
         .get(slot)
         .and_then(|character| character.as_deref())
         .map_or(player.pos, |character| character.body.pos);
+    let holder_id = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .map_or(0, |character| character.id);
     let re2 = &mut game.re2;
     let mut held = player2::Held {
         holder,
+        holder_id,
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,
         released: false,
@@ -245,10 +256,14 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 pos,
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
                 at_w: zombie.atd.at_w,
-                at_w1: zombie
-                    .licker
-                    .as_ref()
-                    .map_or(500, |licker| licker.head.at_w),
+                at_w1: if character.id == crate::zombie2::DOG_ID {
+                    600
+                } else {
+                    zombie
+                        .licker
+                        .as_ref()
+                        .map_or(500, |licker| licker.head.at_w)
+                },
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
             })
         })
@@ -430,6 +445,7 @@ fn run_zombie(
         slot: crate::zombie2::PLAYER_BODY,
         be_flg: game.re2.player.be_flg,
         atd: player_atd(player),
+        pos: player,
     }];
     bodies.extend(slot_bodies(game));
     let sca = room
@@ -454,10 +470,20 @@ fn run_zombie(
     let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
     let re2 = &mut game.re2;
     let gacha = re2.key_trg & 0x34F != 0;
+    let same_id = re2
+        .characters
+        .0
+        .iter()
+        .flatten()
+        .filter(|other| other.be_flg & 1 != 0 && other.id == character.id)
+        .count() as u8;
     let effects = &mut re2.effects;
     let player_life = &mut game.entities[0].health;
     let mut world = crate::zombie2::World {
         slot,
+        same_id,
+        room_enemy: &mut re2.room_enemy,
+        turn_player: None,
         pl: &mut re2.player,
         player_angle,
         player_life,
@@ -486,6 +512,9 @@ fn run_zombie(
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let knocks = std::mem::take(&mut world.knocks);
+    if let Some(angle) = world.turn_player {
+        re2.player.turn_to = Some(angle);
+    }
     let pos = character.body.pos;
     if player2::is_held(&re2.player)
         && re2.player.held_by == Some(slot)
@@ -546,7 +575,7 @@ const FG_COMMON_LICKER: u8 = 0xA4;
 
 /// `Sca_ck_em`'s mask: the children's is lower, and a zombie's its own.
 pub fn sca_mask(id: u8) -> u16 {
-    if (0x10..0x20).contains(&id) || id == 0x22 {
+    if (0x10..=0x20).contains(&id) || id == 0x22 {
         crate::zombie2::MASK
     } else if matches!(id, 0x45 | 0x4F) {
         crate::sca::CHARACTER_MASK_LOW

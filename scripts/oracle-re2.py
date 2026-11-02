@@ -410,6 +410,8 @@ class Game:
 
 
 ITEM_WORK = 0x98ED34
+EQUIPPED = 0x691F68  # three bytes, the last the weapon
+PL_WEAPON = 0x10E
 DOOR_RECORD = 0x9886F8 + 0x54 * 4  # `em_die_table[0x54]`: `Sce_Door`'s record
 GAME_STATE = 0x991F80
 SCRATCH = 0x99EF00  # the unused end of the last page of `.data`
@@ -447,7 +449,7 @@ def zombie_trace(game: Game) -> str:
     """The zombies and lickers in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) < 0x20 or game.u8(pointer + ENTITY_ID) == 0x22):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x20 or game.u8(pointer + ENTITY_ID) == 0x22):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)
@@ -669,6 +671,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         for item in args.give:
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
+                        if args.life is not None:
+                            game.write(PL + ENTITY_LIFE, struct.pack("<h", args.life))
+                if settled and args.equip is not None:
+                    game.write(EQUIPPED, bytes((0, 0, args.equip)))
+                    game.write(PL + PL_WEAPON, struct.pack("<H", args.equip))
                 if (
                     settled
                     and args.no_enemies
@@ -782,8 +789,9 @@ def pixels_command(args: argparse.Namespace) -> int:
         "--ticks", str(args.ticks), "--no-mods", "--trace", str(out / "ark.trace"),
         "--capture-every", str(args.every), "--capture-dir", str(ark_dir),
     ]
-    if args.input:
-        command += ["--input", str(Path(args.input).resolve())]
+    arklay_input = args.arklay_input or args.input
+    if arklay_input:
+        command += ["--input", str(Path(arklay_input).resolve())]
     command += args.arklay_arg
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
 
@@ -889,6 +897,14 @@ def main() -> int:
             "--give", action="append", default=[], metavar="SLOT:ID:COUNT",
             help="put an item in the inventory when play begins",
         )
+        command.add_argument(
+            "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",
+            help="hold this weapon from the moment play is settled; give its slot with --give",
+        )
+        command.add_argument(
+            "--life", type=int, default=None, metavar="N",
+            help="set the player's life when play begins",
+        )
 
     command = commands.add_parser("record", help="record a trace from the original")
     common(command)
@@ -917,6 +933,10 @@ def main() -> int:
     command.add_argument("--reuse-ref", action="store_true", help="keep the recorded reference frames")
     command.add_argument("--arklay", default="target/test-release/arklay")
     command.add_argument("--pack", default="re2.akpak")
+    command.add_argument(
+        "--arklay-input", default=None,
+        help="arklay's own input when its ticks are offset from the reference's",
+    )
     command.add_argument(
         "--arklay-arg", action="append", default=[], metavar="ARG",
         help="one more argument for arklay, such as --room",

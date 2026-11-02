@@ -1,0 +1,123 @@
+# room 212: two dogs come at the shots, weapon 2 (oracle/re2.md)
+494 aim
+514 aim fire
+519 aim
+544 aim fire
+549 aim
+574 aim fire
+579 aim
+604 aim fire
+609 aim
+634 aim fire
+639 aim
+664 aim fire
+669 aim
+694 aim fire
+699 aim
+724 aim fire
+729 aim
+754 aim fire
+759 aim
+784 aim fire
+789 aim
+814 aim fire
+819 aim
+844 aim fire
+849 aim
+874 aim fire
+879 aim
+904 aim fire
+909 aim
+934 aim fire
+939 aim
+964 aim fire
+969 aim
+994 aim fire
+999 aim
+1024 aim fire
+1029 aim
+1054 aim fire
+1059 aim
+1084 aim fire
+1089 aim
+1114 aim fire
+1119 aim
+1144 aim fire
+1149 aim
+1174 aim fire
+1179 aim
+1204 aim fire
+1209 aim
+1234 aim fire
+1239 aim
+1264 aim fire
+1269 aim
+1294 aim fire
+1299 aim
+1324 aim fire
+1329 aim
+1354 aim fire
+1359 aim
+1384 aim fire
+1389 aim
+1414 aim fire
+1419 aim
+1444 aim fire
+1449 aim
+1474 aim fire
+1479 aim
+1504 aim fire
+1509 aim
+1534 aim fire
+1539 aim
+1564 aim fire
+1569 aim
+1594 aim fire
+1599 aim
+1624 aim fire
+1629 aim
+1654 aim fire
+1659 aim
+1684 aim fire
+1689 aim
+1714 aim fire
+1719 aim
+1744 aim fire
+1749 aim
+1774 aim fire
+1779 aim
+1804 aim fire
+1809 aim
+1834 aim fire
+1839 aim
+1864 aim fire
+1869 aim
+1894 aim fire
+1899 aim
+1924 aim fire
+1929 aim
+1954 aim fire
+1959 aim
+1984 aim fire
+1989 aim
+2014 aim fire
+2019 aim
+2044 aim fire
+2049 aim
+2074 aim fire
+2079 aim
+2104 aim fire
+2109 aim
+2134 aim fire
+2139 aim
+2164 aim fire
+2169 aim
+2194 aim fire
+2199 aim
+2224 aim fire
+2229 aim
+2254 aim fire
+2259 aim
+2284 aim fire
+2289 aim
+2300

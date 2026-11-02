@@ -296,6 +296,7 @@ impl UserData for Api {
             "set_atd",
             |_, e, (which, ofs_y, at_w, at_h, w): (i64, i16, u16, u16, u16)| {
                 let atd = Atd {
+                    ofs_x: 0,
                     ofs_y,
                     at_w,
                     at_h,
@@ -384,7 +385,13 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_held_kill", |_, e, ()| {
-            e.em().world.pl.held_kill = true;
+            let pl = &mut *e.em().world.pl;
+            pl.held_kill = true;
+            pl.die_held_back = false;
+            Ok(())
+        });
+        methods.add_method_mut("pl_hold_back_die", |_, e, ()| {
+            e.em().world.pl.die_held_back = true;
             Ok(())
         });
         methods.add_method_mut("pl_life_down", |_, e, (down, low): (i32, Option<bool>)| {
@@ -720,6 +727,95 @@ impl UserData for Api {
         });
 
         // The room.
+        // `Root_ck`, with the target its caller gives.
+        methods.add_method_mut("root_ck", |_, e, (x, z): (i32, i32)| {
+            Ok(e.em().root_ck_to([x as i16, z as i16], None))
+        });
+        methods.add_method_mut("root_ck_area", |_, e, area: i64| {
+            Ok(e.em().root_ck_to([0, 0], Some(area as u8)))
+        });
+        // `Rnd_area`, or -1 in a room without guide areas.
+        methods.add_method_mut("rnd_area", |_, e, ()| {
+            let em = e.em();
+            let count = em.world.guides.len() as i32;
+            if count == 0 {
+                return Ok(-1);
+            }
+            Ok(i32::from(em.world.rnd.draw()) % count)
+        });
+        methods.add_method_mut("area_count", |_, e, ()| Ok(e.em().world.guides.len()));
+        // `Goto00_ck`: 0 once within `rate`, or the way to turn.
+        methods.add_method_mut("goto_ck", |_, e, (x, z, rate): (i32, i32, i32)| {
+            let body = &*e.em().mover.player;
+            let target = direction_ck(body.pos[0], body.pos[2], x, z);
+            Ok(turn_within(body.angle, target, rate))
+        });
+        methods.add_method_mut("add_speed_xyz_at", |_, e, dir: i64| {
+            let em = e.em();
+            em.mover.add_speed_xz_at(dir as u16);
+            let up = i32::from(em.work().spd[1]);
+            em.mover.player.pos[1] += up;
+            Ok(())
+        });
+        methods.add_method_mut("player_pos", |_, e, ()| {
+            let [x, y, z] = e.em().world.player;
+            Ok((x, y, z))
+        });
+        methods.add_method_mut("set_player_angle", |_, e, angle: i64| {
+            e.em().world.turn_player = Some(angle as u16 & 0xFFF);
+            Ok(())
+        });
+        methods.add_method_mut("room_enemy", |_, e, ()| Ok(*e.em().world.room_enemy));
+        methods.add_method_mut("set_room_enemy", |_, e, value: i64| {
+            *e.em().world.room_enemy = value as u8;
+            Ok(())
+        });
+        // `Ck_em_id`, of this one's id.
+        methods.add_method_mut("same_id", |_, e, ()| Ok(e.em().world.same_id));
+        methods.add_method_mut("take_player_floor", |_, e, ()| {
+            let em = e.em();
+            em.z.floor = em.world.player_floor;
+            Ok(())
+        });
+        methods.add_method_mut("ground", |_, e, ()| Ok(e.em().z.vars[super::DOG_GROUND]));
+        methods.add_method_mut("dest", |_, e, ()| {
+            let [x, z] = e.em().work().dest;
+            Ok((i32::from(x), i32::from(z)))
+        });
+        // How far apart two points are, on the floor, against `within`.
+        methods.add_method_mut(
+            "point_within",
+            |_, _, (x0, z0, x1, z1, within): (i32, i32, i32, i32, i32)| {
+                let (dx, dz) = (i64::from(x1 - x0), i64::from(z1 - z0));
+                let within = i64::from(within);
+                Ok(dx * dx + dz * dz < within * within)
+            },
+        );
+        methods.add_method_mut("set_body_ofs_x", |_, e, ofs: i16| {
+            e.em().z.atd.ofs_x = ofs;
+            Ok(())
+        });
+        // Where the jaw was when this tick began.
+        methods.add_method_mut("jaw", |_, e, ()| {
+            let em = e.em();
+            Ok((em.z.vars[super::DOG_JAW], em.z.vars[super::DOG_JAW + 1]))
+        });
+        // `Rot_neck_em`.
+        methods.add_method_mut("rot_neck", |_, e, ()| {
+            let em = e.em();
+            let target = em.world.player_neck;
+            em.mover.rot_neck_dog(target);
+            Ok(())
+        });
+        // `Em_seq_sound`.
+        methods.add_method_mut("seq_sound", |_, e, ()| {
+            let em = e.em();
+            let seq = em.mover.now_seq();
+            if seq & super::SEQ_SOUND != 0 {
+                em.z.sounds.push((seq >> 28) as u8);
+            }
+            Ok(())
+        });
         methods.add_method_mut("partner", |_, e, ()| Ok(e.em().world.partner));
         methods.add_method_mut("enemies", |_, e, ()| Ok(e.em().world.enemies));
         methods.add_method_mut("has_guides", |_, e, ()| Ok(!e.em().world.guides.is_empty()));
@@ -751,7 +847,8 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 2] = [
+    const SCRIPTS: [&str; 3] = [
+        include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/22/enemy.lua"),
         include_str!("../../games/re2/lib/zombie.lua"),
     ];
