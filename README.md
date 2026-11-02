@@ -105,11 +105,11 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
 # You can play the RE2 pack as Leon or Claire, in either scenario: rooms, doors,
 # items, the typewriter, saves and the scripts' scenes with their characters and
-# voice lines work, with text-only menus. Zombies and the licker walk, attack and
-# die; the other enemy families are still to come. The engine also poses any RE2
-# EMD, PLD or PLW with --model, plays RE2 doors with --door, and plays its sounds
-# and films (see issue #244 and docs/re2-deviations.md); --game re2 skips
-# detection
+# voice lines work, with text-only menus. Zombies, the licker, dogs and crows
+# walk, attack and die; the other enemy families are still to come. The engine
+# also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
+# and plays its sounds and films (see issue #244 and docs/re2-deviations.md);
+# --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
