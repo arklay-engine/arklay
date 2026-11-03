@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 
 use arklay_biorand::keys::{KeyOptions, KeyPlacement};
+use arklay_biorand::locks::{self, DoorLock};
 use arklay_biorand::map::{DoorKind, Filter, Map, Requirement};
 
 pub const RE1: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../games/re1");
@@ -31,6 +32,64 @@ pub fn load_map() -> Map {
         .iter()
         .map(|(dir, text)| (dir.as_str(), text.as_str()));
     Map::parse(&map_xml, rooms).unwrap_or_else(|err| panic!("{err:#}"))
+}
+
+/// `map` with the planned `locks` as the game will read them, for a walk:
+/// worked out from each door's lock flag and key byte alone, not from what
+/// the lock stage gave the routing map. A door that no key opens loses its
+/// key requirements; a door a key opens needs that key (and keeps any other
+/// requirement, such as a puzzle's); a door locked for good from this side
+/// opens only from the other; a door with a lock and no key is a script's
+/// and stays as the map has it.
+pub fn with_locks(map: &Map, locks: &[DoorLock]) -> Result<Map, String> {
+    let mut map = map.clone();
+    let discard: HashSet<u8> = map
+        .items
+        .iter()
+        .filter(|(_, def)| def.discard)
+        .map(|(&id, _)| id)
+        .collect();
+    for lock in locks {
+        let door = map
+            .rooms
+            .get_mut(&lock.room)
+            .and_then(|room| room.doors.iter_mut().find(|door| door.id == Some(lock.id)))
+            .ok_or_else(|| {
+                format!(
+                    "the plan locks {}:{}, which the map has not",
+                    lock.room, lock.id
+                )
+            })?;
+        let keyless = |requires: &[Requirement]| -> Vec<Requirement> {
+            requires
+                .iter()
+                .filter(|r| !matches!(r, Requirement::Item(item) if discard.contains(item)))
+                .cloned()
+                .collect()
+        };
+        let unkind = |kind: Option<DoorKind>| match kind {
+            Some(DoorKind::Locked | DoorKind::Unlock) => None,
+            other => other,
+        };
+        if lock.lock == 0 {
+            door.requires = keyless(&door.requires);
+            door.kind = unkind(door.kind);
+        } else if let Some(key) = lock.key_item() {
+            door.requires = keyless(&door.requires);
+            door.requires.push(Requirement::Item(key));
+            door.kind = unkind(door.kind);
+        } else if lock.key == locks::KEY_LOCKED {
+            if !matches!(
+                door.kind,
+                Some(DoorKind::Blocked | DoorKind::NoReturn | DoorKind::OneWay)
+            ) {
+                door.kind = Some(DoorKind::Locked);
+            }
+        } else if lock.key == locks::KEY_UNLOCK {
+            door.requires = keyless(&door.requires);
+        }
+    }
+    Ok(map)
 }
 
 /// Plays `placement` through on the map. From the start room, the player
