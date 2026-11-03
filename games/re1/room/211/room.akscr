@@ -37,7 +37,14 @@ proc init
         aot_set(AOT_03_EVENT_BLOOD_TRAIL, 2500, 11000, 900, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_blood_teammates, 0, 0, 0);
     }
     aot_set(AOT_04_EVENT_BLOOD_SPOTS, 2500, 7600, 900, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_blood_spots, 0, 0, 0);
-    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+    // The key is Chris-only (FG_STATUS 8 is Jill); under ITEM_RANDOMIZER
+    // Jill gets it too.
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_05_ITEM_KEY_DESK_0, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, IMDL_00_KEY_DESK, SCA_NONE, 2900, -2020, 1780, 0, F_ITEM_211_KEY_DESK_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
+        eml_rot(IMDL_00_KEY_DESK, 0, 2048);
+    }
+    else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_05_ITEM_KEY_DESK_0, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, IMDL_00_KEY_DESK, SCA_NONE, 2900, -2020, 1780, 0, F_ITEM_211_KEY_DESK_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
         eml_rot(IMDL_00_KEY_DESK, 0, 2048);

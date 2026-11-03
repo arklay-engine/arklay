@@ -154,7 +154,12 @@ proc init
     }
     else if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
+        // Jill's ribbon slot exists in every mode under ITEM_RANDOMIZER.
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
         {
             if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
             {
@@ -172,7 +177,11 @@ proc init
     }
     else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
-        if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE))
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE))
         {
             item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -183,7 +192,11 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
         {
             item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -518,7 +531,14 @@ proc main
                 set(FG_ROOM, F_ROOM_FRONT_DOOR_BUSY, FALSE);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_ITEM, F_ITEM_106_INK_3, FALSE))
+        if (ITEM_RANDOMIZER)
+        {
+            if (ck(FG_ITEM, F_ITEM_106_INK_3, FALSE))
+            {
+                aot_reset(AOT_05_TYPEWRITER, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+            }
+        }
+        else if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_ITEM, F_ITEM_106_INK_3, FALSE))
         {
             set(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, TRUE);
             aot_reset(AOT_05_TYPEWRITER, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
@@ -3713,7 +3733,11 @@ event jills_gun_or_lockpick_speech
         {
             run
             {
-                if (ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
+                if (ITEM_RANDOMIZER)
+                {
+                    aot_reset(AOT_05_ITEM_INK_3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+                }
+                else if (ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
                 {
                     aot_reset(AOT_05_ITEM_INK_3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
                 }
@@ -3731,7 +3755,11 @@ event jills_gun_or_lockpick_speech
         {
             run
             {
-                if (ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
+                if (ITEM_RANDOMIZER)
+                {
+                    aot_reset(AOT_05_ITEM_INK_3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+                }
+                else if (ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
                 {
                     aot_reset(AOT_05_ITEM_INK_3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
                 }
