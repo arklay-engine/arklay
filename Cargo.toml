@@ -22,7 +22,13 @@ hd = [
     "dep:symphonia-core",
 ]
 
+[workspace]
+# The engine crate is the root package; `cargo test` and `cargo build` with no
+# `-p` still mean it alone.
+members = ["crates/arklay-biorand"]
+
 [dependencies]
+arklay-biorand = { path = "crates/arklay-biorand" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 fontdue = "0.9"
