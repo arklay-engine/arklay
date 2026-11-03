@@ -11,6 +11,7 @@
 pub mod config;
 pub mod enemies;
 pub mod inventory;
+pub mod items;
 pub mod keys;
 pub mod map;
 pub mod prepare;
