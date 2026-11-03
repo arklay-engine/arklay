@@ -10,11 +10,11 @@
     <item id="3" flag="197" type="68" amount="1" group="1" name="GREEN HERB/1"/>
     <item id="5" flag="198" type="68" amount="1" group="1" name="GREEN HERB/2"/>
     <item id="2" flag="40" type="11" amount="15" group="1" name="CLIP ON RICHARD" optional="true"/>
-    <spot x="2895" y="0" z="4899" d="3096"/>
-    <spot x="3011" y="0" z="7992" d="800"/>
-    <spot x="3255" y="0" z="11004" d="1064"/>
-    <spot x="5250" y="0" z="2873" d="2104"/>
-    <spot x="6257" y="0" z="5051" d="1080"/>
-    <spot x="9418" y="0" z="2985" d="1888"/>
   </room>
+  <spot x="2895" y="0" z="4899" d="3096"/>
+  <spot x="3011" y="0" z="7992" d="800"/>
+  <spot x="3255" y="0" z="11004" d="1064"/>
+  <spot x="5250" y="0" z="2873" d="2104"/>
+  <spot x="6257" y="0" z="5051" d="1080"/>
+  <spot x="9418" y="0" z="2985" d="1888"/>
 </random>

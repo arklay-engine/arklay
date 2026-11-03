@@ -13,8 +13,8 @@
     <enemies id="0" kind="npc" player="chris"/>
     <!-- staging condition: 1:67 -->
     <enemies exclude="4 11" max-difficulty="0"/>
-    <spot x="5244" y="0" z="9249" d="1095"/>
-    <spot x="5266" y="0" z="6483" d="2991"/>
-    <spot x="5499" y="0" z="2942" d="143"/>
   </room>
+  <spot x="5244" y="0" z="9249" d="1095"/>
+  <spot x="5266" y="0" z="6483" d="2991"/>
+  <spot x="5499" y="0" z="2942" d="143"/>
 </random>

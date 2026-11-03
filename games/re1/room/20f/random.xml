@@ -7,12 +7,12 @@
     <item id="3" flag="11" type="11" amount="15" group="1" name="CLIP ON CABINET"/>
     <item id="4" flag="12" type="12" amount="7" group="1" name="BOOKSHELF IN CUPBOARD" requires="item(48)"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="10403" y="0" z="6273" d="2160"/>
-    <spot x="10969" y="0" z="8511" d="3032"/>
-    <spot x="4420" y="0" z="8740" d="3128"/>
-    <spot x="4972" y="0" z="6392" d="112"/>
-    <spot x="5334" y="0" z="2982" d="32"/>
-    <spot x="7513" y="0" z="10997" d="2032"/>
-    <spot x="7657" y="0" z="2878" d="3072"/>
   </room>
+  <spot x="10403" y="0" z="6273" d="2160"/>
+  <spot x="10969" y="0" z="8511" d="3032"/>
+  <spot x="4420" y="0" z="8740" d="3128"/>
+  <spot x="4972" y="0" z="6392" d="112"/>
+  <spot x="5334" y="0" z="2982" d="32"/>
+  <spot x="7513" y="0" z="10997" d="2032"/>
+  <spot x="7657" y="0" z="2878" d="3072"/>
 </random>

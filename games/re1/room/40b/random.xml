@@ -6,7 +6,7 @@
     </door>
     <item id="1" flag="168" type="11" amount="15" group="8" name="CLIP ON FLOOR"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="6529" y="0" z="6414" d="2160"/>
-    <spot x="6707" y="0" z="8343" d="2072"/>
   </room>
+  <spot x="6529" y="0" z="6414" d="2160"/>
+  <spot x="6707" y="0" z="8343" d="2072"/>
 </random>

@@ -9,7 +9,7 @@
     </door>
     <item id="5" flag="149" type="61" amount="1" group="1" name="SMALL KEY"/>
     <enemies exclude="4 12" max-difficulty="0"/>
-    <spot x="2977" y="0" z="8833" d="1080"/>
-    <spot x="3083" y="0" z="5914" d="3024"/>
   </room>
+  <spot x="2977" y="0" z="8833" d="1080"/>
+  <spot x="3083" y="0" z="5914" d="3024"/>
 </random>

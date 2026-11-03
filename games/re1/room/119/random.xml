@@ -7,6 +7,6 @@
     <item id="1" flag="67" type="64" amount="0" group="2" name="BOOK"/>
     <item id="4" flag="101" type="14" amount="6" group="2" name="MAGNUM ROUNDS"/>
     <enemies exclude="4 12" max-difficulty="0"/>
-    <spot x="4500" y="0" z="5025" d="2936"/>
   </room>
+  <spot x="4500" y="0" z="5025" d="2936"/>
 </random>

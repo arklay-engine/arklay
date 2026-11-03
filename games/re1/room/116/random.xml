@@ -7,10 +7,10 @@
     <!-- staging typeOffsets: 0x1FEFD -->
     <item id="1" flag="0" type="3" amount="7" group="1" name="SHOTGUN FRAME" requires="item(28)"/>
     <enemies exclude="4" max-difficulty="1"/>
-    <spot x="3617" y="0" z="6716" d="3080"/>
-    <spot x="3689" y="0" z="3201" d="3080"/>
-    <spot x="6877" y="0" z="9485" d="1832"/>
-    <spot x="9257" y="0" z="9122" d="1120"/>
-    <spot x="9727" y="0" z="4404" d="2944"/>
   </room>
+  <spot x="3617" y="0" z="6716" d="3080"/>
+  <spot x="3689" y="0" z="3201" d="3080"/>
+  <spot x="6877" y="0" z="9485" d="1832"/>
+  <spot x="9257" y="0" z="9122" d="1120"/>
+  <spot x="9727" y="0" z="4404" d="2944"/>
 </random>

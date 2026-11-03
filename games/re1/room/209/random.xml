@@ -9,10 +9,10 @@
     <item id="2" flag="38" type="11" amount="15" group="1" name="BEHIND BED" player="jill"/>
     <item id="3" flag="211" type="67" amount="1" group="1" name="RED HERB"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="3633" y="0" z="8143" d="56"/>
-    <spot x="4223" y="0" z="6615" d="4064"/>
-    <spot x="7075" y="0" z="8796" d="2240"/>
-    <spot x="7191" y="0" z="6768" d="2008"/>
-    <spot x="9016" y="0" z="3352" d="3152"/>
   </room>
+  <spot x="3633" y="0" z="8143" d="56"/>
+  <spot x="4223" y="0" z="6615" d="4064"/>
+  <spot x="7075" y="0" z="8796" d="2240"/>
+  <spot x="7191" y="0" z="6768" d="2008"/>
+  <spot x="9016" y="0" z="3352" d="3152"/>
 </random>

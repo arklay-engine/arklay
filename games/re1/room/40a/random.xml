@@ -14,8 +14,8 @@
     <item id="3" flag="78" type="105" amount="1" group="8" name="V-JOLT BOOK IN BOOKCASE" document="true"/>
     <item id="8" flag="120" type="47" amount="3" group="8" name="LOCKED DRAWER" requires="item(61)" lock="35"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="12389" y="0" z="8688" d="1048"/>
-    <spot x="12694" y="0" z="4617" d="3032"/>
-    <spot x="7011" y="0" z="2792" d="2016"/>
   </room>
+  <spot x="12389" y="0" z="8688" d="1048"/>
+  <spot x="12694" y="0" z="4617" d="3032"/>
+  <spot x="7011" y="0" z="2792" d="2016"/>
 </random>

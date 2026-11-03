@@ -9,8 +9,8 @@
     <item id="132" flag="234" type="14" amount="6" group="32" name="MAGNUM ROUNDS"/>
     <item id="5" flag="235" type="47" amount="3" group="32" name="INK IN BOOKCASE" hidden="true"/>
     <enemies exclude="4" max-difficulty="1" restricted="true"/>
-    <spot x="3667" y="0" z="6552" d="4056"/>
-    <spot x="5890" y="0" z="4765" d="3032"/>
-    <spot x="6575" y="0" z="6595" d="976"/>
   </room>
+  <spot x="3667" y="0" z="6552" d="4056"/>
+  <spot x="5890" y="0" z="4765" d="3032"/>
+  <spot x="6575" y="0" z="6595" d="976"/>
 </random>

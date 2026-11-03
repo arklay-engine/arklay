@@ -6,7 +6,7 @@
     </door>
     <item id="1" flag="109" type="11" amount="15" group="8" name="CLIP IN SINK"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="6158" y="0" z="9581" d="1064"/>
-    <spot x="6187" y="0" z="7047" d="2136"/>
   </room>
+  <spot x="6158" y="0" z="9581" d="1064"/>
+  <spot x="6187" y="0" z="7047" d="2136"/>
 </random>

@@ -172,14 +172,31 @@ impl Reader {
                 "expected the root element <random>, found <{found}>"
             )));
         }
-        for node in root.check(&[], &["room"])? {
-            let room = self.room(dir, node)?;
-            if self.map.rooms.contains_key(&room.key) {
-                let key = &room.key;
-                let outside = Elem { room: None, ..node };
-                return Err(outside.error(format!("room \"{key}\" is defined twice")));
+        let children = root.check(&[], &["room", "spot"])?;
+        let has_room = children.iter().any(|node| node.name() == "room");
+        let mut spots = Vec::new();
+        for node in children {
+            match node.name() {
+                "room" => {
+                    let room = self.room(dir, node)?;
+                    if self.map.rooms.contains_key(&room.key) {
+                        let key = &room.key;
+                        let outside = Elem { room: None, ..node };
+                        return Err(outside.error(format!("room \"{key}\" is defined twice")));
+                    }
+                    self.map.rooms.insert(room.key.clone(), room);
+                }
+                "spot" if has_room => spots.push(self.spot(node)?),
+                "spot" => return Err(node.error("a spot needs a logical room in its directory")),
+                _ => unreachable!("check() only lets through the names it is given"),
             }
-            self.map.rooms.insert(room.key.clone(), room);
+        }
+        if !spots.is_empty() {
+            self.map
+                .spots
+                .entry(dir.to_ascii_lowercase())
+                .or_default()
+                .extend(spots);
         }
         Ok(())
     }
@@ -193,7 +210,7 @@ impl Reader {
         };
         let children = el.check(
             &["key", "name", "tags", "door-rando", "player"],
-            &["door", "flag", "item", "enemies", "spot"],
+            &["door", "flag", "item", "enemies"],
         )?;
         let mut room = Room {
             key: key.to_string(),
@@ -218,7 +235,6 @@ impl Reader {
                 "flag" => room.flags.push(self.flag(child)?),
                 "item" => room.items.push(self.item(child)?),
                 "enemies" => room.enemies.push(self.rule(child)?),
-                "spot" => room.spots.push(self.spot(child)?),
                 _ => unreachable!("check() only lets through the names it is given"),
             }
         }
@@ -707,11 +723,11 @@ mod tests {
     <flag name="LIFT" requires="item(52)"/>
     <item id="52" flag="175" type="5" amount="6" group="-1" name="RED EYE" requires="room(10C/BACK)" document="true" hidden="true" optional="true" lock="35" player="chris" door-rando="false"/>
     <enemies id="0" flag="28" kind="npc" include="11 12" exclude="4 12" max-difficulty="0" restricted="true" player="chris"/>
-    <spot x="11764" y="0" z="11442" d="2014" include="zombie" exclude="" placeholder="A"/>
   </room>
   <room key="10C/BACK">
     <door id="1" target="10C:0" kind="unblock"/>
   </room>
+  <spot x="11764" y="0" z="11442" d="2014" include="zombie" exclude="" placeholder="A"/>
 </random>
 "##;
 
@@ -819,11 +835,12 @@ mod tests {
         assert_eq!(rule.exclude, [4, 12]);
         assert_eq!((rule.max_difficulty, rule.restricted), (Some(0), true));
 
-        let spot = &hall.spots[0];
+        let spot = &map.spots["10c"][0];
         assert_eq!((spot.x, spot.y, spot.z, spot.d), (11764, 0, 11442, 2014));
         assert_eq!(spot.include, ["zombie"]);
         assert!(spot.exclude.is_empty());
         assert_eq!(spot.placeholder.as_deref(), Some("A"));
+        assert_eq!(map.spots_for(hall), map.spots["10c"].as_slice());
 
         assert_eq!(map.rooms["10C/BACK"].doors[0].kind, Some(DoorKind::Unblock));
     }
@@ -1005,16 +1022,60 @@ mod tests {
         );
     }
 
+    /// A room file with one room, `10C`, and `spots` after it. The spots start
+    /// on line 3.
+    fn with_spots(spots: &str) -> String {
+        format!("<random>\n  <room key=\"10C\" tags=\"mansion\"/>\n{spots}\n</random>")
+    }
+
     #[test]
     fn rejects_a_spot_naming_no_enemy() {
         let err = error_for(
             MAP,
-            &room("    <spot x=\"1\" y=\"2\" z=\"3\" d=\"4\" include=\"ghost\"/>"),
+            &with_spots("  <spot x=\"1\" y=\"2\" z=\"3\" d=\"4\" include=\"ghost\"/>"),
         );
         assert_eq!(
             err,
-            "room/10c/random.xml:3: room 10C: enemy key \"ghost\" is not in the enemy catalogue"
+            "room/10c/random.xml:3: enemy key \"ghost\" is not in the enemy catalogue"
         );
+    }
+
+    #[test]
+    fn rejects_a_spot_inside_a_room() {
+        let err = error_for(MAP, &room("    <spot x=\"1\" y=\"2\" z=\"3\" d=\"4\"/>"));
+        assert_eq!(
+            err,
+            "room/10c/random.xml:3: room 10C: unknown element <spot> in <room>"
+        );
+    }
+
+    #[test]
+    fn rejects_a_spot_with_no_room() {
+        let err = error_for(
+            MAP,
+            "<random>\n  <spot x=\"1\" y=\"2\" z=\"3\" d=\"4\"/>\n</random>",
+        );
+        assert_eq!(
+            err,
+            "room/10c/random.xml:2: a spot needs a logical room in its directory"
+        );
+    }
+
+    #[test]
+    fn keeps_spots_by_room_directory() {
+        let hall = r#"<random>
+  <room key="10D"/>
+  <spot x="5" y="0" z="0" d="0"/>
+</random>"#;
+        let empty = r#"<random><room key="10E"/></random>"#;
+        let rooms = [("10c", GOOD_ROOMS), ("10d", hall), ("10e", empty)];
+        let map = Map::parse(MAP, rooms).unwrap();
+        assert_eq!(map.spots["10c"].len(), 1);
+        assert_eq!(map.spots["10d"][0].x, 5);
+        assert!(!map.spots.contains_key("10e"));
+        assert_eq!(map.spots_for(&map.rooms["10C/BACK"]).len(), 1);
+        assert_eq!(map.spots_for(&map.rooms["10D"])[0].x, 5);
+        assert!(map.spots_for(&map.rooms["10E"]).is_empty());
     }
 
     #[test]

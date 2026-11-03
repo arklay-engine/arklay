@@ -20,14 +20,14 @@
     <item id="3" flag="148" type="14" amount="6" group="32" name="MAGNUM ROUNDS ON SHELF"/>
     <item id="14" flag="98" type="108" amount="1" group="32" name="MO DISC PASS CODE" requires="flag(MO_DISC_507)" document="true"/>
     <enemies exclude="4"/>
-    <spot x="11804" y="0" z="5164" d="2800"/>
-    <spot x="12087" y="0" z="11786" d="1168"/>
-    <spot x="17400" y="0" z="3522" d="3160"/>
-    <spot x="19681" y="0" z="11359" d="1096"/>
-    <spot x="24716" y="0" z="11462" d="1864"/>
-    <spot x="25100" y="0" z="4098" d="2064"/>
-    <spot x="3143" y="0" z="7960" d="4000"/>
-    <spot x="8020" y="0" z="6554" d="2160"/>
-    <spot x="8898" y="0" z="8440" d="96"/>
   </room>
+  <spot x="11804" y="0" z="5164" d="2800"/>
+  <spot x="12087" y="0" z="11786" d="1168"/>
+  <spot x="17400" y="0" z="3522" d="3160"/>
+  <spot x="19681" y="0" z="11359" d="1096"/>
+  <spot x="24716" y="0" z="11462" d="1864"/>
+  <spot x="25100" y="0" z="4098" d="2064"/>
+  <spot x="3143" y="0" z="7960" d="4000"/>
+  <spot x="8020" y="0" z="6554" d="2160"/>
+  <spot x="8898" y="0" z="8440" d="96"/>
 </random>

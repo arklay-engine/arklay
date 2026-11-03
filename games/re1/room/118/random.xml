@@ -9,7 +9,7 @@
     <item id="4" flag="218" type="12" amount="7" group="2" name="WESKER'S GIFT/SHELLS" optional="true"/>
     <item id="5" flag="217" type="11" amount="15" group="2" name="WESKER'S GIFT/CLIP" optional="true"/>
     <enemies exclude="4 12" max-difficulty="0" restricted="true"/>
-    <spot x="3375" y="0" z="5948" d="192"/>
-    <spot x="5795" y="0" z="4855" d="1888"/>
   </room>
+  <spot x="3375" y="0" z="5948" d="192"/>
+  <spot x="5795" y="0" z="4855" d="1888"/>
 </random>

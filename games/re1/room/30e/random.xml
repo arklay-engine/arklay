@@ -8,7 +8,7 @@
     <item id="4" flag="239" type="65" amount="1" group="16" name="FIRST AID SPRAY"/>
     <item id="5" flag="240" type="47" amount="3" group="16" name="INK"/>
     <enemies exclude="4" max-difficulty="0" restricted="true"/>
-    <spot x="7323" y="0" z="9019" d="992"/>
-    <spot x="7860" y="0" z="3430" d="3008"/>
   </room>
+  <spot x="7323" y="0" z="9019" d="992"/>
+  <spot x="7860" y="0" z="3430" d="3008"/>
 </random>

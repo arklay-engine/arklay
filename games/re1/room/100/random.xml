@@ -8,7 +8,7 @@
     <item id="1" flag="22" type="47" amount="3" group="1" name="INK ON BED" player="jill"/>
     <!-- staging condition: 1:34 -->
     <enemies exclude="4" max-difficulty="0" restricted="true" player="jill"/>
-    <spot x="3908" y="0" z="5395" d="3024"/>
-    <spot x="5666" y="0" z="6742" d="2000"/>
   </room>
+  <spot x="3908" y="0" z="5395" d="3024"/>
+  <spot x="5666" y="0" z="6742" d="2000"/>
 </random>

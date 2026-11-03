@@ -23,9 +23,9 @@
 //! </map>
 //! ```
 //!
-//! Each room's `room/<id>/random.xml` holds one or more logical rooms. A
-//! logical room is the whole room, or a part of it the route treats as its own
-//! node (`10C/BACK`):
+//! Each room's `room/<id>/random.xml` holds one or more logical rooms, then the
+//! directory's enemy spots. A logical room is the whole room, or a part of it
+//! the route treats as its own node (`10C/BACK`):
 //!
 //! ```xml
 //! <random>
@@ -42,8 +42,8 @@
 //!           lock="35" player="chris" door-rando="false"/>
 //!     <enemies id="0" flag="28" kind="npc" include="11 12" exclude="4 12"
 //!              max-difficulty="0" restricted="true" player="chris"/>
-//!     <spot x="11764" y="0" z="11442" d="2014" include="zombie" exclude=""/>
 //!   </room>
+//!   <spot x="11764" y="0" z="11442" d="2014" include="zombie" exclude=""/>
 //! </random>
 //! ```
 //!
@@ -58,9 +58,11 @@
 //!   `typeOffsets` is gone: scripts use `picked()` instead.
 //! - An enemy rule has no `condition`: the room's script says where added
 //!   enemies go with `random_enemies()` (`docs/biorand/plan.md`).
-//! - `<spot>` holds the room's candidate enemy positions (staging's
-//!   `enemy.csv`), and a door's `<entrance>` its arrival point (staging's
-//!   `doors.csv` and inline entrances).
+//! - A `<spot>` is a candidate enemy position (staging's `enemy.csv`). Staging
+//!   gives each spot to one logical room; arklay gives it to the room's
+//!   directory, so [`Map::spots`] is keyed by the directory's name in lowercase
+//!   (`10c`). A door's `<entrance>` is its arrival point (staging's `doors.csv`
+//!   and inline entrances).
 
 mod xml;
 
@@ -298,7 +300,8 @@ pub struct Enemies {
     pub filter: Filter,
 }
 
-/// A candidate enemy position (staging's `enemy.csv`).
+/// A candidate enemy position (staging's `enemy.csv`), kept by room directory
+/// in [`Map::spots`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Spot {
     pub x: i32,
@@ -323,7 +326,6 @@ pub struct Room {
     pub flags: Vec<GraphFlag>,
     pub items: Vec<Item>,
     pub enemies: Vec<Enemies>,
-    pub spots: Vec<Spot>,
     pub filter: Filter,
 }
 
@@ -399,6 +401,20 @@ pub struct Map {
     pub items: IndexMap<u8, ItemDef>,
     pub enemies: Vec<EnemyGroup>,
     pub rooms: IndexMap<String, Room>,
+    /// The enemy spots of each room directory, keyed by its name in lowercase
+    /// (`10c`), in file order. Every logical room in a directory shares them:
+    /// see [`Map::spots_for`].
+    pub spots: IndexMap<String, Vec<Spot>>,
+}
+
+impl Map {
+    /// The enemy spots of the room directory `room` is in. The enemy stage
+    /// chooses from them for whichever logical room in the directory has the
+    /// rules. Empty when the directory has none.
+    pub fn spots_for(&self, room: &Room) -> &[Spot] {
+        let dir = room.room_id().to_ascii_lowercase();
+        self.spots.get(&dir).map(Vec::as_slice).unwrap_or(&[])
+    }
 }
 
 #[cfg(test)]

@@ -11,9 +11,9 @@
     <item id="3" flag="100" type="61" amount="1" group="8" name="SMALL KEY IN CUP" hidden="true"/>
     <item id="4" flag="165" type="12" group="8" name="LOCKED DRAWER" requires="item(61)" lock="33"/>
     <enemies exclude="4" max-difficulty="1"/>
-    <spot x="4560" y="0" z="10561" d="0"/>
-    <spot x="5428" y="0" z="13758" d="1064"/>
-    <spot x="7422" y="0" z="10439" d="2080"/>
-    <spot x="9455" y="0" z="7401" d="3040"/>
   </room>
+  <spot x="4560" y="0" z="10561" d="0"/>
+  <spot x="5428" y="0" z="13758" d="1064"/>
+  <spot x="7422" y="0" z="10439" d="2080"/>
+  <spot x="9455" y="0" z="7401" d="3040"/>
 </random>
