@@ -1099,9 +1099,55 @@ mod tests {
     const SCRIPTS: [&str; 4] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
-        include_str!("../../games/re2/enemy/22/enemy.lua"),
+        include_str!("../../games/re2/lib/licker.lua"),
         include_str!("../../games/re2/lib/zombie.lua"),
     ];
+
+    /// Each licker's variant names every clip `lib/licker.lua` asks it for,
+    /// and a life for each of the sixteen draws.
+    #[test]
+    fn each_licker_id_runs_the_shared_driver() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/licker.lua");
+        let mut names: Vec<&str> = library
+            .split("V.clips.")
+            .skip(1)
+            .map(|rest| {
+                rest.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                    .next()
+                    .unwrap()
+            })
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        for script in [
+            include_str!("../../games/re2/enemy/22/enemy.lua"),
+            include_str!("../../games/re2/enemy/24/enemy.lua"),
+        ] {
+            lua.globals().set("NAMES", names.clone()).unwrap();
+            let ok: bool = lua
+                .load(format!(
+                    "local variant
+                     local function require(name)
+                         assert(name == '/lib/licker')
+                         return {{ run = function(e, v) variant = v end }}
+                     end
+                     {script}
+                     update(nil)
+                     for _, name in ipairs(NAMES) do
+                         assert(variant.clips[name], name)
+                     end
+                     for i = 0, 15 do
+                         assert(variant.life[i] and variant.life_easy[i])
+                     end
+                     return variant.starts[0] ~= nil and variant.blood ~= nil
+                         and variant.init_late ~= nil"
+                ))
+                .eval()
+                .unwrap();
+            assert!(ok);
+        }
+    }
 
     #[test]
     fn each_zombie_id_runs_the_shared_driver() {

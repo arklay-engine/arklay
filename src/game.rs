@@ -7578,9 +7578,33 @@ impl GameState {
             }
 
             // 4. resolve the player out of the object.
-            let mut resolved = player.pos;
-            objects::chk_entity_slide(&mut resolved, ent_ext, &mut record, false);
-            player.pos = resolved;
+            if self.is_re2_room {
+                // RE2's `Oma_ck_oba`, against the player's own `Atd[0]`.
+                if self.re2.player.be_flg & 0x40 == 0 {
+                    let ofs_y = -(crate::character2::PLAYER_HEIGHT as i16);
+                    let old = self.re2.player.old.unwrap_or(player.pos);
+                    let mut atd = objects::PlayerAtd {
+                        at: [
+                            player.pos[0],
+                            player.pos[1] + i32::from(ofs_y),
+                            player.pos[2],
+                        ],
+                        old: [
+                            old[0] as i16,
+                            (old[1] + i32::from(ofs_y)) as i16,
+                            old[2] as i16,
+                        ],
+                        ofs_y,
+                        at_w: crate::character2::PLAYER_WIDTH,
+                        at_h: crate::character2::PLAYER_HEIGHT,
+                    };
+                    objects::oma_ck_oba(&mut player.pos, &mut atd, &record);
+                }
+            } else {
+                let mut resolved = player.pos;
+                objects::chk_entity_slide(&mut resolved, ent_ext, &mut record, false);
+                player.pos = resolved;
+            }
 
             // 5. commit the moved object and shove whatever it ran into.
             if i32::from(record.committed[0]) != record.pos[0]

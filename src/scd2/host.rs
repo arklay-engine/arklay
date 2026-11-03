@@ -1097,7 +1097,7 @@ impl GameHost<'_> {
         } else if types[0] != sound_type {
             types[1] = sound_type;
         }
-        let licker = id == 0x22;
+        let licker = matches!(id, 0x22 | 0x24);
         let zombie = (0x10..=0x21).contains(&id) || licker;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -1363,6 +1363,13 @@ impl GameHost<'_> {
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
             item_flags,
+            // The format reads `At_h` and `At_d` as byte pairs.
+            atd2: crate::objects::ObjectAtd {
+                ofs: [at(15) as i16, at(16) as i16, at(17) as i16],
+                at_w: at(18) as u16,
+                at_h: (at(19) | at(20) << 8) as u16,
+                at_d: (at(21) | at(22) << 8) as u16,
+            },
             ..crate::objects::ObjectRecord::default()
         };
     }

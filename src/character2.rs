@@ -94,11 +94,11 @@ pub fn tick(
 fn player_atd(pos: [i32; 3]) -> crate::zombie2::Atd {
     crate::zombie2::Atd {
         ofs_x: 0,
-        ofs_y: -0x5FA,
+        ofs_y: -(PLAYER_HEIGHT as i16),
         at_w: PLAYER_WIDTH,
-        at_h: 0x5FA,
+        at_h: PLAYER_HEIGHT,
         w: PLAYER_WIDTH,
-        at: [pos[0], pos[1] - 0x5FA, pos[2]],
+        at: [pos[0], pos[1] - i32::from(PLAYER_HEIGHT), pos[2]],
     }
 }
 
@@ -156,6 +156,7 @@ pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState,
     }
     game.re2.player.at_em_flg = touching;
     game.re2.player.atd = Some(atd);
+    game.re2.player.old = Some(old);
 }
 
 /// `Em10` throws a zombie back (`Routine` `0x901`), if it can be.
@@ -590,7 +591,9 @@ fn run_zombie(
 }
 
 /// `Player_set`'s `At_w`.
-const PLAYER_WIDTH: u16 = 450;
+pub const PLAYER_WIDTH: u16 = 450;
+/// The player's `At_h`, and how far its box's `Ofs_y` lifts it.
+pub const PLAYER_HEIGHT: u16 = 0x5FA;
 /// `fg_system`'s `0x20`, easy mode's bit.
 const FG_SYSTEM_EASY: u8 = 26;
 /// `fg_common`'s `0xa4`, which `Em22_Init` reads.
@@ -599,7 +602,7 @@ const FG_COMMON_LICKER: u8 = 0xA4;
 
 /// `Sca_ck_em`'s mask: the children's is lower, and a zombie's its own.
 pub fn sca_mask(id: u8) -> u16 {
-    if (0x10..=0x22).contains(&id) {
+    if (0x10..=0x22).contains(&id) || id == 0x24 {
         crate::zombie2::MASK
     } else if matches!(id, 0x45 | 0x4F) {
         crate::sca::CHARACTER_MASK_LOW

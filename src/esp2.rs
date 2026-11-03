@@ -838,6 +838,33 @@ impl Effects {
             }
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
+            // `Esp_41`: back at its first frame, it rests a while from the
+            // frame `step` names, then comes back at a slightly smaller size.
+            0x41 => {
+                if slot.count == 0 {
+                    if slot.frame == slot.start {
+                        let delay = self
+                            .bank
+                            .sprites
+                            .get(&slot.kind)
+                            .map_or(0, |s| s.frame(slot.step)[2]);
+                        let count = self.rnd() % 0x32 + 0x32;
+                        let this = &mut self.slots[index];
+                        this.frame = slot.step;
+                        this.delay = delay;
+                        this.flags &= 0xDFFC;
+                        this.count = count;
+                    }
+                } else {
+                    self.slots[index].count -= 1;
+                    if self.slots[index].count == 0 {
+                        let shrink = u16::from(self.rnd() % 10) * 10;
+                        let this = &mut self.slots[index];
+                        this.flags |= 0x2003;
+                        this.scale = [slot.size.wrapping_sub(shrink); 2];
+                    }
+                }
+            }
             // `Esp_22`: a feather rocking from side to side as it falls.
             0x22 => {
                 if slot.next_flags == 0 {
@@ -1566,6 +1593,25 @@ mod tests {
         let slot = effects.slots[slot];
         assert_eq!((slot.anim, slot.update), (0, 0));
         assert_eq!(slot.flags & FLAG_INTEGRATE, 0);
+    }
+
+    #[test]
+    fn a_resting_effect_comes_back_a_little_smaller() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
+        let slot = effects.call(7, 0, 0x1000, 0, [0, 0, 0], false).unwrap();
+        effects.slots[slot].frame = effects.slots[slot].start;
+        effects.slots[slot].flags |= 0x2003;
+        effects.behave(slot, 0x41, None);
+        let rest = effects.slots[slot];
+        assert!((0x32..0x64).contains(&rest.count));
+        assert_eq!(rest.flags & 0x2003, 0);
+        effects.slots[slot].count = 1;
+        effects.behave(slot, 0x41, None);
+        let back = effects.slots[slot];
+        assert_eq!(back.flags & 0x2003, 0x2003);
+        assert_eq!(back.scale[0], back.scale[1]);
+        assert!(back.scale[0] <= back.size && back.size - back.scale[0] <= 90);
     }
 
     #[test]

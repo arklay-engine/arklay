@@ -262,6 +262,7 @@ fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
 fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     let table = match id {
         LICKER_ID => &LICKER_DAMAGE,
+        LICKER_24_ID => &LICKER_24_DAMAGE,
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         _ => &DAMAGE,
@@ -272,6 +273,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
 /// `Wp_dmg_tbl`'s entry for a weapon on a zombie: the damages by band, in ten
 /// bits each; what the region loses in three bits each from the bottom, and
 /// `Damage_cnt` in seven from the ninth; and the heights `Set_MinMax` reads.
+#[derive(Clone, Copy)]
 struct Damage {
     damage: u32,
     stun: u32,
@@ -437,6 +439,33 @@ const LICKER_DAMAGE: [Damage; 7] = [
     },
     Damage {
         damage: 0x0501_7C6E,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+];
+const LICKER_24_ID: u8 = 0x24;
+/// The same rows for `Em_24`: weaker to the magnum and the shotguns.
+const LICKER_24_DAMAGE: [Damage; 7] = [
+    LICKER_DAMAGE[0],
+    LICKER_DAMAGE[1],
+    LICKER_DAMAGE[2],
+    Damage {
+        damage: 0x0501_4050,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x01E0_8423,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0320_DC3C,
         stun: 0x078F_1E0A,
         heights: LICKER_HEIGHTS,
     },
@@ -778,6 +807,10 @@ mod tests {
         assert_eq!(licker.damage, 0x12C4_B12C);
         assert_ne!(licker.damage, zombie.damage);
         assert!(damage_table(LICKER_ID, 1).is_none());
+        // `Em_24` shares the handgun's rows but not the magnum's.
+        let second = |weapon| damage_table(LICKER_24_ID, weapon).unwrap().damage;
+        assert_eq!(second(2), 0x00C0_340E);
+        assert_eq!(second(6), 0x0641_9064);
     }
 
     #[test]
