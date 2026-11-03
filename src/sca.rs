@@ -48,6 +48,8 @@ pub struct Resolved {
     pub hit: bool,
     /// The last push's axis: `Some(true)` for one that moved Z.
     pub push_z: Option<bool>,
+    /// The floor a slope left the body on, which it writes to `Floor`.
+    pub floor: Option<u8>,
 }
 
 /// The bit of the quadrant `(x, z)` lies in around the records' centre.
@@ -111,6 +113,7 @@ pub fn resolve_on_floor(
     let area = area(sca, pos[0], pos[2]);
     let mut hit = false;
     let mut push_z = None;
+    let mut on_floor = None;
     for record in &sca.records {
         if !applies(record, mask, area, pos, radius, floor) || record.id & NO_PUSH != 0 {
             continue;
@@ -126,7 +129,7 @@ pub fn resolve_on_floor(
             6 => push_circle(record, &mut pos, radius),
             7 => push_koban_x(record, prev, &mut pos, radius),
             8 => push_koban_z(record, prev, &mut pos, radius),
-            11 => push_slope(record, prev, &mut pos, radius),
+            11 => push_slope(record, prev, &mut pos, radius, &mut on_floor),
             13 => push_curve(record, &mut pos),
             _ => false,
         };
@@ -139,7 +142,12 @@ pub fn resolve_on_floor(
             }
         }
     }
-    Resolved { pos, hit, push_z }
+    Resolved {
+        pos,
+        hit,
+        push_z,
+        floor: on_floor,
+    }
 }
 
 /// `Sca_hit_box`: the axis the previous position was already clear on is the
@@ -613,7 +621,13 @@ fn push_koban_z(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i3
 
 /// `Sca_hit_slope`: a body on the slope takes its height from its place along
 /// it, and the slope's long sides block like a box.
-fn push_slope(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) -> bool {
+fn push_slope(
+    record: &ScaRect,
+    prev: [i32; 3],
+    pos: &mut [i32; 3],
+    radius: i32,
+    floor: &mut Option<u8>,
+) -> bool {
     let along_z = record.kind & 0x20 != 0;
     let (x, z, width, depth) = outline(record);
     let (across_prev, across_low, across_high) = if along_z {
@@ -635,6 +649,7 @@ fn push_slope(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32)
         // Off either end: settle on the floor there.
         pos[1] = i32::from(floor_of(pos[1])) * -FLOOR_HEIGHT;
     }
+    *floor = Some(floor_of(pos[1]));
     true
 }
 
@@ -1153,6 +1168,24 @@ mod tests {
         let half = resolve(&sca, [1500, 0, 1400], [1500, 0, 1500], PLAYER_RADIUS);
         assert_eq!(half.pos[1], 900);
         assert!(half.hit);
+        assert_eq!(half.floor, Some(floor_of(900)), "it writes `Floor`");
+    }
+
+    #[test]
+    fn a_box_on_a_floor_pushes_a_body_whatever_its_height() {
+        let sca = room(vec![record(0)]);
+        // A script put the body on top, but `Floor` still says the ground.
+        let pushed = resolve_on_floor(
+            &sca,
+            PLAYER_MASK,
+            [0, 0, 1500],
+            [1500, -1800, 1500],
+            PLAYER_RADIUS,
+            0,
+        );
+        assert!(pushed.hit);
+        assert_eq!(pushed.floor, None, "only a slope writes `Floor`");
+        assert!(!resolve(&sca, [0, 0, 1500], [1500, -1800, 1500], PLAYER_RADIUS).hit);
     }
 
     #[test]

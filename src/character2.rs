@@ -469,6 +469,7 @@ fn run_zombie(
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let enemies = game.re2.enemies;
     let noise = game.re2.player.noise;
+    let player_floor = game.re2.player.floor;
     let player_neck = game.re2.player.neck.position;
     let stage = game.id.stage;
     let player_angle = game.entities[0].angle;
@@ -503,7 +504,7 @@ fn run_zombie(
         knocks: Vec::new(),
         player,
         player_neck,
-        player_floor: crate::sca::floor_of(player[1]),
+        player_floor,
         noise: u16::from(noise),
         rnd: &mut re2.rnd,
         partner,
