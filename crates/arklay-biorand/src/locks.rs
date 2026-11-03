@@ -533,9 +533,7 @@ fn door_locks(
             let door = door(map, door_ref);
             let key = if door.no_unlock {
                 KEY_NONE
-            } else if door.target.is_none() {
-                KEY_LOCKED
-            } else if door.kind == Some(DoorKind::Locked) {
+            } else if door.target.is_none() || door.kind == Some(DoorKind::Locked) {
                 KEY_LOCKED
             } else if door.kind == Some(DoorKind::Unlock) {
                 KEY_UNLOCK

@@ -235,11 +235,10 @@ fn player_name(player: Player) -> &'static str {
 /// The stages for one player, in staging's order.
 fn plan_game(map: &Map, mut config: Config, seed: u64, player: Player) -> Result<Game> {
     let mut deferred = Vec::new();
-    for option in ["doors/random"] {
-        if config.get_bool(option, false) {
-            config.set(option, false);
-            deferred.push(option.to_string());
-        }
+    // Door randomization is a later milestone.
+    if config.get_bool("doors/random", false) {
+        config.set("doors/random", false);
+        deferred.push("doors/random".to_string());
     }
 
     let options = prepare::Options::from_config(&config, player);

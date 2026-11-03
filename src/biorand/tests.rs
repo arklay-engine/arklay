@@ -417,6 +417,9 @@ fn a_locked_seed_writes_and_verifies_every_door_lock() {
             data[offset + locks::DOOR_KEY] ^= 1;
         });
         let err = format!("{:#}", verify_with(&out, None).unwrap_err());
-        assert!(err.contains(&path) && err.contains("the plan lock"), "{err}");
+        assert!(
+            err.contains(&path) && err.contains("the plan lock"),
+            "{err}"
+        );
     }
 }
