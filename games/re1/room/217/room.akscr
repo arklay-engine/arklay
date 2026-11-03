@@ -40,6 +40,7 @@ proc init
 {
     if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
+        random_enemies();
         door_aot_set(AOT_00_DOOR_216, 10900, 3500, 1300, 1000, 0, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
         aot_set(AOT_01_EVENT_LIGHT_SWITCH, 400, 8200, 3200, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);

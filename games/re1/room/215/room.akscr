@@ -41,6 +41,7 @@ proc init
 {
     if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
+        random_enemies();
         door_aot_set(AOT_00_DOOR_201, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         aot_set(AOT_01_EVENT_LIGHT_SWITCH, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);
         aot_set(AOT_02_EVENT_DEER_HEAD, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_deer_head, 0, 0, 0);

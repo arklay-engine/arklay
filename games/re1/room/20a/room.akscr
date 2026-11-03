@@ -67,6 +67,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+        {
+            random_enemies();
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, TRUE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+    }
     room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_MAIN_ON | 1);
     door_aot_set(AOT_00_DOOR_208, 1000, 5000, 1300, 1600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     // A randomized desk slot (AOT 8) is an ordinary item AOT over the desk,

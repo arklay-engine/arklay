@@ -324,6 +324,7 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, TRUE))
             {
+                random_enemies();
                 if (ck(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, TRUE))
                 {
                     sys_multi(SYS_UNEQUIP);

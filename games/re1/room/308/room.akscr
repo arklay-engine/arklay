@@ -52,6 +52,13 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+        {
+            random_enemies();
+        }
+    }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         door_aot_set(AOT_00_DOOR_307, 200, 15900, 2100, 1500, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_307_308, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -84,6 +91,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_IN_CAVES, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
         {
             dir_set(0, 0, 3920, 0, 2800, 0, 16300);
+            random_enemies();
             enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3984, 0, 5224, 0, 17102, ENEMY_00_BARRY, ANIM_00, 0, EVAR_00);
             evt_exec(0, TASK_09, barry_greets_jill);
             aot_reset(AOT_01_DOOR_309_N, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, flamethrower_taken_or_north_door_with_barry, 0);
@@ -92,11 +100,13 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR, TRUE))
             {
+                random_enemies();
                 enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1288, 0, 12140, 0, 28590, ENEMY_00_BARRY, ANIM_00, 0, EVAR_00);
                 set(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR, FALSE);
             }
             else
             {
+                random_enemies();
                 enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3288, 0, 8690, 0, 3250, ENEMY_00_BARRY, ANIM_00, 0, EVAR_00);
             }
             evt_exec(0, TASK_09, flamethrower_hook_or_barry_follows);
@@ -108,11 +118,17 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
             set(FG_COMMON, F_COMMON_J_BACK_IN_308_AFTER_ENRICO, TRUE);
         }
     }
@@ -120,13 +136,22 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0_2, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0_2, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0_2, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0_2, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
-        enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_1, SPAWN_FORCE, 2, 0, 3072, 0, 9800, 0, 19600, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_1, SPAWN_FORCE, 2, 0, 3072, 0, 9800, 0, 19600, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+        }
     }
 }
 

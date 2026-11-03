@@ -48,6 +48,13 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, TRUE))
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR_20D, 500, 2500, 1700, 3800, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20D_PILLAR_PASSAGE, 11500, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_20F, 3200, 11400, 1700, 1600, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_20F_DINING, 4800, 0, 11600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
@@ -71,11 +78,17 @@ proc init
             room_bgm_state_set(1, ROOM_20E_FRONT_OF_ATTIC, BGM_OFF);
             if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                }
             }
             else
             {
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                }
             }
         }
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
