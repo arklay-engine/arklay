@@ -167,8 +167,10 @@ A door's lock byte means `0x80` checked, `0x40` refused for Rebecca and
 `RANDOMIZER` is set, as staging always rewrites locks), the whole byte is the
 flag index: 0 is unlocked and 1–255 are lock flags. Bank 2 is already 256 bits
 in arklay at run time, but a save keeps only its first 8 bytes, as the
-original's BioCard does. So a save gains an extension block holding the
-whole bank, as staging's `biorand.dll` added one. Scripts that raise a lock flag by number (`set(FG_LOCK, ...)`)
+original's BioCard does. So a save gains an `AKY\x03` trailer (after the height and RE2 trailers)
+holding bank 2's bytes 8 to 31, as staging's `biorand.dll` added one. It is
+written only when one of those bytes is non-zero, so retail saves are
+unchanged and an older save loads with the high flags clear. Scripts that raise a lock flag by number (`set(FG_LOCK, ...)`)
 use the room's lock names, which the emitter renumbers with the door.
 
 The `0x40` Rebecca refusal goes: the few doors that carry it get a script

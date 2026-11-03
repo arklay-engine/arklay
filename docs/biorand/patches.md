@@ -40,7 +40,7 @@ dropped history.
 | 10 | The locked drawer's hard-coded ink-ribbon case | Fix, or Engine if it changes vanilla behaviour | check against arklay's drawer handler |
 | 11–13 | Ink controlled by scenario flag 122 for both characters | Engine: ink reads flag 122 when `BR_INK_FLAG` is set, the character rule otherwise | `BR_INK_FLAG` |
 | 14–15 | Chris may use the lockpick (flag 124); Jill may use the sword key | Engine, already in arklay; confirm both directions | flag 124 |
-| 16–21 | Whole lock byte is the flag index; 256 lock flags, saved; cleared on a new game | Engine, plus a save extension block for bank 2 | `BR_LOCK_FULL_BYTE` |
+| 16–21 | Whole lock byte is the flag index; 256 lock flags, saved; cleared on a new game | Engine, plus a save extension block for bank 2. Done: `GameState::door_lock` decodes the byte; the `AKY\x03` save trailer holds bank 2 bytes 8..32 when any is set; a new game starts cleared | `BR_LOCK_FULL_BYTE` |
 | 22 | 6 or 8 slots for either character | Engine, already in arklay (`config.rs` inventory size); the manifest sets it | manifest |
 | 23 | Undo a Classic REbirth hook that kept the flamethrower in slots 7–8 | Gone: a Classic REbirth bug | |
 | 24 | Weapon hit-scan heights for a swapped player model | Gone: cosmetic (player models) | |
