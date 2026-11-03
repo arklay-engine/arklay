@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="205" name="2F EAST ARMORY" tags="mansion mansion2able">
+    <door id="0" target="204:1" lock="14">
+      <entrance x="16000" y="0" z="7300" d="2048"/>
+    </door>
+    <item id="9" flag="36" type="46" amount="1" group="1" name="IN CABINET"/>
+    <enemies exclude="2 3 4 7 10" max-difficulty="1"/>
+    <spot x="11367" y="0" z="6701" d="3816"/>
+    <spot x="11597" y="0" z="8330" d="288"/>
+    <spot x="5910" y="0" z="7463" d="8"/>
+    <spot x="8633" y="0" z="5902" d="1936"/>
+  </room>
+</random>

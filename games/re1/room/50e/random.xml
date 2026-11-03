@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="50E" name="LABORATORY B3 SAVE" tags="lab box safe save">
+    <door id="0" target="50C:0">
+      <entrance x="2800" y="0" z="4200" d="3648"/>
+    </door>
+    <item id="2" flag="232" type="68" amount="1" group="32" name="GREEN HERB"/>
+    <item id="3" flag="233" type="69" amount="1" group="32" name="BLUE HERB"/>
+    <item id="132" flag="234" type="14" amount="6" group="32" name="MAGNUM ROUNDS"/>
+    <item id="5" flag="235" type="47" amount="3" group="32" name="INK IN BOOKCASE" hidden="true"/>
+    <enemies exclude="4" max-difficulty="1" restricted="true"/>
+    <spot x="3667" y="0" z="6552" d="4056"/>
+    <spot x="5890" y="0" z="4765" d="3032"/>
+    <spot x="6575" y="0" z="6595" d="976"/>
+  </room>
+</random>

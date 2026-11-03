@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="10D" name="1F WEST TIGER" tags="mansion mansion2able">
+    <door id="0" target="103:3">
+      <entrance x="5600" y="0" z="2800" d="3072"/>
+    </door>
+    <!-- staging typeOffsets: 0x270F -->
+    <item id="131" flag="174" type="41" amount="1" group="1" name="BLUE EYE" requires="item(33)"/>
+    <!-- staging typeOffsets: 0x26E7 -->
+    <item id="4" flag="175" type="5" amount="6" group="1" name="RED EYE" requires="item(34)"/>
+    <enemies exclude="4 12" max-difficulty="0"/>
+    <spot x="5572" y="0" z="5207" d="1048"/>
+  </room>
+</random>

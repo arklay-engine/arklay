@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="21C" name="B1 KITCHEN" tags="mansion">
+    <door id="0" target="200:1">
+      <entrance x="19600" y="0" z="6800" d="0"/>
+    </door>
+    <door id="1" target="21B:1" kind="locked" lock="27">
+      <entrance x="6500" y="0" z="2500" d="3072"/>
+    </door>
+    <door id="2" target="110:1" tags="softlock-safe">
+      <entrance x="3800" y="0" z="10000" d="2048"/>
+    </door>
+    <item id="10" flag="228" type="61" amount="1" group="2" name="SMALL KEY NEAR SINK" hidden="true"/>
+    <enemies id="0" flag="107" exclude="4"/>
+    <enemies id="1" flag="108" exclude="4"/>
+    <spot x="11199" y="0" z="7795" d="1868"/>
+    <spot x="12991" y="0" z="2434" d="3724"/>
+    <spot x="14122" y="0" z="5651" d="900"/>
+    <spot x="18947" y="0" z="3055" d="1932"/>
+    <spot x="3289" y="0" z="4225" d="3252"/>
+    <spot x="3448" y="0" z="6870" d="1044"/>
+    <spot x="7241" y="0" z="7568" d="1868"/>
+    <spot x="8040" y="0" z="2572" d="108"/>
+  </room>
+</random>

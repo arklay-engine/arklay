@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="50C" name="LABORATORY B3 EAST CORRIDOR" tags="lab">
+    <door id="0" target="505:4" lock="29">
+      <entrance x="2500" y="0" z="17300" d="0"/>
+    </door>
+    <door id="1" target="507/TABLE:1">
+      <entrance x="6100" y="0" z="18000" d="1024"/>
+    </door>
+    <door id="2" target="50E:0">
+      <entrance x="14300" y="0" z="17700" d="2048"/>
+    </door>
+    <door id="3" target="50F:0">
+      <entrance x="12700" y="0" z="2500" d="3072"/>
+    </door>
+    <door id="4" target="515:0" allowed-locks="" randomize="false" requires="room(50F) room(511)">
+      <entrance x="16000" y="0" z="27900" d="2048"/>
+    </door>
+    <enemies id="0" kind="npc"/>
+    <!-- staging condition: 0:45 -->
+    <enemies exclude="4"/>
+    <spot x="11538" y="0" z="22374" d="3196"/>
+    <spot x="11698" y="0" z="28326" d="940"/>
+    <spot x="11751" y="0" z="10826" d="1052"/>
+    <spot x="11752" y="0" z="19605" d="1020"/>
+    <spot x="11895" y="0" z="14807" d="1052"/>
+    <spot x="12123" y="0" z="5953" d="3060"/>
+    <spot x="13386" y="0" z="24346" d="1076"/>
+    <spot x="13454" y="0" z="12675" d="3004"/>
+    <spot x="13669" y="0" z="28292" d="4084"/>
+    <spot x="13822" y="0" z="8924" d="1060"/>
+    <spot x="9866" y="0" z="17563" d="2076"/>
+  </room>
+</random>

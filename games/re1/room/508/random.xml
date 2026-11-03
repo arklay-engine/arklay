@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="508" name="LABORATORY B3 WEST CORRIDOR" tags="lab">
+    <door id="0" target="505:3">
+      <entrance x="19500" y="0" z="3500" d="2048"/>
+    </door>
+    <door id="1" target="509:0" lock="38" allowed-locks="" no-unlock="true" requires="flag(506_COMPUTER_JOHNADA)">
+      <entrance x="11300" y="0" z="4800" d="1024"/>
+    </door>
+    <door id="2" target="50A:0">
+      <entrance x="18400" y="0" z="2400" d="3072"/>
+    </door>
+    <door id="3" target="50B:0" allowed-locks="" no-unlock="true" requires="flag(MO_DISC_507) flag(MO_DISC_509) flag(MO_DISC_510)" tags="segment-end">
+      <entrance x="2500" y="0" z="3600" d="0"/>
+    </door>
+    <!-- staging condition: !(1:172 && !1:75) -->
+    <enemies exclude="4" max-difficulty="2"/>
+    <spot x="14536" y="0" z="3202" d="4024"/>
+    <spot x="16960" y="0" z="4059" d="2088"/>
+    <spot x="7651" y="0" z="4110" d="2072"/>
+    <spot x="9651" y="0" z="2903" d="24"/>
+  </room>
+</random>

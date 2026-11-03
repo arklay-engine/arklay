@@ -1,17 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="2F WEST DINING ROOM"/>
-  <doors>
-    <door id="0" target="201:0" kind="normal">
+  <room key="202" name="2F WEST DINING ROOM" tags="mansion">
+    <door id="0" target="201:0">
       <entrance x="6400" y="0" z="14000" d="1024" cut="4"/>
     </door>
-    <door id="1" target="203:3" kind="normal">
+    <door id="1" target="203:3">
       <entrance x="30900" y="0" z="8300" d="2048" cut="1"/>
     </door>
-  </doors>
-  <items>
-  </items>
-  <enemies exclude="4">
+    <enemies exclude="4"/>
     <spot x="12522" y="0" z="14166" d="1840"/>
     <spot x="14731" y="0" z="2712" d="3992"/>
     <spot x="17151" y="0" z="14128" d="3936"/>
@@ -27,5 +23,5 @@
     <spot x="31270" y="0" z="13398" d="2272"/>
     <spot x="31546" y="0" z="4132" d="1336"/>
     <spot x="9410" y="0" z="2795" d="2072"/>
-  </enemies>
+  </room>
 </random>

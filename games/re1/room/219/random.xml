@@ -1,16 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="2F WEST STORAGE" tags="visit2"/>
-  <doors>
-    <door id="0" target="213:2" kind="normal">
+  <room key="219" name="2F WEST STORAGE" tags="mansion mansion2able">
+    <door id="0" target="213:2">
       <entrance x="7400" y="0" z="2900" d="2048" cut="1"/>
     </door>
-  </doors>
-  <items>
-    <item id="1" name="SHELLS/1"/>
-    <item id="2" name="SHELLS/2"/>
-  </items>
-  <enemies exclude="4">
+    <item id="1" flag="55" type="12" amount="7" group="2" name="SHELLS/1"/>
+    <item id="2" flag="56" type="12" amount="7" group="2" name="SHELLS/2"/>
+    <!-- staging typeOffsets: 0x14B51 -->
+    <item id="3" flag="57" type="39" amount="1" group="2" name="BATTERY"/>
+    <enemies exclude="4" max-difficulty="0"/>
     <spot x="4131" y="0" z="3124" d="3968"/>
-  </enemies>
+  </room>
 </random>

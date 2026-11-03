@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="114" name="1F EAST OUTSIDE BOILER" tags="mansion mansion2able">
+    <door id="0" target="109:1" lock="4">
+      <entrance x="10030" y="0" z="23449" d="1024"/>
+    </door>
+    <item id="1" flag="10" type="68" amount="1" group="1" name="GREEN HERB/1"/>
+    <item id="2" flag="221" type="68" amount="1" group="1" name="GREEN HERB/2"/>
+    <item id="3" flag="222" type="68" amount="1" group="1" name="GREEN HERB/3"/>
+    <item id="4" flag="223" type="68" amount="1" group="1" name="GREEN HERB/4"/>
+    <item id="5" flag="224" type="68" amount="1" group="1" name="GREEN HERB/5"/>
+    <item id="6" flag="225" type="68" amount="1" group="1" name="GREEN HERB/6"/>
+    <enemies exclude="4"/>
+    <spot x="10146" y="0" z="16476" d="3186"/>
+    <spot x="11972" y="0" z="13460" d="4082"/>
+    <spot x="16002" y="0" z="13497" d="2098"/>
+    <spot x="8230" y="0" z="17846" d="4002"/>
+    <spot x="8747" y="0" z="13497" d="2922"/>
+    <spot x="9949" y="0" z="19602" d="978"/>
+  </room>
+</random>

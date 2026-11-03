@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="102" name="1F WEST STORAGE" tags="mansion mansion2able">
+    <door id="0" target="101:1" lock="10">
+      <entrance x="3400" y="0" z="9200" d="1024"/>
+    </door>
+    <item id="1" flag="48" type="28" amount="1" group="1" name="BROKEN SHOTGUN"/>
+    <item id="2" flag="49" type="12" amount="7" group="1" name="SHELLS IN DRAWER" requires="item(61)" lock="30"/>
+    <item id="3" flag="50" type="11" amount="15" group="1" name="CLIP ON SHELF"/>
+    <enemies exclude="4" max-difficulty="0"/>
+    <spot x="3220" y="0" z="5214" d="1064"/>
+    <spot x="5466" y="0" z="7107" d="2056"/>
+    <spot x="5996" y="0" z="3442" d="3112"/>
+  </room>
+</random>

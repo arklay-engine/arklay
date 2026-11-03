@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="409" name="GUARDHOUSE DRUG STORAGE" tags="guardhouse">
+    <door id="0" target="408:1">
+      <entrance x="9000" y="0" z="3000" d="2048"/>
+    </door>
+    <item id="1" flag="60" type="19" amount="1" group="8" name="EMPTY BOTTLE/1"/>
+    <item id="2" flag="61" type="19" amount="1" group="8" name="EMPTY BOTTLE/2"/>
+    <item id="3" flag="62" type="19" amount="1" group="8" name="EMPTY BOTTLE/3"/>
+    <item id="4" flag="63" type="19" amount="1" group="8" name="EMPTY BOTTLE/4"/>
+    <!-- staging condition: !(!0:0 && 1:58) -->
+    <enemies exclude="4" max-difficulty="0" player="chris"/>
+    <enemies exclude="4" max-difficulty="0" player="jill"/>
+    <spot x="4651" y="0" z="4276" d="0"/>
+  </room>
+</random>

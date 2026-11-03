@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="308" name="CAVES BRANCH PASSAGE" tags="caves">
+    <door id="0" name="Flamethrower Door" target="307:1" lock="40" allowed-locks="" no-unlock="true" door-rando="false" player="chris">
+      <entrance x="2600" y="0" z="16500" d="0"/>
+    </door>
+    <door id="0" name="Flamethrower Door" target="307:1" kind="unblock" lock="40" allowed-locks="" no-unlock="true" door-rando="true" player="chris">
+      <entrance x="2600" y="0" z="16500" d="0"/>
+    </door>
+    <door id="0" target="307:1" player="jill">
+      <entrance x="2600" y="0" z="16500" d="0"/>
+    </door>
+    <door id="1" target="309:0" allowed-locks="" door-rando="false">
+      <entrance x="12600" y="0" z="27300" d="2048"/>
+    </door>
+    <door id="1" target="309:0" door-rando="true">
+      <entrance x="12600" y="0" z="27300" d="2048"/>
+    </door>
+    <door id="2" target="309:1" allowed-locks="" door-rando="false">
+      <entrance x="11000" y="0" z="3300" d="2048"/>
+    </door>
+    <door id="2" target="309:1" door-rando="true">
+      <entrance x="11000" y="0" z="3300" d="2048"/>
+    </door>
+    <enemies exclude="4" player="chris"/>
+    <!-- staging condition: 4:0 -->
+    <enemies exclude="4" player="jill"/>
+    <spot x="10123" y="0" z="14477" d="1040"/>
+    <spot x="10196" y="0" z="24753" d="1264"/>
+    <spot x="10426" y="0" z="19843" d="1400"/>
+    <spot x="7421" y="0" z="16651" d="2088"/>
+    <spot x="8356" y="0" z="8436" d="3048"/>
+    <spot x="8517" y="0" z="28393" d="904"/>
+    <spot x="8862" y="0" z="21667" d="2872"/>
+    <spot x="9200" y="0" z="10845" d="3120"/>
+    <spot x="9915" y="0" z="16545" d="32"/>
+  </room>
+</random>

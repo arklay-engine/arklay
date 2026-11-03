@@ -1,22 +1,23 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="2F WEST ELEVATOR" tags="visit2"/>
-  <doors>
-    <door id="0" target="216:0" kind="normal">
+  <room key="213" name="2F WEST ELEVATOR" tags="mansion">
+    <door id="0" target="216:0">
       <entrance x="15800" y="0" z="16500" d="0" cut="4"/>
     </door>
-    <door id="1" target="200:0" kind="lift"/>
-    <door id="2" target="219:0" kind="normal">
+    <door id="1" target="200:0">
+      <entrance x="16000" y="0" z="7600" d="0"/>
+    </door>
+    <door id="2" target="219:0">
       <entrance x="9800" y="0" z="2900" d="0" cut="1"/>
     </door>
-    <door id="3" target="214:0" kind="normal">
+    <door id="3" target="214:0" player="chris">
       <entrance x="2500" y="0" z="6600" d="0" cut="1"/>
     </door>
-  </doors>
-  <items>
-    <item id="4" name="GREEN HERB"/>
-  </items>
-  <enemies exclude="4">
+    <door id="3" target="214:1" player="jill">
+      <entrance x="2500" y="0" z="6600" d="0" cut="1"/>
+    </door>
+    <item id="4" flag="161" type="68" amount="1" group="2" name="GREEN HERB"/>
+    <enemies exclude="4"/>
     <spot x="10357" y="0" z="7073" d="917"/>
     <spot x="12686" y="0" z="3160" d="13"/>
     <spot x="13458" y="0" z="11364" d="3981"/>
@@ -27,5 +28,5 @@
     <spot x="16636" y="0" z="19276" d="1173"/>
     <spot x="16750" y="0" z="13261" d="3117"/>
     <spot x="5780" y="0" z="6714" d="101"/>
-  </enemies>
+  </room>
 </random>

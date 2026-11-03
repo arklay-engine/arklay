@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="10B" name="1F EAST STAIRS" tags="mansion">
+    <door id="0" target="10A:3" kind="locked" lock="20">
+      <entrance x="3300" y="0" z="6600" d="3072"/>
+    </door>
+    <door id="1" target="207:3" allowed-locks="" no-unlock="true">
+      <entrance x="2900" y="0" z="19000" d="2048"/>
+    </door>
+    <door id="2" target="118:0">
+      <entrance x="9500" y="0" z="14300" d="3072"/>
+    </door>
+    <item id="4" flag="110" type="68" amount="1" group="1" name="GREEN HERB"/>
+    <enemies exclude="4" max-difficulty="1"/>
+    <spot x="2667" y="0" z="8788" d="3090"/>
+    <spot x="2810" y="0" z="14801" d="3058"/>
+    <spot x="2854" y="0" z="12358" d="1074"/>
+    <spot x="5726" y="0" z="16385" d="4042"/>
+    <spot x="5935" y="0" z="14558" d="2098"/>
+    <spot x="7592" y="0" z="16189" d="2130"/>
+  </room>
+</random>

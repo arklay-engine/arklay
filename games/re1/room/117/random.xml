@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="117" name="1F EAST PORTRAITS" tags="mansion mansion2able">
+    <door id="0" target="10A:1">
+      <entrance x="2900" y="0" z="10000" d="0"/>
+    </door>
+    <item id="9" flag="31" type="45" amount="1" group="1" name="BEHIND END PORTRAIT"/>
+  </room>
+</random>

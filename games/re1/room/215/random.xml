@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="215" name="2F WEST DEER ROOM" tags="mansion mansion2able">
+    <door id="0" target="201:2" lock="12">
+      <entrance x="8100" y="0" z="3800" d="2048"/>
+    </door>
+    <item id="3" flag="29" type="12" amount="7" group="2" name="SHELLS"/>
+    <item id="4" flag="116" type="98" amount="1" group="2" name="DOCUMENT ON TABLE" document="true"/>
+    <item id="5" flag="30" type="34" amount="1" group="2" name="DEER EYE"/>
+    <item id="6" flag="200" type="14" amount="6" group="2" name="MAGNUM ROUNDS"/>
+    <enemies exclude="4" max-difficulty="0"/>
+    <spot x="2918" y="0" z="3284" d="64"/>
+    <spot x="3451" y="0" z="10625" d="1192"/>
+    <spot x="3799" y="0" z="5301" d="568"/>
+    <spot x="5401" y="0" z="3810" d="2832"/>
+    <spot x="8068" y="0" z="7560" d="1104"/>
+  </room>
+</random>

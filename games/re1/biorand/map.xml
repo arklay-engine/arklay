@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+  <begin-end start="106" end="501"/>
+  <items>
+    <item id="1" name="Combat Knife" kind="weapon/knife" max="1"/>
+    <item id="2" name="Beretta" kind="weapon/handgun" max="15" ammo="11"/>
+    <item id="3" name="Shotgun" kind="weapon/shotgun" max="7" ammo="12"/>
+    <item id="4" name="Colt Python (dumdum)" kind="weapon/colt/dumdum" max="6" ammo="13"/>
+    <item id="5" name="Colt Python (magnum)" kind="weapon/colt/magnum" max="6" ammo="14"/>
+    <item id="6" name="Flamethrower" kind="weapon/flamethrower" max="240" ammo="15"/>
+    <item id="7" name="Bazooka (acid)" kind="weapon/grenadelauncher/acid" max="6" ammo="16 17 18"/>
+    <item id="8" name="Bazooka (explosive)" kind="weapon/grenadelauncher/explosive" max="6" ammo="16 17 18"/>
+    <item id="9" name="Bazooka (flame)" kind="weapon/grenadelauncher/flame" max="6" ammo="16 17 18"/>
+    <item id="10" name="Rocket Launcher" kind="weapon/rocketlauncher" max="5"/>
+    <item id="11" name="Handgun Ammo" kind="ammo/handgun" max="100"/>
+    <item id="12" name="Shotgun Shells" kind="ammo/shotgun" max="100"/>
+    <item id="13" name="DumDum Rounds" kind="ammo/colt/dumdum" max="100"/>
+    <item id="14" name="Magnum Rounds" kind="ammo/colt/magnum" max="100"/>
+    <item id="15" name="Flamethrower Fuel" kind="ammo/flamethrower" max="100"/>
+    <item id="16" name="Explosive Rounds" kind="ammo/grenadelauncher/explosive" max="100"/>
+    <item id="17" name="Acid Rounds" kind="ammo/grenadelauncher/acid" max="100"/>
+    <item id="18" name="Flame Rounds" kind="ammo/grenadelauncher/flame" max="100"/>
+    <item id="27" name="V-JOLT" kind="key/consumable" group="1"/>
+    <item id="28" name="Broken Shotgun" kind="key/consumable" group="1"/>
+    <item id="29" name="Square Crank" kind="key/reusuable" group="4" amount="0"/>
+    <item id="30" name="Hex Crank" kind="key/reusuable" group="16" amount="0"/>
+    <item id="31" name="Wood Emblem" kind="key/consumable" group="1"/>
+    <item id="32" name="Gold Emblem" kind="key/consumable" group="1"/>
+    <item id="33" name="Blue Jewel" kind="key/consumable" group="1"/>
+    <item id="34" name="Red Jewel" kind="key/consumable" group="1"/>
+    <item id="35" name="Music Notes" kind="key/consumable" group="1" amount="0"/>
+    <item id="38" name="Chemical" kind="key/consumable" group="1"/>
+    <item id="39" name="Battery" kind="key/consumable"/>
+    <item id="40" name="MO Disc" kind="key/consumable" group="32"/>
+    <item id="41" name="Wind Crest" kind="key/consumable" group="1"/>
+    <item id="42" name="Flare" kind="key/consumable" group="1"/>
+    <item id="43" name="Slides" kind="key/consumable" group="32"/>
+    <item id="44" name="Moon Crest" kind="key/consumable" group="1"/>
+    <item id="45" name="Star Crest" kind="key/consumable" group="1"/>
+    <item id="46" name="Sun Crest" kind="key/consumable" group="1"/>
+    <item id="47" name="Ink Ribbon" kind="ink" max="100"/>
+    <item id="48" name="Lighter" kind="key/reusuable" group="1" amount="0"/>
+    <item id="49" name="Lockpick" kind="key/reusuable" group="1" amount="0"/>
+    <item id="51" name="Sword Key" kind="key/reusuable" group="1" discard="true"/>
+    <item id="52" name="Armor Key" kind="key/reusuable" group="1" discard="true"/>
+    <item id="53" name="Shield Key" kind="key/reusuable" group="1" discard="true"/>
+    <item id="54" name="Helmet Key" kind="key/reusuable" group="8" discard="true"/>
+    <item id="55" name="Master Key" kind="key/reusuable" group="32" discard="true"/>
+    <item id="56" name="Special Key" kind="key/reusuable" group="1" discard="true"/>
+    <item id="57" name="002 Key" kind="key/reusuable" group="8" discard="true"/>
+    <item id="58" name="003 Key" kind="key/reusuable" group="8" discard="true"/>
+    <item id="59" name="Control Key" kind="key/reusuable" group="8" discard="true"/>
+    <item id="60" name="Power Room Key" kind="key/reusuable" discard="true"/>
+    <item id="61" name="Small Key" kind="key/consumable" group="128"/>
+    <item id="62" name="Red Book" kind="key/consumable" group="8"/>
+    <item id="63" name="Doom Book (Red)" kind="key/consumable" group="16"/>
+    <item id="64" name="Doom Book (Blue)" kind="key/consumable" group="16"/>
+    <item id="65" name="First Aid Spray" kind="health/fas" max="1"/>
+    <item id="67" name="Herb (R)" kind="health/r" max="1"/>
+    <item id="68" name="Herb (G)" kind="health/g" max="1"/>
+    <item id="69" name="Herb (B)" kind="health/b" max="1"/>
+    <item id="70" name="Herb (GR)" kind="health/gr" max="1"/>
+    <item id="71" name="Herb (GG)" kind="health/gg" max="1"/>
+    <item id="72" name="Herb (GB)" kind="health/gb" max="1"/>
+    <item id="73" name="Herb (GRB)" kind="health/grb" max="1"/>
+    <item id="74" name="Herb (GGG)" kind="health/ggg" max="1"/>
+    <item id="75" name="Herb (GGB)" kind="health/ggb" max="1"/>
+    <item id="78" name="Map (Mansion)" kind="map"/>
+    <item id="80" name="Map (Courtyard)" kind="map"/>
+    <item id="81" name="Map (Caves)" kind="map"/>
+    <item id="82" name="Map (Guardhouse)" kind="map"/>
+    <item id="95" name="Document (Researcher's Will 1)" kind="document"/>
+    <item id="96" name="Document (Researcher's Will 2)" kind="document"/>
+    <item id="97" name="Document (Keeper's Diary)" kind="document"/>
+    <item id="98" name="Document (Orders)" kind="document"/>
+    <item id="103" name="Document (Security System)" kind="document"/>
+    <item id="106" name="Document (Barry's photo)" kind="document"/>
+    <item id="107" name="Document (Pass Code 01)" kind="document"/>
+    <item id="108" name="Document (Pass Code 02)" kind="document"/>
+    <item id="109" name="Document (Pass Code 03)" kind="document"/>
+  </items>
+  <enemies>
+    <group name="Zombie" background="#66f" foreground="#fff">
+      <entry key="zombie" name="Zombie" id="0 1 17" esp="3 4">
+        <pose name="Walking" pose="0" probability="0.4"/>
+        <pose name="Standing" pose="1" probability="0.4"/>
+        <pose name="Crawling" pose="2" probability="0.1"/>
+        <pose name="Faking" pose="3" probability="0.1"/>
+      </entry>
+    </group>
+    <group name="Cerberus" background="#000" foreground="#fff">
+      <entry key="cerberus" name="Cerberus" id="2" esp="4">
+        <pose name="Walking" pose="0" probability="0.8"/>
+        <pose name="Resting" pose="8" probability="0.2"/>
+      </entry>
+    </group>
+    <group name="Spider" background="#af6" foreground="#333">
+      <entry key="spider" name="Web Spinner" id="3" esp="30"/>
+      <entry key="blacktiger" name="Black Tiger" id="4" esp="30"/>
+    </group>
+    <group name="Crow" background="#000" foreground="#fff">
+      <entry key="crow" name="Crow" id="5" esp="28"/>
+    </group>
+    <group name="Hunter" background="#6f6" foreground="#000">
+      <entry key="hunter" name="Hunter" id="6" esp="3 4"/>
+    </group>
+    <group name="Wasp" background="#ff3" foreground="#000">
+      <entry key="wasp" name="Wasp" id="7"/>
+    </group>
+    <group name="Chimera" background="#aaa" foreground="#000">
+      <entry key="chimera" name="Chimera" id="9" esp="3 4 29 31"/>
+    </group>
+    <group name="Snake" background="#080" foreground="#000">
+      <entry key="snake" name="Snake" id="10" esp="4"/>
+    </group>
+    <group name="Neptune" background="#888" foreground="#000">
+      <entry key="neptune" name="Neptune" id="11" esp="23 37">
+        <pose name="Adult (Swimming)" pose="0" probability="0.64"/>
+        <pose name="Adult (Flipping)" pose="1" probability="0.16"/>
+        <pose name="Calf (Swimming)" pose="2" probability="0.16"/>
+        <pose name="Calf (Flipping)" pose="3" probability="0.04"/>
+      </entry>
+    </group>
+    <group name="Tyrant" background="#ccc" foreground="#000">
+      <entry key="tyrant" name="Tyrant" id="12"/>
+    </group>
+  </enemies>
+</map>

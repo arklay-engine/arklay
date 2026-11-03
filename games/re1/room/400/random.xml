@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="400" name="GUARDHOUSE ENTRANCE" tags="guardhouse">
+    <door id="0" target="304:1">
+      <entrance x="3600" y="0" z="9900" d="3072"/>
+    </door>
+    <door id="1" target="401:0">
+      <entrance x="13300" y="0" z="13600" d="1024"/>
+    </door>
+    <door id="2" target="403:0">
+      <entrance x="11100" y="0" z="11700" d="3072"/>
+    </door>
+    <door id="3" target="404:0">
+      <entrance x="20200" y="0" z="12600" d="2048"/>
+    </door>
+    <door id="4" target="405:0">
+      <entrance x="16200" y="0" z="3100" d="3072"/>
+    </door>
+    <item id="5" flag="157" type="69" amount="1" group="8" name="BLUE HERB/1"/>
+    <item id="7" flag="209" type="69" amount="1" group="8" name="BLUE HERB/2"/>
+    <item id="8" flag="210" type="69" amount="1" group="8" name="BLUE HERB/3"/>
+    <enemies exclude="4"/>
+    <spot x="14508" y="0" z="11878" d="32"/>
+    <spot x="16882" y="0" z="5894" d="3098"/>
+    <spot x="17660" y="0" z="13451" d="2136"/>
+    <spot x="3814" y="0" z="16373" d="1056"/>
+    <spot x="6585" y="0" z="12369" d="2000"/>
+    <spot x="9336" y="0" z="11861" d="4088"/>
+  </room>
+</random>

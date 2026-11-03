@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="50F" name="LABORATORY B3 POWER SWITCH" tags="lab">
+    <door id="0" target="50C:3">
+      <entrance x="11500" y="0" z="20800" d="1024"/>
+    </door>
+    <door id="1" target="510:0">
+      <entrance x="22000" y="0" z="7500" d="3072"/>
+    </door>
+    <enemies exclude="4"/>
+    <spot x="15698" y="0" z="11223" d="3040"/>
+    <spot x="15960" y="0" z="17123" d="3040"/>
+    <spot x="16388" y="0" z="6117" d="1192"/>
+    <spot x="17007" y="0" z="19130" d="2008"/>
+    <spot x="18060" y="0" z="7738" d="2248"/>
+    <spot x="19739" y="0" z="19132" d="16"/>
+    <spot x="21929" y="0" z="12860" d="736"/>
+    <spot x="22071" y="0" z="10342" d="1216"/>
+    <spot x="22474" y="0" z="17408" d="1312"/>
+    <spot x="3814" y="0" z="4942" d="64"/>
+    <spot x="3818" y="0" z="19398" d="24"/>
+    <spot x="6144" y="0" z="12264" d="3160"/>
+    <spot x="6295" y="0" z="16787" d="1048"/>
+    <spot x="6397" y="0" z="5758" d="3040"/>
+    <spot x="6552" y="0" z="3626" d="2560"/>
+    <spot x="9133" y="0" z="19174" d="2024"/>
+  </room>
+</random>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="402" name="GUARDHOUSE ROOM 001 BATHROOM" tags="guardhouse">
+    <door id="0" target="401:1">
+      <entrance x="6300" y="0" z="3300" d="2048"/>
+    </door>
+    <item id="1" flag="156" type="59" amount="1" group="8" name="IN BATHTUB"/>
+    <enemies exclude="4" max-difficulty="0"/>
+    <spot x="4160" y="0" z="5253" d="3080"/>
+    <spot x="6100" y="0" z="6536" d="984"/>
+  </room>
+</random>
