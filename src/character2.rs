@@ -701,6 +701,46 @@ pub fn init_for_draw(
     }
 }
 
+/// Marvin's id: his init (`0x4f00e0`) gives his arms two sets of meshes.
+const MARVIN: u8 = 0x4A;
+
+/// The part pairs Marvin's init swaps (`0x53cb20`): each arm joint and the
+/// spare part that holds its other mesh.
+const MARVIN_ARMS: [(usize, usize); 7] = [
+    (8, 17),
+    (12, 18),
+    (13, 15),
+    (14, 19),
+    (9, 20),
+    (10, 21),
+    (11, 22),
+];
+
+/// The mesh Marvin's right hand takes with `Type`'s `0x800`: the one with the
+/// gun.
+const MARVIN_GUN_HAND: usize = 23;
+
+/// Which mesh each joint draws, where that isn't its own. Marvin's init gives
+/// every arm joint a spare part with the same matrix. With `Type`'s `0x300`
+/// clear the spare draws the joint's own mesh (the hand's from mesh 23 with
+/// `0x800`), and the joint draws the other mesh, black and translucent, so
+/// that only the spare shows. With either bit set, the joint takes the other
+/// mesh.
+pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Option<Vec<usize>> {
+    if character.id != MARVIN || joints <= 14 || meshes <= MARVIN_GUN_HAND {
+        return None;
+    }
+    let mut joint_meshes: Vec<usize> = (0..joints).collect();
+    if character.kind & 0x300 != 0 {
+        for (joint, spare) in MARVIN_ARMS {
+            joint_meshes[joint] = spare;
+        }
+    } else if character.kind & 0x800 != 0 {
+        joint_meshes[11] = MARVIN_GUN_HAND;
+    }
+    Some(joint_meshes)
+}
+
 /// The tick the load's `fg_stop` ends: the enemies do no more than a `Root_ck`.
 fn run_load_stop(
     game: &mut GameState,
@@ -843,5 +883,32 @@ mod tests {
         character.work.kind = 0;
         character.be_flg = 0;
         assert!(!moves(&character));
+    }
+
+    #[test]
+    fn marvins_right_hand_holds_the_gun_with_type_0x800() {
+        let mut character = Character {
+            id: MARVIN,
+            be_flg: 1,
+            work: player2::Work::default(),
+            body: crate::player::spawn(RoomId::parse("2020").unwrap(), &RoomState::default()),
+            kind: 0x5800,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            with_room: false,
+            held_bank: None,
+            zombie: None,
+        };
+        let meshes = joint_meshes(&character, 15, 24).unwrap();
+        assert_eq!(meshes[11], MARVIN_GUN_HAND);
+        assert_eq!(meshes[10], 10);
+        // With `0x100` the arms take the spare meshes, the hand mesh 22.
+        character.kind = 0x5900;
+        let meshes = joint_meshes(&character, 15, 24).unwrap();
+        assert_eq!(&meshes[8..15], &[17, 20, 21, 22, 18, 15, 19]);
+        character.id = 0x45;
+        assert!(joint_meshes(&character, 15, 24).is_none());
     }
 }
