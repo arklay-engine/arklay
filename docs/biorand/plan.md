@@ -112,8 +112,8 @@ a room's retail build folds to the `else` arm so retail bytes hold. The
 engine raises the flags from the pack manifest at the start of a game and
 again when a save loads, so saves need not carry them.
 
-Bank 5 is 256 bits in arklay; the original game uses only its first 64. BioRand
-reserves bits `0xC0` to `0xFF`:
+Bank 5 is 256 bits in arklay; the original game uses only low bits (room 205
+tests `0x40`, the highest seen). BioRand reserves bits `0xC0` to `0xFF`:
 
 | Bit | Name | Raised when |
 |---|---|---|

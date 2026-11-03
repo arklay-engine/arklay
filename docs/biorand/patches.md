@@ -30,7 +30,7 @@ dropped history.
 
 | # | Patch | Arklay | Gate |
 |---|---|---|---|
-| 1 | No attract demo from the title | Engine | `RANDOMIZER` (a generated pack has no demo rooms) |
+| 1 | No attract demo from the title | Engine | `BR_NO_TITLE_DEMO` (a generated pack has no demo rooms) |
 | 2 | Combining fuel or ammunition no longer truncates the count to 7 bits | Fix | not `AUTHENTIC`; check whether arklay inherited the truncation |
 | 3 | Heal items usable at full health | Engine, already in arklay | not `AUTHENTIC` |
 | 4 | Blue herb usable when not poisoned | Engine, already in arklay | not `AUTHENTIC` |
