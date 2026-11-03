@@ -106,6 +106,7 @@ dependencies = [
  "anyhow",
  "indexmap",
  "roxmltree",
+ "serde_json",
 ]
 
 [[package]]
