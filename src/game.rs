@@ -7248,7 +7248,7 @@ impl GameState {
     /// and Rebecca's refusal is the room script's business, so `0x40` is part
     /// of the index.
     fn door_lock(&self, byte: u8) -> DoorLock {
-        if self.flag_test(5, crate::scd::opcode::system::BR_LOCK_FULL_BYTE, false) {
+        if self.system_flag(crate::scd::opcode::system::BR_LOCK_FULL_BYTE) {
             DoorLock {
                 locked: byte != 0,
                 refuses_rebecca: false,
