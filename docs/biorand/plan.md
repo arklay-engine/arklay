@@ -57,8 +57,8 @@ launcher / CLI ──► config + seed
    arklay-biorand ──► Map (from the pack's random.xml and biorand/*.xml)
                      │   inventory → doors → locks → keys → items → enemies
                      ▼
-                 Generated (the plan: rooms, doors, locks, pickups, spawns,
-                     │      start inventory, option flags, room renumbering)
+                 Plan (rooms, doors, locks, pickups, spawns, start
+                     │      inventory, option flags, room renumbering)
                      ▼
    arklay::biorand ──► emit: a new base pack with rewritten room scripts and
                      │      renumbered rooms, and a manifest with the options
@@ -70,7 +70,7 @@ launcher / CLI ──► config + seed
 
 A pure library: no SDL, no pack I/O, no engine types. Its inputs are the map
 model (deserialized by the engine crate from the pack), the configuration and
-a seed, and its output is `Generated`. That keeps the engine crate's compile
+a seed, and its output is the `Plan` (`plan::generate`). That keeps the engine crate's compile
 cost unchanged while the generator is iterated on, and lets the generator's
 tests run in a second.
 
@@ -80,9 +80,9 @@ tests run in a second.
 | `config` | `RandomizerConfigurationDefinition`, `RandomizerConfiguration`, both controllers' option lists | Exports the definition the launcher draws; reads values leniently, as staging does. |
 | `map` | `Map.cs`, `MapTags`, `DoorKinds`, `DoorLock`, `ScdCondition` | Rooms keep insertion order (`IndexMap`). |
 | `routing` | common's `Graph`, `GraphBuilder`, `RouteFinder`, `RouteSolver`, `Route`, `Edge`, `Requirement`, `DeadEndInfo` | The largest single piece. |
-| `prepare` | `Re1ClassicRandomizerController.GetMap` | Applies the progression options to the map. |
+| `prepare` | `Re1ClassicRandomizerController.GetMap` | Applies the progression options to the map: the areas left out, the slot groups, the segmented caves and lab. |
 | `inventory`, `doors`, `locks`, `keys`, `items`, `enemies` | the staging randomizers of the same names | Doors last, as it is the riskiest. |
-| `generated` | `ClassicMod` | The contract with the engine crate. |
+| `plan` | `ClassicRandomizer.Randomize`, `ClassicMod` | Runs the stages in order; the plan is the contract with the engine crate. |
 
 The engine crate keeps `src/biorand/` for what touches packs: reading the map
 from `random.xml`, emitting scripts, renumbering rooms, the manifest, verifying

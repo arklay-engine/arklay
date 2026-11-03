@@ -14,6 +14,9 @@ pub mod inventory;
 pub mod items;
 pub mod keys;
 pub mod map;
+pub mod plan;
 pub mod prepare;
 pub mod rng;
 pub mod routing;
+
+pub use plan::{Plan, Players, generate};
