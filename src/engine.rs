@@ -17495,6 +17495,14 @@ fn render_frame_on(
             hd_name: None,
         });
     }
+    // RE2's `Joint_trans2` lights the player from its first part (the hips),
+    // as it does every character; RE1 latches at the entity's position.
+    let player_light_pos = match &player_joints {
+        Some(joints) if game.is_re2_room => {
+            joints.first().map_or(game.entities[0].pos, |root| root.t)
+        }
+        _ => game.entities[0].pos,
+    };
     if let (Some(assets), Some(joints)) = (assets, &player_joints) {
         // The player's whole-entity gate reads the live `zoneFlags` low byte
         // (the camera-zone bit plus the interaction bits the scripts raise),
@@ -17514,7 +17522,7 @@ fn render_frame_on(
             tint: game.player_tint,
             blend_weight: None,
             hidden_joints: hidden | game.re2.player.hidden_parts,
-            light_pos: Some(game.entities[0].pos),
+            light_pos: Some(player_light_pos),
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
@@ -17548,7 +17556,7 @@ fn render_frame_on(
             tint: [255; 3],
             blend_weight: None,
             hidden_joints: 0,
-            light_pos: Some(game.entities[0].pos),
+            light_pos: Some(player_light_pos),
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
