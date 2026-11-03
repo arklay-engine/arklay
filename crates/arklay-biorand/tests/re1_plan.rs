@@ -13,7 +13,7 @@ use arklay_biorand::plan::{Game, Players, generate};
 use arklay_biorand::prepare;
 use arklay_biorand::rng::Rng;
 
-use common::{check_playthrough, load_map};
+use common::{check_playthrough, load_map, with_locks};
 
 const SEEDS: u64 = 50;
 
@@ -77,6 +77,26 @@ fn variants(map: &Map) -> Vec<(&'static str, Config)> {
     ]
 }
 
+/// The configurations with locks randomized, by name.
+fn lock_variants(map: &Map) -> Vec<(&'static str, Config)> {
+    let variants: HashMap<&str, Config> = variants(map).into_iter().collect();
+    let locked = |name: &str, ratio: f64| {
+        let mut config = variants[name].clone();
+        config.set("locks/random", true);
+        config.set("locks/ratio", ratio);
+        config
+    };
+    let mut preserve = locked("default", 0.25);
+    preserve.set("locks/preserve", true);
+    vec![
+        ("locks", locked("default", 0.25)),
+        ("locks strict", locked("strict", 0.5)),
+        ("locks small", locked("small", 0.25)),
+        ("locks all", locked("documents off", 1.0)),
+        ("locks preserve", preserve),
+    ]
+}
+
 #[test]
 fn re1_plans_hold_for_both_players() {
     let map = load_map();
@@ -99,6 +119,109 @@ fn re1_plans_hold_for_both_players() {
         }
     }
     assert_eq!(games, 6 * SEEDS * 2);
+}
+
+#[test]
+fn re1_lock_plans_hold_for_both_players() {
+    let map = load_map();
+    let mut games = 0;
+    let mut locked_doors = 0;
+    for (name, config) in lock_variants(&map) {
+        for seed in 0..SEEDS {
+            let what = format!("{name} seed {seed}");
+            let plan = generate(&map, &config, seed, Players::Both)
+                .unwrap_or_else(|err| panic!("{what}: {err:#}"));
+            for game in &plan.games {
+                let what = format!("{what} {:?}", game.player);
+                assert!(!game.deferred.iter().any(|o| o == "locks/random"), "{what}");
+                for flag in ["LOCK_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
+                    assert!(game.system_flags.contains(&flag), "{what}: {flag}");
+                }
+                check_locks(&map, game).unwrap_or_else(|err| panic!("{what}: {err}"));
+                check_game(&map, game).unwrap_or_else(|err| panic!("{what}: {err}"));
+                locked_doors += game.locks.iter().filter(|l| l.key_item().is_some()).count();
+                games += 1;
+            }
+            if seed < 3 {
+                let again = generate(&map, &config, seed, Players::Both).unwrap();
+                assert_eq!(plan, again, "{what}: the same seed gives the same plan");
+            }
+        }
+    }
+    assert_eq!(games, 5 * SEEDS * 2);
+    assert!(
+        locked_doors > games as usize * 10,
+        "{locked_doors} locked doors"
+    );
+}
+
+/// The plan's locks hold together: every door of the map is planned once,
+/// both sides of a pair share a lock, a new lock takes a lock flag no
+/// original room script raises and a key that may go there, and a door
+/// leading nowhere never opens.
+fn check_locks(map: &Map, game: &Game) -> Result<(), String> {
+    let options = prepare::Options::from_config(&game.config, game.player);
+    let prepared = prepare::prepare(map, &options, &mut Rng::named(game.spoiler.seed, "re1map"))
+        .map_err(|err| format!("{err:#}"))?;
+    let doors: usize = prepared
+        .rooms
+        .values()
+        .map(|room| room.doors.iter().filter(|door| door.id.is_some()).count())
+        .sum();
+    if game.locks.len() != doors {
+        return Err(format!("{} door locks for {doors} doors", game.locks.len()));
+    }
+    let by_name: HashMap<String, &arklay_biorand::locks::DoorLock> = game
+        .locks
+        .iter()
+        .map(|lock| (format!("{}:{}", lock.room, lock.id), lock))
+        .collect();
+    let mut flags: HashMap<u8, HashSet<String>> = HashMap::new();
+    for lock in &game.locks {
+        let name = format!("{}:{}", lock.room, lock.id);
+        if lock.lock == 0 && lock.key != 0 {
+            return Err(format!("{name} is unlocked with key {}", lock.key));
+        }
+        if lock.target.is_none() && (lock.lock, lock.key) != (255, 255) {
+            return Err(format!("{name} leads nowhere but opens"));
+        }
+        if let Some(key) = lock.key_item() {
+            let def = map
+                .items
+                .get(&key)
+                .ok_or_else(|| format!("{name}: key {key}"))?;
+            if lock.drawn && !def.discard {
+                return Err(format!(
+                    "{name}: drawn key {} is not a discard key",
+                    def.name
+                ));
+            }
+        }
+        if lock.drawn && lock.lock != 0 {
+            let other = lock
+                .other
+                .as_ref()
+                .and_then(|other| by_name.get(other))
+                .ok_or_else(|| format!("{name} is drawn without a far side"))?;
+            if other.lock != lock.lock
+                || (other.key_item() != lock.key_item() && other.key != 255 && lock.key != 255)
+            {
+                return Err(format!("{name} {lock:?} and its far side {other:?} differ"));
+            }
+            flags.entry(lock.lock).or_default().insert(name.clone());
+        }
+    }
+    for (flag, doors) in &flags {
+        if doors.len() > 2 {
+            return Err(format!("lock flag {flag} is shared by {doors:?}"));
+        }
+        if !game.config.get_bool("locks/preserve", false) && *flag < 64 {
+            return Err(format!(
+                "new lock flag {flag} (of {doors:?}) is one a room script may raise"
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[test]
@@ -187,7 +310,7 @@ fn re1_variants_change_what_they_say() {
 /// Checks one game against the map it was planned on.
 fn check_game(map: &Map, game: &Game) -> Result<(), String> {
     let options = prepare::Options::from_config(&game.config, game.player);
-    let prepared = prepare::prepare(map, &options, &mut Rng::named(0, "re1map"))
+    let prepared = prepare::prepare(map, &options, &mut Rng::named(game.spoiler.seed, "re1map"))
         .map_err(|err| format!("{err:#}"))?;
 
     // The start fits the player's slots.
@@ -297,7 +420,8 @@ fn check_game(map: &Map, game: &Game) -> Result<(), String> {
         ));
     }
     let key_options = KeyOptions::from_config(&game.config, game.player);
-    check_playthrough(&prepared, &key_options, keys)
+    let walked = with_locks(&prepared, &game.locks)?;
+    check_playthrough(&walked, &key_options, keys)
 }
 
 /// What a slot holds fits it: its group takes the item, the amount is within
@@ -378,6 +502,52 @@ fn re1_walk_catches_a_missing_key_across_segments() {
         assert!(
             check_playthrough(&prepared, &key_options, &broken).is_err(),
             "the play-through still passes without {removed:?}"
+        );
+    }
+}
+
+/// With locks randomized too, the walk reads the new locks: without some
+/// placed keys the play-through fails, and so it does if the drawn locks are
+/// keyed with an item that is no key.
+#[test]
+fn re1_walk_catches_a_missing_key_with_locks() {
+    let map = load_map();
+    let (_, config) = lock_variants(&map).remove(0);
+    for player in [
+        arklay_biorand::map::Player::Chris,
+        arklay_biorand::map::Player::Jill,
+    ] {
+        let plan = generate(&map, &config, 7, Players::Only(player)).unwrap();
+        let game = &plan.games[0];
+        let options = prepare::Options::from_config(&game.config, game.player);
+        let prepared =
+            prepare::prepare(&map, &options, &mut Rng::named(plan.seed, "re1map")).unwrap();
+        let key_options = KeyOptions::from_config(&game.config, game.player);
+        let keys = game.keys.as_ref().unwrap();
+        let walked = with_locks(&prepared, &game.locks).unwrap();
+        check_playthrough(&walked, &key_options, keys).unwrap();
+        // A new lock may guard a shortcut, so not every key is needed; but
+        // some are.
+        let needed = (0..keys.keys.len())
+            .filter(|&i| {
+                let mut broken = keys.clone();
+                broken.keys.remove(i);
+                check_playthrough(&walked, &key_options, &broken).is_err()
+            })
+            .count();
+        assert!(needed > 0, "{player:?}: no key is needed");
+        // Rekey the drawn locks with an item that is no key.
+        let mut locks = game.locks.clone();
+        for lock in locks
+            .iter_mut()
+            .filter(|lock| lock.drawn && lock.key_item().is_some())
+        {
+            lock.key = 2;
+        }
+        let walked = with_locks(&prepared, &locks).unwrap();
+        assert!(
+            check_playthrough(&walked, &key_options, keys).is_err(),
+            "{player:?}: locks nothing opens go unnoticed"
         );
     }
 }

@@ -13,6 +13,7 @@ pub mod enemies;
 pub mod inventory;
 pub mod items;
 pub mod keys;
+pub mod locks;
 pub mod map;
 pub mod plan;
 pub mod prepare;

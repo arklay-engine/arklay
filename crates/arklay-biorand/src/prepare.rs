@@ -18,10 +18,13 @@
 //!   (`:225-228`), but the option's own description says it applies only with
 //!   the guardhouse, and `Random` can pick that pair; here mansion 2 is
 //!   simply off.
-//! - Door randomization and lock randomization are later milestones. Under
-//!   them staging prepares the map differently (`:217`, `:290-445`, `:449`):
-//!   the hooks are marked below, and [`prepare`] fails if either is asked for.
-//!   [`crate::plan::generate`] turns both off before calling it.
+//! - Door randomization is a later milestone. Under it staging prepares the
+//!   map differently (`:217`, `:449`): the hook is marked below, and
+//!   [`prepare`] fails if it is asked for. [`crate::plan::generate`] turns it
+//!   off before calling it.
+//! - Lock randomization ([`prepare_locks`], `:290-445`) allocates the second
+//!   mansion visit's new lock ids from 64 up, as [`crate::locks`] does, so
+//!   that they never meet a lock flag an original room script raises.
 //! - The entrances from `doors.csv` (`:162-182`) are already in the room
 //!   files, and the lockpick's free locks (`:185-190`) are
 //!   [`KeyOptions::implicit_keys`](crate::keys::KeyOptions::implicit_keys).
@@ -29,7 +32,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::config::Config;
-use crate::map::{Door, DoorKind, Filter, Map, Player, Room, tags};
+use crate::map::{Door, DoorKind, Filter, Map, Player, Requirement, Room, tags};
 use crate::rng::Rng;
 
 /// The placement group bits staging's preparation uses (`:205-215`). A slot
@@ -52,6 +55,9 @@ pub mod groups {
 /// The key that opens the second mansion visit's doors on the original
 /// locks (staging's `Re1ItemIds.HelmetKey`).
 const HELMET_KEY: u8 = 54;
+/// The Sword Key, which the lockpick opens: never the second visit's key
+/// while the lockpick is in the game.
+const SWORD_KEY: u8 = 51;
 /// Restricted to the second mansion visit and the lab under mansion 2.
 const BATTERY: u8 = 39;
 /// Restricted to Tyrant 1's room when Tyrant 1 is mandatory.
@@ -97,8 +103,12 @@ pub struct Options {
     pub player: Player,
     /// `doors/random`. Not supported yet.
     pub door_rando: bool,
-    /// `locks/random`. Not supported yet.
+    /// `locks/random`.
     pub lock_rando: bool,
+    /// `locks/preserve`: under `locks/random`, the original locks stay.
+    pub lock_preserve: bool,
+    /// `inventory/special/lockpick` is `Always`.
+    pub lockpick: bool,
     /// `cutscenes/disable`: when off, the prologue's doors may not be locked.
     pub cutscenes_disabled: bool,
     pub progression: Progression,
@@ -110,6 +120,8 @@ impl Options {
             player,
             door_rando: config.get_bool("doors/random", false),
             lock_rando: config.get_bool("locks/random", false),
+            lock_preserve: config.get_bool("locks/preserve", false),
+            lockpick: config.get_str("inventory/special/lockpick", "Always") == "Always",
             cutscenes_disabled: config.get_bool("cutscenes/disable", false),
             progression: Progression::from_config(config),
         }
@@ -119,18 +131,11 @@ impl Options {
 /// The map of one game. `rng` should be `Rng::named(seed, "re1map")`; only
 /// lock randomization draws from it.
 pub fn prepare(map: &Map, options: &Options, rng: &mut Rng) -> Result<Map> {
-    let _ = rng;
     if options.door_rando {
         // Hook (door milestone): with door randomization, staging skips the
         // area and lock set-up below, lets any slot take any key (`:449-454`)
         // and leaves the areas to the door randomizer's segments.
         bail!("door randomization is not supported yet");
-    }
-    if options.lock_rando {
-        // Hook (lock milestone): staging's `:290-445`, which strips the
-        // original locks, picks the second mansion visit's key and rooms, and
-        // gives each door the keys it may take, by area.
-        bail!("lock randomization is not supported yet");
     }
 
     let mut map = for_game(map, options.door_rando, options.player);
@@ -164,9 +169,163 @@ pub fn prepare(map: &Map, options: &Options, rng: &mut Rng) -> Result<Map> {
         }
     }
 
-    restrict_groups(&mut map, progression)?;
+    let mansion2_key = if options.lock_rando {
+        prepare_locks(&mut map, options, rng)?
+    } else {
+        HELMET_KEY
+    };
+
+    restrict_groups(&mut map, progression, mansion2_key)?;
     segment(&mut map, progression)?;
     Ok(map)
+}
+
+/// :290-445, under `locks/random`. Unless the original locks are preserved,
+/// every door the lock randomizer may lock loses its original lock, the
+/// second mansion visit gets a key of its own (any discard key) and a few
+/// rooms locked with it, and each door is told which keys may lock it, by
+/// the area each key is drawn for. Returns the second visit's key: the
+/// Helmet Key on the original locks.
+///
+/// A door's original `requires` stay, as staging leaves them: the lock
+/// stage ([`crate::locks`]) rewrites those of every door it decides.
+fn prepare_locks(map: &mut Map, options: &Options, rng: &mut Rng) -> Result<u8> {
+    let progression = &options.progression;
+    let mut mansion2_key = HELMET_KEY;
+    if !options.lock_preserve {
+        // Remove every original lock the randomizer may replace: a door
+        // whose two sides take any key.
+        let mut free = Vec::new();
+        for room in map.rooms.values() {
+            for (index, door) in room.doors.iter().enumerate() {
+                let opposite_free = other_side(map, &room.key, index)
+                    .is_none_or(|other| other.allowed_locks.is_none());
+                if door.allowed_locks.is_none() && opposite_free {
+                    free.push((room.key.clone(), index));
+                }
+            }
+        }
+        for (room, index) in free {
+            let door = &mut map.rooms[room.as_str()].doors[index];
+            if matches!(door.kind, Some(DoorKind::Locked | DoorKind::Unlock)) {
+                door.kind = None;
+            }
+            door.lock = None;
+        }
+    }
+
+    let discard: Vec<u8> = map
+        .items
+        .iter()
+        .filter(|(_, def)| def.discard)
+        .map(|(&id, _)| id)
+        .collect();
+    let mut generic_keys = rng.shuffled(&discard);
+    if options.lock_preserve {
+        generic_keys.retain(|&key| key != HELMET_KEY);
+    } else {
+        for_each_slot(map, |group| {
+            if *group == groups::MANSION_2 {
+                *group = groups::MANSION_1;
+            }
+        });
+        if progression.mansion2 {
+            mansion2_key = generic_keys
+                .iter()
+                .copied()
+                .find(|&key| !options.lockpick || key != SWORD_KEY)
+                .ok_or_else(|| anyhow!("no discard key is left for the second mansion visit"))?;
+            generic_keys.retain(|&key| key != mansion2_key);
+            lock_mansion2_rooms(map, mansion2_key, rng)?;
+        }
+    }
+
+    // The areas a key may be drawn for: the mansion with the courtyard, the
+    // caves, then the guardhouse and the lab when the game has them.
+    let mut areas: Vec<&[&str]> = vec![&["mansion", "courtyard"], &["caves"]];
+    if progression.guardhouse {
+        areas.push(&["guardhouse"]);
+    }
+    if progression.lab {
+        areas.push(&["lab"]);
+    }
+    let locks: Vec<(u8, Vec<&str>)> = generic_keys
+        .iter()
+        .map(|&key| {
+            let bits = rng.next_in(0, 0b1111);
+            let tags = (0..4)
+                .filter(|&i| bits & (1 << i) != 0)
+                .filter_map(|i| areas.get(i))
+                .flat_map(|tags| tags.iter().copied())
+                .collect();
+            (key, tags)
+        })
+        .collect();
+    for room in map.rooms.values_mut() {
+        let allowed: Vec<u8> = locks
+            .iter()
+            .filter(|(_, tags)| tags.is_empty() || tags.iter().any(|tag| room.filter.has_tag(tag)))
+            .map(|(key, _)| *key)
+            .collect();
+        for door in room
+            .doors
+            .iter_mut()
+            .filter(|door| door.allowed_locks.is_none())
+        {
+            door.allowed_locks = Some(allowed.clone());
+        }
+    }
+    Ok(mansion2_key)
+}
+
+/// :343-410. Between two and eight `mansion2able` rooms become the second
+/// mansion visit: their slots are its slots, and each of their doors, both
+/// sides, is locked with a new lock that `key` opens.
+fn lock_mansion2_rooms(map: &mut Map, key: u8, rng: &mut Rng) -> Result<()> {
+    let able: Vec<String> = map
+        .rooms
+        .values()
+        .filter(|room| room.filter.has_tag("mansion2able"))
+        .map(|room| room.key.clone())
+        .collect();
+    let mut rooms = rng.shuffled(&able);
+    let count = usize::try_from(rng.next_in(2, 9)).unwrap_or(2);
+    rooms.truncate(count);
+
+    let used: std::collections::BTreeSet<u8> = map
+        .rooms
+        .values()
+        .flat_map(|room| {
+            let doors = room.doors.iter().filter_map(|door| door.lock);
+            doors.chain(room.items.iter().filter_map(|item| item.lock))
+        })
+        .collect();
+    let mut lock_ids = crate::locks::lock_id_order().filter(|id| !used.contains(id));
+
+    for room in rooms {
+        for item in &mut map.rooms[room.as_str()].items {
+            item.group = groups::MANSION_2;
+        }
+        for index in 0..map.rooms[room.as_str()].doors.len() {
+            if map.rooms[room.as_str()].doors[index].target.is_none() {
+                continue;
+            }
+            let lock = lock_ids
+                .next()
+                .ok_or_else(|| anyhow!("no lock id is left for the second mansion visit"))?;
+            let set = |door: &mut Door| {
+                door.allowed_locks = Some(Vec::new());
+                door.requires = vec![Requirement::Item(key)];
+                door.lock = Some(lock);
+                door.key = Some(key);
+            };
+            set(&mut map.rooms[room.as_str()].doors[index]);
+            if let Some(other) = other_side_mut(map, &room, index) {
+                set(other);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The map with only what a game with `door_rando` for `player` includes
@@ -232,7 +391,7 @@ fn leave_out_areas(map: &mut Map, progression: &Progression) -> Result<()> {
 /// :456-506. Every slot takes any key, then the progression options clear
 /// bits so that a few keys can only go in chosen slots. The room files'
 /// groups say which area each slot is in.
-fn restrict_groups(map: &mut Map, progression: &Progression) -> Result<()> {
+fn restrict_groups(map: &mut Map, progression: &Progression, mansion2_key: u8) -> Result<()> {
     let area = |group: u32| -> Vec<(String, usize)> {
         map.rooms
             .values()
@@ -254,7 +413,8 @@ fn restrict_groups(map: &mut Map, progression: &Progression) -> Result<()> {
     // Staging's segmented guardhouse (`:465-472`) is hard-wired off (`:150`).
 
     if progression.mansion2 {
-        // The Helmet Key is behind plant 42.
+        // The second visit's key (the Helmet Key on the original locks) is
+        // behind plant 42.
         for_each_slot(map, |group| *group &= !groups::PLANT_42);
         let fireplace = map
             .rooms
@@ -266,7 +426,7 @@ fn restrict_groups(map: &mut Map, progression: &Progression) -> Result<()> {
             })
             .ok_or_else(|| anyhow!("room 40C has no slot KEY IN FIREPLACE"))?;
         fireplace.group = groups::PLANT_42;
-        item_def(map, HELMET_KEY)?.group = groups::PLANT_42;
+        item_def(map, mansion2_key)?.group = groups::PLANT_42;
 
         // The Battery is in a room of the second visit, or the lab.
         for_each_slot(map, |group| *group &= !groups::BATTERY);
@@ -346,7 +506,22 @@ fn doors_mut(map: &mut Map) -> impl Iterator<Item = &mut Door> {
 
 /// The far side of door `index` of `room` (staging's `Map.GetOtherSide`):
 /// the first door of the target room with the target's door id.
-fn other_side_mut<'a>(map: &'a mut Map, room: &str, index: usize) -> Option<&'a mut Door> {
+pub(crate) fn other_side<'a>(map: &'a Map, room: &str, index: usize) -> Option<&'a Door> {
+    let door = &map.rooms.get(room)?.doors[index];
+    let target_id = door.target_id()?;
+    map.rooms
+        .get(door.target_room()?)?
+        .doors
+        .iter()
+        .find(|other| other.id == Some(target_id))
+}
+
+/// [`other_side`], mutable.
+pub(crate) fn other_side_mut<'a>(
+    map: &'a mut Map,
+    room: &str,
+    index: usize,
+) -> Option<&'a mut Door> {
     let door = &map.rooms.get(room)?.doors[index];
     let target_room = door.target_room()?.to_string();
     let target_id = door.target_id()?;
@@ -478,6 +653,8 @@ mod tests {
             player: Player::Chris,
             door_rando: false,
             lock_rando: false,
+            lock_preserve: false,
+            lockpick: true,
             cutscenes_disabled: false,
             progression,
         }
@@ -603,6 +780,55 @@ mod tests {
         };
         let prepared = prepare(&map, &disabled, &mut Rng::new(1)).unwrap();
         assert_eq!(prepared.rooms["21C"].doors[0].allowed_locks, None);
+    }
+
+    #[test]
+    fn lock_randomization_strips_locks_and_locks_the_second_visit() {
+        let mut map = map();
+        for id in [52, 53, HELMET_KEY] {
+            map.items.insert(
+                id,
+                ItemDef {
+                    kind: "key/reusuable".into(),
+                    group: 1,
+                    discard: true,
+                    ..ItemDef::default()
+                },
+            );
+        }
+        // A locked door the randomizer may replace, and a second-visit room
+        // with a door.
+        let gate = &mut map.rooms["302"].doors[0];
+        gate.kind = Some(DoorKind::Locked);
+        gate.lock = Some(9);
+        map.rooms["21C"].filter.tags.push("mansion2able".into());
+        map.rooms["21C"]
+            .doors
+            .push(door(4, "TO COURTYARD", "302:5"));
+        map.rooms["302"].doors.push(door(5, "TO KITCHEN", "21C:4"));
+        let options = Options {
+            lock_rando: true,
+            ..options(EVERYTHING)
+        };
+        for seed in 0..10 {
+            let prepared = prepare(&map, &options, &mut Rng::new(seed)).unwrap();
+            let gate = named(&prepared, "302", "GATE TO GUARDHOUSE");
+            assert_eq!((gate.kind, gate.lock), (None, None), "seed {seed}");
+            assert!(gate.allowed_locks.is_some(), "seed {seed}");
+
+            let kitchen = named(&prepared, "21C", "TO COURTYARD");
+            let key = kitchen.key.unwrap();
+            assert!([52, 53, HELMET_KEY].contains(&key), "seed {seed}");
+            assert!(kitchen.lock.unwrap() >= 64);
+            assert_eq!(kitchen.requires, vec![Requirement::Item(key)]);
+            assert_eq!(kitchen.allowed_locks, Some(Vec::new()));
+            let courtyard = named(&prepared, "302", "TO KITCHEN");
+            assert_eq!((courtyard.lock, courtyard.key), (kitchen.lock, kitchen.key));
+            // The second visit's key is behind plant 42, and its slots are the
+            // second visit's.
+            assert_eq!(prepared.items[&key].group, groups::PLANT_42, "seed {seed}");
+            assert_ne!(group(&prepared, "21C") & groups::BATTERY, 0);
+        }
     }
 
     #[test]
