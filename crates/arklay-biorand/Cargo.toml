@@ -1,0 +1,17 @@
+[package]
+name = "arklay-biorand"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "BioRand's RE1 randomizer, ported from biorand/classic for arklay"
+license = "MIT"
+
+# A pure library: no engine, SDL or pack types, so iterating on the generator
+# never recompiles the engine crate's 250k lines (see AGENTS.md).
+[dependencies]
+anyhow = "1"
+indexmap = "2"
+roxmltree = { version = "0.21", default-features = false, features = ["std"] }
+
+[lints.rust]
+warnings = "deny"

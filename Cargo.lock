@@ -75,6 +75,7 @@ name = "arklay"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arklay-biorand",
  "clap",
  "fontdue",
  "image-webp",
@@ -95,6 +96,15 @@ dependencies = [
  "winreg",
  "zip",
  "zstd",
+]
+
+[[package]]
+name = "arklay-biorand"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "roxmltree",
 ]
 
 [[package]]
