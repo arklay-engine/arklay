@@ -23,7 +23,13 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 0, 5200, 2600, 2400, 1, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_11A_ROOFED_PASSAGE, 7700, 0, 25500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 8800, 4300, 1700, 3200, 11, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, STAGE_3 | ROOM_300_FIRST_HOUSE_OUT, 27300, 0, 5600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    // The key is Chris-only (FG_STATUS 8 is Jill); under ITEM_RANDOMIZER
+    // Jill gets it too.
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9200, -1460, 9200, 0, F_ITEM_22, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         item_aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9200, -1460, 9200, 0, F_ITEM_22, SAT_MANUAL | SAT_PLAYER, 0);
     }
@@ -49,7 +55,18 @@ proc main
     }
     else
     {
-        if (ck(FG_ITEM, F_ITEM_22, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ITEM_RANDOMIZER)
+        {
+            if (ck(FG_ITEM, F_ITEM_22, TRUE))
+            {
+                aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+            }
+            else
+            {
+                aot_reset(AOT_02_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+            }
+        }
+        else if (ck(FG_ITEM, F_ITEM_22, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
         {
             aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         }

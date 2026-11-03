@@ -147,7 +147,12 @@ proc init
     }
     else if (MANSION1)
     {
-        if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+        // Jill's ribbon slot exists in every mode under ITEM_RANDOMIZER.
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
         {
             if (USA)
             {
@@ -165,7 +170,11 @@ proc init
     }
     else if (JPN)
     {
-        if (ck(FG_COMMON, F_COMMON_0B, FALSE))
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_0B, FALSE))
         {
             item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -176,7 +185,11 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
         {
             item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -511,7 +524,14 @@ proc main
                 set(FG_ROOM, F_ROOM_01, FALSE);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_ITEM, F_ITEM_34, FALSE))
+        if (ITEM_RANDOMIZER)
+        {
+            if (ck(FG_ITEM, F_ITEM_34, FALSE))
+            {
+                aot_reset(AOT_05_ITEM, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+            }
+        }
+        else if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_ITEM, F_ITEM_34, FALSE))
         {
             set(FG_COMMON, F_COMMON_0B, TRUE);
             aot_reset(AOT_05_ITEM, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
@@ -3706,7 +3726,11 @@ event on_aot_06_item
         {
             run
             {
-                if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+                if (ITEM_RANDOMIZER)
+                {
+                    aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+                }
+                else if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
                 {
                     aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
                 }
@@ -3724,7 +3748,11 @@ event on_aot_06_item
         {
             run
             {
-                if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+                if (ITEM_RANDOMIZER)
+                {
+                    aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+                }
+                else if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
                 {
                     aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
                 }

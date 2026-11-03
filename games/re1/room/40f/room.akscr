@@ -86,9 +86,13 @@ proc init
     {
         evt_exec(0, TASK_09, on_enter);
     }
+    // Under ITEM_RANDOMIZER Jill can take the key slot too.
     if (JILL)
     {
-        aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        if (!ITEM_RANDOMIZER)
+        {
+            aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {

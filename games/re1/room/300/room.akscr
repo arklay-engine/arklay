@@ -77,13 +77,18 @@ proc init
     aot_set(AOT_03_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 0, 63, 0, 1, 0);
     aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
     item_aot_set(AOT_04_ITEM, 4500, 12500, 2000, 2000, IT_50_UNKNOWN_50, 1, IMDL_00, SCA_NONE, 5642, -2290, 13306, 1024, F_ITEM_4F, SAT_MANUAL | SAT_PLAYER, 0);
-    if (ck(FG_ITEM, F_ITEM_4F, TRUE))
+    // A randomized slot stays the plain item AOT, not the event that hands
+    // over the map.
+    if (!ITEM_RANDOMIZER)
     {
-        aot_reset(AOT_04_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 2, on_aot_04_item, 0);
-    }
-    else
-    {
-        aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
+        if (ck(FG_ITEM, F_ITEM_4F, TRUE))
+        {
+            aot_reset(AOT_04_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 2, on_aot_04_item, 0);
+        }
+        else
+        {
+            aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
+        }
     }
     aot_set(AOT_05_EVENT, 2696, 11486, 900, 1100, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 3, 0, on_aot_05, 0, 0, 0);
     item_aot_set(AOT_06_ITEM, 25700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 26600, 0, 2000, 0, F_ITEM_B9, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);

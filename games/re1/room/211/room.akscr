@@ -37,7 +37,14 @@ proc init
         aot_set(AOT_03_EVENT, 2500, 11000, 900, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);
     }
     aot_set(AOT_04_EVENT, 2500, 7600, 900, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    // The key is Chris-only (FG_STATUS 8 is Jill); under ITEM_RANDOMIZER
+    // Jill gets it too.
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 2900, -2020, 1780, 0, F_ITEM_95, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
+        eml_rot(IMDL_00, 0, 2048);
+    }
+    else if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 2900, -2020, 1780, 0, F_ITEM_95, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
         eml_rot(IMDL_00, 0, 2048);

@@ -38,10 +38,24 @@ proc init
         eml_rot(IMDL_01, 2048, 150);
         aot_delete(AOT_03_ITEM, SCE_NONE, 0);
     }
+    else if (ITEM_RANDOMIZER)
+    {
+        // Jill gets Chris's key in the cup too.
+        item_aot_set(AOT_03_ITEM, 2300, 13500, 1000, 1000, IT_3D_KEY_DESK, 1, IMDL_01, SCA_NONE, 2870, -1440, 14200, 0, F_ITEM_64, SAT_MANUAL | SAT_PLAYER, 0);
+        eml_rot(IMDL_01, 2048, 150);
+        aot_delete(AOT_03_ITEM, SCE_NONE, 0);
+    }
     item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_02, SCA_NONE, 10090, 60, 9770, -1040, F_ITEM_A5, SAT_MANUAL | SAT_PLAYER, 0);
     eml_rot(IMDL_02, -140, -70);
     setbyte(2, 0, 0);
     if (CHRIS)
+    {
+        if (ck(FG_ITEM, F_ITEM_64, TRUE))
+        {
+            aot_set(AOT_05_EVENT, 2300, 13500, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
+        }
+    }
+    else if (ITEM_RANDOMIZER)
     {
         if (ck(FG_ITEM, F_ITEM_64, TRUE))
         {
@@ -84,7 +98,11 @@ event on_aot_05
     sleep(1);
     run
     {
-        message(MSG_THERE_IS_A_KEY_IN_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a key in the cup."
+        // A randomized slot need not hold a key.
+        if (!ITEM_RANDOMIZER)
+        {
+            message(MSG_THERE_IS_A_KEY_IN_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a key in the cup."
+        }
     }
     wait_message();
     run

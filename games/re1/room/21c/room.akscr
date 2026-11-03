@@ -44,6 +44,12 @@ proc init when (MANSION2)
     {
         item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9250, -1500, 8800, 0, F_ITEM_E4, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
     }
+    else if (ITEM_RANDOMIZER)
+    {
+        // Jill gets Chris's key slot too. Her variant has no item model,
+        // so the pickup is invisible.
+        item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9250, -1500, 8800, 0, F_ITEM_E4, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
+    }
     enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_03, F_ENEMY_6B, SPAWN_FORCE, 2, 0, 1536, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
     enemy(EM_11_ZOMBIE_LAB, EB_80, F_ENEMY_6C, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
     if (ck(FG_SCENARIO, F_SCENARIO_33, TRUE))

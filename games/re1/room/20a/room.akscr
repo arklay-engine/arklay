@@ -68,7 +68,12 @@ proc init
 {
     room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_MAIN_ON | 1);
     door_aot_set(AOT_00_DOOR, 1000, 5000, 1300, 1600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_MESSAGE, 5800, 2400, 1900, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    // A randomized desk slot (AOT 8) is an ordinary item AOT over the desk,
+    // in place of the desk's message AOT (which hands over the document).
+    if (!ITEM_RANDOMIZER)
+    {
+        aot_set(AOT_01_MESSAGE, 5800, 2400, 1900, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    }
     aot_set(AOT_02_MESSAGE, 1800, 1700, 2000, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     aot_set(AOT_03_MESSAGE, 5000, 2400, 800, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 3930, 7500, 1800, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
@@ -92,13 +97,27 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                if (ITEM_RANDOMIZER)
+                {
+                    item_aot_set(AOT_08_ITEM, 5800, 2400, 1900, 900, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
+                else
+                {
+                    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                if (ITEM_RANDOMIZER)
+                {
+                    item_aot_set(AOT_08_ITEM, 5800, 2400, 1900, 900, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
+                else
+                {
+                    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
@@ -110,19 +129,40 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                if (ITEM_RANDOMIZER)
+                {
+                    item_aot_set(AOT_08_ITEM, 5800, 2400, 1900, 900, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
+                else
+                {
+                    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else if (ck(FG_COMMON, F_COMMON_07, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                if (ITEM_RANDOMIZER)
+                {
+                    item_aot_set(AOT_08_ITEM, 5800, 2400, 1900, 900, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
+                else
+                {
+                    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                if (ITEM_RANDOMIZER)
+                {
+                    item_aot_set(AOT_08_ITEM, 5800, 2400, 1900, 900, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
+                else
+                {
+                    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                }
                 set(FG_ROOM, F_ROOM_22, TRUE);
             }
         }

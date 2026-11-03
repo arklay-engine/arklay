@@ -47,13 +47,25 @@ proc init
     door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_HIKIDASHI, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 34, 0, 6, 0, 6, 0);
-    aot_set(AOT_04_EVENT, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
+    // A randomized slot (AOT 8) is an ordinary item AOT where the event AOT
+    // that hands over the map stood; AOT 4 is not set then.
+    if (!ITEM_RANDOMIZER)
+    {
+        aot_set(AOT_04_EVENT, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
+    }
     aot_set(AOT_05_EVENT, 12100, 8400, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
     item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 11030, -140, 1960, 0, F_ITEM_19, 0, 0);
     eml_rot(IMDL_00, 0, -1024);
     setbyte(0, 0, 0);
     item_aot_set(AOT_07_ITEM, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, IMDL_01, SCA_NONE, 13400, -710, 4940, 0, F_ITEM_86, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, IMDL_02, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_87, SAT_MANUAL | SAT_PLAYER, 0);
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_08_ITEM, 9000, 5000, 1000, 1000, IT_52_UNKNOWN_52, 1, IMDL_02, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_87, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, IMDL_02, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_87, SAT_MANUAL | SAT_PLAYER, 0);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_45, TRUE))
     {
         obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 10180, 0, 8970, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
@@ -71,6 +83,11 @@ proc init
             aot_reset(AOT_03_HIKIDASHI, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
             aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
             aot_reset(AOT_07_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            // Rebecca can't take the randomized slot either.
+            if (ITEM_RANDOMIZER)
+            {
+                aot_reset(AOT_08_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            }
         }
     }
     else
