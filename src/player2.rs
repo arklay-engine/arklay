@@ -355,6 +355,9 @@ pub struct Work {
     /// `Atd[0]`, as the last `Oba_ck_em2` left it: the box the bodies push
     /// against, which does not follow a hit that moves the player afterwards.
     pub atd: Option<crate::zombie2::Atd>,
+    /// Where the player stood before `Player_move` this tick, for `Old_x2`,
+    /// `Old_y2` and `Old_z2`.
+    pub old: Option<[i32; 3]>,
     /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
     pub near_death: bool,
     /// `Snd_se_on`s of the held states, for the caller.
@@ -387,8 +390,8 @@ pub const fn character_shadow(id: u8) -> (i32, i32) {
     match id {
         // `Em10_Init`'s.
         0x10..0x20 => (0x190, 0x258),
-        // `Em22_Init`'s.
-        0x22 => (0x44C, 0x352),
+        // `Em22_Init`'s, and `Em_24`'s copy.
+        0x22 | 0x24 => (0x44C, 0x352),
         0x45 | 0x4F => (0x172, 0x1CC),
         0x4D => (500, 600),
         id if id & 1 != 0 => (0x1A4, 0x208),
@@ -688,6 +691,7 @@ impl Default for Work {
             timers: [0; 3],
             at_em_flg: 0,
             atd: None,
+            old: None,
             near_death: false,
             sounds: Vec::new(),
             hit: None,

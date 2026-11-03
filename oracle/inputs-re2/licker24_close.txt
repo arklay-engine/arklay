@@ -1,0 +1,80 @@
+# room 605: Leon runs at the two 0x24 lickers, stops at the wall and fires weapon 2 as they come (oracle/re2.md)
+744 up run
+784 aim
+804 aim fire
+809 aim
+829 aim fire
+834 aim
+854 aim fire
+859 aim
+879 aim fire
+884 aim
+904 aim fire
+909 aim
+929 aim fire
+934 aim
+954 aim fire
+959 aim
+979 aim fire
+984 aim
+1004 aim fire
+1009 aim
+1029 aim fire
+1034 aim
+1054 aim fire
+1059 aim
+1079 aim fire
+1084 aim
+1104 aim fire
+1109 aim
+1129 aim fire
+1134 aim
+1154 aim fire
+1159 aim
+1179 aim fire
+1184 aim
+1204 aim fire
+1209 aim
+1229 aim fire
+1234 aim
+1254 aim fire
+1259 aim
+1279 aim fire
+1284 aim
+1304 aim fire
+1309 aim
+1329 aim fire
+1334 aim
+1354 aim fire
+1359 aim
+1379 aim fire
+1384 aim
+1404 aim fire
+1409 aim
+1429 aim fire
+1434 aim
+1454 aim fire
+1459 aim
+1479 aim fire
+1484 aim
+1504 aim fire
+1509 aim
+1529 aim fire
+1534 aim
+1554 aim fire
+1559 aim
+1579 aim fire
+1584 aim
+1604 aim fire
+1609 aim
+1629 aim fire
+1634 aim
+1654 aim fire
+1659 aim
+1679 aim fire
+1684 aim
+1704 aim fire
+1709 aim
+1729 aim fire
+1734 aim
+1850

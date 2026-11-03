@@ -1,6 +1,7 @@
-//! `Em_22`: the licker.
+//! `Em_22` and its copy `Em_24`: the lickers.
 //!
-//! Its behaviour is the script `enemy/22/enemy.lua`; this is what the script
+//! Their behaviour is the script `lib/licker.lua`, behind a thin
+//! `enemy/{id:02x}/enemy.lua` for each id; this is what the script
 //! stands on: the fields the engine reads, the tongue's blend, the turn of the
 //! surface it's on and the pushes at the end of its tick.
 
@@ -204,7 +205,7 @@ impl Em22<'_, '_, '_, '_> {
         })
     }
 
-    /// `update` of `enemy/22/enemy.lua`. A pack without it leaves the licker
+    /// `update` of `enemy/22/enemy.lua` or `enemy/24/enemy.lua`. A pack without it leaves the licker
     /// standing.
     fn script(&mut self) {
         let Some(lua) = self.em.world.lua.take() else {

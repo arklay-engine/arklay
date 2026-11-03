@@ -292,6 +292,8 @@ pub struct ObjectRecord {
     pub draw_lift: i32,
     /// RE2's `+0x145`, from `Item_aot_set`: what an item's object does.
     pub item_flags: u8,
+    /// RE2's `Atd[0]`, from `Obj_model_set`.
+    pub atd2: ObjectAtd,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
 }
@@ -323,9 +325,92 @@ impl Default for ObjectRecord {
             attr: 0,
             draw_lift: 0,
             item_flags: 0,
+            atd2: ObjectAtd::default(),
             tween: TweenScratch::default(),
         }
     }
+}
+
+/// RE2's `Atd[0]` from `Obj_model_set`: the box `Oma_ck_oba` holds the player
+/// out of, about the object's position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ObjectAtd {
+    /// `Ofs_x`, `Ofs_y` and `Ofs_z`.
+    pub ofs: [i16; 3],
+    pub at_w: u16,
+    pub at_h: u16,
+    pub at_d: u16,
+}
+
+/// The player's side of `Oma_ck_oba`: its `Atd[0]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayerAtd {
+    /// `X`, `Y` and `Z`.
+    pub at: [i32; 3],
+    /// `Old_x2`, `Old_y2` and `Old_z2`: where `at` was at the end of the last
+    /// frame.
+    pub old: [i16; 3],
+    pub ofs_y: i16,
+    pub at_w: u16,
+    pub at_h: u16,
+}
+
+/// `Oma_ck_oba` with mode 0, as `Om_move` ends: the push of the player out of
+/// an RE2 object, by the axis it came in on. Returns whether they touched.
+///
+/// The height test is strict: a player standing at the object's own height,
+/// with the box only as tall as the player (`At_h` 0), is clear of it.
+pub fn oma_ck_oba(pos: &mut [i32; 3], player: &mut PlayerAtd, obj: &ObjectRecord) -> bool {
+    if obj.be_flg & 2 != 0 {
+        return false;
+    }
+    let atd = obj.atd2;
+    let (ofs_x, ofs_z, w, d) = if obj.rotation[1] & 0x400 == 0 {
+        (atd.ofs[0], atd.ofs[2], atd.at_w, atd.at_d)
+    } else {
+        (atd.ofs[2], atd.ofs[0], atd.at_d, atd.at_w)
+    };
+    let at = [
+        obj.pos[0] + i32::from(ofs_x),
+        obj.pos[1] + i32::from(atd.ofs[1]),
+        obj.pos[2] + i32::from(ofs_z),
+    ];
+    let dx = at[0] - player.at[0];
+    let dz = at[2] - player.at[2];
+    let reach_x = i32::from(w) + i32::from(player.at_w);
+    let reach_z = i32::from(player.at_w) + i32::from(d);
+    let outside = |delta: i32, reach: i32| ((reach * 2) as u32) < (delta + reach) as u32;
+    if outside(dx, reach_x) || outside(dz, reach_z) {
+        return false;
+    }
+    let dy = at[1] - player.at[1];
+    let height = i32::from(player.at_h) + i32::from(atd.at_h);
+    let within = |delta: i32| ((delta + height) as u32) < (height * 2) as u32;
+    if !within(dy) {
+        return false;
+    }
+    // The object's own `Old_y2`, which nothing writes for an object model.
+    if !within(-i32::from(player.old[1])) {
+        let edge = if dy < 0 { height + 1 } else { -height };
+        pos[1] = at[1] - i32::from(player.ofs_y) + edge;
+        player.at[1] = pos[1] + i32::from(player.ofs_y);
+        return true;
+    }
+    let (axis, reach, back) = if outside(at[0] - i32::from(player.old[0]), reach_x) {
+        (0, reach_x, player.at[0] - i32::from(player.old[0]) >= 0)
+    } else if outside(at[2] - i32::from(player.old[2]), reach_z) {
+        (2, reach_z, player.at[2] - i32::from(player.old[2]) >= 0)
+    } else if (reach_x.wrapping_mul(dz)).unsigned_abs() < (reach_z.wrapping_mul(dx)).unsigned_abs()
+    {
+        (0, reach_x, dx >= 0)
+    } else {
+        (2, reach_z, dz >= 0)
+    };
+    let edge = if back { -(reach + 1) } else { reach + 1 };
+    let delta = (at[axis] - player.at[axis]) + edge;
+    player.at[axis] += delta;
+    pos[axis] += delta;
+    true
 }
 
 impl ObjectRecord {
@@ -469,6 +554,7 @@ impl ObjectTable {
             attr: 0,
             draw_lift: 0,
             item_flags: 0,
+            atd2: ObjectAtd::default(),
             tween: TweenScratch::default(),
         };
         self.built = self.built.wrapping_add(1);
@@ -1454,6 +1540,75 @@ mod tests {
         assert_eq!(twinkle(&object), Some((23, [-18435, -1993, -25973])));
         let plain = ObjectRecord::default();
         assert_eq!(twinkle(&plain), None);
+    }
+
+    fn leon_at(pos: [i32; 3], old: [i32; 3]) -> PlayerAtd {
+        PlayerAtd {
+            at: [pos[0], pos[1] - 0x5FA, pos[2]],
+            old: [old[0] as i16, (old[1] - 0x5FA) as i16, old[2] as i16],
+            ofs_y: -0x5FA,
+            at_w: 450,
+            at_h: 0x5FA,
+        }
+    }
+
+    #[test]
+    fn an_object_with_no_height_holds_no_one_standing_at_its_own() {
+        // Room 605's duct, where Leon drops in: `Oma_ck_oba`'s strict height
+        // test leaves him where the floor's SCA put him.
+        let duct = ObjectRecord {
+            flag: OBJECT_FLAG_ACTIVE,
+            pos: [-25030, -2360, -23196],
+            be_flg: 1,
+            ..ObjectRecord::default()
+        };
+        let mut pos = [-24990, -2360, -23316];
+        let mut atd = leon_at(pos, [-24500, -2360, -24000]);
+        assert!(!oma_ck_oba(&mut pos, &mut atd, &duct));
+        assert_eq!(pos, [-24990, -2360, -23316]);
+    }
+
+    #[test]
+    fn a_player_walking_into_an_object_stops_at_the_side_they_came_from() {
+        let crate_ = ObjectRecord {
+            flag: OBJECT_FLAG_ACTIVE,
+            pos: [1000, 0, 0],
+            be_flg: 1,
+            atd2: ObjectAtd {
+                ofs: [0, -1000, 0],
+                at_w: 500,
+                at_h: 1000,
+                at_d: 500,
+            },
+            ..ObjectRecord::default()
+        };
+        // From the west: out on x, to the box's edge plus one.
+        let mut pos = [200, 0, 100];
+        let mut atd = leon_at(pos, [0, 0, 100]);
+        assert!(oma_ck_oba(&mut pos, &mut atd, &crate_));
+        assert_eq!(pos, [1000 - 951, 0, 100]);
+        // Turned a quarter, its width and depth swap.
+        let turned = ObjectRecord {
+            rotation: [0, 0x400, 0],
+            atd2: ObjectAtd {
+                at_w: 100,
+                at_d: 500,
+                ..crate_.atd2
+            },
+            ..crate_
+        };
+        let mut pos = [200, 0, 100];
+        let mut atd = leon_at(pos, [0, 0, 100]);
+        assert!(oma_ck_oba(&mut pos, &mut atd, &turned));
+        assert_eq!(pos, [1000 - 951, 0, 100]);
+        // Flagged 2, it holds no one.
+        let ghost = ObjectRecord {
+            be_flg: 3,
+            ..crate_
+        };
+        let mut pos = [200, 0, 100];
+        let mut atd = leon_at(pos, [0, 0, 100]);
+        assert!(!oma_ck_oba(&mut pos, &mut atd, &ghost));
     }
 
     fn operands(values: &[i64]) -> Vec<Operand> {
