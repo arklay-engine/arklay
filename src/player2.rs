@@ -88,6 +88,9 @@ const DANGER_LIFE: i32 = 0x15;
 const BLEND_STEP: u16 = 0x200;
 /// A motion change's blend: `Hokan_flg` in the `0x70000` the routines write.
 const FULL_BLEND: u8 = 7;
+/// `Sce_flg`'s bits that pin a foot through a script's clip, and the part:
+/// `FUN_004b2b00` composes parts 0, 1, 2, 3, 4 or 0, 1, 5, 6, 7.
+const FEET: [(u16, usize); 2] = [(1, 4), (2, 7)];
 /// The first of `pRoom`'s climbing clips, going up and down: a first step,
 /// the step repeated, and the last.
 const STAIRS_CLIPS: [u8; 2] = [0, 3];
@@ -3021,12 +3024,23 @@ impl Mover<'_, '_> {
     }
 
     /// `Spl_Scenario`: a script's motion. A motion with `Sce_flg` bit `0x10`
-    /// plays every other tick, which bit `0x20` counts.
+    /// plays every other tick, which bit `0x20` counts. Bits 1 and 2 then
+    /// keep a foot (part 4 or 7) where it was, so the clip walks the body.
     pub(crate) fn scenario(&mut self) {
+        let feet = FEET.map(|(_, part)| self.part_point(part, [0; 3]));
         if self.work.sce_flg & 0x30 != 0x30 {
             self.spl_sce();
         }
         self.work.sce_flg ^= 0x20;
+        for ((bit, part), was) in FEET.into_iter().zip(feet) {
+            if self.work.sce_flg & bit == 0 {
+                continue;
+            }
+            if let (Some(was), Some(now)) = (was, self.part_point(part, [0; 3])) {
+                self.player.pos[0] += was[0] - now[0];
+                self.player.pos[2] += was[2] - now[2];
+            }
+        }
     }
 
     fn spl_sce(&mut self) {
