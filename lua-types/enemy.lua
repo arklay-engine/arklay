@@ -857,6 +857,11 @@ function EnemyApi:hurt_player(damage, flags) end
 ---Raise the poison status bit (`0x02`) and restart the 150-frame poison timer.
 function EnemyApi:poison_player() end
 
+---Whether Yawn's bite poisons with the original's status; `false` means
+---ordinary poison, under the `BR_YAWN_POISON` system flag.
+---@return boolean
+function EnemyApi:yawn_poison_original() end
+
 ---The wasp's grab pose: both the player's and this entity's animation offsets
 ---latch to the player's X/Z, the attacked flag is set and the player enters
 ---the grabbed animation (state 5, frame id 7, the crawl pin).

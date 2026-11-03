@@ -995,6 +995,12 @@ local function death_sink(e)
 
     e.action_ticks_counter = e.action_ticks_counter - 1
     if e.action_ticks_counter == 0 then
+        if e.state == 3 then
+            -- BR_NEPTUNE_KILLABLE: a killed shark stays sunk (state 4 is the
+            -- parked RET) with its hit latch up, so it is never aimed at.
+            e.state = 4
+            return
+        end
         e.state = 1
         e.ignore = 0
         e.action_behavior = 0
@@ -1173,13 +1179,28 @@ local function state_death(e)
     end
 end
 
+-- State 3, the killed shark. The original leaves it a RET, so a lethal hit
+-- froze the shark; BioRand patched it to Cerberus's death routine. Under
+-- `BR_NEPTUNE_KILLABLE` (system flag 0xC9) arklay plays the shark's own death
+-- instead and leaves it dead: the death event is raised once, then the usual
+-- turn, thrash and sink, which end parked rather than respawning.
+local function state_dead(e)
+    if not e:flag_bit(5, 0xC9) then
+        return
+    end
+    if e.ignore == 0 and (e.behavior_flags & 1) == 0 then
+        e:raise_death_event()
+    end
+    state_death(e)
+end
+
 -- `neptune_state_table` (0x004bc9a8): SIX entries. States 3, 4 and 5 are each
 -- a single RET in the original - real slots that deliberately do nothing.
 local STATES = {
     state_init, -- [0] spawn
     state_run, -- [1] the swim/attack AI
     state_death, -- [2] the death split
-    function() end, -- [3] RET
+    state_dead, -- [3] RET, or the death under BR_NEPTUNE_KILLABLE
     function() end, -- [4] RET
     function() end, -- [5] RET
 }

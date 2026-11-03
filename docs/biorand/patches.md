@@ -30,22 +30,22 @@ dropped history.
 
 | # | Patch | Arklay | Gate |
 |---|---|---|---|
-| 1 | No attract demo from the title | Engine | `BR_NO_TITLE_DEMO` (a generated pack has no demo rooms) |
-| 2 | Combining fuel or ammunition no longer truncates the count to 7 bits | Fix | not `AUTHENTIC`; check whether arklay inherited the truncation |
-| 3 | Heal items usable at full health | Engine, already in arklay | not `AUTHENTIC` |
-| 4 | Blue herb usable when not poisoned | Engine, already in arklay | not `AUTHENTIC` |
-| 5–6 | Neptune can die (Cerberus's death routine) and takes weapon damage | Engine | `BR_NEPTUNE_KILLABLE`; randomizer-only |
-| 7 | Yawn's bite gives normal poison | Engine, changed: Yawn still poisons. Under door rando it is always ordinary poison a blue herb cures, with no trip to room 100. Without door rando the original Yawn poison and its room 100 rescue happen only once room 100 has been visited (the visited-room bits in bank 8); before that it is ordinary poison | `BR_YAWN_POISON`, with `DOOR_RANDOMIZER`; randomizer-only |
-| 8–9 | Extra blue herb mixes (B+B=G, B+GB=GG, …) and the icon refresh after mixing | Engine: the mix table in Lua, gated | `BR_HERB_MIXES`; randomizer-only (two mixes are BioRand inventions). Arklay has no icon bug to work around |
-| 10 | The locked drawer's hard-coded ink-ribbon case | Fix, or Engine if it changes vanilla behaviour | check against arklay's drawer handler |
-| 11–13 | Ink controlled by scenario flag 122 for both characters | Engine: ink reads flag 122 when `BR_INK_FLAG` is set, the character rule otherwise | `BR_INK_FLAG` |
-| 14–15 | Chris may use the lockpick (flag 124); Jill may use the sword key | Engine, already in arklay; confirm both directions | flag 124 |
+| 1 | No attract demo from the title | Engine | `BR_NO_TITLE_DEMO` (a generated pack has no demo rooms) **Done:** `App::next_attract_entry` returns no reel when the manifest raises `BR_NO_TITLE_DEMO`. |
+| 2 | Combining fuel or ammunition no longer truncates the count to 7 bits | Fix | not `AUTHENTIC`; check whether arklay inherited the truncation **Done:** arklay inherited the truncation (the ammunition transfer masked a count with `0x7F`); `GameState::combine_count` keeps it only under `--authentic`. |
+| 3 | Heal items usable at full health | Engine, already in arklay | not `AUTHENTIC` **Done:** confirmed (`accepts_ineffective_heal`). |
+| 4 | Blue herb usable when not poisoned | Engine, already in arklay | not `AUTHENTIC` **Done:** confirmed (same). |
+| 5–6 | Neptune can die (Cerberus's death routine) and takes weapon damage | Engine | `BR_NEPTUNE_KILLABLE`; randomizer-only **Done:** state 3 of `enemy/0b/enemy.lua` (a RET in the original, so a lethal hit froze the shark) runs the shark's own death under flag `0xC9`: death event raised, turn, thrash, sink, then parked in state 4 instead of respawning. Weapon damage already reaches Neptune through the shared pipeline (it sets the aim bit within 10000 units); the pack's hit table is not checked. |
+| 7 | Yawn's bite gives normal poison | Engine, changed: Yawn still poisons. Under door rando it is always ordinary poison a blue herb cures, with no trip to room 100. Without door rando the original Yawn poison and its room 100 rescue happen only once room 100 has been visited (the visited-room bits in bank 8); before that it is ordinary poison | `BR_YAWN_POISON`, with `DOOR_RANDOMIZER`; randomizer-only **Done:** `yawn_bite_poison` in `src/game.rs`, called from `enemy/0d/enemy.lua` through `e:yawn_poison_original()`; the ordinary case calls `poison_player`. The rescue is room 20E's test of bank 1 flag `0x43`, which the ordinary bite never raises. |
+| 8–9 | Extra blue herb mixes (B+B=G, B+GB=GG, …) and the icon refresh after mixing | Engine: the mix table, gated | `BR_HERB_MIXES`; randomizer-only (two mixes are BioRand inventions). Arklay has no icon bug to work around **Done:** `items::combine_with_mixes` replaces the blue herb's recipes with classic's six (B+B=G, B+G=GB, B+GR=GRB, B+GG=GGB, B+GB=GG, B+GGB=GGG). The table is Rust data (`items.rs`), not Lua. |
+| 10 | The locked drawer's hard-coded ink-ribbon case | Fix, or Engine if it changes vanilla behaviour | check against arklay's drawer handler **Done:** no change needed: arklay's desk handler has no ink-ribbon special case. |
+| 11–13 | Ink controlled by scenario flag 122 for both characters | Engine: ink reads flag 122 when `BR_INK_FLAG` is set, the character rule otherwise | `BR_INK_FLAG` **Done:** `ink_ribbons_needed` / `GameState::needs_ink_ribbons`: scenario flag 122 under `BR_INK_FLAG`. |
+| 14–15 | Chris may use the lockpick (flag 124); Jill may use the sword key | Engine, already in arklay; confirm both directions | flag 124 **Done:** confirmed: `has_lockpick` accepts flag 124 for either character, and Jill may turn a held sword key, both outside `--authentic`. |
 | 16–21 | Whole lock byte is the flag index; 256 lock flags, saved; cleared on a new game | Engine, plus a save extension block for bank 2. Done: `GameState::door_lock` decodes the byte; the `AKY\x03` save trailer holds bank 2 bytes 8..32 when any is set; a new game starts cleared | `BR_LOCK_FULL_BYTE` |
-| 22 | 6 or 8 slots for either character | Engine, already in arklay (`config.rs` inventory size); the manifest sets it | manifest |
+| 22 | 6 or 8 slots for either character | Engine (`config.rs` inventory size); the manifest must set it | manifest. **Open (milestone 5):** no manifest field sets a slot count yet (only `debug.inventory_size`). Rebecca's inventory is separate in memory, but the save stores one 12-slot run, so an 8-slot Chris would overwrite Rebecca's first two saved slots (as Jill's 8 slots already do); fix with the manifest field |
 | 23 | Undo a Classic REbirth hook that kept the flamethrower in slots 7–8 | Gone: a Classic REbirth bug | |
 | 24 | Weapon hit-scan heights for a swapped player model | Gone: cosmetic (player models) | |
 | 25 | `biorand.dat` loader | Gone: the manifest carries the options | |
-| H1–H4 | Old 8-slot inventory, with Rebecca sharing Chris's inventory | Gone; but check that Chris's slots 7–8 and Rebecca's don't overlap with an 8-slot Chris (an open question in staging too) | |
+| H1–H4 | Old 8-slot inventory, with Rebecca sharing Chris's inventory | Gone; but check that Chris's slots 7–8 and Rebecca's don't overlap with an 8-slot Chris (an open question in staging too) | **Done:** in memory no overlap, but `save.rs` lays out one 12-slot run, so an 8-slot Chris would overwrite Rebecca's first two saved slots, as Jill already does. Rebecca does not use item boxes, so only her saved stash is affected. |
 | H5 | Generic memory writer | Gone | |
 
 ## B. Room script patches (`Re1RdtPatcher`)
