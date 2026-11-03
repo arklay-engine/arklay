@@ -387,7 +387,7 @@ impl GameArg {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Generate and check small randomized games (being ported to the new randomizer)
+    /// Generate and check randomized games (BioRand: items and the start inventory for now)
     Biorand {
         #[command(subcommand)]
         action: BiorandAction,
@@ -560,7 +560,8 @@ enum ModAction {
 
 #[derive(Subcommand, Debug)]
 enum BiorandAction {
-    /// Generate a seed's game pack from a base pack
+    /// Generate a seed's game from a base pack: the original game with its
+    /// items randomized (doors, locks and enemies stay the original's)
     Generate {
         /// The base game pack, such as re1.akpak
         #[arg(value_name = "PACK")]
@@ -570,17 +571,47 @@ enum BiorandAction {
         #[arg(long)]
         seed: u32,
 
-        /// Directory the pack goes in (default: the base pack's directory)
+        /// A configuration as BioRand's JSON: an object of option ids and
+        /// values. Options it leaves out keep their defaults
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
+
+        /// Whose game to write: chris, jill, both (one pack each) or
+        /// configured (the configuration's `player`, drawn from the seed when
+        /// Random)
+        #[arg(long, default_value = "configured", value_parser = parse_player_choice)]
+        player: arklay::biorand::PlayerChoice,
+
+        /// Directory the packs go in (default: the base pack's directory)
         #[arg(long, value_name = "DIR")]
         out_dir: Option<PathBuf>,
+
+        /// Write the pack even when one from the same seed is already there
+        #[arg(long)]
+        force: bool,
+
+        /// Worker threads for compressing the pack; 0 uses every core
+        #[arg(long, default_value_t = 0)]
+        jobs: usize,
     },
-    /// Check a generated pack: every room reachable, every key before its
-    /// lock, the flare and the goal room reachable
+    /// Check a generated pack against the plan it records: the manifest, the
+    /// spoiler, every room script decoding and every planned pickup in
+    /// place; given the base pack, that nothing else differs from it
     Verify {
         /// The generated pack
         #[arg(value_name = "PACK")]
         pack: PathBuf,
+
+        /// The base pack the game was generated from (default: re1.akpak
+        /// beside the generated pack, when it is there)
+        #[arg(long, value_name = "PACK")]
+        base: Option<PathBuf>,
     },
+}
+
+fn parse_player_choice(text: &str) -> Result<arklay::biorand::PlayerChoice, String> {
+    arklay::biorand::PlayerChoice::parse(text)
+        .ok_or_else(|| format!("`{text}` is not chris, jill, both or configured"))
 }
 
 #[derive(Subcommand, Debug)]
@@ -1145,6 +1176,31 @@ fn write_pack_info(pack_path: &Path, pack: &Pack, out: &mut impl Write) -> Resul
                 };
                 writeln!(out, "  biorand_flags: {names}")?;
             }
+            if let Some(version) = manifest.plan_version {
+                writeln!(out, "  plan_version: {version}")?;
+            }
+            let setup = &manifest.setup;
+            if !setup.scenario_flags.is_empty() {
+                let flags: Vec<String> = setup
+                    .scenario_flags
+                    .iter()
+                    .map(|(flag, raised)| format!("{flag}={}", u8::from(*raised)))
+                    .collect();
+                writeln!(out, "  scenario_flags: {}", flags.join(", "))?;
+            }
+            if let Some(items) = &setup.start_items {
+                let items: Vec<String> = items
+                    .iter()
+                    .map(|(id, amount)| format!("{id:#04x} x{amount}"))
+                    .collect();
+                writeln!(out, "  start_items: {}", items.join(", "))?;
+            }
+            if let Some(slots) = setup.chris_slots {
+                writeln!(out, "  chris_slots: {slots}")?;
+            }
+            if let Some(slots) = setup.jill_slots {
+                writeln!(out, "  jill_slots: {slots}")?;
+            }
             if !manifest.lua.is_empty() {
                 writeln!(out, "  lua: {}", manifest.lua.join(", "))?;
             }
@@ -1228,18 +1284,41 @@ fn main() -> Result<()> {
             BiorandAction::Generate {
                 base,
                 seed,
+                config,
+                player,
                 out_dir,
+                force,
+                jobs,
             } => {
                 let dir = out_dir
                     .or_else(|| base.parent().map(Path::to_path_buf))
                     .unwrap_or_default();
-                let out = arklay::biorand::generate(&base, seed, &dir, 0, &|_, _| {})?;
-                println!("{}", out.display());
+                let config = config
+                    .map(|path| -> anyhow::Result<_> {
+                        let text = std::fs::read_to_string(&path)
+                            .with_context(|| format!("failed to read {}", path.display()))?;
+                        arklay_biorand::config::Config::from_json(&text)
+                            .with_context(|| format!("{} is not a configuration", path.display()))
+                    })
+                    .transpose()?;
+                let options = arklay::biorand::Options {
+                    config,
+                    players: player,
+                    force,
+                };
+                let packs =
+                    arklay::biorand::generate_with(&base, seed, &dir, &options, jobs, &|_, _| {})?;
+                for generated in packs {
+                    println!("{}", generated.path.display());
+                }
                 Ok(())
             }
-            BiorandAction::Verify { pack } => {
-                arklay::biorand::verify_pack(&pack)?;
-                println!("{}: ok", pack.display());
+            BiorandAction::Verify { pack, base } => {
+                let report = match base {
+                    Some(base) => arklay::biorand::verify_with(&pack, Some(&base))?,
+                    None => arklay::biorand::verify_pack(&pack)?,
+                };
+                println!("{}: ok, {report}", pack.display());
                 Ok(())
             }
         },

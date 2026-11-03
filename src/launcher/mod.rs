@@ -2758,7 +2758,8 @@ fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
     // A seed's pack is built from another pack, and keeps being the same game
     // when the scripts it was built from change, until the generator does.
     if manifest.seed.is_some() {
-        return manifest.generator_version != Some(biorand::GENERATOR_VERSION);
+        return manifest.generator_version != Some(biorand::GENERATOR_VERSION)
+            || manifest.plan_version != Some(arklay_biorand::plan::GENERATOR_VERSION);
     }
     Game::from_id(&manifest.id) != Some(Game::Re2)
         && manifest.source_hash.as_deref() != Some(source_hash)
@@ -3381,8 +3382,12 @@ mod tests {
         manifest.convert_version = Some(CONVERT_VERSION);
         manifest.seed = Some(1);
         manifest.generator_version = Some(biorand::GENERATOR_VERSION);
+        manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION);
         manifest.source_hash = Some("older scripts".to_string());
         assert!(!is_stale(&manifest, "current scripts"));
+        manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION + 1);
+        assert!(is_stale(&manifest, "current scripts"), "a newer plan");
+        manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION);
         manifest.generator_version = Some(biorand::GENERATOR_VERSION + 1);
         assert!(is_stale(&manifest, "current scripts"));
     }

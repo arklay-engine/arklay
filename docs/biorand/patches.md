@@ -41,11 +41,11 @@ dropped history.
 | 11–13 | Ink controlled by scenario flag 122 for both characters | Engine: ink reads flag 122 when `BR_INK_FLAG` is set, the character rule otherwise | `BR_INK_FLAG` **Done:** `ink_ribbons_needed` / `GameState::needs_ink_ribbons`: scenario flag 122 under `BR_INK_FLAG`. |
 | 14–15 | Chris may use the lockpick (flag 124); Jill may use the sword key | Engine, already in arklay; confirm both directions | flag 124 **Done:** confirmed: `has_lockpick` accepts flag 124 for either character, and Jill may turn a held sword key, both outside `--authentic`. |
 | 16–21 | Whole lock byte is the flag index; 256 lock flags, saved; cleared on a new game | Engine, plus a save extension block for bank 2. Done: `GameState::door_lock` decodes the byte; the `AKY\x03` save trailer holds bank 2 bytes 8..32 when any is set; a new game starts cleared | `BR_LOCK_FULL_BYTE` |
-| 22 | 6 or 8 slots for either character | Engine (`config.rs` inventory size); the manifest must set it | manifest. **Open (milestone 5):** no manifest field sets a slot count yet (only `debug.inventory_size`). Rebecca's inventory is separate in memory, but the save stores one 12-slot run, so an 8-slot Chris would overwrite Rebecca's first two saved slots (as Jill's 8 slots already do); fix with the manifest field |
+| 22 | 6 or 8 slots for either character | Engine (`config.rs` inventory size); the manifest must set it | manifest **Done:** a generated pack's manifest sets `chris_slots`/`jill_slots` when they differ from six and eight; the engine applies them on every path into a game (`apply_slot_counts`), so a load needs nothing saved. The start inventory (`start_items`) and scenario flags 122–124 (`scenario_flags`) come from the manifest the same way, after `new_game.lua`. |
 | 23 | Undo a Classic REbirth hook that kept the flamethrower in slots 7–8 | Gone: a Classic REbirth bug | |
 | 24 | Weapon hit-scan heights for a swapped player model | Gone: cosmetic (player models) | |
 | 25 | `biorand.dat` loader | Gone: the manifest carries the options | |
-| H1–H4 | Old 8-slot inventory, with Rebecca sharing Chris's inventory | Gone; but check that Chris's slots 7–8 and Rebecca's don't overlap with an 8-slot Chris (an open question in staging too) | **Done:** in memory no overlap, but `save.rs` lays out one 12-slot run, so an 8-slot Chris would overwrite Rebecca's first two saved slots, as Jill already does. Rebecca does not use item boxes, so only her saved stash is affected. |
+| H1–H4 | Old 8-slot inventory, with Rebecca sharing Chris's inventory | Gone; but check that Chris's slots 7–8 and Rebecca's don't overlap with an 8-slot Chris (an open question in staging too) | **Done:** in memory no overlap. The save lays out one 12-slot run, so a player holding more than six slots covers Rebecca's first saved slots; when any of those is in use, the save keeps all of Rebecca's slots in an `AKY\x04` trailer and a load restores them from it. A six-slot Chris and a vanilla Jill write no trailer, so their saves stay byte-identical. |
 | H5 | Generic memory writer | Gone | |
 
 ## B. Room script patches (`Re1RdtPatcher`)
@@ -57,9 +57,9 @@ that player's script path.
 | Patch | Rooms | What and why | Arklay |
 |---|---|---|---|
 | ConfigureOptions | 106 | Sets scenario flags 122 ink, 123 hard, 124 lockpick; for Jill without the lockpick option, removes Barry giving it | Engine sets the flags from the manifest. Guard (R): Barry's gift tests flag 124 |
-| FixMapsAsItems | 107, 20B | The 1F and 2F map pickups were event AOTs; make them item AOTs (20B gains AOT 4) | Guard (I) |
-| FixMapsAsItems | 300, 30F, 406 | Courtyard, caves and guardhouse maps: same | Guard (I) |
-| FixDocuments | 20A | The fish-tank document on the desk becomes an item AOT, per player | Guard (I) |
+| FixMapsAsItems | 107, 20B | The 1F and 2F map pickups were event AOTs; make them item AOTs (20B gains AOT 4) | Guard (I) **Done:** 107's item AOT 2 takes event AOT 5's area and is armed with the map SCE; 20B gains item AOT 4 (flag 17, item 0x4F, which `random.xml` now names; staging's says 0) in place of the lighter-gated event AOT 2. 20B's map has no item model, as in staging |
+| FixMapsAsItems | 300, 30F, 406 | Courtyard, caves and guardhouse maps: same | Guard (I) **Done:** 300 skips the `aot_reset` that made AOT 4 an event; 30F's AOT 4 and 406's AOT 8 take the event AOT's area. 406 also turns AOT 8 into a message in Rebecca's branch, so she can't take the slot |
+| FixDocuments | 20A | The fish-tank document on the desk becomes an item AOT, per player | Guard (I) **Done:** the five desk `item_aot_set`s of AOT 8 (flag 16) take the desk's area and the desk message is not set. Jill's third branch, where Barry hands the document over, is unchanged |
 | DisableDogWindows | 108 | No dogs through the windows (staging always applies it) | Guard (R) |
 | DisableDogBoiler | 114 | No dog from the boiler room | Guard (R) |
 | DisableHunterAmbushes | 203, 209 (second visit) | No Hunter ambush events | Guard (E) |
@@ -74,13 +74,13 @@ that player's script path.
 | FixDoorPlant42 | 40A, 40C, 408 | The bookcase stays open; 40C's AOT becomes a door; with door rando: the nest's double doors aren't blocked, no switch to the second mansion visit, the door stays blocked until plant 42 is dead, and the reload crash after killing it (Jill) is avoided | Guard (R) for the bookcase and door; Guard (D) for the rest. Check whether arklay has the reload crash |
 | FixChrisPlant42 | 40C, 40F, 408, 409 (Chris) | No switch to Rebecca; the V-JOLT hand-back; Rebecca's cutscene and drug-store presence forced | Guard (R) |
 | DiableJillSandwich | 115 | Jill's sandwich-room trap off with door rando | Guard (D) |
-| ShotgunOnWallFix | 109, 115, 116 | Ceiling trap with any item: don't overwrite the pickup's quantity, don't place the shotgun back, lock both sandwich-room doors, remap its lock flags 0/1/2 to 15/16 and unlock them from the hall and the living room | Redesign: `picked()` (section C) for the trigger; Guard (I) for placing it back; data for the lock flags (named in `random.xml`, renumbered by the emitter) |
+| ShotgunOnWallFix | 109, 115, 116 | Ceiling trap with any item: don't overwrite the pickup's quantity, don't place the shotgun back, lock both sandwich-room doors, remap its lock flags 0/1/2 to 15/16 and unlock them from the hall and the living room | Redesign: `picked()` (section C) for the trigger; Guard (I) for placing it back; data for the lock flags (named in `random.xml`, renumbered by the emitter) **Partly done:** 116 keeps the slot's own amount, sets no put-back AOT 6 and ignores the shotgun at the wall under `ITEM_RANDOMIZER`. **Open (lock milestone):** the 115 lock change, the remap to 15/16 and the unlocks from 109 and 116 go together; until then 115 keeps the original locks |
 | DisableSerumDoorBlock | 20D | The serum event no longer blocks the door | Guard (R) |
 | DisablePoisonChallenge | 20E | No forced poison challenge | Guard (R) |
 | DisableBarryEvesdrop | 405 (Jill) | Barry's eavesdropping event off | Guard (R) |
 | ChangeEnemies101 | 101 (Chris) | Shifts enemy ids by 2 to dodge 601's reserved ids | Gone: the emitter gives each spawn its own id |
 | ClearEnemies309, 601, 706 | 309 (Jill), 201 and 206 second visit (Chris) | Removes scripted enemy sets that the enemy randomizer replaces | Guard (E): the sets go under `if (!ENEMY_RANDOMIZER)` beside the room's `random_enemies()` |
-| AllowPartnerItemBoxes | 100, 403 | Rebecca uses item boxes (`#if false` in staging) | Gone, unless the 8-slot overlap check (H1–H4) needs it |
+| AllowPartnerItemBoxes | 100, 403 | Rebecca uses item boxes (`#if false` in staging) | Gone: the 8-slot overlap (H1–H4) is solved in the save |
 | EnableFountainHeliportDoors | 303, 305 | Doors both ways between the fountain and the heliport, with a lock flag and arrival cut | Guard (R) (the proof of concept already has 303's half) |
 | FixPlayerChangeGlitch305 | 305 | Removes two player-change opcodes | Guard (R), or Fix if vanilla shows the glitch |
 | ForceHelipadTyrant | 303 | Forces the rooftop Tyrant (`set 0:43`) | Guard on `FORCE_TYRANT2` |
@@ -89,8 +89,8 @@ that player's script path.
 | FixCutscene502 | 502 (Jill) | Conditional opcodes that avoid the cutscene softlock | Guard (R) |
 | AddVariableHelper308 | 308 (Jill) | Sets `FG_ROOM[0]` when Barry's conditions hold, for the enemy condition to test | Gone: `random_enemies()` sits inside Barry's own branch |
 | FixBookcase216, FixBookcase406 | the rooms past 216:2 and 406:2 | With door rando, keeps the bookcase moved after passing it, by clearing flag 79 or 69 in whatever room the door leads to | Redesign: Guard (D) in 216 and 406 themselves, so the flag doesn't depend on the far room |
-| FixMoDiscReader507, 509, 510; FixMoDiscDoor508 | 507–510 | MO disc readers: the item AOT takes the reader's area, and "this reader is done" moves from the MO disc pickup flags (`FG_ITEM` 82/90/98) to scenario flags 112–114, which 508's door reads | Guard (I) |
-| EnableItemForJill106, 113, 11B, 211, 21C, 401, 40F | those rooms (Jill) | Pickups that only exist in Chris's game now exist for Jill | Guard (I) (Jill branch) |
+| FixMoDiscReader507, 509, 510; FixMoDiscDoor508 | 507–510 | MO disc readers: the item AOT takes the reader's area, and "this reader is done" moves from the MO disc pickup flags (`FG_ITEM` 82/90/98) to scenario flags 112–114, which 508's door reads | Guard (I) **Done** |
+| EnableItemForJill106, 113, 11B, 211, 21C, 401, 40F | those rooms (Jill) | Pickups that only exist in Chris's game now exist for Jill | Guard (I) (Jill branch) **Done.** 21C's Jill variant has no item model, so its pickup is invisible; 401 also drops "There's a key in the cup." under the guard |
 
 ## C. Item-type tests
 
