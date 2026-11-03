@@ -232,13 +232,86 @@ patches and room 308's helper flag.
 
 As in the proof of concept, the generator works on the pack's compiled
 scripts, not the `akscr` sources, so it needs neither the sources nor the
-compiler and works on a room a mod replaced. It never patches raw bytes: the
-emitter decodes each used room's script, sets the fields the plan names (door
-targets, entrances, locks and keys, pickups, enemy sets wrapped in their
-placeholders), encodes it again and writes a new base pack. `verify` reads the
-finished pack back and checks that every room is reachable, every key comes
-before its lock, nothing waits on a story flag the route can't raise, and every
-guard a patch needs is reached. A pack that fails is deleted.
+compiler and works on a room a mod replaced. It reads the map from the base
+pack (`biorand/map.xml` and each room's `random.xml`), plans the game, and
+writes one new base pack per planned player (`src/biorand/`):
+
+- **Room scripts.** The emitter decodes each `room/<id>/room.scd` and, for
+  every `item_aot_set` whose pickup flag the plan changes, sets the item type
+  and amount at the decoded instruction's fields. An emptied slot holds item
+  0, which the engine never builds or arms. Every `aot_reset`, `aot_delete`
+  and `aot_on` that re-arms such an AOT with a pickup SCE (item, document,
+  map) gets the SCE of its new item. Fields are written where they are, so
+  nothing else in the script moves. A slot the plan leaves `Original` is not
+  touched.
+- **Script changes are data only.** What a randomized game needs from the
+  room scripts (documents, maps and the MO disc readers as pickups, Jill's
+  missing pickups) is in the shipped `akscr` sources, gated on
+  `ITEM_RANDOMIZER`, so a retail build is byte-identical and the emitter
+  writes no code.
+- **Manifest.** `seed`, `generator_version` (the emitter's), `plan_version`
+  (`arklay_biorand::plan::GENERATOR_VERSION`), `character`, `biorand_flags`,
+  and the new game's setup: `scenario_flags`, `start_items` and any slot
+  count other than the original (`chris_slots`, `jill_slots`). The engine
+  applies the setup after `new_game.lua`, and the slot counts on every path
+  into a game. A new version of either half makes an older pack stale.
+- **Entries.** `biorand/request.json` (the seed, the players and the
+  configuration, so the plan can be made again), `biorand/spoiler.json` and
+  `biorand/spoiler.txt`. Every other entry is the base pack's, copied as it
+  is stored.
+
+Until their milestones land, the doors, locks and enemies stay the
+original's: `generate` defers `doors/random` and `locks/random`, the engine
+side turns `enemies/random` off and lists it as deferred in the spoiler, and
+the manifest raises none of `DOOR_RANDOMIZER`, `ENEMY_RANDOMIZER`,
+`LOCK_RANDOMIZER` or `BR_LOCK_FULL_BYTE` (the last makes the engine read
+whole lock bytes, which only the lock randomizer writes).
+
+`verify` reads the finished pack back. It plans the game again from the
+request and the map the pack carries, then checks the manifest's flags and
+setup, the spoiler, that every room script decodes, and that every planned
+pickup is declared by an `item_aot_set` in its room with the planned item and
+amount (a slot no reachable `item_aot_set` declares could never be picked
+up). Given the base pack, it also checks that every other byte matches: each
+room script equals the base's with the planned fields written, and every
+other entry is identical. `generate` runs it on every pack it writes and
+deletes a pack that fails. Later milestones add the route checks: every room
+reachable, every key before its lock, nothing waiting on a story flag the
+route can't raise, and every guard a patch needs reached.
+
+### How to test milestone 1
+
+Milestone 5 is the first playable one: a full RE1 game with shuffled items,
+on the original doors, locks and enemies. From a repository checkout, with
+the game converted to `re1.akpak` (see the README):
+
+```sh
+cargo build --profile test-release
+# Either player, or both (one pack each):
+target/test-release/arklay biorand generate re1.akpak --seed 123456 --player chris
+target/test-release/arklay biorand generate re1.akpak --seed 123456 --player both --out-dir games
+# An optional configuration (BioRand's JSON; options it leaves out keep their defaults):
+echo '{"inventory/size": "6", "hard": true}' > config.json
+target/test-release/arklay biorand generate re1.akpak --seed 7 --player jill --config config.json --force
+# Check a pack again (the base is found beside it, or given with --base):
+target/test-release/arklay biorand verify games/biorand-123456-chris.akpak --base re1.akpak
+# Read what it set up, and the spoiler:
+target/test-release/arklay pack info games/biorand-123456-chris.akpak
+target/test-release/arklay extract games/biorand-123456-chris.akpak --out target/scratch/seed
+cat target/scratch/seed/biorand/spoiler.txt
+# Play it:
+target/test-release/arklay games/biorand-123456-chris.akpak
+```
+
+The launcher's BioRand screen generates `games/biorand-<seed>.akpak` with the
+default configuration and the configured (random) player, and plays it. A
+generated game saves in its own folder, `<save_dir>/<pack id>/`.
+
+What to look for: the start inventory and slot count match the spoiler's;
+pickups hold the spoiler's items; documents, maps and the MO disc pass codes
+in randomized slots are picked up as items; emptied slots can't be picked
+up; keys are where the spoiler says; the game is completable. Report a stuck
+seed with its seed, player and configuration (`biorand/request.json`).
 
 ## Milestones
 

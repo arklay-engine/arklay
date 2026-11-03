@@ -1,0 +1,358 @@
+use std::path::{Path, PathBuf};
+
+use super::*;
+use crate::manifest::Manifest;
+use crate::pack::PackWriter;
+
+/// A scratch directory removed on drop.
+struct TempDir(PathBuf);
+
+impl TempDir {
+    fn new(label: &str) -> Self {
+        let path =
+            std::env::temp_dir().join(format!("arklay-biorand-{}-{label}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+const QUIET: &(dyn Fn(u64, u64) + Sync) = &|_, _| {};
+
+/// A base pack of the checked-in room definitions, room scripts and map: all
+/// a game is planned and emitted from.
+fn base_pack(dir: &Path) -> PathBuf {
+    let mut manifest = Manifest::base(BASE_PACK_ID);
+    manifest.name = Some("Resident Evil".to_string());
+    manifest.convert_version = Some(1);
+    manifest.source_hash = Some("0123456789abcdef".to_string());
+    let mut writer = PackWriter::new();
+    writer
+        .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+        .unwrap();
+    for (path, text) in crate::room::RE1_FILES {
+        writer
+            .add(&format!("room/{path}"), text.as_bytes().to_vec())
+            .unwrap();
+    }
+    for script in crate::scd::ROOM_SCRIPTS {
+        writer
+            .add(
+                &format!("room/{:03x}/room.scd", script.room),
+                script.container.to_vec(),
+            )
+            .unwrap();
+    }
+    for (path, text) in BIORAND_FILES {
+        writer.add(path, text.as_bytes().to_vec()).unwrap();
+    }
+    writer.add("bgm/000.wav", b"music".to_vec()).unwrap();
+    writer.compress_entries(0, |_| false).unwrap();
+    let path = dir.join(format!("{BASE_PACK_ID}.akpak"));
+    writer.write(&path).unwrap();
+    path
+}
+
+fn both(seed: u32, dir: &TempDir) -> (PathBuf, Vec<Generated>) {
+    let base = base_pack(&dir.0);
+    let options = Options {
+        players: PlayerChoice::Both,
+        ..Options::default()
+    };
+    let packs = generate_with(&base, seed, &dir.0.join("games"), &options, 0, QUIET).unwrap();
+    (base, packs)
+}
+
+#[test]
+fn a_seed_names_its_pack() {
+    assert_eq!(pack_id(42), "biorand-000042");
+    assert_eq!(
+        pack_path(Path::new("games"), 42),
+        Path::new("games").join("biorand-000042.akpak")
+    );
+}
+
+#[test]
+fn the_map_files_are_checked_in_under_biorand() {
+    assert!(
+        BIORAND_FILES
+            .iter()
+            .any(|(entry, _)| *entry == "biorand/map.xml")
+    );
+}
+
+#[test]
+fn a_request_round_trips_through_json() {
+    let mut config = Config::new();
+    config.set("items/random", true);
+    config.set("player", "Jill");
+    let request = Request {
+        seed: 4321,
+        players: PlayerChoice::Both,
+        config,
+    };
+    assert_eq!(Request::from_json(&request.to_json()).unwrap(), request);
+    assert!(Request::from_json("{}").is_err());
+    for choice in ["configured", "chris", "jill", "both"] {
+        assert_eq!(PlayerChoice::parse(choice).unwrap().as_str(), choice);
+    }
+    assert_eq!(PlayerChoice::parse("rebecca"), None);
+}
+
+#[test]
+fn a_seed_makes_a_verified_pack_per_player() {
+    let dir = TempDir::new("both");
+    let (base, packs) = both(42, &dir);
+    let players: Vec<Player> = packs.iter().map(|generated| generated.player).collect();
+    assert_eq!(players, [Player::Chris, Player::Jill]);
+    for (generated, name) in packs.iter().zip(["chris", "jill"]) {
+        assert_eq!(
+            generated.path.file_name().unwrap().to_str().unwrap(),
+            format!("biorand-000042-{name}.akpak")
+        );
+        let report = verify_with(&generated.path, Some(&base)).unwrap();
+        assert!(report.against_base);
+        assert!(report.rooms > 100, "{report}");
+        assert!(report.pickups > 50, "{report}");
+        // The base is found beside the games directory's packs only when it
+        // is there.
+        assert!(!verify_pack(&generated.path).unwrap().against_base);
+
+        let pack = Pack::open(&generated.path).unwrap();
+        let manifest = pack.manifest().unwrap();
+        assert_eq!(manifest.seed, Some(42));
+        assert_eq!(manifest.generator_version, Some(GENERATOR_VERSION));
+        assert_eq!(
+            manifest.plan_version,
+            Some(arklay_biorand::plan::GENERATOR_VERSION)
+        );
+        assert_eq!(manifest.character, Some(character_of(generated.player)));
+        assert_eq!(manifest.source_hash.as_deref(), Some("0123456789abcdef"));
+        let flags = manifest.biorand_flags.as_ref().unwrap();
+        assert!(flags.iter().any(|flag| flag == "ITEM_RANDOMIZER"));
+        for deferred in [
+            "DOOR_RANDOMIZER",
+            "ENEMY_RANDOMIZER",
+            "LOCK_RANDOMIZER",
+            "BR_LOCK_FULL_BYTE",
+        ] {
+            assert!(!flags.iter().any(|flag| flag == deferred), "{deferred}");
+        }
+        let start = manifest.setup.start_items.as_ref().unwrap();
+        assert!(!start.is_empty());
+        assert!(
+            manifest
+                .setup
+                .scenario_flags
+                .iter()
+                .any(|&(flag, _)| flag == 122)
+        );
+        for entry in [REQUEST_ENTRY, SPOILER_JSON_ENTRY, SPOILER_TEXT_ENTRY] {
+            assert!(pack.contains(entry), "{entry}");
+        }
+        let spoiler =
+            String::from_utf8(pack.read(SPOILER_TEXT_ENTRY).unwrap().into_owned()).unwrap();
+        assert!(
+            spoiler.contains("000042") || spoiler.contains("42"),
+            "{spoiler}"
+        );
+        // The other entries are the base's.
+        assert_eq!(pack.read("bgm/000.wav").unwrap().as_ref(), b"music");
+    }
+}
+
+#[test]
+fn a_seed_always_makes_the_same_bytes() {
+    let dir = TempDir::new("same");
+    let base = base_pack(&dir.0);
+    let options = Options {
+        players: PlayerChoice::Jill,
+        force: true,
+        ..Options::default()
+    };
+    let first = generate_with(&base, 7, &dir.0.join("a"), &options, 0, QUIET).unwrap();
+    let second = generate_with(&base, 7, &dir.0.join("b"), &options, 4, QUIET).unwrap();
+    assert_eq!(
+        std::fs::read(&first[0].path).unwrap(),
+        std::fs::read(&second[0].path).unwrap()
+    );
+    assert_eq!(
+        first[0].path.file_name().unwrap().to_str().unwrap(),
+        "biorand-000007.akpak"
+    );
+    let other = generate_with(&base, 8, &dir.0.join("c"), &options, 0, QUIET).unwrap();
+    assert_ne!(
+        Pack::open(&first[0].path)
+            .unwrap()
+            .read(SPOILER_TEXT_ENTRY)
+            .unwrap(),
+        Pack::open(&other[0].path)
+            .unwrap()
+            .read(SPOILER_TEXT_ENTRY)
+            .unwrap()
+    );
+}
+
+#[test]
+fn the_launchers_generate_keeps_a_current_pack() {
+    let dir = TempDir::new("launcher");
+    let base = base_pack(&dir.0);
+    let games = dir.0.join("games");
+    let path = generate(&base, 99, &games, 0, QUIET).unwrap();
+    assert_eq!(path, pack_path(&games, 99));
+    let written = std::fs::metadata(&path).unwrap().modified().unwrap();
+    assert_eq!(generate(&base, 99, &games, 0, QUIET).unwrap(), path);
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().modified().unwrap(),
+        written,
+        "the pack is reused"
+    );
+}
+
+#[test]
+fn a_generated_game_is_not_a_base() {
+    let dir = TempDir::new("reseed");
+    let (_, packs) = both(5, &dir);
+    let err = generate_with(&packs[0].path, 6, &dir.0, &Options::default(), 0, QUIET)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("generate from the base game"), "{err}");
+    assert!(
+        generate_with(
+            &packs[0].path,
+            1_000_000,
+            &dir.0,
+            &Options::default(),
+            0,
+            QUIET
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn the_enemy_option_is_deferred() {
+    let dir = TempDir::new("enemies");
+    let base = base_pack(&dir.0);
+    let mut config = Config::new();
+    config.set("enemies/random", true);
+    config.set("player", "Chris");
+    let options = Options {
+        config: Some(config),
+        ..Options::default()
+    };
+    let packs = generate_with(&base, 3, &dir.0.join("games"), &options, 0, QUIET).unwrap();
+    let pack = Pack::open(&packs[0].path).unwrap();
+    let flags = pack.manifest().unwrap().biorand_flags.clone().unwrap();
+    assert!(!flags.iter().any(|flag| flag == "ENEMY_RANDOMIZER"));
+    let spoiler: Json = serde_json::from_slice(&pack.read(SPOILER_JSON_ENTRY).unwrap()).unwrap();
+    let deferred = spoiler["deferred"].as_array().unwrap();
+    assert!(
+        deferred.iter().any(|option| option == ENEMY_OPTION),
+        "{deferred:?}"
+    );
+    assert!(
+        spoiler["rooms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|room| room["enemies"].is_null())
+    );
+    // The request keeps the option as asked, so verifying plans it the same.
+    let request =
+        Request::from_json(std::str::from_utf8(&pack.read(REQUEST_ENTRY).unwrap()).unwrap())
+            .unwrap();
+    assert!(request.config.get_bool(ENEMY_OPTION, false));
+    verify_with(&packs[0].path, Some(&base)).unwrap();
+}
+
+/// `pack` with entry `path` replaced by `edit` of its bytes.
+fn tamper(pack: &Path, out: &Path, path: &str, edit: impl Fn(&mut Vec<u8>)) {
+    let source = Pack::open(pack).unwrap();
+    let mut writer = PackWriter::new();
+    for entry in source.own_paths() {
+        let mut data = source.read(entry).unwrap().into_owned();
+        if entry == path {
+            edit(&mut data);
+        }
+        writer.add(entry, data).unwrap();
+    }
+    writer.write(out).unwrap();
+}
+
+#[test]
+fn verification_names_what_is_wrong() {
+    let dir = TempDir::new("tamper");
+    let (base, packs) = both(11, &dir);
+    let generated = &packs[0].path;
+    let source = Pack::open(generated).unwrap();
+    let plan_room = {
+        // A room whose script the plan changes, and one of its pickups.
+        let request =
+            Request::from_json(std::str::from_utf8(&source.read(REQUEST_ENTRY).unwrap()).unwrap())
+                .unwrap();
+        let map = read_map(&source).unwrap();
+        let plan = request.plan(&map).unwrap();
+        let game = game_for(&plan, 0).unwrap();
+        game.items
+            .keys()
+            .find(|dir| !emit::planned_flags(game, dir).is_empty())
+            .unwrap()
+            .clone()
+    };
+    let path = format!("room/{plan_room}/room.scd");
+    let scd = source.read(&path).unwrap().into_owned();
+    let scripts = crate::scd::reader::parse(&scd).unwrap();
+    let request =
+        Request::from_json(std::str::from_utf8(&source.read(REQUEST_ENTRY).unwrap()).unwrap())
+            .unwrap();
+    let plan = request.plan(&read_map(&source).unwrap()).unwrap();
+    let flags = emit::planned_flags(game_for(&plan, 0).unwrap(), &plan_room);
+    let offset = emit::commands(&scripts)
+        .find(|insn| insn.op == emit::ITEM_AOT_SET && flags.contains(&insn.bytes[emit::ITEM_FLAG]))
+        .unwrap()
+        .offset;
+
+    // A pickup holding another amount.
+    let out = dir.0.join("amount.akpak");
+    tamper(generated, &out, &path, |data| {
+        data[offset + emit::ITEM_AMOUNT] = data[offset + emit::ITEM_AMOUNT].wrapping_add(1);
+    });
+    let err = format!("{:#}", verify_with(&out, None).unwrap_err());
+    assert!(err.contains(&path) && err.contains("the plan"), "{err}");
+
+    // A byte the plan does not touch, which only the base comparison sees.
+    let out = dir.0.join("other.akpak");
+    tamper(generated, &out, &path, |data| {
+        data[offset + 2] ^= 1;
+    });
+    verify_with(&out, None).unwrap();
+    let err = format!("{:#}", verify_with(&out, Some(&base)).unwrap_err());
+    assert!(err.contains("differs from the base's"), "{err}");
+
+    // An entry the base doesn't have, and another flag.
+    let out = dir.0.join("manifest.akpak");
+    tamper(generated, &out, crate::manifest::ENTRY, |data| {
+        let text = String::from_utf8(data.clone()).unwrap();
+        *data = text
+            .replace(
+                "\"ITEM_RANDOMIZER\"",
+                "\"ITEM_RANDOMIZER\", \"ENEMY_RANDOMIZER\"",
+            )
+            .into_bytes();
+    });
+    let err = format!("{:#}", verify_with(&out, Some(&base)).unwrap_err());
+    assert!(err.contains("biorand_flags"), "{err}");
+
+    // A spoiler edited.
+    let out = dir.0.join("spoiler.akpak");
+    tamper(generated, &out, SPOILER_TEXT_ENTRY, |data| data.push(b'!'));
+    let err = format!("{:#}", verify_with(&out, Some(&base)).unwrap_err());
+    assert!(err.contains("spoiler"), "{err}");
+}

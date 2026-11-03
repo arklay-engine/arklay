@@ -193,14 +193,81 @@ fn a_missing_pack_fails_with_a_read_error() {
     assert_failure(&output, "failed to read pack");
 }
 
+/// A base pack of the checked-in room definitions, room scripts and BioRand
+/// map: everything `biorand generate` reads.
+fn write_biorand_base(path: &Path) {
+    let mut manifest = manifest::Manifest::base("re1");
+    manifest.convert_version = Some(1);
+    manifest.source_hash = Some("cli".to_string());
+    let mut writer = PackWriter::new();
+    writer
+        .add(manifest::ENTRY, manifest.render().into_bytes())
+        .unwrap();
+    for (entry, text) in arklay::room::RE1_FILES {
+        writer
+            .add(&format!("room/{entry}"), text.as_bytes().to_vec())
+            .unwrap();
+    }
+    for script in arklay::scd::ROOM_SCRIPTS {
+        writer
+            .add(
+                &format!("room/{:03x}/room.scd", script.room),
+                script.container.to_vec(),
+            )
+            .unwrap();
+    }
+    for (entry, text) in arklay::biorand::BIORAND_FILES {
+        writer.add(entry, text.as_bytes().to_vec()).unwrap();
+    }
+    writer.write(path).unwrap();
+}
+
 #[test]
-fn biorand_generate_and_verify_say_they_are_being_ported() {
-    let message =
-        "BioRand generation is being ported to the new randomizer (see docs/biorand/plan.md)";
-    let output = run(&["biorand", "generate", "re1.akpak", "--seed", "42"]);
-    assert_failure(&output, message);
-    let output = run(&["biorand", "verify", "biorand-000042.akpak"]);
-    assert_failure(&output, message);
+fn biorand_generates_and_verifies_a_pack_per_player() {
+    let dir = TempDir::new("biorand");
+    let base = dir.join("re1.akpak");
+    write_biorand_base(&base);
+    let config = dir.join("config.json");
+    fs::write(&config, r#"{"items/random": true, "hard": true}"#).unwrap();
+    let base_arg = base.to_str().unwrap();
+    let output = run(&[
+        "biorand",
+        "generate",
+        base_arg,
+        "--seed",
+        "42",
+        "--player",
+        "both",
+        "--config",
+        config.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let packs: Vec<String> = stdout(&output).lines().map(str::to_string).collect();
+    assert_eq!(packs.len(), 2, "{packs:?}");
+    assert!(
+        packs[0].ends_with("biorand-000042-chris.akpak"),
+        "{packs:?}"
+    );
+    assert!(packs[1].ends_with("biorand-000042-jill.akpak"), "{packs:?}");
+    for pack in &packs {
+        // The base is found beside the pack.
+        let output = run(&["biorand", "verify", pack]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        let text = stdout(&output);
+        assert!(text.contains("ok, seed 000042"), "{text}");
+        assert!(text.contains("match the base pack"), "{text}");
+    }
+    let info = stdout(&run(&["pack", "info", &packs[1]]));
+    assert!(info.contains("scenario_flags"), "{info}");
+
+    let output = run(&[
+        "biorand", "generate", base_arg, "--seed", "1", "--player", "rebecca",
+    ]);
+    assert_failure(&output, "not chris, jill, both or configured");
+    let output = run(&["biorand", "verify", base_arg]);
+    assert_failure(&output, "not a generated game");
+    let output = run(&["biorand", "generate", &packs[0], "--seed", "1"]);
+    assert_failure(&output, "generate from the base game");
 }
 
 #[test]
