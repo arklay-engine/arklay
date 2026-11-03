@@ -147,9 +147,8 @@ pub(super) fn patch_doors(scd: &[u8], dir: &str, game: &Game) -> Result<Vec<u8>>
     let scripts = crate::scd::reader::parse(scd)?;
     let planned = planned(game, dir);
     for insn in doors(&scripts) {
-        let expected = expected(dir, &insn.bytes, &planned).map_err(|err| {
-            anyhow::anyhow!("the door_aot_set at {:#x}: {err:#}", insn.offset)
-        })?;
+        let expected = expected(dir, &insn.bytes, &planned)
+            .map_err(|err| anyhow::anyhow!("the door_aot_set at {:#x}: {err:#}", insn.offset))?;
         out[insn.offset + DOOR_LOCK] = expected.lock;
         out[insn.offset + DOOR_KEY] = expected.key;
     }

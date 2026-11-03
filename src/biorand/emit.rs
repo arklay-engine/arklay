@@ -110,7 +110,11 @@ pub(super) fn manifest(base: &Manifest, id: &str, seed: u32, game: &Game) -> Res
     manifest.description = Some(format!(
         "{} with its {} randomized by BioRand, seed {seed:06}.",
         base.name.as_deref().unwrap_or("Resident Evil"),
-        if game.locks.is_empty() { "items" } else { "items and locks" }
+        if game.locks.is_empty() {
+            "items"
+        } else {
+            "items and locks"
+        }
     ));
     manifest.seed = Some(seed);
     manifest.generator_version = Some(super::GENERATOR_VERSION);

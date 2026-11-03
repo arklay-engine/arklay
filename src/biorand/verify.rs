@@ -329,7 +329,10 @@ fn check_doors(
         let expected = match locks::expected(dir, &insn.bytes, &planned) {
             Ok(expected) => expected,
             Err(err) => {
-                problems.push(format!("{path}: the door_aot_set at {:#x}: {err:#}", insn.offset));
+                problems.push(format!(
+                    "{path}: the door_aot_set at {:#x}: {err:#}",
+                    insn.offset
+                ));
                 continue;
             }
         };
