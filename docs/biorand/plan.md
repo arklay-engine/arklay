@@ -260,3 +260,16 @@ The pull request's description holds the live checklist. In order:
 11. **Static analysis and the cutscene option.** The verifier's full checks,
     a seed sweep over the configuration space, and `cutscenes/disable`.
     *Test milestone 4:* ready for main.
+
+## Known issues
+
+- **Consumable keys can still softlock (to fix later).** The route finder is
+  meant to rule out every softlock, but since common 1.6.1 its solver never
+  reports `PotentialSoftlock`, so a finished route only guarantees that *some*
+  order of play completes the game. A player who spends a consumable key on
+  the wrong lock first can be stranded: in 1 of 200 RE1 placements in
+  `tests/re1_keys.rs` (Chris, seed 16, the Battery in a drawer that needs the
+  Small Key), and the greedy solver leaves nodes unvisited in 3 of 100 RE2
+  routes. Staging has the same weakness. The fix belongs in the route finder
+  itself (restore the potential-softlock check for consumable keys), not a
+  reroll around it.
