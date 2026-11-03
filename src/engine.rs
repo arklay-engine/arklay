@@ -12954,10 +12954,15 @@ fn re2_player_shadow<'a>(
 ) -> Option<render::Shadow<'a>> {
     // Leon, then Claire's smaller one.
     let claire = game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
+    // `Game_loop` puts it under part 0, or where the stairs lead it, and finds
+    // its ground at a single point.
+    let work = &game.re2.player;
+    let at = work.kage_pos().unwrap_or(player_state.pos);
     re2_shadow(
         room,
         player_state,
-        player_state.pos,
+        at,
+        (work.kage_probe.unwrap_or(at), 0),
         if claire { (0x1a4, 0x208) } else { (500, 600) },
         crate::sca::PLAYER_MASK,
         shadow::PLAYER_COLOR,
@@ -12974,13 +12979,14 @@ fn kage_at(at: [i32; 3], (off_x, off_z): (i32, i32), angle: u16) -> [i32; 3] {
     [at[0] + along(turn[0]), at[1], at[2] + along(turn[2])]
 }
 
-/// A body's shadow in an RE2 room, at the ground under it (`MulKage`), if
-/// `Kage_work_sort` finds it in the camera's zone.
+/// A body's shadow in an RE2 room at `at`, on the ground `Sca_ck_hit` finds
+/// at `probe` (`MulKage`), if `Kage_work_sort` finds it in the camera's zone.
 #[allow(clippy::too_many_arguments)]
 fn re2_shadow<'a>(
     room: &RoomState,
     body: &player::PlayerState,
     at: [i32; 3],
+    (probe, radius): ([i32; 3], i32),
     (half_x, half_z): (i32, i32),
     mask: u16,
     color: u32,
@@ -12995,7 +13001,7 @@ fn re2_shadow<'a>(
         .find(|zone| i32::from(zone.cam_from) == cut)
         .filter(|zone| zone.contains_signed(body.pos[0], body.pos[2]))?;
     let ground = room.sca.as_ref().map_or(pos[1], |sca| {
-        crate::sca::ground_at(sca, body.pos, body.radius, mask).height
+        crate::sca::ground_at(sca, probe, radius, mask).height
     });
     let mut shadow_pos = [pos[0], ground, pos[2]];
     let mut shadow_angle = body.angle;
@@ -16734,6 +16740,7 @@ fn render_frame_on(
                 room,
                 &character.body,
                 at,
+                (character.body.pos, character.body.radius),
                 (half_x + grown, half_z + grown),
                 crate::character2::sca_mask(character.id),
                 color,
