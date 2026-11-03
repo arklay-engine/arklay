@@ -18,8 +18,8 @@
 //! bytes; bump the version whenever a change would alter a seed's output.
 
 mod emit;
-mod locks;
 mod enemies;
+mod locks;
 mod verify;
 
 use std::path::{Path, PathBuf};
