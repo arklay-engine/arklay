@@ -263,7 +263,9 @@
 #define F_LOCK_201_215 0x0C
 #define F_LOCK_204_20D 0x0D
 #define F_LOCK_204_205 0x0E
+#define F_LOCK_0F 0x0F                                      // Unused by the original rooms; a randomized lock may take it.
 #define F_LOCK_207_208 0x10
+#define F_LOCK_11 0x11                                      // Unused by the original rooms; a randomized lock may take it.
 #define F_LOCK_103_104 0x12                                 // Unlocked from the 103 side.
 #define F_LOCK_104_110 0x13                                 // Unlocked from the 110 side.
 #define F_LOCK_10A_10B 0x14

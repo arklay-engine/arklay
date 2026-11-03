@@ -36,6 +36,14 @@ proc init
     if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         door_aot_set(AOT_02_DOOR_118, 8500, 12400, 2000, 1500, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, DOOR_LOCK_40, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR_118, 8500, 12400, 2000, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
     }
     else
     {
