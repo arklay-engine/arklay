@@ -2195,8 +2195,8 @@ them.
 
 BioRand is ported to the new randomizer (`crates/arklay-biorand`) in
 milestones; the plan is in [`biorand/plan.md`](biorand/plan.md). Today a
-generated game randomizes the items and the start inventory; the doors, locks
-and enemies stay the original's whatever the configuration asks.
+generated game randomizes the items, the start inventory and the enemies; the
+doors and locks stay the original's whatever the configuration asks.
 
 Conversion packs the randomizer's inputs into the base pack: each room's
 `random.xml` as `room/<id>/random.xml`, and the map-wide files from
@@ -2223,7 +2223,8 @@ generated one), it also checks that nothing outside the planned bytes differs.
 
 A generated game is an ordinary base pack with id `biorand-<seed>`, the seed
 padded to six digits. It is its base pack with the planned pickups written
-into the room scripts' `item_aot_set`s, and these entries added:
+into the room scripts' `item_aot_set`s and the planned enemies written in at
+the rooms' `random_enemies()` markers (see below), and these entries added:
 
 - `manifest.toml`: the base's, with `seed`, `generator_version`,
   `plan_version`, `character`, `biorand_flags` (the system flags it raises),
@@ -2299,6 +2300,51 @@ the pickup flag.
 - `picked_as(AOT, ITEM);` is the remap alone, for a test too far from its
   `if` to add 20 bytes (room 10D). It folds away in a retail build.
 
+
+### Enemies: `random_enemies()`
+
+A room script says where the enemy randomizer's new enemies go with
+`random_enemies();`, inside the branch where the script sets its own enemies,
+so story and player conditions come for free. The room's own `enemy(...)`
+commands go under `if (!ENEMY_RANDOMIZER)`:
+
+```
+if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
+{
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(...);
+    }
+    random_enemies();
+}
+```
+
+- A retail variant build (`--room`) compiles `random_enemies()` to nothing and
+  folds the guard, so a room's retail bytes do not change.
+- The runtime (base pack) build compiles it to a four-byte no-op marker,
+  `nop_wide` with operands `0xEA` and the placeholder's id. The unnamed
+  placeholder's id is 0; `random_enemies(name)` is for a room that needs enemies
+  in more than one branch, and its id is `placeholder_id(name)` (FNV-1a of the
+  name folded to 16 bits, never 0). A spot of the room's `random.xml` names its
+  marker with its `placeholder` attribute; a spot with none belongs to the
+  unnamed marker. A marker name is unique within a room.
+- The generator rewrites each marker the plan creates enemies at, in place, to
+  an `evt_exec` of a new event script at the end of the event table. That
+  script is an `evt_single` of an `enemy` per created enemy (its type, pose,
+  position, facing, kill flag and free slot) and `evt_finish`. A marker the plan
+  does not use stays a no-op. Enemies the plan retypes in place (the fixed
+  ones `random.xml` lists with an id) get their new type and the state staging
+  gives them. A created enemy keeps its planned slot unless a fixed enemy that
+  stays (a prop or a boss) holds it, and then takes the lowest free one.
+- A game that randomizes enemies raises `ENEMY_RANDOMIZER`, so the original
+  `enemy(...)` commands under the guard are skipped. In a room the plan does
+  not change, or creates nothing in, the generator flips the sense of every
+  `ENEMY_RANDOMIZER` test, so the room runs as if the flag were clear and its
+  original enemies stay.
+- Effect sheets: a created enemy's effect sprites are not added to rooms that
+  do not declare them. The engine skips such an effect with a warning
+  (`effect sprite N is not declared by this room`) and the enemy plays
+  without it. This is cosmetic.
 
 ## Determinism
 

@@ -40,11 +40,10 @@ pub(super) const AOT_SCE: usize = 2;
 pub(super) const PICKUP_SCES: [u8; 3] = [0x04, 0x0D, 0x0F];
 
 /// The system flags of options this milestone leaves to later ones, which a
-/// pack must not raise: the scripts would act on doors and enemies the pack
-/// does not change.
-const DEFERRED_FLAGS: [&str; 2] = [
+/// pack must not raise: the scripts would act on doors the pack does not
+/// change.
+const DEFERRED_FLAGS: [&str; 1] = [
     system_flags::DOOR_RANDOMIZER,
-    system_flags::ENEMY_RANDOMIZER,
 ];
 
 /// The system flags a pack of `game` raises: the plan's, less the deferred
@@ -296,6 +295,8 @@ pub(super) fn pack(
                 patch_room(&scd, &pickups).with_context(|| format!("failed to patch {path}"))?;
             let patched = super::locks::patch_doors(&patched, &dir, game)
                 .with_context(|| format!("failed to write the door locks of {path}"))?;
+            let patched = super::enemies::patch_for_game(&patched, &dir, game)
+                .with_context(|| format!("failed to place the enemies of {path}"))?;
             let missing: Vec<_> = planned_flags(game, &dir)
                 .difference(&written)
                 .copied()

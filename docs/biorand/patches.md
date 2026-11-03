@@ -63,8 +63,8 @@ that player's script path.
 | FixDocuments | 20A | The fish-tank document on the desk becomes an item AOT, per player | Guard (I) **Done:** the five desk `item_aot_set`s of AOT 8 (flag 16) take the desk's area and the desk message is not set. Jill's third branch, where Barry hands the document over, is unchanged |
 | DisableDogWindows | 108 | No dogs through the windows (staging always applies it) | Guard (R) |
 | DisableDogBoiler | 114 | No dog from the boiler room | Guard (R) |
-| DisableHunterAmbushes | 203, 209 (second visit) | No Hunter ambush events | Guard (E) |
-| RemoveBlood211 | 211 | Dogs and bees crash the original during the pick-up crouch near this blood event | Guard (E); check whether arklay crashes at all, and drop it if not |
+| DisableHunterAmbushes | 203, 209 (second visit) | No Hunter ambush events | Guard (E) **Done:** staging's 603 and 609 are rooms 103 and 109 on the second visit. Their ambush hunters (flags `F_ENEMY_3A`, `F_ENEMY_76`) are under `if (!ENEMY_RANDOMIZER)`, with a `random_enemies()` beside each |
+| RemoveBlood211 | 211 | Dogs and bees crash the original during the pick-up crouch near this blood event | Guard (E) **Not done:** the crash is the original executable's, in the pick-up crouch; arklay's animation is its own and no crash path is known. Room 211 has a `random_enemies()` at the top of its init, and the blood event is unchanged. Watch for a report |
 | AddDoor207 | 207 | A new door AOT 4 (lock 21) to 206 | Guard (L) **Done:** under `LOCK_RANDOMIZER` 207's message AOT 4 becomes staging's door to 206 (`LOCKED`, lock 0x15); the emitter writes the plan's bytes into it. Item-only games keep the message |
 | FixDoor104 | 104 | Door 2's arrival position | Fix (the original's arrival point is wrong) |
 | FixDoor106 | 106 | The main hall's front door is usable as a normal door | Guard (D); Jill needs a new door AOT 3 |
@@ -80,7 +80,7 @@ that player's script path.
 | DisablePoisonChallenge | 20E | No forced poison challenge | Guard (R) |
 | DisableBarryEvesdrop | 405 (Jill) | Barry's eavesdropping event off | Guard (R) |
 | ChangeEnemies101 | 101 (Chris) | Shifts enemy ids by 2 to dodge 601's reserved ids | Gone: the emitter gives each spawn its own id |
-| ClearEnemies309, 601, 706 | 309 (Jill), 201 and 206 second visit (Chris) | Removes scripted enemy sets that the enemy randomizer replaces | Guard (E): the sets go under `if (!ENEMY_RANDOMIZER)` beside the room's `random_enemies()` |
+| ClearEnemies309, 601, 706 | 309 (Jill), 201 and 206 second visit (Chris) | Removes scripted enemy sets that the enemy randomizer replaces | Guard (E) **Done:** the sets go under `if (!ENEMY_RANDOMIZER)` beside the room's `random_enemies()` |
 | AllowPartnerItemBoxes | 100, 403 | Rebecca uses item boxes (`#if false` in staging) | Gone: the 8-slot overlap (H1–H4) is solved in the save |
 | EnableFountainHeliportDoors | 303, 305 | Doors both ways between the fountain and the heliport, with a lock flag and arrival cut | Guard (R) (the proof of concept already has 303's half) |
 | FixPlayerChangeGlitch305 | 305 | Removes two player-change opcodes | Guard (R), or Fix if vanilla shows the glitch |
@@ -88,7 +88,7 @@ that player's script path.
 | ForceLift302 | 300, 301, 302 | With door rando, the lifts start in place; removes player-change opcodes and the waterfall | Guard (D) |
 | FixDoor500 | 500 | Killing Tyrant 1 no longer forces you out | Guard (R) |
 | FixCutscene502 | 502 (Jill) | Conditional opcodes that avoid the cutscene softlock | Guard (R) |
-| AddVariableHelper308 | 308 (Jill) | Sets `FG_ROOM[0]` when Barry's conditions hold, for the enemy condition to test | Gone: `random_enemies()` sits inside Barry's own branch |
+| AddVariableHelper308 | 308 (Jill) | Sets `FG_ROOM[0]` when Barry's conditions hold, for the enemy condition to test | Gone **Done:** `random_enemies()` sits inside Barry's own branch |
 | FixBookcase216, FixBookcase406 | the rooms past 216:2 and 406:2 | With door rando, keeps the bookcase moved after passing it, by clearing flag 79 or 69 in whatever room the door leads to | Redesign: Guard (D) in 216 and 406 themselves, so the flag doesn't depend on the far room |
 | FixMoDiscReader507, 509, 510; FixMoDiscDoor508 | 507–510 | MO disc readers: the item AOT takes the reader's area, and "this reader is done" moves from the MO disc pickup flags (`FG_ITEM` 82/90/98) to scenario flags 112–114, which 508's door reads | Guard (I) **Done** |
 | EnableItemForJill106, 113, 11B, 211, 21C, 401, 40F | those rooms (Jill) | Pickups that only exist in Chris's game now exist for Jill | Guard (I) (Jill branch) **Done.** 21C's Jill variant has no item model, so its pickup is invisible; 401 also drops "There's a key in the cup." under the guard |
