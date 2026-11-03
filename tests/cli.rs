@@ -194,6 +194,16 @@ fn a_missing_pack_fails_with_a_read_error() {
 }
 
 #[test]
+fn biorand_generate_and_verify_say_they_are_being_ported() {
+    let message =
+        "BioRand generation is being ported to the new randomizer (see docs/biorand/plan.md)";
+    let output = run(&["biorand", "generate", "re1.akpak", "--seed", "42"]);
+    assert_failure(&output, message);
+    let output = run(&["biorand", "verify", "biorand-000042.akpak"]);
+    assert_failure(&output, message);
+}
+
+#[test]
 fn a_pack_with_bad_magic_is_rejected() {
     let dir = TempDir::new("bad-magic");
     let path = dir.join("bad.akpak");
