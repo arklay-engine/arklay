@@ -77,7 +77,7 @@ proc main
     {
         msgnode_set(ZONE_16, CAM_06, CAM_03);
     }
-    if (testpickup(IT_68_FILE_RESEARCHERS_LETTER))
+    if (picked(AOT_01_ITEM))
     {
         evt_exec(0, TASK_09, from_main);
     }

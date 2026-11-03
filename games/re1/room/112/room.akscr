@@ -71,7 +71,7 @@ proc init
 
 proc main
 {
-    if (testpickup(IT_2F_KEY_INK_RIBBON))
+    if (picked(AOT_04_ITEM))
     {
         aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }

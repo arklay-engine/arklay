@@ -268,7 +268,7 @@ proc main
                 aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A3, TRUE);
                 evt_exec(0, TASK_09, from_main_3_v2);
@@ -354,7 +354,7 @@ proc main
                 aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A6, TRUE);
                 evt_exec(0, TASK_09, from_main_2_jill);

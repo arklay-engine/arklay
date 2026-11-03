@@ -132,7 +132,7 @@ proc init
 
 proc main when (CHRIS)
 {
-    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+    if (picked(AOT_03_ITEM))
     {
         set(FG_LOCK, F_LOCK_28, FALSE);
         evt_exec(0, TASK_09, from_main);

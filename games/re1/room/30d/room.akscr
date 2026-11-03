@@ -99,7 +99,7 @@ proc main when (CHRIS)
     if (ck(FG_ROOM, F_ROOM_18, TRUE))
     {
         set(FG_ROOM, F_ROOM_18, FALSE);
-        if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+        if (picked(AOT_03_ITEM))
         {
             set(FG_ROOM, F_ROOM_18, FALSE);
         }
@@ -113,7 +113,7 @@ proc main when (CHRIS)
             set(FG_STATUS, F_STATUS_1A, TRUE);
         }
     }
-    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+    if (picked(AOT_03_ITEM))
     {
         set(FG_ITEM, F_ITEM_99, FALSE);
         evt_exec(0, TASK_09, from_main);

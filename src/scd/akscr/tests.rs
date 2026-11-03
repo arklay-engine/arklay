@@ -1274,3 +1274,73 @@ event on_aot
     );
     assert!(lifted.contains("    if (USA)\n"), "{lifted}");
 }
+
+const PICKED_ROOM: &str = "#version 1\nproc init\n{\n    item_aot_set(1, 0, 0, 0, 0, 68, 1, 0, 0, 0, 0, 0, 0, 77, 0, 0);\n    item_aot_set(2, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0, 0, 78, 0, 0);\n    item_aot_set(2, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 79, 0, 0);\n}\n";
+
+fn picked_room(main: &str) -> String {
+    format!("{PICKED_ROOM}proc main\n{{\n{main}\n}}\n")
+}
+
+#[test]
+fn picked_folds_to_the_original_test_in_a_retail_build() {
+    let picked = picked_room("    if (picked(1))\n    {\n        set(0, 1, 0);\n    }");
+    let original = picked_room("    if (testpickup(68))\n    {\n        set(0, 1, 0);\n    }");
+    assert_eq!(all_bytes(&round(&picked)), all_bytes(&round(&original)));
+
+    // An explicit original is emitted verbatim, here a `cmpb` test.
+    let picked = picked_room(
+        "    if (picked(2, cmpb(B_PICKED_ITEM, CMP_EQ, 5)))\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }",
+    );
+    let original = picked_room(
+        "    if (cmpb(B_PICKED_ITEM, CMP_EQ, 5))\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }",
+    );
+    assert_eq!(all_bytes(&round(&picked)), all_bytes(&round(&original)));
+}
+
+#[test]
+fn picked_remaps_the_pickup_under_the_item_randomizer_at_run_time() {
+    let text =
+        picked_room("    if (picked(2, testpickup(5)))\n    {\n        set(0, 1, 0);\n    }");
+    let runtime = compile(&text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.main[0]);
+    let randomizer = [0x04, 5, crate::scd::opcode::system::ITEM_RANDOMIZER, 0];
+    let collected = [0x04, 7, 78, 0];
+    let remap = [0x08, 19, 5, 0];
+    let find = |needle: &[u8]| bytes.windows(needle.len()).position(|w| w == needle);
+    let (a, b, c) = (
+        find(&randomizer).expect("randomizer test"),
+        find(&collected).expect("collected flag test of the matching item"),
+        find(&remap).expect("remap"),
+    );
+    assert!(a < b && b < c, "{bytes:02x?}");
+    // The original test still follows.
+    assert!(find(&[0x11, 5]).is_some(), "{bytes:02x?}");
+    // A statement form does the remap alone.
+    let alone = picked_room("    picked_as(2, 5);");
+    assert!(compile(&alone).is_ok());
+}
+
+#[test]
+fn picked_rejects_an_unknown_or_non_item_aot() {
+    let error = compile_error(&picked_room(
+        "    if (picked(7))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(
+        error.contains("no `item_aot_set`") || error.contains("which no"),
+        "{error}"
+    );
+    let error = compile_error(&picked_room(
+        "    if (picked(2, testpickup(33)))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("holds the item"), "{error}");
+    // AOT 2 holds two items with different flags, so it needs the item.
+    let error = compile_error(&picked_room(
+        "    if (picked(2))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("different"), "{error}");
+    let error = compile_error(&picked_room(
+        "    if (picked(1, ck(0, 1, 0)))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("testpickup"), "{error}");
+}

@@ -351,7 +351,7 @@ proc main
                 aot_delete(AOT_08_USEITEM, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_09_USEITEM, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A7, FALSE);
             }
@@ -476,7 +476,7 @@ proc main
                 aot_delete(AOT_0B_USEITEM, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_0C_USEITEM, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_07_ITEM))
             {
                 set(FG_COMMON, F_COMMON_AA, FALSE);
             }

@@ -40,7 +40,7 @@ proc init when (MANSION2)
 
 proc main when (MANSION2)
 {
-    if (testpickup(IT_27_KEY_BATTERY))
+    if (picked(AOT_03_ITEM))
     {
         aot_delete(AOT_04_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }

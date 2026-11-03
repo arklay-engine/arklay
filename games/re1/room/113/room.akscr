@@ -61,7 +61,7 @@ proc init
 
 proc main
 {
-    if (testpickup(IT_3D_KEY_DESK))
+    if (picked(AOT_01_ITEM))
     {
         aot_delete(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }

@@ -2226,6 +2226,39 @@ manifest without that list (the proof of concept's packs) also raises
 game. A room's retail-identical variant build folds each guard to the branch
 that the clear flag takes, so a guard does not change those bytes.
 
+### Item puzzles: `picked()`
+
+A room that reacts to the item type just picked up (`testpickup(IT_..)` or
+`cmpb(B_PICKED_ITEM, CMP_EQ, IT_..)`) breaks when item randomization puts
+another item in the slot. `if (picked(AOT_04_ITEM))` names the slot's item
+AOT instead; the compiler finds that AOT's `item_aot_set` for the item type and
+the pickup flag.
+
+- `picked(AOT)` stands for `testpickup(<the AOT's item type>)`. It is an error
+  if no `item_aot_set` sets the AOT (so a non-item AOT fails), or if it sets
+  it with several items or flags.
+- `picked(AOT, <original>)` keeps the room's own test, `testpickup(ITEM)` or
+  `cmpb(B_PICKED_ITEM, CMP_EQ, ITEM)`, which a retail build emits as written.
+  Its item also picks the `item_aot_set` when the room reuses an AOT index for
+  several items (room 106's AOT 6).
+- A retail variant build (`--room`) is exactly the original test, as with
+  every guard. The runtime build puts the following before the `if`, which
+  makes the original test see a randomized pickup as the original item:
+
+  ```
+  if (ITEM_RANDOMIZER && ck(FG_ITEM, <pickup flag>, TRUE)
+      && cmpb(B_PICKED_ITEM, CMP_NE, 0)) { setb(B_PICKED_ITEM, <original item>, 0); }
+  ```
+
+  The test is not an `if (...) {} else {}` copy of the bodies: a command's
+  `if` jumps by one byte, so a doubled body would not fit a long `main`.
+  The picked item id lasts one frame while the flag lasts for good, so the
+  `B_PICKED_ITEM != 0` term keeps the remap to frames with a pickup; it also
+  remaps another pickup in the room once this slot has been collected.
+- `picked_as(AOT, ITEM);` is the remap alone, for a test too far from its
+  `if` to add 20 bytes (room 10D). It folds away in a retail build.
+
+
 ## Determinism
 
 A capture or headless run is deterministic. Lua hooks run in a fixed order on

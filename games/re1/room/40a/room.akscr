@@ -125,7 +125,7 @@ proc main
             evt_exec(0, TASK_09, from_main_5);
         }
     }
-    if (testpickup(IT_69_FILE_V_JOLT_REPORT))
+    if (picked(AOT_03_ITEM))
     {
         evt_exec(0, TASK_09, from_main_3);
     }

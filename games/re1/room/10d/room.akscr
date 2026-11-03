@@ -69,6 +69,20 @@ proc init
 
 proc main
 {
+    // The tiger statue's eye tests below are too far from this `if` to hold
+    // a `picked()` of their own (its one-byte jump), so they read the pickup
+    // as the original item from here. A variant's build folds this away.
+    if (ITEM_RANDOMIZER)
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
+        {
+            picked_as(AOT_04_ITEM, IT_05_WEAPON_MAGNUM);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
+        {
+            picked_as(AOT_03_ITEM, IT_29_KEY_CREST_WIND);
+        }
+    }
     if (ck(FG_ROOM, F_ROOM_18, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))

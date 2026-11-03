@@ -143,22 +143,30 @@ hold the same type, and it misses several checks (see
 [`patches.md`](patches.md#c-item-type-tests)).
 
 Newer RE games react to the slot's collected flag instead. Arklay does the
-same. Every `item_aot_set` already names its pickup flag in `FG_ITEM`, and
-the script only reaches these tests while the item is still in place. So
-"the player just took this slot" is the same as "this slot's flag is now
-set". `akscr` gets one condition for it:
+same. Every `item_aot_set` already names its pickup flag in `FG_ITEM`. `akscr`
+gets one condition for it:
 
 ```
 if (picked(AOT_04_ITEM))
 ```
 
 The compiler lowers it to the room's original `cmpb`/`testpickup` in the
-retail build. In other builds it lowers to a runtime choice: under
-`ITEM_RANDOMIZER`, a `ck(FG_ITEM, <the AOT's pickup flag>, TRUE)`; otherwise
-the original test. The pickup flag is read from the room's own `item_aot_set`
-for that AOT, so the generator never touches these tests and a slot can hold
-anything. The same condition takes over each place staging patched with
-`typeOffsets`, and each it missed.
+retail build. In other builds it puts a remap before that same test: under
+`ITEM_RANDOMIZER`, when the AOT's pickup flag is set and something was picked
+this frame, the picked item id becomes the original item. The pickup flag is
+read from the room's own `item_aot_set` for that AOT, so the generator never
+touches these tests and a slot can hold anything. A command `if` cannot be an
+OR and jumps by one byte, so duplicating the test's bodies for a flag branch
+overflows long `main`s (room 10D); remapping the id keeps one copy.
+
+The flag is a level and the original test a pulse: the picked item id is
+cleared after every frame, so a script that polls it in `proc main` sees the
+pickup for one frame, where a collected flag stays set for good. The remap
+therefore also requires a pickup this frame (`B_PICKED_ITEM != 0`). It still
+misfires when another item in the same room is picked up after this slot was
+collected. An exact pulse needs the engine to say which AOT was picked; that
+is the follow-up if a room shows it. `picked_as(AOT, ITEM);` is the remap on
+its own, for a test too far from its `if` (room 10D).
 
 ### Locks
 
