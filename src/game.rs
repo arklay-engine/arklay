@@ -3192,6 +3192,10 @@ pub struct GameState {
     /// the player model is Rebecca; the port records them so the save block
     /// round-trips.
     pub rebecca_inventory: [InventoryItem; INVENTORY_SLOTS_CHRIS],
+    /// Chris's and Jill's own inventory slot counts: the original's six and
+    /// eight, or what the pack's manifest sets (`chris_slots`, `jill_slots`).
+    /// Not saved: every path into a game sets them from the pack.
+    pub slot_counts: [usize; 2],
     /// The room's action table.
     pub room_actions: [Option<RoomAction>; ROOM_ACTION_SLOTS],
     /// Door records, one per door action slot.
@@ -3657,6 +3661,7 @@ impl Default for GameState {
             fmv: FmvState::default(),
             inventory: Vec::new(),
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
+            slot_counts: [INVENTORY_SLOTS_CHRIS, INVENTORY_SLOTS_JILL],
             room_actions: [None; ROOM_ACTION_SLOTS],
             doors: [None; ROOM_ACTION_SLOTS],
             re2: Default::default(),
@@ -5380,11 +5385,7 @@ impl GameState {
         if self.is_re2_room {
             return INVENTORY_SLOTS_JILL;
         }
-        if self.id.player_flag & 1 == 1 {
-            INVENTORY_SLOTS_JILL
-        } else {
-            INVENTORY_SLOTS_CHRIS
-        }
+        self.slot_counts[usize::from(self.id.player_flag & 1)]
     }
 
     /// Set the debug inventory size (`None`: the character's own). Items
@@ -8816,21 +8817,25 @@ impl<'a> ScdGameHost<'a> {
     }
 
     /// Whether `slot` holds an ink ribbon the player's character needs none
-    /// of. A script re-arming it as an item is ignored, so the ribbon stays
-    /// hidden and a typewriter swapped in for it stays.
+    /// of, or nothing (item 0, a slot a generated game empties). A script
+    /// re-arming it as an item is ignored, so the ribbon stays hidden, a
+    /// typewriter swapped in for it stays, and an empty slot never opens a
+    /// pickup.
     fn hidden_ribbon(&self, slot: u8) -> bool {
-        !self.state.needs_ink_ribbons()
-            && self
-                .state
-                .room_actions
-                .get(usize::from(slot))
-                .copied()
-                .flatten()
-                .is_some_and(|action| {
-                    action
-                        .item_data
-                        .is_some_and(|data| data[0] == self.state.ink_ribbon_item())
-                })
+        self.state
+            .room_actions
+            .get(usize::from(slot))
+            .copied()
+            .flatten()
+            .and_then(|action| action.item_data)
+            .is_some_and(|data| self.skipped_item(data[0]))
+    }
+
+    /// Whether an `item_aot_set` of `item` is skipped, its zone kept inert:
+    /// an ink ribbon the player's character needs none of, or item 0, which
+    /// a generated game's emptied slots hold (staging's `Item(0, 0)`).
+    fn skipped_item(&self, item: u8) -> bool {
+        item == 0 || (item == self.state.ink_ribbon_item() && !self.state.needs_ink_ribbons())
     }
 
     fn store_action(&mut self, action: RoomAction) {
@@ -9400,7 +9405,8 @@ impl ScdHost for ScdGameHost<'_> {
                 // event and documents their own. An ink ribbon is skipped (its
                 // room-items bit cleared, its zone kept inert) for a character
                 // who needs none; the original skips it on Jill's first
-                // playthrough.
+                // playthrough. Item 0, an emptied slot, is skipped the same
+                // way but leaves its bit alone.
                 // The crank's hex handle (0x1E) gets an extra texture-dirty
                 // write in the original; it has no analogue in the port
                 // (documented no-op).
@@ -9416,8 +9422,10 @@ impl ScdHost for ScdGameHost<'_> {
                 let z = operand_i16(operands, 11).to_le_bytes();
                 let room_items_flag = operand_u8(operands, 13);
                 let flags_word = operand_u16(operands, 15);
-                if item == self.state.ink_ribbon_item() && !self.state.needs_ink_ribbons() {
-                    self.state.mark_item_taken(room_items_flag);
+                if self.skipped_item(item) {
+                    if item != 0 {
+                        self.state.mark_item_taken(room_items_flag);
+                    }
                     // Port-only: the original leaves the slot unwritten, so a
                     // room that swaps the ribbon's zone for a typewriter once
                     // it is taken (room 106) gets no zone. Keep the zone,
@@ -10033,7 +10041,7 @@ fn channel_bit(channel: u8) -> u8 {
 /// The room-action handler an `item_aot_set` item id selects: maps use
 /// `pickup_key_event` (0x0F), documents `set_room_event_flag` (0x0D) and
 /// everything ordinary the pickup handler (4).
-fn item_handler(item: u8) -> u8 {
+pub(crate) fn item_handler(item: u8) -> u8 {
     if item < ITEM_MAP_FIRST {
         HANDLER_ITEM
     } else if item <= ITEM_MAP_LAST {
@@ -14185,6 +14193,29 @@ mod tests {
         assert!(!state.items.record(0).unwrap().active());
         let action = state.room_actions[0].expect("the zone is kept");
         assert_eq!((action.handler, action.kind), (0, RoomActionKind::Other));
+    }
+
+    #[test]
+    fn item_aot_set_keeps_an_emptied_slot_inert() {
+        // A generated game empties a slot with item 0: nothing is built and
+        // nothing can be picked up, even when a script re-arms the zone.
+        let mut state = item_game("1000", 1);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(op(0x18), &operands(&item_values(0, 0, 0xFF, [1, 2, 3])));
+        }
+        assert_eq!(state.items.built, 0, "nothing is built");
+        assert!(state.room_item_present(1), "the room-items bit is left");
+        let kept = state.room_actions[0].expect("the zone is kept");
+        assert_eq!((kept.handler, kept.kind), (0, RoomActionKind::Other));
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[0, i64::from(HANDLER_ITEM), 0x81, 0, 3, 0]),
+            );
+        }
+        assert_eq!(state.room_actions[0].unwrap().handler, 0, "no pickup");
     }
 
     #[test]

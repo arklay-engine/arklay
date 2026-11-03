@@ -2585,6 +2585,9 @@ impl GameSession {
             // `apply_flag` mode 0 sets the bit and mode 1 clears it.
             game.apply_flag(5, flag, u8::from(!raised.contains(&flag)));
         }
+        if let Some(manifest) = pack.manifest() {
+            apply_slot_counts(manifest, &mut game);
+        }
         // The run options land before `on_init`, so the hooks read them on the
         // first room as well as after a door.
         game.player_options = options;
@@ -7870,6 +7873,7 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
         game.rebecca_inventory[..overlap].fill(game::InventoryItem::default());
     }
     crate::lua::seed_new_game_inventory(pack, game, character);
+    apply_pack_setup(pack, game);
     // `InitializeGame`'s Jill block: the first playthrough raises the main
     // hall's ink-ribbon room-items bit and the Jill first-run scenario bit.
     let second_playthrough = game.flag_test(
@@ -7881,6 +7885,48 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
         game.apply_flag(7, game::ROOM_ITEM_FLAG_MAIN_HALL_RIBBON, 0);
         game.apply_flag(game::BANK_SCENARIO2, game::SCENARIO2_FLAG_JILL_FIRST_RUN, 0);
     }
+}
+
+/// The new-game part of a generated pack's [`crate::manifest::GameSetup`]:
+/// the player's start items in place of `game/new_game.lua`'s, then the
+/// scenario flags the options set (BioRand's room 106 `ConfigureOptions`).
+/// An ordinary pack's setup is empty and changes nothing.
+fn apply_pack_setup(pack: &Pack, game: &mut game::GameState) {
+    let Some(manifest) = pack.manifest() else {
+        return;
+    };
+    apply_slot_counts(manifest, game);
+    let setup = &manifest.setup;
+    if let Some(items) = &setup.start_items {
+        game.inventory.clear();
+        let capacity = game.inventory_capacity();
+        game.inventory.extend(
+            items
+                .iter()
+                .take(capacity)
+                .map(|&(id, quantity)| game::InventoryItem { id, quantity }),
+        );
+        game.rebuild_slots();
+    }
+    for &(flag, raised) in &setup.scenario_flags {
+        // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+        game.apply_flag(game::BANK_SCENARIO, flag, u8::from(!raised));
+    }
+}
+
+/// Chris's and Jill's slot counts from `manifest` (the original's when it
+/// sets none). A save does not keep them, so every path into a game applies
+/// them.
+fn apply_slot_counts(manifest: &crate::manifest::Manifest, game: &mut game::GameState) {
+    let setup = &manifest.setup;
+    game.slot_counts = [
+        setup
+            .chris_slots
+            .map_or(game::INVENTORY_SLOTS_CHRIS, usize::from),
+        setup
+            .jill_slots
+            .map_or(game::INVENTORY_SLOTS_JILL, usize::from),
+    ];
 }
 
 /// Build the next-cycle clear-data card

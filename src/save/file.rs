@@ -87,6 +87,10 @@ pub struct SaveFile {
     pub player_slots: [InventoryItem; PLAYER_SLOT_COUNT],
     /// Room-BGM state table, 224 bytes (0x33C).
     pub room_bgm: [u8; ROOM_BGM_LEN],
+    /// Port-only: Rebecca's six slots, when the player holds more than six
+    /// stacks and the block's shared run would overwrite ones she holds
+    /// ([`super::PARTNER_TRAILER`]); `None` in a retail game.
+    pub partner_slots: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
 }
 
 impl Default for SaveFile {
@@ -128,6 +132,7 @@ impl Default for SaveFile {
             item_box: [InventoryItem::default(); ITEM_BOX_SLOTS],
             player_slots: [InventoryItem::default(); PLAYER_SLOT_COUNT],
             room_bgm: [0; ROOM_BGM_LEN],
+            partner_slots: None,
         }
     }
 }

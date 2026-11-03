@@ -2738,6 +2738,8 @@ fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> m
         seed: None,
         generator_version: None,
         biorand_flags: None,
+        plan_version: None,
+        setup: Default::default(),
         character: None,
         region,
     }
