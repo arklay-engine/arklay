@@ -4,12 +4,12 @@
 //! The map becomes a routing [`Graph`]: a `START` node, a node per room, an
 //! edge per door, a node per item slot and per graph flag. The route finder
 //! then places a key in slots until every edge can be opened. Each key
-//! item's amount (`KeyRandomizer.cs:149-195`) is left to the item stage.
+//! item's amount (`KeyRandomizer.cs:149-195`) is set by the item stage
+//! ([`crate::items`]).
 //!
-//! The graph follows the map as it is given. Staging first reshapes the map
-//! for the configuration (`Re1ClassicRandomizerController.GetMap`: the areas
-//! left out, the slot groups, the segmented caves and lab); that is the
-//! caller's job, as door randomization will be when it rewires the doors.
+//! The graph follows the map as it is given, which should be the game's
+//! prepared map ([`crate::prepare`]: the areas left out, the slot groups, the
+//! segmented caves and lab), as door randomization will rewire it later.
 
 use anyhow::{Context, Result, anyhow, bail};
 use indexmap::IndexMap;
