@@ -35,7 +35,7 @@ dropped history.
 | 3 | Heal items usable at full health | Engine, already in arklay | not `AUTHENTIC` |
 | 4 | Blue herb usable when not poisoned | Engine, already in arklay | not `AUTHENTIC` |
 | 5–6 | Neptune can die (Cerberus's death routine) and takes weapon damage | Engine | `BR_NEPTUNE_KILLABLE`; randomizer-only |
-| 7 | Yawn's bite gives normal poison | Engine | `BR_YAWN_POISON`; randomizer-only |
+| 7 | Yawn's bite gives normal poison | Engine, changed: Yawn still poisons. Under door rando it is always ordinary poison a blue herb cures, with no trip to room 100. Without door rando the original Yawn poison and its room 100 rescue happen only once room 100 has been visited (the visited-room bits in bank 8); before that it is ordinary poison | `BR_YAWN_POISON`, with `DOOR_RANDOMIZER`; randomizer-only |
 | 8–9 | Extra blue herb mixes (B+B=G, B+GB=GG, …) and the icon refresh after mixing | Engine: the mix table in Lua, gated | `BR_HERB_MIXES`; randomizer-only (two mixes are BioRand inventions). Arklay has no icon bug to work around |
 | 10 | The locked drawer's hard-coded ink-ribbon case | Fix, or Engine if it changes vanilla behaviour | check against arklay's drawer handler |
 | 11–13 | Ink controlled by scenario flag 122 for both characters | Engine: ink reads flag 122 when `BR_INK_FLAG` is set, the character rule otherwise | `BR_INK_FLAG` |
@@ -79,7 +79,7 @@ that player's script path.
 | DisablePoisonChallenge | 20E | No forced poison challenge | Guard (R) |
 | DisableBarryEvesdrop | 405 (Jill) | Barry's eavesdropping event off | Guard (R) |
 | ChangeEnemies101 | 101 (Chris) | Shifts enemy ids by 2 to dodge 601's reserved ids | Gone: the emitter gives each spawn its own id |
-| ClearEnemies309, 601, 706 | 309 (Jill), 201 and 206 second visit (Chris) | Removes scripted enemy sets that the enemy randomizer replaces | Guard (E) |
+| ClearEnemies309, 601, 706 | 309 (Jill), 201 and 206 second visit (Chris) | Removes scripted enemy sets that the enemy randomizer replaces | Guard (E): the sets go under `if (!ENEMY_RANDOMIZER)` beside the room's `random_enemies()` |
 | AllowPartnerItemBoxes | 100, 403 | Rebecca uses item boxes (`#if false` in staging) | Gone, unless the 8-slot overlap check (H1–H4) needs it |
 | EnableFountainHeliportDoors | 303, 305 | Doors both ways between the fountain and the heliport, with a lock flag and arrival cut | Guard (R) (the proof of concept already has 303's half) |
 | FixPlayerChangeGlitch305 | 305 | Removes two player-change opcodes | Guard (R), or Fix if vanilla shows the glitch |
@@ -87,7 +87,7 @@ that player's script path.
 | ForceLift302 | 300, 301, 302 | With door rando, the lifts start in place; removes player-change opcodes and the waterfall | Guard (D) |
 | FixDoor500 | 500 | Killing Tyrant 1 no longer forces you out | Guard (R) |
 | FixCutscene502 | 502 (Jill) | Conditional opcodes that avoid the cutscene softlock | Guard (R) |
-| AddVariableHelper308 | 308 (Jill) | Sets `FG_ROOM[0]` when Barry's conditions hold, for the enemy condition to test | Guard (E) |
+| AddVariableHelper308 | 308 (Jill) | Sets `FG_ROOM[0]` when Barry's conditions hold, for the enemy condition to test | Gone: `random_enemies()` sits inside Barry's own branch |
 | FixBookcase216, FixBookcase406 | the rooms past 216:2 and 406:2 | With door rando, keeps the bookcase moved after passing it, by clearing flag 79 or 69 in whatever room the door leads to | Redesign: Guard (D) in 216 and 406 themselves, so the flag doesn't depend on the far room |
 | FixMoDiscReader507, 509, 510; FixMoDiscDoor508 | 507–510 | MO disc readers: the item AOT takes the reader's area, and "this reader is done" moves from the MO disc pickup flags (`FG_ITEM` 82/90/98) to scenario flags 112–114, which 508's door reads | Guard (I) |
 | EnableItemForJill106, 113, 11B, 211, 21C, 401, 40F | those rooms (Jill) | Pickups that only exist in Chris's game now exist for Jill | Guard (I) (Jill branch) |
@@ -122,12 +122,14 @@ its identity, so the 99 of them need nothing. The 116 shotgun's
 
 ## D. Enemy conditions
 
-Data: 25 room conditions in `rdt.json` (listed in
-[`research/staging-data.md` §2.3](research/staging-data.md#23-enemy-condition-25-entries-wrap-created-sce_em_sets))
-gate the enemies the randomizer adds, for example "not during Jill's
-prologue" in 106. They go in each room's `random.xml` as an `akscr`
-condition, and the emitter wraps its enemy sets in it. Fixed enemies retyped
-in place (104, 10E, 208, 20C, 210, 21C, 30A, 30B) are data too.
+Staging gates the enemies it adds with 25 room conditions in `rdt.json`
+(listed in
+[`research/staging-data.md` §2.3](research/staging-data.md#23-enemy-condition-25-entries-wrap-created-sce_em_sets)),
+for example "not during Jill's prologue" in 106. Arklay drops them: each room's
+`akscr` gets a `random_enemies()` placeholder inside the branch where its own
+enemies are set ([`plan.md`](plan.md#enemy-placeholders)), and the 25
+conditions are the guide to where each placeholder goes. Fixed enemies retyped
+in place (104, 10E, 208, 20C, 210, 21C, 30A, 30B) stay data in `random.xml`.
 
 ## E. Disabled cutscenes (`cutscenes/disable`)
 

@@ -93,8 +93,9 @@ and the launcher screen.
 The proof of concept's `random.xml` grows into a full room entry of staging's
 map: each door's target, kind, lock, key, requirements, entrance and tags;
 each item's pickup flag, type, amount, group, requirements and whether it is a
-document or hidden; and each enemy group's conditions, exclusions, spots and
-difficulty. Map-wide data (item definitions, enemy definitions, begin and end
+document or hidden; and each enemy group's exclusions, spots and difficulty.
+When added enemies appear is not data: the room's script says it (see
+[enemy placeholders](#enemy-placeholders)). Map-wide data (item definitions, enemy definitions, begin and end
 rooms) goes in `games/re1/biorand/`. A one-off converter writes them from
 `rdt.json`; from then on they are edited by hand, and each room's file
 documents any difference from staging that a fix needed.
@@ -124,7 +125,7 @@ reserves bits `0xC0` to `0xFF`:
 | `0xC5` | `CUTSCENES_DISABLED` | `cutscenes/disable` |
 | `0xC6` | `FORCE_TYRANT2` | `progression/tyrant2` is Always |
 | `0xC7` | `LAB` | the game reaches the laboratory |
-| `0xC8`–`0xCF` | engine behaviour | see [`patches.md`](patches.md#a-executable-patches): full lock byte, killable Neptune, Yawn's normal poison, extra herb mixes, ink for both characters, no title demo |
+| `0xC8`–`0xCF` | engine behaviour | see [`patches.md`](patches.md#a-executable-patches): full lock byte, killable Neptune, Yawn's poison, extra herb mixes, ink for both characters, no title demo |
 | `0xD0`–`0xFF` | spare | |
 
 The proof of concept used `0xF0` to `0xF2`; they move. Staging's option flags
@@ -189,12 +190,42 @@ reaches them. That needs two engine changes, both in their own milestone:
 
 The map screen is off under `DOOR_RANDOMIZER`.
 
+### Enemy placeholders
+
+Staging wraps the enemies it adds in a condition string from `rdt.json`
+("not during Jill's prologue"), and patches rooms to clear the script's own
+enemies or to raise helper flags for those conditions. In arklay the room's
+`akscr` says where added enemies go:
+
+```
+if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
+{
+    if (!ENEMY_RANDOMIZER)
+    {
+        sce_em_set(...);   // the original's enemies
+    }
+    random_enemies();
+}
+```
+
+`random_enemies()` sits inside the branch the script already uses for its
+own enemies, so the cutscene and story guards come for free. The retail build
+compiles it to nothing; the base pack's build compiles it to a no-op marker
+instruction. The emitter finds the marker in the decoded script and replaces
+it with the plan's `sce_em_set`s; an unused marker stays a no-op. A room
+needing added enemies in more than one branch has more than one marker,
+named (`random_enemies(jill)`), and its `random.xml` says which spots belong
+to which. This replaces staging's 25 enemy conditions, its ClearEnemies
+patches and room 308's helper flag.
+
 ### Emitting and verifying
 
-As in the proof of concept, the generator never patches bytes. The emitter
-decodes each used room's script, sets the fields the plan names (door
+As in the proof of concept, the generator works on the pack's compiled
+scripts, not the `akscr` sources, so it needs neither the sources nor the
+compiler and works on a room a mod replaced. It never patches raw bytes: the
+emitter decodes each used room's script, sets the fields the plan names (door
 targets, entrances, locks and keys, pickups, enemy sets wrapped in their
-conditions), encodes it again and writes a new base pack. `verify` reads the
+placeholders), encodes it again and writes a new base pack. `verify` reads the
 finished pack back and checks that every room is reachable, every key comes
 before its lock, nothing waits on a story flag the route can't raise, and every
 guard a patch needs is reached. A pack that fails is deleted.
@@ -218,7 +249,7 @@ The pull request's description holds the live checklist. In order:
    items.
 6. **Lock randomization**, with the scripted locks (115, 201/214) and the
    Rebecca refusals.
-7. **Enemy randomization**, with the enemy conditions, the cleared rooms, the
+7. **Enemy randomization**, with the enemy placeholders, the cleared rooms, the
    ambushes and the crash guards. *Test milestone 2.*
 8. **Room ids.** Any stage and room number; room origins; the map screen off.
 9. **Door randomization**: segments as stages, renumbered rooms, and the
