@@ -99,22 +99,22 @@ Staging rewrites the item type a script compares the pickup against
 the slot's own collected flag in a randomized game
 ([`plan.md`](plan.md#item-puzzles-collected-flags-not-item-types)).
 
-| Room | Test | Effect | Staging |
-|---|---|---|---|
-| 105 | `testpickup WOOD_EMBLEM` | Dining-room emblem swap | `typeOffsets` |
-| 106 | `testpickup BERETTA` (Chris) | Jill's Beretta drives the cutscene | `typeOffsets` |
-| 10D | `cmpb B_PICKED_ITEM == MAGNUM`, `== WIND_CREST` | Tiger statue's eyes | `typeOffsets` |
-| 10F | `testpickup GOLD_EMBLEM` | Clock wall closes behind the emblem | `typeOffsets` (two door-rando variants) |
-| 112 | `testpickup INK_RIBBON` | Removes the duplicate AOT | `typeOffsets` |
-| 113 | `testpickup SMALL_KEY` | Bathtub drain AOT removed | `typeOffsets` |
-| 116 | `testpickup SHOTGUN` | Ceiling trap | `typeOffsets` |
-| 219 | `testpickup BATTERY` | Removes an AOT | `typeOffsets` (from the 719 file) |
-| 40A | `testpickup V-JOLT book (69)` | Event 06 | `typeOffsets` |
-| 106 | `testpickup HELMET_KEY` | Event 0C | **missed** |
-| 308 | `testpickup FLAMETHROWER` | Lock 40 and event 00 | **missed** |
-| 30B | `testpickup FLAMETHROWER` | Lock 39 and item flag 172 | **missed** |
-| 30D | `testpickup FLAMETHROWER` ×2 | | **missed** |
-| 50A | `testpickup GREEN_HERB (68)` | Event 09 | **missed** |
+| Room | Test | Effect | Staging | Arklay |
+|---|---|---|---|---|
+| 105 | `testpickup WOOD_EMBLEM` | Dining-room emblem swap | `typeOffsets` | Done: `picked(AOT_04_ITEM)` and `picked(AOT_07_ITEM)` (one per player) |
+| 106 | `testpickup BERETTA` (Chris) | Jill's Beretta drives the cutscene | `typeOffsets` | Done: `picked(AOT_06_ITEM, testpickup(HANDGUN))`; AOT 6 is reused, the item picks flag `F_ITEM_1A` |
+| 10D | `cmpb B_PICKED_ITEM == MAGNUM`, `== WIND_CREST` | Tiger statue's eyes | `typeOffsets` | Done: two `picked_as` above the long `if` (too far from it for `picked`) |
+| 10F | `testpickup GOLD_EMBLEM` | Clock wall closes behind the emblem | `typeOffsets` (two door-rando variants) | Done: `picked(AOT_04_ITEM)`, both variants |
+| 112 | `testpickup INK_RIBBON` | Removes the duplicate AOT | `typeOffsets` | Done: `picked(AOT_04_ITEM)` |
+| 113 | `testpickup SMALL_KEY` | Bathtub drain AOT removed | `typeOffsets` | Done: `picked(AOT_01_ITEM)` |
+| 116 | `testpickup SHOTGUN` | Ceiling trap | `typeOffsets` | Done: `picked(AOT_01_ITEM)`; the shotgun put-back stays Guard (I) |
+| 219 | `testpickup BATTERY` | Removes an AOT | `typeOffsets` (from the 719 file) | Done: `picked(AOT_03_ITEM)` |
+| 40A | `testpickup V-JOLT book (69)` | Event 06 | `typeOffsets` | Done: `picked(AOT_03_ITEM)` |
+| 106 | `testpickup HELMET_KEY` | Event 0C | **missed** | Not converted: the test (`IT_54`) sits after a `return;` in `proc main` and never runs |
+| 308 | `testpickup FLAMETHROWER` | Lock 40 and event 00 | **missed** | Done: `picked(AOT_03_ITEM)` |
+| 30B | `testpickup FLAMETHROWER` | Lock 39 and item flag 172 | **missed** | Done: `picked(AOT_03_ITEM)` |
+| 30D | `testpickup FLAMETHROWER` ×2 | | **missed** | Done: both, `picked(AOT_03_ITEM)` |
+| 50A | `testpickup GREEN_HERB (68)` | Event 09 | **missed** | Done: `picked(AOT_01_ITEM)` (item IT_68, a file) |
 
 `testitem` tests the item being *used* (keys, cranks, jewels), which keeps
 its identity, so the 99 of them need nothing. The 116 shotgun's

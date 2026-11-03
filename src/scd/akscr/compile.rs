@@ -41,8 +41,9 @@ pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled
     let preprocessed = preprocess(text, build, load)?;
     let Parsed { sections, procs } = parse(&preprocessed.text, &preprocessed.defines, build)?;
     check_recursion(&sections, &procs)?;
+    let item_sets = item_sets(&sections);
     relaxed(|relax| {
-        let (source, pad_events) = lower_sections(&sections, build, &procs, relax)?;
+        let (source, pad_events) = lower_sections(&sections, build, &procs, &item_sets, relax)?;
         asm::assemble_source(&source, &pad_events)
     })
 }
@@ -88,6 +89,7 @@ fn lower_sections(
     sections: &[Section],
     build: Build,
     procs: &HashMap<String, u8>,
+    item_sets: &[ItemSet],
     relax: &mut Relax,
 ) -> Result<(Source, Vec<bool>)> {
     let mut source = Source::default();
@@ -102,7 +104,7 @@ fn lower_sections(
         {
             continue;
         }
-        let items = lower_section(section, build, procs, relax)?;
+        let items = lower_section(section, build, procs, item_sets, relax)?;
         match section.kind {
             // Procedures may stand anywhere; they are numbered in order.
             SectionKind::Proc(_) => source.procs.push(items),
@@ -192,7 +194,7 @@ pub(super) fn section_bytes(
     };
     let event = matches!(section.kind, SectionKind::Event(_));
     relaxed(|relax| {
-        let items = lower_section(section, build, &procs, relax)?;
+        let items = lower_section(section, build, &procs, &[], relax)?;
         asm::assemble_stream(&items, event, !holds(section.nopad, build))
     })
 }
@@ -627,6 +629,23 @@ enum Stmt {
         line: usize,
         col: usize,
     },
+    /// `if (picked(AOT)) { ... } else { ... }`, or `picked(AOT, original)`:
+    /// see [`Lowerer::picked`].
+    Picked {
+        aot: Arg,
+        original: Option<Call>,
+        then: Vec<Stmt>,
+        otherwise: Option<Vec<Stmt>>,
+        line: usize,
+        col: usize,
+    },
+    /// `picked_as(AOT, ITEM);`: see [`Lowerer::remap_picked`].
+    PickedAs {
+        aot: Arg,
+        item: Arg,
+        line: usize,
+        col: usize,
+    },
     Asm(Vec<(usize, String)>),
     Run {
         noreturn: bool,
@@ -667,6 +686,8 @@ impl Stmt {
             | Stmt::If { line, col, .. }
             | Stmt::Variant { line, col, .. }
             | Stmt::System { line, col, .. }
+            | Stmt::Picked { line, col, .. }
+            | Stmt::PickedAs { line, col, .. }
             | Stmt::Run { line, col, .. }
             | Stmt::For { line, col, .. }
             | Stmt::DoWhile { line, col, .. }
@@ -1095,6 +1116,20 @@ impl Parser {
             _ => return self.error(&token, "a statement"),
         };
         match word.as_str() {
+            "picked_as" => {
+                self.expect_punct("(")?;
+                let aot = self.argument()?;
+                self.expect_punct(",")?;
+                let item = self.argument()?;
+                self.expect_punct(")")?;
+                self.expect_punct(";")?;
+                Ok(Stmt::PickedAs {
+                    aot,
+                    item,
+                    line,
+                    col,
+                })
+            }
             "return" => {
                 self.expect_punct(";")?;
                 Ok(Stmt::Return { line, col })
@@ -1190,6 +1225,32 @@ impl Parser {
             return Ok(Stmt::System {
                 flag,
                 expected,
+                then,
+                otherwise,
+                line,
+                col,
+            });
+        }
+        if matches!(self.peek().tok, Tok::Ident(ref name) if name == "picked")
+            && matches!(
+                self.tokens.get(self.pos + 1).map(|t| &t.tok),
+                Some(Tok::Punct("("))
+            )
+        {
+            self.pos += 2;
+            let aot = self.argument()?;
+            let original = if self.eat_punct(",") {
+                Some(self.call()?)
+            } else {
+                None
+            };
+            self.expect_punct(")")?;
+            self.expect_punct(")")?;
+            let then = self.block()?;
+            let otherwise = self.else_branch()?;
+            return Ok(Stmt::Picked {
+                aot,
+                original,
                 then,
                 otherwise,
                 line,
@@ -1316,11 +1377,13 @@ fn lower_section(
     section: &Section,
     build: Build,
     procs: &HashMap<String, u8>,
+    item_sets: &[ItemSet],
     relax: &mut Relax,
 ) -> Result<Vec<Item>> {
     let mut lowerer = Lowerer {
         build,
         procs,
+        item_sets,
         items: Vec::new(),
         pending: Vec::new(),
         relax,
@@ -1374,10 +1437,69 @@ fn lower_section(
     Ok(lowerer.items)
 }
 
+/// An `item_aot_set` of the room, for `picked`.
+struct ItemSet {
+    aot: i64,
+    item: i64,
+    flag: i64,
+}
+
+/// Every `item_aot_set` in `sections`, whichever branch holds it.
+fn item_sets(sections: &[Section]) -> Vec<ItemSet> {
+    fn walk(body: &[Stmt], out: &mut Vec<ItemSet>) {
+        for stmt in body {
+            match stmt {
+                Stmt::Call(call) | Stmt::Require(call) | Stmt::Single { call, .. }
+                    if call.name == "item_aot_set" =>
+                {
+                    let value = |index: usize| {
+                        call.args
+                            .get(index)
+                            .and_then(|arg| field_value(arg, call).ok())
+                    };
+                    if let (Some(aot), Some(item), Some(flag)) = (value(0), value(5), value(13)) {
+                        out.push(ItemSet {
+                            aot: aot & 0x7F,
+                            item,
+                            flag,
+                        });
+                    }
+                }
+                Stmt::If {
+                    then, otherwise, ..
+                }
+                | Stmt::Variant {
+                    then, otherwise, ..
+                }
+                | Stmt::System {
+                    then, otherwise, ..
+                }
+                | Stmt::Picked {
+                    then, otherwise, ..
+                } => {
+                    walk(then, out);
+                    walk(otherwise.as_deref().unwrap_or_default(), out);
+                }
+                Stmt::Run { body, .. } | Stmt::For { body, .. } | Stmt::DoWhile { body, .. } => {
+                    walk(body, out)
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for section in sections {
+        walk(&section.body, &mut out);
+    }
+    out
+}
+
 struct Lowerer<'a> {
     build: Build,
     /// The user procedures' numbers, by name.
     procs: &'a HashMap<String, u8>,
+    /// The room's `item_aot_set`s, for `picked`.
+    item_sets: &'a [ItemSet],
     items: Vec<Item>,
     /// Labels for the next item.
     pending: Vec<String>,
@@ -1386,6 +1508,11 @@ struct Lowerer<'a> {
 
 /// A part of an `if` statement to lower.
 type Branch<'b> = &'b mut dyn FnMut(&mut Lowerer) -> Result<()>;
+
+const FG_STATUS: i64 = 5;
+const FG_ITEM: i64 = 7;
+const B_PICKED_ITEM: i64 = 19;
+const CMP_NE: i64 = 5;
 
 impl Lowerer<'_> {
     fn label(&mut self) -> String {
@@ -1558,6 +1685,36 @@ impl Lowerer<'_> {
                 } => {
                     self.statement_if(conditions, then, otherwise.as_deref(), false, *line, *col)?
                 }
+                Stmt::PickedAs {
+                    aot,
+                    item,
+                    line,
+                    col,
+                } => {
+                    let here = Call {
+                        name: "picked_as".to_string(),
+                        args: Vec::new(),
+                        line: *line,
+                        col: *col,
+                    };
+                    let item = field_value(item, &here)?;
+                    self.remap_picked(aot, Some(item), false, *line, *col)?;
+                }
+                Stmt::Picked {
+                    aot,
+                    original,
+                    then,
+                    otherwise,
+                    line,
+                    col,
+                } => self.picked(
+                    aot,
+                    original.as_ref(),
+                    then,
+                    otherwise.as_deref(),
+                    *line,
+                    *col,
+                )?,
                 Stmt::Asm(lines) => self.asm(lines)?,
                 Stmt::Variant {
                     mask,
@@ -1607,6 +1764,148 @@ impl Lowerer<'_> {
         let mut otherwise = otherwise.map(|body| move |lowerer: &mut Lowerer| lower(lowerer, body));
         let otherwise = otherwise.as_mut().map(|branch| branch as Branch);
         self.flag_if(conditions, &mut then, otherwise, event, line, col)
+    }
+
+    /// `if (picked(AOT))` and `if (picked(AOT, original))`: "the player just
+    /// took this item AOT's pickup".
+    ///
+    /// `original` is the room's own test, which the retail build emits
+    /// verbatim (`testpickup(IT_..)` or `cmpb(B_PICKED_ITEM, CMP_EQ, IT_..)`);
+    /// without it the test is `testpickup` of the item type of the AOT's
+    /// `item_aot_set`. The runtime build chooses by `ITEM_RANDOMIZER`:
+    ///
+    /// ```text
+    /// if (ITEM_RANDOMIZER) {
+    ///     if (ck(FG_ITEM, <pickup flag>, TRUE) && cmpb(B_PICKED_ITEM, CMP_NE, 0)) {
+    ///         setb(B_PICKED_ITEM, <the original item>, 0);
+    ///     }
+    /// }
+    /// if (<original>) { then } else { else }
+    /// ```
+    ///
+    /// So under randomization a pickup of that AOT reads as the original
+    /// item and the room's own test runs unchanged; `then` and `otherwise`
+    /// are lowered once (a command `if` has no OR, and a second copy of a
+    /// long body overflows its one-byte jump). The original test is a
+    /// one-frame pulse (the picked id is cleared after every frame) but the
+    /// collected flag is a level, so the `B_PICKED_ITEM != 0` term keeps the
+    /// remap to frames with a pickup. It still remaps for another pickup in
+    /// the room after this AOT was collected.
+    ///
+    /// The pickup flag is the `item_aot_set` flag of that AOT. An AOT that
+    /// several `item_aot_set`s reuse for different items (room 106) is
+    /// narrowed to those of the item type `original` tests, and must then
+    /// have one flag.
+    fn picked(
+        &mut self,
+        aot: &Arg,
+        original: Option<&Call>,
+        then: &[Stmt],
+        otherwise: Option<&[Stmt]>,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let tested = original.and_then(|call| match (call.name.as_str(), call.args.as_slice()) {
+            ("testpickup", [item]) => field_value(item, call).ok(),
+            ("cmpb", [Arg::Num(B_PICKED_ITEM), Arg::Num(0), item]) => field_value(item, call).ok(),
+            _ => None,
+        });
+        if original.is_some() && tested.is_none() {
+            bail!(
+                "line {line}, column {col}: the second argument of `picked` must be \
+                 `testpickup(ITEM)` or `cmpb(B_PICKED_ITEM, CMP_EQ, ITEM)`"
+            );
+        }
+        let (item, original) = match original {
+            Some(call) => (tested, call.clone()),
+            None => (
+                None,
+                Call {
+                    name: "testpickup".to_string(),
+                    args: Vec::new(),
+                    line,
+                    col,
+                },
+            ),
+        };
+        let item = self.remap_picked(aot, item, original.args.is_empty(), line, col)?;
+        let mut original = original;
+        if original.args.is_empty() {
+            original.args.push(Arg::Num(item));
+        }
+        self.statement_if(&[original], then, otherwise, false, line, col)
+    }
+
+    /// `picked_as(AOT, ITEM);`: the first half of `picked`. In the runtime
+    /// build, under `ITEM_RANDOMIZER`, a pickup this frame of an AOT whose
+    /// flag is set reads as `ITEM`; a variant's build emits nothing. For a
+    /// test too far from its `if` for the one-byte jump, as in room 10D.
+    fn remap_picked(
+        &mut self,
+        aot: &Arg,
+        tested: Option<i64>,
+        derive: bool,
+        line: usize,
+        col: usize,
+    ) -> Result<i64> {
+        let here = Call {
+            name: "picked".to_string(),
+            args: vec![aot.clone()],
+            line,
+            col,
+        };
+        let aot = field_value(aot, &here)? & 0x7F;
+        let sets: Vec<&ItemSet> = self.item_sets.iter().filter(|set| set.aot == aot).collect();
+        if sets.is_empty() {
+            bail!(
+                "line {line}, column {col}: `picked` names AOT {aot:#04X}, which no \
+                 `item_aot_set` in the room sets"
+            );
+        }
+        let sets: Vec<&ItemSet> = match tested {
+            Some(item) => sets.into_iter().filter(|set| set.item == item).collect(),
+            None => sets,
+        };
+        let Some(first) = sets.first() else {
+            bail!(
+                "line {line}, column {col}: no `item_aot_set` of AOT {aot:#04X} holds the item \
+                 `picked` tests"
+            );
+        };
+        if sets.iter().any(|set| set.flag != first.flag) {
+            bail!(
+                "line {line}, column {col}: AOT {aot:#04X} has `item_aot_set`s with different \
+                 pickup flags; write `picked(AOT, testpickup(ITEM))` to say which"
+            );
+        }
+        if derive && sets.iter().any(|set| set.item != first.item) {
+            bail!(
+                "line {line}, column {col}: AOT {aot:#04X} holds several items; write \
+                 `picked(AOT, testpickup(ITEM))` to say which"
+            );
+        }
+        let (item, flag) = (first.item, first.flag);
+        if self.build.variant().is_some() {
+            return Ok(item);
+        }
+        let call = |name: &str, args: Vec<i64>| Call {
+            name: name.to_string(),
+            args: args.into_iter().map(Arg::Num).collect(),
+            line,
+            col,
+        };
+        let randomizer = i64::from(crate::scd::opcode::system::ITEM_RANDOMIZER);
+        let skip = self.label();
+        self.push("if", vec![Arg::Symbol(skip.clone())], line, col);
+        self.push_call(&call("ck", vec![FG_STATUS, randomizer, 0]))?;
+        self.push_call(&call("ck", vec![FG_ITEM, flag, 0]))?;
+        // The picked item id lasts one frame (`room_state_reset`) and the
+        // flag lasts for good, so require a pickup this frame too.
+        self.push_call(&call("cmpb", vec![B_PICKED_ITEM, CMP_NE, 0]))?;
+        self.push_call(&call("setb", vec![B_PICKED_ITEM, item, 0]))?;
+        self.pending.push(skip);
+        self.push("endif", vec![Arg::Num(0)], line, col);
+        Ok(item)
     }
 
     /// A variant test: in a variant's build the branch that variant takes,
@@ -1714,7 +2013,6 @@ impl Lowerer<'_> {
                 (true, None) => Ok(()),
             };
         }
-        const FG_STATUS: i64 = 5;
         let condition = Call {
             name: "ck".to_string(),
             args: vec![
@@ -1725,21 +2023,7 @@ impl Lowerer<'_> {
             line,
             col,
         };
-        let skip = self.label();
-        self.push("if", vec![Arg::Symbol(skip.clone())], line, col);
-        self.push_call(&condition)?;
-        self.commands(then)?;
-        self.pending.push(skip);
-        match otherwise {
-            None => self.push("endif", vec![Arg::Num(0)], line, col),
-            Some(otherwise) => {
-                let end = self.label();
-                self.push("else", vec![Arg::Symbol(end.clone())], line, col);
-                self.commands(otherwise)?;
-                self.pending.push(end);
-            }
-        }
-        Ok(())
+        self.statement_if(&[condition], then, otherwise, false, line, col)
     }
 
     /// A plain command statement; flow opcodes must use the statement forms.
@@ -1903,7 +2187,11 @@ impl Lowerer<'_> {
                 } => {
                     self.statement_if(conditions, then, otherwise.as_deref(), true, *line, *col)?
                 }
-                Stmt::Return { .. } | Stmt::Require(_) | Stmt::System { .. } => {
+                Stmt::Return { .. }
+                | Stmt::Require(_)
+                | Stmt::System { .. }
+                | Stmt::Picked { .. }
+                | Stmt::PickedAs { .. } => {
                     let (line, col) = stmt.position();
                     bail!(
                         "line {line}, column {col}: command flow is only valid inside a `run` \

@@ -273,7 +273,7 @@ proc main
                 aot_delete(AOT_06_USEITEM_SLOT_WOOD_ALT, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM_SLOT_WOOD, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM_KEY_EMBLEM_GOLD_1))
             {
                 set(FG_COMMON, F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN, TRUE);
                 evt_exec(0, TASK_09, chris_gold_emblem_closes_wall);
@@ -359,7 +359,7 @@ proc main
                 aot_delete(AOT_06_USEITEM_SLOT_WOOD_ALT, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM_SLOT_WOOD, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM_KEY_EMBLEM_GOLD_1))
             {
                 set(FG_COMMON, F_COMMON_J_BAR_GOLD_EMBLEM_OUT, TRUE);
                 evt_exec(0, TASK_09, jill_gold_emblem_closes_wall);

@@ -357,7 +357,7 @@ proc main
                 aot_delete(AOT_08_USEITEM_FIREPLACE_GOLD_ALT, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_09_USEITEM_FIREPLACE_GOLD, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_04_ITEM_KEY_EMBLEM_WOOD_1))
             {
                 set(FG_COMMON, F_COMMON_C_FIREPLACE_WOOD_EMBLEM, FALSE);
             }
@@ -482,7 +482,7 @@ proc main
                 aot_delete(AOT_0B_USEITEM_FIREPLACE_GOLD_ALT, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_0C_USEITEM_FIREPLACE_GOLD, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_07_ITEM_KEY_EMBLEM_WOOD_1))
             {
                 set(FG_COMMON, F_COMMON_J_FIREPLACE_WOOD_EMBLEM, FALSE);
             }

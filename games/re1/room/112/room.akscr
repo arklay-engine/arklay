@@ -73,7 +73,7 @@ proc init
 
 proc main
 {
-    if (testpickup(IT_2F_KEY_INK_RIBBON))
+    if (picked(AOT_04_ITEM_INK_2))
     {
         aot_delete(AOT_05_MESSAGE_NOTHING, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }

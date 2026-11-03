@@ -58,7 +58,7 @@ proc init
 
 proc main
 {
-    if (testpickup(IT_03_WEAPON_SHOTGUN))
+    if (picked(AOT_01_ITEM_WEAPON_SHOTGUN_0))
     {
         evt_exec(0, TASK_09, take_shotgun_rack_clicks);
     }

@@ -101,7 +101,7 @@ proc main
         if (ck(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE))
         {
             set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
-            if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+            if (picked(AOT_03_ITEM_WEAPON_FLAMETHROWER_0))
             {
                 set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
             }
@@ -115,7 +115,7 @@ proc main
                 set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
             }
         }
-        if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+        if (picked(AOT_03_ITEM_WEAPON_FLAMETHROWER_0))
         {
             set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
             evt_exec(0, TASK_09, hook_rises_door_locks);

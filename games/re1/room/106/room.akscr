@@ -364,7 +364,7 @@ proc main
                 }
             }
         }
-        if (testpickup(IT_02_WEAPON_HANDGUN))
+        if (picked(AOT_06_ITEM_HANDGUN_2, testpickup(IT_02_WEAPON_HANDGUN)))
         {
             set(FG_ROOM, F_ROOM_C_HANDGUN_TAKEN, TRUE);
         }

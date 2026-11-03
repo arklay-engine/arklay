@@ -49,7 +49,7 @@ proc main
 {
     if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
-        if (testpickup(IT_27_KEY_BATTERY))
+        if (picked(AOT_03_ITEM_KEY_BATTERY_0))
         {
             aot_delete(AOT_04_EVENT_BATTERY, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
