@@ -16744,7 +16744,7 @@ fn render_frame_on(
                 (half_x + grown, half_z + grown),
                 crate::character2::sca_mask(character.id),
                 color,
-                tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
+                tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.model),
                 tween,
                 texture,
             );
@@ -17025,7 +17025,7 @@ fn render_frame_on(
             .zombie
             .as_ref()
             .map_or(0, |zombie| zombie.skin.saturating_sub(1));
-        let Some(model) = npc_models.get_skinned(pack, character.id, id.player_flag & 1, skin)
+        let Some(model) = npc_models.get_skinned(pack, character.model, id.player_flag & 1, skin)
         else {
             continue;
         };
@@ -17094,7 +17094,7 @@ fn render_frame_on(
             hidden_parts = !flung;
         }
         tween.joints(
-            tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
+            tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.model),
             &mut joints,
         );
         // `Joint_trans2` lights from its first part, not its feet.

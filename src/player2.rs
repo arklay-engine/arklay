@@ -3670,6 +3670,8 @@ pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind
         stairs: None,
     };
     mover.joint_move_late(SPL_INIT_STEP);
+    // `_Spl` turns the head after whichever routine ran.
+    mover.rot_neck();
 }
 
 /// `Workm` of a work's part, as the last tick left it.

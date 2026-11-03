@@ -6,7 +6,7 @@ use crate::game::GameState;
 use crate::model::{Clip, Emd, Keyframe};
 use crate::pack::Pack;
 use crate::player2::{self, Banks, Tick};
-use crate::scd2::host::{Character, EsprCall, NO_ENEMY_FLAG, SPLAYER_SLOT};
+use crate::scd2::host::{Arms, Character, EsprCall, NO_ENEMY_FLAG, SPLAYER_SLOT};
 use crate::state::RoomState;
 
 /// `Game_loop`'s pass over the enemy slots, for the characters `_Spl` runs.
@@ -49,7 +49,7 @@ pub fn tick(
                 crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)))
                     as u32;
         }
-        let model = npc_models.get(pack, character.id, scenario);
+        let model = npc_models.get(pack, character.model, scenario);
         if let Some(mut zombie) = character.zombie.take() {
             if let Some(model) = model.filter(|_| moves(&character)) {
                 run_zombie(
@@ -384,7 +384,7 @@ pub fn run_esprs(
                 .get_mut(slot)
                 .and_then(Option::take)
                 .map(|mut character| {
-                    let model = npc_models.get(pack, character.id, scenario);
+                    let model = npc_models.get(pack, character.model, scenario);
                     let world = model.zip(matrix.part).and_then(|(model, part)| {
                         let held = character.held_bank.clone();
                         let tick = tick_of(room, game, &character, slot, &model, held.as_deref());
@@ -630,7 +630,7 @@ pub fn init(
             continue;
         };
         if character.with_room
-            && let Some(model) = npc_models.get(pack, character.id, scenario)
+            && let Some(model) = npc_models.get(pack, character.model, scenario)
         {
             if let Some(mut zombie) = character.zombie.take() {
                 character.with_room = false;
@@ -720,22 +720,68 @@ const MARVIN_ARMS: [(usize, usize); 7] = [
 /// gun.
 const MARVIN_GUN_HAND: usize = 23;
 
+/// The ticks `Spl_chenge00` takes: the first part's `Poly_rgb` climbs a step a
+/// tick to `0x40`, where the meshes swap, and takes its first step back in the
+/// same call.
+const MARVIN_FADE_TICKS: u8 = 0x40 * 2 - 1;
+
+/// `Type`: a script reads and writes the work's, `sce_em_set` gave the rest.
+fn marvin_kind(character: &Character) -> u16 {
+    character.kind | character.work.kind
+}
+
+fn clear_kind(character: &mut Character, bits: u16) {
+    character.kind &= !bits;
+    character.work.kind &= !bits;
+}
+
+/// `Spl_in4a`, after `Spl_Init`. With `Type`'s `0x300` up, the joints take the
+/// other set of arms at once and the bits go. Otherwise the arms wait for
+/// `Spl_chenge00`.
+fn spl_in4a(character: &mut Character) {
+    if marvin_kind(character) & 0x300 != 0 {
+        character.arms.swapped = true;
+        clear_kind(character, 0x300);
+    } else {
+        character.arms.fade = 0;
+    }
+}
+
+/// `Spl_mv4a`'s `Spl_chenge00`: with `Type`'s `0x200`, the fade to the other
+/// set of arms, which clears the bit at its end. Room 202's script waits for
+/// that before it makes Marvin a zombie. A fade that has run doesn't run again.
+/// The fade's light on the arms isn't drawn: the joints swap at its end.
+fn spl_mv4a(character: &mut Character) {
+    if marvin_kind(character) & 0x200 == 0 || character.arms.faded {
+        return;
+    }
+    character.arms.fade += 1;
+    if character.arms.fade == MARVIN_FADE_TICKS {
+        character.arms = Arms {
+            swapped: true,
+            fade: 0,
+            faded: true,
+        };
+        clear_kind(character, 0x200);
+    }
+}
+
 /// Which mesh each joint draws, where that isn't its own. Marvin's init gives
-/// every arm joint a spare part with the same matrix. With `Type`'s `0x300`
-/// clear the spare draws the joint's own mesh (the hand's from mesh 23 with
+/// every arm joint a spare part with the same matrix. Until his arms swap the
+/// spare draws the joint's own mesh (the hand's from mesh 23 with `Type`'s
 /// `0x800`), and the joint draws the other mesh, black and translucent, so
-/// that only the spare shows. With either bit set, the joint takes the other
-/// mesh.
+/// that only the spare shows. Once they swap, the joint takes the other mesh.
+/// The model decides, not `Id`: as a zombie he keeps his arms.
 pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Option<Vec<usize>> {
-    if character.id != MARVIN || joints <= 14 || meshes <= MARVIN_GUN_HAND {
+    if character.model != MARVIN || joints <= 14 || meshes <= MARVIN_GUN_HAND {
         return None;
     }
     let mut joint_meshes: Vec<usize> = (0..joints).collect();
-    if character.kind & 0x300 != 0 {
+    if character.arms.swapped {
         for (joint, spare) in MARVIN_ARMS {
             joint_meshes[joint] = spare;
         }
-    } else if character.kind & 0x800 != 0 {
+    } else if marvin_kind(character) & 0x800 != 0 {
         joint_meshes[11] = MARVIN_GUN_HAND;
     }
     Some(joint_meshes)
@@ -759,7 +805,7 @@ fn run_load_stop(
         if moves(&character)
             && let Some(mut zombie) = character.zombie.take()
         {
-            if let Some(model) = npc_models.get(pack, character.id, scenario) {
+            if let Some(model) = npc_models.get(pack, character.model, scenario) {
                 run_zombie(
                     game,
                     room,
@@ -786,19 +832,27 @@ fn run_order() -> impl Iterator<Item = usize> {
 /// `_Spl`'s routine: `Spl_Init` for one no script has given a routine, and
 /// `Spl_Scenario`. `Spl_Auto` isn't ported: one of its own stands still.
 fn spl(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
-    if player2::uninitialised(&character.work) {
+    let arrived = if player2::uninitialised(&character.work) {
         player2::spl_init(
             &mut character.work,
             &mut character.body,
             tick,
             character.kind,
         );
+        if character.id == MARVIN {
+            spl_in4a(character);
+        }
         None
     } else if player2::in_scenario(&character.work) {
         player2::player_move(&mut character.work, &mut character.body, tick)
     } else {
         None
+    };
+    // `_Spl`'s call by `Id`, after the routine.
+    if character.id == MARVIN {
+        spl_mv4a(character);
     }
+    arrived
 }
 
 /// `Em_init_move`'s `_Spl` calls for a character the room places.
@@ -865,6 +919,9 @@ mod tests {
     fn a_character_stops_when_out_of_play_or_told_not_to_move() {
         let mut character = Character {
             id: 0x45,
+            model: 0x45,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
             be_flg: 1,
             work: player2::Work::default(),
             body: crate::player::spawn(RoomId::parse("1140").unwrap(), &RoomState::default()),
@@ -889,6 +946,9 @@ mod tests {
     fn marvins_right_hand_holds_the_gun_with_type_0x800() {
         let mut character = Character {
             id: MARVIN,
+            model: MARVIN,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
             be_flg: 1,
             work: player2::Work::default(),
             body: crate::player::spawn(RoomId::parse("2020").unwrap(), &RoomState::default()),
@@ -904,11 +964,55 @@ mod tests {
         let meshes = joint_meshes(&character, 15, 24).unwrap();
         assert_eq!(meshes[11], MARVIN_GUN_HAND);
         assert_eq!(meshes[10], 10);
-        // With `0x100` the arms take the spare meshes, the hand mesh 22.
+        // Init with `0x100` swaps the arms for the spare meshes, the hand mesh 22.
         character.kind = 0x5900;
+        spl_in4a(&mut character);
+        assert_eq!(character.kind, 0x5800);
         let meshes = joint_meshes(&character, 15, 24).unwrap();
         assert_eq!(&meshes[8..15], &[17, 20, 21, 22, 18, 15, 19]);
-        character.id = 0x45;
+        // As a zombie he keeps them: the model decides.
+        character.id = 0x1E;
+        assert!(joint_meshes(&character, 15, 24).is_some());
+        character.model = 0x45;
         assert!(joint_meshes(&character, 15, 24).is_none());
+    }
+
+    #[test]
+    fn marvins_arms_fade_for_127_ticks_then_clear_the_bit() {
+        let mut character = Character {
+            id: MARVIN,
+            model: MARVIN,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 1,
+            work: player2::Work::default(),
+            body: crate::player::spawn(RoomId::parse("2020").unwrap(), &RoomState::default()),
+            kind: 0x5000,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            with_room: false,
+            held_bank: None,
+            zombie: None,
+        };
+        spl_in4a(&mut character);
+        assert!(!character.arms.swapped);
+        // Room 202's script sets the bit in the work's `Type`.
+        character.work.kind = 0x200;
+        for _ in 1..MARVIN_FADE_TICKS {
+            spl_mv4a(&mut character);
+        }
+        assert!(!character.arms.swapped);
+        assert_eq!(character.work.kind, 0x200);
+        spl_mv4a(&mut character);
+        assert!(character.arms.swapped);
+        assert_eq!(character.work.kind, 0);
+        // A second fade never ends.
+        character.work.kind = 0x200;
+        for _ in 0..200 {
+            spl_mv4a(&mut character);
+        }
+        assert_eq!(character.work.kind, 0x200);
     }
 }
