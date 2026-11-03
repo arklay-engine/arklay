@@ -8202,6 +8202,17 @@ impl GameState {
         }
         self.add_item(item, amount);
         self.re2.set_flag(ITEM_BANK, flag, 1);
+        // `St_get_item`: its object goes, and the twinkle with it.
+        let model = usize::from(action.params[3]);
+        if model < 0x20
+            && let Some(record) = self.objects.record_mut(model)
+        {
+            if let Some((row, at)) = crate::objects::twinkle(record) {
+                self.re2.effects.kill_at(5, row, at);
+            }
+            record.be_flg = 0;
+            record.flag = 0;
+        }
         self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
         self.show_re2_global(MESSAGE_PICKED_UP);
         if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {

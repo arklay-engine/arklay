@@ -529,6 +529,15 @@ impl Effects {
         }
     }
 
+    /// `Esp_kill` with a matrix: only those at `at`.
+    pub fn kill_at(&mut self, kind: u8, row: u8, at: [i16; 3]) {
+        for slot in &mut self.slots {
+            if slot.kind == kind && slot.row == row && slot.base == at {
+                slot.kill();
+            }
+        }
+    }
+
     /// `Esp_die`: all go but kind 5's rows 2 and 3.
     pub fn die(&mut self) {
         for slot in &mut self.slots {
@@ -679,6 +688,27 @@ impl Effects {
                 this.ground = ground;
                 this.anim = this.step;
                 this.update = 5;
+            }
+            // `Esp_21`: shown for a random while, then back to a frame that
+            // holds until frame 0x12 comes round again.
+            0x21 => {
+                if slot.count == 0 {
+                    self.slots[index].flags = 0xB803;
+                    self.slots[index].count = self.rnd() % 0x1E + 0x3C;
+                } else {
+                    self.slots[index].count -= 1;
+                    if slot.frame == 0x12 {
+                        let delay = self
+                            .bank
+                            .sprites
+                            .get(&slot.kind)
+                            .map_or(0, |s| s.frame(0x0B)[2]);
+                        let this = &mut self.slots[index];
+                        this.flags = 0x8000;
+                        this.frame = 0x0B;
+                        this.delay = delay;
+                    }
+                }
             }
             0x23 => self.slots[index].kill(),
             // A falling case's first and second bounce.

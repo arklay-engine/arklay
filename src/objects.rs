@@ -290,6 +290,8 @@ pub struct ObjectRecord {
     pub attr: u16,
     /// RE2's `Om_trans`: how far above its position a push box draws.
     pub draw_lift: i32,
+    /// RE2's `+0x145`, from `Item_aot_set`: what an item's object does.
+    pub item_flags: u8,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
 }
@@ -320,6 +322,7 @@ impl Default for ObjectRecord {
             be_flg: 0,
             attr: 0,
             draw_lift: 0,
+            item_flags: 0,
             tween: TweenScratch::default(),
         }
     }
@@ -465,6 +468,7 @@ impl ObjectTable {
             be_flg: 0,
             attr: 0,
             draw_lift: 0,
+            item_flags: 0,
             tween: TweenScratch::default(),
         };
         self.built = self.built.wrapping_add(1);
@@ -874,6 +878,18 @@ fn apply_position_overrides(pos: &mut [i32; 3], slot: usize, id: RoomId) {
 }
 
 /// The object's 4.12 rotation matrix.
+/// The twinkle `Sce_kirakira_set` gives RE2's item object: the row of type 5,
+/// and where on the object it sits.
+pub fn twinkle(object: &ObjectRecord) -> Option<(u8, [i16; 3])> {
+    if object.item_flags & 0x80 == 0 {
+        return None;
+    }
+    let size = ((object.item_flags & 0x60) >> 5).max(1);
+    let matrix = crate::player2::rot_matrix(object.rotation);
+    let at = |axis: usize| (object.pos[axis] + ((i32::from(matrix[axis][1]) * -90) >> 12)) as i16;
+    Some((size * 8 + 7, [at(0), at(1), at(2)]))
+}
+
 pub fn rotation(object: &ObjectRecord) -> [[i32; 3]; 3] {
     anim::rotation_matrix(
         i32::from(object.rotation[0]),
@@ -1425,6 +1441,20 @@ fn operand_word(operands: &[Operand], index: usize) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_items_twinkle_sits_above_its_turned_object() {
+        // Room 10B's item, as the original placed its twinkle.
+        let object = ObjectRecord {
+            pos: [-18521, -2000, -25948],
+            rotation: [1216, 0, -3264],
+            item_flags: 0xC0,
+            ..ObjectRecord::default()
+        };
+        assert_eq!(twinkle(&object), Some((23, [-18435, -1993, -25973])));
+        let plain = ObjectRecord::default();
+        assert_eq!(twinkle(&plain), None);
+    }
 
     fn operands(values: &[i64]) -> Vec<Operand> {
         values

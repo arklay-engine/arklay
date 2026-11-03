@@ -1,9 +1,8 @@
--- The licker on the floor, `Em_22` (entity id 0x22).
+-- The licker, `Em_22` (entity id 0x22).
 --
 -- The state machine, its tables and its effects. The engine keeps the licker's
--- animation, collision and tongue blend, and runs them after `update`. The walls
--- and the ceiling (`Routine_1` 1, 7, 0xB, 0xD, 0x10-0x12, 0x15-0x17, `Em22_Damage`
--- 2 and 5, `Em22_Die` 2-4) need the body's `Super_matrix`, which isn't ported.
+-- animation, collision, tongue blend and the turn of the surface it's on, and
+-- runs them after `update`.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and `e:set_var`
 -- are the fields of the original's work that the engine doesn't read.
@@ -21,6 +20,13 @@ local GRAVITY <const> = 9 -- `+0x242`.
 local LEFT_Y <const> = 10 -- `+0x244`: the height it left from.
 local TIMER0 <const> = 11 -- `Timer0`.
 local BITE_BEHIND <const> = 12 -- `FUN_00466100`'s turn: the side the bite came from.
+local TIMER2 <const> = 13 -- `Timer2`: the side of the room it's heading for.
+local TIMER3 <const> = 14 -- `Timer3`: the side of the room its wall faces.
+local NEXT_SIDE <const> = 15 -- `+0x218`: the side it's going over to.
+local WALL <const> = 16 -- `+0x220`: the collision record it's on, or 0.
+local DEST_X <const> = 17 -- `+0x234`: where it's climbing to.
+local DEST_Y <const> = 18
+local DEST_Z <const> = 19
 
 local AFTER_BITE <const> = 1 -- `FUN_00466100`: the jump's bite bleeds.
 local AFTER_FLAMES <const> = 2 -- `FUN_00467370`: a burning weapon's flames.
@@ -32,10 +38,17 @@ local BE_NO_SCA <const> = 8
 local BE_SUPER <const> = 0x2000000
 
 -- `+0x22c`: the shot that hurt it wasn't a surprise, it stands on its hind legs,
--- it fell off a wall, and it's in the air.
+-- its feet make no sound, it's reached the wall or the ceiling it was climbing to
+-- (along the floor, then up), it fell off a wall, it's climbing, the next tick has
+-- no `Sca_ck_em`, and it's in the air.
 local FLAG_KNOWS <const> = 1
 local FLAG_UP <const> = 2
+local FLAG_QUIET <const> = 4
+local FLAG_ARRIVED <const> = 0x10
+local FLAG_ARRIVED_Y <const> = 0x20
 local FLAG_FALLING <const> = 0x40
+local FLAG_CLIMBING <const> = 0x80
+local FLAG_NO_SCA <const> = 0x100
 local FLAG_JUMPING <const> = 0x200
 -- What `Em22_Damage` clears when the hit does more than hurt.
 local FLAGS_KEPT <const> = 0xFD0F
@@ -201,14 +214,35 @@ local function mot_play_sp(e, clip, hokan)
     if e:joint(0x1000 // (hokan + 1)) then
         return true
     end
-    e:add_speed_xyz()
+    e:add_speed_super(0, 0)
+    return false
+end
+
+-- `Mot_play2_spxz`.
+local function mot_play_spxz(e, clip, hokan)
+    if e:move_no() ~= clip then
+        e:clip(clip, 0, hokan)
+    end
+    e:spd()
+    if e:joint(0x1000 // (hokan + 1)) then
+        return true
+    end
+    e:add_speed_xz()
     return false
 end
 
 -- `Em22_Atd_set_1`.
 local function atd_set(e)
-    e:set_atd(0, 0, 0x250, 600, 1000)
-    e:set_atd(1, -0x180, 0x180, 0x180, 0x180)
+    e:set_atd(0, 0x2A0, 0, 0x250, 600, 1000)
+    e:set_atd(1, -0x60, -0x180, 0x180, 0x180, 0x180)
+    e:clear_back_atd()
+end
+
+-- `Em22_Atd_set_2`: on a wall or the ceiling.
+local function atd_set_up(e)
+    e:set_atd(0, 0x2A0, -200, 0x180, 600, 0x180)
+    e:set_atd(1, -0x60, -0x180, 0x180, 0x180, 0x180)
+    e:set_atd(2, 0x400, 0x70, 0x380, 0x180, 0x380)
 end
 
 -- `Gunarea_chg`.
@@ -1008,8 +1042,7 @@ local function decide(e)
     if life < 0 or e:routine(0) == 7 then
         e:go(0xE)
     elseif e:kind() & 0x10 ~= 0 and e:life() < 0x32 and e:rnd() & 3 == 0 then
-        -- `Routine_1` 1, up a wall.
-        e:go(0xE)
+        e:go(1)
     else
         local off = e:angle_to_player()
         if off > 0x800 then
@@ -1108,34 +1141,732 @@ local function run_at(e)
 end
 
 -- `Em22_Move`, by `Routine_1`.
+-- What it takes to fall: `Spd_y` and the height, each tick.
+local function fall(e)
+    local x, speed, z = e:speed()
+    speed = speed + 0x48
+    e:set_speed(x, speed, z)
+    e:add_pos(0, speed, 0)
+end
+
+-- It's about to land.
+local function landing(e)
+    local _, speed = e:speed()
+    local _, y = e:pos()
+    return speed + 0x48 + y >= 0
+end
+
+-- `FUN_00465bf0`'s answers that aren't a side of the room.
+local AHEAD_CLEAR <const> = -1
+local AHEAD_BLOCKED <const> = -2
+local AHEAD_END <const> = -3
+
+-- `FUN_00465bf0`: what's ahead of it along its wall.
+local function along_wall(e)
+    local x, y, z = e:pos()
+    local ahead_x, _, ahead_z = e:super_rotate(e:angle(), 2200, 0, 0)
+    e:set_var(TIMER2, ((e:direction(0, 0, ahead_x, ahead_z) + 0x100) >> 10) & 3)
+    local at_x, at_z = x + ahead_x, z + ahead_z
+    local floor = quot(-y, 1800)
+    if #e:sca_list(at_x, at_z, floor, 0x200) == 0 then
+        return AHEAD_END
+    end
+    local timer3 = e:var(TIMER3)
+    local answer = AHEAD_CLEAR
+    for _, record in ipairs(e:sca_list(at_x, at_z, floor, 0x600)) do
+        local _, _, _, _, id = e:sca_rect(record)
+        if id & 0x200 == 0 then
+            answer = AHEAD_BLOCKED
+        else
+            local side = e:sca_side(record, at_x, at_z)
+            if record == e:var(WALL) then
+                local edge = e:sca_edge(record, timer3)
+                if timer3 & 1 == 0 then
+                    e:add_pos(edge - x, 0, 0)
+                    x = edge
+                else
+                    e:add_pos(0, 0, edge - z)
+                    z = edge
+                end
+            else
+                e:set_var(WALL, record)
+                if (timer3 ~ side) & 1 ~= 0 then
+                    return side
+                end
+            end
+        end
+    end
+    return answer
+end
+
+-- The end of a turn around a corner of its wall: its motion leaves it `by` along
+-- the new side, on the edge of the record.
+local function corner_end(e, side, turn, by)
+    local by_x, by_z = e:rotate(e:var(TIMER2) * 0x400 + turn, by, 0)
+    e:super_add(0, turn, 0)
+    local x, _, z = e:pos()
+    local edge = e:sca_edge(e:var(WALL), side)
+    if side & 1 == 0 then
+        e:add_pos(edge - x, 0, by_z)
+    else
+        e:add_pos(by_x, 0, edge - z)
+    end
+    e:set_var(TIMER3, side)
+    e:set_be_flg(e:be_flg() & ~BE_NO_PUSH)
+    set_r2(e, 0)
+end
+
+local function walk_wall(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:clip(1, 0, 0xF)
+        e:set_var(GUN_AREA, 4)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        local ahead = along_wall(e)
+        if spots(e) or ahead == AHEAD_BLOCKED then
+            e:go(0xD)
+            return
+        end
+        if ahead == AHEAD_CLEAR then
+            e:spd()
+            e:joint(0x100)
+            e:add_speed_super(0, 0)
+            return
+        end
+        e:set_be_flg(e:be_flg() | BE_NO_PUSH)
+        if ahead == AHEAD_END then
+            state = 5
+        else
+            e:set_var(NEXT_SIDE, ahead)
+            state = 3
+        end
+        set_r2(e, state)
+    end
+    if state == 3 then
+        e:clip(0x11, 0, 0xF)
+        set_r2(e, 4)
+        state = 4
+    elseif state == 5 then
+        e:clip(0x10, 0, 0xF)
+        set_r2(e, 6)
+        state = 6
+    end
+    if state == 4 then
+        if e:joint(0x100) then
+            local side = e:var(NEXT_SIDE)
+            local timer2 = e:var(TIMER2)
+            local turn = (timer2 * 2 - e:var(TIMER3) - side) * 0x400
+            corner_end(e, side, turn, 0x69D)
+            raise_flag(e, FLAG_NO_SCA)
+        end
+    elseif state == 6 then
+        if e:joint(0x100) then
+            corner_end(e, e:var(TIMER2) & 3, (e:var(TIMER2) - e:var(TIMER3)) * 0x400, 0x670)
+        end
+    end
+end
+
+-- Whether it turns the other way to come down: the original's division by three.
+local function comes_down_reversed(e)
+    local turn = e:var(TIMER3) - e:var(TIMER2)
+    if turn > 1 or turn < -1 then
+        turn = quot((turn * 0x55555555) // 0x100000000 - turn, 2)
+    end
+    return turn < 0
+end
+
+local function come_down(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_var(TIMER0, 0)
+        e:set_timer1(0)
+        e:set_be_flg(e:be_flg() | BE_NO_PUSH | BE_NO_SCA)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        local reversed = comes_down_reversed(e)
+        local _, y = e:pos()
+        local ground = e:ground()
+        if y < ground - 0x903 then
+            e:clip(0x1B, 0, 0xF)
+            if reversed then
+                e:set_timer1(1)
+            end
+            set_r2(e, 3)
+            atd_set(e)
+            state = 3
+        else
+            local x, _, z = e:speed()
+            if y > ground - 0x631 or y < ground - 0x66D then
+                local left = ground - y - 0x64F
+                e:set_timer1(left)
+                e:set_speed(x, quot(left, 0x16), z)
+            else
+                e:set_speed(x, 0, z)
+                e:set_pos_y(ground - 0x64F)
+            end
+            e:clip(reversed and 0x1A or 0xC, 0, 0xF)
+            set_r2(e, 1)
+            state = 1
+        end
+    end
+    if state == 1 then
+        local left = e:timer1()
+        if left > 0x14 or left < -0x14 then
+            local _, speed = e:speed()
+            e:set_timer1(left - speed)
+            e:add_pos(0, speed, 0)
+        end
+        if e:joint(0x100) then
+            local by_x, by_z = e:rotate(e:var(TIMER3) << 10, 0x64F, 0)
+            e:add_pos(by_x, 0, by_z)
+            e:set_pos_y(0)
+            e:init_super()
+            e:set_angle(e:var(TIMER2) << 10)
+            e:set_var(WALL, 0)
+            set_r2(e, 2)
+        end
+    elseif state == 2 then
+        e:set_move_cnt(0)
+        mot_play_spxz(e, 3, 3)
+        raise_flag(e, FLAG_UP)
+        e:set_var(TIMER0, e:var(TIMER0) + 1)
+        e:set_var(GUN_AREA, 4)
+        e:set_be_flg(e:be_flg() & ~(BE_NO_PUSH | BE_NO_SCA))
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        if e:var(TIMER0) > 3 then
+            e:go(0xE)
+        end
+    elseif state == 3 then
+        e:spd()
+        local reversed = e:timer1() ~= 0
+        if e:joint(0x100, reversed) then
+            set_r2(e, 0)
+        end
+        e:add_speed_super(reversed and 0x800 or 0, 0)
+    end
+end
+
+-- The common turn from hanging to on its feet: `Pos_y` is the head's, and it
+-- lands looking the way it fell.
+local function drop_turn(e)
+    e:add_pos(0, 0xA8C, 0)
+    local x, _, z = e:super_rotate(e:angle(), 0x898, 0, 0)
+    e:set_angle((e:direction(0, 0, x, z) + 0x100) & 0xC00)
+    e:init_super()
+end
+
+local function hang(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_UP)
+        e:set_var(WALL, 0)
+        e:clip(3, 0, 0)
+        e:set_var(GUN_AREA, 0)
+        local x, _, z = e:speed()
+        e:set_speed(x, 0, z)
+        set_r2(e, 1)
+        state = 1
+    end
+    local function drops()
+        e:clip(0x13, 0, 0)
+        e:set_var(TIMER0, e:var(TIMER0) + 1)
+        set_r2(e, r2(e) + 1)
+    end
+    if state == 1 then
+        e:joint(0x1000)
+        if e:var(AWARE) ~= 2 then
+            local target = spots(e)
+            e:set_var(TARGET, target and 1 or 0)
+            if not target then
+                e:set_var(TIMER0, e:var(TIMER0) + 1)
+                return
+            end
+        end
+        e:set_var(TIMER0, 0)
+        e:set_var(GUN_AREA, 5)
+        e:clip(0x12, 0, 0)
+        set_r2(e, 2)
+    elseif state == 2 then
+        fall(e)
+        if e:joint(0x1000) then
+            drops()
+        else
+            e:set_var(TIMER0, e:var(TIMER0) + 1)
+        end
+    else
+        if state == 3 then
+            drop_turn(e)
+            set_r2(e, 4)
+            state = 4
+        end
+        if state == 4 then
+            fall(e)
+            e:clip(0x13, 0, 0)
+            e:joint(0x1000)
+            if landing(e) then
+                drops()
+            else
+                e:set_var(TIMER0, e:var(TIMER0) + 1)
+            end
+        elseif state == 5 then
+            e:set_var(GUN_AREA, 4)
+            e:set_pos_y(0)
+            if e:joint(0x1000) then
+                e:go(0)
+            end
+        end
+    end
+end
+
+-- `Routine_1` 0x17: on the ceiling until a script says.
+local function hang_scripted(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_var(WALL, 0)
+        e:set_sce_free(0, 0)
+        e:clip(3, 0, 0)
+        e:joint(0x1000)
+        raise_flag(e, FLAG_UP)
+        e:set_kind(e:kind() | 0x4000)
+        e:set_var(GUN_AREA, 0)
+        local x, _, z = e:speed()
+        e:set_speed(x, 0, z)
+        set_r2(e, 1)
+        state = 1
+    end
+    local function drops()
+        e:clip(0x13, 0, 0)
+        e:set_var(TIMER0, e:var(TIMER0) + 1)
+        set_r2(e, r2(e) + 1)
+    end
+    if state == 1 then
+        if e:sce_free(0) ~= 0 then
+            e:set_kind(e:kind() & ~0x4000)
+            e:set_var(TIMER0, 0)
+            e:set_var(GUN_AREA, 5)
+            e:clip(0x12, 0, 0)
+            set_r2(e, 2)
+            return
+        end
+    elseif state == 2 then
+        fall(e)
+        if e:joint(0x1000) then
+            drops()
+            return
+        end
+    elseif state == 3 or state == 4 then
+        if state == 3 then
+            drop_turn(e)
+            set_r2(e, 4)
+        end
+        fall(e)
+        e:clip(0x13, 0, 0)
+        e:joint(0x1000)
+        if landing(e) then
+            drops()
+            return
+        end
+    elseif state == 5 then
+        e:set_var(GUN_AREA, 4)
+        e:set_pos_y(0)
+        if e:joint(0x1000) then
+            e:go(0)
+        end
+    end
+    e:set_var(TIMER0, e:var(TIMER0) + 1)
+end
+
+-- `Routine_1` 0x10: down from the ceiling, at a script's word, and up again.
+local function dropped_by_script(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_move_cnt(0)
+        mot_play_spxz(e, 3, 0)
+        if e:sce_free(0) ~= 0 then
+            e:set_kind(e:kind() & ~0x4000)
+            e:set_sce_free(0, 0)
+            set_r2(e, 1)
+            local x, _, z = e:speed()
+            e:set_speed(x, 0, z)
+        end
+    elseif state == 1 then
+        fall(e)
+        e:step(mot_play(e, 0x12, 0, false))
+    elseif state == 2 or state == 3 then
+        if state == 2 then
+            drop_turn(e)
+            e:clip(0x13, 0, 0)
+            set_r2(e, 3)
+        end
+        fall(e)
+        e:set_move_cnt(0)
+        e:joint(0x100)
+        if landing(e) then
+            e:set_var(GUN_AREA, 3)
+            atd_set(e)
+            e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+            e:set_move_no(0)
+            set_r2(e, 4)
+        end
+    elseif state == 4 then
+        e:set_pos_y(0)
+        e:step(mot_play(e, 0x13, 0, false))
+    elseif state == 5 then
+        mot_play_spxz(e, 3, 3)
+        raise_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 4)
+        if e:sce_free(0) ~= 0 then
+            e:go(0xE)
+        end
+    end
+end
+
+-- `Routine_1` 0x11: on the ceiling, it drops as it is at a script's word.
+local function dropped_at_word(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_move_cnt(0)
+        mot_play_spxz(e, 3, 0)
+        if e:sce_free(0) ~= 0 then
+            e:set_kind(e:kind() & ~0x4000)
+            e:set_sce_free(0, 0)
+            set_r2(e, 1)
+            local x, _, z = e:speed()
+            e:set_speed(x, 0, z)
+            e:clip(0x13, 0, 0xF)
+        end
+    elseif state == 1 then
+        fall(e)
+        e:set_move_cnt(0)
+        e:joint(0x100)
+        if landing(e) then
+            e:set_var(GUN_AREA, 3)
+            e:sound(2)
+            atd_set(e)
+            e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+            e:set_move_no(0)
+            set_r2(e, 2)
+        end
+    elseif state == 2 then
+        e:set_pos_y(0)
+        e:step(mot_play(e, 0x13, 0, false))
+    elseif state == 3 then
+        mot_play_spxz(e, 3, 3)
+        raise_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 4)
+        if e:sce_free(0) ~= 0 then
+            e:go(0xE)
+        end
+    end
+end
+
+-- `Routine_1` 0x12: a script's walk: still, then its own steps, and each word
+-- moves it on.
+local function walk_by_script(e)
+    local state = r2(e)
+    if state == 0 then
+        raise_flag(e, FLAG_QUIET)
+        e:set_move_cnt(0)
+        mot_play(e, 0, 0, false)
+        if e:sce_free(0) ~= 0 then
+            e:set_sce_free(0, 0)
+            e:set_move_no(0xFF)
+            set_r2(e, 1)
+        end
+    elseif state == 1 then
+        mot_play_sp(e, 0, 0)
+        if e:sce_free(0) ~= 0 then
+            set_r2(e, 2)
+        end
+    end
+end
+
+-- `Routine_1` 0x16: on a wall until a script says, and down it.
+local function leap_by_script(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_be_flg(e:be_flg() | BE_NO_SCA)
+        mot_play(e, 0xE, 0, false)
+        e:set_move_no(0)
+        e:set_move_cnt(0)
+        if e:sce_free(0) ~= 0 then
+            set_r2(e, 1)
+        end
+    elseif state == 1 then
+        if e:move_cnt() > 4 then
+            e:approach_y(0, 100)
+        end
+        if mot_play_sp(e, 0xE, 0) then
+            e:go(5)
+            e:set_kind(e:kind() & 0x0FFF)
+            e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+        end
+    end
+end
+
+-- `WORD_00527a58`: the turn up a surface, by its axis and the side it's going to.
+local CLIMB_TURNS <const> = {
+    [0] = { 0, 0, -1024 }, { -1024, 0, 0 }, { 0, 0, 1024 }, { 1024, 0, 0 },
+    { 0, 0, 1024 }, { 1024, 0, 0 }, { 0, 0, -1024 }, { -1024, 0, 0 },
+    { 0, -1024, 0 }, { 0, 0, -1024 }, { 0, 1024, 0 }, { 0, 0, 1024 },
+    { 0, 1024, 0 }, { 0, 0, 1024 }, { 0, -1024, 0 }, { 0, 0, -1024 },
+    { -1024, 0, 0 }, { 0, -1024, 0 }, { 1024, 0, 0 }, { 0, 1024, 0 },
+    { 1024, 0, 0 }, { 0, 1024, 0 }, { -1024, 0, 0 }, { 0, -1024, 0 },
+}
+
+-- `FUN_004654f0`: whether there's a surface to climb onto ahead of it, and the
+-- wall if it's one. On a wall, it looks for the ceiling or the floor.
+local function surface_ahead(e)
+    local x, y, z = e:pos()
+    local by_x, by_y, by_z = e:super_rotate(e:angle(), 0x898, 0, 0)
+    x, y, z = x + by_x, y + by_y, z + by_z
+    if e:super_plane() == 0 then
+        local wall = e:sca_list(x, z, e:floor(), 0x200)[1]
+        return wall ~= nil, wall
+    end
+    local over, under = e:sca_hit(x, y, z, 0x600)
+    if over < y then
+        e:set_var(DEST_Y, over)
+        return true
+    end
+    if y < under then
+        e:set_var(DEST_Y, under)
+        return true
+    end
+    return false
+end
+
+-- `FUN_00465610`: where the climb ends.
+local function climb_to(e, wall)
+    local x, y, z = e:pos()
+    local side = 0
+    local flags = e:flags()
+    if wall then
+        e:set_var(WALL, wall)
+        local edge_x, _, edge_z = e:sca_onto_edge(wall, x, y, z)
+        side = e:sca_face(wall, x, y, z)
+        local by_x, by_z = e:rotate(side << 10, 0x8A2, 0)
+        e:set_var(DEST_X, edge_x + by_x)
+        e:set_var(DEST_Z, edge_z + by_z)
+        flags = (flags & ~FLAG_ARRIVED) | FLAG_ARRIVED_Y
+    else
+        e:set_var(DEST_X, x)
+        e:set_var(DEST_Z, z)
+        local plane = e:super_plane()
+        local to = e:var(DEST_Y)
+        if plane == 1 then
+            if y < to then
+                side = 1
+                e:set_var(DEST_Y, to - 0x898)
+            else
+                side = 3
+                e:set_var(DEST_Y, to + 0x898)
+            end
+        elseif plane == 2 then
+            if to <= y then
+                e:set_var(DEST_Y, to + 0x898)
+            else
+                e:set_var(DEST_Y, to - 0x898)
+                side = 2
+            end
+        end
+        flags = (flags & ~FLAG_ARRIVED_Y) | FLAG_ARRIVED
+    end
+    e:set_flags(flags)
+    e:set_var(NEXT_SIDE, side ~ 2)
+    e:set_be_flg(e:be_flg() | BE_NO_SCA)
+end
+
+-- `FUN_00465790`.
+local function climb_step(e)
+    if not has_flag(e, FLAG_ARRIVED) then
+        if e:approach(e:var(DEST_X), e:var(DEST_Z), 0x30) then
+            raise_flag(e, FLAG_ARRIVED)
+        end
+    end
+    if not has_flag(e, FLAG_ARRIVED_Y) then
+        if e:approach_y(e:var(DEST_Y), 0x30) then
+            raise_flag(e, FLAG_ARRIVED)
+        end
+    end
+    e:goto_angle_super(e:var(NEXT_SIDE) << 10, 0x20)
+end
+
+-- `FUN_00465820`.
+local function climb_end(e)
+    local x, y, z = e:super_rotate(e:angle(), 0x898, -0x69D, 0)
+    local here_x, _, here_z = e:pos()
+    e:add_pos(e:var(DEST_X) + x - here_x, y, e:var(DEST_Z) + z - here_z)
+    local turn = CLIMB_TURNS[e:super_axis() * 4 + e:var(NEXT_SIDE)]
+    e:super_add(turn[1], turn[2], turn[3])
+    e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+end
+
+-- Each wall, by how far the point is from its nearest side.
+local function nearest_wall(e)
+    local x, _, z = e:pos()
+    local best, nearest = 0x7FFFFFFF, nil
+    for _, record in ipairs(e:sca_all(0xF, 0x200)) do
+        local left, near, width, depth = e:sca_rect(record)
+        local side = e:sca_side(record, x, z)
+        local distance
+        if side == 0 then
+            distance = x - width - left
+        elseif side == 1 then
+            distance = near - z
+        elseif side == 2 then
+            distance = left - x
+        else
+            distance = z - depth - near
+        end
+        if distance < 0 then
+            distance = -distance
+        end
+        if distance < best then
+            best, nearest = distance, record
+        end
+    end
+    return nearest
+end
+
+-- `Routine_1` 1: wounded, it goes up the nearest wall.
+local function climb(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_move_no(1)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        if not has_flag(e, FLAG_UP) then
+            e:step(mot_play(e, 6, 0xF, false))
+            return
+        end
+        set_r2(e, 2)
+        state = 2
+    end
+    if state == 2 then
+        raise_flag(e, FLAG_UP)
+        e:set_var(GUN_AREA, 4)
+        local record = nearest_wall(e)
+        local left, near, width, depth = e:sca_rect(record)
+        e:set_var(DEST_X, (width >> 1) + left)
+        e:set_var(DEST_Z, (depth >> 1) + near)
+        e:set_move_cnt(1)
+        e:set_var(TIMER0, 0)
+        set_r2(e, 3)
+        state = 3
+    end
+    if state == 3 then
+        e:goto_super(e:var(DEST_X), 0, e:var(DEST_Z), 0x40)
+        if e:sca_info() & 1 ~= 0 then
+            e:set_timer1(e:timer1() + 1)
+        end
+        if e:var(TIMER0) > 0xB3 then
+            e:routines(1, 0, 0, 0)
+        end
+        local found, wall = surface_ahead(e)
+        if found then
+            climb_to(e, wall)
+            raise_flag(e, FLAG_FALLING | FLAG_CLIMBING)
+            e:set_be_flg(e:be_flg() | BE_NO_PUSH)
+            set_r2(e, r2(e) + 1)
+        end
+        mot_play_sp(e, 0, 0xF)
+    elseif state == 4 then
+        if mot_play(e, 0x11, 0xF, false) then
+            climb_end(e)
+            lower_flag(e, FLAG_FALLING)
+            set_r2(e, 5)
+        else
+            climb_step(e)
+        end
+    elseif state == 5 then
+        local found, wall = surface_ahead(e)
+        if found then
+            lower_flag(e, FLAG_UP)
+            e:set_be_flg(e:be_flg() & ~BE_NO_PUSH)
+            e:set_var(GUN_AREA, 1)
+            climb_to(e, wall)
+            set_r2(e, 6)
+        end
+        mot_play_sp(e, 0, 0xF)
+    elseif state == 6 then
+        if mot_play(e, 0x11, 0xF, false) then
+            climb_end(e)
+            lower_flag(e, FLAG_CLIMBING)
+            e:go(0x15)
+        else
+            climb_step(e)
+        end
+    end
+end
+
+-- `Routine_1` 0x15: across the ceiling, until it's over the player.
+local function cross_ceiling(e)
+    local state = r2(e)
+    if state == 0 then
+        e:set_move_no(1)
+        set_r2(e, 1)
+        e:set_var(TIMER0, 0)
+        e:set_var(TURN, 0)
+    elseif state ~= 1 then
+        return
+    end
+    e:set_var(TIMER0, e:var(TIMER0) + 1)
+    local x, y, z = e:player_pos()
+    e:goto_super(x, y, z, 0x40)
+    mot_play_sp(e, 0, 0xF)
+    if e:distance() < 0x9C4 or e:var(TIMER0) > 0xFF then
+        e:set_var(AWARE, 2)
+        e:go(0xB)
+    end
+end
+
 local MOVES <const> = {
     [0] = idle,
+    [1] = climb,
     [2] = turn_to,
     [3] = get_up,
     [4] = get_down,
     [5] = hesitate,
     [6] = back_off,
+    [7] = walk_wall,
     [8] = tongue_attack,
     [9] = slash,
     [0xA] = jump,
+    [0xB] = hang,
     [0xC] = stalk,
+    [0xD] = come_down,
     [0xE] = listen,
     [0xF] = decide,
+    [0x10] = dropped_by_script,
+    [0x11] = dropped_at_word,
+    [0x12] = walk_by_script,
     [0x13] = chase,
     [0x14] = run_at,
+    [0x15] = cross_ceiling,
+    [0x16] = leap_by_script,
+    [0x17] = hang_scripted,
 }
 
 mv = function(e)
     local move = MOVES[e:routine(1)]
     if move then
         move(e)
-    else
-        -- A wall or the ceiling, which isn't ported: it stays and listens.
-        e:go(0xE)
     end
 end
 
--- `FUN_00467040`, on the floor.
+-- It's on its feet on the floor, not on a wall or in the air.
+local function on_floor(e)
+    local _, y = e:pos()
+    return e:var(WALL) == 0 and e:ground() <= y
+end
+
+-- `FUN_00467040`.
 local function pick_damage(e)
     if has_flag(e, FLAG_FALLING) then
         e:set_damage_no(0)
@@ -1143,6 +1874,10 @@ local function pick_damage(e)
     end
     if has_flag(e, FLAG_JUMPING) then
         e:set_damage_no(7)
+        return
+    end
+    if not on_floor(e) then
+        e:set_damage_no(has_flag(e, FLAG_CLIMBING) and 5 or 2)
         return
     end
     local behind = e:cdir_player()
@@ -1409,6 +2144,143 @@ local function shot_down(e)
     end
 end
 
+-- The landing after a hit on a wall: flat out, and over, unless that ends it.
+local function wall_hit_turns_over(e, state)
+    if state == 5 then
+        if e:life() < 0 then
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+            e:set_var(GUN_AREA, 3)
+            e:set_be_flg(e:be_flg() & ~(BE_NO_PUSH | BE_NO_SCA))
+            set_r2(e, r2(e) + 1)
+            return
+        end
+        e:clip(0x16, 0, 0)
+        set_r3(e, 6)
+        step_r3(e, e:joint(0x1000))
+    elseif state == 7 then
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        e:set_var(GUN_AREA, 3)
+        e:set_be_flg(e:be_flg() & ~(BE_NO_PUSH | BE_NO_SCA))
+        after_hurt(e)
+    else
+        step_r3(e, e:joint(0x1000))
+    end
+end
+
+-- It's down: the floor's boxes, and its head in the fall's last frame.
+local function wall_hit_lands(e)
+    e:clip(0x19, 0, 0)
+    e:joint(0x400)
+    local _, y = e:pos()
+    if y >= 0 then
+        e:set_var(WALL, 0)
+        atd_set(e)
+        e:set_be_flg(e:be_flg() & ~BE_NO_SCA)
+        set_r3(e, 4)
+        e:clip(0x19, 0, 0)
+        step_r3(e, e:joint(0x1000))
+    end
+end
+
+-- Case 2: shot off a wall.
+local function shot_off_wall(e)
+    local state = r3(e)
+    if state == 0 then
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:sound(7)
+        hit_blood(e, false)
+        local timer3 = e:var(TIMER3)
+        local x, z = 0, 0
+        if timer3 == 0 then
+            x = 0x96
+        elseif timer3 == 1 then
+            z = -0x96
+        elseif timer3 == 2 then
+            x = -0x96
+        else
+            z = 0x96
+        end
+        e:set_speed(x, 0, z)
+        local timer2 = e:var(TIMER2)
+        if timer2 == 0 then
+            timer2 = 4
+        end
+        e:clip(timer3 - timer2 < 0 and 0x17 or 0x18, 0, 0)
+        raise_flag(e, FLAG_UP)
+        set_r3(e, 1)
+        e:set_var(TIMER0, 4)
+        step_r3(e, e:joint(0x1000))
+    elseif state == 2 or state == 3 then
+        if state == 2 then
+            e:add_pos(0, 0x4F5, 0)
+            e:set_angle(((e:var(TIMER2) - 2) * 0x400) & 0xFFF)
+            e:init_super()
+            set_r3(e, 3)
+        end
+        wall_hit_lands(e)
+    else
+        wall_hit_turns_over(e, state)
+    end
+    local x, speed, z = e:speed()
+    local _, y = e:pos()
+    if speed + 0x48 + y < 0 then
+        speed = speed + 0x30
+        e:set_speed(x, speed, z)
+        e:add_pos(x, speed, z)
+    else
+        e:set_pos_y(0)
+    end
+end
+
+-- Case 5: shot as it climbs.
+local function shot_climbing(e)
+    local state = r3(e)
+    if state == 0 or state == 1 then
+        if state == 0 then
+            e:set_damage_cnt(e:damage_cnt() | 0x80)
+            e:sound(7)
+            hit_blood(e, false)
+            raise_flag(e, FLAG_UP)
+            e:set_speed(0, 0, 0)
+            e:clip(0x22, 0, 0)
+            set_r3(e, 1)
+            e:set_var(TIMER0, 4)
+        end
+        step_r3(e, e:joint(0x1000))
+        if e:move_cnt() < 6 then
+            local x, _, z = e:speed()
+            e:set_speed(x, 0, z)
+        end
+    elseif state == 2 or state == 3 then
+        if state == 2 then
+            e:add_pos(0, 0x4F5, 0)
+            local axis = e:super_axis()
+            if axis == 2 then
+                e:add_pos(-600, 0, 0)
+            elseif axis == 3 then
+                e:add_pos(600, 0, 0)
+            elseif axis == 4 then
+                e:add_pos(0, 0, -600)
+            elseif axis == 5 then
+                e:add_pos(0, 0, 600)
+            end
+            e:init_super()
+            set_r3(e, 3)
+        end
+        wall_hit_lands(e)
+    else
+        wall_hit_turns_over(e, state)
+    end
+    local x, speed, z = e:speed()
+    local _, y = e:pos()
+    if speed + y + 0x48 < 0 then
+        e:add_pos(x, speed, z)
+        e:set_speed(x, speed + 0x30, z)
+    else
+        e:set_pos_y(e:ground())
+    end
+end
+
 -- `Em22_Damage`.
 local function damage(e)
     if e:routine(1) ~= 0xFF then
@@ -1430,6 +2302,10 @@ local function damage(e)
         hurt(e)
     elseif kind == 1 or kind == 6 then
         knocked(e)
+    elseif kind == 2 then
+        shot_off_wall(e)
+    elseif kind == 5 then
+        shot_climbing(e)
     elseif kind == 3 then
         flinch(e)
     elseif kind == 4 then
@@ -1497,6 +2373,41 @@ local function die_in_air(e)
     end
 end
 
+-- A hit that ends it on a wall (cases 2 and 4): down as ever, and it stays there.
+local function die_on_wall(e, shot)
+    local state = r2(e)
+    if state == 0 then
+        shot(e)
+    elseif state == 1 then
+        e:sound(8)
+        set_r2(e, 2)
+    elseif state == 2 and mot_play(e, 0xB, 0xF, false) then
+        e:set_fading(1)
+        set_r2(e, 3)
+    end
+end
+
+-- Case 3: while it was falling off a wall.
+local function die_falling(e)
+    local state = r2(e)
+    if state == 0 then
+        e:init_super()
+        e:sound(8)
+        hit_blood(e, false)
+        e:set_move_no(0)
+        set_r2(e, 1)
+        state = 1
+    end
+    if state == 1 then
+        e:step(mot_play(e, 9, 0, false))
+    elseif state == 2 then
+        set_r2(e, 3)
+    elseif state == 3 and mot_play(e, 0xB, 0xF, false) then
+        e:set_fading(1)
+        set_r2(e, 4)
+    end
+end
+
 -- `Em22_Die`.
 local function die(e)
     if e:routine(1) ~= 0xFF then
@@ -1504,10 +2415,15 @@ local function die(e)
         e:set_routine(1, 0xFF)
         e:set_var(TARGET, 1)
         e:set_died()
-        if has_flag(e, FLAG_JUMPING) then
+        -- `FUN_00468320`.
+        if has_flag(e, FLAG_FALLING) then
+            e:set_damage_no(3)
+        elseif has_flag(e, FLAG_JUMPING) then
             e:set_damage_no(5)
-        else
+        elseif on_floor(e) then
             e:set_damage_no(e:cdir_player() and 1 or 0)
+        else
+            e:set_damage_no(has_flag(e, FLAG_CLIMBING) and 4 or 2)
         end
     end
     local kind = e:damage_no()
@@ -1515,10 +2431,20 @@ local function die(e)
         die_front(e)
     elseif kind == 1 then
         die_back(e)
+    elseif kind == 2 then
+        die_on_wall(e, shot_off_wall)
+    elseif kind == 3 then
+        die_falling(e)
+    elseif kind == 4 then
+        die_on_wall(e, shot_climbing)
     elseif kind == 5 then
         die_in_air(e)
     end
 end
+
+-- `BYTE_00527c7c` and `BYTE_00527c80`, by `Type`: where it starts.
+local STARTS <const> = { [0] = 0, 7, 0xB, 0x17 }
+local STARTS_SCRIPTED <const> = { [0] = 0x10, 0x11, 0x12, 0x16 }
 
 -- `Em22_Init`.
 local function init(e)
@@ -1539,8 +2465,32 @@ local function init(e)
     e:set_var(TARGET, 1)
     e:set_reach(-500)
     e:set_be_flg(e:be_flg() & ~(BE_NO_OBA | BE_NO_SCA))
-    e:routines(1, 0, 0, 0)
-    atd_set(e)
+    local kind = e:kind()
+    local starts = kind & 0x4000 == 0 and STARTS or STARTS_SCRIPTED
+    e:routines(1, starts[kind & 0xF] or 0, 0, 0)
+    e:init_super()
+    local surface = (kind >> 8) & 0xF
+    if surface == 1 then
+        e:super_add(0, 0, 0x400)
+        e:set_var(TIMER3, 0)
+    elseif surface == 2 then
+        e:super_add(0, 0, -0x400)
+        e:set_var(TIMER3, 2)
+    elseif surface == 3 then
+        e:super_add(-0x400, 0, 0)
+        e:set_var(TIMER3, 3)
+    elseif surface == 4 then
+        e:super_add(0x400, 0, 0)
+        e:set_var(TIMER3, 1)
+    elseif surface == 5 then
+        e:super_add(0x800, 0x800, 0)
+    end
+    if surface >= 1 and surface <= 4 then
+        e:set_be_flg(e:be_flg() | BE_NO_SCA)
+        atd_set_up(e)
+    elseif surface == 0 or surface == 5 then
+        atd_set(e)
+    end
     e:set_be_flg((e:be_flg() & 0xEFFFFFFF) | 0xC000000)
     e:init_parts()
 end

@@ -1,10 +1,8 @@
-//! `Em_22`: the licker, on the floor.
+//! `Em_22`: the licker.
 //!
 //! Its behaviour is the script `enemy/22/enemy.lua`; this is what the script
-//! stands on: the fields the engine reads, the tongue's blend and the pushes at
-//! the end of its tick. The walls and the ceiling need the body's `Super_matrix`,
-//! which isn't ported: a licker the scripts start there doesn't spawn, and one
-//! that would climb stays down (`docs/re2-deviations.md`).
+//! stands on: the fields the engine reads, the tongue's blend, the turn of the
+//! surface it's on and the pushes at the end of its tick.
 
 use super::{Atd, Em, NO_BODY};
 use crate::player2;
@@ -24,13 +22,18 @@ const FLAG_QUIET: u16 = 4;
 const FLAG_NO_SCA: u16 = 0x100;
 
 /// How many of the work's fields the script keeps for itself.
-pub(super) const VARS: usize = 13;
+pub(super) const VARS: usize = 20;
 
 /// What `Em_22` keeps at the end of the work, and in its `Timer`s.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Licker {
     /// `Atd[1]`, the head.
     pub head: Atd,
+    /// `Atd[2]`, its back, which only counts on a wall or the ceiling
+    /// (`Em22_Atd_set_2`).
+    pub back: Option<Atd>,
+    /// `DAT_006894f0`: the turn the script asks of the surface this tick.
+    pub(super) super_add: [i16; 3],
     /// The script's fields (`e:var`), which only it reads.
     pub(super) vars: [i32; VARS],
     /// `+0x22c`.
@@ -49,6 +52,7 @@ pub struct Licker {
     pub(super) timer1: i16,
     /// `Sca_old_x`, `Sca_old_z`.
     sca_old: [i32; 2],
+    shadow_scale: Option<i32>,
     /// `Workm.t` of parts 0 and 1, which `Oba_set_ofs` reads from the last
     /// `Joint_trans2`.
     pub(super) part0: [i32; 3],
@@ -135,6 +139,12 @@ impl Licker {
         (self.tongue_shape != [0; 9]).then_some(&self.tongue_shape)
     }
 
+    /// `Em22_before`: how much of the shadow's size is left, the higher the
+    /// body the less, in 9000ths.
+    pub fn shadow_scale(&self) -> i32 {
+        self.shadow_scale.unwrap_or(9000)
+    }
+
     /// Where `MulKage` puts the shadow, `Off_x` ahead of the third part.
     pub fn shadow_at(&self, angle: u16) -> [i32; 3] {
         let (x, z) = player2::rotate(angle, 0xFA, 0);
@@ -161,7 +171,14 @@ impl Em22<'_, '_, '_, '_> {
         if self.em.z.damage_cnt & 0x7F != 0 {
             self.em.z.damage_cnt -= 1;
         }
+        self.l.super_add = [0; 3];
+        self.em.z.vars[super::DOG_GROUND] = self.ground();
         self.script();
+        if self.l.super_add != [0; 3] {
+            let work = self.em.work();
+            let (_, surface) = super::surface::turned(work.super_matrix, self.l.super_add);
+            work.super_matrix = Some(surface);
+        }
         self.tongue_move();
         if self.l.flags & FLAG_QUIET == 0 {
             let seq = self.em.mover.now_seq();
@@ -172,6 +189,19 @@ impl Em22<'_, '_, '_, '_> {
         self.em.z.last_routine = self.em.work().routine;
         self.oba_and_sca();
         self.joint_trans();
+        if self.em.work().routine[0] == 1 {
+            let above = self.l.part2[1] - self.ground();
+            self.l.shadow_scale = Some((above + 9000).max(0));
+        }
+    }
+
+    /// `Ground`, which `Game_loop` finds under the part the shadow follows.
+    fn ground(&mut self) -> i32 {
+        let at = self.l.part2;
+        let room = self.em.mover.tick.room;
+        room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, at, 0, super::MASK).height
+        })
     }
 
     /// `update` of `enemy/22/enemy.lua`. A pack without it leaves the licker
@@ -200,13 +230,19 @@ impl Em22<'_, '_, '_, '_> {
         let at = self.l.part0;
         self.oba_set_ofs(at);
         self.em.z.at_em_no = NO_BODY;
+        let old = Some(self.em.old_pos);
         for other in self.em.world.bodies {
             let body = &mut self.em.mover.player.pos;
             let be_flg = *self.em.be_flg;
-            if super::oba_hit(other, be_flg, &mut self.em.z.atd, body, None) {
+            if super::oba_hit(other, be_flg, &mut self.em.z.atd, body, old) {
                 self.em.z.at_em_no = other.slot;
             }
-            if super::oba_hit(other, be_flg, &mut self.l.head, body, None) {
+            if super::oba_hit(other, be_flg, &mut self.l.head, body, old) {
+                self.em.z.at_em_no = other.slot;
+            }
+            if let Some(back) = &mut self.l.back
+                && super::oba_hit(other, be_flg, back, body, old)
+            {
                 self.em.z.at_em_no = other.slot;
             }
         }
@@ -225,13 +261,19 @@ impl Em22<'_, '_, '_, '_> {
         body.collision_mirror = [body.pos[0], body.pos[2]];
     }
 
-    /// `Oba_set_ofs`: both boxes, the first reaching forward from its middle.
+    /// `Oba_set_ofs`: every box, each from its own offset on the surface.
     fn oba_set_ofs(&mut self, at: [i32; 3]) {
         let angle = self.em.mover.player.angle;
-        let (x, z) = player2::rotate(angle, 0x2A0, 0);
-        self.em.z.atd.at = [at[0] + x, at[1], at[2] + z];
-        let (x, z) = player2::rotate(angle, -0x60, 0);
-        self.l.head.at = [at[0] + x, at[1] + i32::from(self.l.head.ofs_y), at[2] + z];
+        let m = self.em.work().body_rotation(angle);
+        let place = |atd: &mut Atd| {
+            let ofs = super::surface::apply(&m, [i32::from(atd.ofs_x), i32::from(atd.ofs_y), 0]);
+            atd.at = std::array::from_fn(|axis| at[axis] + ofs[axis]);
+        };
+        place(&mut self.em.z.atd);
+        place(&mut self.l.head);
+        if let Some(back) = &mut self.l.back {
+            place(back);
+        }
     }
 
     /// `Sca_ck_em`, on `Atd[0]`.

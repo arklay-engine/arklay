@@ -5397,6 +5397,9 @@ impl GameSession {
             if self.loaded.re2_vm.is_some() {
                 self.game.room_actions = [None; game::ROOM_ACTION_SLOTS];
                 self.game.doors = [None; game::ROOM_ACTION_SLOTS];
+                // `Obj_model_set` on a slot in use would take it away.
+                let objects = self.game.objects.records.len();
+                self.game.objects.reset(objects);
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -14478,6 +14481,14 @@ fn run_re2_init(
     // `Sce_scheduler_set` ends in a pass of `Sce_scheduler_main`.
     vm.tick(&mut host);
     game.re2.sce_se_set();
+    // `Sce_kirakira_set`: the items' objects start to twinkle.
+    for record in &game.objects.records {
+        if record.be_flg & 1 != 0
+            && let Some((row, at)) = crate::objects::twinkle(record)
+        {
+            game.re2.effects.call(5, row, 0x2800, 0, at, false);
+        }
+    }
     game.re2.clear_tick_flags();
     game.re2.room_loading = false;
     game.re2.vm = Some(Box::new(vm));
@@ -14719,6 +14730,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         targets: &targets,
         neck_targets: &neck_targets,
     };
+    let old = context.player.pos;
     let arrived = if crate::player2::is_held(&context.game.re2.player) {
         crate::character2::player_held(context.game, context.player, &tick);
         None
@@ -14728,7 +14740,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     if !tick.stopped {
         crate::character2::mag_down(context.game, context.player);
     }
-    crate::character2::oba_ck_em2(context.game, context.player);
+    crate::character2::oba_ck_em2(context.game, context.player, old);
     context.game.re2_settle_ammo();
     crate::character2::shoot_camera(
         context.game,
@@ -15148,6 +15160,11 @@ fn tick_room_timed(
             let base = &mut context.game.re2.player.base;
             base[0] = base[0].wrapping_add((resolution.pos[0] - moved[0]) as i16);
             base[2] = base[2].wrapping_add((resolution.pos[2] - moved[2]) as i16);
+            // `Sca_ck_em` pushes `Atd[0]` itself.
+            if let Some(atd) = &mut context.game.re2.player.atd {
+                atd.at[0] += resolution.pos[0] - moved[0];
+                atd.at[2] += resolution.pos[2] - moved[2];
+            }
         }
         context.player.pos = resolution.pos;
         context.game.entities[0].pos = context.player.pos;
@@ -16669,6 +16686,11 @@ fn render_frame_on(
                 },
                 |half| (half, half),
             );
+            let licker = character.zombie.as_ref().and_then(|z| z.licker.as_ref());
+            let (half_x, half_z) = licker.map_or((half_x, half_z), |licker| {
+                let scale = licker.shadow_scale();
+                (half_x * scale / 9000, half_z * scale / 9000)
+            });
             let grown = pool.unwrap_or(0);
             let at = character
                 .zombie
@@ -16996,13 +17018,25 @@ fn render_frame_on(
             .zombie
             .as_ref()
             .map_or([0; 2], |zombie| zombie.tilt);
-        let matrix = anim::entity_matrix_rotated_scaled(
+        let mut matrix = anim::entity_matrix_rotated_scaled(
             character.body.pos,
             pitch,
             character.body.angle,
             roll,
             0,
         );
+        if let Some(surface) = character.work.super_matrix {
+            // `matrix.r` turns a flipped Y, and the surface a real one.
+            let flip =
+                |row: usize, column: usize| i32::from(row == 1) ^ i32::from(column == 1) != 0;
+            let surface = std::array::from_fn(|row| {
+                std::array::from_fn(|column| {
+                    let value = i32::from(surface[row][column]);
+                    if flip(row, column) { -value } else { value }
+                })
+            });
+            matrix.r = anim::mul_matrix0(&surface, &matrix.r);
+        }
         let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
         let mut hidden_parts = character.work.hidden_parts;
         let mut flung = 0;
