@@ -112,6 +112,27 @@ proc init
             set(FG_LOCK, F_LOCK_01, TRUE);
         }
     }
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // A whole lock byte names the map's flags: 0x0F for the door to 109
+        // and 0x10 for the door to 116.
+        if (ck(FG_LOCK, F_LOCK_00, TRUE))
+        {
+            set(FG_LOCK, F_LOCK_0F, TRUE);
+        }
+        else
+        {
+            set(FG_LOCK, F_LOCK_0F, FALSE);
+        }
+        if (ck(FG_LOCK, F_LOCK_01, TRUE))
+        {
+            set(FG_LOCK, F_LOCK_10, TRUE);
+        }
+        else
+        {
+            set(FG_LOCK, F_LOCK_10, FALSE);
+        }
+    }
 }
 
 event event_00 when (JILL)
@@ -343,6 +364,11 @@ event event_01 when (JILL)
     run
     {
         door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 4, DOOR_SND_02_DR_BRK, DOOR_00_DOOR00, 0, DOOR_LOCKED | F_LOCK_00, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Lock 0x0F mirrors F_LOCK_00, which the event raises next.
+            set(FG_LOCK, F_LOCK_0F, TRUE);
+        }
         voice_play(VOICE_PLAY, VO_105_04);
         message(MSG_VO_105_04, 0);
     }

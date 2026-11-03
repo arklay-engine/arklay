@@ -26,6 +26,12 @@
 
 proc init
 {
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // The door to 115 opens from this side (115's script locks it
+        // from inside).
+        set(FG_LOCK, F_LOCK_10, TRUE);
+    }
     door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_01, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_00, SAT_MANUAL | SAT_PLAYER, 0);
     // Under ITEM_RANDOMIZER the slot keeps its own amount and the shotgun

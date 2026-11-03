@@ -40,11 +40,35 @@ proc init
     }
     door_aot_set(AOT_00_DOOR, 15200, 2400, 2000, 2600, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_109_TRAP_PASSAGE, 2700, 0, 8500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 1800, 1000, 2400, 1400, 2, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, DOOR_LOCK_40, ROOM_117_LARGE_GALLERY, 2900, 0, 10000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // Rebecca is turned away (the original lock byte's 0x40).
+        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+        {
+            aot_set(AOT_01_DOOR, 1800, 1000, 2400, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+        }
+    }
     door_aot_set(AOT_02_DOOR, 7800, 5200, 1500, 1700, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_18, ROOM_119_STUDY, 6300, 0, 2700, 3072, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // Rebecca is turned away (the original lock byte's 0x40).
+        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+        {
+            aot_set(AOT_02_DOOR, 7800, 5200, 1500, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+        }
+    }
     door_aot_set(AOT_03_DOOR, 10600, 5200, 2000, 1700, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCKED | F_LOCK_14, ROOM_10B_1F_RIGHT_STAIRS, 3300, 0, 6600, 3072, LOCK, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {
         door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
         enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
     }
@@ -53,6 +77,14 @@ proc init
         if (CHRIS)
         {
             door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+            if (BR_LOCK_FULL_BYTE)
+            {
+                // Rebecca is turned away (the original lock byte's 0x40).
+                if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+                {
+                    aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+                }
+            }
             if (ck(FG_COMMON, F_COMMON_2B, FALSE))
             {
                 if (ck(FG_COMMON, F_COMMON_64, TRUE))

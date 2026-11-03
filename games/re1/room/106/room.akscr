@@ -110,12 +110,28 @@ proc init
     set(FG_STATUS, F_STATUS_1C, TRUE);
     door_aot_set(AOT_00_DOOR, 31100, 10000, 2000, 3000, 6, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 31100, 18600, 2000, 1200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_05, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // Rebecca is turned away (the original lock byte's 0x40).
+        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+        {
+            aot_set(AOT_01_DOOR, 31100, 18600, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+        }
+    }
     door_aot_set(AOT_02_DOOR, 1000, 15000, 1950, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
             door_aot_set(AOT_03_DOOR, 14600, 800, 5200, 2200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_05, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+            if (BR_LOCK_FULL_BYTE)
+            {
+                // Rebecca is turned away (the original lock byte's 0x40).
+                if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+                {
+                    aot_set(AOT_03_DOOR, 14600, 800, 5200, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+                }
+            }
         }
         else
         {

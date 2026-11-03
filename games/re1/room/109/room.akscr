@@ -50,12 +50,42 @@
 
 proc init
 {
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // The door to 115 opens from this side (115's script locks it
+        // from inside).
+        set(FG_LOCK, F_LOCK_0F, TRUE);
+    }
     door_aot_set(AOT_00_DOOR, 23400, 800, 2000, 1700, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_108_L_PASSAGE, 25000, 0, 25300, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {
         door_aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, 2, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_04, ROOM_114_BOILER, 10030, 0, 23449, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, 0, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 7, DOOR_LOCK_40, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
     }
     else
     {

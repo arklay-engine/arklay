@@ -82,6 +82,14 @@ proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
     door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // Rebecca is turned away (the original lock byte's 0x40).
+        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+        {
+            aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+        }
+    }
     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_47, SAT_MANUAL | SAT_PLAYER, 0);
     aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);

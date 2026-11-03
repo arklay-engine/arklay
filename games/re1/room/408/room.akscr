@@ -58,6 +58,14 @@ proc init
         if (CHRIS)
         {
             door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+            if (BR_LOCK_FULL_BYTE)
+            {
+                // Rebecca is turned away (the original lock byte's 0x40).
+                if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+                {
+                    aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+                }
+            }
         }
         else
         {

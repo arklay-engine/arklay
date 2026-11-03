@@ -34,8 +34,32 @@ proc init
         door_aot_set(AOT_00_DOOR, 0, 23700, 2500, 2100, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_101_1F_LEFT_STAIRS, 19000, 0, 20500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_01_DOOR, 800, 500, 3200, 2500, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 1, DOOR_LOCKED | F_LOCK_12, ROOM_104_TEA_ROOM, 15800, 0, 3700, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_02_DOOR, 19000, 17700, 2500, 2400, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCK_40, ROOM_10C_GREEN_HOUSE, 13600, 0, 7400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR, 19000, 17700, 2500, 2400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_03_DOOR, 7500, 15100, 2300, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCK_40, ROOM_10D_TIGER_STATUE_ROOM, 5600, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_03_DOOR, 7500, 15100, 2300, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_04_DOOR, 0, 10100, 2400, 1600, 2, DOOR_SND_00_DR_WD, DOOR_1C_DOOR00K, 3, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_0B, ROOM_10E_EMPLOYEE_ROOM, 7400, 0, 10700, 2048, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_04_DOOR, 0, 10100, 2400, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_29, SPAWN_FORCE, 2, 0, 1024, 0, 8380, 0, 25515, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         if (CHRIS)
         {

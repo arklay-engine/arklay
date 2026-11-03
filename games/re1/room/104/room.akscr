@@ -43,10 +43,26 @@ proc init
     if (MANSION1)
     {
         door_aot_set(AOT_02_DOOR, 31500, 1900, 2300, 1800, 6, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_13, ROOM_110_1F_ELEVATOR, 0, 0, 0, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR, 31500, 1900, 2300, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
     }
     else
     {
         door_aot_set(AOT_02_DOOR, 31500, 1900, 2300, 1800, 6, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_13, ROOM_110_1F_ELEVATOR, 12700, -7200, 3300, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR, 31500, 1900, 2300, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
     }
     door_aot_set(AOT_03_DOOR, 10600, 0, 2800, 2300, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_105_DINING_ROOM, 6300, 0, 14100, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
