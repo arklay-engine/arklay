@@ -77,8 +77,8 @@
 //! phase-2 hold, and `Door_move` reads a fresh skip press on every frame.
 //! A skip only stops the door's task 10 ([`DoorStepper::finish`]); the
 //! animation still ends when the stepper says so, after its own fade.
-//! `Sce_Door` starts `Game_loop`'s door path, which holds the room on screen
-//! for [`RE2_FADE_TICKS`] while `Psx_main` darkens it, before `Set_door` loads
+//! `Sce_Door` starts `Game_loop`'s door path, which holds the game for
+//! [`RE2_FADE_TICKS`] while `Psx_main` darkens the room, before `Set_door` loads
 //! the door and places the player, with `Set_room` running from the next tick.
 //! There is no menu-path `set_fading`. The
 //! original's `Door_exit` and `Set_door`'s tail hand back a tick sooner than
@@ -93,10 +93,10 @@ pub const SKIP_AFTER_FRAME: u32 = 10;
 /// Leading frames an RE2 door draws black: `Door_init`'s pass.
 pub const RE2_BLACK_FRAMES: u32 = 1;
 /// The ticks `Psx_main` keeps darkening the frozen room (`fg_system`'s
-/// `0x10000`) before `Set_door` starts, the tick after the door fired.
+/// `0x10000`) before `Set_door` starts, the tick after the door fired. The
+/// PC version skips `Swap_Cbuff` on those ticks, so the darkening is never
+/// presented and the screen is black from the first of them.
 pub const RE2_FADE_TICKS: u8 = 32;
-/// What `Fade_adjust` takes off every channel per tick of that hold.
-const RE2_FADE_STEP: u8 = 8;
 
 /// Which game's door loop the timeline follows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -390,7 +390,7 @@ pub struct TransitionFrame {
     pub finished: bool,
     /// The animation's sound-busy wait state.
     pub sound_busy: bool,
-    /// RE2's hold before the door: the room stays on screen under this veil.
+    /// RE2's hold before the door: the room is drawn under this veil.
     pub room_veil: Option<Overlay>,
 }
 
@@ -623,7 +623,7 @@ impl<S: DoorStepper> Transition<S> {
             MainTask::Settle if self.timing == Timing::Re2 && self.room_fade < RE2_FADE_TICKS => {
                 self.room_fade += 1;
                 out.room_veil = Some(Overlay {
-                    alpha: self.room_fade.saturating_mul(RE2_FADE_STEP),
+                    alpha: 255,
                     color: FadeColor::Black,
                 });
             }
@@ -934,10 +934,11 @@ mod tests {
             .with_fade(2, -6144, -4097)
             .with_load(true, false)
             .with_timing(Timing::Re2);
-        // `Psx_main` darkens the room first, with nothing of the door running.
-        for tick in 1..=RE2_FADE_TICKS {
+        // `Psx_main` holds the game first, with nothing of the door running,
+        // and the PC version presents none of it.
+        for _ in 1..=RE2_FADE_TICKS {
             let veil = transition.tick(false).room_veil.expect("the room is up");
-            assert_eq!(veil.alpha, tick.saturating_mul(RE2_FADE_STEP));
+            assert_eq!(veil.alpha, 255);
         }
         assert_eq!(transition.stepper().steps, 0);
         // `Set_door` starts no fade; the animation's first pass is the third
