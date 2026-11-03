@@ -2026,8 +2026,13 @@ struct GameSession {
     /// The room the GPU residency was last recorded for; a change retires
     /// the previous room's uploads.
     gpu_room: Option<RoomId>,
-    /// The room and camera as this tick began: what RE2 draws.
+    /// The room and camera as the tick before this one began: what RE2 draws.
+    /// `Bg_loadPC` takes the new view at the end of the tick that changes the
+    /// cut, and the original then shows the frame before the cut for one more
+    /// tick too.
     drawn_cut: Option<(RoomId, usize)>,
+    /// The room and camera as this tick began, which `drawn_cut` takes next.
+    tick_cut: Option<(RoomId, usize)>,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -2602,6 +2607,7 @@ impl GameSession {
             gpu_backend: false,
             gpu_room: None,
             drawn_cut: None,
+            tick_cut: None,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -2844,7 +2850,12 @@ impl GameSession {
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
         self.game.countdown_hud = None;
         self.finish_menu_request(pack);
-        self.drawn_cut = Some((self.loaded.id, self.loaded.room.current_cut));
+        let cut = Some((self.loaded.id, self.loaded.room.current_cut));
+        self.drawn_cut = self
+            .tick_cut
+            .filter(|(room, _)| *room == self.loaded.id)
+            .or(cut);
+        self.tick_cut = cut;
         self.buffer_half ^= 1;
         if self
             .cutscene_skip
@@ -6912,7 +6923,7 @@ impl GameSession {
                 None
             };
             // RE2's new view comes in at the frame's swap (`Bg_loadPC`), so the
-            // tick that changes the cut still draws the old one.
+            // tick that changes the cut and the one after still draw the old one.
             let cut = self.loaded.room.current_cut;
             if let Some((_, drawn)) = self
                 .drawn_cut
