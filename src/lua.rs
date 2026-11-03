@@ -549,6 +549,8 @@ mod imp {
                     // script's `pos_set`, so it holds during a session too.
                     if game.is_re2_room {
                         game.re2.pending_player.pos = Some([x, y, z]);
+                        game.re2.pending_player.warp = Some([x, y, z]);
+                        game.re2.player.floor = crate::sca::floor_of(y);
                     }
                     Ok(())
                 },

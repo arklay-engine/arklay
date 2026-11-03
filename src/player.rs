@@ -3021,15 +3021,21 @@ pub(crate) fn resolve_room_collision(
     let Some(sca) = &room.sca else {
         return resolve_collision_full(&room.collision, prev, proposed, radius, collision_flags);
     };
-    let resolved = crate::sca::resolve(sca, prev, proposed, radius);
-    CollisionResolution {
-        pos: resolved.pos,
-        code: u8::from(resolved.hit),
-        floor_step: 0,
-        scratch: resolved.pos,
-        push_z: resolved.push_z,
-        entity_bkp: None,
-        soft_zone: false,
+    CollisionResolution::from_sca(crate::sca::resolve(sca, prev, proposed, radius))
+}
+
+impl CollisionResolution {
+    /// An RE2 room's pass, which has no floor steps, backups or soft zones.
+    pub(crate) fn from_sca(resolved: crate::sca::Resolved) -> Self {
+        Self {
+            pos: resolved.pos,
+            code: u8::from(resolved.hit),
+            floor_step: 0,
+            scratch: resolved.pos,
+            push_z: resolved.push_z,
+            entity_bkp: None,
+            soft_zone: false,
+        }
     }
 }
 

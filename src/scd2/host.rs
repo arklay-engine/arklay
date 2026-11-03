@@ -131,6 +131,9 @@ pub struct SoundRequest {
 pub struct PendingPlayer {
     pub pos: Option<[i32; 3]>,
     pub angle: Option<u16>,
+    /// A warp, which also moves `Old_x` and `Old_z`. A script's `pos_set`
+    /// leaves them, so the next push starts from the last tick.
+    pub warp: Option<[i32; 3]>,
 }
 
 /// An edit of the room's camera switch zones.

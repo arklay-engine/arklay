@@ -258,6 +258,10 @@ pub enum Bank {
 pub struct Work {
     /// `Routine_0`..`3`.
     pub routine: [u8; 4],
+    /// `Floor` (`+0x106`), the floor `Sca_ck_em` checks against. Only the
+    /// stairs, slopes, climbs and drops change it, so a script that moves the
+    /// player to another height leaves it behind.
+    pub floor: u8,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
     pub move_no: u8,
@@ -628,6 +632,7 @@ impl Default for Work {
             shot_ticks: 0,
             shot_line: None,
             super_matrix: None,
+            floor: 0,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -997,6 +1002,14 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
+    if mover.work.routine[0] == MODE_MOVE
+        && matches!(
+            mover.work.routine[1],
+            MOVE_STAIRS | MOVE_CLIMB | MOVE_JUMP_DOWN
+        )
+    {
+        mover.work.floor = crate::sca::floor_of(mover.player.pos[1]);
+    }
     mover.pl_neck();
     mover.rot_neck();
     mover.work.root = mover.part_matrix(0);
@@ -1209,7 +1222,7 @@ impl Mover<'_, '_> {
         let facing = self.player.angle.wrapping_add(0x200) & 0xFC00;
         let [x, y, z] = self.player.pos;
         let radius = self.player.radius;
-        let floor = crate::sca::floor_of(y);
+        let floor = self.work.floor;
         let reach = |table: &[i32; 20]| table[(usize::from(self.tick.id) + 4) % table.len()];
         let (dx, dz) = rotate(facing, reach(&CLIMB_REACH), 0);
         let up = [x + dx, y - FLOOR_HEIGHT, z + dz];

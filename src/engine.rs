@@ -14447,6 +14447,7 @@ fn run_re2_init(
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
+    game.re2.player.floor = crate::sca::floor_of(game.entities[0].pos[1]);
     game.camera.locked = false;
     // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
     let word = game
@@ -14546,9 +14547,11 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         }
     }
     let moved = std::mem::take(&mut context.game.re2.pending_player);
+    if let Some(warp) = moved.warp {
+        context.player.collision_mirror = [warp[0], warp[2]];
+    }
     if let Some(pos) = moved.pos {
         context.player.pos = pos;
-        context.player.collision_mirror = [pos[0], pos[2]];
     }
     if let Some(angle) = moved.angle {
         context.player.angle = angle;
@@ -15145,13 +15148,31 @@ fn tick_room_timed(
                 context.player.collision_mirror[1],
             ],
         };
-        let resolution = player::resolve_room_collision(
-            context.room,
-            prev,
-            context.game.entities[0].pos,
-            context.player.radius,
-            context.player.collision_flags,
-        );
+        let resolution = match &context.room.sca {
+            // `Sca_ck_em` checks the player's `Floor`, not the height.
+            Some(sca) if context.game.is_re2_room => {
+                let work = &mut context.game.re2.player;
+                let resolved = crate::sca::resolve_on_floor(
+                    sca,
+                    crate::sca::PLAYER_MASK,
+                    prev,
+                    context.game.entities[0].pos,
+                    context.player.radius,
+                    work.floor,
+                );
+                if let Some(floor) = resolved.floor {
+                    work.floor = floor;
+                }
+                player::CollisionResolution::from_sca(resolved)
+            }
+            _ => player::resolve_room_collision(
+                context.room,
+                prev,
+                context.game.entities[0].pos,
+                context.player.radius,
+                context.player.collision_flags,
+            ),
+        };
         if resolution.code != 2 {
             context.player.collision_mirror = [resolution.pos[0], resolution.pos[2]];
         }
