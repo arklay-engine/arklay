@@ -136,12 +136,7 @@ fn a_seed_makes_a_verified_pack_per_player() {
         assert_eq!(manifest.source_hash.as_deref(), Some("0123456789abcdef"));
         let flags = manifest.biorand_flags.as_ref().unwrap();
         assert!(flags.iter().any(|flag| flag == "ITEM_RANDOMIZER"));
-        for deferred in [
-            "DOOR_RANDOMIZER",
-            "ENEMY_RANDOMIZER",
-            "LOCK_RANDOMIZER",
-            "BR_LOCK_FULL_BYTE",
-        ] {
+        for deferred in ["DOOR_RANDOMIZER", "LOCK_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
             assert!(!flags.iter().any(|flag| flag == deferred), "{deferred}");
         }
         let start = manifest.setup.start_items.as_ref().unwrap();
@@ -237,7 +232,7 @@ fn a_generated_game_is_not_a_base() {
 }
 
 #[test]
-fn the_enemy_option_is_deferred() {
+fn the_enemy_option_raises_its_flag_and_verifies() {
     let dir = TempDir::new("enemies");
     let base = base_pack(&dir.0);
     let mut config = Config::new();
@@ -250,25 +245,17 @@ fn the_enemy_option_is_deferred() {
     let packs = generate_with(&base, 3, &dir.0.join("games"), &options, 0, QUIET).unwrap();
     let pack = Pack::open(&packs[0].path).unwrap();
     let flags = pack.manifest().unwrap().biorand_flags.clone().unwrap();
-    assert!(!flags.iter().any(|flag| flag == "ENEMY_RANDOMIZER"));
+    assert!(flags.iter().any(|flag| flag == "ENEMY_RANDOMIZER"));
     let spoiler: Json = serde_json::from_slice(&pack.read(SPOILER_JSON_ENTRY).unwrap()).unwrap();
     let deferred = spoiler["deferred"].as_array().unwrap();
     assert!(
-        deferred.iter().any(|option| option == ENEMY_OPTION),
+        !deferred.iter().any(|option| option == "enemies/random"),
         "{deferred:?}"
     );
-    assert!(
-        spoiler["rooms"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|room| room["enemies"].is_null())
-    );
-    // The request keeps the option as asked, so verifying plans it the same.
     let request =
         Request::from_json(std::str::from_utf8(&pack.read(REQUEST_ENTRY).unwrap()).unwrap())
             .unwrap();
-    assert!(request.config.get_bool(ENEMY_OPTION, false));
+    assert!(request.config.get_bool("enemies/random", false));
     verify_with(&packs[0].path, Some(&base)).unwrap();
 }
 

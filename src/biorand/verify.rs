@@ -34,6 +34,8 @@ pub struct Report {
     pub pickups: usize,
     /// `door_aot_set`s checked against a planned door lock.
     pub doors: usize,
+    /// Planned enemies found in place (created or retyped).
+    pub enemies: usize,
     /// Whether the pack was compared with its base pack.
     pub against_base: bool,
     /// Entries compared with the base pack's, when it was.
@@ -50,6 +52,9 @@ impl fmt::Display for Report {
         )?;
         if self.doors > 0 {
             write!(f, ", {} door locks as planned", self.doors)?;
+        }
+        if self.enemies > 0 {
+            write!(f, ", {} planned enemies in place", self.enemies)?;
         }
         if self.against_base {
             write!(
@@ -193,6 +198,12 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
             }
         };
         report.rooms += 1;
+        let mut enemy_problems = Vec::new();
+        report.enemies +=
+            super::enemies::check_room(path, &dir, &scripts, game, &mut enemy_problems);
+        for problem in enemy_problems {
+            problems.push(problem);
+        }
         check_room(
             path,
             &dir,
@@ -413,8 +424,10 @@ fn compare_with_base(
         let ours = pack.read(path)?;
         let original = base.read(path)?;
         if let Some(dir) = emit::room_script_dir(path) {
-            let expected = emit::patch_room(&original, pickups)
-                .and_then(|(patched, _)| locks::patch_doors(&patched, &dir, game));
+            let expected = emit::patch_room(&original, pickups).and_then(|(patched, _)| {
+                let patched = locks::patch_doors(&patched, &dir, game)?;
+                super::enemies::patch_for_game(&patched, &dir, game)
+            });
             match expected {
                 Ok(expected) if expected == ours.as_ref() => {}
                 Ok(expected) => problems.push(room_difference(path, &expected, &ours)),

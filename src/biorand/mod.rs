@@ -19,6 +19,7 @@
 
 mod emit;
 mod locks;
+mod enemies;
 mod verify;
 
 use std::path::{Path, PathBuf};
@@ -137,11 +138,6 @@ impl PlayerChoice {
     }
 }
 
-/// The options this milestone leaves to later ones: the game keeps the
-/// original's doors and enemies. `generate` already turns the door option
-/// off ([`Game::deferred`]); the enemies are turned off here.
-const ENEMY_OPTION: &str = "enemies/random";
-
 /// What a pack records about its generation ([`REQUEST_ENTRY`]).
 #[derive(Clone, Debug, PartialEq)]
 struct Request {
@@ -186,18 +182,12 @@ impl Request {
     /// Plans the request's games on `map`, with the options this milestone
     /// doesn't apply turned off.
     fn plan(&self, map: &Map) -> Result<Plan> {
-        let mut config = self.config.clone();
-        let enemies = config.get_bool(ENEMY_OPTION, false);
-        config.set(ENEMY_OPTION, false);
-        let mut plan =
-            arklay_biorand::generate(map, &config, u64::from(self.seed), self.players.players())?;
-        if enemies {
-            for game in &mut plan.games {
-                game.deferred.push(ENEMY_OPTION.to_string());
-                game.spoiler.deferred.push(ENEMY_OPTION.to_string());
-            }
-        }
-        Ok(plan)
+        arklay_biorand::generate(
+            map,
+            &self.config,
+            u64::from(self.seed),
+            self.players.players(),
+        )
     }
 }
 

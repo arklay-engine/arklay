@@ -245,8 +245,10 @@ if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
 `random_enemies()` sits inside the branch the script already uses for its
 own enemies, so the cutscene and story guards come for free. The retail build
 compiles it to nothing; the base pack's build compiles it to a no-op marker
-instruction. The emitter finds the marker in the decoded script and replaces
-it with the plan's `sce_em_set`s; an unused marker stays a no-op. A room
+instruction (`nop_wide`, tag `0xEA`, the placeholder's id). The emitter finds
+the marker in the decoded script and rewrites it, in place, to an `evt_exec`
+of an event script holding the plan's `sce_em_set`s; an unused marker stays a
+no-op. A room
 needing added enemies in more than one branch has more than one marker,
 named (`random_enemies(jill)`), and its `random.xml` says which spots belong
 to which. This replaces staging's 25 enemy conditions, its ClearEnemies
@@ -306,7 +308,8 @@ route can't raise, and every guard a patch needs reached.
 ### How to test milestone 1
 
 Milestone 5 is the first playable one: a full RE1 game with shuffled items,
-on the original doors, locks and enemies. From a repository checkout, with
+on the original doors and locks. With `"enemies/random": true` in the
+configuration (milestone 7) the enemies are randomized too. From a repository checkout, with
 the game converted to `re1.akpak` (see the README):
 
 ```sh
@@ -362,7 +365,13 @@ The pull request's description holds the live checklist. In order:
 6. **Lock randomization**, with the scripted locks (115, 201/214) and the
    Rebecca refusals.
 7. **Enemy randomization**, with the enemy placeholders, the cleared rooms, the
-   ambushes and the crash guards. *Test milestone 2.*
+   ambushes and the crash guards. *Test milestone 2.* **Done:** `random_enemies()`
+   is in the original-layout rooms; the emitter (`src/biorand/enemies.rs`)
+   rewrites each marker to an `evt_exec` of an appended event script, retypes
+   the fixed enemies, and flips the `ENEMY_RANDOMIZER` tests of rooms the plan
+   does not change; the verifier checks every planned enemy. Created enemies
+   do not add their effect sheets to the room (`esp`), so some effects are
+   skipped with a warning; see [`modding.md`](../modding.md#enemies-random_enemies).
 8. **Room ids.** Any stage and room number; room origins; the map screen off.
 9. **Door randomization**: segments as stages, renumbered rooms, and the
    door patches (106, 207, the lifts, 303/305, plant 42, the bookcases, 500).
