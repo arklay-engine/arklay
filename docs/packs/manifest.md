@@ -96,11 +96,11 @@ none, which is every ordinary pack, leaves bank 5 alone.
 | `BR_INK_FLAG` | `0xCC` | Ink reads scenario flag 122 for both characters. |
 | `BR_NO_TITLE_DEMO` | `0xCD` | No attract demo from the title screen. |
 
-Only the bits are supported so far. The engine sets them but reads none of
-them: the behaviour each name describes (randomized doors, locks and
-enemies, the BioRand patches) is not part of the engine. The script
-compiler does not know the names either, so a room script tests one by its
-bit: `ck(FG_STATUS, 0xC3, TRUE)`.
+A room script tests a system flag by name, as in `if (ITEM_RANDOMIZER)`
+(see [BioRand](../biorand/index.md#script-guards)): the guards in RE 1's rooms
+make the changes a randomized game needs, and fold away in a retail build. The
+engine reads the `BR_` flags for the behaviour each describes, and
+`DOOR_RANDOMIZER` turns the map off.
 
 A mod's manifest has keys of its own: see [Mods](../mods.md#the-manifest).
 

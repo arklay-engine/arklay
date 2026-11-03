@@ -28996,6 +28996,44 @@ mod tests {
     }
 
     #[test]
+    fn a_randomizer_pack_raises_its_system_flags_at_new_game_and_after_a_load() {
+        use crate::scd::opcode::system;
+
+        let dir = TempDir::new();
+        let generated = crate::manifest::Manifest {
+            seed: Some(42),
+            biorand_flags: Some(vec!["ITEM_RANDOMIZER".to_string(), "LAB".to_string()]),
+            ..crate::manifest::Manifest::base("biorand-000042")
+        };
+        let manifest = generated.render();
+        let pack_path = new_game_pack_with(&dir, &[(crate::manifest::ENTRY, manifest.as_bytes())]);
+        let pack = Pack::open(&pack_path).unwrap();
+        let raised = |game: &game::GameState| -> Vec<u8> {
+            system::BY_NAME
+                .iter()
+                .filter(|(_, flag)| game.flags[5].bit(*flag))
+                .map(|&(_, flag)| flag)
+                .collect()
+        };
+        let expected = [system::RANDOMIZER, system::ITEM_RANDOMIZER, system::LAB];
+
+        let session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(raised(&session.game), expected, "a new game");
+
+        // A save keeps none of bank 5, and loading one replaces the banks, so
+        // the load raises the same flags again.
+        let file = save::SaveFile::from_state(&session.game);
+        let loaded = GameSession::from_save(&pack, &file, &dir.0).unwrap();
+        assert_eq!(raised(&loaded.game), expected, "a loaded save");
+
+        // A pack without a manifest raises none of them.
+        let plain_dir = TempDir::new();
+        let plain = Pack::open(&new_game_pack(&plain_dir)).unwrap();
+        let session = GameSession::new(&plain, 0, &plain_dir.0).unwrap();
+        assert_eq!(raised(&session.game), Vec::<u8>::new(), "no manifest");
+    }
+
+    #[test]
     fn app_boots_title_and_transitions_into_a_new_game() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
