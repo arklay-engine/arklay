@@ -97,6 +97,25 @@ pub(super) fn setup(game: &Game) -> Result<GameSetup> {
     })
 }
 
+/// What a pack of `game` randomizes, for its description: "items",
+/// "items and locks", "items, locks and enemies".
+fn randomized_parts(game: &Game) -> String {
+    let mut parts = vec!["items"];
+    if !game.locks.is_empty() {
+        parts.push("locks");
+    }
+    if game
+        .system_flags
+        .contains(&arklay_biorand::plan::system_flags::ENEMY_RANDOMIZER)
+    {
+        parts.push("enemies");
+    }
+    match parts.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+        _ => parts.join(""),
+    }
+}
+
 /// The manifest of `game`'s pack `id`, from its base pack's.
 pub(super) fn manifest(base: &Manifest, id: &str, seed: u32, game: &Game) -> Result<Manifest> {
     let player = match game.player {
@@ -109,11 +128,7 @@ pub(super) fn manifest(base: &Manifest, id: &str, seed: u32, game: &Game) -> Res
     manifest.description = Some(format!(
         "{} with its {} randomized by BioRand, seed {seed:06}.",
         base.name.as_deref().unwrap_or("Resident Evil"),
-        if game.locks.is_empty() {
-            "items"
-        } else {
-            "items and locks"
-        }
+        randomized_parts(game)
     ));
     manifest.seed = Some(seed);
     manifest.generator_version = Some(super::GENERATOR_VERSION);
