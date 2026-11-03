@@ -356,3 +356,67 @@ fn verification_names_what_is_wrong() {
     let err = format!("{:#}", verify_with(&out, Some(&base)).unwrap_err());
     assert!(err.contains("spoiler"), "{err}");
 }
+
+// Locks.
+
+#[test]
+fn a_locked_seed_writes_and_verifies_every_door_lock() {
+    let dir = TempDir::new("locks");
+    let base = base_pack(&dir.0);
+    let mut config = Config::new();
+    config.set("locks/random", true);
+    let options = Options {
+        config: Some(config),
+        players: PlayerChoice::Both,
+        ..Options::default()
+    };
+    let packs = generate_with(&base, 21, &dir.0.join("games"), &options, 0, QUIET).unwrap();
+    assert_eq!(packs.len(), 2);
+    for generated in &packs {
+        let report = verify_with(&generated.path, Some(&base)).unwrap();
+        assert!(report.doors > 100, "{report}");
+
+        let source = Pack::open(&generated.path).unwrap();
+        let flags = source.manifest().unwrap().biorand_flags.clone().unwrap();
+        for flag in ["LOCK_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
+            assert!(flags.iter().any(|f| f == flag), "{flag}");
+        }
+        let spoiler =
+            String::from_utf8(source.read(SPOILER_TEXT_ENTRY).unwrap().into_owned()).unwrap();
+        assert!(spoiler.contains("Locked doors:"), "{spoiler}");
+
+        // A locked door's key, changed: the plain check sees it.
+        let request =
+            Request::from_json(std::str::from_utf8(&source.read(REQUEST_ENTRY).unwrap()).unwrap())
+                .unwrap();
+        let plan = request.plan(&read_map(&source).unwrap()).unwrap();
+        let character = character_of(generated.player);
+        let game = game_for(&plan, character).unwrap();
+        let door = game
+            .locks
+            .iter()
+            .find(|lock| lock.drawn && lock.key_item().is_some())
+            .unwrap();
+        let path = format!("room/{}/room.scd", door.dir);
+        let scd = source.read(&path).unwrap().into_owned();
+        let scripts = crate::scd::reader::parse(&scd).unwrap();
+        let planned = locks::planned(game, &door.dir);
+        let offset = locks::doors(&scripts)
+            .find(|insn| {
+                locks::expected(&door.dir, &insn.bytes, &planned)
+                    .unwrap()
+                    .planned
+                    .is_some_and(|planned| planned == door)
+            })
+            .unwrap()
+            .offset;
+        assert_eq!(scd[offset + locks::DOOR_LOCK], door.lock);
+        assert_eq!(scd[offset + locks::DOOR_KEY], door.key);
+        let out = dir.0.join("key.akpak");
+        tamper(&generated.path, &out, &path, |data| {
+            data[offset + locks::DOOR_KEY] ^= 1;
+        });
+        let err = format!("{:#}", verify_with(&out, None).unwrap_err());
+        assert!(err.contains(&path) && err.contains("the plan lock"), "{err}");
+    }
+}

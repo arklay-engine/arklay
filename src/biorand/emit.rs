@@ -1,12 +1,15 @@
 //! Writing a planned game as a pack.
 //!
-//! A generated pack is its base pack with three kinds of change, all data:
+//! A generated pack is its base pack with four kinds of change, all data:
 //! the planned pickups written into the room scripts' `item_aot_set`s
-//! ([`patch_room`]), a manifest naming the seed, the flags and the new
-//! game's setup ([`manifest`]), and the request and spoiler entries. The
-//! room-script changes a randomized game needs (documents, maps and MO disc
-//! readers turned into pickups, Jill's missing pickups) are in the shipped
-//! scripts already, gated on `ITEM_RANDOMIZER`.
+//! ([`patch_room`]), the planned door locks written into their
+//! `door_aot_set`s ([`super::locks::patch_doors`]), a manifest naming the
+//! seed, the flags and the new game's setup ([`manifest`]), and the request
+//! and spoiler entries. The room-script changes a randomized game needs
+//! (documents, maps and MO disc readers turned into pickups, Jill's missing
+//! pickups, the scripted locks and Rebecca's refusals) are in the shipped
+//! scripts already, gated on `ITEM_RANDOMIZER`, `LOCK_RANDOMIZER` and
+//! `BR_LOCK_FULL_BYTE`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -37,14 +40,11 @@ pub(super) const AOT_SCE: usize = 2;
 pub(super) const PICKUP_SCES: [u8; 3] = [0x04, 0x0D, 0x0F];
 
 /// The system flags of options this milestone leaves to later ones, which a
-/// pack must not raise: the scripts would act on doors, locks and enemies the
-/// pack does not change. `BR_LOCK_FULL_BYTE` makes the engine read whole lock
-/// bytes, which only the lock randomizer writes.
-const DEFERRED_FLAGS: [&str; 4] = [
+/// pack must not raise: the scripts would act on doors and enemies the pack
+/// does not change.
+const DEFERRED_FLAGS: [&str; 2] = [
     system_flags::DOOR_RANDOMIZER,
     system_flags::ENEMY_RANDOMIZER,
-    system_flags::LOCK_RANDOMIZER,
-    system_flags::BR_LOCK_FULL_BYTE,
 ];
 
 /// The system flags a pack of `game` raises: the plan's, less the deferred
@@ -289,6 +289,8 @@ pub(super) fn pack(
             let scd = source.read(path)?;
             let (patched, written) =
                 patch_room(&scd, &pickups).with_context(|| format!("failed to patch {path}"))?;
+            let patched = super::locks::patch_doors(&patched, &dir, game)
+                .with_context(|| format!("failed to write the door locks of {path}"))?;
             let missing: Vec<_> = planned_flags(game, &dir)
                 .difference(&written)
                 .copied()

@@ -2,11 +2,14 @@
 //!
 //! [`verify`] plans the pack's game again from its request entry and the map
 //! it carries, then checks the pack against that plan: the manifest's flags
-//! and setup, the spoiler, every room script decoding, and every planned
-//! pickup in its room. Given the base pack the game was generated from, it
-//! also checks that the pack is the base byte for byte apart from the
-//! planned bytes: the item fields and the SCEs [`super::emit::patch_room`]
-//! writes, the manifest and the generator's own entries.
+//! and setup, the spoiler, every room script decoding, every planned
+//! pickup in its room, and, when locks are randomized, every door's lock
+//! byte and key against the plan. Given the base pack the game was
+//! generated from, it also checks that the pack is the base byte for byte
+//! apart from the planned bytes: the item fields and the SCEs
+//! [`super::emit::patch_room`] writes, the door bytes
+//! [`super::locks::patch_doors`] writes, the manifest and the generator's own
+//! entries.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -15,6 +18,7 @@ use std::path::Path;
 use anyhow::{Context, Result, anyhow};
 
 use super::emit::{self, AOT_BY_ID, AOT_SCE, ITEM_AMOUNT, ITEM_AOT_SET, ITEM_FLAG, ITEM_TYPE};
+use super::locks;
 use super::{GENERATOR_VERSION, Request, game_for, read_map};
 use crate::pack::Pack;
 
@@ -28,6 +32,8 @@ pub struct Report {
     pub rooms: usize,
     /// Planned pickups checked (slots that differ from the original's).
     pub pickups: usize,
+    /// `door_aot_set`s checked against a planned door lock.
+    pub doors: usize,
     /// Whether the pack was compared with its base pack.
     pub against_base: bool,
     /// Entries compared with the base pack's, when it was.
@@ -42,6 +48,9 @@ impl fmt::Display for Report {
             "seed {:06} ({player}): {} rooms decode, {} planned pickups in place",
             self.seed, self.rooms, self.pickups
         )?;
+        if self.doors > 0 {
+            write!(f, ", {} door locks as planned", self.doors)?;
+        }
         if self.against_base {
             write!(
                 f,
@@ -163,6 +172,7 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
         ..Report::default()
     };
     let mut rooms = Vec::new();
+    let mut checked_doors = Vec::new();
     for path in pack.own_paths() {
         let Some(dir) = emit::room_script_dir(path) else {
             continue;
@@ -192,6 +202,23 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
             &mut problems,
             &mut report,
         );
+        check_doors(path, &dir, &scripts, game, &mut problems, &mut report);
+        checked_doors.push(dir);
+    }
+    problems.check(locks::full_byte(game) != game.locks.is_empty(), || {
+        format!(
+            "the plan has {} door locks, and BR_LOCK_FULL_BYTE is {}raised",
+            game.locks.len(),
+            if locks::full_byte(game) { "" } else { "not " }
+        )
+    });
+    for lock in game.locks.iter().filter(|lock| lock.lock != 0) {
+        problems.check(checked_doors.contains(&lock.dir), || {
+            format!(
+                "the plan locks {}:{}, in room {}, which the pack has no script for",
+                lock.room, lock.id, lock.dir
+            )
+        });
     }
     for dir in game.items.keys() {
         problems.check(
@@ -201,7 +228,7 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
     }
 
     if let Some(base) = base {
-        compare_with_base(&pack, base, &pickups, &mut problems, &mut report)?;
+        compare_with_base(&pack, base, game, &pickups, &mut problems, &mut report)?;
     }
 
     if problems.0.is_empty() {
@@ -281,10 +308,66 @@ fn check_room(
     }
 }
 
+/// Check room `dir`'s doors in a pack that writes whole lock bytes: every
+/// `door_aot_set` of a planned door holds the plan's lock flag and key, every
+/// other has lost the original's lock bits (a lock flag below 64 is all that
+/// is left), and every planned door that locks is declared.
+fn check_doors(
+    path: &str,
+    dir: &str,
+    scripts: &crate::scd::ir::Scripts,
+    game: &arklay_biorand::plan::Game,
+    problems: &mut Problems,
+    report: &mut Report,
+) {
+    if !locks::full_byte(game) {
+        return;
+    }
+    let planned = locks::planned(game, dir);
+    let mut declared = std::collections::BTreeSet::new();
+    for insn in locks::doors(scripts) {
+        let expected = match locks::expected(dir, &insn.bytes, &planned) {
+            Ok(expected) => expected,
+            Err(err) => {
+                problems.push(format!("{path}: the door_aot_set at {:#x}: {err:#}", insn.offset));
+                continue;
+            }
+        };
+        let held = (insn.bytes[locks::DOOR_LOCK], insn.bytes[locks::DOOR_KEY]);
+        match expected.planned {
+            Some(door) => {
+                problems.check(held == (expected.lock, expected.key), || {
+                    format!(
+                        "{path}: the door_aot_set at {:#x} ({}:{}) holds lock {} key {}, the plan lock {} key {}",
+                        insn.offset, door.room, door.id, held.0, held.1, expected.lock, expected.key
+                    )
+                });
+                declared.insert((door.room.as_str(), door.id));
+                report.doors += 1;
+            }
+            None => problems.check(held.0 < 0x40, || {
+                format!(
+                    "{path}: the door_aot_set at {:#x} keeps the original's lock byte {:#04x}",
+                    insn.offset, held.0
+                )
+            }),
+        }
+    }
+    for door in planned.values().flatten().filter(|door| door.lock != 0) {
+        problems.check(declared.contains(&(door.room.as_str(), door.id)), || {
+            format!(
+                "{path}: no door_aot_set declares {}:{} (lock {}, key {}); the lock can never be met",
+                door.room, door.id, door.lock, door.key
+            )
+        });
+    }
+}
+
 /// Check that `pack` is `base` apart from the planned bytes.
 fn compare_with_base(
     pack: &Pack,
     base: &Pack,
+    game: &arklay_biorand::plan::Game,
     pickups: &BTreeMap<u8, (u8, u8)>,
     problems: &mut Problems,
     report: &mut Report,
@@ -326,10 +409,12 @@ fn compare_with_base(
         }
         let ours = pack.read(path)?;
         let original = base.read(path)?;
-        if emit::room_script_dir(path).is_some() {
-            match emit::patch_room(&original, pickups) {
-                Ok((expected, _)) if expected == ours.as_ref() => {}
-                Ok((expected, _)) => problems.push(room_difference(path, &expected, &ours)),
+        if let Some(dir) = emit::room_script_dir(path) {
+            let expected = emit::patch_room(&original, pickups)
+                .and_then(|(patched, _)| locks::patch_doors(&patched, &dir, game));
+            match expected {
+                Ok(expected) if expected == ours.as_ref() => {}
+                Ok(expected) => problems.push(room_difference(path, &expected, &ours)),
                 Err(err) => problems.push(format!("{path}: the base's script: {err:#}")),
             }
         } else {
@@ -345,7 +430,7 @@ fn compare_with_base(
 fn room_difference(path: &str, expected: &[u8], actual: &[u8]) -> String {
     if expected.len() != actual.len() {
         return format!(
-            "{path} is {} bytes, the base's with the planned pickups {}",
+            "{path} is {} bytes, the base's with the planned pickups and locks {}",
             actual.len(),
             expected.len()
         );
@@ -359,7 +444,7 @@ fn room_difference(path: &str, expected: &[u8], actual: &[u8]) -> String {
         .take(8)
         .collect();
     format!(
-        "{path} differs from the base's with the planned pickups at {}",
+        "{path} differs from the base's with the planned pickups and locks at {}",
         offsets.join(", ")
     )
 }

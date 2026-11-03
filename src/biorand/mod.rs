@@ -10,14 +10,15 @@
 //! [`verify_pack`] reads a finished pack back and checks it against the plan,
 //! which it makes again from what the pack records.
 //!
-//! Milestone 5 of `docs/biorand/plan.md` applies items only: the doors, locks
-//! and enemies stay the original's, whatever the configuration asks, and the
-//! pack raises none of their flags (see [`emit::applied_flags`]).
+//! Milestones 5 and 6 of `docs/biorand/plan.md` apply items and locks: the
+//! doors and enemies stay the original's, whatever the configuration asks,
+//! and the pack raises none of their flags (see [`emit::applied_flags`]).
 //!
 //! The same seed, configuration and [`GENERATOR_VERSION`] always make the same
 //! bytes; bump the version whenever a change would alter a seed's output.
 
 mod emit;
+mod locks;
 mod verify;
 
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ pub use verify::Report;
 /// The version of the emitter's output for a given plan. A pack also records
 /// the plan's own version ([`arklay_biorand::plan::GENERATOR_VERSION`]) as
 /// `plan_version`; a change to either makes an older pack stale.
-pub const GENERATOR_VERSION: u32 = 2;
+pub const GENERATOR_VERSION: u32 = 3;
 
 /// The base pack a game is generated from.
 pub const BASE_PACK_ID: &str = "re1";
@@ -137,8 +138,8 @@ impl PlayerChoice {
 }
 
 /// The options this milestone leaves to later ones: the game keeps the
-/// original's doors, locks and enemies. `generate` already turns the door and
-/// lock options off ([`Game::deferred`]); the enemies are turned off here.
+/// original's doors and enemies. `generate` already turns the door option
+/// off ([`Game::deferred`]); the enemies are turned off here.
 const ENEMY_OPTION: &str = "enemies/random";
 
 /// What a pack records about its generation ([`REQUEST_ENTRY`]).
