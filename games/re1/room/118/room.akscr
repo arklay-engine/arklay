@@ -26,6 +26,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 5600, 8200, 1200, 1300, 3, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_10B_1F_RIGHT_STAIRS, 9500, 0, 14300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {

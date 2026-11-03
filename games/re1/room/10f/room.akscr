@@ -99,6 +99,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_06, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {

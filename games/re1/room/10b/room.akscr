@@ -58,7 +58,11 @@ proc init
         {
             set(FG_SCENARIO, F_SCENARIO_09, TRUE);
         }
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_19, SPAWN_FORCE, 2, 0, 2009, 0, 4089, 0, 13523, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_19, SPAWN_FORCE, 2, 0, 2009, 0, 4089, 0, 13523, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     else
     {
@@ -72,7 +76,11 @@ proc init
         {
             aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
         }
-        enemy(EM_06_HUNTER, EB_27, F_ENEMY_75, SPAWN_FORCE, 2, 0, 520, 0, 5853, 0, 16051, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_27, F_ENEMY_75, SPAWN_FORCE, 2, 0, 520, 0, 5853, 0, 16051, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
         room_bgm_state_set(5, 11, BGM_MAIN_ON);
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {

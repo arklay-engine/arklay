@@ -56,8 +56,12 @@ proc init
     {
         if (MANSION1)
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+                enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
             if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
             {
                 set(FG_SCENARIO, F_SCENARIO_05, TRUE);
@@ -65,8 +69,12 @@ proc init
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_20, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
-            enemy(EM_06_HUNTER, EB_20, F_ENEMY_A9, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_20, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                enemy(EM_06_HUNTER, EB_20, F_ENEMY_A9, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
             if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE) && cmpb(B_PREV_ROOM, CMP_EQ, ROOM_206_DOLL_ROOM))
             {
                 set(FG_COMMON, F_COMMON_6B, TRUE);
@@ -78,7 +86,11 @@ proc init
     {
         if (MANSION2)
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_02, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
         if (ck(FG_COMMON, F_COMMON_5F, TRUE))
         {
@@ -86,8 +98,12 @@ proc init
         }
         if (MANSION1)
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+                enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
         set(FG_COMMON, F_COMMON_4F, TRUE);
     }
@@ -102,18 +118,27 @@ proc main
             set(FG_ROOM, F_ROOM_18, TRUE);
             if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
+                    pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
+                    pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 3500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 18500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 3500);
+                    pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 18500);
+                }
             }
         }
     }
@@ -124,18 +149,27 @@ proc main
             set(FG_ROOM, F_ROOM_18, TRUE);
             if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
             {
-                pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
+                    pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
             {
-                pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
+                    pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else
             {
-                pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 3500);
-                pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 3500);
+                    pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+                }
             }
         }
         if (ck(FG_COMMON, F_COMMON_6B, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
@@ -151,15 +185,24 @@ proc main
             set(FG_ROOM, F_ROOM_18, TRUE);
             if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
             {
-                pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
             {
-                pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+                }
             }
             else
             {
-                pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+                }
             }
         }
     }

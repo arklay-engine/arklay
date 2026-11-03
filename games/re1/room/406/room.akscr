@@ -43,6 +43,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            random_enemies();
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_B2, TRUE) && ck(FG_COMMON, F_COMMON_AE, FALSE) && ck(FG_COMMON, F_COMMON_B0, TRUE) && ck(FG_COMMON, F_COMMON_B1, TRUE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR, 300, 2000, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);

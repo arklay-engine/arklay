@@ -37,11 +37,19 @@ proc init
     }
     aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
-    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+    }
+    random_enemies();
     if (CHRIS)
     {
-        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     evt_exec(0, TASK_09, on_enter);
     evt_exec(0, TASK_09, on_enter_2);

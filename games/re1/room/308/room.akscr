@@ -54,6 +54,10 @@ proc init
 {
     if (CHRIS)
     {
+        random_enemies();
+    }
+    if (CHRIS)
+    {
         door_aot_set(AOT_00_DOOR, 200, 15900, 2100, 1500, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_28, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     else
@@ -84,6 +88,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_5D, FALSE) && ck(FG_COMMON, F_COMMON_25, TRUE))
         {
             dir_set(0, 0, 3920, 0, 2800, 0, 16300);
+            random_enemies();
             enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3984, 0, 5224, 0, 17102, ENEMY_00, ANIM_00, 0, EVAR_00);
             evt_exec(0, TASK_09, on_enter);
             aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, from_main, 0);
@@ -92,11 +97,13 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_57, TRUE))
             {
+                random_enemies();
                 enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1288, 0, 12140, 0, 28590, ENEMY_00, ANIM_00, 0, EVAR_00);
                 set(FG_COMMON, F_COMMON_57, FALSE);
             }
             else
             {
+                random_enemies();
                 enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3288, 0, 8690, 0, 3250, ENEMY_00, ANIM_00, 0, EVAR_00);
             }
             evt_exec(0, TASK_09, on_enter_2);
@@ -108,11 +115,17 @@ proc init
     {
         if (CHRIS)
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4B, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4B, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4B, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4B, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00, ANIM_00, 0, EVAR_00);
+            }
             set(FG_COMMON, F_COMMON_50, TRUE);
         }
     }
@@ -120,13 +133,22 @@ proc init
     {
         if (CHRIS)
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4C, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4C, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4C, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4C, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00, ANIM_00, 0, EVAR_00);
+            }
         }
-        enemy(EM_06_HUNTER, EB_00, F_ENEMY_4D, SPAWN_FORCE, 2, 0, 3072, 0, 9800, 0, 19600, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4D, SPAWN_FORCE, 2, 0, 3072, 0, 9800, 0, 19600, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+        }
     }
 }
 

@@ -25,6 +25,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 0, 11300, 2500, 2300, 2, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_40E_WATER_TANK, 28400, 0, 29300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {

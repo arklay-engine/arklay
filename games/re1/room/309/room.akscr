@@ -32,6 +32,20 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            random_enemies();
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_48, FALSE))
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR, 1900, 25800, 2100, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 0, 3500, 2400, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 13900, 0, 2100, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -80,13 +94,19 @@ proc init
     {
         if (CHRIS)
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4E, SPAWN_FORCE, 2, 0, 0, 0, 7750, 0, 4760, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4E, SPAWN_FORCE, 2, 0, 0, 0, 7750, 0, 4760, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
             enemy(EM_06_HUNTER, EB_00, F_ENEMY_4F, SPAWN_FORCE, 2, 0, 0, 0, 9760, 0, 18180, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4E, SPAWN_FORCE, 2, 0, 0, 0, 7750, 0, 4760, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-            enemy(EM_06_HUNTER, EB_00, F_ENEMY_4F, SPAWN_FORCE, 2, 0, 0, 0, 9760, 0, 18180, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4E, SPAWN_FORCE, 2, 0, 0, 0, 7750, 0, 4760, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                enemy(EM_06_HUNTER, EB_00, F_ENEMY_4F, SPAWN_FORCE, 2, 0, 0, 0, 9760, 0, 18180, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     aot_set(AOT_07_MESSAGE, 25600, 16400, 2000, 10100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);

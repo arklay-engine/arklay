@@ -24,6 +24,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 1700, 1300, 2000, 900, 3, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 7, 0, ROOM_109_TRAP_PASSAGE, 18000, 0, 8100, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     // The bathtub key is Chris-only (FG_STATUS 8 is Jill); under
     // ITEM_RANDOMIZER Jill gets it too.

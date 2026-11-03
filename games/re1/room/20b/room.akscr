@@ -61,8 +61,12 @@ proc init
         {
             if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1A, SPAWN_FORCE, 2, 0, 3640, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1B, SPAWN_FORCE, 2, 0, 3048, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1A, SPAWN_FORCE, 2, 0, 3640, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1B, SPAWN_FORCE, 2, 0, 3048, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
             room_bgm_state_set(1, ROOM_20B_FRONT_LESSON_ROOM, BGM_OFF);
         }

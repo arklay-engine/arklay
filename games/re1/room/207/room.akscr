@@ -59,11 +59,19 @@ proc init
     aot_set(AOT_09_EVENT, 8600, 15900, 2000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_09, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_13, SPAWN_FORCE, 2, 0, 3072, 0, 3000, 0, 8000, ENEMY_00, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_08, F_ENEMY_14, SPAWN_FORCE, 2, 0, 2341, 0, 13775, 0, 12089, ENEMY_01, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_13, SPAWN_FORCE, 2, 0, 3072, 0, 3000, 0, 8000, ENEMY_00, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_LAB, EB_08, F_ENEMY_14, SPAWN_FORCE, 2, 0, 2341, 0, 13775, 0, 12089, ENEMY_01, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_08, F_ENEMY_AF, SPAWN_FORCE, 2, 0, 2579, 0, 31491, 0, 9874, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_11_ZOMBIE_LAB, EB_08, F_ENEMY_AF, SPAWN_FORCE, 2, 0, 2579, 0, 31491, 0, 9874, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
         if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE))
         {
@@ -72,8 +80,12 @@ proc init
     }
     else
     {
-        enemy(EM_06_HUNTER, EB_12, F_ENEMY_15, SPAWN_FORCE, 2, 0, 3072, 0, 3000, 0, 8000, ENEMY_00, ANIM_00, 0, EVAR_00);
-        enemy(EM_06_HUNTER, EB_12, F_ENEMY_16, SPAWN_FORCE, 2, 0, 0, 0, 21600, 0, 11700, ENEMY_01, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_12, F_ENEMY_15, SPAWN_FORCE, 2, 0, 3072, 0, 3000, 0, 8000, ENEMY_00, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_12, F_ENEMY_16, SPAWN_FORCE, 2, 0, 0, 0, 21600, 0, 11700, ENEMY_01, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     aot_delete(AOT_05_6, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
 }

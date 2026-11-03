@@ -61,11 +61,19 @@ proc init
     scene_setup(1, 4100, 10000, 5700);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_11_ZOMBIE_LAB, EB_02, F_ENEMY_90, SPAWN_FORCE, 2, 0, 2048, 0, 10000, 0, 12600, ENEMY_00, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_11_ZOMBIE_LAB, EB_02, F_ENEMY_90, SPAWN_FORCE, 2, 0, 2048, 0, 10000, 0, 12600, ENEMY_00, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     else
     {
-        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9D, SPAWN_FORCE, 2, 0, 1776, 0, 11211, 0, 11654, ENEMY_00, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9D, SPAWN_FORCE, 2, 0, 1776, 0, 11211, 0, 11654, ENEMY_00, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
 }
 

@@ -46,6 +46,20 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR, 4700, 12000, 1300, 1300, 0, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_500_UNDER_FOUNTAIN, 4400, 0, 7600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 4800, 1500, 1500, 1300, 0, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_503_STAIRS, 26000, 0, 5800, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (JILL)

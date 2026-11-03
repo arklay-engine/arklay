@@ -72,6 +72,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE) && ck(FG_COMMON, F_COMMON_3A, TRUE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR, 9600, 2300, 1800, 1700, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {

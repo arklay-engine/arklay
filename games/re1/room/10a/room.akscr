@@ -69,8 +69,12 @@ proc init
                 aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
             }
         }
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     else
     {
@@ -96,11 +100,19 @@ proc init
                     set(FG_COMMON, F_COMMON_36, TRUE);
                 }
                 aot_set(AOT_05_EVENT, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_05, 0, 0, 0);
-                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
             else
             {
-                enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
         }
         else
@@ -109,11 +121,19 @@ proc init
             if (ck(FG_COMMON, F_COMMON_28, FALSE))
             {
                 aot_set(AOT_05_EVENT, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_05, 0, 0, 0);
-                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
             else
             {
-                enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
         }
         return;
@@ -178,8 +198,11 @@ event on_aot_05 when (MANSION2)
     sleep(20);
     run
     {
-        pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2524, 0, 12163);
-        eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_67);
+        if (!ENEMY_RANDOMIZER)
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2524, 0, 12163);
+            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_67);
+        }
         if (CHRIS)
         {
             dir_set(0, 0, 0, 0, 4880, 0, 3549);
@@ -195,8 +218,11 @@ event on_aot_05 when (MANSION2)
     run
     {
         dir_set(0, 0, 3144, 0, 2260, 0, 2984);
-        pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2665, 0, 8864);
-        eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_27);
+        if (!ENEMY_RANDOMIZER)
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2665, 0, 8864);
+            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_27);
+        }
         cutnext(CAM_02);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);

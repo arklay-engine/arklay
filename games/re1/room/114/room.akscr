@@ -46,22 +46,34 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_04, FALSE))
         {
-            enemy(EM_02_CERBERUS, EB_01, F_ENEMY_04, SPAWN_FORCE, 2, 0, 0, 0, 4000, 0, 21696, ENEMY_00, ANIM_00, 0, EVAR_00);
-            enemy(EM_02_CERBERUS, EB_80, F_ENEMY_05, SPAWN_FORCE, 2, 0, 2400, 0, 22000, 0, 9800, ENEMY_01, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_02_CERBERUS, EB_01, F_ENEMY_04, SPAWN_FORCE, 2, 0, 0, 0, 4000, 0, 21696, ENEMY_00, ANIM_00, 0, EVAR_00);
+                enemy(EM_02_CERBERUS, EB_80, F_ENEMY_05, SPAWN_FORCE, 2, 0, 2400, 0, 22000, 0, 9800, ENEMY_01, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
             evt_exec(0, TASK_09, on_enter);
             evt_exec(0, TASK_09, on_enter_2);
         }
         else
         {
-            enemy(EM_02_CERBERUS, EB_08, F_ENEMY_04, SPAWN_FORCE, 2, 0, 2800, 0, 10000, 0, 13500, ENEMY_00, ANIM_00, 0, EVAR_00);
-            enemy(EM_02_CERBERUS, EB_08, F_ENEMY_05, SPAWN_FORCE, 2, 0, 1700, 0, 18800, 0, 13200, ENEMY_01, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_02_CERBERUS, EB_08, F_ENEMY_04, SPAWN_FORCE, 2, 0, 2800, 0, 10000, 0, 13500, ENEMY_00, ANIM_00, 0, EVAR_00);
+                enemy(EM_02_CERBERUS, EB_08, F_ENEMY_05, SPAWN_FORCE, 2, 0, 1700, 0, 18800, 0, 13200, ENEMY_01, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
     }
     else
     {
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_06, SPAWN_FORCE, 2, 0, 3184, 0, 8018, 0, 17483, ENEMY_00, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_07, SPAWN_FORCE, 2, 0, 2048, 0, 10560, 0, 14947, ENEMY_01, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_01, F_ENEMY_08, SPAWN_FORCE, 2, 0, 2128, 0, 18370, 0, 13340, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_06, SPAWN_FORCE, 2, 0, 3184, 0, 8018, 0, 17483, ENEMY_00, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_07, SPAWN_FORCE, 2, 0, 2048, 0, 10560, 0, 14947, ENEMY_01, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_LAB, EB_01, F_ENEMY_08, SPAWN_FORCE, 2, 0, 2128, 0, 18370, 0, 13340, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
 }
 

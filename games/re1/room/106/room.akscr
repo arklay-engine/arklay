@@ -107,6 +107,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_00, FALSE) && ck(FG_COMMON, F_COMMON_02, FALSE) && ck(FG_COMMON, F_COMMON_03, FALSE))
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_05, FALSE) && ck(FG_ITEM, F_ITEM_0D, FALSE))
+            {
+                random_enemies();
+            }
+        }
+    }
     set(FG_STATUS, F_STATUS_1C, TRUE);
     door_aot_set(AOT_00_DOOR, 31100, 10000, 2000, 3000, 6, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 31100, 18600, 2000, 1200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_05, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
