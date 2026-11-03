@@ -51,7 +51,8 @@ dropped history.
 ## B. Room script patches (`Re1RdtPatcher`)
 
 Gates: **R** `RANDOMIZER`, **D** `DOOR_RANDOMIZER`, **I** `ITEM_RANDOMIZER`,
-**E** `ENEMY_RANDOMIZER`. "Chris" or "Jill" means the patch applies only to
+**E** `ENEMY_RANDOMIZER`, **L** `LOCK_RANDOMIZER`, **F** `BR_LOCK_FULL_BYTE`
+(raised with **L**). "Chris" or "Jill" means the patch applies only to
 that player's script path.
 
 | Patch | Rooms | What and why | Arklay |
@@ -64,17 +65,17 @@ that player's script path.
 | DisableDogBoiler | 114 | No dog from the boiler room | Guard (R) |
 | DisableHunterAmbushes | 203, 209 (second visit) | No Hunter ambush events | Guard (E) |
 | RemoveBlood211 | 211 | Dogs and bees crash the original during the pick-up crouch near this blood event | Guard (E); check whether arklay crashes at all, and drop it if not |
-| AddDoor207 | 207 | A new door AOT 4 (lock 21) to 206 | Guard (R) |
+| AddDoor207 | 207 | A new door AOT 4 (lock 21) to 206 | Guard (L) **Done:** under `LOCK_RANDOMIZER` 207's message AOT 4 becomes staging's door to 206 (`LOCKED`, lock 0x15); the emitter writes the plan's bytes into it. Item-only games keep the message |
 | FixDoor104 | 104 | Door 2's arrival position | Fix (the original's arrival point is wrong) |
 | FixDoor106 | 106 | The main hall's front door is usable as a normal door | Guard (D); Jill needs a new door AOT 3 |
 | FixDoorToWardrobe | 112 | The wardrobe door no longer waits on the story (the proof of concept already does this) | Guard (R) |
-| FixPassCodeDoor | 201 | The pass-code door gets a lock flag and arrival; Jill without door rando starts it unlocked when the code is known | Guard (R) + data (its lock flag). Staging's lock id disagrees with `rdt.json` (209 against 17); arklay names it in `random.xml` |
-| AllowRoughPassageDoorUnlock | 214 | The rough-passage AOT becomes a door, unlockable from this side, sharing the pass-code door's lock | Guard (R) |
+| FixPassCodeDoor | 201 | The pass-code door gets a lock flag and arrival; Jill without door rando starts it unlocked when the code is known | Guard (R) + data (its lock flag). Staging's lock id disagrees with `rdt.json` (209 against 17); arklay names it in `random.xml` **Done:** Guard (L): no pass-code panel (AOT 5), and the second visit keeps door 1 for either player (no `aot_delete`); its bytes are the plan's. Staging's Jill-only unlock when the code is known (no door rando) is not ported: the plan opens the pair from 214. The first visit's door stays non-interactive (SAT 0), as 214 exists only on the second. Staging's nop offsets for the second visit fall mid-instruction in the retail script; the intent is ported, not the offsets |
+| AllowRoughPassageDoorUnlock | 214 | The rough-passage AOT becomes a door, unlockable from this side, sharing the pass-code door's lock | Guard (L) **Done:** Chris's use-item AOT 1 and Jill's AOT 5 become doors to 201 (`LOCK`, lock 0x11); Jill's original door AOT 0 and the `aot_delete`s that pick between it and AOT 5 are skipped |
 | FixDrugStoreRoom | 409 (Chris) | Removes Rebecca's drug store event blocks | Guard (R) |
 | FixDoorPlant42 | 40A, 40C, 408 | The bookcase stays open; 40C's AOT becomes a door; with door rando: the nest's double doors aren't blocked, no switch to the second mansion visit, the door stays blocked until plant 42 is dead, and the reload crash after killing it (Jill) is avoided | Guard (R) for the bookcase and door; Guard (D) for the rest. Check whether arklay has the reload crash |
 | FixChrisPlant42 | 40C, 40F, 408, 409 (Chris) | No switch to Rebecca; the V-JOLT hand-back; Rebecca's cutscene and drug-store presence forced | Guard (R) |
 | DiableJillSandwich | 115 | Jill's sandwich-room trap off with door rando | Guard (D) |
-| ShotgunOnWallFix | 109, 115, 116 | Ceiling trap with any item: don't overwrite the pickup's quantity, don't place the shotgun back, lock both sandwich-room doors, remap its lock flags 0/1/2 to 15/16 and unlock them from the hall and the living room | Redesign: `picked()` (section C) for the trigger; Guard (I) for placing it back; data for the lock flags (named in `random.xml`, renumbered by the emitter) **Partly done:** 116 keeps the slot's own amount, sets no put-back AOT 6 and ignores the shotgun at the wall under `ITEM_RANDOMIZER`. **Open (lock milestone):** the 115 lock change, the remap to 15/16 and the unlocks from 109 and 116 go together; until then 115 keeps the original locks |
+| ShotgunOnWallFix | 109, 115, 116 | Ceiling trap with any item: don't overwrite the pickup's quantity, don't place the shotgun back, lock both sandwich-room doors, remap its lock flags 0/1/2 to 15/16 and unlock them from the hall and the living room | Redesign: `picked()` (section C) for the trigger; Guard (I) for placing it back; data for the lock flags (named in `random.xml`, renumbered by the emitter) **Partly done:** 116 keeps the slot's own amount, sets no put-back AOT 6 and ignores the shotgun at the wall under `ITEM_RANDOMIZER`. **Done (lock milestone):** under `BR_LOCK_FULL_BYTE` 115 mirrors `F_LOCK_00`/`01` onto flags 0x0F/0x10 (the map's locks for its doors, which the emitter writes) at the end of `init` and where event 1 opens door 0, and 109 and 116 raise 0x0F and 0x10 in `init`. `F_LOCK_02` is on no door, so staging's 2 → 16 is not ported, nor its Jill nop at 0x2342 (the trap's locks stay the original's) |
 | DisableSerumDoorBlock | 20D | The serum event no longer blocks the door | Guard (R) |
 | DisablePoisonChallenge | 20E | No forced poison challenge | Guard (R) |
 | DisableBarryEvesdrop | 405 (Jill) | Barry's eavesdropping event off | Guard (R) |
@@ -150,7 +151,16 @@ milestone.
   `random.xml` records each intended difference.
 - Entrance overrides (106:3, 214, 303:8, 305:0) and the doors that differ by
   player or door rando are data in `random.xml`.
-- Doors leading nowhere get lock 255, which is never raised.
+- Doors leading nowhere get lock 255, which is never raised. **Done**, and
+  arklay also writes key 255 (staging leaves such a door's key 0, which the
+  walk showed can leave it open).
+- **Done (milestone 6):** under `BR_LOCK_FULL_BYTE` the emitter writes every
+  `door_aot_set`: the plan's `(lock, key)` for a door it has, matched by
+  room, AOT id and target room (106 AOT 3, 10F:3, 20E:3, 303:0, 40C:1 and
+  40F:0 don't match the map and keep their original flag); `byte & 0x3F`
+  when the original locks it, else 0, for the rest. The `0x40` Rebecca
+  refusal becomes a Guard (F) message AOT in its room (27 doors in 101, 103,
+  104, 106, 109, 10A, 10B, 201, 203, 204, 207, 303 and 408).
 
 ## G. History
 
