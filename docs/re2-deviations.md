@@ -38,7 +38,6 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **The reach and auto probes.** The bits of an area's `sat` byte are reduced to RE1's action-key, position and reach probes. The other triggers (the low nibble's non-player bits) are ignored.
 - **Locked doors.** The key messages are the executable's wording, written from memory (`games/re2/language/en-US.txt`), and the door plays no lock sound.
 - **The door scripts' other inputs.** The knock type isn't used.
-- **The hold before a door.** `Psx_main` takes 8 off every channel of the frozen frame per tick. Here it's a black veil of that weight, which is the same at both ends and differs a little between.
 - **Door timing.** The ticks are the original's for room 100's door. `Door_load`'s own sleeps depend on the door's sound bank, and no other door has been traced.
 
 ## Scripts
@@ -64,7 +63,6 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **3D effects.** `Esp_trans_3d`'s sprites draw at the turn their script gave them, from `sce_espr3d_on` and `sce_espr3d_on2`. On a body's or a work's matrix they take its position but not its turn, and `Mirror_in_view`'s second pass isn't drawn.
 - **Camera shake.** `sce_shake_on` moves the frame as `SetGeomOffset` does. No campaign room runs it without a trigger, so no parity run has seen it. `Scr_quake`'s own table isn't ported.
 - **The frames of a cut.** On the tick a cut changes and the tick after, the original shows its last frame again; arklay draws the old cut on both ticks with that tick's models, so anything moving has moved on by a tick or two. Room 200's opening pan changes cut on two consecutive ticks (11, then 0, then 10), and there arklay's frames still differ from the original's for three ticks, for a reason not yet found.
-- **Door fade-in.** The room's fade-in after a door has the original's steps and ends on the same tick, but the original's screen stays fully black for its first ticks (room 101: black at ticks 350 and 352, then 93% bright at 354) where arklay already shows the ramp. Why is not known: `Psx_main`'s and `Swap_Cbuff`'s present logic does not explain it.
 - **Script fades.** `sce_fade_set` and `sce_fade_adjust` run all four fades, over the whole screen and only in black or adding modes. Mode 3, used once, adds, and the colour mask, which the campaign always leaves at 7, is ignored. `Sce_fade_adjust`'s hold in stage 6's lit rooms isn't ported.
 - **Attached effects.** An effect on a body's matrix is placed as if on the world's.
 - **The sheets.** A room's effects use the low-resolution TIMs in its RDT, not `espdat1` and `espdat2`, and the shared ones `espcore.bin`'s six low-resolution TIMs (`Graphicsprdata == 0`), not `tex216.adt` and `tex316.adt`.

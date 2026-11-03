@@ -2033,6 +2033,12 @@ struct GameSession {
     drawn_cut: Option<(RoomId, usize)>,
     /// The room and camera as this tick began, which `drawn_cut` takes next.
     tick_cut: Option<(RoomId, usize)>,
+    /// The RE2 frames still to skip after a door: `Swap_Cbuff`'s
+    /// `Movie_set`, which `WinMain` counts down instead of presenting, so the
+    /// door's black stays on screen.
+    load_hold: u8,
+    /// This tick's frame is one `load_hold` skips.
+    load_held: bool,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -2608,6 +2614,8 @@ impl GameSession {
             gpu_room: None,
             drawn_cut: None,
             tick_cut: None,
+            load_hold: 0,
+            load_held: false,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -2856,6 +2864,8 @@ impl GameSession {
             .filter(|(room, _)| *room == self.loaded.id)
             .or(cut);
         self.tick_cut = cut;
+        self.load_held = self.load_hold > 0;
+        self.load_hold = self.load_hold.saturating_sub(1);
         self.buffer_half ^= 1;
         if self
             .cutscene_skip
@@ -5998,6 +6008,13 @@ impl GameSession {
         };
         self.game.re2.door_settling = session.door.re2.is_some();
         self.game.re2.door_stop = session.door.re2.is_some();
+        if session.door.re2.is_some() {
+            // A room's first `Bg_loadPC` skips four frames, room 301's eight,
+            // from the door's last one.
+            let id = self.loaded.id;
+            self.load_hold = if (id.stage, id.room) == (3, 1) { 7 } else { 3 };
+            self.load_held = true;
+        }
         if session.camera_only {
             finish_transition(
                 &mut session,
@@ -6902,7 +6919,7 @@ impl GameSession {
         let fade_hides_room = self.menu.is_some()
             && self.menu_fade_hides()
             && !(self.menu_fade_phase == MenuFadePhase::Out && self.menu_fade_pending);
-        if canvas.is_some() {
+        if canvas.is_some() || (self.load_held && self.menu.is_none()) {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         } else if self.document_pickup_hides_menu() {
