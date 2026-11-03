@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="214" name="2F WEST BLUE CORRIDOR" tags="mansion">
+    <door id="0" target="213:3" player="chris">
+      <entrance x="22800" y="0" z="6300" d="2048" cut="0"/>
+    </door>
+    <door id="1" target="213:3" player="jill">
+      <entrance x="22800" y="0" z="6300" d="2048" cut="0"/>
+    </door>
+    <door id="1" target="201:1" kind="unlock" lock="17" player="chris">
+      <entrance x="11200" y="0" z="28000" d="3072" cut="4"/>
+    </door>
+    <door id="5" target="201:1" kind="unlock" lock="17" player="jill">
+      <entrance x="11200" y="0" z="28000" d="3072" cut="4"/>
+    </door>
+    <item id="2" flag="169" type="68" amount="1" group="2" name="GREEN HERB/1"/>
+    <item id="3" flag="170" type="69" amount="1" group="2" name="BLUE HERB"/>
+    <item id="4" flag="171" type="68" amount="1" group="2" name="GREEN HERB/2"/>
+    <enemies exclude="4"/>
+    <spot x="13558" y="0" z="7505" d="3166"/>
+    <spot x="13901" y="0" z="12855" d="3302"/>
+    <spot x="14175" y="0" z="21286" d="1054"/>
+    <spot x="14196" y="0" z="27839" d="1030"/>
+    <spot x="14970" y="0" z="25074" d="3342"/>
+    <spot x="15141" y="0" z="17962" d="1094"/>
+    <spot x="15352" y="0" z="9998" d="2590"/>
+    <spot x="15701" y="0" z="26502" d="2342"/>
+    <spot x="17220" y="0" z="6424" d="3974"/>
+    <spot x="18835" y="0" z="3676" d="3046"/>
+    <spot x="20378" y="0" z="6309" d="1950"/>
+    <spot x="21983" y="0" z="3445" d="2174"/>
+    <spot x="2970" y="0" z="28195" d="94"/>
+    <spot x="7091" y="0" z="28670" d="3942"/>
+  </room>
+</random>

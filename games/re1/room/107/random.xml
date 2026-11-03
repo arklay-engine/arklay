@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="107" name="1F EAST GALLERY" tags="mansion">
+    <door id="0" target="106:0">
+      <entrance x="2700" y="0" z="6600" d="0"/>
+    </door>
+    <door id="1" target="108:0" lock="9" key="51" requires="item(51)">
+      <entrance x="15300" y="0" z="4200" d="2048"/>
+    </door>
+    <item id="2" flag="145" type="78" amount="1" group="1" name="MAP IN STATUE" document="true"/>
+    <item id="131" flag="39" type="47" amount="3" group="1" name="SHELF ROUND CORNER"/>
+    <enemies exclude="4"/>
+    <spot x="11682" y="0" z="9301" d="1032"/>
+    <spot x="17377" y="0" z="13764" d="4032"/>
+    <spot x="19867" y="0" z="14679" d="4040"/>
+    <spot x="20586" y="0" z="13095" d="3976"/>
+    <spot x="22407" y="0" z="14147" d="1000"/>
+    <spot x="22556" y="0" z="9145" d="2152"/>
+    <spot x="3349" y="0" z="10422" d="96"/>
+    <spot x="5391" y="0" z="2472" d="2168"/>
+    <spot x="6553" y="0" z="6774" d="1264"/>
+    <spot x="8595" y="0" z="9228" d="2008"/>
+    <spot x="8702" y="0" z="4014" d="24"/>
+  </room>
+</random>

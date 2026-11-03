@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="506" name="LABORATORY B3 COMPUTER" tags="lab">
+    <door id="0" target="505:1">
+      <entrance x="15200" y="0" z="4300" d="2712"/>
+    </door>
+    <flag name="506_COMPUTER_JOHNADA"/>
+    <flag name="506_COMPUTER_MOLE"/>
+    <item id="2" flag="179" type="43" amount="1" group="32" name="SLIDES"/>
+    <enemies id="0" kind="npc"/>
+    <enemies id="1" kind="npc"/>
+    <enemies exclude="4" max-difficulty="1"/>
+    <spot x="10481" y="0" z="4072" d="2104"/>
+    <spot x="12083" y="0" z="8161" d="2000"/>
+    <spot x="6590" y="0" z="4463" d="4008"/>
+    <spot x="7943" y="0" z="8481" d="4008"/>
+  </room>
+</random>

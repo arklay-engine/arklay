@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="50A" name="LABORATORY B3 WEST XRAY" tags="lab">
+    <door id="0" target="508:2">
+      <entrance x="10800" y="0" z="10200" d="1576"/>
+    </door>
+    <item id="1" flag="81" type="104" amount="1" group="32" name="DOCUMENT" document="true"/>
+    <item id="6" flag="163" type="11" amount="15" group="32" name="CLIP IN BOX/1" hidden="true"/>
+    <item id="7" flag="229" type="11" amount="15" group="32" name="CLIP IN BOX/2" hidden="true"/>
+    <item id="8" flag="164" type="68" amount="1" group="32" name="GREEN HERB"/>
+    <spot x="11077" y="0" z="6940" d="1944"/>
+    <spot x="2979" y="0" z="6438" d="4032"/>
+    <spot x="3249" y="0" z="9139" d="568"/>
+    <spot x="3757" y="0" z="3698" d="3632"/>
+    <spot x="5291" y="0" z="3435" d="3008"/>
+    <spot x="5349" y="0" z="5827" d="4000"/>
+    <spot x="5794" y="0" z="6594" d="2056"/>
+    <spot x="6959" y="0" z="4371" d="136"/>
+    <spot x="7225" y="0" z="6638" d="4072"/>
+    <spot x="8263" y="0" z="7453" d="2224"/>
+    <spot x="9625" y="0" z="4570" d="2896"/>
+  </room>
+</random>

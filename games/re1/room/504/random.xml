@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="504" name="LABORATORY B2 CONFERENCE ROOM" tags="lab">
+    <door id="0" target="503:1">
+      <entrance x="7300" y="0" z="13800" d="1024"/>
+    </door>
+    <item id="1" flag="137" type="60" amount="1" group="32" name="KEY BEHIND VENT"/>
+    <item id="2" flag="136" type="103" amount="0" group="32" name="MAP IN BOOKCASE" document="true" hidden="true"/>
+    <enemies exclude="4"/>
+    <spot x="10371" y="0" z="4236" d="112"/>
+    <spot x="10975" y="0" z="6898" d="2872"/>
+    <spot x="11621" y="0" z="11620" d="2016"/>
+    <spot x="3321" y="0" z="13843" d="16"/>
+    <spot x="4226" y="0" z="5549" d="1064"/>
+    <spot x="4485" y="0" z="10030" d="1064"/>
+    <spot x="4948" y="0" z="3319" d="4000"/>
+    <spot x="8143" y="0" z="3886" d="2056"/>
+  </room>
+</random>

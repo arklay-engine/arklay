@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="410" name="GUARDHOUSE WEAPON STORAGE" tags="guardhouse">
+    <door id="0" target="40E:2" lock="36">
+      <entrance x="9100" y="0" z="3100" d="2048"/>
+    </door>
+    <item id="1" flag="122" type="12" amount="7" group="8" name="SHELLS/1"/>
+    <item id="2" flag="131" type="12" amount="7" group="8" name="SHELLS/2"/>
+    <item id="131" flag="112" type="11" amount="15" group="8" name="CLIP/1"/>
+    <item id="132" flag="92" type="11" amount="15" group="8" name="CLIP/2"/>
+    <item id="5" flag="114" type="58" amount="1" group="8" name="KEY"/>
+    <enemies exclude="4" max-difficulty="0"/>
+    <spot x="4069" y="0" z="4777" d="144"/>
+    <spot x="7980" y="0" z="5818" d="2000"/>
+  </room>
+</random>

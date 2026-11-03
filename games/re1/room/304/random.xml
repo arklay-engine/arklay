@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="304" name="GUARDHOUSE GATE" tags="guardhouse">
+    <door id="0" target="302:2">
+      <entrance x="28600" y="0" z="4000" d="2048"/>
+    </door>
+    <door id="1" target="400:0">
+      <entrance x="4000" y="0" z="30000" d="1024"/>
+    </door>
+    <item id="3" flag="193" type="68" amount="1" group="4" name="GREEN HERB/1"/>
+    <item id="4" flag="194" type="68" amount="1" group="4" name="GREEN HERB/2"/>
+    <item id="5" flag="195" type="69" amount="1" group="4" name="BLUE HERB/1"/>
+    <item id="6" flag="196" type="69" amount="1" group="4" name="BLUE HERB/2"/>
+    <!-- staging condition: !(!0:0 && 0:24) -->
+    <enemies exclude="4"/>
+    <spot x="12715" y="0" z="15719" d="1904"/>
+    <spot x="15215" y="0" z="17341" d="128"/>
+    <spot x="18822" y="0" z="15317" d="4000"/>
+    <spot x="22021" y="0" z="17606" d="1992"/>
+    <spot x="24263" y="0" z="17016" d="3224"/>
+    <spot x="24737" y="0" z="8123" d="2872"/>
+    <spot x="24748" y="0" z="2790" d="3024"/>
+    <spot x="25739" y="0" z="13161" d="2344"/>
+    <spot x="26645" y="0" z="10377" d="960"/>
+    <spot x="26651" y="0" z="17650" d="1192"/>
+    <spot x="26735" y="0" z="4590" d="2472"/>
+    <spot x="2980" y="0" z="22875" d="3096"/>
+    <spot x="3166" y="0" z="17738" d="104"/>
+    <spot x="4023" y="0" z="16097" d="3056"/>
+    <spot x="4349" y="0" z="20298" d="3216"/>
+    <spot x="4609" y="0" z="16078" d="4048"/>
+    <spot x="4880" y="0" z="26191" d="808"/>
+    <spot x="5996" y="0" z="16258" d="4064"/>
+    <spot x="8653" y="0" z="17237" d="2304"/>
+  </room>
+</random>

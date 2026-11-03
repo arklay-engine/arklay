@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="408" name="GUARDHOUSE NEST" tags="guardhouse">
+    <door id="0" target="405:2">
+      <entrance x="4200" y="0" z="3400" d="0"/>
+    </door>
+    <door id="1" target="409:0" kind="unblock" allowed-locks="">
+      <entrance x="8500" y="0" z="10200" d="0"/>
+    </door>
+    <door id="2" target="40A:0" lock="42" key="58" requires="item(58)">
+      <entrance x="17800" y="0" z="7700" d="2048"/>
+    </door>
+    <door id="3" target="40C:0" kind="blocked" door-rando="false">
+      <entrance x="26000" y="0" z="4000" d="2048"/>
+    </door>
+    <door id="3" target="40C:0" door-rando="true">
+      <entrance x="26000" y="0" z="4000" d="2048"/>
+    </door>
+    <item id="5" flag="72" type="57" amount="1" group="8" name="KEY ON BODY"/>
+    <!-- staging condition: !(!0:0 && 1:170) -->
+    <enemies player="chris"/>
+    <enemies player="jill"/>
+    <spot x="11815" y="0" z="3720" d="3984"/>
+    <spot x="11942" y="0" z="9478" d="1936"/>
+    <spot x="12425" y="0" z="9912" d="904"/>
+    <spot x="13159" y="0" z="6015" d="2840"/>
+    <spot x="13233" y="0" z="5259" d="3544"/>
+    <spot x="13416" y="0" z="3988" d="3968"/>
+    <spot x="15314" y="0" z="10779" d="3904"/>
+    <spot x="15408" y="0" z="4392" d="2096"/>
+    <spot x="15622" y="0" z="7908" d="1136"/>
+    <spot x="16505" y="0" z="15291" d="2912"/>
+    <spot x="16934" y="0" z="20435" d="736"/>
+    <spot x="17286" y="0" z="3777" d="208"/>
+    <spot x="18164" y="0" z="12017" d="3160"/>
+    <spot x="20902" y="0" z="4539" d="64"/>
+    <spot x="24896" y="0" z="3226" d="1968"/>
+    <spot x="3006" y="0" z="7464" d="3992"/>
+    <spot x="8425" y="0" z="4076" d="2128"/>
+    <spot x="9198" y="0" z="6974" d="552"/>
+  </room>
+</random>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="115" name="1F EAST JILL SANDWICH" tags="mansion">
+    <door id="0" target="109:3" kind="dynamic" lock="15" allowed-locks="">
+      <entrance x="2500" y="0" z="4900" d="0"/>
+    </door>
+    <door id="1" target="116:0" kind="dynamic" lock="16" allowed-locks="" randomize="false">
+      <entrance x="6000" y="0" z="2500" d="3072"/>
+    </door>
+    <enemies id="0" kind="npc" player="jill"/>
+    <enemies id="1" kind="npc" player="jill"/>
+    <!-- staging condition: !(7:0 && 7:1 && 1:32) -->
+    <enemies exclude="4" max-difficulty="0" player="chris"/>
+    <!-- staging condition: !(7:0 && 7:1) -->
+    <enemies exclude="4" max-difficulty="0" player="jill"/>
+    <spot x="6673" y="0" z="6714" d="1776"/>
+  </room>
+</random>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="301" name="COURTYARD RESERVOIR" tags="courtyard">
+    <door id="0" target="300:0">
+      <entrance x="22400" y="0" z="3600" d="3072"/>
+    </door>
+    <door target="301/END" kind="unblock" allowed-locks="" randomize="false" requires="item(29)"/>
+    <enemies exclude="3 4 7 10"/>
+    <spot x="10314" y="0" z="28324" d="799"/>
+    <spot x="11055" y="0" z="23428" d="3095"/>
+    <spot x="11080" y="0" z="26406" d="935"/>
+    <spot x="15026" y="0" z="27360" d="2047"/>
+    <spot x="15102" y="0" z="10111" d="2136"/>
+    <spot x="18042" y="0" z="9710" d="3984"/>
+    <spot x="19507" y="0" z="27360" d="2047"/>
+    <spot x="22504" y="0" z="8621" d="3032"/>
+    <spot x="22537" y="0" z="5274" d="1136"/>
+    <spot x="2730" y="0" z="19021" d="3047"/>
+    <spot x="2883" y="0" z="16909" d="3167"/>
+    <spot x="4113" y="0" z="23892" d="991"/>
+    <spot x="4582" y="0" z="16815" d="2775"/>
+    <spot x="4881" y="0" z="24145" d="223"/>
+    <spot x="9119" y="0" z="24169" d="2287"/>
+  </room>
+  <room key="301/END" name="COURTYARD RESERVOIR" tags="courtyard">
+    <door target="301" kind="blocked" allowed-locks="" randomize="false"/>
+    <door id="1" target="302:1" allowed-locks="" no-unlock="true" tags="connect-out">
+      <entrance x="3400" y="0" z="12800" d="3072"/>
+    </door>
+  </room>
+</random>

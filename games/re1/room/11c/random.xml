@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="11C" name="1F EAST WARDROBE" tags="mansion exclude">
+    <door id="0" target="112:1" lock="48">
+      <entrance x="3500" y="0" z="4500" d="1024"/>
+    </door>
+  </room>
+</random>

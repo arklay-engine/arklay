@@ -1,20 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="1F EAST BIG MIRROR"/>
-  <doors>
-    <door id="0" target="111:1" kind="normal">
+  <room key="112" name="1F EAST BIG MIRROR" tags="mansion">
+    <door id="0" target="111:1">
       <entrance x="2900" y="0" z="15300" d="0" cut="7"/>
     </door>
-    <door id="1" target="11C:0" kind="normal">
+    <door id="1" target="11C:0" lock="48" key="56" requires="item(56)">
       <entrance x="3500" y="0" z="7500" d="0" cut="7"/>
     </door>
-  </doors>
-  <items>
-    <item id="2" name="GREEN HERB/1"/>
-    <item id="3" name="GREEN HERB/2"/>
-    <item id="4" name="INK"/>
-  </items>
-  <enemies>
+    <item id="2" flag="142" type="68" amount="1" group="1" name="GREEN HERB/1"/>
+    <item id="3" flag="143" type="68" amount="1" group="1" name="GREEN HERB/2"/>
+    <!-- staging typeOffsets: 0x17969 -->
+    <item id="4" flag="212" type="47" amount="3" group="1" name="INK"/>
+    <enemies max-difficulty="1"/>
     <spot x="10083" y="0" z="8463" d="2384"/>
     <spot x="10734" y="0" z="14807" d="2040"/>
     <spot x="5281" y="0" z="10465" d="152"/>
@@ -28,5 +25,5 @@
     <spot x="8368" y="0" z="14702" d="1144"/>
     <spot x="9410" y="0" z="7543" d="3040"/>
     <spot x="9870" y="0" z="11116" d="2024"/>
-  </enemies>
+  </room>
 </random>

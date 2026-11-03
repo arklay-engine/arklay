@@ -1,18 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="1F EAST DRESSING"/>
-  <doors>
-    <door id="0" target="106:1" kind="normal">
+  <room key="111" name="1F EAST DRESSING" tags="mansion">
+    <door id="0" target="106:1" lock="5">
       <entrance x="2800" y="0" z="4600" d="0" cut="1"/>
     </door>
-    <door id="1" target="112:0" kind="normal">
+    <door id="1" target="112:0">
       <entrance x="22500" y="0" z="11300" d="2048" cut="7"/>
     </door>
-  </doors>
-  <items>
-    <item id="4" name="CLIP ON TABLE"/>
-  </items>
-  <enemies exclude="4">
+    <item id="3" flag="2" type="12" amount="7" group="1" name="IN LOCKED DRAWER" requires="item(61)" lock="31"/>
+    <item id="4" flag="96" type="11" amount="15" group="1" name="CLIP ON TABLE"/>
+    <enemies exclude="4" max-difficulty="1"/>
     <spot x="11030" y="0" z="11325" d="957"/>
     <spot x="14468" y="0" z="11450" d="4061"/>
     <spot x="19369" y="0" z="11414" d="2117"/>
@@ -21,5 +18,5 @@
     <spot x="5716" y="0" z="11403" d="4029"/>
     <spot x="9713" y="0" z="7563" d="2213"/>
     <spot x="9812" y="0" z="4781" d="3117"/>
-  </enemies>
+  </room>
 </random>

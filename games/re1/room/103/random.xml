@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="103" name="1F WEST MIDDLE CORRIDOR" tags="mansion">
+    <door id="0" target="101:2">
+      <entrance x="2400" y="0" z="24800" d="0"/>
+    </door>
+    <door id="1" target="104:0" kind="unlock" lock="18">
+      <entrance x="3000" y="0" z="3000" d="3072"/>
+    </door>
+    <door id="2" target="10C:0">
+      <entrance x="21800" y="0" z="19100" d="3072"/>
+    </door>
+    <door id="3" target="10D:0">
+      <entrance x="8600" y="0" z="15000" d="1024"/>
+    </door>
+    <door id="4" target="10E:0" lock="11" key="51" requires="item(51)">
+      <entrance x="2700" y="0" z="10800" d="0"/>
+    </door>
+    <enemies exclude="4"/>
+    <spot x="13758" y="0" z="22313" d="4060"/>
+    <spot x="17358" y="0" z="22487" d="4060"/>
+    <spot x="21815" y="0" z="22675" d="1100"/>
+    <spot x="3055" y="0" z="14169" d="3060"/>
+    <spot x="3078" y="0" z="5393" d="3060"/>
+    <spot x="3141" y="0" z="17938" d="3316"/>
+    <spot x="5262" y="0" z="22201" d="2044"/>
+    <spot x="5337" y="0" z="14061" d="4084"/>
+    <spot x="8510" y="0" z="24976" d="1996"/>
+    <spot x="9398" y="0" z="22090" d="4060"/>
+  </room>
+</random>

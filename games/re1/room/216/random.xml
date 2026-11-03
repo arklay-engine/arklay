@@ -1,18 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="2F WEST LIBRARY"/>
-  <doors>
-    <door id="0" target="213:0" kind="normal">
+  <room key="216" name="2F WEST LIBRARY" tags="mansion">
+    <door id="0" target="213:0">
       <entrance x="13600" y="0" z="10300" d="2048" cut="4"/>
     </door>
-    <door id="1" target="217:0" kind="normal">
+    <door id="1" target="217:0">
       <entrance x="3000" y="0" z="3600" d="0" cut="5"/>
     </door>
-    <door id="2" target="218:0" kind="hidden"/>
-  </doors>
-  <items>
-  </items>
-  <enemies exclude="4">
+    <door id="2" target="218:0" kind="unblock">
+      <entrance x="5200" y="0" z="15200" d="1024"/>
+    </door>
+    <item id="3" flag="84" type="102" amount="1" group="2" name="DOCUMENT ON STALL" document="true"/>
+    <item id="4" flag="121" type="14" amount="6" group="2" name="LOCKED DRAWER" requires="item(61)" lock="32"/>
+    <enemies exclude="4"/>
     <spot x="10274" y="0" z="9408" d="2895"/>
     <spot x="4375" y="0" z="7311" d="3695"/>
     <spot x="5096" y="0" z="9641" d="1087"/>
@@ -23,5 +23,5 @@
     <spot x="9332" y="0" z="5417" d="3231"/>
     <spot x="9366" y="0" z="13694" d="1103"/>
     <spot x="9368" y="0" z="9316" d="1335"/>
-  </enemies>
+  </room>
 </random>

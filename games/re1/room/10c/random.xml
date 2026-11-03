@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="10C" name="1F WEST GREENHOUSE" tags="mansion">
+    <door id="0" target="103:2">
+      <entrance x="13600" y="0" z="7400" d="2048"/>
+    </door>
+    <door target="10C/BACK" kind="unblock" allowed-locks="" randomize="false" requires="item(38)"/>
+  </room>
+  <room key="10C/BACK" name="1F WEST GREENHOUSE" tags="mansion">
+    <door target="10C" kind="blocked" allowed-locks="" randomize="false"/>
+    <item id="4" flag="27" type="52" amount="6" group="1" name="CREST"/>
+    <item id="5" flag="103" type="67" amount="1" group="1" name="RED HERB/1"/>
+    <item id="6" flag="243" type="67" amount="1" group="1" name="RED HERB/2"/>
+    <item id="7" flag="132" type="68" amount="1" group="1" name="GREEN HERB/1"/>
+    <item id="8" flag="242" type="68" amount="1" group="1" name="GREEN HERB/2"/>
+    <item id="9" flag="244" type="68" amount="1" group="1" name="GREEN HERB/3"/>
+    <item id="10" flag="245" type="68" amount="1" group="1" name="GREEN HERB/4"/>
+  </room>
+</random>

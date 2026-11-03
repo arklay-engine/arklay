@@ -62,6 +62,8 @@
 //!   `enemy.csv`), and a door's `<entrance>` its arrival point (staging's
 //!   `doors.csv` and inline entrances).
 
+mod xml;
+
 use indexmap::IndexMap;
 
 /// Who the player is, for entries that exist for one character only.
@@ -268,7 +270,10 @@ pub struct Item {
     pub name: Option<String>,
     /// The item box or drawer lock it sits behind.
     pub lock: Option<u8>,
-    /// Placement groups, as a bit mask; 0 places anywhere.
+    /// The placement groups this slot takes, as a bit mask. An item whose
+    /// group is `g` (its catalogue entry's, see [`ItemDef::group`]) goes here
+    /// only if every bit of `g` is set, as staging's `RouteFinder` checks.
+    /// `-1` in the XML is every bit: the slot takes any item.
     pub group: u32,
     pub requires: Vec<Requirement>,
     pub document: bool,
@@ -338,6 +343,8 @@ pub struct ItemDef {
     pub kind: String,
     pub ammo: Vec<u8>,
     pub max: u16,
+    /// The slots it may go in: its bits must all be set in the slot's
+    /// [`Item::group`]. 0 fits any slot.
     pub group: u32,
     pub amount: Option<u8>,
     /// A generic key the game discards after its last door; lock

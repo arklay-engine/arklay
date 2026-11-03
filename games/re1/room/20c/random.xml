@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="20C" name="PIANO LESSON" tags="mansion mansion2able">
+    <door id="0" target="20B:5" lock="25">
+      <entrance x="10400" y="0" z="18400" d="2048"/>
+    </door>
+    <door target="20C/GRAVE" kind="oneway" allowed-locks="" door-rando="false"/>
+    <door target="20C/GRAVE" allowed-locks="" randomize="false" door-rando="true"/>
+    <!-- staging ignoreRatio: true -->
+    <enemies id="0" flag="62" include="11 12 18"/>
+  </room>
+  <room key="20C/GRAVE" name="PIANO LESSON/GRAVE" tags="mansion">
+    <door target="20C" kind="blocked" allowed-locks="" randomize="false"/>
+    <door id="1" target="21A:0" kind="unblock" allowed-locks="" tags="segment-end connect-back">
+      <entrance x="20300" y="0" z="3500" d="0"/>
+    </door>
+  </room>
+</random>

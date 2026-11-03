@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="20A" name="2F EAST FISH TANK" tags="mansion mansion2able">
+    <door id="0" target="208:2">
+      <entrance x="2600" y="0" z="5500" d="0"/>
+    </door>
+    <item id="7" flag="15" type="12" amount="7" group="1" name="BEHIND BOOKCASE" player="chris"/>
+    <item id="8" flag="16" type="95" amount="1" group="1" name="DOCUMENT ON DESK" document="true" hidden="true" player="chris"/>
+    <item id="8" flag="16" type="95" amount="1" group="1" name="DOCUMENT ON DESK" document="true" hidden="true" optional="true" player="jill"/>
+    <item id="7" flag="15" type="16" amount="6" group="1" name="BEHIND BOOKCASE" player="jill"/>
+    <item id="9" flag="184" type="47" amount="3" group="1" name="COAT POCKET" hidden="true"/>
+    <enemies exclude="3 4 7 9 10" max-difficulty="0" player="chris"/>
+    <!-- staging condition: !(1:8 && 1:98 && 1:7) -->
+    <enemies exclude="3 4 7 9 10" max-difficulty="0" player="jill"/>
+    <spot x="4419" y="0" z="3486" d="3024"/>
+    <spot x="5535" y="0" z="5128" d="2088"/>
+  </room>
+</random>

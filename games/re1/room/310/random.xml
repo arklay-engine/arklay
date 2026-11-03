@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="310" name="FOUNTAIN STAIRS" tags="lab">
+    <door id="0" target="305:1" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="24600" y="6400" z="1300" d="0"/>
+    </door>
+    <door id="1" target="500:1" allowed-locks="" no-unlock="true" tags="segment-end">
+      <entrance x="0" y="0" z="0" d="2048"/>
+    </door>
+  </room>
+</random>

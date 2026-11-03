@@ -1,13 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <random>
-  <room name="HELIPAD" tags="goal"/>
-  <doors>
-    <door id="8" kind="normal">
-      <entrance x="29130" y="0" z="5700" d="2048" cut="4"/>
+  <room key="303" name="HELIPAD">
+    <door id="0" name="LIFT TO LAB" target="50D:1" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="9000" y="0" z="5500" d="0"/>
     </door>
-  </doors>
-  <items>
-    <item id="2" name="FLARE"/>
-  </items>
-  <enemies fixed="true"/>
+    <door id="8" name="DOOR TO FOUNTAIN" target="305:0" kind="locked" lock="2" door-rando="false">
+      <!-- staging entrance x=28350 y=0 z=5700 d=0 cut=4 replaced by doors.csv -->
+      <!-- proof-of-concept entrance x=29130 y=0 z=5700 d=2048 cut=4 not used -->
+      <entrance x="8700" y="0" z="5300" d="2048"/>
+    </door>
+    <flag name="BRAD_303" requires="item(42)"/>
+    <item id="2" flag="73" type="42" amount="1" group="-1" name="FLARE" optional="true"/>
+    <enemies id="0" flag="89" kind="npc"/>
+  </room>
 </random>

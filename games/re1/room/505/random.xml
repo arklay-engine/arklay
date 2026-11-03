@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="505" name="LABORATORY B3 RING CORRIDOR" tags="lab">
+    <door id="0" target="503:2" allowed-locks="" no-unlock="true">
+      <entrance x="3500" y="0" z="23100" d="1024"/>
+    </door>
+    <door id="1" target="506:0">
+      <entrance x="21600" y="0" z="21000" d="1024"/>
+    </door>
+    <door id="2" target="507/STORE:0" kind="locked" lock="45" allowed-locks="" door-rando="false">
+      <entrance x="16600" y="0" z="4200" d="1024"/>
+    </door>
+    <door id="2" target="507/STORE:0" lock="45" door-rando="true">
+      <entrance x="16600" y="0" z="4200" d="1024"/>
+    </door>
+    <door id="3" target="508:0">
+      <entrance x="2900" y="0" z="17500" d="0"/>
+    </door>
+    <door id="4" target="50C:0" lock="29" key="60" requires="item(60)">
+      <entrance x="22500" y="0" z="3100" d="2048"/>
+    </door>
+    <enemies exclude="4"/>
+    <spot x="10635" y="0" z="17857" d="3694"/>
+    <spot x="12078" y="0" z="4133" d="4086"/>
+    <spot x="13296" y="0" z="19678" d="1766"/>
+    <spot x="14308" y="0" z="3006" d="4086"/>
+    <spot x="14708" y="0" z="17757" d="62"/>
+    <spot x="16945" y="0" z="19068" d="2182"/>
+    <spot x="19256" y="0" z="3099" d="4022"/>
+    <spot x="20159" y="0" z="18473" d="2070"/>
+    <spot x="21005" y="0" z="11752" d="990"/>
+    <spot x="21495" y="0" z="8452" d="1078"/>
+    <spot x="21569" y="0" z="17821" d="926"/>
+    <spot x="22367" y="0" z="13085" d="3270"/>
+    <spot x="22581" y="0" z="6161" d="3014"/>
+    <spot x="3550" y="0" z="13528" d="944"/>
+    <spot x="4729" y="0" z="10450" d="1000"/>
+    <spot x="5216" y="0" z="14628" d="1022"/>
+    <spot x="5774" y="0" z="18232" d="3910"/>
+    <spot x="8496" y="0" z="3330" d="2222"/>
+    <spot x="8696" y="0" z="19125" d="1158"/>
+    <spot x="8824" y="0" z="5584" d="1966"/>
+  </room>
+</random>
