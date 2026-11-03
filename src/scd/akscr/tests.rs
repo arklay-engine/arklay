@@ -97,6 +97,39 @@ fn a_negated_randomizer_condition_tests_for_the_flag_clear() {
 }
 
 #[test]
+fn a_random_enemies_placeholder_is_a_marker_only_outside_a_variants_build() {
+    let text = |call: &str| {
+        format!(
+            "#version 1\nproc init\n{{\n    if (!ENEMY_RANDOMIZER)\n    {{\n        set(0, 1, 0);\n    }}\n    {call}\n}}\n"
+        )
+    };
+    let bytes = |text: &str| {
+        block_bytes(
+            &reader::parse(&compile(text).unwrap().to_container().unwrap())
+                .unwrap()
+                .init[0],
+        )
+    };
+    let none = bytes(&text(""));
+    let unnamed = bytes(&text("random_enemies();"));
+    let named = bytes(&text("random_enemies(jill);"));
+    let marker = |id: u16| {
+        let [low, high] = id.to_le_bytes();
+        [super::ENEMY_MARKER_OP, super::ENEMY_MARKER_TAG, low, high]
+    };
+    assert!(unnamed.windows(4).any(|w| w == marker(0)), "{unnamed:02x?}");
+    let id = super::placeholder_id(Some("jill"));
+    assert_ne!(id, 0);
+    assert!(named.windows(4).any(|w| w == marker(id)), "{named:02x?}");
+    assert_eq!(unnamed.len(), none.len() + 4);
+    // The retail build is the same bytes with or without the placeholder.
+    assert_eq!(
+        all_bytes(&round(&text("random_enemies(jill);"))),
+        all_bytes(&round(&text("")))
+    );
+}
+
+#[test]
 fn every_system_flag_is_tested_by_name() {
     let guard = |condition: &str| {
         format!(
