@@ -206,28 +206,18 @@ fn variant_condition(tokens: &[Token]) -> Result<(u8, usize)> {
     Ok((mask, pos))
 }
 
-/// The port's system flags a script may test by name, as their bits in
-/// `FG_STATUS`. The engine raises them for a randomizer's pack.
-const SYSTEM_ATOMS: [(&str, u8); 3] = {
-    use crate::scd::opcode::system::*;
-    [
-        ("RANDOMIZER", RANDOMIZER),
-        ("DOOR_RANDOMIZER", DOOR_RANDOMIZER),
-        ("ENEMY_RANDOMIZER", ENEMY_RANDOMIZER),
-    ]
-};
-
-/// The system flag and expected state of an `if` condition that tests one
-/// (`RANDOMIZER`, `!ENEMY_RANDOMIZER`), with the tokens it used.
+/// The system flag and expected state of an `if` condition that tests one by
+/// name (`RANDOMIZER`, `!ENEMY_RANDOMIZER`), with the tokens it used. The names
+/// are those of [`crate::scd::opcode::system::BY_NAME`].
 fn system_condition(tokens: &[Token]) -> Option<(u8, bool, usize)> {
     let negated = matches!(tokens.first().map(|t| &t.tok), Some(Tok::Punct("!")));
     let at = usize::from(negated);
     let Some(Tok::Ident(name)) = tokens.get(at).map(|t| &t.tok) else {
         return None;
     };
-    let (_, flag) = SYSTEM_ATOMS.iter().find(|(atom, _)| atom == name)?;
+    let flag = crate::scd::opcode::system::bit_named(name)?;
     matches!(tokens.get(at + 1).map(|t| &t.tok), Some(Tok::Punct(")"))).then_some((
-        *flag,
+        flag,
         !negated,
         at + 1,
     ))

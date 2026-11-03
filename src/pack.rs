@@ -3056,6 +3056,7 @@ mod tests {
             start_health: None,
             seed: None,
             generator_version: None,
+            biorand_flags: None,
             character: None,
             region: None,
         }

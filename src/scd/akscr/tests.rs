@@ -97,6 +97,53 @@ fn a_negated_randomizer_condition_tests_for_the_flag_clear() {
 }
 
 #[test]
+fn every_system_flag_is_tested_by_name() {
+    let guard = |condition: &str| {
+        format!(
+            "#version 1\nproc init\n{{\n    if ({condition})\n    {{\n        set(0, 1, 0);\n    }}\n    else\n    {{\n        set(0, 2, 0);\n    }}\n}}\n"
+        )
+    };
+    let vanilla = |body: u8| {
+        round(&format!(
+            "#version 1\nproc init\n{{\n    set(0, {body}, 0);\n}}\n"
+        ))
+    };
+    for (name, bit) in crate::scd::opcode::system::BY_NAME {
+        // `NAME` takes its `then` arm when the flag is set, so a retail build
+        // (the flag clear) keeps the `else` arm.
+        let runtime = compile(&guard(name)).unwrap();
+        let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+        let bytes = block_bytes(&runtime.init[0]);
+        let test = [0x04, 5, bit, 0];
+        assert!(
+            bytes.windows(4).any(|window| window == test),
+            "{name}: {bytes:02x?}"
+        );
+        assert_eq!(
+            all_bytes(&round(&guard(name))),
+            all_bytes(&vanilla(2)),
+            "{name}"
+        );
+
+        // `!NAME` takes its `then` arm when the flag is clear.
+        let negated = format!("!{name}");
+        let runtime = compile(&guard(negated.as_str())).unwrap();
+        let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+        let bytes = block_bytes(&runtime.init[0]);
+        let test = [0x04, 5, bit, 1];
+        assert!(
+            bytes.windows(4).any(|window| window == test),
+            "{negated}: {bytes:02x?}"
+        );
+        assert_eq!(
+            all_bytes(&round(&guard(negated.as_str()))),
+            all_bytes(&vanilla(1)),
+            "{negated}"
+        );
+    }
+}
+
+#[test]
 fn proc_blocks_end_in_an_implicit_return() {
     let scripts =
         round("#version 1\nproc init\n{\n    set(FG_COMMON, 1, 1);\n}\nproc main\n{\n}\n");

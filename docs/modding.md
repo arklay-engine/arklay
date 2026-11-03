@@ -2212,10 +2212,19 @@ every other base pack, RE2 and generated games included, uses
 
 ### Script guards
 
-`if (RANDOMIZER)`, `if (DOOR_RANDOMIZER)` and `if (ENEMY_RANDOMIZER)` test system
-flags in bank 5 (`0xF0` to `0xF2`), which the engine sets from a manifest with a
-`seed`. They are false in the vanilla game, and a room's retail-identical variant
-build folds them to the `else` arm, so a guard does not change those bytes.
+Each system flag is tested by name, as in `if (RANDOMIZER)` or
+`if (!ITEM_RANDOMIZER)`. They are bank 5 bits `0xC0` to `0xCD`, in the range
+BioRand reserves: `0xCE` and `0xCF` are reserved for more engine behaviour, and
+`0xD0` to `0xFF` are spare. The flags are `RANDOMIZER`, `DOOR_RANDOMIZER`,
+`ENEMY_RANDOMIZER`, `ITEM_RANDOMIZER`, `LOCK_RANDOMIZER`, `CUTSCENES_DISABLED`,
+`FORCE_TYRANT2` and `LAB`, then the engine-behaviour flags
+`BR_LOCK_FULL_BYTE`, `BR_NEPTUNE_KILLABLE`, `BR_YAWN_POISON`, `BR_HERB_MIXES`,
+`BR_INK_FLAG` and `BR_NO_TITLE_DEMO`. The engine raises `RANDOMIZER` for a
+manifest with a `seed`, and every name in its `biorand_flags` list. A seeded
+manifest without that list (the proof of concept's packs) also raises
+`DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`. The flags are clear in the vanilla
+game. A room's retail-identical variant build folds each guard to the branch
+that the clear flag takes, so a guard does not change those bytes.
 
 ## Determinism
 

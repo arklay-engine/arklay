@@ -2574,16 +2574,16 @@ impl GameSession {
         let lua = load_lua(pack);
         let mut game = game;
         // A randomizer's system flags follow the pack, not the save: the same
-        // pack runs the same scripts on every path into a session.
-        let randomized = pack
+        // pack runs the same scripts on every path into a session. A save keeps
+        // none of bank 5, and loading one replaces every bank, so each path
+        // raises them here, once the state is in place.
+        let raised = pack
             .manifest()
-            .is_some_and(|manifest| manifest.seed.is_some());
-        for flag in [
-            scd::opcode::system::RANDOMIZER,
-            scd::opcode::system::DOOR_RANDOMIZER,
-            scd::opcode::system::ENEMY_RANDOMIZER,
-        ] {
-            game.apply_flag(5, flag, u8::from(!randomized));
+            .map(crate::manifest::Manifest::system_flags)
+            .unwrap_or_default();
+        for (_, flag) in scd::opcode::system::BY_NAME {
+            // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+            game.apply_flag(5, flag, u8::from(!raised.contains(&flag)));
         }
         // The run options land before `on_init`, so the hooks read them on the
         // first room as well as after a door.
@@ -23973,6 +23973,44 @@ mod tests {
         let unnamed = crate::manifest::Manifest::base("re1");
         assert_eq!(window_title(Some(&unnamed)), "Arklay");
         assert_eq!(window_title(None), "Arklay");
+    }
+
+    #[test]
+    fn a_randomizer_pack_raises_its_system_flags_at_new_game_and_after_a_load() {
+        use crate::scd::opcode::system;
+
+        let dir = TempDir::new();
+        let generated = crate::manifest::Manifest {
+            seed: Some(42),
+            biorand_flags: Some(vec!["ITEM_RANDOMIZER".to_string(), "LAB".to_string()]),
+            ..crate::manifest::Manifest::base("biorand-000042")
+        };
+        let manifest = generated.render();
+        let pack_path = new_game_pack_with(&dir, &[(crate::manifest::ENTRY, manifest.as_bytes())]);
+        let pack = Pack::open(&pack_path).unwrap();
+        let raised = |game: &game::GameState| -> Vec<u8> {
+            system::BY_NAME
+                .iter()
+                .filter(|(_, flag)| game.flags[5].bit(*flag))
+                .map(|&(_, flag)| flag)
+                .collect()
+        };
+        let expected = [system::RANDOMIZER, system::ITEM_RANDOMIZER, system::LAB];
+
+        let session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(raised(&session.game), expected, "a new game");
+
+        // A save keeps none of bank 5, and loading one replaces the banks, so
+        // the load raises the same flags again.
+        let file = save::SaveFile::from_state(&session.game);
+        let loaded = GameSession::from_save(&pack, &file, &dir.0).unwrap();
+        assert_eq!(raised(&loaded.game), expected, "a loaded save");
+
+        // A pack without a manifest raises none of them.
+        let plain_dir = TempDir::new();
+        let plain = Pack::open(&new_game_pack(&plain_dir)).unwrap();
+        let session = GameSession::new(&plain, 0, &plain_dir.0).unwrap();
+        assert_eq!(raised(&session.game), Vec::<u8>::new(), "no manifest");
     }
 
     #[test]

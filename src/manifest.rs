@@ -24,6 +24,7 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use crate::budget;
 use crate::scd::akscr::Region;
+use crate::scd::opcode::system;
 
 /// The pack entry holding a rendered manifest.
 pub const ENTRY: &str = "manifest.toml";
@@ -106,13 +107,20 @@ pub struct Manifest {
     /// script builds. Absent, a mod's scripts run their USA build.
     pub region: Option<Region>,
     /// Base packs: the randomizer seed that generated the pack. Its presence
-    /// raises the randomizer system flags for scripts.
+    /// raises `RANDOMIZER` for scripts; [`Self::biorand_flags`] names the rest.
     pub seed: Option<u32>,
     /// Base packs: the revision of the randomizer that generated the pack.
     pub generator_version: Option<u32>,
     /// Base packs: the character a new game plays (`0` Chris, `1` Jill),
     /// without the character select screen or the prologue film.
     pub character: Option<u8>,
+    /// Base packs: the bank-5 system flags the pack raises, by their script
+    /// names (see [`crate::scd::opcode::system`]). A seed raises `RANDOMIZER`
+    /// on its own; the list names the others. Absent, the pack predates the
+    /// list, so a seeded one also raises the proof of concept's
+    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`. Parsing refuses a name that is
+    /// not a system flag and one listed twice.
+    pub biorand_flags: Option<Vec<String>>,
 }
 
 impl Manifest {
@@ -138,6 +146,7 @@ impl Manifest {
             start_health: None,
             seed: None,
             generator_version: None,
+            biorand_flags: None,
             character: None,
             region: None,
         }
@@ -146,6 +155,25 @@ impl Manifest {
     /// Whether this pack declares itself a mod.
     pub fn is_mod(&self) -> bool {
         self.kind == PackKind::Mod
+    }
+
+    /// The bank-5 system flags this manifest raises: `RANDOMIZER` for a seed,
+    /// then the names in `biorand_flags`. A seeded pack without the list
+    /// predates it, so it also raises the proof of concept's
+    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`.
+    pub fn system_flags(&self) -> Vec<u8> {
+        let mut flags = Vec::new();
+        if self.seed.is_some() {
+            flags.push(system::RANDOMIZER);
+        }
+        match &self.biorand_flags {
+            Some(names) => flags.extend(names.iter().filter_map(|name| system::bit_named(name))),
+            None if self.seed.is_some() => {
+                flags.extend([system::DOOR_RANDOMIZER, system::ENEMY_RANDOMIZER]);
+            }
+            None => {}
+        }
+        flags
     }
 
     /// Parse a manifest, naming the line of every malformed value.
@@ -176,6 +204,7 @@ impl Manifest {
         let mut character = None;
         let mut start_health = None;
         let mut region = None;
+        let mut biorand_flags = None;
         let mut seen: HashSet<String> = HashSet::new();
 
         for item in parse_items(text)? {
@@ -294,6 +323,22 @@ impl Manifest {
                     }
                     character = Some(value);
                 }
+                "biorand_flags" => {
+                    let Value::Array(names) = item.value else {
+                        bail!("manifest.toml line {line}: `biorand_flags` must be a string array");
+                    };
+                    for (index, name) in names.iter().enumerate() {
+                        if system::bit_named(name).is_none() {
+                            bail!(
+                                "manifest.toml line {line}: unknown system flag `{name}` in `biorand_flags`"
+                            );
+                        }
+                        if names[..index].contains(name) {
+                            bail!("manifest.toml line {line}: `biorand_flags` repeats `{name}`");
+                        }
+                    }
+                    biorand_flags = Some(names);
+                }
                 "start_angle" => {
                     let text = non_empty_string(item, "start_angle")?;
                     start_angle = Some(text.parse().map_err(|error| {
@@ -339,6 +384,9 @@ impl Manifest {
         if kind == PackKind::Mod && region.is_some() {
             bail!("manifest.toml: `region` belongs to a base pack, not a mod");
         }
+        if kind == PackKind::Mod && biorand_flags.is_some() {
+            bail!("manifest.toml: `biorand_flags` belongs to a base pack, not a mod");
+        }
 
         Ok(Self {
             format,
@@ -362,6 +410,7 @@ impl Manifest {
             seed,
             generator_version,
             character,
+            biorand_flags,
         })
     }
 
@@ -430,6 +479,14 @@ impl Manifest {
         }
         if let Some(character) = self.character {
             write_pair(&mut out, "character", &quote(&character.to_string()));
+        }
+        if let Some(names) = &self.biorand_flags {
+            let entries: Vec<String> = names.iter().map(|name| quote(name)).collect();
+            write_pair(
+                &mut out,
+                "biorand_flags",
+                &format!("[{}]", entries.join(", ")),
+            );
         }
         out
     }
@@ -755,6 +812,7 @@ mod tests {
             start_health: None,
             seed: None,
             generator_version: None,
+            biorand_flags: None,
             character: None,
             region: None,
         }
@@ -781,6 +839,7 @@ mod tests {
             start_health: None,
             seed: None,
             generator_version: None,
+            biorand_flags: None,
             character: None,
             region: None,
         }
@@ -816,6 +875,80 @@ mod tests {
         assert_eq!(parsed.seed, Some(42));
         assert_eq!(parsed.generator_version, Some(3));
         assert_eq!(parsed.character, Some(1));
+    }
+
+    #[test]
+    fn biorand_flags_round_trip_and_name_the_raised_flags() {
+        let mut manifest = Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.biorand_flags = Some(vec!["DOOR_RANDOMIZER".to_string(), "LAB".to_string()]);
+        let text = manifest.render();
+        assert!(
+            text.contains("biorand_flags = [\"DOOR_RANDOMIZER\", \"LAB\"]\n"),
+            "{text}"
+        );
+        let parsed = Manifest::parse(&text).unwrap();
+        assert_eq!(parsed, manifest);
+        assert_eq!(
+            parsed.system_flags(),
+            [system::RANDOMIZER, system::DOOR_RANDOMIZER, system::LAB]
+        );
+
+        // An empty list is written too, and raises only the seed's flag.
+        manifest.biorand_flags = Some(Vec::new());
+        let text = manifest.render();
+        assert!(text.contains("biorand_flags = []\n"), "{text}");
+        let parsed = Manifest::parse(&text).unwrap();
+        assert_eq!(parsed.biorand_flags, Some(Vec::new()));
+        assert_eq!(parsed.system_flags(), [system::RANDOMIZER]);
+    }
+
+    #[test]
+    fn a_pack_without_the_list_keeps_the_proof_of_concept_flags() {
+        let mut manifest = Manifest::base("biorand-000007");
+        manifest.seed = Some(7);
+        assert_eq!(manifest.biorand_flags, None);
+        assert_eq!(
+            manifest.system_flags(),
+            [
+                system::RANDOMIZER,
+                system::DOOR_RANDOMIZER,
+                system::ENEMY_RANDOMIZER
+            ]
+        );
+        // The list raises its flags with or without a seed.
+        manifest.seed = None;
+        manifest.biorand_flags = Some(vec!["LAB".to_string()]);
+        assert_eq!(manifest.system_flags(), [system::LAB]);
+        manifest.biorand_flags = None;
+        assert!(manifest.system_flags().is_empty());
+    }
+
+    #[test]
+    fn biorand_flags_refuse_unknown_repeated_and_mod_declarations() {
+        let base = "format = 1\nid = \"biorand-000042\"\nkind = \"base\"\nseed = \"42\"\n";
+        let refused = |line: &str| {
+            Manifest::parse(&format!("{base}{line}\n"))
+                .unwrap_err()
+                .to_string()
+        };
+        let unknown = refused("biorand_flags = [\"DOOR_RANDMIZER\"]");
+        assert!(unknown.contains("line 5"), "{unknown}");
+        assert!(unknown.contains("DOOR_RANDMIZER"), "{unknown}");
+        let repeated = refused("biorand_flags = [\"LAB\", \"LAB\"]");
+        assert!(repeated.contains("repeats `LAB`"), "{repeated}");
+        let not_an_array = refused("biorand_flags = \"LAB\"");
+        assert!(
+            not_an_array.contains("must be a string array"),
+            "{not_an_array}"
+        );
+
+        let mod_with_list = "format = 1\nid = \"demo\"\nkind = \"mod\"\nbase = \"re1\"\nbiorand_flags = [\"LAB\"]\n";
+        let error = Manifest::parse(mod_with_list).unwrap_err().to_string();
+        assert!(
+            error.contains("`biorand_flags` belongs to a base pack"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -953,6 +1086,7 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             start_health: None,
             seed: None,
             generator_version: None,
+            biorand_flags: None,
             character: None,
             region: None,
         }

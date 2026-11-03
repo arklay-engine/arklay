@@ -1137,6 +1137,14 @@ fn write_pack_info(pack_path: &Path, pack: &Pack, out: &mut impl Write) -> Resul
             if let Some(character) = manifest.character {
                 writeln!(out, "  character: {character}")?;
             }
+            if let Some(flags) = &manifest.biorand_flags {
+                let names = if flags.is_empty() {
+                    "none".to_string()
+                } else {
+                    flags.join(", ")
+                };
+                writeln!(out, "  biorand_flags: {names}")?;
+            }
             if !manifest.lua.is_empty() {
                 writeln!(out, "  lua: {}", manifest.lua.join(", "))?;
             }
@@ -1892,6 +1900,35 @@ entries:
         assert!(text.contains("manifest: none"), "{text}");
         assert!(text.contains("layers: 0"), "{text}");
         assert!(text.contains("2 entries, 15 bytes"), "{text}");
+    }
+
+    #[test]
+    fn pack_info_lists_the_biorand_system_flags() {
+        use arklay::manifest;
+
+        let dir = TempDir::new("pack-info-flags");
+        let path = dir.path.join("biorand-000042.akpak");
+        let generated = manifest::Manifest {
+            seed: Some(42),
+            biorand_flags: Some(vec!["ITEM_RANDOMIZER".to_string(), "LAB".to_string()]),
+            ..manifest::Manifest::base("biorand-000042")
+        };
+        let mut writer = PackWriter::new();
+        writer
+            .add(manifest::ENTRY, generated.render().into_bytes())
+            .unwrap();
+        writer.add("room/1000/room.rdt", b"base".to_vec()).unwrap();
+        writer.write(&path).unwrap();
+
+        let pack = open_game_pack(&path, &[]).unwrap();
+        let mut out = Vec::new();
+        write_pack_info(&path, &pack, &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("  seed: 42\n"), "{text}");
+        assert!(
+            text.contains("  biorand_flags: ITEM_RANDOMIZER, LAB\n"),
+            "{text}"
+        );
     }
 
     #[test]
