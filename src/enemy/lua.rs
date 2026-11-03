@@ -2507,6 +2507,12 @@ mod imp {
                 Ok(())
             });
 
+            // Whether Yawn's bite poisons with the original's status (`false`
+            // means ordinary poison under `BR_YAWN_POISON`).
+            methods.add_method("yawn_poison_original", |_lua, api, ()| {
+                Ok(api.game_ref().yawn_bite_poison() == crate::game::YawnPoison::Original)
+            });
+
             // The wasp grab pose: pin both entities' animation offsets, set
             // the attacked flag and play the grabbed animation.
             methods.add_method_mut("grab_player", |_lua, api, ()| {
@@ -16608,7 +16614,7 @@ mod computer_arms_tests {
 
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
-            for id in [0x0Du8, 0x12] {
+            for id in [0x0Bu8, 0x0D, 0x12] {
                 let path = format!("enemy/{id:02x}/enemy.lua");
                 writer.add(&path, source(id).as_bytes().to_vec()).unwrap();
             }
@@ -16864,6 +16870,72 @@ mod computer_arms_tests {
             assert_eq!(game.health_status & 0x20, 0x20, "the first Yawn poisons");
             assert!(game.flags[usize::from(crate::game::BANK_SCENARIO2)].bit(0x43));
             assert_eq!(game.entities[1].yawn_bite_dir(), -1);
+        }
+
+        #[test]
+        fn a_killed_neptune_dies_only_under_br_neptune_killable() {
+            for killable in [false, true] {
+                let pack = pack();
+                let (mut game, clips) = yawn(0x0B, 0);
+                if killable {
+                    game.apply_flag(5, crate::scd::opcode::system::BR_NEPTUNE_KILLABLE, 0);
+                }
+                game.entities[1].set_state(3);
+                game.entities[1].health = -5;
+                let mut host = LuaEnemyHost::new();
+                step(&mut host, &mut game, &pack, &clips);
+                let raised = game.flags[usize::from(crate::game::BANK_ENEMIES)].bit(5);
+                assert_eq!(raised, killable, "the death event, killable {killable}");
+                assert_eq!(
+                    game.entities[1].ignore() != 0,
+                    killable,
+                    "the death is claimed"
+                );
+            }
+        }
+
+        #[test]
+        fn br_yawn_poison_makes_the_bite_ordinary_until_room_100_is_visited() {
+            use crate::scd::opcode::system;
+            for (visited, original) in [(false, false), (true, true)] {
+                let pack = pack();
+                let (mut game, clips) = yawn(0x0D, 0);
+                game.apply_flag(5, system::BR_YAWN_POISON, 0);
+                if visited {
+                    game.mark_room_visited(crate::state::RoomId {
+                        stage: 1,
+                        room: 0,
+                        ..Default::default()
+                    });
+                }
+                let mut host = LuaEnemyHost::new();
+                assert!(step(&mut host, &mut game, &pack, &clips));
+                game.entities[1].action_behavior = 2;
+                game.entities[1].action_state = 1;
+                game.entities[1].set_yawn_form(0);
+                game.entities[1].animation_id = 3;
+                game.entities[1].animation_frame_id = 13;
+                game.entities[1].timing_control = 0;
+                game.entities[1].blend_counter = 0;
+                game.entities[0].pos = [1000, 0, 0];
+                game.entities[1].pos = [0, 0, 0];
+                game.entities[0].health = 100;
+                assert!(step(&mut host, &mut game, &pack, &clips));
+                assert_eq!(
+                    game.health_status & 0x20 != 0,
+                    original,
+                    "visited {visited}"
+                );
+                assert_eq!(
+                    game.health_status & 0x02 != 0,
+                    !original,
+                    "visited {visited}"
+                );
+                assert_eq!(
+                    game.flags[usize::from(crate::game::BANK_SCENARIO2)].bit(0x43),
+                    original
+                );
+            }
         }
 
         #[test]

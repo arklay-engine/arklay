@@ -9135,6 +9135,14 @@ impl App {
     /// here the pack's `demo/` enumeration is the list. `None` when the pack
     /// ships no reels.
     fn next_attract_entry(&mut self) -> Option<String> {
+        // `BR_NO_TITLE_DEMO`: a generated pack has no demo to play.
+        if self.pack.manifest().is_some_and(|manifest| {
+            manifest
+                .system_flags()
+                .contains(&scd::opcode::system::BR_NO_TITLE_DEMO)
+        }) {
+            return None;
+        }
         if self.demos.is_empty() {
             return None;
         }

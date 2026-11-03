@@ -386,8 +386,13 @@ bite = function(e)
                 -- Only the first Yawn poisons, and only while the serum has
                 -- not been taken.
                 if e.id == 0x0D and not e:flag_bit(0, 0x47) then
-                    e:raise_flag(1, 0x43)
-                    e.player_health_status = e.player_health_status | 0x20
+                    if e:yawn_poison_original() then
+                        e:raise_flag(1, 0x43)
+                        e.player_health_status = e.player_health_status | 0x20
+                    else
+                        -- BR_YAWN_POISON: ordinary poison, no rescue.
+                        e:poison_player()
+                    end
                 end
 
                 e.yawn_bite_dir = 0xFF

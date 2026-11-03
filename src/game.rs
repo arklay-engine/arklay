@@ -474,6 +474,43 @@ pub const MESSAGE_TYPEWRITER_RIBBON_PROMPT: u8 = 0xDF;
 pub const MESSAGE_TYPEWRITER_SAVE_PROMPT: u8 = 0xE0;
 /// Scenario-2 flag cleared when a `0x10` cure removes the poison bit `0x20`.
 pub const SCENARIO2_FLAG_YAWN_POISONED: u8 = 0x43;
+/// Scenario flag BioRand's ink option raises (`BR_INK_FLAG`): ink is needed
+/// to save for both characters when it is up.
+pub const BR_INK_SCENARIO_FLAG: u8 = 122;
+
+/// Whether saving needs an ink ribbon: scenario flag 122 under `BR_INK_FLAG`,
+/// else the per-character rule.
+pub fn ink_ribbons_needed(br_ink_flag: bool, scenario_flag_122: bool, per_character: bool) -> bool {
+    if br_ink_flag {
+        scenario_flag_122
+    } else {
+        per_character
+    }
+}
+
+/// What Yawn's bite does to the player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YawnPoison {
+    /// The original's: status `0x20`, cured by the serum, with the rescue.
+    Original,
+    /// Ordinary poison a blue herb cures.
+    Ordinary,
+}
+
+/// The first Yawn's poison under `BR_YAWN_POISON`: ordinary under door
+/// randomization; otherwise the original's once room 100 has been visited,
+/// ordinary before. Without the flag it is always the original's.
+pub fn yawn_bite_poison(
+    br_yawn_poison: bool,
+    door_rando: bool,
+    room_100_visited: bool,
+) -> YawnPoison {
+    if !br_yawn_poison || (!door_rando && room_100_visited) {
+        YawnPoison::Original
+    } else {
+        YawnPoison::Ordinary
+    }
+}
 /// Scenario-2 flag marking Jill's first playthrough (with the main hall's
 /// ink-ribbon room-items bit). `InitializeGame` raises both on a new Jill game.
 pub const SCENARIO2_FLAG_JILL_FIRST_RUN: u8 = 0x0B;
@@ -5452,15 +5489,43 @@ impl GameState {
 
     /// Whether the player's character needs ink ribbons to save, from the
     /// ink ribbon options. One who does not never sees an ink ribbon either.
+    ///
+    /// Under `BR_INK_FLAG` scenario flag 122 decides it for both characters
+    /// ([`ink_ribbons_needed`]).
     pub fn needs_ink_ribbons(&self) -> bool {
         if self.is_re2_room {
             return true;
         }
-        if self.id.player_flag & 3 == 1 {
+        let per_character = if self.id.player_flag & 3 == 1 {
             self.player_options.jill_ink_ribbons
         } else {
             !self.player_options.no_chris_ink_ribbons
-        }
+        };
+        ink_ribbons_needed(
+            self.system_flag(crate::scd::opcode::system::BR_INK_FLAG),
+            self.flag_test(0, BR_INK_SCENARIO_FLAG, false),
+            per_character,
+        )
+    }
+
+    /// Whether a bank 5 system flag (see [`crate::scd::opcode::system`]) is
+    /// raised: the engine's test for the BioRand behaviour flags.
+    pub fn system_flag(&self, bit: u8) -> bool {
+        self.flag_test(5, bit, false)
+    }
+
+    /// How Yawn's bite poisons now ([`yawn_bite_poison`]).
+    pub fn yawn_bite_poison(&self) -> YawnPoison {
+        use crate::scd::opcode::system;
+        yawn_bite_poison(
+            self.system_flag(system::BR_YAWN_POISON),
+            self.system_flag(system::DOOR_RANDOMIZER),
+            self.room_visited(RoomId {
+                stage: 1,
+                room: 0,
+                ..RoomId::default()
+            }),
+        )
     }
 
     /// The room-action typewriter handler (`room_check_actions[0x10]`).
@@ -5997,7 +6062,11 @@ impl GameState {
         if cursor.id == 0 || target.id == 0 {
             return Err(CombineResult::NoRecipe);
         }
-        let Some(record) = items::combine(cursor.id, target.id) else {
+        let Some(record) = items::combine_with_mixes(
+            cursor.id,
+            target.id,
+            self.system_flag(crate::scd::opcode::system::BR_HERB_MIXES),
+        ) else {
             // No recipe: the original distinguishes two herbs (its result 3,
             // the `0xF6` "cannot combine" message) from every other pair.
             return Err(
@@ -6049,6 +6118,17 @@ impl GameState {
         }
     }
 
+    /// A stack's count as the ammunition transfer adds it. The original keeps
+    /// 7 bits, so a count of 128 or more (fuel, ammunition) is truncated; only
+    /// `--authentic` keeps that.
+    fn combine_count(&self, quantity: u8) -> u16 {
+        if self.player_options.authentic {
+            u16::from(quantity) & 0x7F
+        } else {
+            u16::from(quantity)
+        }
+    }
+
     /// The combine record's effect byte: 1/2 ammo transfer with the cursor /
     /// other slot winning, 3 quantity merge (cap `0xFA`), 4 chemical flag,
     /// 5 mode only, 6/7 one-way ammo transfer.
@@ -6057,7 +6137,7 @@ impl GameState {
         let target = self.inventory[target_slot];
         match effect {
             1 => {
-                let sum = u16::from(target.quantity) + (u16::from(cursor.quantity) & 0x7F);
+                let sum = u16::from(target.quantity) + self.combine_count(cursor.quantity);
                 let max = u16::from(self.item_defs.get(cursor.id).stack);
                 if max < sum {
                     self.inventory[cursor_slot].quantity = max as u8;
@@ -6068,7 +6148,7 @@ impl GameState {
                 }
             }
             2 => {
-                let sum = u16::from(cursor.quantity) + (u16::from(target.quantity) & 0x7F);
+                let sum = u16::from(cursor.quantity) + self.combine_count(target.quantity);
                 let max = u16::from(self.item_defs.get(target.id).stack);
                 if max < sum {
                     self.inventory[target_slot].quantity = max as u8;
@@ -10171,6 +10251,14 @@ mod tests {
         assert!(matches!(result, CombineResult::Applied { .. }));
         assert_eq!(state.inventory.len(), 1);
         assert_eq!(state.inventory[0].quantity, 3 + 3);
+    }
+
+    #[test]
+    fn the_ammunition_transfer_truncates_to_seven_bits_only_when_authentic() {
+        let mut state = game();
+        assert_eq!(state.combine_count(200), 200);
+        state.player_options.authentic = true;
+        assert_eq!(state.combine_count(200), 72);
     }
 
     #[test]
@@ -16420,6 +16508,31 @@ mod tests {
         assert_eq!(state.entities[1].action_ticks_counter, 1);
         assert_eq!(state.entities[1].move_speed_current, 93);
         assert_eq!(state.entities[1].status_flags, 0, "the teardown cleared it");
+    }
+
+    #[test]
+    fn ink_decision_follows_flag_122_only_under_br_ink_flag() {
+        assert!(ink_ribbons_needed(true, true, false));
+        assert!(!ink_ribbons_needed(true, false, true));
+        assert!(ink_ribbons_needed(false, false, true));
+        assert!(!ink_ribbons_needed(false, true, false));
+    }
+
+    #[test]
+    fn yawn_poison_decision() {
+        use YawnPoison::*;
+        // Flag clear: always the original.
+        for door in [false, true] {
+            for seen in [false, true] {
+                assert_eq!(yawn_bite_poison(false, door, seen), Original);
+            }
+        }
+        // Door rando: always ordinary.
+        assert_eq!(yawn_bite_poison(true, true, true), Ordinary);
+        assert_eq!(yawn_bite_poison(true, true, false), Ordinary);
+        // No door rando: original only once room 100 is visited.
+        assert_eq!(yawn_bite_poison(true, false, false), Ordinary);
+        assert_eq!(yawn_bite_poison(true, false, true), Original);
     }
 
     #[test]
