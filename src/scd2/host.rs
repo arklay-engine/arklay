@@ -185,7 +185,16 @@ pub struct Kage {
 /// `_Spl`'s character: a body and a `PLAYER_WORK`, driven by the room's scripts.
 #[derive(Debug, Clone)]
 pub struct Character {
+    /// `Id`, which chooses what runs it. A script can change it (`member_set`).
     pub id: u8,
+    /// The id the room loaded its model and animations for, which a change of
+    /// `Id` keeps: Marvin turns into a zombie in his own body.
+    pub model: u8,
+    /// `sce_em_set`'s floor, model type and dead flag, which a zombie it
+    /// becomes starts with.
+    pub em_set: (u8, u8, u8),
+    /// Marvin's two sets of arms (`Spl_in4a`, `Spl_chenge00`).
+    pub arms: Arms,
     /// `Be_flg`, whose first bit is whether it's in play.
     pub be_flg: u32,
     pub work: crate::player2::Work,
@@ -206,6 +215,18 @@ pub struct Character {
     pub zombie: Option<crate::zombie2::Zombie>,
     /// The last `kage_set`, in place of `Em_init`'s shadow.
     pub kage: Option<Kage>,
+}
+
+/// Which of Marvin's arms his joints draw, and the fade between them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Arms {
+    /// The joints draw the spare meshes: his arms as a zombie's.
+    pub swapped: bool,
+    /// Ticks of `Spl_chenge00`'s fade so far: the first part's `Poly_rgb`
+    /// climbs to `0x40` and back.
+    pub fade: u8,
+    /// The fade has run (`Timer0` is 2), and doesn't run again.
+    pub faded: bool,
 }
 
 /// `xa_on`'s line, which `wsleep` waits out. A save doesn't hold it, so a line
@@ -832,6 +853,8 @@ const WK_OBJECT: i64 = 4;
 const MEMBER_POS_X: usize = 0x0B;
 /// The member that reads and writes `cdir.y`.
 const MEMBER_ANGLE: u8 = 0x0F;
+/// `Id`.
+const MEMBER_ID: u8 = 6;
 /// `Type`.
 const MEMBER_TYPE: u8 = 7;
 /// The word at `+0x21a`, which on a zombie is [`crate::zombie2::Zombie::flags`].
@@ -1102,6 +1125,9 @@ impl GameHost<'_> {
         characters.resize_with(CHARACTER_SLOTS, || None);
         characters[slot] = Some(Box::new(Character {
             id,
+            model: id,
+            em_set: (at(5) as u8, at(7) as u8, dead),
+            arms: Arms::default(),
             be_flg: 1,
             work,
             body,
@@ -1225,8 +1251,15 @@ impl GameHost<'_> {
 
     /// `Member_set_branch` on whichever work `task` has, if it's modelled.
     fn set_member(&mut self, task: usize, member: u8, value: i32) {
+        let slot = match self.game.re2.work.get(task) {
+            Some(Work::Character(slot)) => *slot,
+            _ => 0,
+        };
         if let Some(character) = self.task_character(task) {
             set_character_member(character, member, value);
+            if member == MEMBER_ID {
+                become_zombie(character, slot);
+            }
         } else if let Some(object) = self.task_object(task) {
             set_object_member(object, member, value);
         } else if self.work_is_player(task) {
@@ -1916,6 +1949,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
     }
     match member {
         0 => Some(character.be_flg as i32),
+        MEMBER_ID => Some(i32::from(character.id)),
         MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
         MEMBER_ZOMBIE_FLAGS => character
             .zombie
@@ -1926,6 +1960,21 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
 }
 
 /// `Member_set_branch` on a character.
+/// A character whose `Id` a script has made a zombie's. `Em_move` now gives it
+/// to `Em_Zombie`, whose init runs in the body and with the animations it has:
+/// the room loaded nothing new for it. Room 202 turns Marvin so.
+fn become_zombie(character: &mut Character, slot: u8) {
+    let id = character.id;
+    if !(0x10..=0x21).contains(&id) || character.zombie.is_some() {
+        return;
+    }
+    let (floor, model_type, dead) = character.em_set;
+    let mut zombie = crate::zombie2::spawned(slot, floor, model_type);
+    zombie.dead_flag = dead;
+    character.zombie = Some(zombie);
+    character.body.radius = 0x1C2;
+}
+
 fn set_character_member(character: &mut Character, member: u8, value: i32) {
     if let Some(axis) = usize::from(member)
         .checked_sub(MEMBER_POS_X)
@@ -1936,6 +1985,7 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
     }
     match member {
         0 => character.be_flg = value as u32,
+        MEMBER_ID => character.id = value as u8,
         MEMBER_ANGLE => character.body.angle = value as u16,
         MEMBER_ZOMBIE_FLAGS => {
             if let Some(zombie) = character.zombie.as_mut() {
