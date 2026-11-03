@@ -387,7 +387,7 @@ impl GameArg {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Generate and check small randomized games
+    /// Generate and check small randomized games (being ported to the new randomizer)
     Biorand {
         #[command(subcommand)]
         action: BiorandAction,

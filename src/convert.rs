@@ -743,6 +743,7 @@ fn convert_observed_as(
     let (shadow_count, shadow_bytes) = copy_shadow(&data, &mut writer, &mut progress)?;
     let (language_count, language_bytes) = copy_language_files(&mut writer, &mut progress)?;
     let (item_def_count, item_def_bytes) = copy_item_definitions(&mut writer, &mut progress)?;
+    let (biorand_count, biorand_bytes) = copy_biorand_files(&mut writer)?;
     let (item_model_count, item_model_bytes) = copy_item_models(
         &item_m2_dirs,
         &mut writer,
@@ -837,6 +838,10 @@ fn convert_observed_as(
         writeln!(
             summary,
             "item definition: {item_def_count} entries, {item_def_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "biorand: {biorand_count} entries, {biorand_bytes} bytes"
         )?;
         writeln!(
             summary,
@@ -2101,6 +2106,20 @@ fn copy_item_definitions(
     Ok((files.len(), bytes))
 }
 
+/// Add the checked-in map-wide BioRand files (`biorand/*.xml`) to the pack.
+/// The randomizer reads them from there, beside each room's `random.xml`.
+fn copy_biorand_files(writer: &mut PackWriter) -> Result<(usize, usize)> {
+    let files = crate::biorand::BIORAND_FILES;
+    let mut bytes = 0usize;
+    for (entry, source) in files {
+        bytes += source.len();
+        writer
+            .add(entry, source.as_bytes().to_vec())
+            .with_context(|| format!("failed to add {entry}"))?;
+    }
+    Ok((files.len(), bytes))
+}
+
 /// Split every `ITEM_M2/*.IVM` item-view model into the mesh and texture page
 /// of each item that uses it: `item/<id>/model.tmd` and `model.bmp`.
 ///
@@ -2646,7 +2665,8 @@ pub const CONVERT_VERSION: u32 = 22;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, the language sheets, the
-/// item and room definitions and the room script builds.
+/// item and room definitions, the BioRand map files and the room script
+/// builds.
 /// Comparing it with a pack's manifest catches a changed script or language
 /// file even when nobody remembered to bump [`CONVERT_VERSION`].
 pub fn packed_source_hash() -> String {
@@ -2667,6 +2687,7 @@ pub fn packed_source_hash() -> String {
         .chain(crate::language::LANGUAGE_FILES.iter())
         .chain(crate::item_catalog::ITEM_FILES.iter())
         .chain(crate::room::RE1_FILES.iter())
+        .chain(crate::biorand::BIORAND_FILES.iter())
     {
         feed(name.as_bytes());
         feed(&[0]);
@@ -4970,10 +4991,17 @@ mod tests {
         assert!(pack.contains("room/10d/room.xml"));
         assert!(pack.contains("room/10d/cut/01.bmp"));
         assert!(!pack.paths().any(|path| path.starts_with("room/10d0/")));
+        // The randomizer's inputs are packed beside the room definitions.
+        assert!(pack.contains("room/10d/random.xml"));
+        assert!(pack.contains("biorand/map.xml"));
         // The definition and scripts are the repository's.
         let text = pack.read("room/10d/room.xml").unwrap();
         let checked_in = crate::room::re1_definition(RoomId::parse("10d0").unwrap());
-        assert_eq!(std::str::from_utf8(&text).unwrap(), checked_in[0].1);
+        let (_, room_xml) = checked_in
+            .iter()
+            .find(|(entry, _)| entry == "room/10d/room.xml")
+            .unwrap();
+        assert_eq!(std::str::from_utf8(&text).unwrap(), *room_xml);
         assert!(pack.contains("room/10d/room.scd"));
         assert!(pack.contains("bgm/013.wav"));
         assert!(pack.contains("bgm/200.wav"));

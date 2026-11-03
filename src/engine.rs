@@ -18660,10 +18660,6 @@ fn capture_bmp(image: &Image, path: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "biorand/playthrough.rs"]
-mod biorand_playthrough;
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{ClipFrame, Emw, Keyframe, Skeleton, Texture8, Tmd};
