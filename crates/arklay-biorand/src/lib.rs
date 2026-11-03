@@ -11,6 +11,7 @@
 pub mod config;
 pub mod enemies;
 pub mod inventory;
+pub mod keys;
 pub mod map;
 pub mod rng;
 pub mod routing;
