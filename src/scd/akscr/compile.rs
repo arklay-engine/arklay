@@ -207,6 +207,31 @@ fn variant_condition(tokens: &[Token]) -> Result<(u8, usize)> {
     Ok((mask, pos))
 }
 
+/// The instruction a `random_enemies()` placeholder compiles to in a
+/// non-retail build: `nop_wide`, which the script VM does nothing with. Its
+/// three operands are [`ENEMY_MARKER_TAG`] and the placeholder's
+/// [`placeholder_id`], low byte first. No original script uses `nop_wide`
+/// with a first operand other than 0 or 1, so the tag is unambiguous.
+pub const ENEMY_MARKER_OP: u8 = 0x32;
+/// The first operand of the placeholder instruction.
+pub const ENEMY_MARKER_TAG: u8 = 0xEA;
+
+/// The 16-bit id a placeholder name is stored as (`random_enemies(name)`
+/// and a `random.xml` spot's `placeholder`): FNV-1a of the name, folded, and
+/// never 0. The unnamed placeholder is 0. Two names of one room must not
+/// share an id.
+pub fn placeholder_id(name: Option<&str>) -> u16 {
+    let Some(name) = name else {
+        return 0;
+    };
+    let mut hash: u32 = 0x811C_9DC5;
+    for byte in name.bytes() {
+        hash = (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193);
+    }
+    let folded = ((hash >> 16) ^ hash) as u16;
+    folded.max(1)
+}
+
 /// The system flag and expected state of an `if` condition that tests one by
 /// name (`RANDOMIZER`, `!ENEMY_RANDOMIZER`), with the tokens it used. The names
 /// are those of [`crate::scd::opcode::system::BY_NAME`].
@@ -532,6 +557,13 @@ enum Stmt {
         line: usize,
         col: usize,
     },
+    /// `random_enemies();` or `random_enemies(name);`: see
+    /// [`ENEMY_MARKER_OP`].
+    RandomEnemies {
+        name: Option<String>,
+        line: usize,
+        col: usize,
+    },
 }
 
 impl Stmt {
@@ -549,7 +581,8 @@ impl Stmt {
             | Stmt::Run { line, col, .. }
             | Stmt::For { line, col, .. }
             | Stmt::DoWhile { line, col, .. }
-            | Stmt::Raw { line, col, .. } => (*line, *col),
+            | Stmt::Raw { line, col, .. }
+            | Stmt::RandomEnemies { line, col, .. } => (*line, *col),
             Stmt::Asm(lines) => (lines.first().map_or(0, |(line, _)| *line), 1),
         }
     }
@@ -864,6 +897,18 @@ impl Parser {
             "return" => {
                 self.expect_punct(";")?;
                 Ok(Stmt::Return { line, col })
+            }
+            "random_enemies" => {
+                self.expect_punct("(")?;
+                let name = if self.eat_punct(")") {
+                    None
+                } else {
+                    let (name, _) = self.expect_ident()?;
+                    self.expect_punct(")")?;
+                    Some(name)
+                };
+                self.expect_punct(";")?;
+                Ok(Stmt::RandomEnemies { name, line, col })
             }
             "if" => self.if_statement(line, col),
             "require" => {
@@ -1355,6 +1400,22 @@ impl Lowerer {
                     *col,
                 )?,
                 Stmt::Asm(lines) => self.asm(lines)?,
+                Stmt::RandomEnemies { name, line, col } => {
+                    // A variant's (retail) build has no marker.
+                    if self.build.variant().is_none() {
+                        let [low, high] = placeholder_id(name.as_deref()).to_le_bytes();
+                        self.push(
+                            "nop_wide",
+                            vec![
+                                Arg::Num(i64::from(ENEMY_MARKER_TAG)),
+                                Arg::Num(i64::from(low)),
+                                Arg::Num(i64::from(high)),
+                            ],
+                            *line,
+                            *col,
+                        );
+                    }
+                }
                 Stmt::Variant {
                     mask,
                     then,
@@ -1789,7 +1850,8 @@ impl Lowerer {
                 | Stmt::If { .. }
                 | Stmt::System { .. }
                 | Stmt::Picked { .. }
-                | Stmt::PickedAs { .. } => {
+                | Stmt::PickedAs { .. }
+                | Stmt::RandomEnemies { .. } => {
                     let (line, col) = stmt.position();
                     bail!(
                         "line {line}, column {col}: command flow is only valid inside a `run` \
