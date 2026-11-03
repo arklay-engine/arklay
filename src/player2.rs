@@ -100,6 +100,11 @@ const STAIRS_TURN_CLOSE: i32 = 0x28;
 const STAIRS_WALK_OFF_FRAME: u8 = 9;
 const STAIRS_FIRST_BLEND: u8 = 3;
 const STAIRS_FIRST_STEP: u16 = 0x400;
+/// How far the shadow leads the body on the stairs, and how fast it gets
+/// there and comes back.
+const STAIRS_KAGE_LEAD: i16 = 200;
+const STAIRS_KAGE_STEP: i16 = 0x14;
+const STAIRS_KAGE_BACK: i16 = 0x32;
 /// `Oma_pl_updown_ck`'s reach to a box to climb and to a drop, by `Id + 4`
 /// (`0x533370`, `0x533398`).
 const CLIMB_REACH: [i32; 20] = [
@@ -293,6 +298,13 @@ pub struct Work {
     stopped: [u8; 4],
     /// Part 0's `Workm`, as the last tick left it, for what an enemy has handed over.
     pub(crate) root: Option<Matrix>,
+    /// `Kage_ofs`: how far along the body `Game_loop` probes the shadow's ground.
+    kage_ofs: i16,
+    /// The point `pl_mv_07` aims `pKage_work->pPos` at in place of part 0.
+    kage_pos: Option<[i32; 3]>,
+    /// Where `Game_loop`'s `Sca_ck_hit` finds the shadow's ground this tick:
+    /// `pPos` before this tick's `Joint_trans2`, `Kage_ofs` along `Cdir_y`.
+    pub kage_probe: Option<[i32; 3]>,
     /// `Damage_cnt`, and `Status_flg`, for `Pl_damage`, `Sce_Damage` and the
     /// enemies: its top bit is also an enemy having hold of them.
     pub(crate) damage_cnt: u8,
@@ -625,6 +637,25 @@ impl Work {
         self.super_matrix
             .map_or(turn, |surface| mul_matrix(&surface, &turn))
     }
+
+    /// `pKage_work->pPos`: part 0's place, unless the stairs moved it.
+    pub fn kage_pos(&self) -> Option<[i32; 3]> {
+        self.kage_pos.or(self.root.map(|root| root.t))
+    }
+
+    /// `Game_loop`'s probe for the shadow's ground, taken before this tick's
+    /// part 0 is composed.
+    fn latch_kage_probe(&mut self, angle: u16) {
+        let turn = rot_matrix([0, angle as i16, 0]);
+        let ofs = i32::from(self.kage_ofs);
+        self.kage_probe = self.kage_pos().map(|at| {
+            [
+                at[0] + i32::from(((i32::from(turn[0][0]) * ofs) >> 12) as i16),
+                at[1],
+                at[2] + i32::from(((i32::from(turn[2][0]) * ofs) >> 12) as i16),
+            ]
+        });
+    }
 }
 
 impl Default for Work {
@@ -676,6 +707,9 @@ impl Default for Work {
             dest: [0; 2],
             stopped: [0; 4],
             root: None,
+            kage_ofs: 0,
+            kage_pos: None,
+            kage_probe: None,
             damage_cnt: 0,
             status_flg: 0,
             sce_blood: None,
@@ -984,6 +1018,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     work.key_trg = key & !work.last_key;
     work.last_key = key;
     if tick.stopped {
+        work.latch_kage_probe(player.angle);
         return None;
     }
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
@@ -1015,6 +1050,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     }
     mover.pl_neck();
     mover.rot_neck();
+    mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.arrived
 }
@@ -1028,6 +1064,7 @@ pub fn player_held(
     held: &mut Held<'_>,
 ) {
     if tick.stopped {
+        work.latch_kage_probe(player.angle);
         return;
     }
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
@@ -1039,6 +1076,7 @@ pub fn player_held(
     mover.em10_held(held);
     mover.pl_neck();
     mover.rot_neck();
+    mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
 }
 
@@ -1470,8 +1508,9 @@ impl Mover<'_, '_> {
         };
     }
 
-    /// `pl_mv_07`: turn to the stairs, climb them step by step, walk off.
-    /// The shadow's own path isn't ported.
+    /// `pl_mv_07`: turn to the stairs, climb them step by step, walk off. The
+    /// shadow leads the body by `Timer0` meanwhile, and probes its ground
+    /// `Kage_ofs` further on.
     fn pl_mv_stairs(&mut self) {
         let climb = STAIRS_CLIPS[usize::from(self.work.timer2 != 0)];
         if self.work.routine[2] == 0 {
@@ -1494,42 +1533,108 @@ impl Mover<'_, '_> {
                 }
                 self.joint_move();
             }
-            2 => {
-                self.work.routine[2] = 3;
-                self.work.bank = Bank::Room;
-                self.work.move_no = climb;
-                self.work.move_cnt = 0;
-                self.work.hokan = STAIRS_FIRST_BLEND;
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    self.work.bank = Bank::Room;
+                    self.work.move_no = climb;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = STAIRS_FIRST_BLEND;
+                    self.work.timer0 = 0;
+                }
                 self.stairs_step(climb, STAIRS_FIRST_STEP);
+                let down = self.work.timer2 != 0;
+                let step = if down {
+                    STAIRS_KAGE_STEP
+                } else {
+                    -STAIRS_KAGE_STEP
+                };
+                let mut lead = (self.work.timer0 as i16).wrapping_add(step);
+                self.work.kage_ofs = self.work.kage_ofs.wrapping_add(STAIRS_KAGE_STEP);
+                if (down && lead > STAIRS_KAGE_LEAD) || (!down && lead < -STAIRS_KAGE_LEAD) {
+                    lead = if down {
+                        STAIRS_KAGE_LEAD
+                    } else {
+                        -STAIRS_KAGE_LEAD
+                    };
+                    self.work.kage_ofs = STAIRS_KAGE_LEAD;
+                }
+                self.work.timer0 = lead as u16;
+                self.stairs_kage(lead);
             }
-            3 => self.stairs_step(climb, STAIRS_FIRST_STEP),
-            4 => self.stairs_step(climb, BLEND_STEP),
+            4 => {
+                self.stairs_step(climb, BLEND_STEP);
+                self.stairs_kage(self.stairs_full_lead());
+            }
             5 => {
                 self.spd_get();
                 if self.joint_move() {
                     self.work.routine[2] = 6;
                 }
                 self.add_speed_xyz();
+                self.stairs_kage(self.stairs_full_lead());
             }
             6 | 7 => {
+                let down = self.work.timer2 != 0;
                 if self.work.routine[2] == 6 {
                     self.work.routine[2] = 7;
                     self.work.bank = Bank::Weapon;
                     self.work.move_no = 0;
                     self.work.move_cnt = 0;
                     self.work.hokan = FULL_BLEND;
+                    self.work.timer0 = self.stairs_full_lead() as u16;
                 }
+                // The lead and the probe both shrink back to the body.
+                let step = if down {
+                    -STAIRS_KAGE_BACK
+                } else {
+                    STAIRS_KAGE_BACK
+                };
+                let lead = (self.work.timer0 as i16).wrapping_add(step);
+                self.work.kage_ofs = self.work.kage_ofs.wrapping_sub(STAIRS_KAGE_BACK);
+                let lead = if (down && lead < 0) || (!down && lead > 0) {
+                    self.work.kage_ofs = 0;
+                    0
+                } else {
+                    lead
+                };
+                self.work.timer0 = lead as u16;
+                self.stairs_kage(lead);
                 self.spd_get();
                 self.joint_move();
                 self.add_speed_xz();
                 if self.work.move_cnt > STAIRS_WALK_OFF_FRAME {
                     self.set_routine(MOVE_IDLE);
                     self.work.damage_cnt &= !DAMAGE_LOCK;
+                    self.work.kage_pos = None;
                 }
             }
             _ => {}
         }
         self.footstep(0);
+    }
+
+    /// The shadow's whole lead on the stairs, ahead going down and behind
+    /// going up.
+    fn stairs_full_lead(&self) -> i16 {
+        if self.work.timer2 != 0 {
+            STAIRS_KAGE_LEAD
+        } else {
+            -STAIRS_KAGE_LEAD
+        }
+    }
+
+    /// `pl_mv_07`'s `DWORD_00689be0`, the shadow's `pPos`: `lead` along `M`
+    /// from part 0 as the last tick left it.
+    fn stairs_kage(&mut self, lead: i16) {
+        let Some(root) = self.work.root else {
+            return;
+        };
+        let m = self.work.body_rotation(self.player.angle);
+        let lead = i32::from(lead);
+        self.work.kage_pos = Some(std::array::from_fn(|axis| {
+            root.t[axis] + i32::from(((i32::from(m[axis][0]) * lead) >> 12) as i16)
+        }));
     }
 
     /// A step of the climb's first or repeated clip: the last step's clip
@@ -4113,6 +4218,27 @@ mod tests {
         // These stairs are one flight, with no repeated step.
         assert_eq!(clips, [0, 2, 0]);
         assert!(!setup.work.climbing());
+    }
+
+    /// `pl_mv_07` leads the shadow off the body on the stairs, probing its
+    /// ground further on, and brings both back to the body for the walk off.
+    #[test]
+    fn a_climb_leads_the_shadow_and_hands_it_back() {
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.tick(action(), 200);
+        let mut most = 0;
+        for _ in 0..200 {
+            setup.tick(Input::default(), 200);
+            if setup.work.routine[1] != MOVE_STAIRS {
+                break;
+            }
+            most = most.max(setup.work.kage_ofs);
+        }
+        assert_eq!(most, STAIRS_KAGE_LEAD);
+        assert_eq!(setup.work.kage_ofs, 0);
+        assert_eq!(setup.work.kage_pos, None);
+        // Back on part 0, probed where it is.
+        assert_eq!(setup.work.kage_pos(), setup.work.root.map(|root| root.t));
     }
 
     #[test]
