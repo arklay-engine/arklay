@@ -3699,13 +3699,14 @@ impl Lighting {
                 + f64::from(offset[2]).powi(2))
             .sqrt()
             .max(1.0);
+            // RE2's `Set_Light_data` stores `-gain * normalize(offset)`, and
+            // the PC port negates the light matrix's Y column for Direct3D
+            // (`0x4463f3`), so the same row as RE1's lights the same side.
             let gain = light.re2_gain.map_or(1.0, f64::from);
-            // `Set_Light_data` gives the GTE the vector as it is.
-            let y_sign = if light.re2_gain.is_some() { 1.0 } else { -1.0 };
             EntityLightSource {
                 dir: [
                     (f64::from(offset[0]) / length * 4096.0 * gain) as i32,
-                    (y_sign * f64::from(offset[1]) / length * 4096.0 * gain) as i32,
+                    (-f64::from(offset[1]) / length * 4096.0 * gain) as i32,
                     (f64::from(offset[2]) / length * 4096.0 * gain) as i32,
                 ],
                 color: color.map(|channel| channel.min(0x80)),

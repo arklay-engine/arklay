@@ -832,6 +832,8 @@ const WK_OBJECT: i64 = 4;
 const MEMBER_POS_X: usize = 0x0B;
 /// The member that reads and writes `cdir.y`.
 const MEMBER_ANGLE: u8 = 0x0F;
+/// `Type`.
+const MEMBER_TYPE: u8 = 7;
 /// The word at `+0x21a`, which on a zombie is [`crate::zombie2::Zombie::flags`].
 const MEMBER_ZOMBIE_FLAGS: u8 = 0x2A;
 /// The room's flag bank, which `plc_dest` raises its arrival flag in.
@@ -1191,6 +1193,11 @@ impl GameHost<'_> {
         }
         match member {
             MEMBER_ANGLE => Some(i32::from(self.game.entities[0].angle & 0x0FFF)),
+            // `Type`'s low bits are the weapon in hand, which the engine keeps
+            // with the inventory.
+            MEMBER_TYPE => Some(i32::from(
+                self.game.re2.player.kind & !0x0FFF | u16::from(self.game.equipped_weapon_id),
+            )),
             _ => crate::player2::member(&self.game.re2.player, member),
         }
     }
@@ -2124,6 +2131,21 @@ mod tests {
             part: None,
         };
         assert_eq!(of(3), Some(root));
+    }
+
+    /// Room 202's scene with Marvin reads the player's `Type & 0xFF` to choose
+    /// whether to put the gun away.
+    #[test]
+    fn the_players_type_holds_the_weapon_in_hand() {
+        let mut game = GameState::default();
+        game.equipped_weapon_id = 2;
+        game.re2.player.kind = crate::player2::KIND_NOT_MOVED;
+        let mut host = GameHost { game: &mut game };
+        exec(host.game, "work_set", &[WK_PLAYER, 0]);
+        assert_eq!(
+            host.member(0, MEMBER_TYPE),
+            Some(i32::from(crate::player2::KIND_NOT_MOVED) | 2)
+        );
     }
 
     #[test]

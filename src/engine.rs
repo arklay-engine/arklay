@@ -17098,6 +17098,22 @@ fn render_frame_on(
         if let Some(tongue) = re2_tongue(character, &model, &joints).filter(|_| in_view) {
             npc_tongues.push((models.len(), tongue.0, tongue.1));
         }
+        // The draw pairs mesh object k with joint k, so a joint drawing
+        // another mesh moves its matrix to that object's place.
+        let meshes = model.mesh.objects.len();
+        if let Some(joint_meshes) = crate::character2::joint_meshes(character, joints.len(), meshes)
+        {
+            let mut by_mesh = vec![anim::Mat4x3::default(); meshes];
+            let mut hidden = u32::MAX;
+            for (joint, &mesh) in joint_meshes.iter().enumerate() {
+                by_mesh[mesh] = joints[joint];
+                if hidden_parts & (1 << joint) == 0 {
+                    hidden &= !(1 << mesh);
+                }
+            }
+            joints = by_mesh;
+            hidden_parts = hidden;
+        }
         models.push(model);
         npc_joints.push(joints);
         npc_hidden.push(hidden_parts);
