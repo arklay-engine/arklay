@@ -942,6 +942,18 @@ impl GameHost<'_> {
         } else {
             at(1) as u8
         };
+        // `Item_aot_set`: the object of an item that's been taken stays away,
+        // whatever `Obj_model_set` asks of it.
+        let taken = self.game.re2.flag(ITEM_BANK, flag);
+        if model < 0x20
+            && let Some(record) = self.game.objects.record_mut(usize::from(model))
+        {
+            record.item_flags = if taken { 0 } else { action };
+            if taken || action & 2 != 0 {
+                record.be_flg = 0x8000_0000;
+                record.flag = 0;
+            }
+        }
         let params = [item, amount, flag, model, action, 0, 0, 0];
         self.write_area(
             at(0) as usize,
@@ -1057,10 +1069,7 @@ impl GameHost<'_> {
         } else if types[0] != sound_type {
             types[1] = sound_type;
         }
-        // A licker on the floor: one that starts on a wall or the ceiling isn't
-        // ported.
-        let type_word = (at(3) as u16) | (at(4) as u16) << 8;
-        let licker = id == 0x22 && type_word & 0x4F0F == 0;
+        let licker = id == 0x22;
         let zombie = (0x10..=0x21).contains(&id) || licker;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -1276,6 +1285,7 @@ impl GameHost<'_> {
         let Some(record) = self.game.objects.record_mut(slot) else {
             return;
         };
+        let item_flags = record.item_flags;
         let mut be_flg = if record.be_flg == 0 {
             (at(7) as i16 as i32 | 1) as u32
         } else {
@@ -1309,6 +1319,7 @@ impl GameHost<'_> {
             be_flg,
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
+            item_flags,
             ..crate::objects::ObjectRecord::default()
         };
     }

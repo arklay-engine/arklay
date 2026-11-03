@@ -124,13 +124,14 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
                 },
                 |zombie| zombie.atd,
             );
-            // A licker has a second box, for its head.
-            let head = other.zombie.as_ref().and_then(|zombie| {
-                let licker = zombie.licker.as_ref()?;
-                Some(licker.head)
-            });
+            // A licker has a second box for its head and, on a wall or
+            // ceiling, a third for its back.
+            let licker = other.zombie.as_ref().and_then(|z| z.licker.as_ref());
+            let head = licker.map(|licker| licker.head);
+            let back = licker.and_then(|licker| licker.back);
             std::iter::once(atd)
                 .chain(head)
+                .chain(back)
                 .map(move |atd| crate::zombie2::Oba {
                     slot: slot as u8,
                     be_flg: other.be_flg,
@@ -142,16 +143,19 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
 }
 
 /// `Oba_ck_em2`: the player's push out of the bodies in play, after `Player_move`.
-pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState) {
+///
+/// `old` is where the player ended the last tick: `Old_x`, `Old_y` and `Old_z`.
+pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState, old: [i32; 3]) {
     let mut atd = player_atd(player.pos);
     let be_flg = game.re2.player.be_flg;
     let mut touching = 0;
     for other in slot_bodies(game) {
-        if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos, None) {
+        if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos, Some(old)) {
             touching |= 1 << other.slot;
         }
     }
     game.re2.player.at_em_flg = touching;
+    game.re2.player.atd = Some(atd);
 }
 
 /// `Em10` throws a zombie back (`Routine` `0x901`), if it can be.
@@ -447,7 +451,7 @@ fn run_zombie(
     let mut bodies = vec![crate::zombie2::Oba {
         slot: crate::zombie2::PLAYER_BODY,
         be_flg: game.re2.player.be_flg,
-        atd: player_atd(player),
+        atd: game.re2.player.atd.unwrap_or_else(|| player_atd(player)),
         pos: player,
     }];
     bodies.extend(slot_bodies(game));

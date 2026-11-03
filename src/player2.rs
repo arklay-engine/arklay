@@ -258,6 +258,8 @@ pub enum Bank {
 pub struct Work {
     /// `Routine_0`..`3`.
     pub routine: [u8; 4],
+    /// `Super_matrix`, the surface a body walks on when it isn't the floor.
+    pub super_matrix: Option<[[i16; 3]; 3]>,
     pub move_no: u8,
     pub move_cnt: u8,
     pub hokan: u8,
@@ -331,6 +333,9 @@ pub struct Work {
     pub timers: [u16; 3],
     /// `At_em_flg`: the slots `Oba_ck_em2` found the player touching.
     pub at_em_flg: u32,
+    /// `Atd[0]`, as the last `Oba_ck_em2` left it: the box the bodies push
+    /// against, which does not follow a hit that moves the player afterwards.
+    pub atd: Option<crate::zombie2::Atd>,
     /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
     pub near_death: bool,
     /// `Snd_se_on`s of the held states, for the caller.
@@ -606,6 +611,15 @@ impl Work {
     }
 }
 
+impl Work {
+    /// The root of `Joint_trans2`: `Cdir_y`, on the surface it walks on.
+    pub(crate) fn body_rotation(&self, angle: u16) -> [[i16; 3]; 3] {
+        let turn = rot_matrix([0, angle as i16, 0]);
+        self.super_matrix
+            .map_or(turn, |surface| mul_matrix(&surface, &turn))
+    }
+}
+
 impl Default for Work {
     fn default() -> Self {
         Self {
@@ -613,6 +627,7 @@ impl Default for Work {
             shot_level: 0,
             shot_ticks: 0,
             shot_line: None,
+            super_matrix: None,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -633,6 +648,7 @@ impl Default for Work {
             base: [0; 3],
             timers: [0; 3],
             at_em_flg: 0,
+            atd: None,
             near_death: false,
             sounds: Vec::new(),
             hit: None,
@@ -1975,7 +1991,7 @@ impl Mover<'_, '_> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         let mut world = Matrix {
-            m: rot_matrix([0, self.player.angle as i16, 0]),
+            m: self.work.body_rotation(self.player.angle),
             t: self.player.pos,
         };
         for &part in chain {
@@ -3305,7 +3321,7 @@ pub(crate) fn rcos(angle: i32) -> i32 {
 }
 
 /// `MulMatrix0`: every element is narrowed to a `short`.
-fn mul_matrix(a: &[[i16; 3]; 3], b: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
+pub(crate) fn mul_matrix(a: &[[i16; 3]; 3], b: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
     std::array::from_fn(|row| {
         std::array::from_fn(|column| {
             let sum: i32 = (0..3)

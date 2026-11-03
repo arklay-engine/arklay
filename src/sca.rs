@@ -724,12 +724,20 @@ pub struct Ground {
     pub blocked: bool,
     /// The lowest top rising past the body (`DWORD_00695E74`).
     pub ceiling: i32,
+    /// The highest floor a record starts from at or below the body
+    /// (`DWORD_00695E78`), and above it (`DWORD_00695E80`).
+    pub below: i32,
+    pub above: i32,
+    /// A record starts above the body (`DWORD_00695E84`'s bit 1).
+    pub under_record: bool,
 }
 
 /// `Sca_ck_hit`, without the object models.
 pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
     let mut ground = Ground {
         blocked: pos[1] > 0,
+        below: sca.ceiling,
+        above: sca.ceiling,
         ..Ground::default()
     };
     let area = area(sca, pos[0], pos[2]);
@@ -750,10 +758,106 @@ pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
                 ground.ceiling = ground.ceiling.min(height);
             } else {
                 ground.height = ground.height.min(height);
+                if pos[1] < height {
+                    continue;
+                }
             }
+        }
+        if pos[1] < top_floor {
+            ground.under_record = true;
+            ground.above = ground.above.max(top_floor);
+        } else {
+            ground.below = ground.below.max(top_floor);
         }
     }
     ground
+}
+
+/// `Sca_ck_info`'s list: the records for `mask` whose outline, grown by `radius`,
+/// holds the point.
+pub fn list_at(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> Vec<usize> {
+    let area = area(sca, x, z);
+    (0..sca.records.len())
+        .filter(|&record| applies(&sca.records[record], mask, area, [x, 0, z], radius, floor))
+        .collect()
+}
+
+/// `FUN_004e3960`: the first records of the room, wherever they are, for `areas`
+/// and `mask`.
+pub fn list_all(sca: &Sca, areas: u16, mask: u16) -> Vec<usize> {
+    (0..sca.records.len())
+        .filter(|&record| {
+            let record = &sca.records[record];
+            record.kind & areas != 0 && record.id & mask != 0
+        })
+        .take(0x20)
+        .collect()
+}
+
+/// Which of a box's sides a point is nearest, across its diagonals: 0 the right
+/// edge of `a`, 1 the near edge of `b`, 2 the left of `a`, 3 the far of `b`
+/// (`FUN_004e30f0`).
+fn side_across(a: i32, b: i32, from: [i32; 2], size: [i32; 2]) -> u8 {
+    let along = div(mul(a - from[0], size[1]), size[0]);
+    let up = b - from[1];
+    let far = up - size[1];
+    if up <= along {
+        if -far == along || -along < far { 0 } else { 1 }
+    } else if -along < far {
+        3
+    } else {
+        2
+    }
+}
+
+/// `FUN_004e2ec0`: the side of a record, seen from above, that a point faces.
+pub fn side_of(record: &ScaRect, x: i32, z: i32) -> u8 {
+    let (left, near, width, depth) = outline(record);
+    side_across(x, z, [left, near], [width, depth])
+}
+
+/// `FUN_004e3250`: where a side of a record lies, on its own axis.
+pub fn edge_of(record: &ScaRect, side: u8) -> i32 {
+    let (left, near, width, depth) = outline(record);
+    match side & 3 {
+        0 => left + width,
+        1 => near,
+        2 => left,
+        _ => near + depth,
+    }
+}
+
+/// `FUN_004e2f30`: the side of a record a point faces, seen from `plane`
+/// (`FUN_004e3150`): 0 from above, 1 along `x` and 2 along `z`.
+pub fn face_of(record: &ScaRect, pos: [i32; 3], plane: u8) -> u8 {
+    let (left, near, width, depth) = outline(record);
+    let (top, bottom) = stairs_ends(record);
+    let height = bottom - top;
+    match plane {
+        0 => side_across(pos[0], pos[2], [left, near], [width, depth]),
+        1 => side_across(pos[2], pos[1], [near, top], [depth, height]),
+        _ => side_across(pos[1], pos[0], [top, left], [height, width]),
+    }
+}
+
+/// `FUN_004e32b0`: a point moved onto the side of a record it faces in `plane`.
+pub fn onto_edge(record: &ScaRect, pos: [i32; 3], plane: u8) -> [i32; 3] {
+    let (left, near, width, depth) = outline(record);
+    let (top, bottom) = stairs_ends(record);
+    let height = bottom - top;
+    let (a, b, from, size) = match plane {
+        0 => (0, 2, [left, near], [width, depth]),
+        1 => (1, 2, [top, near], [height, depth]),
+        _ => (0, 1, [left, top], [width, height]),
+    };
+    let mut at = pos;
+    match side_across(pos[a], pos[b], from, size) {
+        0 => at[a] = from[0] + size[0],
+        1 => at[b] = from[1],
+        2 => at[a] = from[0],
+        _ => at[b] = from[1] + size[1],
+    }
+    at
 }
 
 /// Within a record's own shape, given it's within its outline: `Sca_ck_naname_a`

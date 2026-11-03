@@ -4,7 +4,7 @@
 use mlua::{UserData, UserDataMethods};
 
 use super::licker::Licker;
-use super::{Atd, Em, PLAYER_BODY, direction_ck, goto, square_root0, turn_within};
+use super::{Atd, Em, PLAYER_BODY, direction_ck, goto, square_root0, surface, turn_within};
 use crate::player2::{self, Bank};
 
 /// One script call's view of its enemy, valid only for that call: the host's
@@ -71,6 +71,15 @@ fn bank(index: i64) -> mlua::Result<Bank> {
         2 => Ok(Bank::Room),
         _ => Err(mlua::Error::RuntimeError(format!("no bank {index}"))),
     }
+}
+
+/// A collision record a script names, from 1.
+fn sca_record(e: &mut Api, record: i64) -> mlua::Result<&'static crate::state::ScaRect> {
+    let room = e.em().mover.tick.room;
+    room.sca
+        .as_ref()
+        .and_then(|sca| sca.records.get(usize::try_from(record - 1).ok()?))
+        .ok_or_else(|| mlua::Error::RuntimeError(format!("no record {record}")))
 }
 
 fn routine_index(index: i64) -> mlua::Result<usize> {
@@ -294,23 +303,188 @@ impl UserData for Api {
         });
         methods.add_method_mut(
             "set_atd",
-            |_, e, (which, ofs_y, at_w, at_h, w): (i64, i16, u16, u16, u16)| {
+            |_, e, (which, ofs_x, ofs_y, at_w, at_h, w): (i64, i16, i16, u16, u16, u16)| {
                 let atd = Atd {
-                    ofs_x: 0,
+                    ofs_x,
                     ofs_y,
                     at_w,
                     at_h,
                     w,
                     at: [0; 3],
                 };
-                if which == 0 {
-                    e.em().z.atd = atd;
-                } else {
-                    e.l()?.head = atd;
+                match which {
+                    0 => e.em().z.atd = atd,
+                    1 => e.l()?.head = atd,
+                    _ => e.l()?.back = Some(atd),
                 }
                 Ok(())
             },
         );
+        methods.add_method_mut("clear_back_atd", |_, e, ()| {
+            e.l()?.back = None;
+            Ok(())
+        });
+
+        // The surface it walks on (`Super_matrix`).
+        methods.add_method_mut("super_add", |_, e, (x, y, z): (i64, i64, i64)| {
+            e.l()?.super_add = [x as i16, y as i16, z as i16];
+            Ok(())
+        });
+        methods.add_method_mut("init_super", |_, e, ()| {
+            e.em().work().super_matrix = None;
+            Ok(())
+        });
+        methods.add_method_mut(
+            "super_rotate",
+            |_, e, (angle, x, y, z): (i64, i32, i32, i32)| {
+                let surface = e.em().work().super_matrix;
+                let [x, y, z] = surface::rotate(surface, angle as u16, [x, y, z]);
+                Ok((x, y, z))
+            },
+        );
+        methods.add_method_mut("super_axis", |_, e, ()| {
+            Ok(surface::axis(e.em().work().super_matrix))
+        });
+        methods.add_method_mut("super_plane", |_, e, ()| {
+            Ok(surface::plane(e.em().work().super_matrix))
+        });
+        methods.add_method_mut("add_speed_super", |_, e, (turn_y, turn_z): (i64, i64)| {
+            let em = e.em();
+            let on = em.work().super_matrix;
+            if on.is_none() && turn_y == 0 && turn_z == 0 {
+                em.mover.add_speed_xyz();
+                return Ok(());
+            }
+            let spd = em.work().spd.map(i32::from);
+            let angle = em.mover.player.angle.wrapping_add(turn_y as u16);
+            let turn = player2::rot_matrix([0, angle as i16, turn_z as i16]);
+            let m = on.map_or(turn, |on| player2::mul_matrix(&on, &turn));
+            let by = surface::apply(&m, spd);
+            let body = &mut *em.mover.player;
+            for (pos, by) in body.pos.iter_mut().zip(by) {
+                *pos += i32::from(by as i16);
+            }
+            Ok(())
+        });
+        methods.add_method_mut(
+            "goto_super",
+            |_, e, (x, y, z, rate): (i32, i32, i32, i16)| {
+                let em = e.em();
+                let surface = em.work().super_matrix;
+                let body = &mut *em.mover.player;
+                body.angle = surface::goto_point(surface, body.angle, body.pos, [x, y, z], rate);
+                Ok(())
+            },
+        );
+        methods.add_method_mut("goto_angle_super", |_, e, (to, rate): (i32, i16)| {
+            let em = e.em();
+            let surface = em.work().super_matrix;
+            let body = &mut *em.mover.player;
+            body.angle = surface::goto_angle(surface, body.angle, to, rate);
+            Ok(())
+        });
+        methods.add_method_mut(
+            "direction",
+            |_, _, (x0, z0, x1, z1): (i32, i32, i32, i32)| Ok(direction_ck(x0, z0, x1, z1)),
+        );
+        // `Approach`: whether it has got there.
+        methods.add_method_mut("approach", |_, e, (x, z, rate): (i32, i32, i32)| {
+            let body = &mut *e.em().mover.player;
+            let [old_x, _, old_z] = body.pos;
+            let angle = direction_ck(old_x, old_z, x, z);
+            let (dx, dz) = player2::rotate(angle, rate, 0);
+            let (new_x, new_z) = (old_x + dx, old_z + dz);
+            if (new_x - x < 0) == (old_x - x < 0) && (new_z - z < 0) == (old_z - z < 0) {
+                body.pos[0] = new_x;
+                body.pos[2] = new_z;
+                return Ok(false);
+            }
+            body.pos[0] = x;
+            body.pos[2] = z;
+            Ok(true)
+        });
+        // `Approach_one`, on its height.
+        methods.add_method_mut("approach_y", |_, e, (y, rate): (i32, i32)| {
+            let body = &mut *e.em().mover.player;
+            let old = body.pos[1];
+            let new = if old - y < 0 { old + rate } else { old - rate };
+            if (new - y < 0) == (old - y < 0) {
+                body.pos[1] = new;
+                return Ok(false);
+            }
+            body.pos[1] = y;
+            Ok(true)
+        });
+
+        // The room's collision records, which scripts name by number from 1.
+        methods.add_method_mut("floor", |_, e, ()| Ok(e.em().z.floor));
+        methods.add_method_mut(
+            "sca_list",
+            |_, e, (x, z, floor, mask): (i32, i32, i32, i64)| {
+                let room = e.em().mover.tick.room;
+                Ok(room.sca.as_ref().map_or_else(Vec::new, |sca| {
+                    let floor = (floor & 0x1F) as u8;
+                    let list = crate::sca::list_at(sca, mask as u16, x, z, 10, floor);
+                    list.into_iter().map(|record| record + 1).collect()
+                }))
+            },
+        );
+        methods.add_method_mut("sca_all", |_, e, (areas, mask): (i64, i64)| {
+            let room = e.em().mover.tick.room;
+            Ok(room.sca.as_ref().map_or_else(Vec::new, |sca| {
+                let list = crate::sca::list_all(sca, areas as u16, mask as u16);
+                list.into_iter().map(|record| record + 1).collect()
+            }))
+        });
+        methods.add_method_mut("sca_rect", |_, e, record: i64| {
+            let rect = sca_record(e, record)?;
+            Ok((
+                i32::from(rect.x),
+                i32::from(rect.z),
+                i32::from(rect.width),
+                i32::from(rect.depth),
+                rect.id,
+            ))
+        });
+        methods.add_method_mut("sca_side", |_, e, (record, x, z): (i64, i32, i32)| {
+            Ok(crate::sca::side_of(sca_record(e, record)?, x, z))
+        });
+        methods.add_method_mut("sca_edge", |_, e, (record, side): (i64, i64)| {
+            Ok(crate::sca::edge_of(sca_record(e, record)?, side as u8))
+        });
+        methods.add_method_mut(
+            "sca_face",
+            |_, e, (record, x, y, z): (i64, i32, i32, i32)| {
+                let plane = surface::plane(e.em().work().super_matrix);
+                Ok(crate::sca::face_of(
+                    sca_record(e, record)?,
+                    [x, y, z],
+                    plane,
+                ))
+            },
+        );
+        methods.add_method_mut(
+            "sca_onto_edge",
+            |_, e, (record, x, y, z): (i64, i32, i32, i32)| {
+                let plane = surface::plane(e.em().work().super_matrix);
+                let [x, y, z] = crate::sca::onto_edge(sca_record(e, record)?, [x, y, z], plane);
+                Ok((x, y, z))
+            },
+        );
+        // `Sca_ck_hit`'s two answers `FUN_004654f0` reads: the surface over the
+        // point and the one under it.
+        methods.add_method_mut("sca_hit", |_, e, (x, y, z, mask): (i32, i32, i32, i64)| {
+            let room = e.em().mover.tick.room;
+            Ok(room.sca.as_ref().map_or((0, 0), |sca| {
+                let ground = crate::sca::ground_at(sca, [x, y, z], 0, mask as u16);
+                let over = if ground.blocked || ground.under_record {
+                    ground.ceiling
+                } else {
+                    ground.height
+                };
+                (over, ground.below.max(ground.above))
+            }))
+        });
         methods.add_method_mut("init_parts", |_, e, ()| {
             let pos = e.em().mover.player.pos;
             let l = e.l()?;

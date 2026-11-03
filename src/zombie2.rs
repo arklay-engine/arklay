@@ -59,6 +59,7 @@ const SEQ_SOUND: u32 = 0x800_0000;
 
 pub mod licker;
 mod script;
+pub mod surface;
 
 /// A collision body, `AT_DATA`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -618,6 +619,7 @@ pub fn em_zombie(
         (body.pos[2] - world.player[2]).wrapping_mul(body.pos[2] - world.player[2])
             + (body.pos[0] - world.player[0]).wrapping_mul(body.pos[0] - world.player[0]),
     );
+    let old_pos = body.pos;
     let mut em = Em {
         mover: Mover::new(work, body, tick),
         z: zombie,
@@ -625,7 +627,7 @@ pub fn em_zombie(
         world,
         distance,
         kept_arms: [None; 2],
-        old_pos: [0; 3],
+        old_pos,
     };
     if let Some(mut body) = em.z.licker.take() {
         licker::run(&mut em, &mut body);
@@ -976,7 +978,7 @@ impl Em<'_, '_, '_> {
             pos[2] + ahead_z,
         ];
         self.z.at_em_no = NO_BODY;
-        let old = matches!(self.mover.tick.id, DOG_ID | CROW_ID).then_some(self.old_pos);
+        let old = Some(self.old_pos);
         for other in self.world.bodies {
             let body = &mut self.mover.player.pos;
             let mut other = *other;
