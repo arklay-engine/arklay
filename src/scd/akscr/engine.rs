@@ -123,6 +123,7 @@ pub(super) const BYTE: Family = Family {
         ("B_ENT_AOT", 17),
         ("B_USED_ITEM", 18),
         ("B_PICKED_ITEM", 19),
+        ("B_PICKED_AOT", 20),
         ("B_SAVES", 40),
         ("B_EQUIPPED", 41),
         ("B_CHARACTER", 43),

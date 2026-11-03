@@ -67,6 +67,13 @@ pub const STATE_BYTE_ENT_ACTION: u8 = 17;
 pub const STATE_BYTE_USED_ITEM: u8 = 18;
 /// State byte holding the last picked item (BioCard 0x213).
 pub const STATE_BYTE_PICKED_ITEM: u8 = 19;
+/// Arklay-only state byte: the action slot plus one of the item AOT whose
+/// pickup set [`STATE_BYTE_PICKED_ITEM`] this frame, 0 for none. The original
+/// leaves the byte (BioCard 0x214, a fade word no script reads) alone. The
+/// forward probe byte does not do: it lasts one frame and the pickup runs
+/// frames later, after the prompt. `picked()` tests it. Cleared with the
+/// picked item.
+pub const STATE_BYTE_PICKED_AOT: u8 = 20;
 /// First byte of the 32-bit play-timer snapshot (BioCard 0x224), the
 /// original's `g_gameTimerSnapshot`. It ticks at 30 Hz and is read by the
 /// RESULT screen and the next-cycle grant.
@@ -5036,6 +5043,7 @@ impl GameState {
     /// pass; the same clear runs at the top of a room load.
     pub fn room_state_reset(&mut self) {
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = 0;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = 0;
         self.state_bytes[usize::from(STATE_BYTE_USED_ITEM)] = 0;
         self.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)] = 0;
         self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[4..8].fill(0);
@@ -7048,6 +7056,7 @@ impl GameState {
         let item = action.item_id();
         self.last_picked_item = Some(item);
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.mark_file_collected(item);
         // The state-8 screen clears the model byte and the room-items bit but
         // never frees the sparkle pool slot.
@@ -7916,6 +7925,7 @@ impl GameState {
         self.last_picked_item = Some(item);
         // BioCard 0x213 (`pickedItemId`) is what the scripts test with cmpb 19.
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.item_events.push(item);
         // A document pickup raises its FILE-collected bit (bank 8,
         // `0x82 + (item - 0x5F)`) so the FILE tab lists it.
@@ -7985,6 +7995,7 @@ impl GameState {
         }
         self.last_picked_item = Some(item);
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.tear_down_item(slot, action, false);
         true
     }
@@ -15372,6 +15383,23 @@ mod tests {
     }
 
     #[test]
+    fn a_pickup_records_which_aot_was_picked_until_the_frame_ends() {
+        let mut state = item_game("1000", 2);
+        state.room_actions[0] = Some(item_action(0, 0x02, 1, [0, 0, 100, 100]));
+        state.room_actions[2] = Some(item_action(2, 0x03, 1, [0, 0, 100, 100]));
+        let byte = |state: &GameState, index: u8| state.state_bytes[usize::from(index)];
+        assert!(state.pick_up(2));
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_ITEM), 0x03);
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 3, "AOT 2, plus one");
+        state.room_state_reset();
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 0);
+        // A later pickup of another AOT names that AOT, not the first.
+        assert!(state.pick_up(0));
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_ITEM), 0x02);
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 1, "AOT 0, plus one");
+    }
+
+    #[test]
     fn map_handler_raises_the_room_flag_and_never_awards() {
         let mut state = item_game("1000", 1);
         {
@@ -18083,6 +18111,7 @@ mod tests {
     fn seeded_room_state() -> GameState {
         let mut state = game();
         state.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = 9;
+        state.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = 3;
         state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)] = 8;
         state.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)] = 7;
         state.flags[usize::from(BANK_SYSTEM)].bytes_mut()[4] = 0xAA;
@@ -18093,6 +18122,7 @@ mod tests {
     /// The shared assertions for the per-frame reset and the room load.
     fn assert_room_state_cleared(state: &GameState) {
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)], 0);
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)], 0);
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)], 0);
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)], 0);
         assert_eq!(

@@ -1305,17 +1305,28 @@ fn picked_remaps_the_pickup_under_the_item_randomizer_at_run_time() {
     let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
     let bytes = block_bytes(&runtime.main[0]);
     let randomizer = [0x04, 5, crate::scd::opcode::system::ITEM_RANDOMIZER, 0];
+    // AOT 2 is reused for two items, so the item's own flag narrows it too.
     let collected = [0x04, 7, 78, 0];
+    let picked_aot = [0x06, 20, 0, 3];
     let remap = [0x08, 19, 5, 0];
     let find = |needle: &[u8]| bytes.windows(needle.len()).position(|w| w == needle);
-    let (a, b, c) = (
+    let (a, b, c, d) = (
         find(&randomizer).expect("randomizer test"),
+        find(&picked_aot).expect("picked AOT test"),
         find(&collected).expect("collected flag test of the matching item"),
         find(&remap).expect("remap"),
     );
-    assert!(a < b && b < c, "{bytes:02x?}");
+    assert!(a < b && b < c && c < d, "{bytes:02x?}");
     // The original test still follows.
     assert!(find(&[0x11, 5]).is_some(), "{bytes:02x?}");
+    // An AOT with one item needs no flag: the picked AOT alone names it.
+    let text = picked_room("    if (picked(1))\n    {\n        set(0, 1, 0);\n    }");
+    let runtime = compile(&text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.main[0]);
+    let find = |needle: &[u8]| bytes.windows(needle.len()).position(|w| w == needle);
+    assert!(find(&[0x06, 20, 0, 2]).is_some(), "{bytes:02x?}");
+    assert!(find(&[0x04, 7, 77, 0]).is_none(), "{bytes:02x?}");
     // A statement form does the remap alone.
     let alone = picked_room("    picked_as(2, 5);");
     assert!(compile(&alone).is_ok());

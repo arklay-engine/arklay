@@ -1130,7 +1130,7 @@ event on_enter
   | Names | For |
   | --- | --- |
   | `CMP_EQ` `CMP_GT` `CMP_GE` `CMP_LT` `CMP_LE` `CMP_NE` | `cmpb` / `cmpw` comparisons, the state on the left |
-  | `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
+  | `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_PICKED_AOT` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
   | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
   | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
   | `MSG_FAST` | `message`: show the text at once |
@@ -2246,15 +2246,22 @@ the pickup flag.
   makes the original test see a randomized pickup as the original item:
 
   ```
-  if (ITEM_RANDOMIZER && ck(FG_ITEM, <pickup flag>, TRUE)
-      && cmpb(B_PICKED_ITEM, CMP_NE, 0)) { setb(B_PICKED_ITEM, <original item>, 0); }
+  if (ITEM_RANDOMIZER && cmpb(B_PICKED_AOT, CMP_EQ, <AOT> + 1)) {
+      setb(B_PICKED_ITEM, <original item>, 0);
+  }
   ```
+
+  `B_PICKED_AOT` is an Arklay state byte (20): the engine sets it to the
+  picked item AOT's id plus one (0 is no pickup) whenever it sets
+  `B_PICKED_ITEM`, and clears it with it after the frame. So the remap fires
+  for a pickup of exactly that AOT, and never for another pickup in the room,
+  collected or not. (`B_FWD_AOT` cannot do this: it lasts the one frame of the
+  action press, and the pickup runs frames later after the prompt.) An AOT
+  that the room reuses for several items (room 106's AOT 6) also tests the
+  item's own pickup flag, `ck(FG_ITEM, <flag>, TRUE)`.
 
   The test is not an `if (...) {} else {}` copy of the bodies: a command's
   `if` jumps by one byte, so a doubled body would not fit a long `main`.
-  The picked item id lasts one frame while the flag lasts for good, so the
-  `B_PICKED_ITEM != 0` term keeps the remap to frames with a pickup; it also
-  remaps another pickup in the room once this slot has been collected.
 - `picked_as(AOT, ITEM);` is the remap alone, for a test too far from its
   `if` to add 20 bytes (room 10D). It folds away in a retail build.
 
