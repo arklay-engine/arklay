@@ -2712,7 +2712,7 @@ pub struct GameplayScene<'a> {
     pub colour: [u8; 3],
     pub meshes: &'a [EntityMesh<'a>],
     pub shadows: &'a [Shadow<'a>],
-    /// The Tyrant's slash ribbon this tick and its tint byte ([`ribbon_polys`]).
+    /// The Tyrant's slash ribbon this tick and its tint byte (`ribbon_polys`).
     pub ribbon: (&'a [[[i32; 3]; 4]], u8),
     pub camera: &'a Camera,
     pub lighting: &'a Lighting,
