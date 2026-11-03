@@ -51,16 +51,17 @@ This document supersedes item 8 of `docs/m13-deviations.md` (FMV out of scope).
    `samples_consumed` path of `MovieSession::tick` remains the deterministic
    unit-test seam.
 
-5. **Endings unreachable through normal play.** Reaching an ending requires the
-   excluded combat and bosses, so `ending::select_id` and `ending::chain` are
-   pure functions and the only way to see the sequence is the `--ending <id>`
-   debug entry (with `--character`), which now runs the films, the RESULT
-   screen, the epilogue and the next-cycle save end to end. The seven-row
-   table, the congratulations film rules (plate/character/infinite
-   launcher/second playthrough) and the staff-roll flag are transcribed and
-   unit-tested, but no gameplay path sets the survivor flags or reaches
-   `ending_state`: the post-film screen sequence and the flow's carried bits
-   are wired, but only the debug entries drive them.
+5. **Ending playback paths.** `ending::select_id` and `ending::chain` are pure
+   functions, and `--ending <id>` (with `--character`) runs the films, the
+   RESULT screen, the epilogue and the next-cycle save end to end. The bosses
+   and room scripts that lead to the finales are ported, and room 303's finale
+   now reaches the same chain in normal play: killing the rooftop Tyrant runs
+   the room script's escape, which sets the death-variant flags and hands over
+   to `ending_state` (#345). The seven-row table, the congratulations film
+   rules (plate/character/infinite launcher/second playthrough) and the
+   staff-roll flag are transcribed and unit-tested. A recorded full playthrough
+   through every ending is still outstanding, so the debug entry remains the
+   only way to see each ending on demand.
 
 6. **Automatic films only on the interactive root boot.** The boot logos (28
    then 23), the title opening (0, once per process) and the character intro
