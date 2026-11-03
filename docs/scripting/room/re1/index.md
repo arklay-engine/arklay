@@ -726,7 +726,7 @@ The compiler also names these engine values:
 | Names | For |
 | --- | --- |
 | `CMP_EQ` `CMP_GT` `CMP_GE` `CMP_LT` `CMP_LE` `CMP_NE` | `cmpb` / `cmpw` comparisons, the state on the left |
-| `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
+| `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_PICKED_AOT` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
 | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
 | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
 | `MSG_FAST` | `message`: show the text at once |

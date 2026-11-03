@@ -1512,7 +1512,8 @@ type Branch<'b> = &'b mut dyn FnMut(&mut Lowerer) -> Result<()>;
 const FG_STATUS: i64 = 5;
 const FG_ITEM: i64 = 7;
 const B_PICKED_ITEM: i64 = 19;
-const CMP_NE: i64 = 5;
+const B_PICKED_AOT: i64 = 20;
+const CMP_EQ: i64 = 0;
 
 impl Lowerer<'_> {
     fn label(&mut self) -> String {
@@ -1776,7 +1777,7 @@ impl Lowerer<'_> {
     ///
     /// ```text
     /// if (ITEM_RANDOMIZER) {
-    ///     if (ck(FG_ITEM, <pickup flag>, TRUE) && cmpb(B_PICKED_ITEM, CMP_NE, 0)) {
+    ///     if (cmpb(B_PICKED_AOT, CMP_EQ, <AOT> + 1)) {
     ///         setb(B_PICKED_ITEM, <the original item>, 0);
     ///     }
     /// }
@@ -1786,16 +1787,17 @@ impl Lowerer<'_> {
     /// So under randomization a pickup of that AOT reads as the original
     /// item and the room's own test runs unchanged; `then` and `otherwise`
     /// are lowered once (a command `if` has no OR, and a second copy of a
-    /// long body overflows its one-byte jump). The original test is a
-    /// one-frame pulse (the picked id is cleared after every frame) but the
-    /// collected flag is a level, so the `B_PICKED_ITEM != 0` term keeps the
-    /// remap to frames with a pickup. It still remaps for another pickup in
-    /// the room after this AOT was collected.
+    /// long body overflows its one-byte jump). `B_PICKED_AOT` is an Arklay
+    /// state byte the engine sets, with the picked item id, to the picked
+    /// AOT plus one and clears with it after the frame. It names the AOT
+    /// exactly, so a pickup elsewhere in the room never remaps, collected
+    /// flag or not.
     ///
-    /// The pickup flag is the `item_aot_set` flag of that AOT. An AOT that
-    /// several `item_aot_set`s reuse for different items (room 106) is
-    /// narrowed to those of the item type `original` tests, and must then
-    /// have one flag.
+    /// An AOT that several `item_aot_set`s reuse for different items (room
+    /// 106) is narrowed to those of the item type `original` tests, and must
+    /// then have one flag; the remap also requires that `item_aot_set`'s
+    /// pickup flag (`ck(FG_ITEM, <flag>, TRUE)`), so another item at the same
+    /// AOT does not remap.
     fn picked(
         &mut self,
         aot: &Arg,
@@ -1837,8 +1839,8 @@ impl Lowerer<'_> {
     }
 
     /// `picked_as(AOT, ITEM);`: the first half of `picked`. In the runtime
-    /// build, under `ITEM_RANDOMIZER`, a pickup this frame of an AOT whose
-    /// flag is set reads as `ITEM`; a variant's build emits nothing. For a
+    /// build, under `ITEM_RANDOMIZER`, a pickup this frame of the AOT
+    /// reads as `ITEM`; a variant's build emits nothing. For a
     /// test too far from its `if` for the one-byte jump, as in room 10D.
     fn remap_picked(
         &mut self,
@@ -1885,6 +1887,10 @@ impl Lowerer<'_> {
             );
         }
         let (item, flag) = (first.item, first.flag);
+        let shared = self
+            .item_sets
+            .iter()
+            .any(|set| set.aot == aot && (set.item != item || set.flag != flag));
         if self.build.variant().is_some() {
             return Ok(item);
         }
@@ -1898,10 +1904,11 @@ impl Lowerer<'_> {
         let skip = self.label();
         self.push("if", vec![Arg::Symbol(skip.clone())], line, col);
         self.push_call(&call("ck", vec![FG_STATUS, randomizer, 0]))?;
-        self.push_call(&call("ck", vec![FG_ITEM, flag, 0]))?;
-        // The picked item id lasts one frame (`room_state_reset`) and the
-        // flag lasts for good, so require a pickup this frame too.
-        self.push_call(&call("cmpb", vec![B_PICKED_ITEM, CMP_NE, 0]))?;
+        // The engine clears the byte with the picked item id after the frame.
+        self.push_call(&call("cmpb", vec![B_PICKED_AOT, CMP_EQ, aot + 1]))?;
+        if shared {
+            self.push_call(&call("ck", vec![FG_ITEM, flag, 0]))?;
+        }
         self.push_call(&call("setb", vec![B_PICKED_ITEM, item, 0]))?;
         self.pending.push(skip);
         self.push("endif", vec![Arg::Num(0)], line, col);

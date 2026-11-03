@@ -95,8 +95,9 @@ that player's script path.
 ## C. Item-type tests
 
 Staging rewrites the item type a script compares the pickup against
-(`typeOffsets`). Arklay replaces each test with `picked(AOT)`, which tests
-the slot's own collected flag in a randomized game
+(`typeOffsets`). Arklay replaces each test with `picked(AOT)`, which in a randomized game
+remaps a pickup of exactly that AOT (the engine's `B_PICKED_AOT` byte) to the
+original item type, so the room's own test runs unchanged
 ([`plan.md`](plan.md#item-puzzles-collected-flags-not-item-types)).
 
 | Room | Test | Effect | Staging | Arklay |
