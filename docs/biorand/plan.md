@@ -171,19 +171,43 @@ its own, for a test too far from its `if` (room 10D).
 ### Locks
 
 A door's lock byte means `0x80` checked, `0x40` refused for Rebecca and
-`& 0x3F` the flag in bank 2. Under `LOCK_RANDOMIZER` (and whenever
-`RANDOMIZER` is set, as staging always rewrites locks), the whole byte is the
+`& 0x3F` the flag in bank 2. Under `BR_LOCK_FULL_BYTE`, which a pack raises
+with `LOCK_RANDOMIZER` (staging rewrites the bytes whenever it randomizes; here
+an item-only game keeps the original bytes and reading), the whole byte is the
 flag index: 0 is unlocked and 1–255 are lock flags. Bank 2 is already 256 bits
 in arklay at run time, but a save keeps only its first 8 bytes, as the
 original's BioCard does. So a save gains an `AKY\x03` trailer (after the height and RE2 trailers)
 holding bank 2's bytes 8 to 31, as staging's `biorand.dll` added one. It is
 written only when one of those bytes is non-zero, so retail saves are
-unchanged and an older save loads with the high flags clear. Scripts that raise a lock flag by number (`set(FG_LOCK, ...)`)
-use the room's lock names, which the emitter renumbers with the door.
+unchanged and an older save loads with the high flags clear.
 
-The `0x40` Rebecca refusal goes: the few doors that carry it get a script
-check in their rooms instead. While Rebecca is the player, the door's AOT is
-replaced by a message AOT that shows the original's refusal.
+The package's lock stage (`locks.rs`, after the inventory) follows staging's
+`LockRandomiser`: it frees the doors the map allows, keeps the box route and
+the item rooms reachable, then draws locks over the remaining pairs at the
+configured ratio with flags from 64 up (then 1–63), and keys for them from
+the configuration's key pool. The plan lists every door's `(lock, key)`:
+the key byte is an item, `0xFE` (opens from this side), `0xFF` (never opens
+from this side) or 0 (says it is locked). Three deviations from staging, each
+a staging bug the playthrough walk caught: a door that leads nowhere is
+locked for good (`0xFF`, `0xFF`) rather than left open; a `no-unlock` pair is
+never given a lock (staging can lock it with no way to open it); and a door
+that lost its lock also loses the original's key requirement, so keys are not
+placed for a lock that is gone.
+
+The emitter writes every `door_aot_set` of every room script: a door the plan
+has (matched by room, AOT id and target room) gets the plan's bytes in every
+branch that declares it; any other door keeps its key and gets its original
+flag (`byte & 0x3F` when `0x80` is set, else 0), so the scripts' own
+`set(FG_LOCK, ...)` still open it. Room 115's scripted doors are the
+exception, as the map gives them flags 0x0F and 0x10: 115 mirrors its
+`F_LOCK_00`/`01` onto those under the guard, and 109 and 116 raise them from
+their side (staging's `ShotgunOnWallFix` renumbering). `verify` checks every
+door's bytes against the plan and that every planned locked door is declared.
+
+The `0x40` Rebecca refusal goes: the doors that carry it (27 in 13 rooms) get
+a script check instead. Under `BR_LOCK_FULL_BYTE`, while Rebecca is the
+player (`B_CHARACTER_MODEL` 3), the door's AOT is replaced by a message AOT
+that shows the engine's wrong-character message (0xD6).
 
 ### Room ids and segments
 
@@ -260,19 +284,19 @@ writes one new base pack per planned player (`src/biorand/`):
   `biorand/spoiler.txt`. Every other entry is the base pack's, copied as it
   is stored.
 
-Until their milestones land, the doors, locks and enemies stay the
-original's: `generate` defers `doors/random` and `locks/random`, the engine
-side turns `enemies/random` off and lists it as deferred in the spoiler, and
-the manifest raises none of `DOOR_RANDOMIZER`, `ENEMY_RANDOMIZER`,
-`LOCK_RANDOMIZER` or `BR_LOCK_FULL_BYTE` (the last makes the engine read
-whole lock bytes, which only the lock randomizer writes).
+Until their milestones land, the doors and enemies stay the original's:
+`generate` defers `doors/random`, the engine side turns `enemies/random` off
+and lists it as deferred in the spoiler, and the manifest raises neither
+`DOOR_RANDOMIZER` nor `ENEMY_RANDOMIZER`. Locks are randomized with
+`locks/random` (milestone 6), which raises `LOCK_RANDOMIZER` and
+`BR_LOCK_FULL_BYTE`; without it the pack keeps the original lock bytes.
 
 `verify` reads the finished pack back. It plans the game again from the
 request and the map the pack carries, then checks the manifest's flags and
 setup, the spoiler, that every room script decodes, and that every planned
 pickup is declared by an `item_aot_set` in its room with the planned item and
 amount (a slot no reachable `item_aot_set` declares could never be picked
-up). Given the base pack, it also checks that every other byte matches: each
+up), and, with random locks, every door's lock and key bytes. Given the base pack, it also checks that every other byte matches: each
 room script equals the base's with the planned fields written, and every
 other entry is identical. `generate` runs it on every pack it writes and
 deletes a pack that fails. Later milestones add the route checks: every room
@@ -293,6 +317,9 @@ target/test-release/arklay biorand generate re1.akpak --seed 123456 --player bot
 # An optional configuration (BioRand's JSON; options it leaves out keep their defaults):
 echo '{"inventory/size": "6", "hard": true}' > config.json
 target/test-release/arklay biorand generate re1.akpak --seed 7 --player jill --config config.json --force
+# Random locks (milestone 6):
+echo '{"locks/random": true}' > locks.json
+target/test-release/arklay biorand generate re1.akpak --seed 7 --player both --config locks.json --force
 # Check a pack again (the base is found beside it, or given with --base):
 target/test-release/arklay biorand verify games/biorand-123456-chris.akpak --base re1.akpak
 # Read what it set up, and the spoiler:
@@ -310,7 +337,9 @@ generated game saves in its own folder, `<save_dir>/<pack id>/`.
 What to look for: the start inventory and slot count match the spoiler's;
 pickups hold the spoiler's items; documents, maps and the MO disc pass codes
 in randomized slots are picked up as items; emptied slots can't be picked
-up; keys are where the spoiler says; the game is completable. Report a stuck
+up; keys are where the spoiler says; with random locks, the spoiler's "Locked
+doors" open with their keys from either side, and Rebecca is turned away from
+the doors the original refuses her; the game is completable. Report a stuck
 seed with its seed, player and configuration (`biorand/request.json`).
 
 ## Milestones

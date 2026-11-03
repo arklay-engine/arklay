@@ -561,7 +561,8 @@ enum ModAction {
 #[derive(Subcommand, Debug)]
 enum BiorandAction {
     /// Generate a seed's game from a base pack: the original game with its
-    /// items randomized (doors, locks and enemies stay the original's)
+    /// items randomized, and its locks with `locks/random` (doors and
+    /// enemies stay the original's)
     Generate {
         /// The base game pack, such as re1.akpak
         #[arg(value_name = "PACK")]
