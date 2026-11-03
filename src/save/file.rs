@@ -68,6 +68,9 @@ pub struct SaveFile {
     pub scenario2: [u8; 32],
     /// Door/desk lock flags, 8 bytes (0x254).
     pub locks: [u8; 8],
+    /// Port-only: bytes 8..32 of the lock bank, for the randomizer's lock
+    /// flags 64 to 255 ([`super::LOCKS_TRAILER`]); all zero in a retail game.
+    pub locks_high: [u8; 24],
     /// Enemy flags, 32 bytes (0x25C).
     pub enemies: [u8; 32],
     /// Room-item flags, 32 bytes (0x27C).
@@ -116,6 +119,7 @@ impl Default for SaveFile {
             health_status: 0,
             scenario2: [0; 32],
             locks: [0; 8],
+            locks_high: [0; 24],
             enemies: [0; 32],
             room_items: [0; 32],
             examined: [0; 4],

@@ -61,6 +61,15 @@ pub const HEIGHT_TRAILER_LEN: usize = 8;
 /// Port-only: the magic of the RE2 state trailer, which follows the height
 /// trailer: a `u32` length and [`crate::scd2::host::Re2State::to_save_bytes`].
 pub const RE2_TRAILER: [u8; 4] = *b"AKY\x02";
+/// Port-only: the magic of the lock-bank trailer, last after the height and
+/// RE2 trailers: bytes 8..32 of bank 2 ([`LOCKS_TRAILER_LEN`] bytes in all).
+/// The original's block keeps only the bank's first 8 bytes (lock flags
+/// 0..=63), but a randomized game uses lock flags up to 255. The trailer is
+/// written only when one of those bytes is non-zero, so a retail game's saves
+/// stay the plain block and a file without it loads with the high flags clear.
+pub const LOCKS_TRAILER: [u8; 4] = *b"AKY\x03";
+/// Bytes of the lock-bank trailer: the magic and 24 bank bytes.
+pub const LOCKS_TRAILER_LEN: usize = 28;
 /// Bytes of the bio-card prefix at the start of the block.
 pub const PREFIX_LEN: usize = 0x200;
 /// BioCard offset the [`GameState`] state image starts at.
@@ -211,6 +220,8 @@ impl SaveFile {
         file.scenario.copy_from_slice(&state.flags[0].bytes()[..16]);
         file.scenario2.copy_from_slice(state.flags[1].bytes());
         file.locks.copy_from_slice(&state.flags[2].bytes()[..8]);
+        file.locks_high
+            .copy_from_slice(&state.flags[2].bytes()[8..]);
         file.enemies.copy_from_slice(state.flags[3].bytes());
         file.room_items.copy_from_slice(state.flags[7].bytes());
         file.room_flags
@@ -263,6 +274,7 @@ impl SaveFile {
         state.flags[0].bytes_mut()[..16].copy_from_slice(&self.scenario);
         state.flags[1].bytes_mut().copy_from_slice(&self.scenario2);
         state.flags[2].bytes_mut()[..8].copy_from_slice(&self.locks);
+        state.flags[2].bytes_mut()[8..].copy_from_slice(&self.locks_high);
         state.flags[3].bytes_mut().copy_from_slice(&self.enemies);
         state.flags[7].bytes_mut().copy_from_slice(&self.room_items);
         state.flags[8].bytes_mut()[..20].copy_from_slice(&self.room_flags);
@@ -368,6 +380,10 @@ impl SaveFile {
             bytes.extend_from_slice(&(re2.len() as u32).to_le_bytes());
             bytes.extend_from_slice(re2);
         }
+        if self.locks_high != [0; 24] {
+            bytes.extend_from_slice(&LOCKS_TRAILER);
+            bytes.extend_from_slice(&self.locks_high);
+        }
         bytes
     }
 
@@ -431,6 +447,7 @@ impl SaveFile {
             );
         }
         budget::check_len(bytes.len(), budget::MAX_SAVE_BYTES, "save block size")?;
+        let trailers = trailers(bytes);
         let mut file = Self {
             prefix: bytes[..PREFIX_LEN].try_into().expect("prefix bytes"),
             state_bytes: bytes[STATE_IMAGE_OFFSET..STATE_IMAGE_OFFSET + STATE_BYTES]
@@ -455,8 +472,9 @@ impl SaveFile {
             character: bytes[0x22B],
             pos_x: get_i16(bytes, 0x22C),
             pos_z: get_i16(bytes, 0x22E),
-            pos_y: height_trailer(bytes).unwrap_or(0),
-            re2: re2_trailer(bytes).map(<[u8]>::to_vec),
+            pos_y: trailers.height.unwrap_or(0),
+            re2: trailers.re2.map(<[u8]>::to_vec),
+            locks_high: trailers.locks_high.unwrap_or_default(),
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
             ..Self::default()
@@ -485,23 +503,49 @@ impl SaveFile {
     }
 }
 
-/// The height a file's trailer carries ([`HEIGHT_TRAILER`]), if it has one.
-fn height_trailer(bytes: &[u8]) -> Option<i16> {
-    let trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
-    let rest = trailer.get(HEIGHT_TRAILER_LEN..)?;
-    (trailer[..4] == HEIGHT_TRAILER && (rest.is_empty() || rest.starts_with(&RE2_TRAILER)))
-        .then(|| i16::from_le_bytes([trailer[4], trailer[5]]))
+/// What the port-only trailers after the block carry.
+#[derive(Default)]
+struct Trailers<'a> {
+    /// The player height ([`HEIGHT_TRAILER`]).
+    height: Option<i16>,
+    /// The RE2 state ([`RE2_TRAILER`]).
+    re2: Option<&'a [u8]>,
+    /// Bank 2's bytes 8..32 ([`LOCKS_TRAILER`]).
+    locks_high: Option<[u8; 24]>,
 }
 
-/// The RE2 state a file's trailer carries ([`RE2_TRAILER`]), if it has one.
-fn re2_trailer(bytes: &[u8]) -> Option<&[u8]> {
-    let mut trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
-    if trailer.starts_with(&HEIGHT_TRAILER) {
-        trailer = trailer.get(HEIGHT_TRAILER_LEN..)?;
+/// Read the trailers a file carries, in their fixed order: height, RE2 state,
+/// lock bank. Each is optional, and a file whose tail is anything else (an
+/// original 0xA82-byte file, say) has none.
+fn trailers(bytes: &[u8]) -> Trailers<'_> {
+    let mut found = Trailers::default();
+    let Some(mut rest) = bytes.get(SAVE_BLOCK_SIZE..) else {
+        return found;
+    };
+    let follows = |tail: &[u8]| {
+        tail.is_empty() || tail.starts_with(&RE2_TRAILER) || tail.starts_with(&LOCKS_TRAILER)
+    };
+    if rest.starts_with(&HEIGHT_TRAILER)
+        && let Some(tail) = rest.get(HEIGHT_TRAILER_LEN..)
+        && follows(tail)
+    {
+        found.height = Some(i16::from_le_bytes([rest[4], rest[5]]));
+        rest = tail;
     }
-    let body = trailer.strip_prefix(&RE2_TRAILER)?;
-    let (length, body) = body.split_first_chunk::<4>()?;
-    (body.len() == u32::from_le_bytes(*length) as usize).then_some(body)
+    if let Some(body) = rest.strip_prefix(&RE2_TRAILER)
+        && let Some((length, body)) = body.split_first_chunk::<4>()
+        && let Some((state, tail)) = body.split_at_checked(u32::from_le_bytes(*length) as usize)
+        && (tail.is_empty() || tail.starts_with(&LOCKS_TRAILER))
+    {
+        found.re2 = Some(state);
+        rest = tail;
+    }
+    if rest.len() == LOCKS_TRAILER_LEN
+        && let Some(high) = rest.strip_prefix(&LOCKS_TRAILER)
+    {
+        found.locks_high = high.try_into().ok();
+    }
+    found
 }
 
 /// The block's 1-based file name for a zero-based slot index.
@@ -1043,6 +1087,63 @@ mod tests {
         let block = SaveFile::from_bytes(&file.to_bytes()).unwrap();
         assert_eq!(block.pos_y, 0);
         assert_eq!(SaveFile { pos_y: 0, ..file }, block);
+    }
+
+    #[test]
+    fn high_lock_flags_ride_in_the_lock_trailer() {
+        let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
+        for bit in [3, 63, 64, 0xC5, 0xFF] {
+            state.apply_flag(2, bit, 0);
+        }
+        let file = SaveFile::from_state(&state);
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes.len(), SAVE_BLOCK_SIZE + LOCKS_TRAILER_LEN);
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap(), file);
+        let mut restored = GameState::default();
+        SaveFile::from_bytes(&bytes)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert_eq!(restored.flags[2].bytes(), state.flags[2].bytes());
+        for bit in [3, 63, 64, 0xC5, 0xFF] {
+            assert!(restored.flag_test(2, bit, false), "{bit}");
+        }
+        assert!(!restored.flag_test(2, 65, false));
+    }
+
+    #[test]
+    fn the_lock_trailer_follows_the_height_and_re2_trailers() {
+        let mut file = SaveFile {
+            pos_y: -40,
+            re2: Some(vec![1, 2, 3]),
+            ..filled()
+        };
+        file.locks_high[5] = 0x10;
+        let bytes = file.to_file_bytes();
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap(), file);
+        file.re2 = None;
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+        file.pos_y = 0;
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+    }
+
+    #[test]
+    fn a_save_without_the_lock_trailer_loads_with_high_locks_clear() {
+        let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
+        state.apply_flag(2, 7, 0);
+        let bytes = SaveFile::from_state(&state).to_file_bytes();
+        assert_eq!(
+            bytes.len(),
+            SAVE_BLOCK_SIZE,
+            "a vanilla game adds no trailer"
+        );
+        assert_eq!(bytes, SaveFile::from_state(&state).to_bytes().to_vec());
+        let mut restored = GameState::default();
+        restored.apply_flag(2, 200, 0);
+        SaveFile::from_bytes(&bytes)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert!(restored.flag_test(2, 7, false));
+        assert!(!restored.flag_test(2, 200, false));
     }
 
     #[test]

@@ -513,6 +513,17 @@ pub fn character_max_health(character: u8) -> i16 {
     140 - 44 * i16::from(character & 1)
 }
 
+/// A decoded door lock byte ([`GameState::door_lock`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DoorLock {
+    /// The door is locked until its flag is raised.
+    locked: bool,
+    /// The door turns Rebecca away.
+    refuses_rebecca: bool,
+    /// The flag index in [`BANK_LOCKS`].
+    flag: u8,
+}
+
 /// One MSB-first flag bank.
 ///
 /// A selector byte chooses a little-endian dword by its high three bits and a
@@ -1146,7 +1157,8 @@ pub struct Door {
     /// bits the animation's entry camera.
     pub camera: u8,
     /// Lock descriptor: bit `0x80` start locked, bit `0x40` one character,
-    /// low six bits the lock flag index in bank 2.
+    /// low six bits the lock flag index in bank 2. With `BR_LOCK_FULL_BYTE`
+    /// raised the whole byte is the flag index and 0 is unlocked.
     pub lock: u8,
     /// Room number within the destination stage; values `>= 0x20` also change
     /// stage.
@@ -7150,6 +7162,27 @@ impl GameState {
             .filter(|action| action.kind == RoomActionKind::Item)
     }
 
+    /// Decode a door's lock byte. Vanilla: `0x80` starts locked, `0x40` turns
+    /// Rebecca away and the low six bits are the lock flag. With
+    /// `BR_LOCK_FULL_BYTE` raised the whole byte is the flag (0 is unlocked)
+    /// and Rebecca's refusal is the room script's business, so `0x40` is part
+    /// of the index.
+    fn door_lock(&self, byte: u8) -> DoorLock {
+        if self.flag_test(5, crate::scd::opcode::system::BR_LOCK_FULL_BYTE, false) {
+            DoorLock {
+                locked: byte != 0,
+                refuses_rebecca: false,
+                flag: byte,
+            }
+        } else {
+            DoorLock {
+                locked: byte & 0x80 != 0,
+                refuses_rebecca: byte & 0x40 != 0,
+                flag: byte & 0x3F,
+            }
+        }
+    }
+
     /// Whether the player can pick locks. The original only tests Jill's
     /// lockpick scenario flag; outside authentic mode a lockpick in the
     /// inventory also counts, for either character.
@@ -7959,15 +7992,16 @@ impl GameState {
         if door.re2.is_some() {
             return self.try_re2_door(&door);
         }
+        let lock = self.door_lock(door.lock);
         // The character-restriction test is inert for the two PC characters:
         // it compares the player id against 3, and ids 0/1 never match. Keep
         // the original's exact test so a record with bit 0x40 behaves the same.
-        if door.lock & 0x40 != 0 && self.id.player_flag & 3 == 3 {
+        if lock.refuses_rebecca && self.id.player_flag & 3 == 3 {
             self.show_message(MESSAGE_WRONG_CHARACTER, 0xFF);
             return false;
         }
         // Unlocked outright, or its lock flag is already raised.
-        if door.lock & 0x80 == 0 || self.flag_test(BANK_LOCKS, door.lock & 0x3F, false) {
+        if !lock.locked || self.flag_test(BANK_LOCKS, lock.flag, false) {
             return self.begin_transition(&door);
         }
         let need = door.key;
@@ -7976,7 +8010,7 @@ impl GameState {
             // the next probe walks through.
             self.sfx_requests.push(DOOR_CUE_OTHER_SIDE);
             self.show_message(MESSAGE_OTHER_SIDE, 0xFF);
-            self.apply_flag(BANK_LOCKS, door.lock & 0x3F, 0);
+            self.apply_flag(BANK_LOCKS, lock.flag, 0);
             return false;
         }
         if need == 0xFF {
@@ -8021,7 +8055,7 @@ impl GameState {
         };
         self.sfx_requests.push(cue);
         self.show_message(MESSAGE_KEY_TURN, 0xFF);
-        self.apply_flag(BANK_LOCKS, door.lock & 0x3F, 0);
+        self.apply_flag(BANK_LOCKS, lock.flag, 0);
         false
     }
 
@@ -15548,6 +15582,96 @@ mod tests {
         assert!(state.apply_flag(2, 5, 0));
         state.interact([-550, 0, 50], 0, true);
         assert!(state.transition.is_some());
+    }
+
+    #[test]
+    fn full_byte_mode_uses_the_whole_lock_byte_as_the_flag() {
+        use crate::scd::opcode::system::BR_LOCK_FULL_BYTE;
+        for lock in [0x41u8, 0x7F, 0xC5, 0xFF, 5] {
+            let mut state = game();
+            state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+            let mut locked = door(1, lock);
+            locked.key = 0x34;
+            state.room_actions[0] = Some(door_action(locked));
+            state.doors[0] = Some(locked);
+
+            // Locked without its flag, with no 0x80 bit needed.
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_none(), "{lock:#X}");
+            assert_eq!(state.message.id, Some(LOCKED_MESSAGE + 1), "{lock:#X}");
+            state.cancel_message();
+
+            // The key turn raises exactly this flag.
+            state.add_item(0x34, 1);
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.flag_test(BANK_LOCKS, lock, false), "{lock:#X}");
+            assert_eq!(
+                (0..=255u8)
+                    .filter(|&bit| state.flag_test(BANK_LOCKS, bit, false))
+                    .count(),
+                1,
+                "{lock:#X}"
+            );
+            state.cancel_message();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_some(), "{lock:#X}");
+        }
+
+        // A flag raised from a script opens it; byte 0 is never locked.
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let locked = door(1, 0xC5);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0xC5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let open = door(1, 0);
+        state.room_actions[0] = Some(door_action(open));
+        state.doors[0] = Some(open);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+    }
+
+    #[test]
+    fn full_byte_mode_drops_rebeccas_refusal() {
+        use crate::scd::opcode::system::BR_LOCK_FULL_BYTE;
+        // 0x40 is flag 64 here, not a restriction: with it raised, Rebecca
+        // (player flag 3) walks through.
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let locked = door(1, 0x40);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0x40, 0);
+        state.id.player_flag = 3;
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+        assert_ne!(state.message.id, Some(0xD6));
+    }
+
+    #[test]
+    fn vanilla_mode_masks_the_lock_byte() {
+        // With the flag clear 0xC5 is "locked, Rebecca refused, flag 5".
+        let mut state = game();
+        let locked = door(1, 0xC5);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_none());
+        state.apply_flag(BANK_LOCKS, 5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+        // Flag 0xC5 would not have opened it.
+        let mut state = game();
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0xC5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_none());
     }
 
     #[test]
