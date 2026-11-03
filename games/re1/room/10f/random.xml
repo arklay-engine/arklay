@@ -12,12 +12,12 @@
     <item id="4" flag="21" type="32" amount="1" group="1" name="BEHIND SLIDING DOOR" requires="item(31) item(35)" player="jill"/>
     <item id="5" flag="7" type="35" amount="0" group="1" name="BEHIND BOOKSHELF"/>
     <enemies exclude="3 4 7 10" max-difficulty="1" player="jill"/>
-    <spot x="11595" y="0" z="3140" d="4064"/>
-    <spot x="11690" y="0" z="3933" d="2568"/>
-    <spot x="12853" y="0" z="10793" d="4088"/>
-    <spot x="15538" y="0" z="4388" d="2064"/>
-    <spot x="18856" y="0" z="9641" d="2024"/>
-    <spot x="7588" y="0" z="9711" d="664"/>
-    <spot x="7915" y="0" z="7171" d="3080"/>
   </room>
+  <spot x="11595" y="0" z="3140" d="4064"/>
+  <spot x="11690" y="0" z="3933" d="2568"/>
+  <spot x="12853" y="0" z="10793" d="4088"/>
+  <spot x="15538" y="0" z="4388" d="2064"/>
+  <spot x="18856" y="0" z="9641" d="2024"/>
+  <spot x="7588" y="0" z="9711" d="664"/>
+  <spot x="7915" y="0" z="7171" d="3080"/>
 </random>

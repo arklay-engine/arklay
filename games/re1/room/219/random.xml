@@ -9,6 +9,6 @@
     <!-- staging typeOffsets: 0x14B51 -->
     <item id="3" flag="57" type="39" amount="1" group="2" name="BATTERY"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="4131" y="0" z="3124" d="3968"/>
   </room>
+  <spot x="4131" y="0" z="3124" d="3968"/>
 </random>

@@ -14,10 +14,6 @@
     <item id="4" flag="118" type="81" amount="1" group="16" name="MAP BEHIND BOULDER" document="true"/>
     <item id="5" flag="251" type="40" amount="1" group="16" name="MO DISK BEHIND BOULDER"/>
     <enemies exclude="3 4 7 10"/>
-    <spot x="24470" y="0" z="11960" d="3072"/>
-    <spot x="24470" y="0" z="15396" d="4032"/>
-    <spot x="24950" y="0" z="8155" d="3072"/>
-    <spot x="26603" y="0" z="18551" d="1016"/>
   </room>
   <room key="30F/BACK" name="CAVES SECOND BOULDER (BACK)" tags="caves">
     <door target="30F" kind="blocked" randomize="false"/>
@@ -25,4 +21,8 @@
       <entrance x="13000" y="0" z="16000" d="0"/>
     </door>
   </room>
+  <spot x="24470" y="0" z="11960" d="3072"/>
+  <spot x="24470" y="0" z="15396" d="4032"/>
+  <spot x="24950" y="0" z="8155" d="3072"/>
+  <spot x="26603" y="0" z="18551" d="1016"/>
 </random>

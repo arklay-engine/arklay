@@ -18,11 +18,11 @@
     <item id="8" flag="41" type="11" amount="15" group="1" name="KENNETH/1" optional="true" player="jill"/>
     <item id="9" flag="47" type="11" amount="15" group="1" name="KENNETH/2" optional="true" player="jill"/>
     <enemies id="0" flag="28" exclude="3 4 6 9 10"/>
-    <spot x="14922" y="0" z="3190" d="4091"/>
-    <spot x="20520" y="0" z="2725" d="187"/>
-    <spot x="25059" y="0" z="3705" d="1995"/>
-    <spot x="3364" y="0" z="2879" d="91"/>
-    <spot x="4438" y="0" z="6027" d="947"/>
-    <spot x="7859" y="0" z="2983" d="2027"/>
   </room>
+  <spot x="14922" y="0" z="3190" d="4091"/>
+  <spot x="20520" y="0" z="2725" d="187"/>
+  <spot x="25059" y="0" z="3705" d="1995"/>
+  <spot x="3364" y="0" z="2879" d="91"/>
+  <spot x="4438" y="0" z="6027" d="947"/>
+  <spot x="7859" y="0" z="2983" d="2027"/>
 </random>

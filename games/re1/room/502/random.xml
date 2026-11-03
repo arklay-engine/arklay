@@ -13,7 +13,7 @@
     <item id="2" flag="117" type="106" amount="0" group="32" name="BARRY'S PHOTO" document="true" optional="true" player="jill"/>
     <!-- staging condition: 1:75 -->
     <enemies exclude="4" max-difficulty="1" restricted="true" player="chris"/>
-    <spot x="7283" y="0" z="8800" d="968"/>
-    <spot x="7433" y="0" z="4319" d="3048"/>
   </room>
+  <spot x="7283" y="0" z="8800" d="968"/>
+  <spot x="7433" y="0" z="4319" d="3048"/>
 </random>

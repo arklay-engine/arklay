@@ -12,7 +12,7 @@
     <enemies exclude="3 4 7 9 10" max-difficulty="0" player="chris"/>
     <!-- staging condition: !(1:8 && 1:98 && 1:7) -->
     <enemies exclude="3 4 7 9 10" max-difficulty="0" player="jill"/>
-    <spot x="4419" y="0" z="3486" d="3024"/>
-    <spot x="5535" y="0" z="5128" d="2088"/>
   </room>
+  <spot x="4419" y="0" z="3486" d="3024"/>
+  <spot x="5535" y="0" z="5128" d="2088"/>
 </random>

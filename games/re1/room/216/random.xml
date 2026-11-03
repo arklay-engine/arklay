@@ -13,15 +13,15 @@
     <item id="3" flag="84" type="102" amount="1" group="2" name="DOCUMENT ON STALL" document="true"/>
     <item id="4" flag="121" type="14" amount="6" group="2" name="LOCKED DRAWER" requires="item(61)" lock="32"/>
     <enemies exclude="4"/>
-    <spot x="10274" y="0" z="9408" d="2895"/>
-    <spot x="4375" y="0" z="7311" d="3695"/>
-    <spot x="5096" y="0" z="9641" d="1087"/>
-    <spot x="5306" y="0" z="3608" d="3295"/>
-    <spot x="5454" y="0" z="12925" d="1135"/>
-    <spot x="7788" y="0" z="3296" d="4063"/>
-    <spot x="8805" y="0" z="9662" d="3063"/>
-    <spot x="9332" y="0" z="5417" d="3231"/>
-    <spot x="9366" y="0" z="13694" d="1103"/>
-    <spot x="9368" y="0" z="9316" d="1335"/>
   </room>
+  <spot x="10274" y="0" z="9408" d="2895"/>
+  <spot x="4375" y="0" z="7311" d="3695"/>
+  <spot x="5096" y="0" z="9641" d="1087"/>
+  <spot x="5306" y="0" z="3608" d="3295"/>
+  <spot x="5454" y="0" z="12925" d="1135"/>
+  <spot x="7788" y="0" z="3296" d="4063"/>
+  <spot x="8805" y="0" z="9662" d="3063"/>
+  <spot x="9332" y="0" z="5417" d="3231"/>
+  <spot x="9366" y="0" z="13694" d="1103"/>
+  <spot x="9368" y="0" z="9316" d="1335"/>
 </random>

@@ -8,8 +8,8 @@
     <item id="3" flag="167" type="16" amount="6" group="8" name="GRENADE ROUNDS IN BOOKCASE" player="jill"/>
     <item id="4" flag="180" type="65" amount="1" group="8" name="FIRST AID SPRAY"/>
     <enemies exclude="4" max-difficulty="1" restricted="true"/>
-    <spot x="3384" y="0" z="6672" d="1080"/>
-    <spot x="5277" y="0" z="7920" d="2040"/>
-    <spot x="6310" y="0" z="5424" d="4032"/>
   </room>
+  <spot x="3384" y="0" z="6672" d="1080"/>
+  <spot x="5277" y="0" z="7920" d="2040"/>
+  <spot x="6310" y="0" z="5424" d="4032"/>
 </random>

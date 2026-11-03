@@ -8,8 +8,8 @@
     <item id="2" flag="49" type="12" amount="7" group="1" name="SHELLS IN DRAWER" requires="item(61)" lock="30"/>
     <item id="3" flag="50" type="11" amount="15" group="1" name="CLIP ON SHELF"/>
     <enemies exclude="4" max-difficulty="0"/>
-    <spot x="3220" y="0" z="5214" d="1064"/>
-    <spot x="5466" y="0" z="7107" d="2056"/>
-    <spot x="5996" y="0" z="3442" d="3112"/>
   </room>
+  <spot x="3220" y="0" z="5214" d="1064"/>
+  <spot x="5466" y="0" z="7107" d="2056"/>
+  <spot x="5996" y="0" z="3442" d="3112"/>
 </random>

@@ -14,10 +14,10 @@
     <enemies exclude="4" player="chris"/>
     <!-- staging condition: 0:55 -->
     <enemies exclude="4" player="jill"/>
-    <spot x="10010" y="0" z="7987" d="1072"/>
-    <spot x="4335" y="0" z="12373" d="3992"/>
-    <spot x="7365" y="0" z="9517" d="2296"/>
-    <spot x="7454" y="0" z="11068" d="1880"/>
-    <spot x="8626" y="0" z="12682" d="1096"/>
   </room>
+  <spot x="10010" y="0" z="7987" d="1072"/>
+  <spot x="4335" y="0" z="12373" d="3992"/>
+  <spot x="7365" y="0" z="9517" d="2296"/>
+  <spot x="7454" y="0" z="11068" d="1880"/>
+  <spot x="8626" y="0" z="12682" d="1096"/>
 </random>

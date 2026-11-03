@@ -12,14 +12,6 @@
     <enemies exclude="2 3 4 7 10" player="chris"/>
     <!-- staging condition: !(!1:92 && !1:72) -->
     <enemies exclude="2 3 4 7 10" player="jill"/>
-    <spot x="11513" y="0" z="12659" d="3016"/>
-    <spot x="12040" y="0" z="16718" d="3112"/>
-    <spot x="12635" y="0" z="10340" d="3216"/>
-    <spot x="12848" y="0" z="9686" d="1056"/>
-    <spot x="13130" y="0" z="16319" d="3152"/>
-    <spot x="13513" y="0" z="20432" d="944"/>
-    <spot x="2552" y="0" z="19796" d="4072"/>
-    <spot x="9503" y="0" z="21231" d="152"/>
   </room>
   <room key="307/BACK" name="CAVES ENTRANCE (BACK)" tags="caves">
     <door target="307" kind="blocked" allowed-locks="" randomize="false"/>
@@ -27,4 +19,12 @@
       <entrance x="3600" y="0" z="3900" d="3072"/>
     </door>
   </room>
+  <spot x="11513" y="0" z="12659" d="3016"/>
+  <spot x="12040" y="0" z="16718" d="3112"/>
+  <spot x="12635" y="0" z="10340" d="3216"/>
+  <spot x="12848" y="0" z="9686" d="1056"/>
+  <spot x="13130" y="0" z="16319" d="3152"/>
+  <spot x="13513" y="0" z="20432" d="944"/>
+  <spot x="2552" y="0" z="19796" d="4072"/>
+  <spot x="9503" y="0" z="21231" d="152"/>
 </random>

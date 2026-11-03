@@ -10,8 +10,8 @@
     <item id="2" flag="34" type="61" amount="1" group="4" name="SMALL KEY" hidden="true"/>
     <item id="3" flag="35" type="29" amount="0" group="4" name="CRANK ON SHELF"/>
     <enemies exclude="4" max-difficulty="1"/>
-    <spot x="5464" y="0" z="6123" d="192"/>
-    <spot x="5975" y="0" z="8566" d="880"/>
-    <spot x="6161" y="0" z="3022" d="3040"/>
   </room>
+  <spot x="5464" y="0" z="6123" d="192"/>
+  <spot x="5975" y="0" z="8566" d="880"/>
+  <spot x="6161" y="0" z="3022" d="3040"/>
 </random>

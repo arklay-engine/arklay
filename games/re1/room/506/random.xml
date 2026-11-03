@@ -10,9 +10,9 @@
     <enemies id="0" kind="npc"/>
     <enemies id="1" kind="npc"/>
     <enemies exclude="4" max-difficulty="1"/>
-    <spot x="10481" y="0" z="4072" d="2104"/>
-    <spot x="12083" y="0" z="8161" d="2000"/>
-    <spot x="6590" y="0" z="4463" d="4008"/>
-    <spot x="7943" y="0" z="8481" d="4008"/>
   </room>
+  <spot x="10481" y="0" z="4072" d="2104"/>
+  <spot x="12083" y="0" z="8161" d="2000"/>
+  <spot x="6590" y="0" z="4463" d="4008"/>
+  <spot x="7943" y="0" z="8481" d="4008"/>
 </random>

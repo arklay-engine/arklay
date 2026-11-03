@@ -7,9 +7,9 @@
     <item id="2" flag="199" type="11" amount="15" group="2" name="CLIP"/>
     <item id="3" flag="91" type="47" amount="3" group="2" name="INK"/>
     <enemies exclude="4" max-difficulty="1"/>
-    <spot x="2903" y="0" z="4489" d="312"/>
-    <spot x="3091" y="0" z="6699" d="968"/>
-    <spot x="7097" y="0" z="4129" d="2144"/>
-    <spot x="7734" y="0" z="6240" d="984"/>
   </room>
+  <spot x="2903" y="0" z="4489" d="312"/>
+  <spot x="3091" y="0" z="6699" d="968"/>
+  <spot x="7097" y="0" z="4129" d="2144"/>
+  <spot x="7734" y="0" z="6240" d="984"/>
 </random>

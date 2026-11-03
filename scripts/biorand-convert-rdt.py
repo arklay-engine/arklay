@@ -7,7 +7,7 @@ A one-off converter. It reads `rdt.json`, `doors.csv` and `enemy.csv` from
 - `games/re1/biorand/map.xml`: the item catalogue, the enemy groups and the
   begin and end rooms;
 - `games/re1/room/<dir>/random.xml` for every room directory, holding the
-  logical rooms in that directory.
+  logical rooms in that directory, then the directory's enemy spots.
 
 The schema is documented in `crates/arklay-biorand/src/map.rs`. The files
 are edited by hand after this runs once (`docs/biorand/plan.md`), so this
@@ -21,9 +21,9 @@ How staging's data becomes arklay's:
 - A `doors.csv` row sets the entrance of the door with that id in the one
   logical room that contains the row's RDT and has such a door. It replaces
   an inline `entrance`, as staging's GetMap does.
-- An `enemy.csv` row is a spot of the logical room that owns its RDT: the
-  only room among those containing the RDT whose enemy list is not empty,
-  else the room without a '/' in its key.
+- An `enemy.csv` row is a spot of the room directory that holds its RDT. Every
+  logical room that lists the RDT must be in that one directory, which is
+  checked. Each logical room in a directory shares the directory's spots.
 - A cut comes from the proof-of-concept table below, or from the inline
   entrance, but only when that recorded the same coordinates as the final
   entrance. Staging never writes cuts.
@@ -473,7 +473,6 @@ def read_rooms(staging, catalogue, dropped):
             flags=[],
             items=[],
             enemies=[],
-            spots=[],
         )
         room.doors = [
             read_door(room, i, d, catalogue)
@@ -563,19 +562,12 @@ def resolve_targets(rooms, report):
             report['targets fixed'] += 1
 
 
-def owner_of_rdt(rooms, rdt):
-    candidates = [r for r in rooms.values() if rdt in r.rdts]
-    if not candidates:
-        fail('enemy.csv', f'no logical room has RDT {rdt}')
-    with_enemies = [r for r in candidates if r.enemies]
-    if len(with_enemies) == 1:
-        return with_enemies[0]
-    if len(with_enemies) > 1:
-        fail('enemy.csv', f'RDT {rdt} is in more than one room with enemies')
-    main = [r for r in candidates if '/' not in r.key]
-    if len(main) != 1:
-        fail('enemy.csv', f'RDT {rdt} has no single owning room')
-    return main[0]
+def dir_of_rdt(rooms, rdt):
+    # The room directory that holds an RDT: every logical room listing it is in it.
+    dirs = {key_base(r.key).lower() for r in rooms.values() if rdt in r.rdts}
+    if len(dirs) != 1:
+        fail('enemy.csv', f'RDT {rdt} is in {len(dirs)} room directories, not one')
+    return dirs.pop()
 
 
 def assign_doors(rooms, door_rows, report):
@@ -669,6 +661,8 @@ def assign_cuts(rooms, report):
 
 
 def assign_spots(rooms, enemy_rows, report):
+    # The spots of each room directory, in the order of enemy.csv.
+    spots = {}
     for n, row in enumerate(enemy_rows, start=2):
         where = f'enemy.csv:{n}'
         rdt, *values = row
@@ -677,11 +671,12 @@ def assign_spots(rooms, enemy_rows, report):
         x, y, z, d, include, exclude = values
         if include or exclude:
             fail(where, 'Include and Exclude are not converted; none of staging\'s rows has them')
-        owner = owner_of_rdt(rooms, rdt)
-        owner.spots.append(SimpleNamespace(
+        spot = SimpleNamespace(
             x=csv_int(x, where), y=csv_int(y, where), z=csv_int(z, where), d=csv_int(d, where),
-        ))
+        )
+        spots.setdefault(dir_of_rdt(rooms, rdt), []).append(spot)
         report['spots'] += 1
+    return spots
 
 
 def check_references(rooms, catalogue, groups, begin_end):
@@ -888,14 +883,16 @@ def room_element(room):
             ('restricted', boolean(rule.restricted)),
             ('player', rule.player),
         ]))
-    for spot in room.spots:
-        element.children.append(Element('spot', [
-            ('x', spot.x),
-            ('y', spot.y),
-            ('z', spot.z),
-            ('d', spot.d),
-        ]))
     return element
+
+
+def spot_element(spot):
+    return Element('spot', [
+        ('x', spot.x),
+        ('y', spot.y),
+        ('z', spot.z),
+        ('d', spot.d),
+    ])
 
 
 # The conversion.
@@ -934,7 +931,7 @@ def convert(meta):
     assign_inline_entrances(rooms, report)
     assign_cuts(rooms, report)
     resolve_targets(rooms, report)
-    assign_spots(rooms, enemy_rows, report)
+    spots = assign_spots(rooms, enemy_rows, report)
 
     # Every room's directory has a file, and every logical room is in one.
     dirs = sorted(d for d in os.listdir(ROOM_DIR) if os.path.isdir(os.path.join(ROOM_DIR, d)))
@@ -948,6 +945,8 @@ def convert(meta):
         for room in rooms.values():
             if key_base(room.key).lower() == d:
                 root.children.append(room_element(room))
+        for spot in spots.get(d, []):
+            root.children.append(spot_element(spot))
         files[os.path.join(ROOM_DIR, d, 'random.xml')] = document(root)
 
     for text in files.values():

@@ -6,17 +6,6 @@
     </door>
     <door target="40D/EXIT" kind="unblock" allowed-locks="" randomize="false"/>
     <enemies exclude="4"/>
-    <spot x="11679" y="0" z="20411" d="168"/>
-    <spot x="17302" y="0" z="19855" d="1888"/>
-    <spot x="1977" y="0" z="19965" d="4008"/>
-    <spot x="20938" y="792" z="3152" d="3960"/>
-    <spot x="2124" y="0" z="23999" d="1048"/>
-    <spot x="22023" y="0" z="21198" d="280"/>
-    <spot x="25729" y="0" z="3832" d="1888"/>
-    <spot x="26203" y="0" z="20322" d="1832"/>
-    <spot x="26452" y="0" z="6016" d="3064"/>
-    <spot x="3707" y="0" z="24147" d="2960"/>
-    <spot x="4412" y="0" z="20763" d="2296"/>
   </room>
   <room key="40D/EXIT" name="GUARDHOUSE BOX PASSAGE EXIT" tags="guardhouse">
     <door target="40D" kind="blocked" allowed-locks="" randomize="false"/>
@@ -26,4 +15,15 @@
     <item id="6" flag="158" type="68" amount="1" group="8" name="GREEN HERB/1"/>
     <item id="7" flag="159" type="68" amount="1" group="8" name="GREEN HERB/2"/>
   </room>
+  <spot x="11679" y="0" z="20411" d="168"/>
+  <spot x="17302" y="0" z="19855" d="1888"/>
+  <spot x="1977" y="0" z="19965" d="4008"/>
+  <spot x="20938" y="792" z="3152" d="3960"/>
+  <spot x="2124" y="0" z="23999" d="1048"/>
+  <spot x="22023" y="0" z="21198" d="280"/>
+  <spot x="25729" y="0" z="3832" d="1888"/>
+  <spot x="26203" y="0" z="20322" d="1832"/>
+  <spot x="26452" y="0" z="6016" d="3064"/>
+  <spot x="3707" y="0" z="24147" d="2960"/>
+  <spot x="4412" y="0" z="20763" d="2296"/>
 </random>

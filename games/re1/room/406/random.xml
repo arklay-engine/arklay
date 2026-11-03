@@ -16,8 +16,8 @@
     <enemies exclude="4" max-difficulty="1" player="chris"/>
     <!-- staging condition: !(1:178 && !1:174 && 1:176 && 1:177) -->
     <enemies exclude="4" max-difficulty="1" player="jill"/>
-    <spot x="11584" y="0" z="4667" d="3192"/>
-    <spot x="14052" y="0" z="6794" d="1952"/>
-    <spot x="8317" y="0" z="3000" d="0"/>
   </room>
+  <spot x="11584" y="0" z="4667" d="3192"/>
+  <spot x="14052" y="0" z="6794" d="1952"/>
+  <spot x="8317" y="0" z="3000" d="0"/>
 </random>
