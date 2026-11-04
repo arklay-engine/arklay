@@ -265,6 +265,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         LICKER_24_ID => &LICKER_24_DAMAGE,
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
+        MRX_ID => &MRX_DAMAGE,
         _ => &DAMAGE,
     };
     table.get(usize::from(weapon).checked_sub(2)?)
@@ -359,6 +360,48 @@ const CROW_DAMAGE: [Damage; 7] = [
         damage: 0x01E0_A078,
         stun: 0x078F_1E0A,
         heights: CROW_HEIGHTS,
+    },
+];
+
+const MRX_ID: u8 = crate::zombie2::MRX_ID;
+const MRX_HANDGUN: [i32; 6] = [-4000, 100, -3000, 2400, -1000, 2600];
+const MRX_SHOTGUN: [i32; 6] = [-4500, 800, -3000, 2400, -1000, 2600];
+/// The same rows for `Em_2A`.
+const MRX_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x0100_4010,
+        stun: 0x078F_1E0A,
+        heights: MRX_HANDGUN,
+    },
+    Damage {
+        damage: 0x0100_4010,
+        stun: 0x078F_1E0A,
+        heights: MRX_HANDGUN,
+    },
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x0000_000A,
+        heights: MRX_HANDGUN,
+    },
+    Damage {
+        damage: 0x04B1_3851,
+        stun: 0x078F_1E0A,
+        heights: MRX_HANDGUN,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: MRX_HANDGUN,
+    },
+    Damage {
+        damage: 0x0280_B432,
+        stun: 0x078F_1E0A,
+        heights: MRX_SHOTGUN,
+    },
+    Damage {
+        damage: 0x0461_2C50,
+        stun: 0x078F_1FB4,
+        heights: MRX_SHOTGUN,
     },
 ];
 

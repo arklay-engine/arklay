@@ -446,10 +446,10 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 
 
 def zombie_trace(game: Game) -> str:
-    """The zombies and lickers in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    """The zombies, lickers and Mr. X in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not 0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22:
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) == 0x2A):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)

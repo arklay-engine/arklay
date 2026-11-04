@@ -812,7 +812,7 @@ pub fn list_all(sca: &Sca, areas: u16, mask: u16) -> Vec<usize> {
 /// Which of a box's sides a point is nearest, across its diagonals: 0 the right
 /// edge of `a`, 1 the near edge of `b`, 2 the left of `a`, 3 the far of `b`
 /// (`FUN_004e30f0`).
-fn side_across(a: i32, b: i32, from: [i32; 2], size: [i32; 2]) -> u8 {
+pub(crate) fn side_across(a: i32, b: i32, from: [i32; 2], size: [i32; 2]) -> u8 {
     let along = div(mul(a - from[0], size[1]), size[0]);
     let up = b - from[1];
     let far = up - size[1];

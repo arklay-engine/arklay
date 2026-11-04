@@ -197,10 +197,19 @@ pub fn player_held(
         .get(slot)
         .and_then(|character| character.as_deref())
         .map_or(0, |character| character.id);
+    let holder_angle = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .map_or(0, |character| character.body.angle);
     let re2 = &mut game.re2;
     let mut held = player2::Held {
         holder,
+        holder_angle,
         holder_id,
+        draw_buffer: re2.draw_buffer,
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,
         released: false,
@@ -263,8 +272,11 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 at_w: zombie.atd.at_w,
                 at_w1: if character.id == crate::zombie2::DOG_ID {
                     600
-                } else if character.id == crate::zombie2::CROW_ID {
-                    // `Em_21` never gives it an `Atd[1]`.
+                } else if matches!(
+                    character.id,
+                    crate::zombie2::CROW_ID | crate::zombie2::MRX_ID
+                ) {
+                    // `Em_21` and `MrX_init` never give it an `Atd[1]`.
                     0
                 } else {
                     zombie
@@ -473,6 +485,7 @@ fn run_zombie(
     let player_floor = game.re2.player.floor;
     let player_neck = game.re2.player.neck.position;
     let stage = game.id.stage;
+    let room_code = u16::from(stage) << 8 | u16::from(game.id.room);
     let player_angle = game.entities[0].angle;
     let player_id = game.id.player_flag;
     let weapon = game.re2_weapon().id;
@@ -521,15 +534,29 @@ fn run_zombie(
         kin: Vec::new(),
         tongue_owner: &mut re2.tongue_owner,
         common_a4,
+        draw_buffer: re2.draw_buffer,
+        room_code,
+        player_moved: false,
+        status_or: 0,
         scene_target,
         pack,
         lua,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
+    let moved = world.player_moved.then_some(world.player);
+    let status_or = world.status_or;
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
         re2.player.turn_to = Some(angle);
+    }
+    if let Some([x, _, z]) = moved {
+        game.entities[0].pos[0] = x;
+        game.entities[0].pos[2] = z;
+        re2.player.move_to = Some([x, z]);
+    }
+    for bit in (0..32u8).filter(|bit| status_or & (0x8000_0000u32 >> bit) != 0) {
+        re2.set_flag(crate::scd2::host::STATUS_BANK, bit, 1);
     }
     for call in &kin {
         for other in re2.characters.0.iter_mut().flatten() {
@@ -886,15 +913,20 @@ pub fn tick_of<'a>(
         .iter()
         .find(|(anims_slot, _)| usize::from(*anims_slot) == slot)
         .map(|(_, anim)| anim);
+    let main = (&model.clips[..], &model.keyframes[..]);
+    let sub0 = model
+        .banks
+        .first()
+        .map_or(empty, |bank| (&bank.clips[..], &bank.keyframes[..]));
+    // `MrX_init` swaps its main and first sub banks, but for the one `Type`.
+    let swapped = character.id == crate::zombie2::MRX_ID && character.work.kind & 0xF != 7;
+    let (pld, weapon) = if swapped { (sub0, main) } else { (main, sub0) };
     Tick {
         room,
         skeleton: &model.skeleton,
         banks: Banks {
-            pld: (&model.clips, &model.keyframes),
-            weapon: model
-                .banks
-                .first()
-                .map_or(empty, |bank| (&bank.clips, &bank.keyframes)),
+            pld,
+            weapon,
             room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
             held: held.map_or(empty, |bank| {
                 (bank.clips.as_slice(), bank.keyframes.as_slice())

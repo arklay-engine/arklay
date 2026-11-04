@@ -353,6 +353,11 @@ const VARS: usize = 23;
 pub const DOG_ID: u8 = 0x20;
 /// The crow, whose script is `enemy/21/enemy.lua`.
 pub const CROW_ID: u8 = 0x21;
+/// Mr. X, Tyrant 1, whose script is `enemy/2a/enemy.lua`.
+pub const MRX_ID: u8 = 0x2A;
+/// Where `Game_loop`'s `Joint_trans` left Mr. X's parts 12 and 15 between
+/// ticks: x, y and z of each.
+pub(crate) const MRX_HANDS: usize = 14;
 /// `+0x230`, which `Em_20` counts up while the dog is stuck.
 const DOG_STUCK: usize = 18;
 /// `Ground`, which `Game_loop` finds under each body between ticks.
@@ -584,6 +589,14 @@ pub struct World<'a> {
     pub tongue_owner: &'a mut u8,
     /// `fg_common`'s `0xa4`, which takes some life off a licker.
     pub common_a4: bool,
+    /// `DWORD_009888d8`'s low byte: which draw buffer this frame fills.
+    pub draw_buffer: u8,
+    /// `(scd_var_stage + 1) * 0x100 + scd_var_room`.
+    pub room_code: u16,
+    /// A script moved `player` along the floor.
+    pub player_moved: bool,
+    /// Bits a script set in `fg_status`'s first word.
+    pub status_or: u32,
     /// Where the body a script's `Sce_free3` names stands.
     pub scene_target: [i32; 3],
     /// The pack the behaviour scripts come from, and their VM. `None` parks them.
@@ -696,6 +709,35 @@ impl Em<'_, '_, '_> {
         self.sca_ck_em();
     }
 
+    /// `Em_2A`, which leaves the rest to its script.
+    fn run_mrx(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        let before = self.mover.player.pos;
+        self.old_pos = before;
+        self.z.vars[DOG_GROUND] = self
+            .mover
+            .tick
+            .room
+            .sca
+            .as_ref()
+            .map_or(0, |sca| crate::sca::ground_at(sca, before, 0, MASK).height);
+        for (hand, part) in [12, 15].into_iter().enumerate() {
+            if let Some(point) = self.mover.part_point(part, [0, 0, 0]) {
+                let at = MRX_HANDS + hand * 3;
+                self.z.vars[at..at + 3].copy_from_slice(&point);
+            }
+        }
+        self.script();
+        self.oba_ck_em();
+        self.sca_ck_em();
+    }
+
     /// `Root_ck` with its own target: the point, or with `by_area` the middle of
     /// a guide area. 0 finds no way, 1 has its target in this area and 2 is a
     /// tick without a look. The player's sight is still checked.
@@ -767,6 +809,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == CROW_ID {
             self.run_crow();
+            return;
+        }
+        if self.mover.tick.id == MRX_ID {
+            self.run_mrx();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from
@@ -1007,7 +1053,7 @@ impl Em<'_, '_, '_> {
         let radius = i32::from(self.z.atd.w);
         let [ahead_x, ahead_z] = self.atd_ahead();
         let room = self.mover.tick.room;
-        let crow = self.mover.tick.id == CROW_ID;
+        let keeps_hit = matches!(self.mover.tick.id, CROW_ID | MRX_ID);
         let body = &mut *self.mover.player;
         if *self.be_flg & BE_NO_SCA == 0
             && let Some(sca) = &room.sca
@@ -1017,7 +1063,7 @@ impl Em<'_, '_, '_> {
             let prev = [old_x, body.pos[1], old_z];
             let at = [body.pos[0] + ahead_x, body.pos[1], body.pos[2] + ahead_z];
             let floor = self.z.floor;
-            if crow {
+            if keeps_hit {
                 self.z.sca_hit =
                     crate::sca::first_hit(sca, MASK, at, radius, floor).map(|record| {
                         [
