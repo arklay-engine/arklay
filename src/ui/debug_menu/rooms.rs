@@ -24,9 +24,15 @@ use crate::ui::UiInput;
 /// Thumbnails loaded per painted frame, so the grid stays responsive.
 const LOADS_PER_FRAME: usize = 4;
 
-/// A stage tab's label: the language's `UI_DEBUG_STAGE_<digit>` in an RE1
-/// pack (the names are RE1's), else the stage's digit (`Stage A`).
-fn stage_label(cx: &Cx<'_>, stage: u8, named: bool) -> String {
+/// A stage tab's label: the pack's own name for it (`game/stages.lua`), else
+/// the language's `UI_DEBUG_STAGE_<digit>` in an RE1 pack (the names are
+/// RE1's), else the stage's digit (`Stage A`).
+fn stage_label(cx: &Cx<'_>, stage: u8, named: bool, names: &[String]) -> String {
+    if let Some(name) = names.get(usize::from(stage).wrapping_sub(1))
+        && !name.trim().is_empty()
+    {
+        return name.clone();
+    }
     let digit = RoomId {
         stage,
         ..RoomId::default()
@@ -115,6 +121,9 @@ pub struct RoomSelect {
     /// Whether the tabs take the language's RE1 stage names: the pack's
     /// rooms are RE1's.
     named: bool,
+    /// The pack's own stage names, stage 1 first ([`crate::lua::stage_names`]);
+    /// empty for a pack that gives none.
+    names: Vec<String>,
     /// Each tab's rooms.
     stages: Vec<Vec<RoomVariants>>,
     /// The session's room as the menu last saw it.
@@ -134,7 +143,10 @@ impl RoomSelect {
         let named = rooms
             .first()
             .is_none_or(|room| crate::room::dialect(pack, room.id(0)) == Dialect::Re1);
-        let mut stage_ids: Vec<u8> = if named {
+        let names = crate::lua::stage_names(pack);
+        let mut stage_ids: Vec<u8> = if !names.is_empty() {
+            (1..=u8::try_from(names.len()).unwrap_or(u8::MAX)).collect()
+        } else if named {
             (1..=RoomId::RE1_STAGES).collect()
         } else {
             Vec::new()
@@ -154,6 +166,7 @@ impl RoomSelect {
         let mut select = Self {
             stage_ids,
             named,
+            names,
             stages,
             current: (0, 0),
             stage: 0,
@@ -253,7 +266,7 @@ impl RoomSelect {
         let labels: Vec<String> = self
             .stage_ids
             .iter()
-            .map(|&stage| stage_label(cx, stage, self.named))
+            .map(|&stage| stage_label(cx, stage, self.named, &self.names))
             .collect();
         let empty: Vec<bool> = self.stages.iter().map(Vec::is_empty).collect();
         let tab_h = widgets::tabs(p, cx, area, &labels, self.stage, &empty);
@@ -374,6 +387,23 @@ mod tests {
         let select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
         assert_eq!(select.stage_ids, [1, 2, 3, 4, 5]);
         assert!(select.named, "an RE1 pack's tabs take the RE1 stage names");
+    }
+
+    #[test]
+    fn a_pack_names_its_own_stage_tabs() {
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add("room/1000/room.rdt", vec![0]).unwrap();
+        writer.add("room/2010/room.rdt", vec![0]).unwrap();
+        writer
+            .add(
+                crate::lua::STAGE_NAMES_ENTRY,
+                br#"return { "Seg. 1", "Seg. 2" }"#.to_vec(),
+            )
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
+        assert_eq!(select.names, ["Seg. 1", "Seg. 2"]);
+        assert_eq!(select.stage_ids, [1, 2], "the pack's names are its tabs");
     }
 
     #[test]

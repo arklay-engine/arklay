@@ -322,6 +322,26 @@ mod imp {
         .map_err(|err| anyhow::anyhow!("{name}: {err}"))
     }
 
+    /// Evaluate a data chunk that returns a list of strings, in the sandbox
+    /// and without the authoring API: `return { "Seg. 1", "Seg. 2" }`.
+    pub(crate) fn eval_strings(bytes: &[u8], name: &str) -> Result<Vec<String>> {
+        budget::check_len(bytes.len(), budget::MAX_LUA_CHUNK, &format!("{name} size"))?;
+        let (lua, budget) = new_sandboxed_state()?;
+        let function = lua
+            .load(bytes)
+            .set_name(name.to_string())
+            .into_function()
+            .map_err(|err| anyhow::anyhow!("{name}: {err}"))?;
+        budget.begin();
+        let table: mlua::Table = function
+            .call(())
+            .map_err(|err| anyhow::anyhow!("{name}: {err}"))?;
+        table
+            .sequence_values::<String>()
+            .collect::<mlua::Result<Vec<String>>>()
+            .map_err(|err| anyhow::anyhow!("{name}: {err}"))
+    }
+
     /// The hook paths to load: the manifest's ordered list, or every
     /// `lua/**.lua` entry in lowercased-path order.
     fn hook_paths(pack: &Pack) -> Vec<String> {
@@ -889,6 +909,27 @@ pub fn seed_initial_state(
     }
 }
 
+/// The pack entry that names the debug ROOM SELECT's stage tabs.
+pub const STAGE_NAMES_ENTRY: &str = "game/stages.lua";
+
+/// The stage tab names the pack gives, from its [`STAGE_NAMES_ENTRY`]: a
+/// chunk returning the names in stage order (`return { "Seg. 1", "Seg. 2" }`,
+/// stage 1 first). Empty for a pack without the entry, or whose entry fails
+/// (logged): the tabs then take the language's stage names.
+pub fn stage_names(pack: &crate::pack::Pack) -> Vec<String> {
+    if !pack.contains(STAGE_NAMES_ENTRY) {
+        return Vec::new();
+    }
+    let names = pack
+        .read(STAGE_NAMES_ENTRY)
+        .map_err(|err| anyhow::anyhow!("cannot read {STAGE_NAMES_ENTRY}: {err:#}"))
+        .and_then(|bytes| imp::eval_strings(&bytes, STAGE_NAMES_ENTRY));
+    names.unwrap_or_else(|err| {
+        eprintln!("[lua] {err}; using the language's stage names");
+        Vec::new()
+    })
+}
+
 /// Resolve a sandboxed `require(name)` to a lowercased pack entry, or `None`
 /// when no candidate exists (by `contains`) or the path escapes the pack root.
 ///
@@ -1007,6 +1048,27 @@ mod tests {
     use crate::budget;
     use crate::game::GameState;
     use crate::pack::Pack;
+
+    #[test]
+    fn a_packs_stage_names_come_from_its_stages_script() {
+        let none = pack(&[]);
+        assert!(stage_names(&none).is_empty());
+        let named = pack(&[(
+            STAGE_NAMES_ENTRY,
+            b"-- tabs
+local names = {}
+for n = 1, 3 do names[n] = 'Seg. ' .. n end
+return names",
+        )]);
+        assert_eq!(stage_names(&named), ["Seg. 1", "Seg. 2", "Seg. 3"]);
+        // A script that fails, or returns no names, leaves the language's.
+        let broken = pack(&[(STAGE_NAMES_ENTRY, b"return nope(")]);
+        assert!(stage_names(&broken).is_empty());
+        let wrong = pack(&[(STAGE_NAMES_ENTRY, b"return 7")]);
+        assert!(stage_names(&wrong).is_empty());
+        let runaway = pack(&[(STAGE_NAMES_ENTRY, b"while true do end")]);
+        assert!(stage_names(&runaway).is_empty());
+    }
 
     /// Build an in-memory pack from the given `(path, bytes)` entries.
     fn pack(entries: &[(&str, &[u8])]) -> Pack {
