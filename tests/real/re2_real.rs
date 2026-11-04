@@ -629,9 +629,11 @@ fn every_model_parses_draws_textured_and_animates() {
 
 /// The TeamX RE2 HD pack's model skins are named by `bio2hd.asi`'s hash of
 /// each 128-texel page through its own CLUT row; `ARKLAY_RE2_HD` names the
-/// extracted pack. Every enemy and player page has a skin but a few the
-/// pack skipped (the weapon composites are hashed as the character's own
-/// texture, so only the bodies are counted).
+/// extracted pack. At least nine in ten bare enemy and player pages must have
+/// a skin. A PLW loads as its player body with the weapon pasted into page 1,
+/// so each one is a weapon-composited page: those are counted and reported,
+/// not asserted, because the pack names them by a hash this crate does not
+/// reproduce yet (#268).
 #[test]
 #[ignore]
 fn the_hd_pack_names_most_model_pages() {
@@ -674,6 +676,25 @@ fn the_hd_pack_names_most_model_pages() {
         matched * 10 >= (matched + unmatched.len()) * 9,
         "{matched} matched"
     );
+    // The weapon composites, hashed through CLUT row 1 like a body's page 1.
+    let (mut composited, mut named) = (0, 0);
+    for entry in models(pack).iter().filter(|entry| entry.ends_with(".plw")) {
+        let model = arklay::model_viewer::load(pack, entry).unwrap();
+        let texture = &model.texture;
+        if texture.width < 256 || texture.palettes.len() / 256 < 2 {
+            continue;
+        }
+        composited += 1;
+        let candidates = arklay::htexture::page_candidates(texture, 1);
+        if candidates
+            .iter()
+            .any(|candidate| candidate.origin == [128, 0] && names.contains(&candidate.hash))
+        {
+            named += 1;
+        }
+    }
+    eprintln!("{named} of {composited} weapon-composited pages have an HD skin (#268)");
+    assert!(composited > 0, "no weapon-composited pages were loaded");
 }
 
 /// Every room's init and main scripts parse, rebuild byte for byte, and
