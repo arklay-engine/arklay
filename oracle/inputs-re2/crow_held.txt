@@ -1,0 +1,59 @@
+# room 109: held by the first crow with aim and a turn held, weapon 7 (oracle/re2.md)
+384 up run
+424 left run
+434 right
+440 aim left
+490 aim left fire
+495 aim left
+500 aim left
+550 aim left fire
+555 aim left
+560 aim left
+610 aim left fire
+615 aim left
+620 aim left
+670 aim left fire
+675 aim left
+680 aim left
+730 aim left fire
+735 aim left
+740 aim left
+790 aim left fire
+795 aim left
+800 aim left
+850 aim left fire
+855 aim left
+860 aim left
+910 aim left fire
+915 aim left
+920 aim left
+970 aim left fire
+975 aim left
+980 aim left
+1030 aim left fire
+1035 aim left
+1040 aim left
+1090 aim left fire
+1095 aim left
+1100 aim left
+1150 aim left fire
+1155 aim left
+1160 aim left
+1210 aim left fire
+1215 aim left
+1220 aim left
+1270 aim left fire
+1275 aim left
+1280 aim left
+1330 aim left fire
+1335 aim left
+1340 aim left
+1390 aim left fire
+1395 aim left
+1400 aim left
+1450 aim left fire
+1455 aim left
+1460 aim left
+1510 aim left fire
+1515 aim left
+1500
