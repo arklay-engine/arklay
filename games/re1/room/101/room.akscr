@@ -106,67 +106,84 @@ proc init
         room_bgm_state_set(5, 1, BGM_OFF);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
+            // Rebecca and the hunters of the second visit are scenes: none
+            // is set up when cutscenes are disabled (staging nops them).
+            if (!CUTSCENES_DISABLED)
             {
-                if (cmpw(0, W_04, CMP_GT, 180))
+                if (ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_33, TRUE);
-                }
-                else
-                {
-                    set(FG_COMMON, F_COMMON_32, TRUE);
-                }
-            }
-            if (ck(FG_COMMON, F_COMMON_30, TRUE))
-            {
-                room_bgm_state_set(5, 1, BGM_RELOAD);
-                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2576, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_04, 29, EVAR_00);
-                aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
-                if (ck(FG_COMMON, F_COMMON_35, FALSE))
-                {
-                    set(FG_ROOM, F_ROOM_1C, TRUE);
-                }
-                if (!ENEMY_RANDOMIZER)
-                {
-                    enemy(EM_06_HUNTER, EB_27, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-                }
-            }
-            if (ck(FG_COMMON, F_COMMON_31, TRUE))
-            {
-                room_bgm_state_set(5, 1, BGM_RELOAD | 1);
-                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
-                aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05_message, 0, 0, 0);
-            }
-            if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_23, FALSE))
-            {
-                if (ck(FG_COMMON, F_COMMON_33, TRUE))
-                {
-                    set(FG_STATUS, F_STATUS_1D, TRUE);
-                    set(FG_ROOM, F_ROOM_1E, TRUE);
-                    set(FG_ROOM, F_ROOM_1D, TRUE);
-                    room_bgm_state_set(5, 1, BGM_RELOAD | 1);
-                    enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 9329, 0, 6214, ENEMY_00_NPC_REBECCA_2, ANIM_31, 59, EVAR_00);
-                    aot_set(AOT_05_MESSAGE, 12000, 2650, 1800, 1800, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
-                    if (!ENEMY_RANDOMIZER)
+                    if (cmpw(0, W_04, CMP_GT, 180))
                     {
-                        enemy(EM_06_HUNTER, EB_67, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                        set(FG_COMMON, F_COMMON_33, TRUE);
+                    }
+                    else
+                    {
+                        set(FG_COMMON, F_COMMON_32, TRUE);
                     }
                 }
-                else
+            }
+            if (!CUTSCENES_DISABLED)
+            {
+                if (ck(FG_COMMON, F_COMMON_30, TRUE))
+                {
+                    room_bgm_state_set(5, 1, BGM_RELOAD);
+                    enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2576, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_04, 29, EVAR_00);
+                    aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
+                    if (ck(FG_COMMON, F_COMMON_35, FALSE))
+                    {
+                        set(FG_ROOM, F_ROOM_1C, TRUE);
+                    }
+                    if (!ENEMY_RANDOMIZER)
+                    {
+                        enemy(EM_06_HUNTER, EB_27, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                    }
+                }
+            }
+            if (!CUTSCENES_DISABLED)
+            {
+                if (ck(FG_COMMON, F_COMMON_31, TRUE))
+                {
+                    room_bgm_state_set(5, 1, BGM_RELOAD | 1);
+                    enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
+                    aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05_message, 0, 0, 0);
+                }
+            }
+            if (!CUTSCENES_DISABLED)
+            {
+                if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_23, FALSE))
+                {
+                    if (ck(FG_COMMON, F_COMMON_33, TRUE))
+                    {
+                        set(FG_STATUS, F_STATUS_1D, TRUE);
+                        set(FG_ROOM, F_ROOM_1E, TRUE);
+                        set(FG_ROOM, F_ROOM_1D, TRUE);
+                        room_bgm_state_set(5, 1, BGM_RELOAD | 1);
+                        enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 9329, 0, 6214, ENEMY_00_NPC_REBECCA_2, ANIM_31, 59, EVAR_00);
+                        aot_set(AOT_05_MESSAGE, 12000, 2650, 1800, 1800, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
+                        if (!ENEMY_RANDOMIZER)
+                        {
+                            enemy(EM_06_HUNTER, EB_67, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                        }
+                    }
+                    else
+                    {
+                        if (!ENEMY_RANDOMIZER)
+                        {
+                            enemy(EM_06_HUNTER, EB_17, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 3000, 0, 4067, 0, 17454, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                            enemy(EM_06_HUNTER, EB_17, F_ENEMY_0F, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
+                        }
+                    }
+                }
+            }
+            if (!CUTSCENES_DISABLED)
+            {
+                if (ck(FG_COMMON, F_COMMON_22, FALSE))
                 {
                     if (!ENEMY_RANDOMIZER)
                     {
                         enemy(EM_06_HUNTER, EB_17, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 3000, 0, 4067, 0, 17454, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
                         enemy(EM_06_HUNTER, EB_17, F_ENEMY_0F, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
                     }
-                }
-            }
-            if (ck(FG_COMMON, F_COMMON_22, FALSE))
-            {
-                if (!ENEMY_RANDOMIZER)
-                {
-                    enemy(EM_06_HUNTER, EB_17, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 3000, 0, 4067, 0, 17454, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-                    enemy(EM_06_HUNTER, EB_17, F_ENEMY_0F, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
                 }
             }
         }
@@ -183,30 +200,42 @@ proc init
 
 proc main when (CHRIS && MANSION2)
 {
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_1E, TRUE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_1E, FALSE);
-        set(FG_STATUS, F_STATUS_1D, FALSE);
-        cutnext(CAM_04);
-        evt_exec(0, TASK_09, from_main);
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_1E, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_1E, FALSE);
+            set(FG_STATUS, F_STATUS_1D, FALSE);
+            cutnext(CAM_04);
+            evt_exec(0, TASK_09, from_main);
+        }
     }
-    if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1D, TRUE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_1D, FALSE);
-        set(FG_COMMON, F_COMMON_2F, FALSE);
-        set(FG_COMMON, F_COMMON_31, TRUE);
-        aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message, 0);
+        if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1D, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_1D, FALSE);
+            set(FG_COMMON, F_COMMON_2F, FALSE);
+            set(FG_COMMON, F_COMMON_31, TRUE);
+            aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message, 0);
+        }
     }
-    if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1C, TRUE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_1C, FALSE);
-        aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_2, 0);
+        if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1C, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_1C, FALSE);
+            aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_2, 0);
+        }
     }
-    if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1B, TRUE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_1B, FALSE);
-        bgm_volume_ramp(BGM_MAIN, -96, 1);
-        evt_exec(0, TASK_09, from_main_2);
+        if (ck(FG_ENEMY, F_ENEMY_0E, TRUE) && ck(FG_ROOM, F_ROOM_1B, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_1B, FALSE);
+            bgm_volume_ramp(BGM_MAIN, -96, 1);
+            evt_exec(0, TASK_09, from_main_2);
+        }
     }
 }
 

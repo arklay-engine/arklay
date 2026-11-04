@@ -97,6 +97,7 @@
 #define F_SCENARIO_7C 0x7C
 #define F_SCENARIO_7D 0x7D
 #define F_SCENARIO_7F 0x7F
+#define F_SCENARIO_C0 0xC0
 
 #define F_COMMON_00 0x00
 #define F_COMMON_01 0x01

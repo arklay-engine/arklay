@@ -228,7 +228,10 @@ event on_aot_05 when (MANSION2)
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (CHRIS)
         {
-            set(FG_COMMON, F_COMMON_21, TRUE);
+            if (!CUTSCENES_DISABLED)
+            {
+                set(FG_COMMON, F_COMMON_21, TRUE);
+            }
         }
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }

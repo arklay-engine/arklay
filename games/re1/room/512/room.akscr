@@ -47,23 +47,26 @@ proc init
     {
         room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
     }
-    if (ck(FG_COMMON, F_COMMON_4B, FALSE))
+    if (!CUTSCENES_DISABLED)
     {
-        if (CHRIS)
+        if (ck(FG_COMMON, F_COMMON_4B, FALSE))
         {
-            enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
-            sys_multi(SYS_UNEQUIP);
-            plw_anim(PLW_00, ANIM_00, 0);
-            eml_state(0, ENEMY_00_NPC_JILL, EML_STATUS, EML_STATUS_OR | 2);
-            dir_set(0, 0, 1024, 0, 5670, 0, 9100);
+            if (CHRIS)
+            {
+                enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
+                sys_multi(SYS_UNEQUIP);
+                plw_anim(PLW_00, ANIM_00, 0);
+                eml_state(0, ENEMY_00_NPC_JILL, EML_STATUS, EML_STATUS_OR | 2);
+                dir_set(0, 0, 1024, 0, 5670, 0, 9100);
+            }
+            else
+            {
+                enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
+            }
+            evt_exec(0, TASK_09, on_enter);
+            set(FG_COMMON, F_COMMON_4B, TRUE);
+            room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_1_ON);
         }
-        else
-        {
-            enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
-        }
-        evt_exec(0, TASK_09, on_enter);
-        set(FG_COMMON, F_COMMON_4B, TRUE);
-        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_1_ON);
     }
     aot_set(AOT_01_MESSAGE, 1800, 3100, 900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 7000, 2000, 1800, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 138, 0, 255, 0, 0, 0);

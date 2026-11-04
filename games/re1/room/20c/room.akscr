@@ -154,12 +154,25 @@ proc init when (MANSION2)
     {
         if (ck(FG_ENEMY, F_ENEMY_3E, FALSE))
         {
-            aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, on_aot_03, 0, 0, 0);
+            if (CUTSCENES_DISABLED)
+            {
+                // Jill's trigger runs the event for the room after Barry's
+                // scene (staging patches the event index to 0x2C).
+                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, on_aot_03_2, 0, 0, 0);
+            }
+            else
+            {
+                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, on_aot_03, 0, 0, 0);
+            }
         }
         else
         {
             set(FG_ROOM, F_ROOM_08, TRUE);
-            if (ck(FG_COMMON, F_COMMON_26, TRUE))
+            if (CUTSCENES_DISABLED)
+            {
+                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);
+            }
+            else if (ck(FG_COMMON, F_COMMON_26, TRUE))
             {
                 if (ck(FG_COMMON, F_COMMON_25, TRUE))
                 {

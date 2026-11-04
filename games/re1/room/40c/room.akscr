@@ -187,13 +187,21 @@ proc init
         aot_set(AOT_07_EVENT, 3229, 10452, 1800, 1800, SCE_EVENT, 0, 9, 0, on_aot_07, 0, 0, 0);
         aot_set(AOT_08_USEITEM, 3800, 12000, 1300, 800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
         aot_set(AOT_09_USEITEM, 4800, 11100, 1500, 1300, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
-        if (ck(FG_COMMON, F_COMMON_B2, FALSE))
+        // Barry's scene at plant 42 is skipped when cutscenes are disabled
+        // (staging's DisableCutscenes nops these two raises of F_ROOM_0F).
+        if (!CUTSCENES_DISABLED)
         {
-            set(FG_ROOM, F_ROOM_0F, TRUE);
+            if (ck(FG_COMMON, F_COMMON_B2, FALSE))
+            {
+                set(FG_ROOM, F_ROOM_0F, TRUE);
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_07, TRUE))
+        if (!CUTSCENES_DISABLED)
         {
-            set(FG_ROOM, F_ROOM_0F, TRUE);
+            if (ck(FG_COMMON, F_COMMON_07, TRUE))
+            {
+                set(FG_ROOM, F_ROOM_0F, TRUE);
+            }
         }
         if (ck(FG_SCENARIO, F_SCENARIO_13, TRUE))
         {
