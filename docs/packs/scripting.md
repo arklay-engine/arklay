@@ -12,6 +12,7 @@ they can call.
 | `game/initial_state.lua`, `game/new_game.lua` | [the new-game state](#the-new-game-state) | once, when a new game starts |
 | `game/music.lua` | the room music tables (see [BGM](bgm.md#room-music)) | once, when a game session starts |
 | `game/flags.lua` | [flag names](#flag-names) for the debug menu | when the debug menu's FLAGS screen opens |
+| `game/stages.lua` | [stage names](#stage-names) for the debug room select | when the ROOM SELECT opens |
 | `lua/**.lua` | [hooks](#hooks) | on events: start, room load, each tick, each message |
 | `lib/**.lua` | [shared modules](#shared-modules) | when another script `require`s them |
 
@@ -75,6 +76,22 @@ end
 A chunk that fails to load or raises an error is logged and the pack's own
 start items are used instead, so a broken mod never starts the player
 empty-handed.
+
+## Stage names
+
+The debug menu's ROOM SELECT has a tab per stage. An RE1 pack's tabs take the
+language's `UI_DEBUG_STAGE_<n>` names (`1 MANSION`, ...). A pack names its own
+with the entry `game/stages.lua`, a chunk that returns the names in stage order,
+stage 1 first:
+
+```lua
+return { "Seg. 1", "Seg. 2", "Seg. 3" }
+```
+
+The chunk runs in the Lua sandbox without the `api`. Its names are the tabs
+(a stage past the list still gets one if a room is in it); a chunk that fails
+is logged and the language's names apply. A BioRand game with random doors
+writes one, since its stages are segments.
 
 ## Flag names
 

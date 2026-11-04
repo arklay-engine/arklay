@@ -251,6 +251,11 @@ reaches them. Milestone 8 made the engine ready for that:
   cannot name is saved in the `AKY\x05` trailer, last after the others:
   stage, room, flags (bit 0 the second visit) and a reserved zero. The block
   then names the room's origin. Retail rooms never write it.
+- **Second-visit-only rooms.** The first visit of 110, 119, 200, 20C and 213-21C
+  is a stub RDT without the doors, because the original never leads there. A
+  copy of one (`RoomOrigins::with_visit`) therefore always plays the second
+  visit, whatever the scenario flag says, and leads on by the flag. The
+  planner places these rooms in the first visit too.
 - **The map screen** is off under `DOOR_RANDOMIZER` (bank 5, `0xC1`): the
   map button and the MAP tab do nothing.
 
@@ -495,8 +500,9 @@ The pull request's description holds the live checklist. In order:
     spoiler log and stale-pack rebuilds. **Done:** BIORAND has a Player row,
     an Options screen and a Spoiler Log screen. Options is generated from the
     package's definition (`arklay_biorand::config::definition`, read from the
-    base pack's map): a page per definition page (Ctrl+Up/Down or LB/RB turn
-    it), a heading per group, and per item a toggle (switch), choice
+    base pack's map): the options' own native controls, a tab per definition
+    page (Q/E, Ctrl+Up/Down or LB/RB turn it), a native group per titled group
+    (an untitled group's options sit straight in the list), and per item a toggle (switch), choice
     (dropdown, with its Default and Random choices) or slider (range, percent),
     with the item's label and, in the pane beside the list, its description.
     R (X on a pad) resets every option to its default. The options are saved on
