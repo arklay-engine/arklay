@@ -1038,6 +1038,7 @@ impl Em<'_, '_, '_> {
         }
         self.oba_ck_em();
         self.sca_ck_em();
+        self.mover.place_neck();
         for (effect, part, point) in self.z.flames.clone() {
             if let Some(at) = self.mover.part_point(usize::from(part), point) {
                 self.world

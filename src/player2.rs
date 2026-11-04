@@ -1859,6 +1859,16 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// Where the head is once `Oba_ck_em` and `Sca_ck_em` have pushed the
+    /// body: the neck joint's `+0x5C` that the next tick's `Root_ck` looks
+    /// from. The original's world matrices are made after the pushes, so the
+    /// head moves with them.
+    pub(crate) fn place_neck(&mut self) {
+        if let Some(position) = self.chain_position(&[0, NECK_JOINT]) {
+            self.work.neck.position = Some(position);
+        }
+    }
+
     /// `FUN_0045f5b0`: `Rot_neck_em` on both of the dog's neck joints.
     pub(crate) fn rot_neck_dog(&mut self, target: Option<[i32; 3]>) {
         let [first, second] = DOG_NECK;
@@ -4486,6 +4496,50 @@ mod tests {
             setup.tick(Input::default(), 200);
         }
         assert_eq!(setup.work.neck.turn, [0, 0]);
+    }
+
+    #[test]
+    fn the_neck_is_placed_on_the_pushed_body() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; NECK_JOINT + 1];
+        }
+        setup.skeleton.relative = vec![[0; 3]; NECK_JOINT + 1];
+        setup.skeleton.relative[NECK_JOINT] = [0, -700, 0];
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.rot_neck_em(None);
+        let before = mover.work.neck.position.expect("a head on the pose");
+        // `Oba_ck_em` and `Sca_ck_em` push the body after `Rot_neck_em`.
+        mover.player.pos[0] += 18;
+        mover.player.pos[2] -= 14;
+        mover.place_neck();
+        assert_eq!(
+            mover.work.neck.position,
+            Some([before[0] + 18, before[1], before[2] - 14])
+        );
     }
 
     #[test]
