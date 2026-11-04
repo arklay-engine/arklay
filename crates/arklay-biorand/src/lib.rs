@@ -8,6 +8,7 @@
 //!
 //! See `docs/biorand/plan.md` in the repository.
 
+pub mod audit;
 pub mod config;
 pub mod doors;
 pub mod enemies;
