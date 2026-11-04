@@ -31,7 +31,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE) && ck(FG_COMMON, F_COMMON_4B, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_4B, TRUE))
             {
             }
             else
@@ -41,7 +41,7 @@ proc init
         }
         else
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
             {
                 random_enemies();
             }

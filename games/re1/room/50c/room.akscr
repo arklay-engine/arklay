@@ -81,7 +81,7 @@ proc init
 {
     if (ENEMY_RANDOMIZER)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_2D, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_2D, FALSE))
         {
             random_enemies();
         }

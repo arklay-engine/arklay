@@ -50,7 +50,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_4B, FALSE))
             {
                 random_enemies();
             }

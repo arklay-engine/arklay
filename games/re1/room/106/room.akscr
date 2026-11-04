@@ -111,14 +111,14 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_00, FALSE) && ck(FG_COMMON, F_COMMON_02, FALSE) && ck(FG_COMMON, F_COMMON_03, FALSE))
+            if (ck(FG_COMMON, F_COMMON_00, TRUE) && ck(FG_COMMON, F_COMMON_02, TRUE) && ck(FG_COMMON, F_COMMON_03, TRUE))
             {
                 random_enemies();
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_05, FALSE) && ck(FG_ITEM, F_ITEM_0D, FALSE))
+            if (ck(FG_COMMON, F_COMMON_05, TRUE) && ck(FG_ITEM, F_ITEM_0D, TRUE))
             {
                 random_enemies();
             }

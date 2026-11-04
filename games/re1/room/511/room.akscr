@@ -30,7 +30,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_5A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_5A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
             {
             }
             else

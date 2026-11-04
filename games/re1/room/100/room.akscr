@@ -320,9 +320,15 @@ proc init
         }
         else
         {
+            if (ENEMY_RANDOMIZER)
+            {
+                if (ck(FG_COMMON, F_COMMON_22, FALSE))
+                {
+                    random_enemies();
+                }
+            }
             if (ck(FG_COMMON, F_COMMON_22, TRUE))
             {
-                random_enemies();
                 if (ck(FG_COMMON, F_COMMON_21, TRUE))
                 {
                     sys_multi(SYS_UNEQUIP);

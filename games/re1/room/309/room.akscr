@@ -40,7 +40,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_48, FALSE))
+            if (ck(FG_COMMON, F_COMMON_48, TRUE))
             {
                 random_enemies();
             }

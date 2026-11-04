@@ -61,7 +61,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_AB, TRUE) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+            if (ck(FG_COMMON, F_COMMON_AB, FALSE) && ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
             {
             }
             else
@@ -71,7 +71,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_AF, TRUE) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+            if (ck(FG_COMMON, F_COMMON_AF, FALSE) && ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
             {
             }
             else

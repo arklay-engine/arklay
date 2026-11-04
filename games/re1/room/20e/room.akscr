@@ -49,7 +49,7 @@ proc init noreturn (MANSION2)
 {
     if (ENEMY_RANDOMIZER)
     {
-        if (ck(FG_COMMON, F_COMMON_43, TRUE))
+        if (ck(FG_COMMON, F_COMMON_43, FALSE))
         {
             random_enemies();
         }

@@ -63,7 +63,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_22, FALSE) && ck(FG_COMMON, F_COMMON_23, TRUE))
+            if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_23, FALSE))
             {
             }
             else

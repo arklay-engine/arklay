@@ -42,7 +42,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_5C, FALSE) && ck(FG_COMMON, F_COMMON_48, FALSE))
+            if (ck(FG_COMMON, F_COMMON_5C, TRUE) && ck(FG_COMMON, F_COMMON_48, TRUE))
             {
             }
             else

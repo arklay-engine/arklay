@@ -48,7 +48,7 @@ proc init
     {
         if (CHRIS)
         {
-            if (ck(FG_ITEM, F_ITEM_00, TRUE) && ck(FG_ITEM, F_ITEM_01, TRUE) && ck(FG_COMMON, F_COMMON_20, TRUE))
+            if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE) && ck(FG_COMMON, F_COMMON_20, FALSE))
             {
             }
             else
@@ -58,7 +58,7 @@ proc init
         }
         else
         {
-            if (ck(FG_ITEM, F_ITEM_00, TRUE) && ck(FG_ITEM, F_ITEM_01, TRUE))
+            if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE))
             {
             }
             else
