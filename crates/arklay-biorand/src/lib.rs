@@ -9,6 +9,7 @@
 //! See `docs/biorand/plan.md` in the repository.
 
 pub mod config;
+pub mod doors;
 pub mod enemies;
 pub mod inventory;
 pub mod items;

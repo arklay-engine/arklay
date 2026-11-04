@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 
+use arklay_biorand::doors::DoorPlan;
 use arklay_biorand::keys::{KeyOptions, KeyPlacement};
 use arklay_biorand::locks::{self, DoorLock};
 use arklay_biorand::map::{DoorKind, Filter, Map, Requirement};
@@ -32,6 +33,83 @@ pub fn load_map() -> Map {
         .iter()
         .map(|(dir, text)| (dir.as_str(), text.as_str()));
     Map::parse(&map_xml, rooms).unwrap_or_else(|err| panic!("{err:#}"))
+}
+
+/// `map` (prepared, with the original doors) rewired as the door `plan`
+/// says, for a walk: only the rooms the plan's doors are in or lead to, each
+/// door to its planned far side, a segment end no-return with its far door
+/// blocked, and a sealed door shut. Worked out from the plan alone, not from
+/// the map the door stage returned.
+pub fn with_doors(map: &Map, plan: &DoorPlan) -> Result<Map, String> {
+    let mut map = map.clone();
+    // The rooms the plan's doors are in or lead to, and those reached from
+    // them through exits with no door AOT (`20C/GRAVE`).
+    let mut kept: HashSet<String> = plan
+        .doors
+        .iter()
+        .flat_map(|door| {
+            std::iter::once(door.room.clone()).chain(door.target.as_ref().map(|t| t.room.clone()))
+        })
+        .collect();
+    loop {
+        let more: Vec<String> = map
+            .rooms
+            .values()
+            .filter(|room| kept.contains(&room.key))
+            .flat_map(|room| room.doors.iter().filter(|door| door.id.is_none()))
+            .filter_map(|door| door.target_room().map(str::to_string))
+            .filter(|to| !kept.contains(to))
+            .collect();
+        if more.is_empty() {
+            break;
+        }
+        kept.extend(more);
+    }
+    map.rooms.retain(|key, _| kept.contains(key));
+    let mut blocked = HashSet::new();
+    for room in map.rooms.values_mut() {
+        let key = room.key.clone();
+        room.doors.retain(|door| {
+            door.id.is_some() || door.target_room().is_none_or(|to| kept.contains(to))
+        });
+        for door in &mut room.doors {
+            let Some(id) = door.id else {
+                continue;
+            };
+            let planned = plan
+                .doors
+                .iter()
+                .find(|d| d.room == key && d.id == id)
+                .ok_or_else(|| format!("{key}:{id} is in the game but not in the plan"))?;
+            match &planned.target {
+                Some(target) => {
+                    door.target = Some(format!("{}:{}", target.room, target.door));
+                    if planned.no_return {
+                        door.kind = Some(DoorKind::NoReturn);
+                        blocked.insert((target.room.clone(), target.door));
+                    }
+                }
+                None => {
+                    door.target = None;
+                    door.kind = Some(if door.no_unlock {
+                        DoorKind::Blocked
+                    } else {
+                        DoorKind::Locked
+                    });
+                    door.requires.clear();
+                }
+            }
+        }
+    }
+    for (room, id) in blocked {
+        let door = map
+            .rooms
+            .get_mut(&room)
+            .and_then(|room| room.doors.iter_mut().find(|door| door.id == Some(id)))
+            .ok_or_else(|| format!("a segment ends at {room}:{id}, not in the game"))?;
+        door.kind = Some(DoorKind::Blocked);
+    }
+    Ok(map)
 }
 
 /// `map` with the planned `locks` as the game will read them, for a walk:
@@ -370,7 +448,10 @@ impl<'a> World<'a> {
         if let Some(end) = self.end
             && !p.reached.contains(end)
         {
-            problems.push(format!("the end room {end} is never reached"));
+            problems.push(format!(
+                "the end room {end} is never reached; reached {:?}",
+                p.reached
+            ));
         }
         let mut unpicked: Vec<_> = self
             .keys
@@ -399,8 +480,12 @@ impl<'a> World<'a> {
             .iter()
             .filter(|action| p.reached.contains(action.at) && !self.done(p, action))
             .filter(|action| match action.what {
-                What::Door { to, .. } => {
-                    !is_no_return(action) && !action.requires.is_empty() && !p.reached.contains(to)
+                // A blocked door is never opened from this side, key or not.
+                What::Door { to, kind } => {
+                    !is_no_return(action)
+                        && kind != Some(DoorKind::Blocked)
+                        && !action.requires.is_empty()
+                        && !p.reached.contains(to)
                 }
                 What::Slot { .. } | What::Flag { .. } => true,
             })
@@ -426,7 +511,15 @@ impl<'a> World<'a> {
             if problems.is_empty() {
                 return Ok(());
             }
-            first_failure.get_or_insert(problems);
+            // Report the play-through that got furthest: the most slots
+            // emptied (a no-return door forgets the rooms reached).
+            let progress = (p.picked.len(), p.reached.len());
+            if first_failure
+                .as_ref()
+                .is_none_or(|(furthest, _)| progress > *furthest)
+            {
+                first_failure = Some((progress, problems));
+            }
             if budget == 0 {
                 return Err("the search ran out of budget".to_string());
             }
@@ -442,7 +535,7 @@ impl<'a> World<'a> {
                 }
             }
         }
-        Err(first_failure.unwrap_or_default().join("\n"))
+        Err(first_failure.unwrap_or_default().1.join("\n"))
     }
 
     /// Plays through spending each consumable key on the first lock found.

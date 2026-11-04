@@ -6,6 +6,7 @@ mod common;
 use std::collections::{HashMap, HashSet};
 
 use arklay_biorand::config::{self, Config};
+use arklay_biorand::doors;
 use arklay_biorand::items::{Pickup, Role};
 use arklay_biorand::keys::KeyOptions;
 use arklay_biorand::map::Map;
@@ -13,14 +14,16 @@ use arklay_biorand::plan::{Game, Players, generate};
 use arklay_biorand::prepare;
 use arklay_biorand::rng::Rng;
 
-use common::{check_playthrough, load_map, with_locks};
+use common::{check_playthrough, load_map, with_doors, with_locks};
 
 const SEEDS: u64 = 50;
 
 /// The configurations the plans are checked under, by name.
 fn variants(map: &Map) -> Vec<(&'static str, Config)> {
     let definition = config::definition(map);
-    let defaults = Config::defaults(&definition);
+    let mut defaults = Config::defaults(&definition);
+    // The door variants are below.
+    defaults.set("doors/random", false);
     let ammo_kinds: Vec<String> = map
         .items
         .values()
@@ -160,9 +163,7 @@ fn re1_lock_plans_hold_for_both_players() {
 /// original room script raises and a key that may go there, and a door
 /// leading nowhere never opens.
 fn check_locks(map: &Map, game: &Game) -> Result<(), String> {
-    let options = prepare::Options::from_config(&game.config, game.player);
-    let prepared = prepare::prepare(map, &options, &mut Rng::named(game.spoiler.seed, "re1map"))
-        .map_err(|err| format!("{err:#}"))?;
+    let prepared = game_map(map, game)?;
     let doors: usize = prepared
         .rooms
         .values()
@@ -270,11 +271,7 @@ fn re1_variants_change_what_they_say() {
 
     let default = generate(&map, &variants["default"], 1, Players::Configured).unwrap();
     let game = &default.games[0];
-    assert_eq!(
-        game.deferred,
-        ["doors/random"],
-        "the default turns door randomization on"
-    );
+    assert!(game.deferred.is_empty(), "{:?}", game.deferred);
     for flag in [
         "RANDOMIZER",
         "ITEM_RANDOMIZER",
@@ -307,11 +304,26 @@ fn re1_variants_change_what_they_say() {
     assert!(raised.contains(&122) && raised.contains(&123), "{raised:?}");
 }
 
+/// The map prepared for a game's configuration, with the original doors.
+fn prepared(map: &Map, game: &Game) -> Result<Map, String> {
+    let options = prepare::Options::from_config(&game.config, game.player);
+    prepare::prepare(map, &options, &mut Rng::named(game.spoiler.seed, "re1map"))
+        .map_err(|err| format!("{err:#}"))
+}
+
+/// The map a game was planned on: prepared for its configuration, and
+/// rewired as its door plan says.
+fn game_map(map: &Map, game: &Game) -> Result<Map, String> {
+    let prepared = prepared(map, game)?;
+    match &game.doors {
+        Some(plan) => with_doors(&prepared, plan),
+        None => Ok(prepared),
+    }
+}
+
 /// Checks one game against the map it was planned on.
 fn check_game(map: &Map, game: &Game) -> Result<(), String> {
-    let options = prepare::Options::from_config(&game.config, game.player);
-    let prepared = prepare::prepare(map, &options, &mut Rng::named(game.spoiler.seed, "re1map"))
-        .map_err(|err| format!("{err:#}"))?;
+    let prepared = game_map(map, game)?;
 
     // The start fits the player's slots.
     let size = usize::from(game.inventory_sizes.of(game.player));
@@ -481,7 +493,8 @@ fn check_pickup(
 #[test]
 fn re1_walk_catches_a_missing_key_across_segments() {
     let map = load_map();
-    let config = Config::defaults(&config::definition(&map));
+    let mut config = Config::defaults(&config::definition(&map));
+    config.set("doors/random", false);
     let plan = generate(
         &map,
         &config,
@@ -549,5 +562,207 @@ fn re1_walk_catches_a_missing_key_with_locks() {
             check_playthrough(&walked, &key_options, keys).is_err(),
             "{player:?}: locks nothing opens go unnoticed"
         );
+    }
+}
+
+/// The configurations with doors randomized, by name.
+fn door_variants(map: &Map) -> Vec<(&'static str, Config)> {
+    let mut doors = Config::defaults(&config::definition(map));
+    doors.set("doors/random", true);
+    doors.set("locks/random", false);
+    doors.set("enemies/random", false);
+    let mut locks = doors.clone();
+    locks.set("locks/random", true);
+    locks.set("locks/ratio", 0.25);
+    let mut enemies = locks.clone();
+    enemies.set("enemies/random", true);
+    let mut wide = enemies.clone();
+    wide.set("doors/segments", 6);
+    wide.set("doors/rooms", 1.0);
+    let mut narrow = doors.clone();
+    narrow.set("doors/segments", 1);
+    narrow.set("doors/rooms", 0.0);
+    vec![
+        ("doors", doors),
+        ("doors locks", locks),
+        ("doors locks enemies", enemies),
+        ("doors wide", wide),
+        ("doors narrow", narrow),
+    ]
+}
+
+#[test]
+fn re1_door_plans_hold_for_both_players() {
+    let map = load_map();
+    let mut games = 0;
+    for (name, config) in door_variants(&map) {
+        for seed in 0..SEEDS {
+            let what = format!("{name} seed {seed}");
+            let plan = generate(&map, &config, seed, Players::Both)
+                .unwrap_or_else(|err| panic!("{what}: {err:#}"));
+            for game in &plan.games {
+                let what = format!("{what} {:?}", game.player);
+                assert!(game.deferred.is_empty(), "{what}: {:?}", game.deferred);
+                for flag in ["DOOR_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
+                    assert!(game.system_flags.contains(&flag), "{what}: {flag}");
+                }
+                check_doors(&map, game).unwrap_or_else(|err| panic!("{what}: {err}"));
+                check_locks(&map, game).unwrap_or_else(|err| panic!("{what}: {err}"));
+                check_game(&map, game).unwrap_or_else(|err| panic!("{what}: {err}"));
+                games += 1;
+            }
+            if seed < 3 {
+                let again = generate(&map, &config, seed, Players::Both).unwrap();
+                assert_eq!(plan, again, "{what}: the same seed gives the same plan");
+            }
+        }
+    }
+    assert_eq!(games, 5 * SEEDS * 2);
+}
+
+/// The door plan holds together: every room has one new id, numbered from 0
+/// in each stage, none is 311's; every door of the game is planned once and
+/// leads to a door of the game that leads back; the far side's entrance is
+/// the map's; the start room is in the first stage.
+fn check_doors(map: &Map, game: &Game) -> Result<(), String> {
+    let plan = game
+        .doors
+        .as_ref()
+        .ok_or("doors are randomized, but no plan")?;
+    let original = prepared(map, game)?;
+    let walked = game_map(map, game)?;
+    let mut ids = HashSet::new();
+    let mut numbers: HashMap<u8, Vec<u8>> = HashMap::new();
+    for (dir, room) in &plan.rooms {
+        if !std::path::Path::new(&format!("{}/room/{dir}", common::RE1)).is_dir() {
+            return Err(format!("room {dir} has no folder"));
+        }
+        if room.id != doors::room_id(room.stage, room.room) {
+            return Err(format!("{dir}: id {} for {room:?}", room.id));
+        }
+        if room.id == "311" || !ids.insert(room.id.clone()) {
+            return Err(format!("{dir}: id {} is taken", room.id));
+        }
+        if room.stage == 0 || room.stage > plan.segments {
+            return Err(format!("{dir}: stage {} of {}", room.stage, plan.segments));
+        }
+        numbers.entry(room.stage).or_default().push(room.room);
+    }
+    for (stage, mut rooms) in numbers {
+        rooms.sort_unstable();
+        let expected: Vec<u8> = (0..=u8::MAX)
+            .filter(|&n| doors::room_id(stage, n) != "311")
+            .take(rooms.len())
+            .collect();
+        if rooms != expected {
+            return Err(format!("stage {stage} numbers its rooms {rooms:?}"));
+        }
+    }
+    let start = &map.begin_end[0].start;
+    match plan.rooms.get(&start.to_ascii_lowercase()) {
+        Some(room) if room.stage == 1 => {}
+        other => return Err(format!("the start room {start} is {other:?}")),
+    }
+
+    let planned_doors: usize = walked
+        .rooms
+        .values()
+        .map(|room| room.doors.iter().filter(|door| door.id.is_some()).count())
+        .sum();
+    if planned_doors != plan.doors.len() {
+        return Err(format!(
+            "{} planned doors for {planned_doors}",
+            plan.doors.len()
+        ));
+    }
+    let by_name: HashMap<(&str, u8), &doors::PlannedDoor> = plan
+        .doors
+        .iter()
+        .map(|door| ((door.room.as_str(), door.id), door))
+        .collect();
+    if by_name.len() != plan.doors.len() {
+        return Err("a door is planned twice".into());
+    }
+    for door in &plan.doors {
+        let name = format!("{}:{}", door.room, door.id);
+        if !plan.rooms.contains_key(&door.dir) {
+            return Err(format!("{name}: room {} has no new id", door.dir));
+        }
+        let Some(target) = &door.target else {
+            if door.no_return {
+                return Err(format!("{name} ends a segment but leads nowhere"));
+            }
+            continue;
+        };
+        let far = by_name
+            .get(&(target.room.as_str(), target.door))
+            .ok_or_else(|| {
+                format!(
+                    "{name} leads to {}:{}, not in the game",
+                    target.room, target.door
+                )
+            })?;
+        if plan.new_id(&target.dir) != Some(target.id.as_str()) {
+            return Err(format!(
+                "{name}: target id {} for {}",
+                target.id, target.dir
+            ));
+        }
+        let back = far.target.as_ref().map(|t| (t.room.as_str(), t.door));
+        if back != Some((door.room.as_str(), door.id)) {
+            return Err(format!(
+                "{name} leads to {}:{}, which leads to {back:?}",
+                far.room, far.id
+            ));
+        }
+        let entrance = original.rooms[&target.room]
+            .doors
+            .iter()
+            .find(|d| d.id == Some(target.door))
+            .and_then(|d| d.entrance);
+        if entrance != Some(target.entrance) {
+            return Err(format!(
+                "{name}: entrance {:?} for {entrance:?}",
+                target.entrance
+            ));
+        }
+        if !door.randomized {
+            let was = original.rooms[&door.room]
+                .doors
+                .iter()
+                .find(|d| d.id == Some(door.id))
+                .and_then(|d| d.target.clone());
+            if was != Some(format!("{}:{}", target.room, target.door)) {
+                return Err(format!("{name} is fixed but leads elsewhere than {was:?}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// With doors randomized, the walk on the rewired map still needs the keys:
+/// without some placed key the play-through fails.
+#[test]
+fn re1_walk_catches_a_missing_key_with_doors() {
+    let map = load_map();
+    let (_, config) = door_variants(&map).remove(1);
+    for player in [
+        arklay_biorand::map::Player::Chris,
+        arklay_biorand::map::Player::Jill,
+    ] {
+        let plan = generate(&map, &config, 3, Players::Only(player)).unwrap();
+        let game = &plan.games[0];
+        let walked = with_locks(&game_map(&map, game).unwrap(), &game.locks).unwrap();
+        let key_options = KeyOptions::from_config(&game.config, game.player);
+        let keys = game.keys.as_ref().unwrap();
+        check_playthrough(&walked, &key_options, keys).unwrap();
+        let needed = (0..keys.keys.len())
+            .filter(|&i| {
+                let mut broken = keys.clone();
+                broken.keys.remove(i);
+                check_playthrough(&walked, &key_options, &broken).is_err()
+            })
+            .count();
+        assert!(needed > 0, "{player:?}: no key is needed");
     }
 }
