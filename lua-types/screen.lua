@@ -870,7 +870,8 @@ function ScreenApi:draw_re2_binders(model, page, top) end
 ---@return boolean set `false` outside a session.
 function ScreenApi:flag(bank, bit) end
 
----Where the paused session stands; four `nil`s outside a session.
+---Where the paused session stands; four `nil`s outside a session. A
+---generated room reports its origin's stage and room.
 ---@return integer? stage
 ---@return integer? room
 ---@return integer? cut The camera cut.

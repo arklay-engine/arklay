@@ -50,7 +50,11 @@ Saves belong to their pack: `re1` keeps `save_dir` itself, and every other
 base pack, RE2 and generated games included, uses `<save_dir>/<pack id>/`.
 Screen scripts' `<save_dir>` means that folder. A Chris with eight slots keeps
 Rebecca's overlapped save slots in an extra save trailer (`AKY\x04`), so a
-six-slot game's saves stay byte-identical to the original's.
+six-slot game's saves stay byte-identical to the original's. Likewise a save
+in a room the block cannot name (a long id) keeps it in the `AKY\x05`
+trailer, and the block names the room's origin.
+
+Under `DOOR_RANDOMIZER` the map screen is off.
 
 ## Script guards
 

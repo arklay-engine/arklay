@@ -30,7 +30,7 @@ up to the closing `]`), and a single `[pack]` section.
 | `homepage` | The pack's home page URL. Optional. |
 | `thumbnail` | The entry holding a 4:3 picture for the pack's card on the PLAY screen, such as `"ui/title.bmp"`. Optional. |
 | `language` | The language of the pack's own room text, such as `"ja-JP"`. Optional. |
-| `start_room` | The room a new game starts in, as a room id (`"100"`, `"G01"`). The player enters it as with `--room`. Optional. |
+| `start_room` | The room a new game starts in, as a room id (`"100"`, `"G01"`, or a generated game's long id such as `"09-40"`). The player enters it as with `--room`. Optional. |
 | `region` | `"USA"`, `"JPN"` or `"EUR"`, which room scripts can test with `if (USA)`. Default `"USA"`. |
 | `lua` | The Lua hooks to run, in order. Left out or empty, every `lua/**.lua` file runs (see [Scripting](scripting.md#hooks)). |
 | `engine` | A note about the engine build the pack is made for. Optional and not checked. |
