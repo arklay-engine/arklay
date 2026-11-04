@@ -2820,6 +2820,18 @@ impl GameSession {
                 room.current_cut = cut;
                 self.game.set_camera_cut(cut);
             }
+        } else if !self.game.camera.locked {
+            // An RE1 room's switch zones only follow the player from cut to
+            // cut, so a placement the zones never led to (a spawn without a
+            // door to arrive by) can keep a cut that doesn't show the player.
+            let room = &mut self.loaded.room;
+            let current = room.current_cut;
+            let cut = cut_showing_player(room, self.player.pos, &[current])
+                .filter(|&cut| cut != current && cut < room.cuts.len());
+            if let Some(cut) = cut {
+                room.current_cut = cut;
+                self.game.set_camera_cut(cut);
+            }
         }
     }
 
@@ -7343,7 +7355,12 @@ impl GameSession {
             || wants(self.file.as_deref())
             || (self.map_visible() && wants(self.map.as_deref()))
             || wants(pickup.and_then(|pickup| pickup.reader.as_deref()))
-            || wants(pickup.and_then(|pickup| pickup.screen.as_deref()))
+            // The viewer draws over the inventory panel, which comes up
+            // through the menu's fade like START's: until it has, the room is
+            // still what shows, in its band, and not the 4:3 frame of a
+            // screen on black.
+            || (!self.menu_fade_hides()
+                && wants(pickup.and_then(|pickup| pickup.screen.as_deref())))
     }
 
     /// The last rendered frame.
@@ -7595,17 +7612,25 @@ pub fn room_entry_placement(
         let [x, z, width, depth] = door.zone.map(i32::from);
         return Some(([x + width / 2, 0, z + depth / 2], 0, None));
     }
-    if let Some(door) = door
-        && let Some(dest) = game.door_destination(target, door.next_room)
-        && dest != target
-        && let Ok(neighbour) = room_door_state(pack, dest)
-        && let Some(back) = neighbour
+    // The entry door is the first one that has a door leading back to this
+    // room. A door-randomized game pairs doors by what the plan decided, so
+    // the stairwell landing's neighbour may not lead back here at all, and
+    // the room is entered by another of its doors.
+    let arrival = entry_doors(&game.doors).into_iter().find_map(|candidate| {
+        let dest = game.door_destination(target, candidate.next_room)?;
+        if dest == target {
+            return None;
+        }
+        let neighbour = room_door_state(pack, dest).ok()?;
+        neighbour
             .doors
             .iter()
             .flatten()
             .find(|back| game.door_destination(dest, back.next_room) == Some(target))
-    {
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, None));
+            .map(|back| (back.next_pos, back.next_angle as u16 & 0x0FFF, None))
+    });
+    if arrival.is_some() {
+        return arrival;
     }
     if door.is_none()
         && room.sca.is_some()
@@ -7643,12 +7668,20 @@ fn cut_showing_player(room: &RoomState, pos: [i32; 3], preferred: &[usize]) -> O
 /// A stairwell landing is a stairwell room's real entry, so the first
 /// stair/ladder record wins; every other room uses its first door entry.
 fn entry_door(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Option<game::Door> {
-    doors
-        .iter()
-        .flatten()
+    entry_doors(doors).into_iter().next()
+}
+
+/// Every door of the room in the order the arbitrary start tries them as its
+/// entry: the stair and ladder records first, then the rest by slot.
+fn entry_doors(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Vec<game::Door> {
+    let is_stair =
+        |door: &game::Door| door.re2.is_none() && crate::door::is_stair_type(door.door_type);
+    let all: Vec<game::Door> = doors.iter().flatten().copied().collect();
+    all.iter()
+        .filter(|door| is_stair(door))
+        .chain(all.iter().filter(|door| !is_stair(door)))
         .copied()
-        .find(|door| door.re2.is_none() && crate::door::is_stair_type(door.door_type))
-        .or_else(|| doors.iter().flatten().copied().next())
+        .collect()
 }
 
 /// Build a neighbour room's door table: parse its RDT and SCD override and run
