@@ -56,7 +56,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_TOO_LATE, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_TOO_LATE, FALSE))
             {
                 random_enemies();
             }

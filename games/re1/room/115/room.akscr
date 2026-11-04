@@ -49,7 +49,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE) && ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE))
+            if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE))
             {
             }
             else
@@ -59,7 +59,7 @@ proc init
         }
         else
         {
-            if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE))
+            if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE))
             {
             }
             else

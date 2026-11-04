@@ -81,7 +81,7 @@ proc init
 {
     if (ENEMY_RANDOMIZER)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_POWER_CONNECTED, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_POWER_CONNECTED, FALSE))
         {
             random_enemies();
         }

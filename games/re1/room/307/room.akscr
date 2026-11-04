@@ -42,7 +42,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_J_BARRY_WENT_AHEAD, FALSE) && ck(FG_COMMON, F_COMMON_ENRICO_SHOT, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_WENT_AHEAD, TRUE) && ck(FG_COMMON, F_COMMON_ENRICO_SHOT, TRUE))
             {
             }
             else

@@ -63,7 +63,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_101_ATTACK_OVER, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_101_ATTACK_OVER, FALSE))
             {
             }
             else

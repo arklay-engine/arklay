@@ -64,7 +64,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE) && ck(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, FALSE))
             {
             }
             else

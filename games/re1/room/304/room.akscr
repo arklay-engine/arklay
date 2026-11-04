@@ -43,7 +43,7 @@ proc init
 {
     if (ENEMY_RANDOMIZER)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE) && ck(FG_SCENARIO, F_SCENARIO_304_VARIANT_VISITED, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_SCENARIO, F_SCENARIO_304_VARIANT_VISITED, FALSE))
         {
         }
         else

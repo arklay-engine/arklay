@@ -283,6 +283,11 @@ if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
 }
 ```
 
+Translating a staging condition: its `B:F` is a raw RE1 `ck(B, F, 1)`, which
+passes when the bit is clear, so it is akscr `ck(B, F, FALSE)`; `!B:F` is
+`ck(B, F, TRUE)`; a `!( ... )` wrapper puts `random_enemies()` in the else
+branch.
+
 `random_enemies()` sits inside the branch the script already uses for its
 own enemies, so the cutscene and story guards come for free. The retail build
 compiles it to nothing; the base pack's build compiles it to a no-op marker

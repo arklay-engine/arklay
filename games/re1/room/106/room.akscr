@@ -119,14 +119,14 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_INTRO_SEEN, FALSE) && ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, FALSE) && ck(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, FALSE))
+            if (ck(FG_COMMON, F_COMMON_INTRO_SEEN, TRUE) && ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, TRUE) && ck(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, TRUE))
             {
                 random_enemies();
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_J_BARRY_LOCKPICK_SCENE, FALSE) && ck(FG_ITEM, F_ITEM_118_KEY_HERBICIDE_0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_LOCKPICK_SCENE, TRUE) && ck(FG_ITEM, F_ITEM_118_KEY_HERBICIDE_0, TRUE))
             {
                 random_enemies();
             }

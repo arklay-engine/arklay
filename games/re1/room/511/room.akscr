@@ -31,7 +31,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, TRUE) && ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, FALSE))
             {
             }
             else

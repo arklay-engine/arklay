@@ -31,7 +31,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE) && ck(FG_COMMON, F_COMMON_CELL_RESCUED, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE) && ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
             }
             else
@@ -41,7 +41,7 @@ proc init
         }
         else
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
             {
                 random_enemies();
             }

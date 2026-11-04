@@ -61,7 +61,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_C_WESKER_GUARDHOUSE_MET, TRUE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_WESKER_GUARDHOUSE_MET, FALSE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
             {
             }
             else
@@ -71,7 +71,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_J_WESKER_GUARDHOUSE_MET, TRUE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_WESKER_GUARDHOUSE_MET, FALSE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
             {
             }
             else

@@ -39,7 +39,7 @@ pub use verify::Report;
 /// The version of the emitter's output for a given plan. A pack also records
 /// the plan's own version ([`arklay_biorand::plan::GENERATOR_VERSION`]) as
 /// `plan_version`; a change to either makes an older pack stale.
-pub const GENERATOR_VERSION: u32 = 4;
+pub const GENERATOR_VERSION: u32 = 5;
 
 /// The base pack a game is generated from.
 pub const BASE_PACK_ID: &str = "re1";

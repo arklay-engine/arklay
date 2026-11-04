@@ -43,7 +43,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_ENRICO_SHOT, FALSE))
+            if (ck(FG_COMMON, F_COMMON_ENRICO_SHOT, TRUE))
             {
                 random_enemies();
             }

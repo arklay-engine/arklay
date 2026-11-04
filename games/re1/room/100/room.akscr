@@ -322,9 +322,15 @@ proc init
         }
         else
         {
+            if (ENEMY_RANDOMIZER)
+            {
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, FALSE))
+                {
+                    random_enemies();
+                }
+            }
             if (ck(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, TRUE))
             {
-                random_enemies();
                 if (ck(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, TRUE))
                 {
                     sys_multi(SYS_UNEQUIP);

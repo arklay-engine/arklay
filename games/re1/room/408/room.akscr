@@ -53,7 +53,7 @@ proc init
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_AFTER_PLANT42, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_AFTER_PLANT42, FALSE))
             {
             }
             else

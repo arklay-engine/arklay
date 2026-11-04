@@ -75,7 +75,7 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, TRUE))
+            if (ck(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, FALSE))
             {
             }
             else
