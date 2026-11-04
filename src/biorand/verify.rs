@@ -26,6 +26,7 @@ use super::emit::{self, AOT_BY_ID, AOT_SCE, ITEM_AMOUNT, ITEM_AOT_SET, ITEM_FLAG
 use super::locks;
 use super::{GENERATOR_VERSION, Request, game_for, read_map};
 use crate::pack::Pack;
+use arklay_biorand::audit;
 
 /// What a passing check covered.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -47,6 +48,14 @@ pub struct Report {
     pub walked_rooms: usize,
     /// Whether the pack was compared with its base pack.
     pub against_base: bool,
+    /// Whether the recorded plan passed the static audit
+    /// ([`arklay_biorand::audit::check_all`]): the walk over the map with the
+    /// plan's doors, locks and keys, the start inventory, enemies and flags.
+    pub audited: bool,
+    /// Findings that do not fail the pack. The only one now is the
+    /// consumable-key softlock: a player who spends a key on the wrong lock
+    /// first can be stranded (plan.md, Known issues).
+    pub warnings: Vec<String>,
     /// Entries compared with the base pack's, when it was.
     pub entries: usize,
 }
@@ -71,6 +80,9 @@ impl fmt::Display for Report {
                 ", {} doors lead as planned, the walk to the end reaches {} rooms",
                 self.routed_doors, self.walked_rooms
             )?;
+        }
+        if self.audited {
+            write!(f, ", the plan passes the static audit")?;
         }
         if self.against_base {
             write!(
@@ -135,6 +147,24 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
         .ok_or_else(|| anyhow!("the pack's request plans no game for character {character}"))?;
 
     let mut problems = Problems::default();
+    // The plan itself: the same checks the seed sweep runs. The pack is
+    // compared with this plan below, byte for byte, so what holds for the
+    // plan holds for the pack.
+    if let Err(err) = audit::check_map_data(&map) {
+        problems.push(format!("the map's data: {err}"));
+    }
+    let audit_problems = audit::check_all(&map, game);
+    let audited = audit_problems.is_empty();
+    for problem in audit_problems {
+        problems.push(format!("audit: {problem}"));
+    }
+    let mut warnings = Vec::new();
+    if audited && let Err(err) = audit::greedy_spend(&map, game) {
+        warnings.push(format!(
+            "a player who spends each consumable key on the first lock found can be stranded: {}",
+            err.lines().next().unwrap_or("")
+        ));
+    }
     problems.check(request.seed == seed, || {
         format!(
             "the request's seed {} is not the manifest's {seed}",
@@ -190,6 +220,8 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
     let mut report = Report {
         seed,
         character,
+        audited,
+        warnings,
         ..Report::default()
     };
     let mut rooms = Vec::new();
