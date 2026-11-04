@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::assets::{self, Artwork, Geometry};
 use crate::gui::canvas::Picture;
 use crate::gui::save_screen;
+use crate::hash::{BORDER_HEIGHT, BORDER_WIDTH};
 use crate::htexture;
 use crate::item_art;
 use crate::items;
@@ -42,11 +43,18 @@ impl Art {
     pub fn load_thumbnail(&mut self, pack: &Pack, room: RoomId) {
         let picture = (|| {
             let stem = crate::room::Folder::of(pack, room).cut_stem(0);
-            let image = crate::ui::load_picture(pack, &stem, Geometry::Free, None).ok()?;
-            Some(Arc::new(save_screen::downscale(
-                opaque(image),
-                THUMBNAIL_WIDTH,
-            )))
+            let mut image = crate::ui::load_picture(pack, &stem, Geometry::Free, None).ok()?;
+            let bordered = crate::engine::room_sets_screen_border(pack, room);
+            if bordered {
+                // The artwork is 316x236 under a 320x240 header: re-wrap the
+                // rows, then centre it on black as the game's display does.
+                image.reslice(BORDER_WIDTH as u32, BORDER_HEIGHT as u32);
+            }
+            let mut picture = opaque(image);
+            if (picture.width, picture.height) == (BORDER_WIDTH as u32, BORDER_HEIGHT as u32) {
+                picture = framed(&picture);
+            }
+            Some(Arc::new(save_screen::downscale(picture, THUMBNAIL_WIDTH)))
         })();
         self.thumbnails.insert(room, picture);
     }
@@ -144,6 +152,26 @@ fn crop(hd: &htexture::Replacement) -> Picture {
     }
 }
 
+/// A screen-border room's 316x236 picture centred on a black 320x240 frame,
+/// at the game's (2, 2) display origin.
+fn framed(picture: &Picture) -> Picture {
+    let (width, height) = (320usize, 240usize);
+    let mut rgba = vec![0u8; width * height * 4];
+    for px in rgba.as_chunks_mut::<4>().0 {
+        px[3] = 255;
+    }
+    let row = picture.width as usize * 4;
+    for y in 0..picture.height as usize {
+        let to = ((y + 2) * width + 2) * 4;
+        rgba[to..to + row].copy_from_slice(&picture.rgba[y * row..(y + 1) * row]);
+    }
+    Picture {
+        width: width as u32,
+        height: height as u32,
+        rgba,
+    }
+}
+
 /// A decoded picture made opaque.
 fn opaque(image: Image) -> Picture {
     let mut rgba = image.rgba;
@@ -154,5 +182,28 @@ fn opaque(image: Image) -> Picture {
         width: image.width,
         height: image.height,
         rgba,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_screen_border_picture_is_centred_on_a_black_frame() {
+        let (width, height) = (BORDER_WIDTH as u32, BORDER_HEIGHT as u32);
+        let art = Picture {
+            width,
+            height,
+            rgba: [200, 100, 50, 255].repeat((width * height) as usize),
+        };
+        let frame = framed(&art);
+        assert_eq!((frame.width, frame.height), (320, 240));
+        let at = |x: usize, y: usize| &frame.rgba[(y * 320 + x) * 4..(y * 320 + x) * 4 + 4];
+        assert_eq!(at(0, 0), [0, 0, 0, 255]);
+        assert_eq!(at(1, 239), [0, 0, 0, 255]);
+        assert_eq!(at(2, 2), [200, 100, 50, 255]);
+        assert_eq!(at(317, 237), [200, 100, 50, 255]);
+        assert_eq!(at(318, 238), [0, 0, 0, 255]);
     }
 }
