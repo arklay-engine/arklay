@@ -3645,6 +3645,12 @@ impl Lighting {
         }
     }
 
+    /// Whether these are an RE2 camera's lights, which a part's normals meet
+    /// in its own space (`re2_vertex_shade`).
+    pub fn is_re2(&self) -> bool {
+        self.lights[0].re2_gain.is_some()
+    }
+
     /// Latch the room's lights for one entity at `entity_pos`.
     ///
     /// The original samples the lights once per entity and then evaluates each
@@ -4143,8 +4149,11 @@ fn collect_triangles(
                     // The gameplay path evaluates each corner normal against
                     // the latched light directions, clamps the accumulated
                     // light, then folds in the vertex colour and the mesh tint.
-                    (Some(_), Some(light)) if !full_bright => {
+                    (Some(lighting), Some(light)) if !full_bright => {
                         let mut shade = match normal {
+                            Some(normal) if lighting.is_re2() => {
+                                re2_vertex_shade(&joint.r, normal, &light)
+                            }
                             Some(normal) => reference_vertex_shade(
                                 &light_camera,
                                 &normal_matrix,
@@ -4599,6 +4608,77 @@ pub(crate) fn reference_vertex_shade(
         }
     }
     shade.map(f64::from)
+}
+
+/// RE2's light for one vertex, in the part's own space.
+///
+/// `ko_joint_trans2` sets the light matrix to `MulMatrix0(llMatrix, Workm)`,
+/// the latched rows turned by the part's world rotation, and Marni
+/// (`TransObjectNgTin3_VinsNins`) dots each row with the stored normal, with
+/// no camera in between: the colour is the ambient plus
+/// `colour * max(0, row . n)` per light. `rotation` is the part's world
+/// rotation in arklay's Y-up form and `normal` the raw normal, which takes
+/// that form with its Y negated. RE1's `TmdComputeLight` instead rotates the
+/// light row by the camera with the GTE's Y flip ([`reference_vertex_shade`]);
+/// that equals this only for a camera with no pitch, so a camera looking down
+/// at a body lit from above drew it too dark (#383).
+pub(crate) fn re2_vertex_shade(
+    rotation: &[[i32; 3]; 3],
+    normal: [i16; 3],
+    light: &EntityLight,
+) -> [f64; 3] {
+    let normal = [
+        f32::from(normal[0]) / 4096.0,
+        -f32::from(normal[1]) / 4096.0,
+        f32::from(normal[2]) / 4096.0,
+    ];
+    let mut shade = light.ambient.map(|value| value as f32);
+    for source in &light.sources {
+        let row = re2_light_row(source.dir, rotation);
+        let d =
+            -(normal[0] * row[0] as f32 + normal[1] * row[1] as f32 + normal[2] * row[2] as f32)
+                / 4096.0;
+        if d > 0.0 {
+            for (channel, &value) in shade.iter_mut().zip(&source.color) {
+                *channel += d * value as f32 * 255.0 / 128.0;
+            }
+        }
+    }
+    shade.map(f64::from)
+}
+
+/// Where a mesh's corner normals meet its latched light rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightSpace {
+    /// RE1's entities: the stored row through the camera
+    /// (`reference_vertex_shade`).
+    Camera,
+    /// RE1's room objects: the row turned by the object's rotation, then
+    /// through the camera.
+    RoomObject,
+    /// RE2: the row turned by the part's rotation, met in the part's own
+    /// space (`re2_vertex_shade`).
+    Part,
+}
+
+impl LightSpace {
+    /// The space of a mesh lit by `lighting`; `room_object` is a mesh of the
+    /// room pass.
+    pub fn of(lighting: &Lighting, room_object: bool) -> Self {
+        if lighting.is_re2() {
+            Self::Part
+        } else if room_object {
+            Self::RoomObject
+        } else {
+            Self::Camera
+        }
+    }
+}
+
+/// `MulMatrix0(llMatrix, Workm)` for one latched light row: the row RE2 dots
+/// with a part's normals ([`re2_vertex_shade`]), stored as shorts.
+pub(crate) fn re2_light_row(dir: [i32; 3], rotation: &[[i32; 3]; 3]) -> [i32; 3] {
+    mul_matrix0(&[dir, [0; 3], [0; 3]], rotation)[0].map(|value| i32::from(value as i16))
 }
 
 /// Project and shade one `.ivm` object into `triangles`.
@@ -7501,6 +7581,68 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// RE2 dots a part's normals with `llMatrix * Workm`, with no camera in
+    /// between (#383): a light above a body lights its upward faces fully
+    /// however the camera looks at it. RE1's camera-space dot agrees only
+    /// for a level camera.
+    #[test]
+    fn an_re2_part_meets_its_light_in_its_own_space() {
+        let lighting = Lighting {
+            ambient: [0; 3],
+            lights: [
+                Light {
+                    pos: [0, -4000, 0],
+                    color: [0x80; 3],
+                    kind: 0,
+                    radius: 0xFFFF,
+                    re2_gain: Some(1),
+                },
+                Light::default(),
+                Light::default(),
+            ],
+        };
+        assert!(lighting.is_re2());
+        let light = lighting.latched([0; 3]);
+        // A normal facing up (the file's -Y) under a light straight above.
+        let up = [0i16, -4096, 0];
+        let identity = anim::rotation_matrix(0, 0, 0);
+        let lit = |rotation: &[[i32; 3]; 3]| re2_vertex_shade(rotation, up, &light)[0];
+        assert!(
+            (lit(&identity) - CHANNEL_MAX).abs() < 0.5,
+            "{}",
+            lit(&identity)
+        );
+        // A part turned on its side faces the same normal away from it.
+        let side = anim::rotation_matrix(1024, 0, 0);
+        assert_eq!(lit(&side), 0.0);
+
+        let level = Camera::from_points([0, -1000, -6000], [0, -1000, 0], 600);
+        let pitched = Camera::from_points([0, -5000, -3000], [0, 0, 0], 600);
+        let shade_through = |camera: &Camera, rotation: &[[i32; 3]; 3], normal| {
+            let stored = stored_camera_matrix(camera.from, camera.look_at);
+            let draw_matrix = mul_matrix0(&stored, rotation)
+                .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
+            reference_vertex_shade(&stored, &draw_matrix, normal, &light, None)
+        };
+        let mut pitch_differs = false;
+        for rotation in [[0, 0, 0], [0, 1024, 0], [300, -700, 90]] {
+            let rotation = anim::rotation_matrix(rotation[0], rotation[1], rotation[2]);
+            for normal in [up, [4096, 0, 0], [2896, -2896, 0], [-1000, -3000, 2000]] {
+                let shade = re2_vertex_shade(&rotation, normal, &light);
+                let level = shade_through(&level, &rotation, normal);
+                for (part, camera) in shade.iter().zip(level) {
+                    assert!(
+                        (part - camera).abs() < 1.0,
+                        "{normal:?}: {shade:?} vs {level:?}"
+                    );
+                }
+                let pitched = shade_through(&pitched, &rotation, normal);
+                pitch_differs |= (shade[0] - pitched[0]).abs() > 20.0;
+            }
+        }
+        assert!(pitch_differs);
     }
 
     #[test]

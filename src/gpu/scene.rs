@@ -23,8 +23,8 @@
 use crate::anim::Mat4x3;
 use crate::model::{Texture8, Tmd};
 use crate::render::{
-    self, ABE_BIT, Camera, EntityLight, EntityMesh, GameplayScene, MirrorPass, apply_matrix_sv,
-    mul_matrix0, stored_camera_matrix,
+    self, ABE_BIT, Camera, EntityLight, EntityMesh, GameplayScene, LightSpace, MirrorPass,
+    apply_matrix_sv, mul_matrix0, re2_light_row, stored_camera_matrix,
 };
 use crate::state::Image;
 
@@ -270,17 +270,28 @@ fn view_point(rows: &[[f32; 4]], position: [f32; 3]) -> [f32; 3] {
 /// `reference_vertex_shade` computes `d = -(n_view . l) / 4096` with
 /// `n_view = C R n' / 4096^3` and `l = ApplyMatrixSV(C, dir)`; folding the
 /// matrices onto the light gives `d = -dot(n', (C R)^T l / 4096^4)`, so the
-/// GPU evaluates one dot product per light and corner.
+/// GPU evaluates one dot product per light and corner. RE2's
+/// `re2_vertex_shade` dots `n' / 4096` with the part's own row `dir * R`
+/// (4.12), so its vector is that row over `4096^2`.
 fn light_vector(
     stored: &[[i32; 3]; 3],
     joint: &Mat4x3,
     dir: [i32; 3],
-    room_object: bool,
+    space: LightSpace,
 ) -> [f32; 4] {
-    let vec = if room_object {
-        mul_matrix0(&[dir, [0; 3], [0; 3]], &joint.r)[0]
-    } else {
-        dir
+    let vec = match space {
+        LightSpace::Part => {
+            let row = re2_light_row(dir, &joint.r);
+            let scale = 4096.0f64 * 4096.0;
+            return [
+                (f64::from(row[0]) / scale) as f32,
+                (f64::from(row[1]) / scale) as f32,
+                (f64::from(row[2]) / scale) as f32,
+                0.0,
+            ];
+        }
+        LightSpace::RoomObject => mul_matrix0(&[dir, [0; 3], [0; 3]], &joint.r)[0],
+        LightSpace::Camera => dir,
     };
     let l = apply_matrix_sv(stored, vec);
     // The draw matrix is `MulMatrix0`'s rounded 4.12 short product.
@@ -329,15 +340,15 @@ pub fn pass_range(
 
 /// The uniform block of one mesh draw through `camera`.
 ///
-/// `room_object` selects the room pass's light rotation (the software
-/// `room_object` flag; never set for the mirror copy). `mirror` hides the
-/// joints the mirror probe rejects, on top of the mesh's own hidden joints,
-/// and draws unculled like the software's reflection.
+/// `space` is where the mesh's corner normals meet its light rows
+/// ([`LightSpace`]). `mirror` hides the joints the mirror probe rejects, on
+/// top of the mesh's own hidden joints, and draws unculled like the
+/// software's reflection.
 pub fn draw_uniforms(
     camera: &Camera,
     mesh: &EntityMesh<'_>,
     light: &EntityLight,
-    room_object: bool,
+    space: LightSpace,
     mirror: Option<&MirrorPass>,
 ) -> DrawUniforms {
     let projection = camera_terms(camera);
@@ -371,7 +382,7 @@ pub fn draw_uniforms(
             .get(index)
             .filter(|colour| **colour != render::NO_JOINT_COLOUR));
         for (slot, source) in light.sources.iter().enumerate() {
-            let mut vector = light_vector(&stored, joint, source.dir, room_object);
+            let mut vector = light_vector(&stored, joint, source.dir, space);
             vector[3] = colour.map_or(NOT_COLOURED, |colour| {
                 f32::from(colour[slot]) * 255.0 / 128.0
             });
@@ -1096,7 +1107,7 @@ mod tests {
             lights: Default::default(),
         }
         .latched([0; 3]);
-        let uniforms = draw_uniforms(&camera, &entity, &light, false, None);
+        let uniforms = draw_uniforms(&camera, &entity, &light, LightSpace::Camera, None);
         assert_eq!(uniforms.flags, [!1, DRAW_CULL, 256, 256]);
         assert_eq!(projection[3], 1200.0);
         let (rotation, translation, near) = render::object_view(&camera, &joint);
@@ -1182,16 +1193,19 @@ mod tests {
         let stored = stored_camera_matrix(camera.from, camera.look_at);
         let draw_matrix = mul_matrix0(&stored, &joint.r)
             .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
-        for room_object in [false, true] {
-            let uniforms = draw_uniforms(&camera, &entity, &light, room_object, None);
+        for space in [LightSpace::Camera, LightSpace::RoomObject, LightSpace::Part] {
+            let uniforms = draw_uniforms(&camera, &entity, &light, space, None);
             for normal in [[0i16, -4096, 0], [2896, 0, 2896], [-1000, 3000, -2000]] {
-                let reference = render::reference_vertex_shade(
-                    &stored,
-                    &draw_matrix,
-                    normal,
-                    &light,
-                    room_object.then_some(&joint.r),
-                );
+                let reference = match space {
+                    LightSpace::Part => render::re2_vertex_shade(&joint.r, normal, &light),
+                    _ => render::reference_vertex_shade(
+                        &stored,
+                        &draw_matrix,
+                        normal,
+                        &light,
+                        (space == LightSpace::RoomObject).then_some(&joint.r),
+                    ),
+                };
                 let n = [
                     f32::from(normal[0]),
                     -f32::from(normal[1]),
@@ -1259,7 +1273,7 @@ mod tests {
             lights: Default::default(),
         }
         .latched([0; 3]);
-        let uniforms = draw_uniforms(&camera, &entity, &light, false, None);
+        let uniforms = draw_uniforms(&camera, &entity, &light, LightSpace::Camera, None);
         let colour = |joint: usize, slot: usize| uniforms.joints[joint * 6 + 3 + slot][3];
         assert_eq!(colour(0, 0), NOT_COLOURED, "no colour keeps the lit shade");
         assert_eq!(colour(1, 0), 127.5);
@@ -1305,7 +1319,7 @@ mod tests {
             lights: Default::default(),
         }
         .latched([0; 3]);
-        let uniforms = draw_uniforms(&camera, &entity, &light, false, None);
+        let uniforms = draw_uniforms(&camera, &entity, &light, LightSpace::Camera, None);
         // Joint 0 draws; joint 1 has no matrix; joints past the mesh never draw.
         assert_eq!(uniforms.flags[0], !1);
         let entity = EntityMesh {
@@ -1313,7 +1327,7 @@ mod tests {
             ..entity
         };
         assert_eq!(
-            draw_uniforms(&camera, &entity, &light, false, None).flags[0],
+            draw_uniforms(&camera, &entity, &light, LightSpace::Camera, None).flags[0],
             !0
         );
     }
