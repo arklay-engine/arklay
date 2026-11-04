@@ -213,16 +213,52 @@ that shows the engine's wrong-character message (0xD6).
 
 Under door randomization the generated game renumbers its rooms. Segment *n*
 becomes stage *n*, and its rooms are numbered from 0 in the order the route
-reaches them. That needs two engine changes, both in their own milestone:
+reaches them. Milestone 8 made the engine ready for that:
 
-- `RoomId` takes any stage and room numbers 0–255. The id's text form grows
-  to fit, and RE2's letter stages are unchanged.
-- Engine behaviour keyed to an original room (room 303's helicopter, 302's
-  lift, second-visit-only rooms, the music and sound tables) is keyed to the
-  room's *origin*, which `room.xml` records. A renumbered room keeps the
-  original's behaviour, music and sounds.
+- **Ids.** `RoomId` takes any stage (1–255) and room (0–255). An id the
+  original forms can spell keeps them: `10b` for a room folder, `10b1` for
+  an RDT, and RE2's letter stages (`a00`–`g1f`). Any other id has the long
+  form, two hex digits each: `09-40` for the room, `09-40-1` for one
+  player's RDT. The long form of an id with a short one (`01-0b`) is
+  refused, so every id has one spelling and every form round-trips.
+- **Origins.** `<room origin="106">` in `room.xml` names the original room
+  a room was copied from; a room without one is its own origin. The pack
+  reads every room's origin once (`Pack::room_origins`), and engine
+  behaviour keyed to an original room reads the origin
+  (`RoomOrigins::of`, `GameState::origin`): the quirks (303's helicopter,
+  the drug storehouse, the guardhouse save, the lab cues, the special
+  lights, the object and item fix-ups, the shadow and depth tables), the
+  music (`room_bgm` row and slot, RE2's music places), the sound and voice
+  rows, the effect sheets and camera lights, the masks, the visited bits,
+  the enemy and Lua room views, and the `B_STAGE`/`B_ROOM` state bytes the
+  scripts read. A room plays the second mansion visit when its origin is a
+  mansion room (`RoomOrigins::with_visit`). The room's files, its text keys
+  (falling back to the origin's), door targets, saves and the debug menu
+  use the room's own id. A table indexed by the original's 32 rooms per
+  stage never reads past them: a room it does not hold gets none of its
+  rows.
+- **Door targets.** A script's door target byte names only an original room
+  (`< 0x20` a room of the same stage, else the table row plus one in bits
+  5–7 and the room in bits 0–4), and the retail scripts stay byte-identical.
+  So `room.xml` names a door's other targets: `<doors><door aot="3"
+  target="09-40"/></doors>` sends the door armed in AOT slot 3 to `09-40`,
+  and `next="0x45"` limits an entry to the door whose byte is `0x45` (it
+  wins over one without). `door_aot_set` arms the target in the door record
+  (`Door::target`); the door animation still reads the byte. The player is
+  the player's, and the visit the scenario flag's, through the target's
+  origin.
+- **Saves.** The block names a room by table row and room, so a room it
+  cannot name is saved in the `AKY\x05` trailer, last after the others:
+  stage, room, flags (bit 0 the second visit) and a reserved zero. The block
+  then names the room's origin. Retail rooms never write it.
+- **The map screen** is off under `DOOR_RANDOMIZER` (bank 5, `0xC1`): the
+  map button and the MAP tab do nothing.
 
-The map screen is off under `DOOR_RANDOMIZER`.
+Milestone 9's emitter copies each renumbered room's folder to its new id
+with `<room origin="...">` set, and adds a `<doors>` entry for every door
+that leads to a renumbered room (by AOT, with `next` where a slot is armed
+more than once). Room 303's death replay draws room 311 relative to the
+origin, so 311 keeps its folder and its id.
 
 ### Enemy placeholders
 
@@ -379,6 +415,7 @@ The pull request's description holds the live checklist. In order:
    do not add their effect sheets to the room (`esp`), so some effects are
    skipped with a warning; see [`modding.md`](../modding.md#enemies-random_enemies).
 8. **Room ids.** Any stage and room number; room origins; the map screen off.
+   **Done:** see [Room ids and segments](#room-ids-and-segments).
 9. **Door randomization**: segments as stages, renumbered rooms, and the
    door patches (106, 207, the lifts, 303/305, plant 42, the bookcases, 500).
    *Test milestone 3.*

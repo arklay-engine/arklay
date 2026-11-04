@@ -39,7 +39,7 @@ lua = ["lua/demo.lua"]
 | `language` | The language of the pack's own room text (`ja-JP` for the Japanese install). Optional. |
 | `engine` | Optional note about the target engine build. |
 | `lua` | Ordered hook paths; empty means discover `lua/**.lua`. |
-| `start_room` | A base pack's new-game room as a three-character room id (`"100"`, or a letter stage such as `"G01"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional; a mod manifest may not set it. |
+| `start_room` | A base pack's new-game room as a three-character room id (`"100"`, or a letter stage such as `"G01"`, or a generated game's long id such as `"09-40"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional; a mod manifest may not set it. |
 | `region` | A base pack's script region, `"USA"`, `"JPN"` or `"EUR"`: `convert-game` records the region whose room scripts the install ships, and the room scripts' `if (USA)`-style tests read it. Without it the scripts run as USA's. Optional; a mod manifest may not set it. |
 
 A pack carries no game-format tag: each RDT, EMD and WAV entry is identified
@@ -237,7 +237,10 @@ BMP is read as true colour.
 ### Room definitions
 
 `convert-game` writes each room as a folder `room/<room>` (`<room>` is the
-three-digit lower-case room id, e.g. `room/10b`). One folder holds every
+three-digit lower-case room id, e.g. `room/10b`). A room past the original
+games' stages and rooms (a generated game's) has the long id instead, two
+hex digits each for the stage and room: `room/09-40`, and `09-40-1` for one
+player's RDT. An id with a three-digit form has only that one. One folder holds every
 variant of the room: both players and, for the mansion (stages 1 and 2),
 both visits. The second visit is the same room played after the guardhouse
 sets scenario flag 0 (the original game numbered it as stages 6 and 7 and
@@ -295,6 +298,29 @@ element whose `when` fails is not there:
   </walkZones>
 </room>
 ```
+
+A room copied from another names it in `<room origin="106">`, and then
+plays as that room wherever the engine keys behaviour to an original room:
+its quirks, music and sound rows, effect and light tables, masks, the
+second mansion visit, and the stage and room bytes its scripts read. Its
+files, its door targets and saves use its own id, and its text keys fall
+back to the origin's. A room without an origin is its own.
+
+A door's script target byte names only an original room, so a door leading
+to any other names it in `<doors>`:
+
+```xml
+<doors>
+  <door aot="3" target="09-40"/>
+  <door aot="4" next="0x45" target="09-41"/>
+</doors>
+```
+
+`aot` is the AOT slot the script arms the door in. `next` limits an entry to
+the door whose target byte is that value, and wins over an entry without
+one. The door keeps its own animation, the player and the visit are the
+player's and the scenario's, and a door with no entry goes where its byte
+says.
 
 A list (lights, walk zones, camera switches, footsteps) is the elements that
 hold, in order. The `objectSlots` and `itemSlots` attributes of `<room>`
@@ -1256,7 +1282,8 @@ exist (Lua colon syntax):
 
 | Method | Effect |
 | --- | --- |
-| `api:room()` | The three-digit room id, read-only. |
+| `api:room()` | The room id (`"106"`, or a generated room's `"09-40"`), read-only. |
+| `api:origin()` | The id of the original room the room plays as (its `<room origin>`), its own id when it has none, read-only. |
 | `api:authentic()` | Whether the run was started with `--authentic` (the original's item rules), read-only. |
 | `api:flag_get(bank, bit)` | Whether a flag bit is set. |
 | `api:flag_set(bank, bit[, value])` | Set (default) or clear a flag bit. |
@@ -1517,7 +1544,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:darken(alpha)` | Fade the whole frame toward black by `alpha`. |
 | `api:page_ramp(page, sx, sy, w, h, dx, dy, ramp)` | An unscaled sheet region modulated by `2 * ramp`, half-blended. |
 | `api:flag(bank, bit)` | One bit of the paused session's flag banks; `false` outside a session. |
-| `api:room()` | The paused session's stage, room, camera cut and player (0 Chris, 1 Jill). |
+| `api:room()` | The paused session's stage, room, camera cut and player (0 Chris, 1 Jill). A generated room reports its origin's stage and room. |
 | `api:item_name_bytes(id[, examined])` | The font-encoded item name; with `examined`, the menu's name, which stays the unchecked one until the item's class is examined. |
 | `api:font_margin()` | The session font's left text margin. |
 | `api:glyph_width()` | The session font's fixed glyph advance: 14 on the Japanese sheet, 8 on the Western one; `nil` without a font. The vanilla save screen picks its Japanese or USA column table by it. |
@@ -1733,7 +1760,9 @@ one-per-room howl latch), `e.hunter_intro_jump_kind` (`u8`),
 screen will consume) and the read-only `e.attract_room_camera_id` (`u8`, the
 outgoing room id the scripted intro's camera selector reads) and
 `e.mansion2` (`bool`, the room is on its second mansion visit, which the
-SCA/intro selection reads).
+SCA/intro selection reads). `e.stage`, `e.room` and `e.mansion2` are the
+room's origin's (`<room origin>`), so a generated game's copy of a room
+poses its enemies as the original does.
 Read-only views: `e.id`, `e.player_character`, `e.monster_paused`,
 `e.scd_anim_param`, `e.prev_pos_x`/`y`/`z` (the stored collision-accepted
 position) and the model tint record (`e.model_tint_r`/`g`/`b`,
@@ -2243,7 +2272,11 @@ Saves belong to their pack: `re1` keeps `save_dir` itself, and every other
 base pack, RE2 and generated games included, uses `<save_dir>/<pack id>/`.
 Screen scripts' `<save_dir>` means that folder. A Chris with eight slots keeps
 Rebecca's overlapped save slots in an extra save trailer (`AKY\x04`), so a
-six-slot game's saves stay byte-identical to the original's.
+six-slot game's saves stay byte-identical to the original's. Likewise a save
+in a room the block cannot name (a long id) keeps it in the `AKY\x05`
+trailer, and the block names the room's origin.
+
+Under `DOOR_RANDOMIZER` the map screen is off.
 
 ### Script guards
 
