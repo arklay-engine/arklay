@@ -3,7 +3,7 @@
 //! into a configuration value, and the saved configuration file.
 //!
 //! Nothing here names an option. The screen is generated from
-//! [`Definition`]: one page per definition page, a heading per group, and per
+//! [`Definition`]: a tab per definition page, a group per titled group, and per
 //! item the control its [`Kind`] asks for (a switch is a toggle, a dropdown a
 //! choice, a range or percent a slider), with the item's label and
 //! description. A change to the definition (a new option, a new weapon in the
@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use arklay_biorand::config::{Config, Definition, Item, Kind, Value as Setting};
+use arklay_biorand::config::{Config, Definition, Item, Kind, Page, Value as Setting};
 
 use crate::gui::dom::Value;
 
@@ -49,50 +49,131 @@ pub fn complete(definition: &Definition, saved: &Config) -> Config {
     Config::defaults(definition).merge(saved)
 }
 
-/// One row of a page: a group heading, or an option.
-pub struct Row<'a> {
-    /// The option, `None` for a heading.
-    pub item: Option<&'a Item>,
-    /// The row's value for the UI store.
-    pub ui: Value,
+/// One entry of a page's list: a titled group of options, or what an
+/// untitled group puts straight into the list.
+pub enum Entry<'a> {
+    /// A titled group, with its warning, which shows above its options.
+    Group {
+        label: &'a str,
+        warning: Option<&'a str>,
+        items: &'a [Item],
+    },
+    /// The warning of an untitled group.
+    Warning(&'a str),
+    /// An option of an untitled group.
+    Item(&'a Item),
 }
 
-/// The titles of the definition's pages.
-pub fn page_titles(definition: &Definition) -> Vec<&str> {
-    definition
-        .pages
-        .iter()
-        .map(|page| page.label.as_str())
-        .collect()
-}
-
-/// The rows of page `page`, showing the values in `config`.
-pub fn rows<'a>(definition: &'a Definition, page: usize, config: &Config) -> Vec<Row<'a>> {
-    let Some(page) = definition.pages.get(page) else {
-        return Vec::new();
-    };
-    let mut rows = Vec::new();
+/// The entries of `page`, in order.
+pub fn entries(page: &Page) -> Vec<Entry<'_>> {
+    let mut entries = Vec::new();
     for group in &page.groups {
-        if !group.label.is_empty() || group.warning.is_some() {
-            rows.push(Row {
-                item: None,
-                ui: Value::map([
-                    ("heading", Value::from(group.label.as_str())),
-                    (
-                        "warning",
-                        Value::from(group.warning.as_deref().unwrap_or("")),
-                    ),
-                ]),
-            });
-        }
-        for item in &group.items {
-            rows.push(Row {
-                item: Some(item),
-                ui: item_row(item, config),
+        if group.label.is_empty() {
+            if let Some(warning) = group.warning.as_deref() {
+                entries.push(Entry::Warning(warning));
+            }
+            entries.extend(group.items.iter().map(Entry::Item));
+        } else {
+            entries.push(Entry::Group {
+                label: &group.label,
+                warning: group.warning.as_deref(),
+                items: &group.items,
             });
         }
     }
-    rows
+    entries
+}
+
+/// The pages for the UI store: a tab each, whose list holds the page's
+/// [`entries`]. An entry sets `group` and `rows` for a group, `warning` for a
+/// warning, or the control of an option (`toggle`, `choice` or `slider`); the
+/// markup hides what an entry leaves nil or empty.
+pub fn pages(definition: &Definition, config: &Config) -> Value {
+    Value::list(
+        definition
+            .pages
+            .iter()
+            .map(|page| {
+                Value::map([
+                    ("label", Value::from(page.label.as_str())),
+                    (
+                        "entries",
+                        Value::list(
+                            entries(page)
+                                .iter()
+                                .map(|entry| entry_ui(entry, config))
+                                .collect(),
+                        ),
+                    ),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// A row of the UI store: a group's, a warning's or an option's, with every
+/// field the markup reads.
+fn row(
+    group: Option<(&str, Vec<Value>)>,
+    warning: &str,
+    control: Option<(&'static str, Value)>,
+) -> Value {
+    let (label, rows) = group.unzip();
+    let mut fields = vec![
+        ("group", Value::from(label.is_some())),
+        ("label", Value::from(label.unwrap_or(""))),
+        ("rows", Value::list(rows.unwrap_or_default())),
+        ("warning", Value::from(warning)),
+        ("toggle", Value::Nil),
+        ("choice", Value::Nil),
+        ("slider", Value::Nil),
+    ];
+    if let Some((name, def)) = control {
+        fields.retain(|(key, _)| *key != name);
+        fields.push((name, def));
+    }
+    Value::map(fields)
+}
+
+/// An entry's row.
+fn entry_ui(entry: &Entry<'_>, config: &Config) -> Value {
+    match entry {
+        Entry::Group {
+            label,
+            warning,
+            items,
+        } => {
+            let mut rows: Vec<Value> = warning.iter().map(|w| row(None, w, None)).collect();
+            rows.extend(items.iter().map(|item| item_row(item, config)));
+            row(Some((*label, rows)), "", None)
+        }
+        Entry::Warning(warning) => row(None, warning, None),
+        Entry::Item(item) => item_row(item, config),
+    }
+}
+
+/// The option a changed store path names, such as
+/// `biorand_config.pages.1.entries.3.rows.2.choice.value` (the third row of
+/// a group; a group's warning is a row too) or
+/// `biorand_config.pages.0.entries.0.toggle.value` (an untitled group's).
+pub fn changed_item<'a>(definition: &'a Definition, path: &str) -> Option<&'a Item> {
+    let mut parts = path.strip_prefix("biorand_config.pages.")?.split('.');
+    let page = definition.pages.get(parts.next()?.parse::<usize>().ok()?)?;
+    if parts.next()? != "entries" {
+        return None;
+    }
+    let entry = entries(page).into_iter().nth(parts.next()?.parse().ok()?)?;
+    match entry {
+        Entry::Item(item) => Some(item),
+        Entry::Group { warning, items, .. } => {
+            if parts.next()? != "rows" {
+                return None;
+            }
+            let row: usize = parts.next()?.parse().ok()?;
+            items.get(row.checked_sub(usize::from(warning.is_some()))?)
+        }
+        Entry::Warning(_) => None,
+    }
 }
 
 /// The percentage a fraction is shown as.
@@ -185,16 +266,7 @@ pub fn control(item: &Item, config: &Config) -> Value {
 /// An item's row: only the control of its kind is set, which hides the
 /// others.
 fn item_row(item: &Item, config: &Config) -> Value {
-    let (control, def) = control_def(item, config);
-    let mut row = vec![
-        ("heading", Value::Nil),
-        ("toggle", Value::Nil),
-        ("choice", Value::Nil),
-        ("slider", Value::Nil),
-    ];
-    row.retain(|(key, _)| *key != control);
-    row.push((control, def));
-    Value::map(row)
+    row(None, "", Some(control_def(item, config)))
 }
 
 /// A number as a setting: whole numbers are ints, as staging reads them.
@@ -222,15 +294,6 @@ pub fn set(item: &Item, shown: i64, config: &mut Config) {
         Kind::Percent { .. } => number((shown as f64 / 100.0 * 1e6).round() / 1e6),
     };
     config.set(item.id.clone(), value);
-}
-
-/// The row a store path like `biorand_config.rows.7.slider.value` names.
-pub fn changed_row(path: &str) -> Option<usize> {
-    path.strip_prefix("biorand_config.rows.")?
-        .split('.')
-        .next()?
-        .parse()
-        .ok()
 }
 
 #[cfg(test)]
@@ -262,45 +325,98 @@ pub(crate) mod tests {
         row.at(&format!("{control}.{key}")).unwrap()
     }
 
+    /// The row of every option in `pages`, with the store path it is at.
+    fn option_rows(pages: &Value) -> Vec<(String, &Value)> {
+        let mut found = Vec::new();
+        for (p, page) in pages.as_list().iter().enumerate() {
+            for (e, entry) in page.at("entries").unwrap().as_list().iter().enumerate() {
+                let base = format!("biorand_config.pages.{p}.entries.{e}");
+                if entry.at("group").unwrap().truthy() {
+                    for (r, row) in entry.at("rows").unwrap().as_list().iter().enumerate() {
+                        found.push((format!("{base}.rows.{r}"), row));
+                    }
+                } else {
+                    found.push((base, entry));
+                }
+            }
+        }
+        found
+            .into_iter()
+            .filter(|(_, row)| {
+                ["toggle", "choice", "slider"]
+                    .iter()
+                    .any(|control| row.at(control).unwrap().truthy())
+            })
+            .collect()
+    }
+
     #[test]
     fn every_item_of_the_definition_gets_a_row_with_its_control() {
         let definition = definition_for_tests();
         let config = Config::defaults(&definition);
-        let mut items = 0;
-        for page in 0..definition.pages.len() {
-            for row in rows(&definition, page, &config) {
-                let Some(item) = row.item else {
-                    assert!(
-                        row.ui.at("heading").unwrap().truthy() || row.ui.at("warning").is_some()
-                    );
-                    continue;
-                };
-                items += 1;
-                let control = match item.kind {
-                    Kind::Switch => "toggle",
-                    Kind::Dropdown { .. } => "choice",
-                    _ => "slider",
-                };
-                for other in ["toggle", "choice", "slider"] {
-                    assert_eq!(row.ui.at(other).unwrap().truthy(), other == control);
+        let pages = pages(&definition, &config);
+        assert_eq!(pages.as_list().len(), definition.pages.len());
+        let rows = option_rows(&pages);
+        assert_eq!(rows.len(), definition.items().count());
+        for (path, ui) in rows {
+            let item = changed_item(&definition, &format!("{path}.toggle.value"))
+                .unwrap_or_else(|| panic!("{path} names no option"));
+            let control = match item.kind {
+                Kind::Switch => "toggle",
+                Kind::Dropdown { .. } => "choice",
+                _ => "slider",
+            };
+            for other in ["toggle", "choice", "slider"] {
+                assert_eq!(ui.at(other).unwrap().truthy(), other == control, "{path}");
+            }
+            assert_eq!(
+                field(ui, control, "label").to_string(),
+                match &item.category {
+                    Some(category) => format!("{} [{}]", item.label, category.label),
+                    None => item.label.clone(),
                 }
+            );
+            // A default config shows every item at its default.
+            assert_eq!(
+                field(ui, control, "value"),
+                field(ui, control, "default"),
+                "{}",
+                item.id
+            );
+        }
+    }
+
+    #[test]
+    fn titled_groups_are_native_groups_and_untitled_ones_are_bare_rows() {
+        let definition = definition_for_tests();
+        let pages = pages(&definition, &Config::defaults(&definition));
+        for (page, ui) in definition.pages.iter().zip(pages.as_list().iter()) {
+            let entries = ui.at("entries").unwrap().as_list();
+            let titled = page.groups.iter().filter(|g| !g.label.is_empty());
+            let untitled: usize = page
+                .groups
+                .iter()
+                .filter(|g| g.label.is_empty())
+                .map(|g| g.items.len() + usize::from(g.warning.is_some()))
+                .sum();
+            assert_eq!(entries.len(), titled.clone().count() + untitled);
+            let groups: Vec<_> = entries
+                .iter()
+                .filter(|entry| entry.at("group").unwrap().truthy())
+                .collect();
+            for (group, ui) in titled.zip(groups) {
+                assert_eq!(ui.at("label").unwrap().to_string(), group.label);
+                // A warning is the group's first row, then its options.
+                let rows = ui.at("rows").unwrap().as_list();
                 assert_eq!(
-                    field(&row.ui, control, "label").to_string(),
-                    match &item.category {
-                        Some(category) => format!("{} [{}]", item.label, category.label),
-                        None => item.label.clone(),
-                    }
+                    rows.len(),
+                    group.items.len() + usize::from(group.warning.is_some())
                 );
-                // A default config shows every item at its default.
-                assert_eq!(
-                    field(&row.ui, control, "value"),
-                    field(&row.ui, control, "default"),
-                    "{}",
-                    item.id
-                );
+                if let Some(warning) = &group.warning {
+                    assert_eq!(rows[0].at("warning").unwrap().to_string(), *warning);
+                }
             }
         }
-        assert_eq!(items, definition.items().count());
     }
 
     #[test]
@@ -398,8 +514,23 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_changed_row_is_named_by_its_store_path() {
-        assert_eq!(changed_row("biorand_config.rows.12.slider.value"), Some(12));
-        assert_eq!(changed_row("update.channel.value"), None);
+    fn a_changed_path_names_its_option() {
+        let definition = definition_for_tests();
+        let config = Config::defaults(&definition);
+        let pages = pages(&definition, &config);
+        // Every row maps back to the option it shows, in a group (after any
+        // warning) or bare.
+        for (path, ui) in option_rows(&pages) {
+            let control = ["toggle", "choice", "slider"]
+                .into_iter()
+                .find(|control| ui.at(control).unwrap().truthy())
+                .unwrap();
+            let item = changed_item(&definition, &format!("{path}.{control}.value")).unwrap();
+            let label = field(ui, control, "label").to_string();
+            assert!(label.starts_with(&item.label), "{path}: {label}");
+        }
+        assert!(changed_item(&definition, "update.channel.value").is_none());
+        assert!(changed_item(&definition, "biorand_config.pages.99.entries.0").is_none());
+        assert!(changed_item(&definition, "biorand_config.pages.0.entries.99").is_none());
     }
 }

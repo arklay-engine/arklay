@@ -534,11 +534,6 @@ struct Launcher {
     /// The option definition of the base game's map, and the base pack it
     /// was read from.
     biorand_def: Option<(PathBuf, BiorandDefinition)>,
-    /// The definition page the configuration screen shows.
-    biorand_page: usize,
-    /// The option id of each row the configuration screen shows (`None` for
-    /// a heading).
-    biorand_rows: Vec<Option<String>>,
     /// Whether the seed's pack is already what the options would make.
     biorand_current: bool,
     spoiler: Option<Spoiler>,
@@ -604,8 +599,6 @@ impl Launcher {
             biorand_cfg: biorand_config::load(&biorand_config::config_path()),
             biorand_path: biorand_config::config_path(),
             biorand_def: None,
-            biorand_page: 0,
-            biorand_rows: Vec::new(),
             biorand_current: false,
             spoiler: None,
             update_job: None,
@@ -959,25 +952,9 @@ impl Launcher {
         let Some((_, def)) = &self.biorand_def else {
             return;
         };
-        let titles = biorand_config::page_titles(def);
-        let page = self.biorand_page.min(titles.len().saturating_sub(1));
-        let rows = biorand_config::rows(def, page, &self.biorand_cfg);
         self.ui.set(
-            "biorand_config.page",
-            format!(
-                "{} ({}/{})",
-                titles.get(page).copied().unwrap_or(""),
-                page + 1,
-                titles.len()
-            ),
-        );
-        self.biorand_rows = rows
-            .iter()
-            .map(|row| row.item.map(|item| item.id.clone()))
-            .collect();
-        self.ui.set(
-            "biorand_config.rows",
-            Value::list(rows.into_iter().map(|row| row.ui).collect()),
+            "biorand_config.pages",
+            biorand_config::pages(def, &self.biorand_cfg),
         );
     }
 
@@ -1450,23 +1427,11 @@ impl Launcher {
             "biorand_generate" => self.start_biorand(self.biorand_seed.parse().ok(), None),
             "biorand_config_screen" => {
                 if self.load_biorand_definition() {
-                    self.biorand_page = 0;
                     self.enter(Screen::BiorandConfig);
                 } else {
                     let line = format!("Install {} from Install / Rebuild.", Game::Re1.title());
                     self.show_message("NO GAME TO CONFIGURE", &[&line], Screen::Biorand);
                 }
-            }
-            "biorand_page" => {
-                let pages = self
-                    .biorand_def
-                    .as_ref()
-                    .map_or(1, |(_, def)| def.pages.len());
-                let step = arg.as_int().unwrap_or(0);
-                self.biorand_page =
-                    (self.biorand_page as i64 + step).rem_euclid(pages as i64) as usize;
-                self.publish();
-                self.ui.set_focus_index(0);
             }
             "biorand_reset" => {
                 if let Some((_, def)) = &self.biorand_def {
@@ -1562,8 +1527,12 @@ impl Launcher {
         let Some(index) = value.as_int() else {
             return;
         };
-        if let Some(row) = biorand_config::changed_row(path) {
-            let id = self.biorand_rows.get(row).cloned().flatten();
+        if path.starts_with("biorand_config.") {
+            let id = self
+                .biorand_def
+                .as_ref()
+                .and_then(|(_, def)| biorand_config::changed_item(def, path))
+                .map(|item| item.id.clone());
             self.set_biorand_option(id.as_deref(), index);
             return;
         }
@@ -1749,8 +1718,8 @@ impl Launcher {
             SDL_SCANCODE_DOWN | SDL_SCANCODE_S => GuiKey::Down,
             SDL_SCANCODE_LEFT | SDL_SCANCODE_A => GuiKey::Left,
             SDL_SCANCODE_RIGHT | SDL_SCANCODE_D => GuiKey::Right,
-            SDL_SCANCODE_Q if options => GuiKey::TabPrev,
-            SDL_SCANCODE_E if options => GuiKey::TabNext,
+            SDL_SCANCODE_Q if options || self.screen() == Screen::BiorandConfig => GuiKey::TabPrev,
+            SDL_SCANCODE_E if options || self.screen() == Screen::BiorandConfig => GuiKey::TabNext,
             SDL_SCANCODE_1 if options => GuiKey::SubPrev,
             SDL_SCANCODE_3 if options => GuiKey::SubNext,
             SDL_SCANCODE_TAB if options => GuiKey::ResetAll,
@@ -3653,10 +3622,12 @@ mod tests {
         launcher.publish();
 
         // The first row is the player: a choice over Chris, Jill and Random.
-        assert_eq!(launcher.biorand_rows[0].as_deref(), Some("player"));
-        let page = launcher.ui.get("biorand_config.rows");
-        assert_eq!(page.at("0.choice.value"), Some(&Value::Int(2)));
-        launcher.changed("biorand_config.rows.0.choice.value", &Value::Int(1));
+        let pages = launcher.ui.get("biorand_config.pages");
+        assert_eq!(pages.at("0.entries.0.choice.value"), Some(&Value::Int(2)));
+        launcher.changed(
+            "biorand_config.pages.0.entries.0.choice.value",
+            &Value::Int(1),
+        );
         assert_eq!(launcher.biorand_cfg.get_str("player", ""), "Jill");
         assert_eq!(
             biorand_config::load(&launcher.biorand_path).get_str("player", ""),
@@ -3674,19 +3645,24 @@ mod tests {
             "Chris"
         );
 
-        // Pages turn and wrap, and reset restores the defaults.
-        let pages = launcher.biorand_def.as_ref().unwrap().1.pages.len();
-        let display_free = |launcher: &mut Launcher, step: i64| {
-            let page = (launcher.biorand_page as i64 + step).rem_euclid(pages as i64);
-            launcher.biorand_page = page as usize;
-            launcher.publish();
-        };
-        display_free(&mut launcher, -1);
-        assert_eq!(launcher.biorand_page, pages - 1);
-        assert!(launcher.biorand_rows.iter().any(Option::is_some));
-        display_free(&mut launcher, 1);
-        assert_eq!(launcher.biorand_page, 0);
+        // An option inside a titled group edits too: the door segments.
+        let pages = launcher.ui.get("biorand_config.pages");
+        let mut path = None;
+        for (p, page) in pages.as_list().iter().enumerate() {
+            for (e, entry) in page.at("entries").unwrap().as_list().iter().enumerate() {
+                for (r, row) in entry.at("rows").unwrap().as_list().iter().enumerate() {
+                    let label = row.at("slider.label").map(ToString::to_string);
+                    if label.as_deref() == Some("Number of Segments") {
+                        path = Some(format!("biorand_config.pages.{p}.entries.{e}.rows.{r}"));
+                    }
+                }
+            }
+        }
+        let path = path.expect("the door segments slider is in a group");
+        launcher.changed(&format!("{path}.slider.value"), &Value::Int(5));
+        assert_eq!(launcher.biorand_cfg.get_int("doors/segments", 0), 5);
 
+        // Reset restores the defaults.
         let def = launcher.biorand_def.as_ref().unwrap().1.clone();
         launcher.biorand_cfg = BiorandSettings::defaults(&def);
         launcher.save_biorand_config();
