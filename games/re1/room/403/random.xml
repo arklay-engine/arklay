@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="403" name="GUARDHOUSE SAVE" tags="guardhouse box safe save">
+    <door id="0" target="400:2">
+      <entrance x="8600" y="0" z="9000" d="1024"/>
+    </door>
+    <item id="3" flag="166" type="16" amount="6" group="8" name="CLIP IN BOOKCASE" player="chris"/>
+    <item id="3" flag="167" type="16" amount="6" group="8" name="GRENADE ROUNDS IN BOOKCASE" player="jill"/>
+    <item id="4" flag="180" type="65" amount="1" group="8" name="FIRST AID SPRAY"/>
+    <enemies exclude="4" max-difficulty="1" restricted="true"/>
+  </room>
+  <spot x="3384" y="0" z="6672" d="1080"/>
+  <spot x="5277" y="0" z="7920" d="2040"/>
+  <spot x="6310" y="0" z="5424" d="4032"/>
+</random>

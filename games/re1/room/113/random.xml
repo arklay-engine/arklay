@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="113" name="1F EAST BATHROOM" tags="mansion mansion2able">
+    <door id="0" target="109:2">
+      <entrance x="2800" y="0" z="2400" d="3072"/>
+    </door>
+    <!-- staging typeOffsets: 0x1CBC5 -->
+    <item id="1" flag="3" type="61" amount="1" group="1" name="IN BATHTUB"/>
+    <enemies exclude="4" max-difficulty="0"/>
+  </room>
+  <spot x="5862" y="0" z="4653" d="2128"/>
+  <spot x="9039" y="0" z="5193" d="2128"/>
+</random>

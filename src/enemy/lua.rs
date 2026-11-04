@@ -1369,7 +1369,8 @@ mod imp {
                 Ok(api.game_ref().attract_room_camera_id())
             });
             // Whether the room is on its second mansion visit.
-            fields.add_field_method_get("mansion2", |_lua, api| Ok(api.game_ref().id.mansion2));
+            fields
+                .add_field_method_get("mansion2", |_lua, api| Ok(api.game_ref().origin().mansion2));
 
             // The zombie's state-word aliases and scratch views. The four
             // bytes at +0x84 and their mirror at +0x184 are read and written
@@ -1592,9 +1593,10 @@ mod imp {
                 Ok(())
             });
 
-            // The room the entity belongs to, for the story-flag pose variants.
-            fields.add_field_method_get("stage", |_lua, api| Ok(api.game_ref().id.stage));
-            fields.add_field_method_get("room", |_lua, api| Ok(api.game_ref().id.room));
+            // The room the entity belongs to, for the story-flag pose variants:
+            // the room's origin, the original room the behaviour is keyed to.
+            fields.add_field_method_get("stage", |_lua, api| Ok(api.game_ref().origin().stage));
+            fields.add_field_method_get("room", |_lua, api| Ok(api.game_ref().origin().room));
             // The per-frame platform random snapshot (`g_RandSeed`).
             fields.add_field_method_get("rand_seed", |_lua, api| Ok(api.game_ref().rand_seed));
             // `MSF2_ATTRACT_DEMO` (main_state_flags2 bit 0x10000000): attract
@@ -2507,6 +2509,12 @@ mod imp {
                 Ok(())
             });
 
+            // Whether Yawn's bite poisons with the original's status (`false`
+            // means ordinary poison under `BR_YAWN_POISON`).
+            methods.add_method("yawn_poison_original", |_lua, api, ()| {
+                Ok(api.game_ref().yawn_bite_poison() == crate::game::YawnPoison::Original)
+            });
+
             // The wasp grab pose: pin both entities' animation offsets, set
             // the attacked flag and play the grabbed animation.
             methods.add_method_mut("grab_player", |_lua, api, ()| {
@@ -3150,7 +3158,7 @@ mod imp {
             // caller owns the playing bit; an id with no line in the package
             // simply misses at load.
             methods.add_method_mut("play_voice", |_lua, api, id: i64| {
-                let row = api.game_ref().id.table_row() as u8;
+                let row = api.game_ref().origin().table_row() as u8;
                 let volume = if row == 0 && id == 0x33 { -300 } else { 0 };
                 let game = api.game();
                 game.voice.request = Some(crate::game::VoiceRequest {
@@ -8435,6 +8443,33 @@ end
         game.entities[1].set_sink_wobble(0);
         assert!(wasp_step(&mut host, &mut game, &pack, &clips));
         assert_eq!(game.entities[1].action_state, 4);
+        assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
+    }
+
+    /// In an enemy randomizer game (system flag 0xC2) a light kill still
+    /// leaves the crawling corpse, but it raises the death event rather than
+    /// respawning at the nest, so the wasp stays dead.
+    #[test]
+    fn wasp_dies_for_good_in_an_enemy_randomizer_game() {
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
+        let (clips, _, _) = wasp_model();
+        let mut game = wasp_game(0);
+        game.flags[5].apply(0xC2, 0);
+        let mut host = LuaEnemyHost::new();
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        game.entities[1].set_state(3);
+        game.entities[1].action_state = 0;
+        game.entities[1].action_behavior = 0;
+        game.entities[1].hit_state = 0x10;
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        assert_eq!(game.entities[1].action_state, 2, "the corpse crawls");
+        assert!(!game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
+
+        game.entities[1].set_sink_wobble(0);
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        assert_eq!(game.entities[1].state(), 3, "it does not re-run init");
+        assert_eq!(game.entities[1].action_state, 4);
+        assert_eq!(game.entities[1].wasp_respawns, 0);
         assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
     }
 
@@ -16608,7 +16643,7 @@ mod computer_arms_tests {
 
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
-            for id in [0x0Du8, 0x12] {
+            for id in [0x0Bu8, 0x0D, 0x12] {
                 let path = format!("enemy/{id:02x}/enemy.lua");
                 writer.add(&path, source(id).as_bytes().to_vec()).unwrap();
             }
@@ -16864,6 +16899,72 @@ mod computer_arms_tests {
             assert_eq!(game.health_status & 0x20, 0x20, "the first Yawn poisons");
             assert!(game.flags[usize::from(crate::game::BANK_SCENARIO2)].bit(0x43));
             assert_eq!(game.entities[1].yawn_bite_dir(), -1);
+        }
+
+        #[test]
+        fn a_killed_neptune_dies_only_under_br_neptune_killable() {
+            for killable in [false, true] {
+                let pack = pack();
+                let (mut game, clips) = yawn(0x0B, 0);
+                if killable {
+                    game.apply_flag(5, crate::scd::opcode::system::BR_NEPTUNE_KILLABLE, 0);
+                }
+                game.entities[1].set_state(3);
+                game.entities[1].health = -5;
+                let mut host = LuaEnemyHost::new();
+                step(&mut host, &mut game, &pack, &clips);
+                let raised = game.flags[usize::from(crate::game::BANK_ENEMIES)].bit(5);
+                assert_eq!(raised, killable, "the death event, killable {killable}");
+                assert_eq!(
+                    game.entities[1].ignore() != 0,
+                    killable,
+                    "the death is claimed"
+                );
+            }
+        }
+
+        #[test]
+        fn br_yawn_poison_makes_the_bite_ordinary_until_room_100_is_visited() {
+            use crate::scd::opcode::system;
+            for (visited, original) in [(false, false), (true, true)] {
+                let pack = pack();
+                let (mut game, clips) = yawn(0x0D, 0);
+                game.apply_flag(5, system::BR_YAWN_POISON, 0);
+                if visited {
+                    game.mark_room_visited(crate::state::RoomId {
+                        stage: 1,
+                        room: 0,
+                        ..Default::default()
+                    });
+                }
+                let mut host = LuaEnemyHost::new();
+                assert!(step(&mut host, &mut game, &pack, &clips));
+                game.entities[1].action_behavior = 2;
+                game.entities[1].action_state = 1;
+                game.entities[1].set_yawn_form(0);
+                game.entities[1].animation_id = 3;
+                game.entities[1].animation_frame_id = 13;
+                game.entities[1].timing_control = 0;
+                game.entities[1].blend_counter = 0;
+                game.entities[0].pos = [1000, 0, 0];
+                game.entities[1].pos = [0, 0, 0];
+                game.entities[0].health = 100;
+                assert!(step(&mut host, &mut game, &pack, &clips));
+                assert_eq!(
+                    game.health_status & 0x20 != 0,
+                    original,
+                    "visited {visited}"
+                );
+                assert_eq!(
+                    game.health_status & 0x02 != 0,
+                    !original,
+                    "visited {visited}"
+                );
+                assert_eq!(
+                    game.flags[usize::from(crate::game::BANK_SCENARIO2)].bit(0x43),
+                    original
+                );
+            }
         }
 
         #[test]

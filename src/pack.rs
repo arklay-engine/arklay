@@ -185,6 +185,25 @@ impl PackWriter {
         self.add_shared(path, Arc::new(data))
     }
 
+    /// Add one entry as another pack stores it ([`Pack::read_stored`]): a
+    /// zstd frame (`zstd`) is kept as it is, so copying a pack's entries never
+    /// compresses them again, and [`Self::compress_entries`] skips it. Its
+    /// plain size is the frame's declared content size, else its stored size.
+    pub fn add_stored(&mut self, path: &str, data: Vec<u8>, zstd: bool) -> Result<()> {
+        if !zstd {
+            return self.add(path, data);
+        }
+        let plain_len = match zstd::zstd_safe::get_frame_content_size(&data) {
+            Ok(Some(size)) => usize::try_from(size).unwrap_or(data.len()),
+            _ => data.len(),
+        };
+        self.add(path, data)?;
+        let entry = self.entries.last_mut().expect("the entry just added");
+        entry.compression = Compression::Zstd;
+        entry.plain_len = plain_len;
+        Ok(())
+    }
+
     /// Add one entry whose bytes may be shared with other entries: every
     /// entry added with a clone of the same `Arc` holds one copy in memory and
     /// is compressed once. The written pack is the same as adding each copy
@@ -1261,6 +1280,9 @@ pub struct Pack {
     /// `htexture/` replacements across the pack and its layers, indexed on
     /// first use.
     htexture: std::sync::OnceLock<crate::htexture::HdTable>,
+    /// Each room's origin across the pack and its layers, scanned on first
+    /// use ([`Pack::room_origins`]).
+    room_origins: std::sync::OnceLock<crate::state::RoomOrigins>,
 }
 
 impl Pack {
@@ -1316,6 +1338,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             htexture: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1365,12 +1388,14 @@ impl Pack {
             ));
             pack.manifest = Some(manifest::Manifest::base(id));
         }
-        let base_id = pack
+        let base_manifest = pack
             .manifest
             .as_ref()
-            .expect("a base manifest always exists here")
-            .id
-            .clone();
+            .expect("a base manifest always exists here");
+        let base_id = base_manifest.id.clone();
+        // A game derived from another (a BioRand pack from `re1`) names that
+        // game as its own `base`, and the mods made for it apply too.
+        let derived_from = base_manifest.base.clone();
 
         let mut applied = Vec::with_capacity(layers.len());
         let mut discovered_ids: HashSet<String> = HashSet::new();
@@ -1403,6 +1428,7 @@ impl Pack {
             // mod builder's check.
             if let Some(declared) = &manifest.base
                 && declared != &base_id
+                && derived_from.as_ref() != Some(declared)
                 && !opened.only_hd_textures()
             {
                 // A shared mods folder holds every game's mods; an explicit
@@ -1458,6 +1484,7 @@ impl Pack {
         });
         pack.overlays = applied.into_iter().map(|(_, layer)| layer).collect();
         pack.htexture = std::sync::OnceLock::new();
+        pack.room_origins = std::sync::OnceLock::new();
         pack.warnings = warnings;
         Ok(pack)
     }
@@ -1559,6 +1586,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             htexture: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1592,6 +1620,27 @@ impl Pack {
             return Ok(Cow::Owned(data));
         }
         entry_bytes(&self.data, entry)
+    }
+
+    /// This pack's own entry `path` as stored, and whether the bytes are a
+    /// zstd frame, for copying it into another pack with
+    /// [`PackWriter::add_stored`] without decompressing it. Mod layers are not
+    /// consulted; a directory pack's entries read raw.
+    pub fn read_stored(&self, path: &str) -> Result<(Cow<'_, [u8]>, bool)> {
+        let index = self
+            .lookup
+            .get(&path.to_ascii_lowercase())
+            .copied()
+            .ok_or_else(|| anyhow!("pack entry not found: {path}"))?;
+        let entry = &self.entries[index];
+        if entry.file.is_some() {
+            return Ok((self.entry_bytes(entry)?, false));
+        }
+        let stored = &self.data[entry.offset..entry.offset + entry.length];
+        Ok((
+            Cow::Borrowed(stored),
+            entry.compression == Compression::Zstd,
+        ))
     }
 
     /// The parsed `manifest.toml`, when the pack carries one.
@@ -1827,6 +1876,13 @@ impl Pack {
     /// table of contents where [`Pack::paths`] is the merged view.
     pub fn own_paths(&self) -> impl Iterator<Item = &str> {
         self.entries.iter().map(|entry| entry.path.as_str())
+    }
+
+    /// Where each room of the pack and its layers was made from
+    /// ([`crate::room::scan_origins`]).
+    pub fn room_origins(&self) -> &crate::state::RoomOrigins {
+        self.room_origins
+            .get_or_init(|| crate::room::scan_origins(self))
     }
 
     /// The `htexture/` replacements this pack and its layers carry.
@@ -3054,6 +3110,12 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
         }
         .render()
@@ -3270,6 +3332,37 @@ mod tests {
             &[(manifest::ENTRY, &mod_manifest("empty", "re1", 0))],
         );
         assert!(Pack::open_layered(&base, &[empty]).is_err());
+    }
+
+    #[test]
+    fn a_mod_for_a_game_applies_to_a_pack_derived_from_it() {
+        let dir = TempDir::new("derived-base");
+        let derived = dir.join("biorand-000042.akpak");
+        let mut manifest = manifest::Manifest::base("biorand-000042");
+        manifest.base = Some("re1".to_string());
+        write_pack(&derived, &[(manifest::ENTRY, manifest.render().as_bytes())]);
+        let movies = dir.join("hd.akpak");
+        write_pack(
+            &movies,
+            &[
+                (manifest::ENTRY, &mod_manifest("hd", "re1", 0)),
+                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+                ("movie/1a.mp4", b"film"),
+            ],
+        );
+        let pack = Pack::open_layered(&derived, std::slice::from_ref(&movies)).unwrap();
+        assert!(pack.contains("movie/1a.mp4"));
+
+        // Another game's mod still does not.
+        let other = dir.join("other.akpak");
+        write_pack(
+            &other,
+            &[
+                (manifest::ENTRY, &mod_manifest("other", "re2", 0)),
+                ("movie/1a.mp4", b"film"),
+            ],
+        );
+        assert!(Pack::open_layered(&derived, &[other]).is_err());
     }
 
     #[test]

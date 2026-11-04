@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="40F" name="GUARDHOUSE PLANT 42 ROOTS" tags="guardhouse">
+    <door id="0" target="40E:1">
+      <entrance x="2800" y="0" z="12300" d="0"/>
+    </door>
+    <flag name="VJOLT_ROOTS" requires="item(27)"/>
+    <item id="1" flag="105" type="61" amount="1" group="8" name="SMALL KEY ON BOX" hidden="true"/>
+    <enemies id="0" kind="npc"/>
+    <enemies exclude="3 4 7 10" max-difficulty="0"/>
+  </room>
+  <spot x="3179" y="0" z="3208" d="3208"/>
+  <spot x="5091" y="0" z="7943" d="3144"/>
+  <spot x="5329" y="0" z="10176" d="56"/>
+  <spot x="5638" y="0" z="12268" d="0"/>
+  <spot x="8934" y="0" z="13150" d="2400"/>
+  <spot x="9352" y="0" z="9319" d="1072"/>
+</random>

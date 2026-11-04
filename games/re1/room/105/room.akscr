@@ -325,7 +325,11 @@ proc init
         }
         if (ck(FG_COMMON, F_COMMON_AD, FALSE))
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_C0, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_11_ZOMBIE_LAB, EB_C0, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
     }
 }
@@ -351,7 +355,7 @@ proc main
                 aot_delete(AOT_08_USEITEM, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_09_USEITEM, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A7, FALSE);
             }
@@ -476,7 +480,7 @@ proc main
                 aot_delete(AOT_0B_USEITEM, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_0C_USEITEM, SCE_USEITEM, SAT_PLAYER);
             }
-            if (testpickup(IT_1F_KEY_EMBLEM_WOOD))
+            if (picked(AOT_07_ITEM))
             {
                 set(FG_COMMON, F_COMMON_AA, FALSE);
             }
@@ -1163,7 +1167,10 @@ event event_0E when (JILL)
         cut_auto(CUT_LOCKED);
         aot_delete(AOT_0E_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6388, 14000);
-        pos_set(ENEMY_01_ZOMBIE_LAB, 0, 350, 0, 8000, 0, 13600);
+        if (!ENEMY_RANDOMIZER)
+        {
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 350, 0, 8000, 0, 13600);
+        }
     }
     evt_disable(TASK_01);
     sleep(15);
@@ -1251,7 +1258,10 @@ event event_0E when (JILL)
     {
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
         se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
-        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0D);
+        if (!ENEMY_RANDOMIZER)
+        {
+            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0D);
+        }
     }
     do
     {
@@ -1267,7 +1277,10 @@ event event_0E when (JILL)
     {
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
         se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
-        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0D);
+        if (!ENEMY_RANDOMIZER)
+        {
+            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0D);
+        }
     }
     do
     {
@@ -1283,7 +1296,10 @@ event event_0E when (JILL)
     {
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
         se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 4500, 7800);
-        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0A);
+        if (!ENEMY_RANDOMIZER)
+        {
+            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_ACTION, AB_0A);
+        }
     }
     do
     {
@@ -1412,7 +1428,10 @@ event on_enter_2 when (JILL)
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     run
     {
-        pos_set(ENEMY_01_ZOMBIE_LAB, 0, 350, 0, 8000, 0, 13600);
+        if (!ENEMY_RANDOMIZER)
+        {
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 350, 0, 8000, 0, 13600);
+        }
         message(9, 0);
         voice_play(VOICE_PLAY, VO_102_0A_28);
     }

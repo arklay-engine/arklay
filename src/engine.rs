@@ -2361,6 +2361,8 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let character = character & 1;
+        // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
+        let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
@@ -2487,6 +2489,8 @@ impl GameSession {
         save_dir: &Path,
         options: player::Options,
     ) -> Result<Box<Self>> {
+        // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
+        let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
@@ -2513,6 +2517,7 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let id = file.room_id();
+        let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
@@ -2574,6 +2579,21 @@ impl GameSession {
         // typewriter.
         let lua = load_lua(pack);
         let mut game = game;
+        // A randomizer's system flags follow the pack, not the save: the same
+        // pack runs the same scripts on every path into a session. A save keeps
+        // none of bank 5, and loading one replaces every bank, so each path
+        // raises them here, once the state is in place.
+        let raised = pack
+            .manifest()
+            .map(crate::manifest::Manifest::system_flags)
+            .unwrap_or_default();
+        for (_, flag) in scd::opcode::system::BY_NAME {
+            // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+            game.apply_flag(5, flag, u8::from(!raised.contains(&flag)));
+        }
+        if let Some(manifest) = pack.manifest() {
+            apply_slot_counts(manifest, &mut game);
+        }
         // The run options land before `on_init`, so the hooks read them on the
         // first room as well as after a door.
         game.player_options = options;
@@ -2708,7 +2728,21 @@ impl GameSession {
         // `g_AttractMode_RoomCameraId` on a same-stage door; `init_room`
         // resets it to 0x1F. The hunter's scripted intro reads it as a camera
         // selector.
+        // Between copied rooms the scripts read it as the original would:
+        // the origin's room, when the two origins share a stage.
+        let origin_of = |id: RoomId| self.game.origins.origin_room(id);
         let attract_room_camera_id = match from {
+            Some(source)
+                if origin_of(source) != (source.stage, source.room)
+                    || origin_of(self.loaded.id) != (self.loaded.id.stage, self.loaded.id.room) =>
+            {
+                let (stage, room) = origin_of(source);
+                if stage == origin_of(self.loaded.id).0 {
+                    room
+                } else {
+                    0x1F
+                }
+            }
             Some(source) if !init_room => source.room,
             _ => 0x1F,
         };
@@ -3868,8 +3902,11 @@ impl GameSession {
             }
             let attract = self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
             let variant = self.game.flags[5].bit(game::MSF2_DEATH_VARIANT) || attract;
-            self.death
-                .start(ui::death::immediate_fade(self.loaded.id), variant, attract);
+            self.death.start(
+                ui::death::immediate_fade(self.game.origin()),
+                variant,
+                attract,
+            );
             return;
         }
         // A scripted death (the hunter pounce) arms the fade itself at its own
@@ -4517,7 +4554,8 @@ impl GameSession {
     /// the `column` slot of the loaded room's sound-table row, keyed by its
     /// bank slot like the original's `play_sfx(2, column)`.
     fn play_room_bank_sound(&mut self, pack: &Pack, column: u8) {
-        let row = sfx::room_row(self.loaded.room.table_row(), self.loaded.room.room);
+        let origin = self.loaded.room.origin();
+        let row = sfx::room_row(origin.table_row(), origin.room);
         let Some(name) = sfx::room_sound(row, usize::from(column)) else {
             return;
         };
@@ -4903,7 +4941,7 @@ impl GameSession {
         let mansion2 =
             self.game
                 .flag_test(game::BANK_SCENARIO, game::SCENARIO_FLAG_MANSION2, false);
-        let target = target.with_visit(mansion2);
+        let target = self.game.origins.with_visit(target, mansion2);
         let from = self.loaded.id;
         let loaded = load_room(pack, target)?;
         self.loaded = loaded;
@@ -5870,10 +5908,18 @@ impl GameSession {
         }
     }
 
+    /// Whether the map is off: a door-randomized game's rooms are not where
+    /// the floor plans draw them, so neither the map button nor the menu's
+    /// map tab opens it.
+    fn map_disabled(&self) -> bool {
+        self.game
+            .system_flag(crate::scd::opcode::system::DOOR_RANDOMIZER)
+    }
+
     /// Open the map tab over the frozen inventory panel. The table/art load
     /// warns and leaves the tab blank when the pack lacks the map entries.
     fn open_map(&mut self, pack: &Pack) {
-        if self.map.is_some() {
+        if self.map.is_some() || self.map_disabled() {
             return;
         }
         self.open_menu(pack);
@@ -5952,12 +5998,12 @@ impl GameSession {
         if frame.place {
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
             // `Set_door`'s `Snd_bgm_ck`.
+            let target = self.game.origins.of(session.target);
             if session.door.re2.is_some()
-                && let Some(word) = session
-                    .target
+                && let Some(word) = target
                     .stage
                     .checked_sub(1)
-                    .and_then(|stage| self.game.re2.bgm.get(stage, session.target.room))
+                    .and_then(|stage| self.game.re2.bgm.get(stage, target.room))
             {
                 let system = self.game.re2_music_place().system;
                 self.game.re2.music.leave_room(word, system);
@@ -6029,7 +6075,7 @@ impl GameSession {
         if session.door.re2.is_some() {
             // A room's first `Bg_loadPC` skips four frames, room 301's eight,
             // from the door's last one.
-            let id = self.loaded.id;
+            let id = self.game.origins.of(self.loaded.id);
             self.load_hold = if (id.stage, id.room) == (3, 1) { 7 } else { 3 };
             self.load_held = true;
         }
@@ -7626,7 +7672,7 @@ pub fn room_entry_placement(
     // the stairwell landing's neighbour may not lead back here at all, and
     // the room is entered by another of its doors.
     let arrival = entry_doors(&game.doors).into_iter().find_map(|candidate| {
-        let dest = game.door_destination(target, candidate.next_room)?;
+        let dest = game.door_leads_to(target, &candidate)?;
         if dest == target {
             return None;
         }
@@ -7635,7 +7681,7 @@ pub fn room_entry_placement(
             .doors
             .iter()
             .flatten()
-            .find(|back| game.door_destination(dest, back.next_room) == Some(target))
+            .find(|back| game.door_leads_to(dest, back) == Some(target))
             .map(|back| (back.next_pos, back.next_angle as u16 & 0x0FFF, None))
     });
     if arrival.is_some() {
@@ -7700,6 +7746,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let loaded = crate::room::load(pack, id)?;
     let (scripts, _) = room_scripts(pack, id, &loaded)?;
     let mut game = game::GameState::new(id, &loaded.state);
+    game.origins = pack.room_origins().clone();
     game.region = pack_region(pack);
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
@@ -7820,12 +7867,14 @@ const RE2_SCENARIO_B_ANGLE: u16 = 400;
 /// The new-game identity: the base pack's `start_room` ([`pack_start_room`]),
 /// else the shipped card's start room, the main hall.
 fn new_game_id(pack: &Pack, character: u8) -> RoomId {
-    pack_start_room(pack, character).unwrap_or(RoomId {
+    let id = pack_start_room(pack, character).unwrap_or(RoomId {
         stage: 1,
         room: NEW_GAME_ROOM,
         player_flag: character & 1,
         mansion2: false,
-    })
+    });
+    // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
+    pack.room_origins().with_visit(id, id.mansion2)
 }
 
 /// The new-game room a base pack's manifest names (an RE2 pack's room 100),
@@ -7867,6 +7916,7 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
         game.rebecca_inventory[..overlap].fill(game::InventoryItem::default());
     }
     crate::lua::seed_new_game_inventory(pack, game, character);
+    apply_pack_setup(pack, game);
     // `InitializeGame`'s Jill block: the first playthrough raises the main
     // hall's ink-ribbon room-items bit and the Jill first-run scenario bit.
     let second_playthrough = game.flag_test(
@@ -7878,6 +7928,48 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
         game.apply_flag(7, game::ROOM_ITEM_FLAG_MAIN_HALL_RIBBON, 0);
         game.apply_flag(game::BANK_SCENARIO2, game::SCENARIO2_FLAG_JILL_FIRST_RUN, 0);
     }
+}
+
+/// The new-game part of a generated pack's [`crate::manifest::GameSetup`]:
+/// the player's start items in place of `game/new_game.lua`'s, then the
+/// scenario flags the options set (BioRand's room 106 `ConfigureOptions`).
+/// An ordinary pack's setup is empty and changes nothing.
+fn apply_pack_setup(pack: &Pack, game: &mut game::GameState) {
+    let Some(manifest) = pack.manifest() else {
+        return;
+    };
+    apply_slot_counts(manifest, game);
+    let setup = &manifest.setup;
+    if let Some(items) = &setup.start_items {
+        game.inventory.clear();
+        let capacity = game.inventory_capacity();
+        game.inventory.extend(
+            items
+                .iter()
+                .take(capacity)
+                .map(|&(id, quantity)| game::InventoryItem { id, quantity }),
+        );
+        game.rebuild_slots();
+    }
+    for &(flag, raised) in &setup.scenario_flags {
+        // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+        game.apply_flag(game::BANK_SCENARIO, flag, u8::from(!raised));
+    }
+}
+
+/// Chris's and Jill's slot counts from `manifest` (the original's when it
+/// sets none). A save does not keep them, so every path into a game applies
+/// them.
+fn apply_slot_counts(manifest: &crate::manifest::Manifest, game: &mut game::GameState) {
+    let setup = &manifest.setup;
+    game.slot_counts = [
+        setup
+            .chris_slots
+            .map_or(game::INVENTORY_SLOTS_CHRIS, usize::from),
+        setup
+            .jill_slots
+            .map_or(game::INVENTORY_SLOTS_JILL, usize::from),
+    ];
 }
 
 /// Build the next-cycle clear-data card
@@ -9047,7 +9139,14 @@ impl App {
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         match action {
-            ScreenAction::CharSelect => self.open_select()?,
+            ScreenAction::CharSelect => {
+                // A randomizer's seed has already picked the character, and
+                // the prologue film is of a mansion it may not visit.
+                match self.pack.manifest().and_then(|manifest| manifest.character) {
+                    Some(character) => self.start_new_game(character)?,
+                    None => self.open_select()?,
+                }
+            }
             ScreenAction::SaveLoad => self.open_load()?,
             ScreenAction::NewGame { character } => {
                 // The interactive root boot plays the prologue film (id 1)
@@ -9125,6 +9224,14 @@ impl App {
     /// here the pack's `demo/` enumeration is the list. `None` when the pack
     /// ships no reels.
     fn next_attract_entry(&mut self) -> Option<String> {
+        // `BR_NO_TITLE_DEMO`: a generated pack has no demo to play.
+        if self.pack.manifest().is_some_and(|manifest| {
+            manifest
+                .system_flags()
+                .contains(&scd::opcode::system::BR_NO_TITLE_DEMO)
+        }) {
+            return None;
+        }
         if self.demos.is_empty() {
             return None;
         }
@@ -9724,6 +9831,19 @@ pub(crate) fn run_root_with_display(
     )
 }
 
+/// Where the game in `pack` keeps its saves: its own folder under `save_dir`,
+/// as a save holds no pack id and is only meaningful to the pack that wrote it.
+/// RE1 keeps the root, where every existing save is. A pack whose manifest
+/// cannot be read fails later, with a better message.
+fn pack_save_dir(pack: &Path, save_dir: &Path) -> PathBuf {
+    match crate::pack::read_manifest(pack) {
+        Ok(Some(manifest)) if manifest.id != crate::convert::BASE_PACK_ID => {
+            save_dir.join(&manifest.id)
+        }
+        _ => save_dir.to_path_buf(),
+    }
+}
+
 /// Build the capture-path new-game session and start it.
 ///
 /// The session lives here rather than in [`run_ui_impl`]'s arm: a debug build
@@ -9777,6 +9897,7 @@ fn run_ui_impl(
     authoring: Authoring<'_>,
     shared: Option<&mut Display>,
 ) -> Result<()> {
+    let save_dir = &pack_save_dir(pack, save_dir);
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -11303,9 +11424,11 @@ fn start_transition(
     };
     // A destination byte of 0x20 and up changes stage: `init_room` yields a
     // frame before its `room_set`.
-    let stage_change = match record.re2 {
-        Some(re2) => re2.stage != source.stage,
-        None => record.next_room >= 0x20,
+    let stage_change = match (record.re2, record.target) {
+        (Some(re2), _) => re2.stage != source.stage,
+        // A `<doors>` target changes stage when it names another.
+        (None, Some(target)) => target.stage != source.stage,
+        (None, None) => record.next_room >= 0x20,
     };
     // RE2's `Set_door` places the player, and `Set_room` runs from the next tick.
     let mut timeline = transition::Transition::new(animation)
@@ -11536,7 +11659,10 @@ fn place_transition_player(
     // The original snapshots the outgoing room's live enemies and tears the
     // list down before the destination's `room_set` wipes the slots. The
     // snapshot ages only when the destination room differs from the source.
-    let destination_changed = session.door.next_room as i8 != game.id.room as i8;
+    let destination_changed = match session.door.target {
+        Some(_) => (session.target.stage, session.target.room) != (game.id.stage, game.id.room),
+        None => session.door.next_room as i8 != game.id.room as i8,
+    };
     game.snapshot_enemies(destination_changed);
     game.clear_room_entities();
     // The original's door load resets the player's animation id before the
@@ -13215,7 +13341,9 @@ fn play_entity_sounds(
         let wav = match sound.name {
             game::SoundName::Room(name) => cache.load(pack, name),
             game::SoundName::Enemy { id, slot } => {
-                let room_id = u16::from(room.stage) << 8 | u16::from(room.room);
+                // An enemy's room-keyed sounds are its room's origin's.
+                let origin = room.origin();
+                let room_id = u16::from(origin.stage) << 8 | u16::from(origin.room);
                 enemy_lua
                     .enemy_sound_stems(pack, id, room_id, slot)
                     .into_iter()
@@ -14028,8 +14156,10 @@ fn blit_effect_sprite(page: &mut Image, texture: &crate::model::Texture8, v: u32
 
 /// Decode and composite the room's effect pages.
 fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> EffectPages {
-    let stage = id.table_row();
-    let room_byte = usize::from(id.room);
+    // The sheet table row is the origin's.
+    let origin = pack.room_origins().of(id);
+    let stage = origin.table_row();
+    let room_byte = usize::from(origin.room);
     let mut pages = EffectPages::default();
 
     for page in 0..4 {
@@ -14082,8 +14212,10 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
 /// `htexture/room/<id>/effect/<slot>` (`_<row>` for a variant) over each
 /// sprite's rows.
 fn build_effect_hd(pack: &Pack, id: RoomId, room: &effects::RoomEffects, pages: &mut EffectPages) {
-    let stage = usize::from(id.stage_index());
-    let room_byte = usize::from(id.room);
+    // The sheet table row is the origin's; the sprites' art is the room's own.
+    let origin = pack.room_origins().of(id);
+    let stage = usize::from(origin.stage_index());
+    let room_byte = usize::from(origin.room);
     for page in 0..4 {
         for row in 0..=3u8 {
             let index = if row == 0 {
@@ -14157,6 +14289,8 @@ fn build_effect_quads(
     tween: &mut Tween,
 ) -> Vec<EffectQuad> {
     let mut quads = Vec::new();
+    // Every table and quirk here is the origin's.
+    let id = game.origins.of(id);
     // The camera light records share the mansion's rows between its visits.
     let folded = usize::from(id.stage_index());
     let lesson_room = id.stage == STAGE_DIGIT_MANSION_2F && id.mansion2 && id.room == ROOM_LESSON;
@@ -14489,6 +14623,7 @@ fn new_game_state(
     options: player::Options,
 ) -> game::GameState {
     let mut game = game::GameState::new(id, room);
+    game.origins = pack.room_origins().clone();
     game.region = pack_region(pack);
     game.player_options = options;
     game.music = crate::music::load(pack, options);
@@ -14568,11 +14703,11 @@ fn run_re2_init(
     game.re2.player.floor = crate::sca::floor_of(game.entities[0].pos[1]);
     game.camera.locked = false;
     // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
-    let word = game
-        .id
+    let origin = game.origin();
+    let word = origin
         .stage
         .checked_sub(1)
-        .and_then(|stage| game.re2.bgm.get(stage, game.id.room))
+        .and_then(|stage| game.re2.bgm.get(stage, origin.room))
         .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
     let place = game.re2_music_place();
     game.re2.music.enter_room(word, place);
@@ -16533,6 +16668,7 @@ fn visible_objects<'a>(
 /// view axis: the original bumps the camera-composed `localMatrix.t[2]`, after
 /// the switch-zone cull, so the shift is in view space and not world Z.
 fn object_view_z_shift(room: &RoomState, record: &objects::ObjectRecord) -> i32 {
+    let room = room.origin();
     if room.stage == 3 && room.room == 0x03 && (1..5).contains(&(record.model & 0x3F)) {
         1000
     } else {
@@ -16593,6 +16729,7 @@ fn visible_items<'a>(
 /// (`DAT_00ae9ef8`) instead of sorting it by GTE depth: the flooded guardhouse
 /// rooms, the courtyard water gate and objects 0-1 of room 20B.
 fn object_fixed_depth(room: &RoomState, record: &objects::ObjectRecord) -> bool {
+    let room = room.origin();
     match room.stage % 5 {
         4 => matches!(room.room, 0x0D..=0x11),
         3 => room.room == 0x01,
@@ -16602,6 +16739,7 @@ fn object_fixed_depth(room: &RoomState, record: &objects::ObjectRecord) -> bool 
 }
 
 fn object_render_skipped(room: &RoomState, camera: usize, record: &objects::ObjectRecord) -> bool {
+    let room = room.origin();
     let model = record.model & 0x3F;
     // Guardhouse 002's mirror stand-in on camera 4.
     if room.stage == 4 && room.room == 0x06 && camera == 4 && model == 0 {
@@ -16770,6 +16908,9 @@ fn render_frame_on(
     };
     let loaded_id = id;
     let id = game.drawn_room(id);
+    // The tables and quirks keyed to a room (shadows, mask order) are its
+    // origin's.
+    let origin = game.origins.of(id);
     // Every moving thing below is recorded exactly and drawn between the
     // previous tick and this one (a no-op unless the render rate tweens).
     tween.begin(id, room.current_cut);
@@ -16796,7 +16937,7 @@ fn render_frame_on(
         masks.page_for(pack, id, room.current_cut)
     };
     let layer = page.map(|page| MaskLayer {
-        room: id,
+        room: origin,
         camera: room.current_cut,
         cut,
         page,
@@ -16884,7 +17025,7 @@ fn render_frame_on(
     } else if let Some(texture) = shadow_texture
         && game.entities[0].shadow_quad
         && shadow::visible(
-            id,
+            origin,
             room,
             room.current_cut,
             player_state,
@@ -16908,7 +17049,7 @@ fn render_frame_on(
             half_x: player_state.shadow_half_x,
             half_z: player_state.shadow_half_z,
             shift: player_state.shadow_shift,
-            lift: shadow::offset_y(id, room.current_cut),
+            lift: shadow::offset_y(origin, room.current_cut),
             tint: shadow::billboard_tint(player_state.shadow_tint),
         });
     }
@@ -17044,7 +17185,7 @@ fn render_frame_on(
                     half_x: i32::from(init.shadow_half_x),
                     half_z: i32::from(init.shadow_half_z),
                     shift: [0, 0],
-                    lift: shadow::offset_y(id, room.current_cut),
+                    lift: shadow::offset_y(origin, room.current_cut),
                     tint: shadow::billboard_tint(init.tint),
                 })
             } else if !entity.shadow_suppressed
@@ -17064,7 +17205,7 @@ fn render_frame_on(
                     half_x: i32::from(entity.shadow_half_x),
                     half_z: i32::from(entity.shadow_half_z),
                     shift: [0, 0],
-                    lift: shadow::offset_y(id, room.current_cut),
+                    lift: shadow::offset_y(origin, room.current_cut),
                     tint: shadow::billboard_tint(entity.shadow_tint),
                 })
             } else {
@@ -17741,7 +17882,7 @@ fn render_frame_on(
                 half_x: i32::from(clone.entity.shadow_half_x),
                 half_z: i32::from(clone.entity.shadow_half_z),
                 shift: [0, 0],
-                lift: shadow::offset_y(id, room.current_cut),
+                lift: shadow::offset_y(origin, room.current_cut),
                 tint: shadow::billboard_tint(clone.entity.shadow_tint),
             });
         }
@@ -17846,7 +17987,7 @@ fn render_frame_on(
                 half_x: i32::from(companion.entity.shadow_half_x),
                 half_z: i32::from(companion.entity.shadow_half_z),
                 shift: [0, 0],
-                lift: shadow::offset_y(id, room.current_cut),
+                lift: shadow::offset_y(origin, room.current_cut),
                 tint: shadow::billboard_tint(companion.entity.shadow_tint),
             });
         }
@@ -17934,7 +18075,8 @@ fn render_frame_on(
         pages.hd.iter().map(Option::as_ref).collect();
     if game.is_re2_room {
         // `Esp_trans_3d`'s two cuts that want their effects moved in depth.
-        let depth_bias = match (id.stage, id.room, room.current_cut) {
+        let origin = game.origin();
+        let depth_bias = match (origin.stage, origin.room, room.current_cut) {
             (4, 0x0e, 0x0b) => 2000,
             (7, 0x03, 0x0b) => -300,
             _ => 0,
@@ -18750,6 +18892,29 @@ mod tests {
         assert!(game.quick_turn);
     }
 
+    #[test]
+    fn each_pack_saves_apart_and_re1_keeps_the_root() {
+        let dir = TempDir::new();
+        let write = |id: &str| {
+            let path = dir.0.join(format!("{id}.akpak"));
+            let mut writer = crate::pack::PackWriter::new();
+            let manifest = crate::manifest::Manifest::base(id).render();
+            writer.add("manifest.toml", manifest.into_bytes()).unwrap();
+            writer.write(&path).unwrap();
+            path
+        };
+        let saves = Path::new("/saves");
+        assert_eq!(pack_save_dir(&write("re1"), saves), saves);
+        assert_eq!(
+            pack_save_dir(&write("biorand-000042"), saves),
+            saves.join("biorand-000042")
+        );
+        assert_eq!(
+            pack_save_dir(&write("biorand-000043"), saves),
+            saves.join("biorand-000043")
+        );
+    }
+
     struct TempDir(std::path::PathBuf);
 
     impl TempDir {
@@ -19350,6 +19515,241 @@ mod tests {
             game.room_actions[usize::from(slot)].map(|a| a.kind),
             Some(game::RoomActionKind::Typewriter)
         );
+    }
+
+    /// A generated game's room: real room 106 copied to `09-40` with its
+    /// origin set, and a door of 105 retargeted to it through `<doors>`, as
+    /// a mod over the real pack. The copy plays as 106: the same music, the
+    /// same state bytes, and a save that names it through the room trailer.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn a_copied_real_room_plays_as_its_origin() {
+        let _sdl = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let base = Pack::open(Path::new(&path)).unwrap();
+        let from = RoomId::parse("1050").unwrap();
+        let origin = RoomId::parse("1060").unwrap();
+        // The door of 105 that leads to 106.
+        let slot = {
+            let mut loaded = load_room(&base, from).unwrap();
+            let mut game = new_game_state(&base, from, &loaded.room, player::Options::default());
+            seed_fresh_state(&base, &mut game);
+            run_room_init(&mut loaded, &mut game);
+            (0..game.doors.len() as u8)
+                .find(|&slot| {
+                    game.doors[usize::from(slot)]
+                        .is_some_and(|door| game.door_leads_to(from, &door) == Some(origin))
+                })
+                .expect("a door from 105 to 106")
+        };
+        let splice = |text: &[u8], root: &str, tail: &str| {
+            let text = std::str::from_utf8(text).unwrap();
+            text.replacen("<room ", &format!("<room {root} "), 1)
+                .replacen("</room>", &format!("{tail}</room>"), 1)
+                .into_bytes()
+        };
+        let dir = TempDir::new();
+        let mod_path = dir.0.join("copy.akpak");
+        let mut writer = PackWriter::new();
+        let manifest = crate::manifest::Manifest {
+            kind: crate::manifest::PackKind::Mod,
+            base: Some("re1".to_string()),
+            load_order: 10,
+            ..crate::manifest::Manifest::base("room-copy")
+        };
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        let paths: Vec<String> = base
+            .paths()
+            .filter(|path| path.starts_with("room/106/"))
+            .map(str::to_string)
+            .collect();
+        for path in &paths {
+            let data = base.read(path).unwrap();
+            let rest = &path["room/106/".len()..];
+            let data = if rest == "room.xml" {
+                splice(&data, r#"origin="106""#, "")
+            } else {
+                data.into_owned()
+            };
+            writer.add(&format!("room/09-40/{rest}"), data).unwrap();
+        }
+        let door = format!(r#"<doors><door aot="{slot}" target="09-40"/></doors>"#);
+        let xml = base.read("room/105/room.xml").unwrap();
+        writer
+            .add("room/105/room.xml", splice(&xml, "", &door))
+            .unwrap();
+        writer.write(&mod_path).unwrap();
+        let pack = Pack::open_layered(Path::new(&path), std::slice::from_ref(&mod_path)).unwrap();
+        let copy = RoomId::parse("09-40-0").unwrap();
+        assert_eq!(pack.room_origins().of(copy), origin);
+        assert!(crate::room::ids(&pack).contains(&copy));
+
+        // Through the door, against the same door into 106 itself.
+        let into_copy = simulate_door(&pack, from, slot, None).unwrap();
+        let into_origin = simulate_door(&base, from, slot, None).unwrap();
+        let game = &into_copy.game;
+        assert_eq!(game.id, copy);
+        assert_eq!(into_origin.game.id, origin);
+        assert_eq!(game.origin(), origin);
+        assert_eq!(into_copy.room.origin(), origin);
+        assert_eq!(game.state_bytes[..2], [1, 6], "B_STAGE and B_ROOM");
+        assert_eq!(game.state_bytes[..2], into_origin.game.state_bytes[..2]);
+        let music = |game: &game::GameState| {
+            (
+                game.bgm.state,
+                game.bgm.target,
+                game.bgm.channels.map(|channel| channel.track),
+            )
+        };
+        assert_eq!(music(game), music(&into_origin.game));
+        assert!(
+            game.bgm
+                .channels
+                .iter()
+                .any(|channel| channel.track.is_some())
+        );
+        assert_eq!(into_copy.player.pos, into_origin.player.pos);
+        assert_eq!(into_copy.room.current_cut, into_origin.room.current_cut);
+        // The room-keyed render quirks (lights, effect sheets, shadows,
+        // masks) are the origin's: the first frame is 106's.
+        assert!(
+            into_copy.gameplay_frame.rgba == into_origin.gameplay_frame.rgba,
+            "the copy draws as 106"
+        );
+
+        // A save names the copy in the room trailer and its origin in the
+        // block; continuing it boots the copy.
+        let file = save::SaveFile::from_state(game);
+        assert_eq!((file.stage, file.room), (0, 6));
+        assert!(file.room_ext.is_some());
+        let parsed = save::SaveFile::from_bytes(&file.to_file_bytes()).unwrap();
+        assert_eq!(parsed.room_id(), copy);
+        let session = GameSession::from_save(&pack, &parsed, &dir.0.join("saves")).unwrap();
+        assert_eq!(session.loaded.id, copy);
+        assert_eq!(session.game.origin(), origin);
+        assert_eq!(music(&session.game).2, music(&into_origin.game).2);
+        // The retail save of the same spot stays the plain block.
+        let retail = save::SaveFile::from_state(&into_origin.game);
+        assert_eq!(retail.to_file_bytes(), retail.to_bytes().to_vec());
+    }
+
+    /// Door-randomized games generated from the real pack, for both players:
+    /// a new game boots in the main hall's new id, and each planned door a
+    /// fresh room sets up leads, through the headless door transition, into
+    /// its planned room, which plays as its original.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn a_door_randomized_real_game_leads_through_its_doors() {
+        let _sdl = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let base = Path::new(&path);
+        // The packs are the size of the base: beside it, not in the
+        // temporary directory.
+        let games = base.with_file_name(format!("doors-test-{}", std::process::id()));
+        let mut config = arklay_biorand::config::Config::new();
+        for option in [
+            "items/random",
+            "doors/random",
+            "locks/random",
+            "enemies/random",
+        ] {
+            config.set(option, true);
+        }
+        let options = crate::biorand::Options {
+            config: Some(config),
+            players: crate::biorand::PlayerChoice::Both,
+            force: true,
+        };
+        let packs = crate::biorand::generate_with(base, 5, &games, &options, 0, &|_, _| {});
+        let result = std::panic::catch_unwind(|| {
+            for generated in packs.as_ref().unwrap() {
+                let pack = Pack::open(&generated.path).unwrap();
+                let game = crate::biorand::planned_game(&pack).unwrap();
+                let plan = game.doors.as_ref().unwrap();
+                let character = u8::from(game.player == arklay_biorand::map::Player::Jill);
+                let id_of = |folder: &str| RoomId::from_room_and_player(folder, character).unwrap();
+                let origin_of = |dir: &str| RoomId::from_room_and_player(dir, character).unwrap();
+
+                let session = GameSession::new(&pack, character, &games.join("saves")).unwrap();
+                assert_eq!(session.loaded.id, id_of(plan.new_id(&plan.start).unwrap()));
+                assert_eq!(session.game.origin(), origin_of(&plan.start));
+
+                let (mut walked, mut unset) = (0, 0);
+                for door in plan.doors.iter().filter(|door| door.randomized) {
+                    let Some(target) = &door.target else {
+                        continue;
+                    };
+                    let from = id_of(plan.new_id(&door.dir).unwrap());
+                    let zone = {
+                        let mut loaded = load_room(&pack, from).unwrap();
+                        let mut state =
+                            new_game_state(&pack, from, &loaded.room, player::Options::default());
+                        seed_fresh_state(&pack, &mut state);
+                        run_room_init(&mut loaded, &mut state);
+                        state
+                            .doors
+                            .get(usize::from(door.id))
+                            .copied()
+                            .flatten()
+                            .map(|door| door.zone)
+                    };
+                    match zone {
+                        // A door its room sets up only later in the game, or
+                        // an event's (a lift's) without a zone of its own.
+                        None => {
+                            unset += 1;
+                            continue;
+                        }
+                        Some(zone) if zone[2] <= 1 && zone[3] <= 1 => {
+                            unset += 1;
+                            continue;
+                        }
+                        Some(_) => {}
+                    }
+                    let Ok(sim) = simulate_door(&pack, from, door.id, None) else {
+                        // Locked: the key is not held in a fresh state.
+                        unset += 1;
+                        continue;
+                    };
+                    let what = format!(
+                        "{}:{} ({}) into {}",
+                        door.room,
+                        door.id,
+                        from.room3(),
+                        target.room
+                    );
+                    assert_eq!(sim.game.id, id_of(&target.id), "{what}");
+                    assert_eq!(sim.game.origin(), origin_of(&target.dir), "{what}");
+                    // A fresh state's first entry into the main hall plays
+                    // the opening, which places the player itself, as 310's
+                    // script does for its lift's door (entrance 0, 0).
+                    let placed = (target.entrance.x, target.entrance.z) == (0, 0);
+                    if target.dir != plan.start && !placed {
+                        assert_eq!(
+                            [sim.player.pos[0], sim.player.pos[2]],
+                            [target.entrance.x, target.entrance.z],
+                            "{what}"
+                        );
+                    }
+                    walked += 1;
+                }
+                eprintln!(
+                    "{}: {walked} doors walked, {unset} not set up or locked in a fresh room",
+                    generated.path.display()
+                );
+                assert!(walked > 60, "{walked} doors walked, {unset} not set up");
+            }
+        });
+        let _ = std::fs::remove_dir_all(&games);
+        if let Err(panic) = result {
+            std::panic::resume_unwind(panic);
+        }
     }
 
     #[test]
@@ -23929,6 +24329,44 @@ mod tests {
     }
 
     #[test]
+    fn a_randomizer_pack_raises_its_system_flags_at_new_game_and_after_a_load() {
+        use crate::scd::opcode::system;
+
+        let dir = TempDir::new();
+        let generated = crate::manifest::Manifest {
+            seed: Some(42),
+            biorand_flags: Some(vec!["ITEM_RANDOMIZER".to_string(), "LAB".to_string()]),
+            ..crate::manifest::Manifest::base("biorand-000042")
+        };
+        let manifest = generated.render();
+        let pack_path = new_game_pack_with(&dir, &[(crate::manifest::ENTRY, manifest.as_bytes())]);
+        let pack = Pack::open(&pack_path).unwrap();
+        let raised = |game: &game::GameState| -> Vec<u8> {
+            system::BY_NAME
+                .iter()
+                .filter(|(_, flag)| game.flags[5].bit(*flag))
+                .map(|&(_, flag)| flag)
+                .collect()
+        };
+        let expected = [system::RANDOMIZER, system::ITEM_RANDOMIZER, system::LAB];
+
+        let session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(raised(&session.game), expected, "a new game");
+
+        // A save keeps none of bank 5, and loading one replaces the banks, so
+        // the load raises the same flags again.
+        let file = save::SaveFile::from_state(&session.game);
+        let loaded = GameSession::from_save(&pack, &file, &dir.0).unwrap();
+        assert_eq!(raised(&loaded.game), expected, "a loaded save");
+
+        // A pack without a manifest raises none of them.
+        let plain_dir = TempDir::new();
+        let plain = Pack::open(&new_game_pack(&plain_dir)).unwrap();
+        let session = GameSession::new(&plain, 0, &plain_dir.0).unwrap();
+        assert_eq!(raised(&session.game), Vec::<u8>::new(), "no manifest");
+    }
+
+    #[test]
     fn app_boots_title_and_transitions_into_a_new_game() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
@@ -24042,6 +24480,35 @@ mod tests {
         session.close_menu();
         assert!(session.map.is_none() && session.menu.is_none());
         assert!(!session.map_direct);
+    }
+
+    #[test]
+    fn a_door_randomizer_has_no_map() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        assert!(
+            session
+                .game
+                .apply_flag(5, crate::scd::opcode::system::DOOR_RANDOMIZER, 0)
+        );
+        assert!(session.map_disabled());
+        // Neither the map button nor the menu's MAP tab opens it.
+        session.begin_map_open(&pack);
+        assert!(session.map.is_none() && session.menu.is_none());
+        assert!(!session.game.message_menu, "pad control stays");
+        session.open_menu(&pack);
+        session.handle_tab(&pack, 0);
+        assert!(session.map.is_none());
+        assert!(session.menu.is_some(), "the menu itself still opens");
+        // Without the flag it opens.
+        session.close_menu();
+        session.game.flags[5].apply(crate::scd::opcode::system::DOOR_RANDOMIZER, 1);
+        assert!(!session.map_disabled());
+        session.open_menu(&pack);
+        session.handle_tab(&pack, 0);
+        assert!(session.map.is_some());
     }
 
     #[test]

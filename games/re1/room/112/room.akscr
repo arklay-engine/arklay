@@ -23,13 +23,21 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1500, 14400, 900, 2100, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_111_DRESSING_ROOM, 22500, 0, 11300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+    if (RANDOMIZER)
     {
-        door_aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, DOOR_LOCKED | F_LOCK_30, ROOM_11C_WARDROBE_S, 3500, 0, 4500, 1024, IT_38_KEY_CLOSET, SAT_MANUAL | SAT_PLAYER);
+        // The route can't wait for the story to open this door.
+        door_aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_11C_WARDROBE_S, 3500, 0, 4500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+        {
+            door_aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, DOOR_LOCKED | F_LOCK_30, ROOM_11C_WARDROBE_S, 3500, 0, 4500, 1024, IT_38_KEY_CLOSET, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        }
     }
     item_aot_set(AOT_02_ITEM, 10250, 6500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 10750, 0, 7000, -600, F_ITEM_8E, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     item_aot_set(AOT_03_ITEM, 8200, 6500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 8700, 0, 7000, -500, F_ITEM_8F, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
@@ -53,17 +61,25 @@ proc init
     scene_setup(1, 4100, 10000, 5700);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_11_ZOMBIE_LAB, EB_02, F_ENEMY_90, SPAWN_FORCE, 2, 0, 2048, 0, 10000, 0, 12600, ENEMY_00, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_11_ZOMBIE_LAB, EB_02, F_ENEMY_90, SPAWN_FORCE, 2, 0, 2048, 0, 10000, 0, 12600, ENEMY_00, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     else
     {
-        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9D, SPAWN_FORCE, 2, 0, 1776, 0, 11211, 0, 11654, ENEMY_00, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9D, SPAWN_FORCE, 2, 0, 1776, 0, 11211, 0, 11654, ENEMY_00, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
 }
 
 proc main
 {
-    if (testpickup(IT_2F_KEY_INK_RIBBON))
+    if (picked(AOT_04_ITEM))
     {
         aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }

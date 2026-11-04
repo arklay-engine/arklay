@@ -99,6 +99,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_06, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
@@ -268,7 +269,7 @@ proc main
                 aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A3, TRUE);
                 evt_exec(0, TASK_09, from_main_3_v2);
@@ -354,7 +355,7 @@ proc main
                 aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM, SCE_NONE, SAT_PLAYER);
             }
-            if (testpickup(IT_20_KEY_EMBLEM_GOLD))
+            if (picked(AOT_04_ITEM))
             {
                 set(FG_COMMON, F_COMMON_A6, TRUE);
                 evt_exec(0, TASK_09, from_main_2_jill);

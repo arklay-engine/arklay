@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="208" name="2F EAST DEER CONNECTOR" tags="mansion">
+    <door id="0" target="209:0">
+      <entrance x="2700" y="0" z="4500" d="0"/>
+    </door>
+    <door id="1" target="207:1">
+      <entrance x="6500" y="0" z="6300" d="1024"/>
+    </door>
+    <door id="2" target="20A:0">
+      <entrance x="10300" y="0" z="4400" d="2048"/>
+    </door>
+    <enemies id="0" flag="23" exclude="2"/>
+  </room>
+  <spot x="4565" y="0" z="5275" d="952"/>
+  <spot x="5727" y="0" z="3182" d="4080"/>
+  <spot x="8487" y="0" z="3135" d="2064"/>
+</random>

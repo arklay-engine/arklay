@@ -38,6 +38,7 @@
 
 proc init when (MANSION2)
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 10900, 3500, 1300, 1000, 0, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     set(FG_STATUS, F_STATUS_1D, TRUE);
     aot_set(AOT_01_EVENT, 400, 8200, 3200, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);

@@ -85,6 +85,11 @@
 //! The exporter writes the older `#if CHRIS` form ([`merge`]) and
 //! [`lift`]s it into tests ([`merge_rooms`], [`merge_regions`]).
 //!
+//! `random_enemies();` and `random_enemies(name);` mark where a BioRand game
+//! may add enemies (`docs/biorand/plan.md`). A variant's (retail) build has
+//! nothing there; the runtime build has [`ENEMY_MARKER_OP`], a no-op the
+//! generator finds and replaces.
+//!
 //! Anywhere a statement is allowed, `asm { ... }` embeds `.s` assembly lines
 //! verbatim (closed by a line holding only `}`); the decompiler uses it for
 //! bytecode that has no structured form.
@@ -98,7 +103,10 @@ mod merge;
 mod names;
 mod preprocess;
 
-pub use compile::{compile, compile_build, compile_variant, compile_with};
+pub use compile::{
+    ENEMY_MARKER_OP, ENEMY_MARKER_TAG, compile, compile_build, compile_variant, compile_with,
+    placeholder_id,
+};
 pub use decompile::{decompile, decompile_with};
 pub use lift::lift;
 pub use merge::{merge, merge_regions, merge_rooms};

@@ -208,7 +208,7 @@ proc main
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+        if (picked(AOT_03_ITEM))
         {
             evt_exec(0, TASK_09, from_main_4);
             set(FG_LOCK, F_LOCK_27, FALSE);

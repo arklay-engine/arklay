@@ -88,6 +88,13 @@ pub struct RoomSource {
     /// label). They reach the game as the `ROOM_<room3>_NAME` and
     /// `ROOM_<room3>_NAME_SAVE` language keys ([`super::language_layers`]).
     pub strings: Vec<crate::language::XmlString>,
+    /// The original room this room was made from (`<room origin="10b">`),
+    /// as player 0 on the first visit; `None` when it is its own
+    /// ([`crate::state::RoomOrigins`]).
+    pub origin: Option<RoomId>,
+    /// Where the room's doors lead beyond the targets their scripts name
+    /// (`<doors>`, [`crate::state::DoorTarget`]).
+    pub doors: Vec<crate::state::DoorTarget>,
 }
 
 /// The files one room variant's slots read from the room's `object`,
@@ -504,6 +511,8 @@ impl RoomSource {
             item_slots,
             slots: Slots::default(),
             strings: Vec::new(),
+            origin: None,
+            doors: Vec::new(),
         };
         Ok(Converted { source, files })
     }
@@ -601,6 +610,8 @@ impl RoomSource {
             mansion2: id.mansion2,
             room: id.room,
             player_flag: id.player_flag,
+            origin: None,
+            door_targets: self.doors.clone(),
             omodel_slot_count,
             item_count,
             cuts,

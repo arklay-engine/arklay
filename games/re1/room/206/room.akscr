@@ -52,6 +52,20 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE))
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR, 2500, 1000, 1300, 1400, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_204_C_PASSAGE, 3500, 0, 19100, 512, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 9500, 10700, 1300, 1600, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 2, DOOR_LOCKED | F_LOCK_15, ROOM_207_2F_RIGHT_STAIRS, 3000, 0, 12100, 0, LOCK, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_F7, TRUE))
@@ -89,44 +103,76 @@ proc init
     }
     else if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_COMMON, F_COMMON_36, TRUE))
+        // Chris's second visit: Rebecca and the hunter scenes (staging nops them
+        // when cutscenes are disabled).
+        if (!CUTSCENES_DISABLED)
         {
-            if (cmpw(0, W_04, CMP_GT, 180))
+            if (ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_COMMON, F_COMMON_36, TRUE))
             {
-                set(FG_COMMON, F_COMMON_68, TRUE);
-                room_bgm_state_set(6, 6, BGM_RELOAD);
+                if (cmpw(0, W_04, CMP_GT, 180))
+                {
+                    set(FG_COMMON, F_COMMON_68, TRUE);
+                    room_bgm_state_set(6, 6, BGM_RELOAD);
+                }
+                else
+                {
+                    set(FG_COMMON, F_COMMON_67, TRUE);
+                    room_bgm_state_set(6, 6, BGM_RELOAD | 1);
+                }
             }
             else
             {
-                set(FG_COMMON, F_COMMON_67, TRUE);
-                room_bgm_state_set(6, 6, BGM_RELOAD | 1);
+                room_bgm_state_set(6, 6, BGM_OFF);
             }
         }
-        else
+        if (!CUTSCENES_DISABLED)
         {
-            room_bgm_state_set(6, 6, BGM_OFF);
+            if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_COMMON, F_COMMON_6C, TRUE))
+            {
+                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 72, 0, 6947, 0, 12497, ENEMY_00_NPC_REBECCA_2, ANIM_00, 0, EVAR_00);
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_COMMON, F_COMMON_6C, TRUE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 72, 0, 6947, 0, 12497, ENEMY_00_NPC_REBECCA_2, ANIM_00, 0, EVAR_00);
+            if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE))
+            {
+                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1696, 0, 8253, 0, 9707, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_60, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 3416, 0, 5457, 0, 7095, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1696, 0, 8253, 0, 9707, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
-            enemy(EM_06_HUNTER, EB_60, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 3416, 0, 5457, 0, 7095, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+            if (ck(FG_COMMON, F_COMMON_68, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE))
+            {
+                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1150, 0, 6314, 0, 7354, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_60, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 3312, 0, 5500, 0, 5000, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_68, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1150, 0, 6314, 0, 7354, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
-            enemy(EM_06_HUNTER, EB_60, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 3312, 0, 5500, 0, 5000, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+            if (ck(FG_COMMON, F_COMMON_6C, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE))
+            {
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_02, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 1177, 0, 6258, 0, 7748, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_6C, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 1177, 0, 6258, 0, 7748, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-        }
-        if (ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE))
-        {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 1177, 0, 6258, 0, 7748, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+            if (ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE))
+            {
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_02, F_ENEMY_6F, SPAWN_RESTORE, 2, 0, 1177, 0, 6258, 0, 7748, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+                }
+            }
         }
     }
     else
@@ -140,28 +186,40 @@ proc init
 
 proc main when (CHRIS && MANSION2)
 {
-    if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_03, TRUE);
-        aot_reset(AOT_04_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_04, 0);
+        if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_03, TRUE);
+            aot_reset(AOT_04_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_04, 0);
+        }
     }
-    if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_6B, FALSE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_ROOM, F_ROOM_00, TRUE);
-        inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 8900, 10500, 11916, 13000);
-        evt_exec(0, TASK_00, from_main);
+        if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_COMMON, F_COMMON_6B, FALSE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 8900, 10500, 11916, 13000);
+            evt_exec(0, TASK_00, from_main);
+        }
     }
-    if (ck(FG_COMMON, F_COMMON_68, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_COMMON, F_COMMON_6C, TRUE);
-        set(FG_ROOM, F_ROOM_00, TRUE);
-        evt_exec(0, TASK_00, from_main_3);
+        if (ck(FG_COMMON, F_COMMON_68, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_COMMON, F_COMMON_6C, TRUE);
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            evt_exec(0, TASK_00, from_main_3);
+        }
     }
-    if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE))
+    if (!CUTSCENES_DISABLED)
     {
-        set(FG_COMMON, F_COMMON_6C, TRUE);
-        inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 15000, 15000, 15010, 15010);
-        evt_exec(0, TASK_00, from_main_2);
+        if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_COMMON, F_COMMON_6C, FALSE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_6C, TRUE);
+            inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 15000, 15000, 15010, 15010);
+            evt_exec(0, TASK_00, from_main_2);
+        }
     }
 }
 

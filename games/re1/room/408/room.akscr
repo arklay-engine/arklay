@@ -50,6 +50,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE) && ck(FG_COMMON, F_COMMON_AA, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR, 0, 2200, 3000, 2100, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_405_CENTER_PASSAGE, 23200, 0, 8800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 5500, 9400, 3000, 1800, 1, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_409_DRUG_STOREHOUSE, 9000, 0, 3000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 18200, 6500, 3000, 2000, 1, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, DOOR_LOCKED | F_LOCK_2A, ROOM_40A_ROOM_003, 2900, 0, 2800, 0, IT_3A_KEY_GUARDHOUSE_003, SAT_MANUAL | SAT_PLAYER);
@@ -58,6 +75,14 @@ proc init
         if (CHRIS)
         {
             door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+            if (BR_LOCK_FULL_BYTE)
+            {
+                // Rebecca is turned away (the original lock byte's 0x40).
+                if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+                {
+                    aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+                }
+            }
         }
         else
         {
@@ -66,7 +91,13 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (DOOR_RANDOMIZER)
+        {
+            // The nest's double doors open before the first visit to the
+            // plant's room (staging's FixDoorPlant42).
+            door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        }
+        else if (CHRIS)
         {
             aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 141, 0, 255, 0, 0, 0);
         }
@@ -121,15 +152,21 @@ proc init
     }
     else
     {
-        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_00_WASP, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_00_WASP, ANIM_00, 0, EVAR_00);
+        }
     }
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_01_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -3500, 22600, ENEMY_02_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17700, -4000, 22700, ENEMY_03_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17800, -3500, 22800, ENEMY_04_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17900, -4000, 22800, ENEMY_05_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -3500, 22900, ENEMY_06_WASP, ANIM_00, 0, EVAR_00);
-    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -4000, 22900, ENEMY_07_WASP, ANIM_00, 0, EVAR_00);
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_01_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -3500, 22600, ENEMY_02_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17700, -4000, 22700, ENEMY_03_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17800, -3500, 22800, ENEMY_04_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17900, -4000, 22800, ENEMY_05_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -3500, 22900, ENEMY_06_WASP, ANIM_00, 0, EVAR_00);
+        enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -4000, 22900, ENEMY_07_WASP, ANIM_00, 0, EVAR_00);
+    }
 }
 
 proc main
@@ -692,7 +729,10 @@ event on_enter_2_sub1
         }
         else
         {
-            pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
+            if (!ENEMY_RANDOMIZER)
+            {
+                pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
+            }
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
@@ -1371,7 +1411,10 @@ event on_enter_2_sub2
         }
         else
         {
-            pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
+            if (!ENEMY_RANDOMIZER)
+            {
+                pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
+            }
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);

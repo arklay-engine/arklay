@@ -363,7 +363,7 @@ fn death_fall(game: &mut GameState, player: &mut PlayerState, room: &RoomState, 
     }
     match state {
         2 => {
-            if !crate::ui::death::skips_blood_pool(game.id) {
+            if !crate::ui::death::skips_blood_pool(game.origin()) {
                 // The blood pool reuses the player's ground quad: recoloured
                 // and shrunk, then grown a step a frame in state 3.
                 player.shadow_tint = 0x00FF_FF50;

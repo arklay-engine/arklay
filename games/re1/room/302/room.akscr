@@ -51,6 +51,13 @@
 
 proc init
 {
+    if (DOOR_RANDOMIZER)
+    {
+        // Both lifts start at this level, so either way in finds them
+        // (staging's ForceLift302).
+        set(FG_SCENARIO, F_SCENARIO_30, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_31, FALSE);
+    }
     door_aot_set(AOT_00_DOOR, 19500, 4100, 2300, 1600, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_300_FIRST_HOUSE_OUT, 5000, 0, 11400, 0, UNLOCKED, SAT_MANUAL);
     door_aot_set(AOT_01_DOOR, 20200, 27400, 2600, 2000, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_301_WATER_GATE, 3400, 0, 12800, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER);
     door_aot_set(AOT_02_DOOR, 0, 21100, 3500, 2900, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_304_SECOND_HOUSE_GATE, 28600, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -80,9 +87,13 @@ proc init
             aot_set(AOT_08_EVENT, 20000, 4200, 1000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        aot_set(AOT_09_MESSAGE, 14200, 23000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 247, 0, 0, 0);
+        // No waterfall with door rando (staging's ForceLift302).
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+        {
+            aot_set(AOT_09_MESSAGE, 14200, 23000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 247, 0, 0, 0);
+        }
     }
     aot_set(AOT_0A_EVENT, 13300, 27300, 2100, 2800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0a, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_30, TRUE))
@@ -93,9 +104,13 @@ proc init
     {
         obj(OBJ_01, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 20700, 0, 4960, 2024, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        obj(OBJ_02, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14200, 0, 25500, 1024, 0, 0, 0, 0, 600, 2000, 1000, 2000);
+        // No waterfall with door rando (staging's ForceLift302).
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+        {
+            obj(OBJ_02, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14200, 0, 25500, 1024, 0, 0, 0, 0, 600, 2000, 1000, 2000);
+        }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_32, TRUE))
     {
@@ -105,9 +120,13 @@ proc init
     {
         obj(OBJ_03, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE, SCA_NONE, 0, -100, 0, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        effect(FX_02, FX_ROW_00, FX_AT_WORLD, 13900, -2400, 28100, 0);
+        // No waterfall with door rando (staging's ForceLift302).
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+        {
+            effect(FX_02, FX_ROW_00, FX_AT_WORLD, 13900, -2400, 28100, 0);
+        }
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_301_WATER_GATE))
     {
@@ -130,11 +149,19 @@ proc init
         snd_pan_vol_set(BGM_SUB_1, 55, 75);
     }
     set(FG_STATUS, F_STATUS_3C, TRUE);
-    enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AA, SPAWN_FORCE, 2, 0, 1024, 0, 15000, 0, 13000, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
-    enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AB, SPAWN_FORCE, 2, 0, 1024, 0, 8000, 0, 19300, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AA, SPAWN_FORCE, 2, 0, 1024, 0, 15000, 0, 13000, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AB, SPAWN_FORCE, 2, 0, 1024, 0, 8000, 0, 19300, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
+    }
+    random_enemies();
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AC, SPAWN_FORCE, 2, 0, 1024, 0, 20000, 0, 19300, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AC, SPAWN_FORCE, 2, 0, 1024, 0, 20000, 0, 19300, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     return;
 }
@@ -151,146 +178,171 @@ proc main
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
+        // No waterfall with door rando (staging's ForceLift302).
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_00, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
             {
-                snd_pan_vol_set(BGM_SUB_1, 75, 60);
-                set(FG_ROOM, F_ROOM_00, TRUE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_00, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 75, 60);
+                    set(FG_ROOM, F_ROOM_00, TRUE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_01, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
             {
-                snd_pan_vol_set(BGM_SUB_1, 75, 55);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, TRUE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_01, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 75, 55);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, TRUE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_02, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
             {
-                snd_pan_vol_set(BGM_SUB_1, 70, 70);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, TRUE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_02, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 70, 70);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, TRUE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_03, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
             {
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, TRUE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_03, FALSE))
+                {
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, TRUE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_04, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
             {
-                snd_pan_vol_set(BGM_SUB_1, 80, 80);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, TRUE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_04, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 80, 80);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, TRUE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_05, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
             {
-                snd_pan_vol_set(BGM_SUB_1, 55, 75);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, TRUE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_05, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 55, 75);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, TRUE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_06, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
             {
-                snd_pan_vol_set(BGM_SUB_1, 60, 60);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, TRUE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                if (ck(FG_ROOM, F_ROOM_06, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 60, 60);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, TRUE);
+                    set(FG_ROOM, F_ROOM_07, FALSE);
+                }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (!DOOR_RANDOMIZER)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
+        if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_07, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
             {
-                snd_pan_vol_set(BGM_SUB_1, 55, 40);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, TRUE);
+                if (ck(FG_ROOM, F_ROOM_07, FALSE))
+                {
+                    snd_pan_vol_set(BGM_SUB_1, 55, 40);
+                    set(FG_ROOM, F_ROOM_00, FALSE);
+                    set(FG_ROOM, F_ROOM_01, FALSE);
+                    set(FG_ROOM, F_ROOM_02, FALSE);
+                    set(FG_ROOM, F_ROOM_03, FALSE);
+                    set(FG_ROOM, F_ROOM_04, FALSE);
+                    set(FG_ROOM, F_ROOM_05, FALSE);
+                    set(FG_ROOM, F_ROOM_06, FALSE);
+                    set(FG_ROOM, F_ROOM_07, TRUE);
+                }
             }
         }
     }
@@ -343,17 +395,21 @@ event on_aot_08
         aot_on(AOT_00_DOOR, SCE_DOOR, 129);
         set(FG_SCENARIO, F_SCENARIO_31, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+        if (!DOOR_RANDOMIZER)
         {
-            setb(B_CHARACTER_MODEL, 0, 0);
-        }
-        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 4))
-        {
-            setb(B_CHARACTER_MODEL, 1, 0);
-        }
-        if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 5))
-        {
-            setb(B_CHARACTER_MODEL, 2, 0);
+            // No player model change with door rando (staging's ForceLift302).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                setb(B_CHARACTER_MODEL, 0, 0);
+            }
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 4))
+            {
+                setb(B_CHARACTER_MODEL, 1, 0);
+            }
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 5))
+            {
+                setb(B_CHARACTER_MODEL, 2, 0);
+            }
         }
     }
     evt_finish();
@@ -536,13 +592,17 @@ event on_aot_0a_sub1
 {
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (!DOOR_RANDOMIZER)
         {
-            setb(B_CHARACTER_MODEL, 4, 0);
-        }
-        else
-        {
-            setb(B_CHARACTER_MODEL, 5, 0);
+            // No player model change with door rando (staging's ForceLift302).
+            if (ck(FG_STATUS, F_STATUS_08, FALSE))
+            {
+                setb(B_CHARACTER_MODEL, 4, 0);
+            }
+            else
+            {
+                setb(B_CHARACTER_MODEL, 5, 0);
+            }
         }
         door_aot_set(AOT_03_DOOR, 13300, 25300, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);

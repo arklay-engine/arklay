@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="514" name="LABORATORY B4 BETRAYAL CORRIDOR" tags="lab">
+    <door id="0" target="513:0" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="3500" y="0" z="2500" d="3072"/>
+    </door>
+    <door id="1" target="515:1" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="13300" y="0" z="10000" d="2048"/>
+    </door>
+  </room>
+</random>

@@ -434,6 +434,34 @@ pub fn combine(item: u8, other: u8) -> Option<CombineRecord> {
     combine_table(index).find(other)
 }
 
+/// BioRand's blue herb mixes (`BR_HERB_MIXES`), which replace the blue herb's
+/// recipes: the other item and the item the cursor becomes. The other slot is
+/// emptied.
+pub const BR_BLUE_HERB_MIXES: [(u8, u8); 6] = [
+    (ITEM_BLUE_HERB, ITEM_GREEN_HERB),
+    (ITEM_GREEN_HERB, ITEM_GREEN_BLUE_HERB),
+    (ITEM_GREEN_RED_HERB, ITEM_GREEN_RED_BLUE_HERB),
+    (ITEM_GREEN_GREEN_HERB, ITEM_GREEN_GREEN_BLUE_HERB),
+    (ITEM_GREEN_BLUE_HERB, ITEM_GREEN_GREEN_HERB),
+    (ITEM_GREEN_GREEN_BLUE_HERB, ITEM_GREEN_GREEN_GREEN_HERB),
+];
+
+/// [`combine`], with BioRand's blue herb mixes when `br_herb_mixes`.
+pub fn combine_with_mixes(item: u8, other: u8, br_herb_mixes: bool) -> Option<CombineRecord> {
+    if br_herb_mixes && item == ITEM_BLUE_HERB {
+        return BR_BLUE_HERB_MIXES
+            .iter()
+            .find(|(with, _)| *with == other)
+            .map(|&(with, result)| CombineRecord {
+                other_item: with,
+                new_cursor: result,
+                new_target: 0,
+                effect: 0,
+            });
+    }
+    combine(item, other)
+}
+
 /// The item-view file name for an icon class (`0..=0x4A`).
 pub fn model_name_for_class(image_class: u8) -> Option<&'static str> {
     let name = MODEL_NAMES.get(usize::from(image_class))?;
@@ -585,6 +613,28 @@ mod tests {
         assert_eq!(combine(0x41, 0x44), None);
         assert!(combine_table(0x80).is_empty());
         assert!(combine_table(200).is_empty());
+    }
+
+    #[test]
+    fn herb_mixes_replace_the_blue_herb_recipes_only_when_asked() {
+        let mixes = |other| combine_with_mixes(ITEM_BLUE_HERB, other, true).map(|r| r.new_cursor);
+        assert_eq!(mixes(ITEM_BLUE_HERB), Some(ITEM_GREEN_HERB));
+        assert_eq!(mixes(ITEM_GREEN_HERB), Some(ITEM_GREEN_BLUE_HERB));
+        assert_eq!(mixes(ITEM_GREEN_BLUE_HERB), Some(ITEM_GREEN_GREEN_HERB));
+        assert_eq!(
+            mixes(ITEM_GREEN_GREEN_BLUE_HERB),
+            Some(ITEM_GREEN_GREEN_GREEN_HERB)
+        );
+        assert_eq!(mixes(0x01), None);
+        // Flag clear: vanilla, and other items are untouched.
+        assert_eq!(
+            combine_with_mixes(ITEM_BLUE_HERB, ITEM_BLUE_HERB, false),
+            combine(ITEM_BLUE_HERB, ITEM_BLUE_HERB)
+        );
+        assert_eq!(
+            combine_with_mixes(ITEM_GREEN_HERB, 0x43, true),
+            combine(ITEM_GREEN_HERB, 0x43)
+        );
     }
 
     #[test]

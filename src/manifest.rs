@@ -24,12 +24,17 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use crate::budget;
 use crate::scd::akscr::Region;
+use crate::scd::opcode::system;
 
 /// The pack entry holding a rendered manifest.
 pub const ENTRY: &str = "manifest.toml";
 
 /// The manifest format version this module writes and accepts.
 pub const FORMAT: u32 = 1;
+
+/// The most inventory slots a character can have (`chris_slots`,
+/// `jill_slots`, `start_items`).
+pub const MAX_SLOTS: u8 = 8;
 
 /// Whether a pack is a base game pack or a mod layered over one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +76,9 @@ pub struct Manifest {
     pub description: Option<String>,
     /// Whether this is the base pack or a mod.
     pub kind: PackKind,
-    /// Mods: the base pack id this mod layers over.
+    /// Mods: the base pack id this mod layers over. A base pack derived from
+    /// another game's (a BioRand pack) names that game here, so the mods made
+    /// for it apply to the derived pack too.
     pub base: Option<String>,
     /// Mods: layer order; lower layers are applied first.
     pub load_order: i32,
@@ -105,6 +112,54 @@ pub struct Manifest {
     /// ships (`convert-game` records it), which picks a mod's per-region
     /// script builds. Absent, a mod's scripts run their USA build.
     pub region: Option<Region>,
+    /// Base packs: the randomizer seed that generated the pack. Its presence
+    /// raises `RANDOMIZER` for scripts; [`Self::biorand_flags`] names the rest.
+    pub seed: Option<u32>,
+    /// Base packs: the revision of the randomizer that generated the pack.
+    pub generator_version: Option<u32>,
+    /// Base packs: the character a new game plays (`0` Chris, `1` Jill),
+    /// without the character select screen or the prologue film.
+    pub character: Option<u8>,
+    /// Base packs: the bank-5 system flags the pack raises, by their script
+    /// names (see [`crate::scd::opcode::system`]). A seed raises `RANDOMIZER`
+    /// on its own; the list names the others. Absent, the pack predates the
+    /// list, so a seeded one also raises the proof of concept's
+    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`. Parsing refuses a name that is
+    /// not a system flag and one listed twice.
+    pub biorand_flags: Option<Vec<String>>,
+    /// Base packs: the revision of the `arklay-biorand` plan the pack was
+    /// written from (`arklay_biorand::plan::GENERATOR_VERSION`), beside the
+    /// emitter's own [`Self::generator_version`].
+    pub plan_version: Option<u32>,
+    /// Base packs: what a new game sets up beyond the shipped start.
+    pub setup: GameSetup,
+}
+
+/// What a base pack's new game sets up beyond the shipped start: the
+/// options a generated game records (`scenario_flags`, `start_items`,
+/// `chris_slots`, `jill_slots`). Every field is empty in an ordinary pack.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GameSetup {
+    /// Scenario flags (bank 0) a new game raises (`true`) or clears, after
+    /// the shipped start: `scenario_flags = ["122=1", "123=0"]`. A save keeps
+    /// bank 0, so a load needs nothing more.
+    pub scenario_flags: Vec<(u8, bool)>,
+    /// The player's start inventory as `(item, amount)`, in place of what
+    /// `game/new_game.lua` gives the player (Rebecca's slots are left as the
+    /// script sets them): `start_items = ["1:0", "2:15"]`.
+    pub start_items: Option<Vec<(u8, u8)>>,
+    /// Chris's and Jill's inventory slot counts, in place of the original's
+    /// six and eight (1 to 8): `chris_slots = 8`. Not saved, so every path
+    /// into a game applies them.
+    pub chris_slots: Option<u8>,
+    pub jill_slots: Option<u8>,
+}
+
+impl GameSetup {
+    /// Whether the setup holds nothing.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 impl Manifest {
@@ -128,6 +183,12 @@ impl Manifest {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: GameSetup::default(),
+            character: None,
             region: None,
         }
     }
@@ -135,6 +196,25 @@ impl Manifest {
     /// Whether this pack declares itself a mod.
     pub fn is_mod(&self) -> bool {
         self.kind == PackKind::Mod
+    }
+
+    /// The bank-5 system flags this manifest raises: `RANDOMIZER` for a seed,
+    /// then the names in `biorand_flags`. A seeded pack without the list
+    /// predates it, so it also raises the proof of concept's
+    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`.
+    pub fn system_flags(&self) -> Vec<u8> {
+        let mut flags = Vec::new();
+        if self.seed.is_some() {
+            flags.push(system::RANDOMIZER);
+        }
+        match &self.biorand_flags {
+            Some(names) => flags.extend(names.iter().filter_map(|name| system::bit_named(name))),
+            None if self.seed.is_some() => {
+                flags.extend([system::DOOR_RANDOMIZER, system::ENEMY_RANDOMIZER]);
+            }
+            None => {}
+        }
+        flags
     }
 
     /// Parse a manifest, naming the line of every malformed value.
@@ -160,8 +240,14 @@ impl Manifest {
         let mut start_room = None;
         let mut start_pos = None;
         let mut start_angle = None;
+        let mut seed = None;
+        let mut generator_version = None;
+        let mut character = None;
         let mut start_health = None;
         let mut region = None;
+        let mut biorand_flags = None;
+        let mut plan_version = None;
+        let mut setup = GameSetup::default();
         let mut seen: HashSet<String> = HashSet::new();
 
         for item in parse_items(text)? {
@@ -269,6 +355,106 @@ impl Manifest {
                     };
                     start_pos = Some([x, y, z]);
                 }
+                "seed" => seed = Some(parsed_field(item, "seed")?),
+                "generator_version" => {
+                    generator_version = Some(parsed_field(item, "generator_version")?)
+                }
+                "character" => {
+                    let value: u8 = parsed_field(item, "character")?;
+                    if value > 1 {
+                        bail!("manifest.toml line {line}: bad `character`: {value}");
+                    }
+                    character = Some(value);
+                }
+                "biorand_flags" => {
+                    let Value::Array(names) = item.value else {
+                        bail!("manifest.toml line {line}: `biorand_flags` must be a string array");
+                    };
+                    for (index, name) in names.iter().enumerate() {
+                        if system::bit_named(name).is_none() {
+                            bail!(
+                                "manifest.toml line {line}: unknown system flag `{name}` in `biorand_flags`"
+                            );
+                        }
+                        if names[..index].contains(name) {
+                            bail!("manifest.toml line {line}: `biorand_flags` repeats `{name}`");
+                        }
+                    }
+                    biorand_flags = Some(names);
+                }
+                "plan_version" => plan_version = Some(parsed_field(item, "plan_version")?),
+                "scenario_flags" => {
+                    let Value::Array(values) = item.value else {
+                        bail!("manifest.toml line {line}: `scenario_flags` must be a string array");
+                    };
+                    for value in &values {
+                        let parsed = value.split_once('=').and_then(|(flag, raised)| {
+                            let raised = match raised.trim() {
+                                "1" => true,
+                                "0" => false,
+                                _ => return None,
+                            };
+                            Some((flag.trim().parse::<u8>().ok()?, raised))
+                        });
+                        let Some((flag, raised)) = parsed else {
+                            bail!(
+                                "manifest.toml line {line}: bad `scenario_flags` entry `{value}` (expected \"<flag>=0\" or \"<flag>=1\")"
+                            );
+                        };
+                        if setup.scenario_flags.iter().any(|(seen, _)| *seen == flag) {
+                            bail!("manifest.toml line {line}: `scenario_flags` repeats {flag}");
+                        }
+                        setup.scenario_flags.push((flag, raised));
+                    }
+                }
+                "start_items" => {
+                    let Value::Array(values) = item.value else {
+                        bail!("manifest.toml line {line}: `start_items` must be a string array");
+                    };
+                    if values.len() > usize::from(MAX_SLOTS) {
+                        bail!(
+                            "manifest.toml line {line}: `start_items` lists more than {MAX_SLOTS} items"
+                        );
+                    }
+                    let mut items = Vec::with_capacity(values.len());
+                    for value in &values {
+                        let parsed = value.split_once(':').and_then(|(id, amount)| {
+                            Some((
+                                id.trim().parse::<u8>().ok()?,
+                                amount.trim().parse::<u8>().ok()?,
+                            ))
+                        });
+                        match parsed {
+                            Some((id, amount)) if id != 0 => items.push((id, amount)),
+                            _ => bail!(
+                                "manifest.toml line {line}: bad `start_items` entry `{value}` (expected \"<item>:<amount>\")"
+                            ),
+                        }
+                    }
+                    setup.start_items = Some(items);
+                }
+                "chris_slots" | "jill_slots" => {
+                    let Value::Integer(value) = item.value else {
+                        bail!(
+                            "manifest.toml line {line}: `{}` must be an integer",
+                            item.key
+                        );
+                    };
+                    let Some(slots) = u8::try_from(value)
+                        .ok()
+                        .filter(|slots| (1..=MAX_SLOTS).contains(slots))
+                    else {
+                        bail!(
+                            "manifest.toml line {line}: `{}` must be 1 to {MAX_SLOTS}, found {value}",
+                            item.key
+                        );
+                    };
+                    if item.key == "chris_slots" {
+                        setup.chris_slots = Some(slots);
+                    } else {
+                        setup.jill_slots = Some(slots);
+                    }
+                }
                 "start_angle" => {
                     let text = non_empty_string(item, "start_angle")?;
                     start_angle = Some(text.parse().map_err(|error| {
@@ -304,12 +490,23 @@ impl Manifest {
             && (start_room.is_some()
                 || start_pos.is_some()
                 || start_angle.is_some()
-                || start_health.is_some())
+                || start_health.is_some()
+                || seed.is_some()
+                || generator_version.is_some()
+                || character.is_some())
         {
             bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
         }
         if kind == PackKind::Mod && region.is_some() {
             bail!("manifest.toml: `region` belongs to a base pack, not a mod");
+        }
+        if kind == PackKind::Mod && biorand_flags.is_some() {
+            bail!("manifest.toml: `biorand_flags` belongs to a base pack, not a mod");
+        }
+        if kind == PackKind::Mod && (plan_version.is_some() || !setup.is_empty()) {
+            bail!(
+                "manifest.toml: `plan_version`, `scenario_flags`, `start_items` and the slot counts belong to a base pack, not a mod"
+            );
         }
 
         Ok(Self {
@@ -331,6 +528,12 @@ impl Manifest {
             start_angle,
             start_health,
             region,
+            seed,
+            generator_version,
+            character,
+            biorand_flags,
+            plan_version,
+            setup,
         })
     }
 
@@ -391,8 +594,70 @@ impl Manifest {
         if let Some(region) = self.region {
             write_pair(&mut out, "region", &quote(region.symbol()));
         }
+        if let Some(seed) = self.seed {
+            write_pair(&mut out, "seed", &quote(&seed.to_string()));
+        }
+        if let Some(version) = self.generator_version {
+            write_pair(&mut out, "generator_version", &quote(&version.to_string()));
+        }
+        if let Some(character) = self.character {
+            write_pair(&mut out, "character", &quote(&character.to_string()));
+        }
+        if let Some(names) = &self.biorand_flags {
+            let entries: Vec<String> = names.iter().map(|name| quote(name)).collect();
+            write_pair(
+                &mut out,
+                "biorand_flags",
+                &format!("[{}]", entries.join(", ")),
+            );
+        }
+        if let Some(version) = self.plan_version {
+            write_pair(&mut out, "plan_version", &quote(&version.to_string()));
+        }
+        let setup = &self.setup;
+        if !setup.scenario_flags.is_empty() {
+            let entries: Vec<String> = setup
+                .scenario_flags
+                .iter()
+                .map(|(flag, raised)| quote(&format!("{flag}={}", u8::from(*raised))))
+                .collect();
+            write_pair(
+                &mut out,
+                "scenario_flags",
+                &format!("[{}]", entries.join(", ")),
+            );
+        }
+        if let Some(items) = &setup.start_items {
+            let entries: Vec<String> = items
+                .iter()
+                .map(|(id, amount)| quote(&format!("{id}:{amount}")))
+                .collect();
+            write_pair(
+                &mut out,
+                "start_items",
+                &format!("[{}]", entries.join(", ")),
+            );
+        }
+        if let Some(slots) = setup.chris_slots {
+            write_pair(&mut out, "chris_slots", &slots.to_string());
+        }
+        if let Some(slots) = setup.jill_slots {
+            write_pair(&mut out, "jill_slots", &slots.to_string());
+        }
         out
     }
+}
+
+/// A string field holding a number, like `start_angle`.
+fn parsed_field<T>(item: Item, name: &str) -> Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    let line = item.line;
+    non_empty_string(item, name)?
+        .parse()
+        .map_err(|error| anyhow!("manifest.toml line {line}: bad `{name}`: {error}"))
 }
 
 /// The value kinds the subset grammar can represent.
@@ -701,6 +966,12 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
         }
     }
@@ -724,6 +995,12 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
         }
     }
@@ -746,6 +1023,143 @@ mod tests {
         };
         let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
         assert!(error.contains("`region` belongs to a base pack"), "{error}");
+    }
+
+    #[test]
+    fn a_generated_packs_fields_round_trip() {
+        let mut manifest = Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.generator_version = Some(3);
+        manifest.character = Some(1);
+        let parsed = Manifest::parse(&manifest.render()).unwrap();
+        assert_eq!(parsed.seed, Some(42));
+        assert_eq!(parsed.generator_version, Some(3));
+        assert_eq!(parsed.character, Some(1));
+    }
+
+    #[test]
+    fn biorand_flags_round_trip_and_name_the_raised_flags() {
+        let mut manifest = Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.biorand_flags = Some(vec!["DOOR_RANDOMIZER".to_string(), "LAB".to_string()]);
+        let text = manifest.render();
+        assert!(
+            text.contains("biorand_flags = [\"DOOR_RANDOMIZER\", \"LAB\"]\n"),
+            "{text}"
+        );
+        let parsed = Manifest::parse(&text).unwrap();
+        assert_eq!(parsed, manifest);
+        assert_eq!(
+            parsed.system_flags(),
+            [system::RANDOMIZER, system::DOOR_RANDOMIZER, system::LAB]
+        );
+
+        // An empty list is written too, and raises only the seed's flag.
+        manifest.biorand_flags = Some(Vec::new());
+        let text = manifest.render();
+        assert!(text.contains("biorand_flags = []\n"), "{text}");
+        let parsed = Manifest::parse(&text).unwrap();
+        assert_eq!(parsed.biorand_flags, Some(Vec::new()));
+        assert_eq!(parsed.system_flags(), [system::RANDOMIZER]);
+    }
+
+    #[test]
+    fn a_pack_without_the_list_keeps_the_proof_of_concept_flags() {
+        let mut manifest = Manifest::base("biorand-000007");
+        manifest.seed = Some(7);
+        assert_eq!(manifest.biorand_flags, None);
+        assert_eq!(
+            manifest.system_flags(),
+            [
+                system::RANDOMIZER,
+                system::DOOR_RANDOMIZER,
+                system::ENEMY_RANDOMIZER
+            ]
+        );
+        // The list raises its flags with or without a seed.
+        manifest.seed = None;
+        manifest.biorand_flags = Some(vec!["LAB".to_string()]);
+        assert_eq!(manifest.system_flags(), [system::LAB]);
+        manifest.biorand_flags = None;
+        assert!(manifest.system_flags().is_empty());
+    }
+
+    #[test]
+    fn biorand_flags_refuse_unknown_repeated_and_mod_declarations() {
+        let base = "format = 1\nid = \"biorand-000042\"\nkind = \"base\"\nseed = \"42\"\n";
+        let refused = |line: &str| {
+            Manifest::parse(&format!("{base}{line}\n"))
+                .unwrap_err()
+                .to_string()
+        };
+        let unknown = refused("biorand_flags = [\"DOOR_RANDMIZER\"]");
+        assert!(unknown.contains("line 5"), "{unknown}");
+        assert!(unknown.contains("DOOR_RANDMIZER"), "{unknown}");
+        let repeated = refused("biorand_flags = [\"LAB\", \"LAB\"]");
+        assert!(repeated.contains("repeats `LAB`"), "{repeated}");
+        let not_an_array = refused("biorand_flags = \"LAB\"");
+        assert!(
+            not_an_array.contains("must be a string array"),
+            "{not_an_array}"
+        );
+
+        let mod_with_list = "format = 1\nid = \"demo\"\nkind = \"mod\"\nbase = \"re1\"\nbiorand_flags = [\"LAB\"]\n";
+        let error = Manifest::parse(mod_with_list).unwrap_err().to_string();
+        assert!(
+            error.contains("`biorand_flags` belongs to a base pack"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_generated_games_setup_round_trips_and_is_checked() {
+        let mut manifest = Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.plan_version = Some(3);
+        manifest.setup = GameSetup {
+            scenario_flags: vec![(122, true), (123, false), (124, true)],
+            start_items: Some(vec![(1, 0), (2, 15), (0x41, 1)]),
+            chris_slots: Some(8),
+            jill_slots: Some(6),
+        };
+        let text = manifest.render();
+        assert!(
+            text.contains("scenario_flags = [\"122=1\", \"123=0\", \"124=1\"]\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("start_items = [\"1:0\", \"2:15\", \"65:1\"]\n"),
+            "{text}"
+        );
+        assert!(text.contains("chris_slots = 8\n"), "{text}");
+        assert_eq!(Manifest::parse(&text).unwrap(), manifest);
+        assert!(
+            !Manifest::base("re1").render().contains("slots"),
+            "an ordinary pack writes none of it"
+        );
+
+        let base = "format = 1\nid = \"biorand-000042\"\nkind = \"base\"\n";
+        let refused = |line: &str| {
+            Manifest::parse(&format!("{base}{line}\n"))
+                .unwrap_err()
+                .to_string()
+        };
+        for (line, says) in [
+            ("scenario_flags = [\"122=2\"]", "bad `scenario_flags` entry"),
+            ("scenario_flags = [\"122=1\", \"122=0\"]", "repeats 122"),
+            ("start_items = [\"0:1\"]", "bad `start_items` entry"),
+            ("start_items = [\"2\"]", "bad `start_items` entry"),
+            ("chris_slots = 9", "must be 1 to 8"),
+            ("jill_slots = 0", "must be 1 to 8"),
+        ] {
+            let error = refused(line);
+            assert!(error.contains(says), "{line}: {error}");
+            assert!(error.contains("line 4"), "{line}: {error}");
+        }
+        let mod_setup =
+            "format = 1\nid = \"demo\"\nkind = \"mod\"\nbase = \"re1\"\nchris_slots = 8\n";
+        let error = Manifest::parse(mod_setup).unwrap_err().to_string();
+        assert!(error.contains("belong to a base pack"), "{error}");
     }
 
     #[test]
@@ -881,6 +1295,12 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
         }
     }

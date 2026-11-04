@@ -45,7 +45,15 @@ options screen itself, key configuration included, writing every change back
 to `arklay.toml` (the renderer settings take effect when a game starts). MODS
 lists every discovered mod, whatever its game, in application order: the top
 row is applied first (lowest priority) and the bottom row last (highest);
-Ctrl+Down moves a mod toward higher priority.
+Ctrl+Down moves a mod toward higher priority. BIORAND generates a game from a
+seed (type digits, or New Seed), as `games/biorand-<seed>.akpak`, and plays it;
+its Player row and Options screen (every BioRand option, as the in-game
+options show theirs: a tab per page and a group per titled group, with a
+description of the focused one; Q/E or Ctrl+Up/Down turn the page and R resets
+them) are saved to `biorand.json` beside `arklay.toml` in BioRand's own JSON.
+A seed's pack is reused while its options, player and base game are the same
+and rebuilt when any changed. Spoiler Log shows the pack's spoiler and writes
+it to `games/biorand-<seed>-spoiler.txt`.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
 UPDATE values left and right; A/Start confirms; B/Back backs out, quitting
@@ -116,6 +124,12 @@ cargo run -- convert-game /path/to/re2
 # seeds, ...) into a mod pack in the per-user mods directory; see
 # docs/modding.md for the mapping
 cargo run -- convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
+
+# Generate a BioRand game (items, the start inventory and doors randomized,
+# locks and enemies on request; see docs/modding.md), one pack per player,
+# and check one again
+cargo run -- biorand generate re1.akpak --seed 123456 --player both
+cargo run -- biorand verify biorand-123456-chris.akpak
 
 # List every pack entry with its size, then the entry count and total bytes
 cargo run -- list re1.akpak

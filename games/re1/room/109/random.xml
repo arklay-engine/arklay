@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="109" name="1F EAST CORNER CORRIDOR" tags="mansion">
+    <door id="0" target="108:1">
+      <entrance x="24400" y="0" z="2700" d="3072"/>
+    </door>
+    <door id="4" target="10A:0">
+      <entrance x="2700" y="0" z="8500" d="0"/>
+    </door>
+    <door id="1" target="114:0" lock="4" key="52" requires="item(52)">
+      <entrance x="24300" y="0" z="7600" d="2048"/>
+    </door>
+    <door id="2" target="113:0">
+      <entrance x="18000" y="0" z="8100" d="1024"/>
+    </door>
+    <door id="3" target="115:0" lock="15">
+      <entrance x="6700" y="0" z="9800" d="2048"/>
+    </door>
+    <item id="5" flag="111" type="68" amount="1" group="1" name="GREEN HERB IN CORNER"/>
+    <enemies exclude="4 12" max-difficulty="0" player="chris"/>
+    <!-- staging name: BARRY -->
+    <enemies id="0" kind="npc" player="jill"/>
+    <!-- staging condition: !(!1:32 && 1:33) -->
+    <enemies exclude="4 12" max-difficulty="0" player="jill"/>
+  </room>
+  <spot x="13754" y="0" z="14035" d="2064"/>
+  <spot x="15408" y="0" z="12234" d="3032"/>
+  <spot x="15572" y="0" z="9293" d="976"/>
+  <spot x="21192" y="0" z="7621" d="2160"/>
+  <spot x="21986" y="0" z="5044" d="4056"/>
+  <spot x="23527" y="0" z="4949" d="1592"/>
+  <spot x="4659" y="0" z="7449" d="3056"/>
+  <spot x="6433" y="0" z="14175" d="1008"/>
+  <spot x="9658" y="0" z="14063" d="4080"/>
+</random>

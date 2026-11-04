@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="300" name="COURTYARD GARDEN" tags="courtyard">
+    <door id="0" target="301:0">
+      <entrance x="23800" y="0" z="27500" d="1024"/>
+    </door>
+    <door id="1" target="302:0" kind="blocked" allowed-locks="" no-unlock="true" door-rando="false">
+      <entrance x="5000" y="0" z="11400" d="0"/>
+    </door>
+    <door id="1" target="302:0" allowed-locks="" no-unlock="true" door-rando="true">
+      <entrance x="5000" y="0" z="11400" d="0"/>
+    </door>
+    <door id="2" target="11B:1">
+      <entrance x="27300" y="0" z="5600" d="0"/>
+    </door>
+    <item id="4" flag="79" type="80" amount="1" group="4" name="MAP ON WALL" document="true"/>
+    <item id="6" flag="185" type="68" amount="1" group="4" name="GREEN HERB/1"/>
+    <item id="7" flag="186" type="68" amount="1" group="4" name="GREEN HERB/2"/>
+    <item id="8" flag="187" type="68" amount="1" group="4" name="GREEN HERB/3"/>
+    <item id="9" flag="188" type="67" amount="1" group="4" name="GREEN HERB/4"/>
+    <item id="10" flag="189" type="67" amount="1" group="4" name="RED HERB/1"/>
+    <item id="11" flag="191" type="69" amount="1" group="4" name="BLUE HERB/1"/>
+    <item id="12" flag="192" type="69" amount="1" group="4" name="BLUE HERB/2"/>
+    <enemies/>
+  </room>
+  <spot x="10259" y="0" z="11757" d="1952"/>
+  <spot x="15419" y="0" z="9910" d="3264"/>
+  <spot x="16897" y="0" z="11654" d="4000"/>
+  <spot x="19490" y="0" z="26397" d="1000"/>
+  <spot x="19813" y="0" z="22213" d="2784"/>
+  <spot x="21142" y="0" z="9836" d="2112"/>
+  <spot x="24140" y="0" z="12469" d="1576"/>
+  <spot x="24145" y="0" z="15606" d="64"/>
+  <spot x="24933" y="0" z="23042" d="2152"/>
+  <spot x="25916" y="0" z="18215" d="1264"/>
+  <spot x="26272" y="0" z="10723" d="448"/>
+  <spot x="26669" y="0" z="14072" d="3448"/>
+  <spot x="27001" y="0" z="27313" d="0"/>
+  <spot x="27206" y="0" z="15436" d="1384"/>
+  <spot x="27412" y="0" z="21237" d="3008"/>
+  <spot x="29505" y="0" z="4400" d="3152"/>
+  <spot x="29588" y="0" z="9915" d="2144"/>
+  <spot x="29741" y="0" z="25542" d="1104"/>
+  <spot x="9124" y="0" z="10141" d="2392"/>
+</random>

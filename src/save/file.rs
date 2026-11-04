@@ -68,6 +68,9 @@ pub struct SaveFile {
     pub scenario2: [u8; 32],
     /// Door/desk lock flags, 8 bytes (0x254).
     pub locks: [u8; 8],
+    /// Port-only: bytes 8..32 of the lock bank, for the randomizer's lock
+    /// flags 64 to 255 ([`super::LOCKS_TRAILER`]); all zero in a retail game.
+    pub locks_high: [u8; 24],
     /// Enemy flags, 32 bytes (0x25C).
     pub enemies: [u8; 32],
     /// Room-item flags, 32 bytes (0x27C).
@@ -84,6 +87,15 @@ pub struct SaveFile {
     pub player_slots: [InventoryItem; PLAYER_SLOT_COUNT],
     /// Room-BGM state table, 224 bytes (0x33C).
     pub room_bgm: [u8; ROOM_BGM_LEN],
+    /// Port-only: Rebecca's six slots, when the player holds more than six
+    /// stacks and the block's shared run would overwrite ones she holds
+    /// ([`super::PARTNER_TRAILER`]); `None` in a retail game.
+    pub partner_slots: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
+    /// Port-only: the room the save is in, when the block's stage and room
+    /// bytes cannot name it ([`super::ROOM_TRAILER`]); the block then names
+    /// the room's origin. `None` for every retail room. Its player digit is
+    /// unused (the character byte is the player).
+    pub room_ext: Option<RoomId>,
 }
 
 impl Default for SaveFile {
@@ -116,6 +128,7 @@ impl Default for SaveFile {
             health_status: 0,
             scenario2: [0; 32],
             locks: [0; 8],
+            locks_high: [0; 24],
             enemies: [0; 32],
             room_items: [0; 32],
             examined: [0; 4],
@@ -124,6 +137,8 @@ impl Default for SaveFile {
             item_box: [InventoryItem::default(); ITEM_BOX_SLOTS],
             player_slots: [InventoryItem::default(); PLAYER_SLOT_COUNT],
             room_bgm: [0; ROOM_BGM_LEN],
+            partner_slots: None,
+            room_ext: None,
         }
     }
 }

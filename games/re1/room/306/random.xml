@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="306" name="CAVES STATUE PUZZLE" tags="caves">
+    <!-- staging target 30F:1 has no door 1 in 30F; door 1 is in 30F/BACK -->
+    <door id="0" target="30F/BACK:1">
+      <entrance x="9400" y="0" z="6300" d="2048"/>
+    </door>
+    <item id="6" flag="119" type="63" amount="1" group="16" name="BEHIND PUZZLE DOOR" requires="item(30)"/>
+    <enemies exclude="3 4 7 9 10" max-difficulty="1"/>
+  </room>
+  <spot x="4558" y="0" z="3729" d="3144"/>
+  <spot x="4886" y="0" z="7135" d="624"/>
+  <spot x="6581" y="0" z="5417" d="2856"/>
+  <spot x="7479" y="0" z="8453" d="2064"/>
+</random>

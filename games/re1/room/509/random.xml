@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="509" name="LABORATORY B3 WEST MO DISC" tags="lab">
+    <door id="0" target="508:1">
+      <entrance x="3600" y="0" z="2700" d="3072"/>
+    </door>
+    <flag name="MO_DISC_509" requires="item(40)"/>
+    <item id="1" flag="82" type="107" amount="1" group="32" name="MO DISC PASS CODE" requires="flag(MO_DISC_509)" document="true"/>
+    <item id="2" flag="83" type="101" amount="1" group="32" name="DOCUMENT" document="true"/>
+    <enemies exclude="4" max-difficulty="1"/>
+  </room>
+  <spot x="10835" y="0" z="5253" d="3192"/>
+  <spot x="11114" y="0" z="8045" d="2040"/>
+  <spot x="3336" y="0" z="9719" d="1064"/>
+  <spot x="3383" y="0" z="6722" d="3240"/>
+  <spot x="5098" y="0" z="4200" d="3144"/>
+  <spot x="5732" y="0" z="9070" d="8"/>
+  <spot x="6793" y="0" z="7595" d="1992"/>
+  <spot x="8459" y="0" z="3379" d="2912"/>
+  <spot x="8932" y="0" z="8024" d="2040"/>
+</random>

@@ -70,6 +70,11 @@
 
 proc init
 {
+    if (DOOR_RANDOMIZER)
+    {
+        // The lift starts at this level (staging's ForceLift302).
+        set(FG_SCENARIO, F_SCENARIO_31, TRUE);
+    }
     set(FG_STATUS, F_STATUS_1D, TRUE);
     door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
@@ -77,13 +82,18 @@ proc init
     aot_set(AOT_03_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 0, 63, 0, 1, 0);
     aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
     item_aot_set(AOT_04_ITEM, 4500, 12500, 2000, 2000, IT_50_UNKNOWN_50, 1, IMDL_00, SCA_NONE, 5642, -2290, 13306, 1024, F_ITEM_4F, SAT_MANUAL | SAT_PLAYER, 0);
-    if (ck(FG_ITEM, F_ITEM_4F, TRUE))
+    // A randomized slot stays the plain item AOT, not the event that hands
+    // over the map.
+    if (!ITEM_RANDOMIZER)
     {
-        aot_reset(AOT_04_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 2, on_aot_04_item, 0);
-    }
-    else
-    {
-        aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
+        if (ck(FG_ITEM, F_ITEM_4F, TRUE))
+        {
+            aot_reset(AOT_04_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 2, on_aot_04_item, 0);
+        }
+        else
+        {
+            aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
+        }
     }
     aot_set(AOT_05_EVENT, 2696, 11486, 900, 1100, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 3, 0, on_aot_05, 0, 0, 0);
     item_aot_set(AOT_06_ITEM, 25700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 26600, 0, 2000, 0, F_ITEM_B9, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
@@ -114,11 +124,19 @@ proc init
         inst_cfg(COL_LIST_01, COL_06, 0, 2232, 9018, 4329, 14544);
         inst_cfg(COL_LIST_03, COL_04, 0, 2232, 9018, 4329, 14544);
     }
-    enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_30, SPAWN_FORCE, 2, 0, 744, 0, 23945, 0, 20792, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
-    enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_31, SPAWN_FORCE, 2, 0, 1464, 0, 29528, 0, 23029, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_30, SPAWN_FORCE, 2, 0, 744, 0, 23945, 0, 20792, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_31, SPAWN_FORCE, 2, 0, 1464, 0, 29528, 0, 23029, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
+    }
+    random_enemies();
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_32, SPAWN_FORCE, 2, 0, 2784, 0, 9000, 0, 11000, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_32, SPAWN_FORCE, 2, 0, 2784, 0, 9000, 0, 11000, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     if (ck(FG_SCENARIO, F_SCENARIO_14, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7F, TRUE))
     {

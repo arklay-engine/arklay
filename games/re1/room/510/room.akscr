@@ -19,19 +19,37 @@
 #define FX_1F 0x1F
 #define IMDL_00 0x00
 #define SE_18_STEAM_A 0x18
+// BioRand: "this reader is done" under ITEM_RANDOMIZER (508's door reads it).
+#define F_SCENARIO_71_MO_DISC_510 0x71
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_5A, SAT_MANUAL | SAT_PLAYER, 0);
+    // A randomized slot is an item AOT on the reader's area.
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_02_ITEM, 18600, 1500, 1800, 1500, IT_6D_FILE_PASS_CODE_03, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_5A, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_5A, SAT_MANUAL | SAT_PLAYER, 0);
+    }
     aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
-    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+    if (!ENEMY_RANDOMIZER)
+    {
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+    }
+    random_enemies();
     if (CHRIS)
     {
-        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     evt_exec(0, TASK_09, on_enter);
     evt_exec(0, TASK_09, on_enter_2);
@@ -40,6 +58,38 @@ proc init
 
 proc main
 {
+    // Under ITEM_RANDOMIZER the reader is done once the MO disc is used
+    // (scenario flag), not once the pass code is taken, and the slot is an
+    // ordinary pickup on the reader from then until it is taken.
+    if (ITEM_RANDOMIZER)
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_71_MO_DISC_510, FALSE))
+        {
+            aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
+            aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+            aot_delete(AOT_02_ITEM, SCE_DOCUMENT, 0);
+        }
+        else
+        {
+            aot_reset(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+            if (ck(FG_ITEM, F_ITEM_5A, TRUE))
+            {
+                aot_reset(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+                aot_delete(AOT_02_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
+            }
+            else
+            {
+                aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+                aot_delete(AOT_02_ITEM, SCE_DOCUMENT, 0);
+            }
+        }
+        if (testitem(IT_28_KEY_MO_DISK))
+        {
+            set(FG_SCENARIO, F_SCENARIO_71_MO_DISC_510, TRUE);
+            evt_exec(0, TASK_09, from_main);
+        }
+        return;
+    }
     if (ck(FG_ITEM, F_ITEM_5A, TRUE))
     {
         aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);

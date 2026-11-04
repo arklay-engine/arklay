@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="110" name="1F WEST ELEVATOR STAIRS" tags="mansion">
+    <door id="0" target="104:2" kind="unlock" lock="19" tags="softlock-safe">
+      <entrance x="12700" y="-7200" z="3300" d="0"/>
+    </door>
+    <door id="1" target="21C:2">
+      <entrance x="2900" y="0" z="10400" d="0"/>
+    </door>
+  </room>
+  <spot x="16915" y="-7200" z="6431" d="2992"/>
+  <spot x="16985" y="-7200" z="10172" d="1056"/>
+  <spot x="17099" y="-7200" z="3410" d="1904"/>
+</random>

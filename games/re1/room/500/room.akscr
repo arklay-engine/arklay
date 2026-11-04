@@ -27,6 +27,26 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_4B, TRUE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR, 0, 8000, 2500, 3300, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, DOOR_LOCKED | F_LOCK_1C, ROOM_501_HELIPORT_PASSAGE, 30000, 0, 3500, 2048, IT_37_KEY_LAB_MASTER, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 7500, 2400, 1600, 1700, 0, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, STAGE_3 | ROOM_310_COURT_TO_LABO, 0, 0, 0, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 3200, 5900, 2100, 1700, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_502_LADDER_ROOM, 5300, 0, 11200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -68,13 +88,18 @@ proc init
                 }
             }
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+        if (!DOOR_RANDOMIZER)
         {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-        }
-        else
-        {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 255, 0);
+            // With door rando the lift stays a door after Tyrant 1, since it
+            // may be the only way out (staging's FixDoor500).
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+            {
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+            }
+            else
+            {
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 255, 0);
+            }
         }
         if (JILL)
         {

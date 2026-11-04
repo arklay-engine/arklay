@@ -152,81 +152,96 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 2400, 700, 2400, 1700, 10, DOOR_SND_0C_DR_AIR, DOOR_0D_DOOR13, 64, 0, ROOM_513_TYRANT_ROOM, 4700, 0, 25500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 13500, 8500, 1800, 2900, 0, DOOR_SND_0D_EV_LAB, DOOR_13_ELE01B, 64, 0, ROOM_515_B4_ELEVATOR, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+    if (!CUTSCENES_DISABLED)
     {
-        if (CHRIS)
+        if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
         {
-            room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD);
-        }
-        enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 2950, 0, 3000, ENEMY_00, ANIM_32, 0, EVAR_00);
-        if (CHRIS)
-        {
-            if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (CHRIS)
             {
-                enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 13480, 0, 11000, ENEMY_01_NPC_REBECCA, ANIM_00, 0, EVAR_00);
+                room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD);
             }
-            evt_exec(0, TASK_09, on_enter);
-        }
-        else
-        {
-            room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD | 1);
-            if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+            enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 2950, 0, 3000, ENEMY_00, ANIM_32, 0, EVAR_00);
+            if (CHRIS)
             {
-                enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 13480, 0, 11000, ENEMY_01_NPC_BARRY, ANIM_00, 0, EVAR_00);
-                evt_exec(0, TASK_09, on_enter_sub1);
+                if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+                {
+                    enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 13480, 0, 11000, ENEMY_01_NPC_REBECCA, ANIM_00, 0, EVAR_00);
+                }
+                evt_exec(0, TASK_09, on_enter);
             }
             else
             {
-                evt_exec(0, TASK_09, on_enter_2);
+                room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD | 1);
+                if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+                {
+                    enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 13480, 0, 11000, ENEMY_01_NPC_BARRY, ANIM_00, 0, EVAR_00);
+                    evt_exec(0, TASK_09, on_enter_sub1);
+                }
+                else
+                {
+                    evt_exec(0, TASK_09, on_enter_2);
+                }
             }
         }
     }
     if (CHRIS)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1904, 0, 12590, 0, 11000, ENEMY_00, ANIM_00, 0, EVAR_00);
-            eml_state(0, ENEMY_00, EML_STATUS, EML_STATUS_OR | 2);
-            set(FG_COMMON, F_COMMON_4C, TRUE);
-            room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_OFF);
-            evt_exec(0, TASK_09, on_enter_2);
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+            {
+                enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1904, 0, 12590, 0, 11000, ENEMY_00, ANIM_00, 0, EVAR_00);
+                eml_state(0, ENEMY_00, EML_STATUS, EML_STATUS_OR | 2);
+                set(FG_COMMON, F_COMMON_4C, TRUE);
+                room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_OFF);
+                evt_exec(0, TASK_09, on_enter_2);
+            }
         }
     }
     else
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, TRUE))
+        if (!CUTSCENES_DISABLED)
         {
-            room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 2);
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, TRUE))
+            {
+                room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 2);
+            }
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            room_bgm_state_set(4, ROOM_500_UNDER_FOUNTAIN, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_501_HELIPORT_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
-            room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_503_STAIRS, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_504_CONFERENCE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_507_MORTUARY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_508_DOUBLE_LOCK, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_509_PRIVATE_ROOM_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_50A_PRIVATE_ROOM_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_50B_FRONT_OF_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_50C_FRONT_OF_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_50D_ESCAPE_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
-            room_bgm_state_set(4, ROOM_50E_SAVE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_510_MAZE_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_511_ENGINE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_513_TYRANT_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-            room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD | 2);
-            room_bgm_state_set(4, ROOM_515_B4_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+            {
+                room_bgm_state_set(4, ROOM_500_UNDER_FOUNTAIN, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_501_HELIPORT_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+                room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_503_STAIRS, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_504_CONFERENCE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_507_MORTUARY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_508_DOUBLE_LOCK, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_509_PRIVATE_ROOM_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_50A_PRIVATE_ROOM_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_50B_FRONT_OF_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_50C_FRONT_OF_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_50D_ESCAPE_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+                room_bgm_state_set(4, ROOM_50E_SAVE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_510_MAZE_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_511_ENGINE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_513_TYRANT_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+                room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_RELOAD | 2);
+                room_bgm_state_set(4, ROOM_515_B4_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+            }
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+        if (!CUTSCENES_DISABLED)
         {
-            enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3232, 0, 2836, 0, 3180, ENEMY_00, ANIM_00, 0, EVAR_00);
-            evt_exec(0, TASK_09, on_enter_3);
+            if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4C, FALSE))
+            {
+                enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3232, 0, 2836, 0, 3180, ENEMY_00, ANIM_00, 0, EVAR_00);
+                evt_exec(0, TASK_09, on_enter_3);
+            }
         }
     }
 }

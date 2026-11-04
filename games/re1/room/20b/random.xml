@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="20B" name="2F EAST FIREPLACE" tags="mansion">
+    <door id="0" target="207:2">
+      <entrance x="7800" y="0" z="8000" d="1024"/>
+    </door>
+    <door id="5" target="20C:0" lock="25" key="54" requires="item(54)">
+      <entrance x="2500" y="0" z="7400" d="0"/>
+    </door>
+    <item id="4" flag="17" type="79" amount="1" group="1" name="MAP ABOVE FIREPLACE" requires="item(48)" document="true"/>
+    <item id="3" flag="162" type="68" amount="1" group="1" name="GREEN HERB"/>
+    <enemies exclude="4" max-difficulty="1"/>
+  </room>
+  <spot x="2811" y="0" z="2997" d="3296"/>
+  <spot x="3248" y="0" z="5283" d="440"/>
+  <spot x="5013" y="0" z="5126" d="1992"/>
+  <spot x="5479" y="0" z="7110" d="720"/>
+  <spot x="7612" y="0" z="5134" d="1992"/>
+</random>

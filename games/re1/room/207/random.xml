@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="207" name="2F EAST STAIRS" tags="mansion">
+    <door id="0" target="204:3" kind="unlock" lock="22">
+      <entrance x="3000" y="0" z="3600" d="3072" cut="7"/>
+    </door>
+    <!-- staging lockKey 52 has no lockId, so staging leaves this door unlocked -->
+    <door id="1" target="208:1" key="52" requires="item(52)">
+      <entrance x="17000" y="0" z="11300" d="3072" cut="5"/>
+    </door>
+    <door id="2" target="20B:0">
+      <entrance x="30400" y="0" z="5000" d="3072" cut="4"/>
+    </door>
+    <door id="3" target="10B:1" allowed-locks="" no-unlock="true">
+      <entrance x="8600" y="2885" z="19000" d="0"/>
+    </door>
+    <door id="4" target="206:1" kind="locked" lock="21">
+      <entrance x="3000" y="0" z="12100" d="0"/>
+    </door>
+    <enemies exclude="4"/>
+  </room>
+  <spot x="11764" y="0" z="11442" d="2014"/>
+  <spot x="14960" y="0" z="12039" d="2054"/>
+  <spot x="20203" y="0" z="12129" d="134"/>
+  <spot x="23257" y="0" z="11512" d="4070"/>
+  <spot x="27170" y="0" z="12084" d="2070"/>
+  <spot x="2836" y="0" z="8963" d="1078"/>
+  <spot x="2939" y="0" z="6527" d="3014"/>
+  <spot x="30221" y="0" z="8143" d="3110"/>
+  <spot x="30410" y="0" z="11701" d="2150"/>
+  <spot x="4236" y="0" z="11507" d="2014"/>
+  <spot x="7720" y="0" z="11485" d="2094"/>
+</random>

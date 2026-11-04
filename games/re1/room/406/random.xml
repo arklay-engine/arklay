@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="406" name="GUARDHOUSE ROOM 002" tags="guardhouse">
+    <door id="0" target="405:1" lock="41">
+      <entrance x="3000" y="0" z="3000" d="0"/>
+    </door>
+    <door id="1" target="407:0">
+      <entrance x="3100" y="0" z="3700" d="1024"/>
+    </door>
+    <door id="2" target="40D:0" kind="unblock" allowed-locks="" no-unlock="true">
+      <entrance x="12000" y="0" z="8000" d="1024"/>
+    </door>
+    <item id="6" flag="25" type="12" amount="7" group="8" name="LOCKED DRAWER" requires="item(61)" lock="34"/>
+    <item id="7" flag="134" type="100" amount="1" group="8" name="DOCUMENT ON BED" document="true"/>
+    <item id="8" flag="135" type="82" amount="1" group="8" name="MAP ON WALL" document="true"/>
+    <enemies exclude="4" max-difficulty="1" player="chris"/>
+    <!-- staging condition: !(1:178 && !1:174 && 1:176 && 1:177) -->
+    <enemies exclude="4" max-difficulty="1" player="jill"/>
+  </room>
+  <spot x="11584" y="0" z="4667" d="3192"/>
+  <spot x="14052" y="0" z="6794" d="1952"/>
+  <spot x="8317" y="0" z="3000" d="0"/>
+</random>

@@ -26,6 +26,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_5A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR, 11300, 15800, 3000, 2900, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_MESSAGE, 17700, 8300, 2100, 1600, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 5800, 4400, 2100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
@@ -44,7 +61,10 @@ proc init
         {
             aot_set(AOT_03_MESSAGE, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
             enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 9000, 0, 3726, ENEMY_00_NPC_WESKER, ANIM_00, 0, EVAR_00);
-            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_B5, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_09_CHIMERA, EB_03, F_ENEMY_B5, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     evt_exec(0, TASK_09, on_enter);

@@ -18,6 +18,17 @@
 //! wins, so one without `when` after the others is the room's default; a
 //! kind with none reads every file of its folder, slot `n` from file `n`.
 //!
+//! `<room origin="106">` names the original room a generated game's room was
+//! copied from: the room plays as its origin wherever the engine keys
+//! behaviour to an original room ([`crate::state::RoomOrigins`]), and a room
+//! without one is its own. `<doors>` gives a door a target its script's
+//! target byte cannot name: `<door aot="3" target="09-40"/>` sends the door
+//! the script arms in AOT slot 3 to room `09-40`, and an optional
+//! `next="0x45"` limits the entry to the door whose target byte is `0x45`
+//! ([`crate::state::DoorTarget`]). A room id is the folder name: `10b`, or
+//! the long form `09-40` past the original games' stages and rooms
+//! ([`RoomId`]).
+//!
 //! Every integer attribute is read as decimal or `0x` hex; the writer uses
 //! hex for the few raw words and decimal for everything else. The packed
 //! flag words of the RDT (collision boxes, walk zones, mask sprites) are
@@ -158,6 +169,9 @@ pub fn write(room: &RoomSource) -> Result<String> {
     if let Some(slots) = room.item_slots {
         attributes.push(("itemSlots", dec(slots as i64)));
     }
+    if let Some(origin) = room.origin {
+        attributes.push(("origin", Value::Str(origin.room3().to_ascii_lowercase())));
+    }
     w.open("room", &attributes);
     let [r, g, b] = room.ambient;
     w.empty("ambient", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
@@ -247,9 +261,30 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
 
     write_slots(&mut w, &room.slots);
+    write_doors(&mut w, &room.doors);
     write_strings(&mut w, &room.strings);
     w.close("room");
     Ok(w.out)
+}
+
+/// The room's door targets as a `<doors>` block; nothing when it has none.
+fn write_doors(w: &mut Writer, doors: &[crate::state::DoorTarget]) {
+    if doors.is_empty() {
+        return;
+    }
+    w.open("doors", &[]);
+    for door in doors {
+        let mut attributes = vec![("aot", dec(door.aot))];
+        if let Some(next) = door.next {
+            attributes.push(("next", Value::Str(format!("0x{next:02X}"))));
+        }
+        attributes.push((
+            "target",
+            Value::Str(door.target.room3().to_ascii_lowercase()),
+        ));
+        w.empty("door", &attributes);
+    }
+    w.close("doors");
 }
 
 /// The slot lists the room names, as a `<slots>` block; nothing when it
@@ -793,7 +828,10 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
             root.tag_name().name()
         );
     }
-    check_attributes(root, &["format", "game", "objectSlots", "itemSlots"])?;
+    check_attributes(
+        root,
+        &["format", "game", "objectSlots", "itemSlots", "origin"],
+    )?;
     let format: u32 = attr_or(root, "format", FORMAT)?;
     if format != FORMAT && format != FORMAT_WITH_MESSAGES {
         bail!("room XML format {format} is not supported (expected {FORMAT})");
@@ -802,6 +840,7 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
     let mut room = RoomSource {
         object_slots: optional_attr::<u8>(root, "objectSlots")?.map(usize::from),
         item_slots: optional_attr::<u8>(root, "itemSlots")?.map(usize::from),
+        origin: root.attribute("origin").map(parse_room_ref).transpose()?,
         dialect: match root.attribute("game") {
             None | Some("re1") => Dialect::Re1,
             Some("re2") => Dialect::Re2,
@@ -887,12 +926,69 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
                     .collect::<Result<_>>()?;
             }
             "slots" => room.slots = parse_slots(node)?,
+            "doors" => room.doors = parse_doors(node)?,
             "strings" => room.strings = parse_strings(node)?,
             "messages" if format == FORMAT_WITH_MESSAGES => {}
             other => bail!("unknown room element <{other}>"),
         }
     }
     Ok(room)
+}
+
+/// A room named by an attribute (`origin="10b"`, `target="09-40"`): a room
+/// id without its player digit, as player 0 on the first visit.
+fn parse_room_ref(text: &str) -> Result<RoomId> {
+    RoomId::parse_room(text).with_context(|| {
+        format!("`{text}` is not a room id such as 10b or 09-40 (no player digit)")
+    })
+}
+
+/// `<doors>`: one `<door aot=".." target=".."/>`, with an optional `next`,
+/// per door that leads somewhere its target byte cannot name
+/// ([`crate::state::DoorTarget`]).
+fn parse_doors(node: Node<'_, '_>) -> Result<Vec<crate::state::DoorTarget>> {
+    check_attributes(node, &[])?;
+    let doors = children(node, "door")?
+        .map(|door| {
+            check_attributes(door, &["aot", "next", "target"])?;
+            Ok(crate::state::DoorTarget {
+                aot: attr(door, "aot")?,
+                next: optional_attr(door, "next")?,
+                target: parse_room_ref(attr_text(door, "target")?)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    for (index, door) in doors.iter().enumerate() {
+        if doors[..index]
+            .iter()
+            .any(|other| other.aot == door.aot && other.next == door.next)
+        {
+            bail!("<doors> names AOT {} twice", door.aot);
+        }
+    }
+    Ok(doors)
+}
+
+/// The `origin` of `room.xml` `text` (`<room origin="10b">`), reading only
+/// its root element's start tag, so a pack's rooms can be scanned without
+/// parsing every definition. `None` for a room that is its own origin.
+pub fn origin_of(text: &str) -> Result<Option<RoomId>> {
+    let start = text
+        .find("<room")
+        .context("room XML has no <room> element")?;
+    let end = text[start..]
+        .find('>')
+        .map(|end| start + end)
+        .context("room XML's <room> start tag is not closed")?;
+    let tag = text[start..end].trim_end_matches('/');
+    let tag = format!("{tag}/>");
+    let document =
+        Document::parse(&tag).context("room XML's <room> start tag is not well-formed")?;
+    document
+        .root_element()
+        .attribute("origin")
+        .map(parse_room_ref)
+        .transpose()
 }
 
 /// A `<strings>` block: the room's `name`, `save_name`, message texts and

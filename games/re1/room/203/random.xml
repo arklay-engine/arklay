@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="203" name="2F MAIN HALL" tags="mansion">
+    <door id="0" target="106:4" allowed-locks="" randomize="false">
+      <entrance x="17100" y="0" z="25300" d="3072"/>
+    </door>
+    <door id="3" target="202:1">
+      <entrance x="3400" y="-2885" z="17000" d="0"/>
+    </door>
+    <door id="2" target="204:0">
+      <entrance x="31200" y="-2885" z="20500" d="2048"/>
+    </door>
+    <door id="1" target="211:0">
+      <entrance x="31500" y="-2885" z="8000" d="2048"/>
+    </door>
+    <item id="8" flag="14" type="17" amount="6" group="1" name="BARRY'S GIFT" optional="true" player="jill"/>
+  </room>
+  <spot x="13076" y="-2885" z="15202" d="2207"/>
+  <spot x="17292" y="-2885" z="15991" d="1815"/>
+  <spot x="19780" y="-2885" z="15610" d="119"/>
+  <spot x="23635" y="-2885" z="15548" d="2151"/>
+  <spot x="26297" y="-2885" z="21224" d="103"/>
+  <spot x="26985" y="-2885" z="16342" d="3303"/>
+  <spot x="27885" y="-2885" z="19100" d="2511"/>
+  <spot x="2909" y="-2885" z="8303" d="3159"/>
+  <spot x="2967" y="-2885" z="12678" d="3023"/>
+  <spot x="30291" y="-2885" z="16901" d="2039"/>
+  <spot x="3051" y="-2885" z="4030" d="3079"/>
+  <spot x="30590" y="-2885" z="24891" d="1383"/>
+  <spot x="31140" y="-2885" z="3605" d="2959"/>
+  <spot x="31291" y="-2885" z="12134" d="3127"/>
+  <spot x="4624" y="-2885" z="21140" d="583"/>
+  <spot x="4879" y="-2885" z="24275" d="487"/>
+  <spot x="6363" y="-2885" z="19760" d="2863"/>
+  <spot x="7418" y="-2885" z="22052" d="1135"/>
+  <spot x="8109" y="-2885" z="16398" d="2391"/>
+</random>

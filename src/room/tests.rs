@@ -902,3 +902,120 @@ fn an_re2_rooms_guide_areas_survive_the_xml() {
     let text = xml::write(&source).unwrap();
     assert_eq!(xml::parse(&text).unwrap(), source);
 }
+
+/// The converted room `ID` copied to `copy`'s per-RDT folder with `root`
+/// spliced into its `<room` start tag and `doors` before its end.
+fn copied_room(copy: RoomId, root: &str, doors: &str) -> Pack {
+    let (_, mut entries) = converted_entries();
+    let from = format!("{}/", ID.rdt_dir());
+    let to = format!("{}/", copy.rdt_dir());
+    let copies: Vec<_> = entries
+        .iter()
+        .filter_map(|(path, data)| {
+            let rest = path.strip_prefix(&from)?;
+            let mut data = data.clone();
+            if rest == "room.xml" {
+                let text = String::from_utf8(data).unwrap();
+                let text = text.replacen("<room ", &format!("<room {root} "), 1);
+                let text = text.replacen("</room>", &format!("{doors}</room>"), 1);
+                data = text.into_bytes();
+            }
+            Some((format!("{to}{rest}"), data))
+        })
+        .collect();
+    entries.extend(copies);
+    pack_of(entries)
+}
+
+#[test]
+fn a_copied_room_plays_as_its_origin() {
+    let copy = RoomId::parse("09-40-1").unwrap();
+    let pack = copied_room(
+        copy,
+        r#"origin="205""#,
+        r#"<doors><door aot="3" target="10b"/><door aot="3" next="0x45" target="09-41"/></doors>"#,
+    );
+    assert_eq!(
+        pack.room_origins().pairs().collect::<Vec<_>>(),
+        [((9, 0x40), (2, 5))]
+    );
+    assert!(ids(&pack).contains(&copy));
+    // A mansion origin gives the copy the second visit's variant too.
+    assert_eq!(
+        pack.room_origins().with_visit(copy, true),
+        RoomId {
+            mansion2: true,
+            ..copy
+        }
+    );
+    let loaded = load(&pack, copy).unwrap();
+    assert_eq!(loaded.state.id(), copy);
+    assert_eq!(loaded.state.origin, Some((2, 5)));
+    assert_eq!(loaded.state.origin(), ID);
+    assert_eq!(loaded.state.table_row(), 1);
+    assert_eq!(
+        loaded.state.door_targets,
+        [
+            crate::state::DoorTarget {
+                aot: 3,
+                next: None,
+                target: RoomId::parse_room("10B").unwrap(),
+            },
+            crate::state::DoorTarget {
+                aot: 3,
+                next: Some(0x45),
+                target: RoomId::parse_room("09-41").unwrap(),
+            },
+        ]
+    );
+    // The original keeps no origin and no door targets.
+    let original = load(&pack, ID).unwrap();
+    assert_eq!(original.state.origin, None);
+    assert!(original.state.door_targets.is_empty());
+}
+
+#[test]
+fn origins_and_door_targets_round_trip_through_the_xml() {
+    let copy = RoomId::parse("09-40-1").unwrap();
+    let pack = copied_room(
+        copy,
+        r#"origin="205""#,
+        r#"<doors><door aot="2" next="0x21" target="11-00"/></doors>"#,
+    );
+    let text =
+        String::from_utf8(pack.read(&rdt_file(copy, "room.xml")).unwrap().into_owned()).unwrap();
+    let source = xml::parse(&text).unwrap();
+    assert_eq!(source.origin, Some(RoomId::parse_room("205").unwrap()));
+    let written = xml::write(&source).unwrap();
+    assert!(written.contains(r#"origin="205""#), "{written}");
+    assert!(
+        written.contains(r#"<door aot="2" next="0x21" target="11-00"/>"#),
+        "{written}"
+    );
+    assert_eq!(xml::parse(&written).unwrap(), source);
+    assert_eq!(xml::origin_of(&written).unwrap(), source.origin);
+    // A room without an origin writes none.
+    let (plain, _) = converted_entries();
+    assert_eq!(xml::origin_of(&plain).unwrap(), None);
+    assert!(!plain.contains("<doors"));
+}
+
+#[test]
+fn bad_origins_and_door_targets_are_rejected() {
+    let (xml_text, _) = converted_entries();
+    let with = |root: &str, doors: &str| {
+        xml_text
+            .replacen("<room ", &format!("<room {root} "), 1)
+            .replacen("</room>", &format!("{doors}</room>"), 1)
+    };
+    assert!(
+        xml::parse(&with(r#"origin="01-05""#, "")).is_err(),
+        "long form of a short id"
+    );
+    assert!(xml::origin_of(&with(r#"origin="zz""#, "")).is_err());
+    assert!(xml::parse(&with("", r#"<doors><door aot="1" target="1000"/></doors>"#)).is_err());
+    let twice = r#"<doors><door aot="1" target="100"/><door aot="1" target="101"/></doors>"#;
+    assert!(xml::parse(&with("", twice)).is_err());
+    let unknown = r#"<doors><door aot="1" target="100" stage="2"/></doors>"#;
+    assert!(xml::parse(&with("", unknown)).is_err());
+}

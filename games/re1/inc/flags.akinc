@@ -97,6 +97,7 @@
 #define F_SCENARIO_7C 0x7C
 #define F_SCENARIO_7D 0x7D
 #define F_SCENARIO_7F 0x7F
+#define F_SCENARIO_C0 0xC0
 
 #define F_COMMON_00 0x00
 #define F_COMMON_01 0x01
@@ -221,7 +222,9 @@
 #define F_LOCK_0C 0x0C
 #define F_LOCK_0D 0x0D
 #define F_LOCK_0E 0x0E
+#define F_LOCK_0F 0x0F
 #define F_LOCK_10 0x10
+#define F_LOCK_11 0x11
 #define F_LOCK_12 0x12
 #define F_LOCK_13 0x13
 #define F_LOCK_14 0x14

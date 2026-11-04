@@ -67,6 +67,13 @@ pub const STATE_BYTE_ENT_ACTION: u8 = 17;
 pub const STATE_BYTE_USED_ITEM: u8 = 18;
 /// State byte holding the last picked item (BioCard 0x213).
 pub const STATE_BYTE_PICKED_ITEM: u8 = 19;
+/// Arklay-only state byte: the action slot plus one of the item AOT whose
+/// pickup set [`STATE_BYTE_PICKED_ITEM`] this frame, 0 for none. The original
+/// leaves the byte (BioCard 0x214, a fade word no script reads) alone. The
+/// forward probe byte does not do: it lasts one frame and the pickup runs
+/// frames later, after the prompt. `picked()` tests it. Cleared with the
+/// picked item.
+pub const STATE_BYTE_PICKED_AOT: u8 = 20;
 /// First byte of the 32-bit play-timer snapshot (BioCard 0x224), the
 /// original's `g_gameTimerSnapshot`. It ticks at 30 Hz and is read by the
 /// RESULT screen and the next-cycle grant.
@@ -474,6 +481,43 @@ pub const MESSAGE_TYPEWRITER_RIBBON_PROMPT: u8 = 0xDF;
 pub const MESSAGE_TYPEWRITER_SAVE_PROMPT: u8 = 0xE0;
 /// Scenario-2 flag cleared when a `0x10` cure removes the poison bit `0x20`.
 pub const SCENARIO2_FLAG_YAWN_POISONED: u8 = 0x43;
+/// Scenario flag BioRand's ink option raises (`BR_INK_FLAG`): ink is needed
+/// to save for both characters when it is up.
+pub const BR_INK_SCENARIO_FLAG: u8 = 122;
+
+/// Whether saving needs an ink ribbon: scenario flag 122 under `BR_INK_FLAG`,
+/// else the per-character rule.
+pub fn ink_ribbons_needed(br_ink_flag: bool, scenario_flag_122: bool, per_character: bool) -> bool {
+    if br_ink_flag {
+        scenario_flag_122
+    } else {
+        per_character
+    }
+}
+
+/// What Yawn's bite does to the player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YawnPoison {
+    /// The original's: status `0x20`, cured by the serum, with the rescue.
+    Original,
+    /// Ordinary poison a blue herb cures.
+    Ordinary,
+}
+
+/// The first Yawn's poison under `BR_YAWN_POISON`: ordinary under door
+/// randomization; otherwise the original's once room 100 has been visited,
+/// ordinary before. Without the flag it is always the original's.
+pub fn yawn_bite_poison(
+    br_yawn_poison: bool,
+    door_rando: bool,
+    room_100_visited: bool,
+) -> YawnPoison {
+    if !br_yawn_poison || (!door_rando && room_100_visited) {
+        YawnPoison::Original
+    } else {
+        YawnPoison::Ordinary
+    }
+}
 /// Scenario-2 flag marking Jill's first playthrough (with the main hall's
 /// ink-ribbon room-items bit). `InitializeGame` raises both on a new Jill game.
 pub const SCENARIO2_FLAG_JILL_FIRST_RUN: u8 = 0x0B;
@@ -511,6 +555,17 @@ const ROOM_GUARDHOUSE_SAVE: u8 = 0x0A;
 /// derives it as `140 - 44 * (id & 1)` on both the new-game and continue paths.
 pub fn character_max_health(character: u8) -> i16 {
     140 - 44 * i16::from(character & 1)
+}
+
+/// A decoded door lock byte ([`GameState::door_lock`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DoorLock {
+    /// The door is locked until its flag is raised.
+    locked: bool,
+    /// The door turns Rebecca away.
+    refuses_rebecca: bool,
+    /// The flag index in [`BANK_LOCKS`].
+    flag: u8,
 }
 
 /// One MSB-first flag bank.
@@ -1146,10 +1201,15 @@ pub struct Door {
     /// bits the animation's entry camera.
     pub camera: u8,
     /// Lock descriptor: bit `0x80` start locked, bit `0x40` one character,
-    /// low six bits the lock flag index in bank 2.
+    /// low six bits the lock flag index in bank 2. With `BR_LOCK_FULL_BYTE`
+    /// raised the whole byte is the flag index and 0 is unlocked.
     pub lock: u8,
     /// Room number within the destination stage; values `>= 0x20` also change
-    /// stage.
+    /// stage: bits 5-7 are the original's 0-based stage plus one (its
+    /// per-room table row, so `0xC0` and `0xE0` name the second mansion
+    /// visit) and bits 0-4 the room. `0xFF` leads nowhere. A generated
+    /// game's door that leads further keeps this byte and names its room in
+    /// [`Door::target`].
     pub next_room: u8,
     /// Spawn position in the target room: X and Z are zero-extended room
     /// coordinates, Y is a signed height.
@@ -1164,6 +1224,10 @@ pub struct Door {
     pub sub_type: u8,
     /// An RE2 door's destination; `next_room` then holds only the room.
     pub re2: Option<crate::scd2::host::Re2Door>,
+    /// The destination the room's `<doors>` gives this door
+    /// ([`crate::state::DoorTarget`]), which `next_room` cannot name; `None`
+    /// for a door that goes where `next_room` points (every retail door).
+    pub target: Option<RoomId>,
 }
 
 /// A room change requested by a door.
@@ -3084,6 +3148,12 @@ impl CountdownHud {
 pub struct GameState {
     /// The room this state belongs to.
     pub id: RoomId,
+    /// Where the pack's rooms were made from: [`GameState::origin`] and the
+    /// visit of a door's destination read it.
+    pub origins: crate::state::RoomOrigins,
+    /// The current room's door targets beyond its doors' target bytes
+    /// (`room.xml`'s `<doors>`), which arm [`Door::target`].
+    pub door_targets: Vec<crate::state::DoorTarget>,
     /// The ten flag banks addressed by `ck`/`set`.
     pub flags: [FlagBank; FLAG_BANK_COUNT],
     /// BioCard-like state bytes, indexed by their offset from BioCard 0x200
@@ -3136,6 +3206,10 @@ pub struct GameState {
     /// the player model is Rebecca; the port records them so the save block
     /// round-trips.
     pub rebecca_inventory: [InventoryItem; INVENTORY_SLOTS_CHRIS],
+    /// Chris's and Jill's own inventory slot counts: the original's six and
+    /// eight, or what the pack's manifest sets (`chris_slots`, `jill_slots`).
+    /// Not saved: every path into a game sets them from the pack.
+    pub slot_counts: [usize; 2],
     /// The room's action table.
     pub room_actions: [Option<RoomAction>; ROOM_ACTION_SLOTS],
     /// Door records, one per door action slot.
@@ -3583,6 +3657,8 @@ impl Default for GameState {
         state_bytes[3] = 0x1F;
         Self {
             id: RoomId::default(),
+            origins: crate::state::RoomOrigins::default(),
+            door_targets: Vec::new(),
             region: crate::scd::akscr::Region::Usa,
             flags: [FlagBank::default(); FLAG_BANK_COUNT],
             state_bytes,
@@ -3601,6 +3677,7 @@ impl Default for GameState {
             fmv: FmvState::default(),
             inventory: Vec::new(),
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
+            slot_counts: [INVENTORY_SLOTS_CHRIS, INVENTORY_SLOTS_JILL],
             room_actions: [None; ROOM_ACTION_SLOTS],
             doors: [None; ROOM_ACTION_SLOTS],
             re2: Default::default(),
@@ -3755,10 +3832,14 @@ impl GameState {
     pub fn new(id: RoomId, room: &RoomState) -> Self {
         let mut state = Self {
             id,
+            door_targets: room.door_targets.clone(),
             ..Self::default()
         };
-        state.state_bytes[0] = id.stage;
-        state.state_bytes[1] = id.room;
+        // The scripts' `B_STAGE` and `B_ROOM` are the origin's, the room the
+        // scripts were written for.
+        let origin = room.origin.map_or(id, |origin| id.as_origin(origin));
+        state.state_bytes[0] = origin.stage;
+        state.state_bytes[1] = origin.room;
         state.set_camera_cut(0);
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
         // `GameInit` parks the special-room-light state at -1 so no overlay
@@ -3783,7 +3864,9 @@ impl GameState {
         } else {
             variant::JILL
         };
-        let mansion = match (self.id.is_mansion(), self.id.mansion2) {
+        // The visit is the origin's: a copy of a mansion room has both.
+        let origin = self.origin();
+        let mansion = match (origin.is_mansion(), origin.mansion2) {
             (true, false) => variant::MANSION1,
             (true, true) => variant::MANSION2,
             (false, _) => variant::OUTSIDE,
@@ -3821,12 +3904,16 @@ impl GameState {
     /// `g_roomId` from then on sees room 311. `load_room_bg_image` special-cases
     /// that id, reading `RC311<camera>.pak` on each cut, and the masks and the
     /// per-camera bias tables are looked up under it too.
+    ///
+    /// The room byte holds the origin's room ([`GameState::enter_room`]),
+    /// so a copy of room 303 draws the pack's own room 311.
     pub fn drawn_room(&self, loaded: RoomId) -> RoomId {
         let byte = self.state_bytes[1];
-        if (loaded.stage, loaded.room) == (3, 0x03) && byte == ROOM_SCRAPPED_HELIPORT {
+        let origin = self.origins.of(loaded);
+        if (origin.stage, origin.room) == (3, 0x03) && byte == ROOM_SCRAPPED_HELIPORT {
             RoomId {
                 room: byte,
-                ..loaded
+                ..origin
             }
         } else {
             loaded
@@ -4987,6 +5074,7 @@ impl GameState {
     /// pass; the same clear runs at the top of a room load.
     pub fn room_state_reset(&mut self) {
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = 0;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = 0;
         self.state_bytes[usize::from(STATE_BYTE_USED_ITEM)] = 0;
         self.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)] = 0;
         self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[4..8].fill(0);
@@ -5041,6 +5129,7 @@ impl GameState {
         self.flags[5].apply(MSF_OBJECT_PUSH, 1);
         self.resolve_room_effects(room);
         self.id = id;
+        self.door_targets.clone_from(&room.door_targets);
         self.mark_room_visited(id);
         self.apply_pending_player(id);
         // `RoomInit`'s model switch (0x00477904): the wardrobe stores model id
@@ -5051,8 +5140,11 @@ impl GameState {
             self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
             self.state_bytes[model] &= 7;
         }
-        self.state_bytes[0] = id.stage;
-        self.state_bytes[1] = id.room;
+        // The scripts' `B_STAGE` and `B_ROOM` are the origin's, the room the
+        // scripts were written for.
+        let origin = room.origin.map_or(id, |origin| id.as_origin(origin));
+        self.state_bytes[0] = origin.stage;
+        self.state_bytes[1] = origin.room;
         self.set_camera_cut(0);
         self.room_actions = [None; ROOM_ACTION_SLOTS];
         self.doors = [None; ROOM_ACTION_SLOTS];
@@ -5127,14 +5219,26 @@ impl GameState {
     /// Raise the room's visited bit (`room_set_visited_flag`): the bit block
     /// below [`ROOM_FLAG_MAP_BASE`] at the stage's map group offset. The map
     /// tab tints the floor plan from these bits.
+    ///
+    /// The bit is the origin's: the visited bits, like the floor plans, are
+    /// the original rooms', and a room past them sets none.
     pub fn mark_room_visited(&mut self, id: RoomId) {
+        let id = self.origins.of(id);
+        if id.room > RoomId::MAX_ROOM {
+            return;
+        }
         let group = usize::from((id.stage.wrapping_sub(1)) % 5).min(5);
         let bit = STAGE_ROOM_FLAG_OFFSETS[group].wrapping_add(id.room);
         self.apply_flag(BANK_ROOM_FLAGS, bit, 0);
     }
 
     /// Whether the room's visited bit is up.
+    /// `id` is an original room (the origin [`GameState::mark_room_visited`]
+    /// marks); a room past the bits is never visited.
     pub fn room_visited(&self, id: RoomId) -> bool {
+        if id.room > RoomId::MAX_ROOM {
+            return false;
+        }
         let group = usize::from((id.stage.wrapping_sub(1)) % 5).min(5);
         let bit = STAGE_ROOM_FLAG_OFFSETS[group].wrapping_add(id.room);
         self.flags[usize::from(BANK_ROOM_FLAGS)].bit(bit)
@@ -5323,11 +5427,7 @@ impl GameState {
         if self.is_re2_room {
             return INVENTORY_SLOTS_JILL;
         }
-        if self.id.player_flag & 1 == 1 {
-            INVENTORY_SLOTS_JILL
-        } else {
-            INVENTORY_SLOTS_CHRIS
-        }
+        self.slot_counts[usize::from(self.id.player_flag & 1)]
     }
 
     /// Set the debug inventory size (`None`: the character's own). Items
@@ -5440,15 +5540,43 @@ impl GameState {
 
     /// Whether the player's character needs ink ribbons to save, from the
     /// ink ribbon options. One who does not never sees an ink ribbon either.
+    ///
+    /// Under `BR_INK_FLAG` scenario flag 122 decides it for both characters
+    /// ([`ink_ribbons_needed`]).
     pub fn needs_ink_ribbons(&self) -> bool {
         if self.is_re2_room {
             return true;
         }
-        if self.id.player_flag & 3 == 1 {
+        let per_character = if self.id.player_flag & 3 == 1 {
             self.player_options.jill_ink_ribbons
         } else {
             !self.player_options.no_chris_ink_ribbons
-        }
+        };
+        ink_ribbons_needed(
+            self.system_flag(crate::scd::opcode::system::BR_INK_FLAG),
+            self.flag_test(0, BR_INK_SCENARIO_FLAG, false),
+            per_character,
+        )
+    }
+
+    /// Whether a bank 5 system flag (see [`crate::scd::opcode::system`]) is
+    /// raised: the engine's test for the BioRand behaviour flags.
+    pub fn system_flag(&self, bit: u8) -> bool {
+        self.flag_test(5, bit, false)
+    }
+
+    /// How Yawn's bite poisons now ([`yawn_bite_poison`]).
+    pub fn yawn_bite_poison(&self) -> YawnPoison {
+        use crate::scd::opcode::system;
+        yawn_bite_poison(
+            self.system_flag(system::BR_YAWN_POISON),
+            self.system_flag(system::DOOR_RANDOMIZER),
+            self.room_visited(RoomId {
+                stage: 1,
+                room: 0,
+                ..RoomId::default()
+            }),
+        )
     }
 
     /// The room-action typewriter handler (`room_check_actions[0x10]`).
@@ -5823,7 +5951,8 @@ impl GameState {
     /// Whether the current room is the guardhouse drug store, where chemicals
     /// may be combined.
     pub fn is_drug_store(&self) -> bool {
-        self.id.stage == STAGE_GUARDHOUSE && self.id.room == ROOM_DRUG_STOREHOUSE
+        let origin = self.origin();
+        origin.stage == STAGE_GUARDHOUSE && origin.room == ROOM_DRUG_STOREHOUSE
     }
 
     /// Apply the menu USE action for `item`, exactly as the original's
@@ -5985,7 +6114,11 @@ impl GameState {
         if cursor.id == 0 || target.id == 0 {
             return Err(CombineResult::NoRecipe);
         }
-        let Some(record) = items::combine(cursor.id, target.id) else {
+        let Some(record) = items::combine_with_mixes(
+            cursor.id,
+            target.id,
+            self.system_flag(crate::scd::opcode::system::BR_HERB_MIXES),
+        ) else {
             // No recipe: the original distinguishes two herbs (its result 3,
             // the `0xF6` "cannot combine" message) from every other pair.
             return Err(
@@ -6037,6 +6170,17 @@ impl GameState {
         }
     }
 
+    /// A stack's count as the ammunition transfer adds it. The original keeps
+    /// 7 bits, so a count of 128 or more (fuel, ammunition) is truncated; only
+    /// `--authentic` keeps that.
+    fn combine_count(&self, quantity: u8) -> u16 {
+        if self.player_options.authentic {
+            u16::from(quantity) & 0x7F
+        } else {
+            u16::from(quantity)
+        }
+    }
+
     /// The combine record's effect byte: 1/2 ammo transfer with the cursor /
     /// other slot winning, 3 quantity merge (cap `0xFA`), 4 chemical flag,
     /// 5 mode only, 6/7 one-way ammo transfer.
@@ -6045,7 +6189,7 @@ impl GameState {
         let target = self.inventory[target_slot];
         match effect {
             1 => {
-                let sum = u16::from(target.quantity) + (u16::from(cursor.quantity) & 0x7F);
+                let sum = u16::from(target.quantity) + self.combine_count(cursor.quantity);
                 let max = u16::from(self.item_defs.get(cursor.id).stack);
                 if max < sum {
                     self.inventory[cursor_slot].quantity = max as u8;
@@ -6056,7 +6200,7 @@ impl GameState {
                 }
             }
             2 => {
-                let sum = u16::from(cursor.quantity) + (u16::from(target.quantity) & 0x7F);
+                let sum = u16::from(cursor.quantity) + self.combine_count(target.quantity);
                 let max = u16::from(self.item_defs.get(target.id).stack);
                 if max < sum {
                     self.inventory[target_slot].quantity = max as u8;
@@ -6626,6 +6770,8 @@ impl GameState {
     /// before saturation, and the guardhouse control room draws the same rect
     /// twice.
     pub fn special_light_rect(&self, id: RoomId, camera: usize) -> Option<SpecialLight> {
+        // The rooms that change the overlay are origins.
+        let id = self.origins.of(id);
         let state = self.state_words[1] as i16;
         if state < 0 {
             return None;
@@ -6956,6 +7102,7 @@ impl GameState {
         let item = action.item_id();
         self.last_picked_item = Some(item);
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.mark_file_collected(item);
         // The state-8 screen clears the model byte and the room-items bit but
         // never frees the sparkle pool slot.
@@ -7150,6 +7297,27 @@ impl GameState {
             .filter(|action| action.kind == RoomActionKind::Item)
     }
 
+    /// Decode a door's lock byte. Vanilla: `0x80` starts locked, `0x40` turns
+    /// Rebecca away and the low six bits are the lock flag. With
+    /// `BR_LOCK_FULL_BYTE` raised the whole byte is the flag (0 is unlocked)
+    /// and Rebecca's refusal is the room script's business, so `0x40` is part
+    /// of the index.
+    fn door_lock(&self, byte: u8) -> DoorLock {
+        if self.system_flag(crate::scd::opcode::system::BR_LOCK_FULL_BYTE) {
+            DoorLock {
+                locked: byte != 0,
+                refuses_rebecca: false,
+                flag: byte,
+            }
+        } else {
+            DoorLock {
+                locked: byte & 0x80 != 0,
+                refuses_rebecca: byte & 0x40 != 0,
+                flag: byte & 0x3F,
+            }
+        }
+    }
+
     /// Whether the player can pick locks. The original only tests Jill's
     /// lockpick scenario flag; outside authentic mode a lockpick in the
     /// inventory also counts, for either character.
@@ -7240,8 +7408,8 @@ impl GameState {
     pub fn check_desk_state(&mut self) {
         // The guardhouse save room restarts the flow for Jill's first
         // playthrough, so a desk can never be left mid-state across the save.
-        if self.id.stage == GUARDHOUSE_STAGE
-            && self.id.room == ROOM_GUARDHOUSE_SAVE
+        if self.origin().stage == GUARDHOUSE_STAGE
+            && self.origin().room == ROOM_GUARDHOUSE_SAVE
             && self.id.player_flag & 3 == 1
             && !self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, false)
         {
@@ -7803,6 +7971,7 @@ impl GameState {
         self.last_picked_item = Some(item);
         // BioCard 0x213 (`pickedItemId`) is what the scripts test with cmpb 19.
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.item_events.push(item);
         // A document pickup raises its FILE-collected bit (bank 8,
         // `0x82 + (item - 0x5F)`) so the FILE tab lists it.
@@ -7872,6 +8041,7 @@ impl GameState {
         }
         self.last_picked_item = Some(item);
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
+        self.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = slot.saturating_add(1);
         self.tear_down_item(slot, action, false);
         true
     }
@@ -7959,15 +8129,16 @@ impl GameState {
         if door.re2.is_some() {
             return self.try_re2_door(&door);
         }
+        let lock = self.door_lock(door.lock);
         // The character-restriction test is inert for the two PC characters:
         // it compares the player id against 3, and ids 0/1 never match. Keep
         // the original's exact test so a record with bit 0x40 behaves the same.
-        if door.lock & 0x40 != 0 && self.id.player_flag & 3 == 3 {
+        if lock.refuses_rebecca && self.id.player_flag & 3 == 3 {
             self.show_message(MESSAGE_WRONG_CHARACTER, 0xFF);
             return false;
         }
         // Unlocked outright, or its lock flag is already raised.
-        if door.lock & 0x80 == 0 || self.flag_test(BANK_LOCKS, door.lock & 0x3F, false) {
+        if !lock.locked || self.flag_test(BANK_LOCKS, lock.flag, false) {
             return self.begin_transition(&door);
         }
         let need = door.key;
@@ -7976,7 +8147,7 @@ impl GameState {
             // the next probe walks through.
             self.sfx_requests.push(DOOR_CUE_OTHER_SIDE);
             self.show_message(MESSAGE_OTHER_SIDE, 0xFF);
-            self.apply_flag(BANK_LOCKS, door.lock & 0x3F, 0);
+            self.apply_flag(BANK_LOCKS, lock.flag, 0);
             return false;
         }
         if need == 0xFF {
@@ -8011,7 +8182,8 @@ impl GameState {
         self.event_item_used = true;
         self.selected_item = Some(turned);
         self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = turned;
-        let cue = if self.id.stage == LABORATORY_STAGE && self.id.room == ROOM_LAB_B3_PASSAGE {
+        let origin = self.origin();
+        let cue = if origin.stage == LABORATORY_STAGE && origin.room == ROOM_LAB_B3_PASSAGE {
             // The lab B3 passage plays the two mechanism sounds then this cue.
             self.sfx_requests.push(DOOR_CUE_LAB_B3_A);
             self.sfx_requests.push(DOOR_CUE_LAB_B3_B);
@@ -8021,7 +8193,7 @@ impl GameState {
         };
         self.sfx_requests.push(cue);
         self.show_message(MESSAGE_KEY_TURN, 0xFF);
-        self.apply_flag(BANK_LOCKS, door.lock & 0x3F, 0);
+        self.apply_flag(BANK_LOCKS, lock.flag, 0);
         false
     }
 
@@ -8055,25 +8227,81 @@ impl GameState {
             return None;
         }
         if dest < 0x20 {
-            Some(RoomId {
-                stage: from.stage,
-                room: dest,
-                player_flag: from.player_flag,
-                mansion2: from.mansion2,
-            })
+            // A generated stage's room keeps the visit when its own origin
+            // has one; an original stage's always does. A copy that plays
+            // the second visit whatever the game is on (its origin has no
+            // first one) leads on by the scenario flag.
+            let copy = self.origins.origin_room(from) != (from.stage, from.room);
+            let visit = if copy && self.origins.of(from).second_visit_only() {
+                self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false)
+            } else {
+                from.mansion2
+            };
+            Some(self.origins.with_visit(
+                RoomId {
+                    stage: from.stage,
+                    room: dest,
+                    player_flag: from.player_flag,
+                    mansion2: false,
+                },
+                visit,
+            ))
         } else {
             let row = usize::from((dest >> 5) - 1);
             let target = RoomId::from_table_row(row, dest & 0x1F);
             let mansion2 =
                 target.mansion2 || self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
-            Some(
+            Some(self.origins.with_visit(
                 RoomId {
                     player_flag: from.player_flag,
                     ..target
-                }
-                .with_visit(mansion2),
-            )
+                },
+                mansion2,
+            ))
         }
+    }
+
+    /// Where `door`, armed in room `from`, leads: its [`Door::target`] when
+    /// the room's `<doors>` gives one, else where its target byte points
+    /// ([`GameState::door_destination`]). `None` for a door that leads
+    /// nowhere.
+    pub fn door_leads_to(&self, from: RoomId, door: &Door) -> Option<RoomId> {
+        match door.target {
+            Some(target) => {
+                let mansion2 = self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
+                Some(self.origins.with_visit(
+                    RoomId {
+                        player_flag: from.player_flag,
+                        mansion2: false,
+                        ..target
+                    },
+                    mansion2,
+                ))
+            }
+            None => self.door_destination(from, door.next_room),
+        }
+    }
+
+    /// The target the current room's `<doors>` gives a door armed in AOT
+    /// `slot` with target byte `next_room`: the entry naming that byte, else
+    /// the slot's entry for any byte.
+    pub fn door_target_of(&self, slot: u8, next_room: u8) -> Option<RoomId> {
+        let targets = self.door_targets.iter().filter(|door| door.aot == slot);
+        targets
+            .clone()
+            .find(|door| door.next == Some(next_room))
+            .or_else(|| targets.clone().find(|door| door.next.is_none()))
+            .map(|door| door.target)
+    }
+
+    /// The current room as its origin plays it ([`RoomOrigins::of`]): the
+    /// id that engine behaviour keyed to an original room (its quirks,
+    /// music, sounds and tables) reads. The room's own id for a room
+    /// without an origin.
+    ///
+    /// [`RoomOrigins::of`]: crate::state::RoomOrigins::of
+    pub fn origin(&self) -> RoomId {
+        self.origins.of(self.id)
     }
 
     /// Arm the transition described by `door`, decoding the destination's
@@ -8092,7 +8320,7 @@ impl GameState {
         } else if camera_only {
             self.id
         } else {
-            let Some(target) = self.door_destination(self.id, door.next_room) else {
+            let Some(target) = self.door_leads_to(self.id, door) else {
                 return false;
             };
             target
@@ -8691,21 +8919,25 @@ impl<'a> ScdGameHost<'a> {
     }
 
     /// Whether `slot` holds an ink ribbon the player's character needs none
-    /// of. A script re-arming it as an item is ignored, so the ribbon stays
-    /// hidden and a typewriter swapped in for it stays.
+    /// of, or nothing (item 0, a slot a generated game empties). A script
+    /// re-arming it as an item is ignored, so the ribbon stays hidden, a
+    /// typewriter swapped in for it stays, and an empty slot never opens a
+    /// pickup.
     fn hidden_ribbon(&self, slot: u8) -> bool {
-        !self.state.needs_ink_ribbons()
-            && self
-                .state
-                .room_actions
-                .get(usize::from(slot))
-                .copied()
-                .flatten()
-                .is_some_and(|action| {
-                    action
-                        .item_data
-                        .is_some_and(|data| data[0] == self.state.ink_ribbon_item())
-                })
+        self.state
+            .room_actions
+            .get(usize::from(slot))
+            .copied()
+            .flatten()
+            .and_then(|action| action.item_data)
+            .is_some_and(|data| self.skipped_item(data[0]))
+    }
+
+    /// Whether an `item_aot_set` of `item` is skipped, its zone kept inert:
+    /// an ink ribbon the player's character needs none of, or item 0, which
+    /// a generated game's emptied slots hold (staging's `Item(0, 0)`).
+    fn skipped_item(&self, item: u8) -> bool {
+        item == 0 || (item == self.state.ink_ribbon_item() && !self.state.needs_ink_ribbons())
     }
 
     fn store_action(&mut self, action: RoomAction) {
@@ -8714,7 +8946,8 @@ impl<'a> ScdGameHost<'a> {
         }
     }
 
-    fn store_door(&mut self, door: Door) {
+    fn store_door(&mut self, mut door: Door) {
+        door.target = self.state.door_target_of(door.slot, door.next_room);
         if let Some(slot) = self.state.doors.get_mut(usize::from(door.slot)) {
             *slot = Some(door);
         }
@@ -9058,7 +9291,7 @@ impl ScdHost for ScdGameHost<'_> {
                     1 => {
                         // The original's tables are per stage row; the
                         // request formats the row's pack entry directly.
-                        let row = self.state.id.table_row() as u8;
+                        let row = self.state.origin().table_row() as u8;
                         // The one mixed-well-down line: stage 1's id 0x33,
                         // on the first visit.
                         let volume = if row == 0 && id == 0x33 { -300 } else { 0 };
@@ -9127,6 +9360,7 @@ impl ScdHost for ScdGameHost<'_> {
                     key: operand_u8(operands, 15),
                     sub_type: operand_u8(operands, 16),
                     re2: None,
+                    target: None,
                 };
                 let action = RoomAction {
                     slot,
@@ -9275,7 +9509,8 @@ impl ScdHost for ScdGameHost<'_> {
                 // event and documents their own. An ink ribbon is skipped (its
                 // room-items bit cleared, its zone kept inert) for a character
                 // who needs none; the original skips it on Jill's first
-                // playthrough.
+                // playthrough. Item 0, an emptied slot, is skipped the same
+                // way but leaves its bit alone.
                 // The crank's hex handle (0x1E) gets an extra texture-dirty
                 // write in the original; it has no analogue in the port
                 // (documented no-op).
@@ -9291,8 +9526,10 @@ impl ScdHost for ScdGameHost<'_> {
                 let z = operand_i16(operands, 11).to_le_bytes();
                 let room_items_flag = operand_u8(operands, 13);
                 let flags_word = operand_u16(operands, 15);
-                if item == self.state.ink_ribbon_item() && !self.state.needs_ink_ribbons() {
-                    self.state.mark_item_taken(room_items_flag);
+                if self.skipped_item(item) {
+                    if item != 0 {
+                        self.state.mark_item_taken(room_items_flag);
+                    }
                     // Port-only: the original leaves the slot unwritten, so a
                     // room that swaps the ribbon's zone for a typewriter once
                     // it is taken (room 106) gets no zone. Keep the zone,
@@ -9323,7 +9560,10 @@ impl ScdHost for ScdGameHost<'_> {
                 // build-order byte keeps naming every declaration; a hidden
                 // record keeps its flag byte 0.
                 let previous_asset = self.state.items.last_asset;
-                let built = self.state.items.build(operands, present, self.state.id);
+                let built = self
+                    .state
+                    .items
+                    .build(operands, present, self.state.origin());
                 // The courtyard and guardhouse maps darken their pair's 256
                 // palette entries, but only when the pair changes (the
                 // original's last-item-data cache).
@@ -9530,8 +9770,11 @@ impl ScdHost for ScdGameHost<'_> {
     fn on_model(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
         match op.op {
             0x1F => {
-                let fixup = self.state.objects.palette_fixup(operands, self.state.id);
-                if self.state.objects.build(operands, self.state.id)
+                let fixup = self
+                    .state
+                    .objects
+                    .palette_fixup(operands, self.state.origin());
+                if self.state.objects.build(operands, self.state.origin())
                     && let Some(fixup) = fixup
                 {
                     self.state.object_palette_edits.push((0, fixup));
@@ -9551,7 +9794,7 @@ impl ScdHost for ScdGameHost<'_> {
                 // item table. The water-tank entry's forced omodel clear fires
                 // before the table selector, so it is tried first and wins for
                 // both tables.
-                if !self.state.objects.set_flag(operands, self.state.id) {
+                if !self.state.objects.set_flag(operands, self.state.origin()) {
                     self.state.items.set_flag(operands);
                 }
                 StepResult::Continue
@@ -9887,9 +10130,10 @@ impl ScdHost for ScdGameHost<'_> {
 impl GameState {
     /// What `sce_bgm_control` and a room's music ask about where they run.
     pub fn re2_music_place(&self) -> crate::bgm2::Place {
+        let origin = self.origin();
         crate::bgm2::Place {
-            stage: self.id.stage.saturating_sub(1),
-            room: self.id.room,
+            stage: origin.stage.saturating_sub(1),
+            room: origin.room,
             cut: self.camera.current_cut,
             system: self.re2.banks[0][0],
             player: u8::from(self.re2.flag(1, crate::scd2::host::STATUS_PLAYER)),
@@ -9908,7 +10152,7 @@ fn channel_bit(channel: u8) -> u8 {
 /// The room-action handler an `item_aot_set` item id selects: maps use
 /// `pickup_key_event` (0x0F), documents `set_room_event_flag` (0x0D) and
 /// everything ordinary the pickup handler (4).
-fn item_handler(item: u8) -> u8 {
+pub(crate) fn item_handler(item: u8) -> u8 {
     if item < ITEM_MAP_FIRST {
         HANDLER_ITEM
     } else if item <= ITEM_MAP_LAST {
@@ -10137,6 +10381,14 @@ mod tests {
         assert!(matches!(result, CombineResult::Applied { .. }));
         assert_eq!(state.inventory.len(), 1);
         assert_eq!(state.inventory[0].quantity, 3 + 3);
+    }
+
+    #[test]
+    fn the_ammunition_transfer_truncates_to_seven_bits_only_when_authentic() {
+        let mut state = game();
+        assert_eq!(state.combine_count(200), 200);
+        state.player_options.authentic = true;
+        assert_eq!(state.combine_count(200), 72);
     }
 
     #[test]
@@ -13313,6 +13565,7 @@ mod tests {
             key: 0,
             sub_type: 0x81,
             re2: None,
+            target: None,
         }
     }
 
@@ -13369,6 +13622,96 @@ mod tests {
         assert_eq!(stored.lock, 0);
         assert_eq!(stored.key, 0);
         assert_eq!(stored.sub_type, 129);
+    }
+
+    #[test]
+    fn a_door_target_names_a_room_its_byte_cannot() {
+        use crate::state::{DoorTarget, RoomOrigins};
+        let high = RoomId::parse_room("09-40").unwrap();
+        let mut state = game();
+        state.origins = RoomOrigins::new([((9, 0x40), (1, 0x06)), ((9, 0x41), (3, 0x05))]);
+        state.door_targets = vec![
+            DoorTarget {
+                aot: 0,
+                next: None,
+                target: high,
+            },
+            DoorTarget {
+                aot: 0,
+                next: Some(0x45),
+                target: RoomId::parse_room("09-41").unwrap(),
+            },
+        ];
+        assert_eq!(state.door_target_of(0, 0x01), Some(high));
+        assert_eq!(
+            state.door_target_of(0, 0x45),
+            RoomId::parse_room("09-41"),
+            "the entry naming the byte wins"
+        );
+        assert_eq!(state.door_target_of(1, 0x01), None);
+        // `door_aot_set` arms it; the record keeps its own byte.
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x0C),
+                &operands(&[
+                    0, 2700, 500, 1700, 1800, 3, 0, 0, 4, 0, 1, 8700, 0, 7900, 1024, 0, 129,
+                ]),
+            );
+        }
+        let stored = state.doors[0].expect("door record");
+        assert_eq!((stored.next_room, stored.target), (1, Some(high)));
+        // The player's digit is the player's; the visit is the scenario's,
+        // through the target's origin.
+        let to = state.door_leads_to(state.id, &stored).unwrap();
+        assert_eq!(
+            to,
+            RoomId {
+                player_flag: 1,
+                ..high
+            }
+        );
+        assert!(state.apply_flag(0, SCENARIO_FLAG_MANSION2, 0));
+        assert!(state.door_leads_to(state.id, &stored).unwrap().mansion2);
+        let lab = Door {
+            target: RoomId::parse_room("09-41"),
+            ..stored
+        };
+        assert!(!state.door_leads_to(state.id, &lab).unwrap().mansion2);
+        // A door with no target goes where its byte says.
+        let plain = Door {
+            target: None,
+            ..stored
+        };
+        assert_eq!(
+            state.door_leads_to(state.id, &plain),
+            state.door_destination(state.id, 1)
+        );
+        // Interacting walks through it.
+        let mut state = game();
+        state.door_targets = vec![DoorTarget {
+            aot: 0,
+            next: None,
+            target: high,
+        }];
+        let armed = Door {
+            target: state.door_target_of(0, 0x1F),
+            ..door(0x1F, 0)
+        };
+        state.room_actions[0] = Some(door_action(armed));
+        state.doors[0] = Some(armed);
+        state.interact([-550, 0, 50], 0, true);
+        let transition = state.transition.expect("transition");
+        assert_eq!(
+            transition.target,
+            RoomId {
+                player_flag: 1,
+                ..high
+            }
+        );
+        // Inside a generated stage, a byte under 0x20 stays on it.
+        let inside = state.door_destination(transition.target, 0x05).unwrap();
+        assert_eq!((inside.stage, inside.room), (9, 5));
     }
 
     #[test]
@@ -14052,6 +14395,29 @@ mod tests {
         assert!(!state.items.record(0).unwrap().active());
         let action = state.room_actions[0].expect("the zone is kept");
         assert_eq!((action.handler, action.kind), (0, RoomActionKind::Other));
+    }
+
+    #[test]
+    fn item_aot_set_keeps_an_emptied_slot_inert() {
+        // A generated game empties a slot with item 0: nothing is built and
+        // nothing can be picked up, even when a script re-arms the zone.
+        let mut state = item_game("1000", 1);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(op(0x18), &operands(&item_values(0, 0, 0xFF, [1, 2, 3])));
+        }
+        assert_eq!(state.items.built, 0, "nothing is built");
+        assert!(state.room_item_present(1), "the room-items bit is left");
+        let kept = state.room_actions[0].expect("the zone is kept");
+        assert_eq!((kept.handler, kept.kind), (0, RoomActionKind::Other));
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[0, i64::from(HANDLER_ITEM), 0x81, 0, 3, 0]),
+            );
+        }
+        assert_eq!(state.room_actions[0].unwrap().handler, 0, "no pickup");
     }
 
     #[test]
@@ -15250,6 +15616,23 @@ mod tests {
     }
 
     #[test]
+    fn a_pickup_records_which_aot_was_picked_until_the_frame_ends() {
+        let mut state = item_game("1000", 2);
+        state.room_actions[0] = Some(item_action(0, 0x02, 1, [0, 0, 100, 100]));
+        state.room_actions[2] = Some(item_action(2, 0x03, 1, [0, 0, 100, 100]));
+        let byte = |state: &GameState, index: u8| state.state_bytes[usize::from(index)];
+        assert!(state.pick_up(2));
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_ITEM), 0x03);
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 3, "AOT 2, plus one");
+        state.room_state_reset();
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 0);
+        // A later pickup of another AOT names that AOT, not the first.
+        assert!(state.pick_up(0));
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_ITEM), 0x02);
+        assert_eq!(byte(&state, STATE_BYTE_PICKED_AOT), 1, "AOT 0, plus one");
+    }
+
+    #[test]
     fn map_handler_raises_the_room_flag_and_never_awards() {
         let mut state = item_game("1000", 1);
         {
@@ -15548,6 +15931,96 @@ mod tests {
         assert!(state.apply_flag(2, 5, 0));
         state.interact([-550, 0, 50], 0, true);
         assert!(state.transition.is_some());
+    }
+
+    #[test]
+    fn full_byte_mode_uses_the_whole_lock_byte_as_the_flag() {
+        use crate::scd::opcode::system::BR_LOCK_FULL_BYTE;
+        for lock in [0x41u8, 0x7F, 0xC5, 0xFF, 5] {
+            let mut state = game();
+            state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+            let mut locked = door(1, lock);
+            locked.key = 0x34;
+            state.room_actions[0] = Some(door_action(locked));
+            state.doors[0] = Some(locked);
+
+            // Locked without its flag, with no 0x80 bit needed.
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_none(), "{lock:#X}");
+            assert_eq!(state.message.id, Some(LOCKED_MESSAGE + 1), "{lock:#X}");
+            state.cancel_message();
+
+            // The key turn raises exactly this flag.
+            state.add_item(0x34, 1);
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.flag_test(BANK_LOCKS, lock, false), "{lock:#X}");
+            assert_eq!(
+                (0..=255u8)
+                    .filter(|&bit| state.flag_test(BANK_LOCKS, bit, false))
+                    .count(),
+                1,
+                "{lock:#X}"
+            );
+            state.cancel_message();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_some(), "{lock:#X}");
+        }
+
+        // A flag raised from a script opens it; byte 0 is never locked.
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let locked = door(1, 0xC5);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0xC5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let open = door(1, 0);
+        state.room_actions[0] = Some(door_action(open));
+        state.doors[0] = Some(open);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+    }
+
+    #[test]
+    fn full_byte_mode_drops_rebeccas_refusal() {
+        use crate::scd::opcode::system::BR_LOCK_FULL_BYTE;
+        // 0x40 is flag 64 here, not a restriction: with it raised, Rebecca
+        // (player flag 3) walks through.
+        let mut state = game();
+        state.apply_flag(5, BR_LOCK_FULL_BYTE, 0);
+        let locked = door(1, 0x40);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0x40, 0);
+        state.id.player_flag = 3;
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+        assert_ne!(state.message.id, Some(0xD6));
+    }
+
+    #[test]
+    fn vanilla_mode_masks_the_lock_byte() {
+        // With the flag clear 0xC5 is "locked, Rebecca refused, flag 5".
+        let mut state = game();
+        let locked = door(1, 0xC5);
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_none());
+        state.apply_flag(BANK_LOCKS, 5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_some());
+        // Flag 0xC5 would not have opened it.
+        let mut state = game();
+        state.room_actions[0] = Some(door_action(locked));
+        state.doors[0] = Some(locked);
+        state.apply_flag(BANK_LOCKS, 0xC5, 0);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_none());
     }
 
     #[test]
@@ -16296,6 +16769,31 @@ mod tests {
         assert_eq!(state.entities[1].action_ticks_counter, 1);
         assert_eq!(state.entities[1].move_speed_current, 93);
         assert_eq!(state.entities[1].status_flags, 0, "the teardown cleared it");
+    }
+
+    #[test]
+    fn ink_decision_follows_flag_122_only_under_br_ink_flag() {
+        assert!(ink_ribbons_needed(true, true, false));
+        assert!(!ink_ribbons_needed(true, false, true));
+        assert!(ink_ribbons_needed(false, false, true));
+        assert!(!ink_ribbons_needed(false, true, false));
+    }
+
+    #[test]
+    fn yawn_poison_decision() {
+        use YawnPoison::*;
+        // Flag clear: always the original.
+        for door in [false, true] {
+            for seen in [false, true] {
+                assert_eq!(yawn_bite_poison(false, door, seen), Original);
+            }
+        }
+        // Door rando: always ordinary.
+        assert_eq!(yawn_bite_poison(true, true, true), Ordinary);
+        assert_eq!(yawn_bite_poison(true, true, false), Ordinary);
+        // No door rando: original only once room 100 is visited.
+        assert_eq!(yawn_bite_poison(true, false, false), Ordinary);
+        assert_eq!(yawn_bite_poison(true, false, true), Original);
     }
 
     #[test]
@@ -17846,6 +18344,7 @@ mod tests {
     fn seeded_room_state() -> GameState {
         let mut state = game();
         state.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = 9;
+        state.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)] = 3;
         state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)] = 8;
         state.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)] = 7;
         state.flags[usize::from(BANK_SYSTEM)].bytes_mut()[4] = 0xAA;
@@ -17856,6 +18355,7 @@ mod tests {
     /// The shared assertions for the per-frame reset and the room load.
     fn assert_room_state_cleared(state: &GameState) {
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)], 0);
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_PICKED_AOT)], 0);
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)], 0);
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)], 0);
         assert_eq!(

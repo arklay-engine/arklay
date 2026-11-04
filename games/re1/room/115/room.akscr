@@ -44,6 +44,29 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE) && ck(FG_COMMON, F_COMMON_20, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_00, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 5300, 1400, 2400, 1000, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_01, ROOM_116_LIVING_ROOM, 4850, 0, 10250, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -81,35 +104,79 @@ proc init
         }
         if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_5F, FALSE))
+            if (DOOR_RANDOMIZER)
             {
-                set(FG_LOCK, F_LOCK_00, FALSE);
-                set(FG_LOCK, F_LOCK_01, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                evt_exec(0, TASK_09, on_enter);
-            }
-            else if (ck(FG_COMMON, F_COMMON_29, FALSE))
-            {
-                set(FG_LOCK, F_LOCK_00, FALSE);
-                set(FG_LOCK, F_LOCK_01, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                set(FG_LOCK, F_LOCK_01, TRUE);
-                evt_exec(0, TASK_09, on_enter_2);
+                // No first ceiling trap with Barry's rescue for Jill
+                // (staging's DiableJillSandwich).
+                if (ck(FG_COMMON, F_COMMON_29, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                    evt_exec(0, TASK_09, on_enter_2);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_00, TRUE);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                }
             }
             else
             {
-                set(FG_LOCK, F_LOCK_00, TRUE);
-                set(FG_LOCK, F_LOCK_01, TRUE);
+                if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_5F, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    evt_exec(0, TASK_09, on_enter);
+                }
+                else if (ck(FG_COMMON, F_COMMON_29, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                    evt_exec(0, TASK_09, on_enter_2);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_00, TRUE);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                }
             }
         }
         else
         {
             set(FG_LOCK, F_LOCK_00, TRUE);
             set(FG_LOCK, F_LOCK_01, TRUE);
+        }
+    }
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // A whole lock byte names the map's flags: 0x0F for the door to 109
+        // and 0x10 for the door to 116.
+        if (ck(FG_LOCK, F_LOCK_00, TRUE))
+        {
+            set(FG_LOCK, F_LOCK_0F, TRUE);
+        }
+        else
+        {
+            set(FG_LOCK, F_LOCK_0F, FALSE);
+        }
+        if (ck(FG_LOCK, F_LOCK_01, TRUE))
+        {
+            set(FG_LOCK, F_LOCK_10, TRUE);
+        }
+        else
+        {
+            set(FG_LOCK, F_LOCK_10, FALSE);
         }
     }
 }
@@ -343,6 +410,11 @@ event event_01 when (JILL)
     run
     {
         door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 4, DOOR_SND_02_DR_BRK, DOOR_00_DOOR00, 0, DOOR_LOCKED | F_LOCK_00, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Lock 0x0F mirrors F_LOCK_00, which the event raises next.
+            set(FG_LOCK, F_LOCK_0F, TRUE);
+        }
         voice_play(VOICE_PLAY, VO_105_04);
         message(MSG_VO_105_04, 0);
     }

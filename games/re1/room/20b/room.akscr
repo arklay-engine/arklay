@@ -12,6 +12,7 @@
 #define AOT_01_MESSAGE 0x01
 #define AOT_02_USEITEM 0x02
 #define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
 #define AOT_05_DOOR 0x05
 #define CAM_01 0x01
 #define CAM_02 0x02
@@ -19,6 +20,7 @@
 #define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
 #define FX_10 0x10
 #define IMDL_00 0x00
+#define IMDL_01 0x01
 #define MSG_IT_IS_A_MAP_OF_2ND 0x00
 #define MSG_YOU_GOT_THE_MAP_OF_2ND 0x02
 #define OBJ_00 0x00
@@ -42,7 +44,16 @@ proc init
     {
         obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5110, -2950, 2438, 2902, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_rot(ROT_OBJ | OBJ_01, 3072, 3072);
-        aot_set(AOT_02_USEITEM, 5050, 1400, 500, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_useitem, 0, 0, 0);
+        // A randomized slot is an item AOT (4) over the fireplace, in place
+        // of the event that hands over the map. It has no item model.
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_04_ITEM, 5050, 1400, 500, 1800, IT_4F_UNKNOWN_4F, 1, IMDL_01, SCA_NONE, 5110, -2950, 2438, 0, F_ITEM_11, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else
+        {
+            aot_set(AOT_02_USEITEM, 5050, 1400, 500, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_useitem, 0, 0, 0);
+        }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_08, TRUE))
     {
@@ -50,8 +61,12 @@ proc init
         {
             if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1A, SPAWN_FORCE, 2, 0, 3640, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1B, SPAWN_FORCE, 2, 0, 3048, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1A, SPAWN_FORCE, 2, 0, 3640, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1B, SPAWN_FORCE, 2, 0, 3048, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+                }
+                random_enemies();
             }
             room_bgm_state_set(1, ROOM_20B_FRONT_LESSON_ROOM, BGM_OFF);
         }
@@ -64,6 +79,14 @@ proc init
 
 proc main
 {
+    // The randomized slot's pickup takes the map off the wall.
+    if (ITEM_RANDOMIZER)
+    {
+        if (ck(FG_ITEM, F_ITEM_11, FALSE))
+        {
+            objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+        }
+    }
     if (cmpb(B_USED_ITEM, CMP_EQ, IT_30_KEY_LIGHTER))
     {
         evt_exec(0, TASK_09, from_main);
@@ -95,7 +118,14 @@ event from_main
     run
     {
         aot_delete(AOT_01_MESSAGE, SCE_NONE, 0);
-        aot_reset(AOT_02_USEITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_02_useitem, 0);
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_04_ITEM, 5050, 1400, 500, 1800, IT_4F_UNKNOWN_4F, 1, IMDL_01, SCA_NONE, 5110, -2950, 2438, 0, F_ITEM_11, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else
+        {
+            aot_reset(AOT_02_USEITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_02_useitem, 0);
+        }
         cutnext(CAM_01);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);

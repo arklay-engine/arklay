@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="507/TABLE" name="LABORATORY B3 MORGUE (TABLE)" tags="lab">
+    <door target="507/STORE" kind="oneway" allowed-locks="" randomize="false"/>
+    <door id="1" target="50C:0">
+      <entrance x="21300" y="0" z="2800" d="3072"/>
+    </door>
+    <item id="2" flag="123" type="67" amount="1" group="32" name="RED HERB"/>
+    <item id="15" flag="124" type="12" amount="7" group="32" name="SHELLS"/>
+  </room>
+  <room key="507/STORE" name="LABORATORY B3 MORGUE (STORE)" tags="lab">
+    <door target="507/TABLE" kind="blocked" allowed-locks="" randomize="false"/>
+    <door id="0" target="505:2" kind="unlock" lock="45" allowed-locks="" door-rando="false">
+      <entrance x="12100" y="0" z="2500" d="3072"/>
+    </door>
+    <door id="0" target="505:2" tags="connect-back" door-rando="true">
+      <entrance x="12100" y="0" z="2500" d="3072"/>
+    </door>
+    <flag name="MO_DISC_507" requires="item(40)"/>
+    <item id="3" flag="148" type="14" amount="6" group="32" name="MAGNUM ROUNDS ON SHELF"/>
+    <item id="14" flag="98" type="108" amount="1" group="32" name="MO DISC PASS CODE" requires="flag(MO_DISC_507)" document="true"/>
+    <enemies exclude="4"/>
+  </room>
+  <spot x="11804" y="0" z="5164" d="2800"/>
+  <spot x="12087" y="0" z="11786" d="1168"/>
+  <spot x="17400" y="0" z="3522" d="3160"/>
+  <spot x="19681" y="0" z="11359" d="1096"/>
+  <spot x="24716" y="0" z="11462" d="1864"/>
+  <spot x="25100" y="0" z="4098" d="2064"/>
+  <spot x="3143" y="0" z="7960" d="4000"/>
+  <spot x="8020" y="0" z="6554" d="2160"/>
+  <spot x="8898" y="0" z="8440" d="96"/>
+</random>

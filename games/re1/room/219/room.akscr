@@ -20,6 +20,7 @@
 
 proc init when (MANSION2)
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 7800, 2000, 1000, 1800, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_213_FRONT_ELEVATOR, 9800, 0, 2900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
@@ -40,7 +41,7 @@ proc init when (MANSION2)
 
 proc main when (MANSION2)
 {
-    if (testpickup(IT_27_KEY_BATTERY))
+    if (picked(AOT_03_ITEM))
     {
         aot_delete(AOT_04_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }

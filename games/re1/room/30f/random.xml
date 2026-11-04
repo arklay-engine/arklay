@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="30F" name="CAVES SECOND BOULDER" tags="caves">
+    <door id="0" name="Lift to fountain" target="305:2" allowed-locks="" no-unlock="true">
+      <entrance x="24200" y="0" z="5700" d="3072"/>
+    </door>
+    <door target="30F/BACK" kind="unblock" allowed-locks="" randomize="false" requires="item(30)"/>
+    <door id="2" target="30D:2" lock="47" player="chris">
+      <entrance x="28000" y="0" z="15400" d="2048"/>
+    </door>
+    <door id="2" target="30D:2" player="jill">
+      <entrance x="28000" y="0" z="15400" d="2048"/>
+    </door>
+    <item id="4" flag="118" type="81" amount="1" group="16" name="MAP BEHIND BOULDER" document="true"/>
+    <item id="5" flag="251" type="40" amount="1" group="16" name="MO DISK BEHIND BOULDER"/>
+    <enemies exclude="3 4 7 10"/>
+  </room>
+  <room key="30F/BACK" name="CAVES SECOND BOULDER (BACK)" tags="caves">
+    <door target="30F" kind="blocked" randomize="false"/>
+    <door id="1" name="Door after crank tunnel" target="306:0" tags="connect-out">
+      <entrance x="13000" y="0" z="16000" d="0"/>
+    </door>
+  </room>
+  <spot x="24470" y="0" z="11960" d="3072"/>
+  <spot x="24470" y="0" z="15396" d="4032"/>
+  <spot x="24950" y="0" z="8155" d="3072"/>
+  <spot x="26603" y="0" z="18551" d="1016"/>
+</random>

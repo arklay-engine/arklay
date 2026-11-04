@@ -257,20 +257,33 @@ pub fn message_index(id: u16) -> u16 {
 }
 
 /// The language keys of `room`'s message `id`, the room variant's first:
-/// `ROOM_100_JILL_MANSION2_TEXT_0A`, ..., `ROOM_100_TEXT_0A`.
+/// `ROOM_100_JILL_MANSION2_TEXT_0A`, ..., `ROOM_100_TEXT_0A`. The variants
+/// are those of the room's origin (a copy of a mansion room has both
+/// visits), and a room with an origin falls back to the origin's keys, so a
+/// copy without strings of its own reads the original's.
 fn room_text_keys(room: &RoomState, id: u16) -> Vec<String> {
-    let room3 = format!("{:X}{:02X}", room.stage, room.room);
-    let variant = crate::state::RoomId {
-        stage: room.stage,
-        room: room.room,
-        player_flag: room.player_flag,
-        mansion2: room.mansion2,
+    // The stage in hex (RE2's `G` is `10`), or the long form for a stage
+    // past one digit.
+    let room3 = |id: crate::state::RoomId| {
+        if id.stage <= 0xF || id.has_short_form() {
+            format!("{:X}{:02X}", id.stage, id.room)
+        } else {
+            id.room3()
+        }
     };
-    crate::room::xml::string_variants(variant)
-        .into_iter()
-        .map(|tag| match tag.as_str() {
-            "" => format!("ROOM_{room3}_TEXT_{id:02X}"),
-            tag => format!("ROOM_{room3}_{tag}_TEXT_{id:02X}"),
+    let origin = room.origin();
+    let tags = crate::room::xml::string_variants(origin);
+    let mut rooms = vec![room3(room.id())];
+    if room3(origin) != rooms[0] {
+        rooms.push(room3(origin));
+    }
+    rooms
+        .iter()
+        .flat_map(|room3| {
+            tags.iter().map(move |tag| match tag.as_str() {
+                "" => format!("ROOM_{room3}_TEXT_{id:02X}"),
+                tag => format!("ROOM_{room3}_{tag}_TEXT_{id:02X}"),
+            })
         })
         .collect()
 }

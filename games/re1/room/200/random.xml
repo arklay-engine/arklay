@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="200" name="KITCHEN ELEVATOR (CUTSCENE)" tags="mansion">
+    <door id="0" target="213:1" no-unlock="true" door-rando="false">
+      <entrance x="4600" y="0" z="4600" d="1024"/>
+    </door>
+    <door id="1" target="21C:0" no-unlock="true" door-rando="false">
+      <entrance x="4600" y="0" z="4600" d="1024"/>
+    </door>
+  </room>
+</random>

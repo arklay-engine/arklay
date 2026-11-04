@@ -53,9 +53,12 @@
 #define SE_19_CHAKUCHI 0x19
 #define SE_1A_SW_PUSH3 0x1A
 #define SE_PL_02 0x02
+// BioRand: "this reader is done" under ITEM_RANDOMIZER (508's door reads it).
+#define F_SCENARIO_72_MO_DISC_507 0x72
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 10800, 0, 2200, 2200, 6, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, DOOR_LOCKED | F_LOCK_2D, ROOM_505_O_PASSAGE, 16600, 0, 4200, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 20000, 0, 2600, 2700, 9, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, 0, ROOM_50C_FRONT_OF_ELEVATOR, 6100, 0, 18000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_7B, TRUE))
@@ -78,7 +81,15 @@ proc init
     aot_set(AOT_0D_MESSAGE, 2520, 5720, 2300, 1800, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_62, TRUE))
     {
-        item_aot_set(AOT_0E_ITEM, 0, 0, 1, 1, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_62, SAT_MANUAL | SAT_PLAYER, 0);
+        // A randomized slot is an item AOT on the reader's area.
+        if (ITEM_RANDOMIZER)
+        {
+            item_aot_set(AOT_0E_ITEM, 2520, 5720, 2300, 1800, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_62, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else
+        {
+            item_aot_set(AOT_0E_ITEM, 0, 0, 1, 1, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_62, SAT_MANUAL | SAT_PLAYER, 0);
+        }
     }
     if (ck(FG_ITEM, F_ITEM_7C, TRUE))
     {
@@ -227,6 +238,38 @@ proc main
     if (testitem(IT_49_HEAL_HERB_MIX_GRB) && ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
     {
         evt_exec(0, TASK_07, event_07);
+    }
+    // Under ITEM_RANDOMIZER the reader is done once the MO disc is used
+    // (scenario flag), not once the pass code is taken, and the slot is an
+    // ordinary pickup on the reader from then until it is taken.
+    if (ITEM_RANDOMIZER)
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_72_MO_DISC_507, FALSE))
+        {
+            aot_reset(AOT_0C_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
+            aot_reset(AOT_0D_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 257, 0);
+            aot_delete(AOT_0E_ITEM, SCE_DOCUMENT, 0);
+        }
+        else
+        {
+            aot_reset(AOT_0C_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+            if (ck(FG_ITEM, F_ITEM_62, TRUE))
+            {
+                aot_reset(AOT_0D_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+                aot_delete(AOT_0E_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
+            }
+            else
+            {
+                aot_reset(AOT_0D_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 257, 0);
+                aot_delete(AOT_0E_ITEM, SCE_DOCUMENT, 0);
+            }
+        }
+        if (testitem(IT_28_KEY_MO_DISK))
+        {
+            set(FG_SCENARIO, F_SCENARIO_72_MO_DISC_507, TRUE);
+            aot_on(AOT_0E_ITEM, SCE_DOCUMENT, 0);
+        }
+        return;
     }
     if (ck(FG_ITEM, F_ITEM_62, TRUE))
     {

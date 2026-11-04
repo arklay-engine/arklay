@@ -35,6 +35,7 @@
 #define F_ROOM_08 0x08
 #define F_ROOM_09 0x09
 #define F_ROOM_0A 0x0A
+#define F_ROOM_0B 0x0B
 #define F_ROOM_1E 0x1E
 #define F_ROOM_1F 0x1F
 #define F_ROOM_20 0x20
@@ -117,6 +118,12 @@ proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
     set(FG_STATUS, F_STATUS_1C, TRUE);
+    if (CUTSCENES_DISABLED)
+    {
+        // No scene releases the Tyrant, so it is there from the start
+        // (staging adds this enemy).
+        enemy(EM_0C_TYRANT_1, EB_00, F_ENEMY_70, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
     {
         set(FG_ROOM, F_ROOM_07, TRUE);
@@ -146,6 +153,13 @@ proc init
     else
     {
         aot_set(AOT_01_MESSAGE, 5900, 3800, 3500, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 160, 0, 255, 0, 0, 0);
+    }
+    if (CUTSCENES_DISABLED)
+    {
+        // The room is always set up as on a return visit, with no scene
+        // (staging drops the test of the self-destruct flag that raises
+        // F_ROOM_07). The door message above has already followed the flag.
+        set(FG_ROOM, F_ROOM_07, TRUE);
     }
     if (CHRIS)
     {
@@ -225,7 +239,10 @@ proc init
         }
         else
         {
-            enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_NPC_WESKER_2, ANIM_00, 0, EVAR_00);
+            if (!CUTSCENES_DISABLED)
+            {
+                enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_NPC_WESKER_2, ANIM_00, 0, EVAR_00);
+            }
             evt_exec(0, TASK_07, on_enter);
         }
     }
@@ -281,7 +298,10 @@ proc init
         }
         else if (ck(FG_COMMON, F_COMMON_5B, FALSE))
         {
-            enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00, ANIM_00, 0, EVAR_00);
+            if (!CUTSCENES_DISABLED)
+            {
+                enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ROOM, F_ROOM_07, FALSE))
         {
@@ -317,6 +337,28 @@ proc init
 
 proc main
 {
+    if (CUTSCENES_DISABLED)
+    {
+        // F_ROOM_07 stands for "the self-destruct has started" in the tests
+        // below, as before the scene was dropped (staging retargets them to
+        // the self-destruct flag, F_SCENARIO_37).
+        if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_07, FALSE);
+            if (ck(FG_ROOM, F_ROOM_0B, FALSE))
+            {
+                // The boss music the scene would have started.
+                set(FG_ROOM, F_ROOM_0B, TRUE);
+                bgm_stop(BGM_MAIN);
+                bgm_stop(BGM_SUB_1);
+                bgm_play(BGM_SUB_2);
+            }
+        }
+        else
+        {
+            set(FG_ROOM, F_ROOM_07, TRUE);
+        }
+    }
     if (CHRIS)
     {
         if (ck(FG_ITEM, F_ITEM_5F, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))

@@ -284,7 +284,9 @@ fn room3(file: &SaveFile) -> String {
 fn location(cx: &UiContext<'_>, file: &SaveFile) -> String {
     cx.text
         .and_then(|text| {
-            text.save_location(file.room_id().stage, file.room)
+            // A generated room's block names its origin, whose label it has.
+            let room = file.block_room();
+            text.save_location(room.stage, room.room)
                 .map(|bytes| text.decode(bytes))
         })
         .map(|label| label.trim().to_string())

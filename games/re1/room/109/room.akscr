@@ -50,12 +50,59 @@
 
 proc init
 {
+    if (BR_LOCK_FULL_BYTE)
+    {
+        // The door to 115 opens from this side (115's script locks it
+        // from inside).
+        set(FG_LOCK, F_LOCK_0F, TRUE);
+    }
+    if (ENEMY_RANDOMIZER)
+    {
+        if (CHRIS)
+        {
+            random_enemies();
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_20, TRUE) && ck(FG_COMMON, F_COMMON_21, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR, 23400, 800, 2000, 1700, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_108_L_PASSAGE, 25000, 0, 25300, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {
         door_aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, 2, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_04, ROOM_114_BOILER, 10030, 0, 23449, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, 0, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 7, DOOR_LOCK_40, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
         door_aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        if (BR_LOCK_FULL_BYTE)
+        {
+            // Rebecca is turned away (the original lock byte's 0x40).
+            if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
+            {
+                aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 0xD6, 0, 255, 0, 0, 0);
+            }
+        }
     }
     else
     {
@@ -91,7 +138,10 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_5E, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_12, F_ENEMY_76, SPAWN_FORCE, 2, 0, 1536, 0, 15565, 0, 12166, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_12, F_ENEMY_76, SPAWN_FORCE, 2, 0, 1536, 0, 15565, 0, 12166, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         else
         {
@@ -118,17 +168,26 @@ proc init
         }
         if (ck(FG_ROOM, F_ROOM_00, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_88, F_ENEMY_76, SPAWN_FORCE, 2, 0, 3600, 0, 20824, 0, 7524, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_88, F_ENEMY_76, SPAWN_FORCE, 2, 0, 3600, 0, 20824, 0, 7524, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ROOM, F_ROOM_01, TRUE))
         {
             if (CHRIS)
             {
-                enemy(EM_06_HUNTER, EB_89, F_ENEMY_76, SPAWN_FORCE, 2, 0, 0, 0, 12733, 0, 14086, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_89, F_ENEMY_76, SPAWN_FORCE, 2, 0, 0, 0, 12733, 0, 14086, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
             }
             else
             {
-                enemy(EM_06_HUNTER, EB_99, F_ENEMY_76, SPAWN_FORCE, 2, 0, 0, 0, 12733, 0, 14086, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_06_HUNTER, EB_99, F_ENEMY_76, SPAWN_FORCE, 2, 0, 0, 0, 12733, 0, 14086, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                }
             }
         }
         room_bgm_state_set(5, 9, BGM_OFF);
@@ -180,12 +239,18 @@ proc main
             if (ck(FG_ROOM, F_ROOM_00, TRUE) && ck(FG_ROOM, F_ROOM_02, TRUE))
             {
                 set(FG_SCENARIO, F_SCENARIO_5E, TRUE);
-                eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_08);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_08);
+                }
             }
             if (ck(FG_ROOM, F_ROOM_01, TRUE) && cmpb(B_CAMERA, CMP_EQ, CAM_03))
             {
                 set(FG_SCENARIO, F_SCENARIO_5E, TRUE);
-                eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_09);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_09);
+                }
             }
         }
     }
@@ -228,7 +293,10 @@ event on_enter
             }
             else
             {
-                pos_set(ENEMY_00_HUNTER, 0, 400, 0, 4800, 0, 8900);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 400, 0, 4800, 0, 8900);
+                }
             }
         }
     }
@@ -373,7 +441,10 @@ event on_enter
             }
             else
             {
-                pos_set(ENEMY_00_HUNTER, 0, 0, 0, 0, 0, 0);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    pos_set(ENEMY_00_HUNTER, 0, 0, 0, 0, 0, 0);
+                }
             }
         }
         sleep(20);

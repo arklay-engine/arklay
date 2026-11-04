@@ -30,12 +30,12 @@ use anyhow::{Context, Result, bail};
 
 use crate::budget;
 use crate::game::{
-    BgmState, CameraState, FLAG_BANK_COUNT, FlagBank, GameState, ITEM_BOX_SLOTS, InventoryItem,
-    MSF_CHAR_VARIANT, STATE_BYTE_CHARACTER, STATE_BYTE_CUT, STATE_BYTE_ENT_ACTION,
-    STATE_BYTE_EQUIPPED, STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS, STATE_BYTE_MENU_CHOICE,
-    STATE_BYTE_PICKED_ITEM, STATE_BYTE_ROOM_CAMERA, STATE_BYTE_SAVES, STATE_BYTE_SELECTED_ITEM,
-    STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES, STATE_WORD_COUNTDOWN, VoiceState,
-    character_max_health,
+    BgmState, CameraState, FLAG_BANK_COUNT, FlagBank, GameState, INVENTORY_SLOTS_CHRIS,
+    ITEM_BOX_SLOTS, InventoryItem, MSF_CHAR_VARIANT, STATE_BYTE_CHARACTER, STATE_BYTE_CUT,
+    STATE_BYTE_ENT_ACTION, STATE_BYTE_EQUIPPED, STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS,
+    STATE_BYTE_MENU_CHOICE, STATE_BYTE_PICKED_ITEM, STATE_BYTE_ROOM_CAMERA, STATE_BYTE_SAVES,
+    STATE_BYTE_SELECTED_ITEM, STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES,
+    STATE_WORD_COUNTDOWN, VoiceState, character_max_health,
 };
 use crate::state::RoomId;
 
@@ -61,6 +61,40 @@ pub const HEIGHT_TRAILER_LEN: usize = 8;
 /// Port-only: the magic of the RE2 state trailer, which follows the height
 /// trailer: a `u32` length and [`crate::scd2::host::Re2State::to_save_bytes`].
 pub const RE2_TRAILER: [u8; 4] = *b"AKY\x02";
+/// Port-only: the magic of the lock-bank trailer, last after the height and
+/// RE2 trailers: bytes 8..32 of bank 2 ([`LOCKS_TRAILER_LEN`] bytes in all).
+/// The original's block keeps only the bank's first 8 bytes (lock flags
+/// 0..=63), but a randomized game uses lock flags up to 255. The trailer is
+/// written only when one of those bytes is non-zero, so a retail game's saves
+/// stay the plain block and a file without it loads with the high flags clear.
+pub const LOCKS_TRAILER: [u8; 4] = *b"AKY\x03";
+/// Bytes of the lock-bank trailer: the magic and 24 bank bytes.
+pub const LOCKS_TRAILER_LEN: usize = 28;
+/// Port-only: the magic of the partner trailer, last after the lock trailer:
+/// Rebecca's six slots as `(id, quantity)` pairs ([`PARTNER_TRAILER_LEN`]
+/// bytes in all). The block keeps one run of 12 slots, the player's first
+/// and Rebecca's last six, so a player holding more than six stacks
+/// overwrites her first ones: Jill's eight slots always did, and a generated
+/// game can give Chris eight. The trailer is written only when that would
+/// lose a stack Rebecca holds, so a retail game's saves stay the plain block.
+/// Without it, a load clears the Rebecca slots the player's stacks covered,
+/// rather than handing her copies of the player's items.
+pub const PARTNER_TRAILER: [u8; 4] = *b"AKY\x04";
+/// Bytes of the partner trailer: the magic and six two-byte slots.
+pub const PARTNER_TRAILER_LEN: usize = 16;
+/// Port-only: the magic of the room trailer, last after the partner
+/// trailer: the room's 1-based stage, its room, a flags byte (bit 0 the
+/// second mansion visit) and a reserved zero ([`ROOM_TRAILER_LEN`] bytes in
+/// all). The block's stage byte is the original's table row and its room
+/// byte the room, so it names only the original games' rooms; a generated
+/// game's room past them (stage 9, room 0x40) is saved here, and the block
+/// then names the room's origin, so a reader without the trailer still
+/// loads a room of the right kind. The trailer is written only for such a
+/// room, so a retail game's saves stay the plain block.
+pub const ROOM_TRAILER: [u8; 4] = *b"AKY\x05";
+/// Bytes of the room trailer: the magic, stage, room, flags and a reserved
+/// byte.
+pub const ROOM_TRAILER_LEN: usize = 8;
 /// Bytes of the bio-card prefix at the start of the block.
 pub const PREFIX_LEN: usize = 0x200;
 /// BioCard offset the [`GameState`] state image starts at.
@@ -124,7 +158,7 @@ impl SaveFile {
     fn sync_state_image(&mut self) {
         // The state image keeps the port's 1-based stage digit; the block's
         // own 0x200 byte (`self.stage`) is the original's 0-based g_stageId.
-        self.state_bytes[0] = self.room_id().stage;
+        self.state_bytes[0] = self.block_stage();
         self.state_bytes[1] = self.room;
         self.state_bytes[usize::from(STATE_BYTE_ROOM_CAMERA)] = self.camera;
         self.state_bytes[usize::from(STATE_BYTE_CUT)] = self.cut;
@@ -168,6 +202,13 @@ impl SaveFile {
                 .try_into()
                 .expect("timer bytes"),
         );
+        // The block names a room by its table row and room; one it cannot
+        // name goes in the room trailer, and the block names its origin.
+        let block_room = if block_names(state.id) {
+            state.id
+        } else {
+            state.origin()
+        };
         let mut file = Self {
             prefix: BIOCARD_PREFIX,
             state_bytes: {
@@ -180,8 +221,13 @@ impl SaveFile {
             // The block stores the original's 0-based `g_stageId`, whose
             // stages 6 and 7 are the second mansion visit; the port's
             // `RoomId.stage` is the 1-based RDT digit.
-            stage: state.id.table_row() as u8,
-            room: state.id.room,
+            stage: block_room.table_row() as u8,
+            room: block_room.room,
+            // The trailer holds no player: the character byte is it.
+            room_ext: (block_room != state.id).then_some(RoomId {
+                player_flag: 0,
+                ..state.id
+            }),
             camera: state.camera.current_cut.min(0xFF) as u8,
             cut: state.state_bytes[usize::from(STATE_BYTE_CUT)],
             menu_choice: state.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)],
@@ -211,6 +257,8 @@ impl SaveFile {
         file.scenario.copy_from_slice(&state.flags[0].bytes()[..16]);
         file.scenario2.copy_from_slice(state.flags[1].bytes());
         file.locks.copy_from_slice(&state.flags[2].bytes()[..8]);
+        file.locks_high
+            .copy_from_slice(&state.flags[2].bytes()[8..]);
         file.enemies.copy_from_slice(state.flags[3].bytes());
         file.room_items.copy_from_slice(state.flags[7].bytes());
         file.room_flags
@@ -226,6 +274,11 @@ impl SaveFile {
         }
         for (slot, stack) in file.player_slots.iter_mut().zip(state.inventory.iter()) {
             *slot = *stack;
+        }
+        if partner_overlap(state.inventory.len())
+            .any(|index| state.rebecca_inventory[index].id != 0)
+        {
+            file.partner_slots = Some(state.rebecca_inventory);
         }
         file.sync_state_image();
         file
@@ -263,6 +316,7 @@ impl SaveFile {
         state.flags[0].bytes_mut()[..16].copy_from_slice(&self.scenario);
         state.flags[1].bytes_mut().copy_from_slice(&self.scenario2);
         state.flags[2].bytes_mut()[..8].copy_from_slice(&self.locks);
+        state.flags[2].bytes_mut()[8..].copy_from_slice(&self.locks_high);
         state.flags[3].bytes_mut().copy_from_slice(&self.enemies);
         state.flags[7].bytes_mut().copy_from_slice(&self.room_items);
         state.flags[8].bytes_mut()[..20].copy_from_slice(&self.room_flags);
@@ -318,6 +372,16 @@ impl SaveFile {
         state
             .rebecca_inventory
             .copy_from_slice(&self.player_slots[6..12]);
+        match self.partner_slots {
+            Some(partner) => state.rebecca_inventory = partner,
+            // The player's stacks past the sixth sit where Rebecca's first
+            // ones would; they are not hers.
+            None => {
+                for index in partner_overlap(usize::from(self.total_held)) {
+                    state.rebecca_inventory[index] = InventoryItem::default();
+                }
+            }
+        }
         // The per-room BGM table round-trips through the block; the live state
         // byte is not saved, so it resets to the nothing-playing value and the
         // destination room's entry rebuilds the channels on load.
@@ -331,8 +395,11 @@ impl SaveFile {
         state.state_bytes = self.state_bytes;
         state.state_words[usize::from(STATE_WORD_COUNTDOWN)] =
             u16::from_le_bytes([self.state_bytes[0x1C], self.state_bytes[0x1D]]);
-        state.state_bytes[0] = state.id.stage;
-        state.state_bytes[1] = self.room;
+        // `B_STAGE` and `B_ROOM` are the room's origin's
+        // ([`GameState::enter_room`]): the block's own for a retail room.
+        let origin = state.origins.of(state.id);
+        state.state_bytes[0] = origin.stage;
+        state.state_bytes[1] = origin.room;
         state.state_bytes[usize::from(STATE_BYTE_ROOM_CAMERA)] = self.camera;
         state.state_bytes[usize::from(STATE_BYTE_CUT)] = self.cut;
         state.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = self.menu_choice;
@@ -367,6 +434,20 @@ impl SaveFile {
             bytes.extend_from_slice(&RE2_TRAILER);
             bytes.extend_from_slice(&(re2.len() as u32).to_le_bytes());
             bytes.extend_from_slice(re2);
+        }
+        if self.locks_high != [0; 24] {
+            bytes.extend_from_slice(&LOCKS_TRAILER);
+            bytes.extend_from_slice(&self.locks_high);
+        }
+        if let Some(partner) = &self.partner_slots {
+            bytes.extend_from_slice(&PARTNER_TRAILER);
+            for stack in partner {
+                bytes.extend_from_slice(&[stack.id, stack.quantity]);
+            }
+        }
+        if let Some(room) = self.room_ext {
+            bytes.extend_from_slice(&ROOM_TRAILER);
+            bytes.extend_from_slice(&[room.stage, room.room, u8::from(room.mansion2), 0]);
         }
         bytes
     }
@@ -431,6 +512,7 @@ impl SaveFile {
             );
         }
         budget::check_len(bytes.len(), budget::MAX_SAVE_BYTES, "save block size")?;
+        let trailers = trailers(bytes);
         let mut file = Self {
             prefix: bytes[..PREFIX_LEN].try_into().expect("prefix bytes"),
             state_bytes: bytes[STATE_IMAGE_OFFSET..STATE_IMAGE_OFFSET + STATE_BYTES]
@@ -455,8 +537,11 @@ impl SaveFile {
             character: bytes[0x22B],
             pos_x: get_i16(bytes, 0x22C),
             pos_z: get_i16(bytes, 0x22E),
-            pos_y: height_trailer(bytes).unwrap_or(0),
-            re2: re2_trailer(bytes).map(<[u8]>::to_vec),
+            pos_y: trailers.height.unwrap_or(0),
+            re2: trailers.re2.map(<[u8]>::to_vec),
+            locks_high: trailers.locks_high.unwrap_or_default(),
+            partner_slots: trailers.partner,
+            room_ext: trailers.room,
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
             ..Self::default()
@@ -480,28 +565,105 @@ impl SaveFile {
             .copy_from_slice(&bytes[0x33C..SAVE_LAYOUT_SIZE]);
         // The state image keeps the port's 1-based stage digit; the block's
         // own 0x200 byte read above is the original's 0-based `g_stageId`.
-        file.state_bytes[0] = file.room_id().stage;
+        file.state_bytes[0] = file.block_stage();
         Ok(file)
     }
 }
 
-/// The height a file's trailer carries ([`HEIGHT_TRAILER`]), if it has one.
-fn height_trailer(bytes: &[u8]) -> Option<i16> {
-    let trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
-    let rest = trailer.get(HEIGHT_TRAILER_LEN..)?;
-    (trailer[..4] == HEIGHT_TRAILER && (rest.is_empty() || rest.starts_with(&RE2_TRAILER)))
-        .then(|| i16::from_le_bytes([trailer[4], trailer[5]]))
+/// What the port-only trailers after the block carry.
+#[derive(Default)]
+struct Trailers<'a> {
+    /// The player height ([`HEIGHT_TRAILER`]).
+    height: Option<i16>,
+    /// The RE2 state ([`RE2_TRAILER`]).
+    re2: Option<&'a [u8]>,
+    /// Bank 2's bytes 8..32 ([`LOCKS_TRAILER`]).
+    locks_high: Option<[u8; 24]>,
+    /// Rebecca's slots ([`PARTNER_TRAILER`]).
+    partner: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
+    /// The room the block cannot name ([`ROOM_TRAILER`]), player 0.
+    room: Option<RoomId>,
 }
 
-/// The RE2 state a file's trailer carries ([`RE2_TRAILER`]), if it has one.
-fn re2_trailer(bytes: &[u8]) -> Option<&[u8]> {
-    let mut trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
-    if trailer.starts_with(&HEIGHT_TRAILER) {
-        trailer = trailer.get(HEIGHT_TRAILER_LEN..)?;
+/// Whether the block's stage and room bytes name room `id`: its table row
+/// reads back as it ([`RoomId::from_table_row`]).
+fn block_names(id: RoomId) -> bool {
+    id.room <= RoomId::MAX_ROOM
+        && RoomId {
+            player_flag: id.player_flag,
+            ..RoomId::from_table_row(id.table_row(), id.room)
+        } == id
+}
+
+/// The Rebecca slots (indexes into her six) that a player inventory of
+/// `held` stacks covers in the block's shared run of 12.
+fn partner_overlap(held: usize) -> std::ops::Range<usize> {
+    0..held
+        .saturating_sub(INVENTORY_SLOTS_CHRIS)
+        .min(INVENTORY_SLOTS_CHRIS)
+}
+
+/// Read the trailers a file carries, in their fixed order: height, RE2 state,
+/// lock bank, partner slots, room. Each is optional, and a file whose tail is
+/// anything else (an original 0xA82-byte file, say) has none.
+fn trailers(bytes: &[u8]) -> Trailers<'_> {
+    let mut found = Trailers::default();
+    let Some(mut rest) = bytes.get(SAVE_BLOCK_SIZE..) else {
+        return found;
+    };
+    let after_partner = |tail: &[u8]| {
+        tail.is_empty() || (tail.len() == ROOM_TRAILER_LEN && tail.starts_with(&ROOM_TRAILER))
+    };
+    let partner_at = |tail: &[u8]| {
+        tail.starts_with(&PARTNER_TRAILER)
+            && tail.get(PARTNER_TRAILER_LEN..).is_some_and(after_partner)
+    };
+    let after_locks = |tail: &[u8]| after_partner(tail) || partner_at(tail);
+    let after_re2 = |tail: &[u8]| after_locks(tail) || tail.starts_with(&LOCKS_TRAILER);
+    let follows = |tail: &[u8]| after_re2(tail) || tail.starts_with(&RE2_TRAILER);
+    if rest.starts_with(&HEIGHT_TRAILER)
+        && let Some(tail) = rest.get(HEIGHT_TRAILER_LEN..)
+        && follows(tail)
+    {
+        found.height = Some(i16::from_le_bytes([rest[4], rest[5]]));
+        rest = tail;
     }
-    let body = trailer.strip_prefix(&RE2_TRAILER)?;
-    let (length, body) = body.split_first_chunk::<4>()?;
-    (body.len() == u32::from_le_bytes(*length) as usize).then_some(body)
+    if let Some(body) = rest.strip_prefix(&RE2_TRAILER)
+        && let Some((length, body)) = body.split_first_chunk::<4>()
+        && let Some((state, tail)) = body.split_at_checked(u32::from_le_bytes(*length) as usize)
+        && after_re2(tail)
+    {
+        found.re2 = Some(state);
+        rest = tail;
+    }
+    if rest.starts_with(&LOCKS_TRAILER)
+        && let Some(tail) = rest.get(LOCKS_TRAILER_LEN..)
+        && after_locks(tail)
+    {
+        found.locks_high = rest[4..LOCKS_TRAILER_LEN].try_into().ok();
+        rest = tail;
+    }
+    if partner_at(rest) {
+        let slots = &rest[PARTNER_TRAILER.len()..PARTNER_TRAILER_LEN];
+        let mut partner = [InventoryItem::default(); INVENTORY_SLOTS_CHRIS];
+        for (stack, &[id, quantity]) in partner.iter_mut().zip(slots.as_chunks::<2>().0) {
+            *stack = InventoryItem { id, quantity };
+        }
+        found.partner = Some(partner);
+        rest = &rest[PARTNER_TRAILER_LEN..];
+    }
+    if rest.len() == ROOM_TRAILER_LEN
+        && let Some(&[stage, room, flags, _]) = rest.strip_prefix(&ROOM_TRAILER)
+        && stage != 0
+    {
+        found.room = Some(RoomId {
+            stage,
+            room,
+            player_flag: 0,
+            mansion2: flags & 1 != 0,
+        });
+    }
+    found
 }
 
 /// The block's 1-based file name for a zero-based slot index.
@@ -662,14 +824,16 @@ pub struct SaveSlotInfo {
 }
 
 impl SaveSlotInfo {
-    /// Read the header fields out of a parsed block.
+    /// Read the header fields out of a parsed block. A generated game's
+    /// room is named by its origin, whose labels it shares
+    /// ([`SaveFile::block_room`]).
     pub fn from_file(file: &SaveFile) -> Self {
-        let id = file.room_id();
+        let id = file.block_room();
         Self {
             character: file.character,
             saves: file.saves,
             stage: id.stage,
-            room: file.room,
+            room: id.room,
             mansion2: id.mansion2,
         }
     }
@@ -678,11 +842,33 @@ impl SaveSlotInfo {
 impl SaveFile {
     /// The room the block was saved in: its 0-based `g_stageId` is the
     /// original's, whose stages 6 and 7 are the second mansion visit.
+    ///
+    /// A room the block cannot name is the room trailer's
+    /// ([`ROOM_TRAILER`]).
     pub fn room_id(&self) -> RoomId {
+        let room = self
+            .room_ext
+            .unwrap_or_else(|| RoomId::from_table_row(usize::from(self.stage), self.room));
+        RoomId {
+            player_flag: self.character & 1,
+            ..room
+        }
+    }
+
+    /// The room the block's stage and room bytes name: [`SaveFile::room_id`]
+    /// for a retail room, and the room's origin for one the room trailer
+    /// names ([`ROOM_TRAILER`]), whose labels it shares.
+    pub fn block_room(&self) -> RoomId {
         RoomId {
             player_flag: self.character & 1,
             ..RoomId::from_table_row(usize::from(self.stage), self.room)
         }
+    }
+
+    /// The 1-based stage the block's stage byte names (the state image's
+    /// `B_STAGE`).
+    fn block_stage(&self) -> u8 {
+        self.block_room().stage
     }
 }
 
@@ -1046,6 +1232,63 @@ mod tests {
     }
 
     #[test]
+    fn high_lock_flags_ride_in_the_lock_trailer() {
+        let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
+        for bit in [3, 63, 64, 0xC5, 0xFF] {
+            state.apply_flag(2, bit, 0);
+        }
+        let file = SaveFile::from_state(&state);
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes.len(), SAVE_BLOCK_SIZE + LOCKS_TRAILER_LEN);
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap(), file);
+        let mut restored = GameState::default();
+        SaveFile::from_bytes(&bytes)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert_eq!(restored.flags[2].bytes(), state.flags[2].bytes());
+        for bit in [3, 63, 64, 0xC5, 0xFF] {
+            assert!(restored.flag_test(2, bit, false), "{bit}");
+        }
+        assert!(!restored.flag_test(2, 65, false));
+    }
+
+    #[test]
+    fn the_lock_trailer_follows_the_height_and_re2_trailers() {
+        let mut file = SaveFile {
+            pos_y: -40,
+            re2: Some(vec![1, 2, 3]),
+            ..filled()
+        };
+        file.locks_high[5] = 0x10;
+        let bytes = file.to_file_bytes();
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap(), file);
+        file.re2 = None;
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+        file.pos_y = 0;
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+    }
+
+    #[test]
+    fn a_save_without_the_lock_trailer_loads_with_high_locks_clear() {
+        let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
+        state.apply_flag(2, 7, 0);
+        let bytes = SaveFile::from_state(&state).to_file_bytes();
+        assert_eq!(
+            bytes.len(),
+            SAVE_BLOCK_SIZE,
+            "a vanilla game adds no trailer"
+        );
+        assert_eq!(bytes, SaveFile::from_state(&state).to_bytes().to_vec());
+        let mut restored = GameState::default();
+        restored.apply_flag(2, 200, 0);
+        SaveFile::from_bytes(&bytes)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert!(restored.flag_test(2, 7, false));
+        assert!(!restored.flag_test(2, 200, false));
+    }
+
+    #[test]
     fn a_floor_level_save_is_the_plain_block() {
         let file = filled();
         assert_eq!(file.to_file_bytes(), file.to_bytes().to_vec());
@@ -1093,6 +1336,146 @@ mod tests {
         file.apply_to(&mut restored);
         assert_eq!(restored.rebecca_inventory[0].id, 0x02);
         assert_eq!(restored.rebecca_inventory[0].quantity, 15);
+    }
+
+    #[test]
+    fn an_eight_slot_chris_keeps_rebeccas_slots_in_the_partner_trailer() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        let mut state = GameState::new(RoomId::parse("1060").unwrap(), &RoomState::default());
+        state.slot_counts[0] = 8;
+        state.inventory = (1..=8).map(|id| stack(id, id)).collect();
+        state.rebecca_inventory[0] = stack(0x02, 15);
+        state.rebecca_inventory[5] = stack(0x44, 1);
+        let file = SaveFile::from_state(&state);
+        assert_eq!(file.partner_slots, Some(state.rebecca_inventory));
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes.len(), SAVE_BLOCK_SIZE + PARTNER_TRAILER_LEN);
+        assert_eq!(&bytes[SAVE_BLOCK_SIZE..SAVE_BLOCK_SIZE + 4], b"AKY\x04");
+        let parsed = SaveFile::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed, file);
+        let mut restored = GameState::default();
+        parsed.apply_to(&mut restored);
+        assert_eq!(restored.inventory, state.inventory);
+        assert_eq!(restored.rebecca_inventory, state.rebecca_inventory);
+
+        // After the height, RE2 and lock trailers too.
+        let mut file = SaveFile {
+            pos_y: -40,
+            re2: Some(vec![1, 2, 3]),
+            ..file
+        };
+        file.locks_high[2] = 1;
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+    }
+
+    #[test]
+    fn a_room_the_block_cannot_name_is_saved_in_the_room_trailer() {
+        let high = RoomId::parse("09-40-1").unwrap();
+        let mut state = GameState::new(high, &RoomState::default());
+        state.origins = crate::state::RoomOrigins::new([((9, 0x40), (2, 0x05))]);
+        let file = SaveFile::from_state(&state);
+        assert_eq!(
+            file.room_ext,
+            Some(RoomId {
+                player_flag: 0,
+                ..high
+            })
+        );
+        // The block names the origin, for a reader without the trailer.
+        assert_eq!((file.stage, file.room), (1, 5));
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes.len(), SAVE_BLOCK_SIZE + ROOM_TRAILER_LEN);
+        assert_eq!(&bytes[SAVE_BLOCK_SIZE..], b"AKY\x05\x09\x40\x00\x00");
+        let parsed = SaveFile::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed, file);
+        assert_eq!(parsed.room_id(), high);
+        assert_eq!(parsed.state_bytes[0], 2, "the block's own stage");
+        let mut restored = GameState::default();
+        restored.origins = state.origins.clone();
+        parsed.apply_to(&mut restored);
+        assert_eq!(restored.id, high);
+        // `B_STAGE` and `B_ROOM` are the origin's.
+        assert_eq!(restored.state_bytes[..2], [2, 5]);
+
+        // The second visit, after every other trailer.
+        let visit = RoomId {
+            mansion2: true,
+            ..high
+        };
+        let mut file = SaveFile {
+            room_ext: Some(RoomId {
+                player_flag: 0,
+                ..visit
+            }),
+            pos_y: -40,
+            re2: Some(vec![1, 2, 3]),
+            partner_slots: Some(state.rebecca_inventory),
+            ..file
+        };
+        file.locks_high[2] = 1;
+        let bytes = file.to_file_bytes();
+        assert_eq!(
+            &bytes[bytes.len() - ROOM_TRAILER_LEN..],
+            b"AKY\x05\x09\x40\x01\x00"
+        );
+        let parsed = SaveFile::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed, file);
+        assert_eq!(parsed.room_id(), visit);
+        // Without the partner trailer too.
+        let file = SaveFile {
+            partner_slots: None,
+            ..file
+        };
+        assert_eq!(SaveFile::from_bytes(&file.to_file_bytes()).unwrap(), file);
+    }
+
+    #[test]
+    fn a_retail_room_writes_no_room_trailer() {
+        for text in ["1001", "1061", "51F0", "G1F0", "A000", "21F1"] {
+            let id = RoomId::parse(text).unwrap();
+            for mansion2 in [false, true] {
+                let id = id.with_visit(mansion2);
+                let state = GameState::new(id, &RoomState::default());
+                let file = SaveFile::from_state(&state);
+                assert_eq!(file.room_ext, None, "{text} {mansion2}");
+                assert_eq!(file.to_file_bytes(), file.to_bytes().to_vec(), "{text}");
+                assert_eq!(
+                    SaveFile::from_bytes(&file.to_file_bytes())
+                        .unwrap()
+                        .room_id(),
+                    id
+                );
+            }
+        }
+        // A room trailer anywhere but last is not one.
+        let state = GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default());
+        let mut bytes = SaveFile::from_state(&state).to_file_bytes();
+        bytes.extend_from_slice(b"AKY\x05\x09\x40\x00\x00\x00");
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap().room_ext, None);
+    }
+
+    #[test]
+    fn a_vanilla_eight_slot_jill_writes_the_plain_block() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        let mut state = GameState::new(RoomId::parse("1061").unwrap(), &RoomState::default());
+        state.inventory = (1..=8).map(|id| stack(id, id)).collect();
+        let file = SaveFile::from_state(&state);
+        assert_eq!(file.partner_slots, None);
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes, file.to_bytes().to_vec(), "no trailer");
+        // Her two extra stacks sit in Rebecca's first two slots; a load
+        // doesn't give them to Rebecca, and saving again writes the same
+        // block.
+        let mut restored = GameState::default();
+        SaveFile::from_bytes(&bytes)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert_eq!(restored.inventory, state.inventory);
+        assert_eq!(
+            restored.rebecca_inventory[..2],
+            [InventoryItem::default(); 2]
+        );
+        assert_eq!(SaveFile::from_state(&restored).to_file_bytes(), bytes);
     }
 
     #[test]

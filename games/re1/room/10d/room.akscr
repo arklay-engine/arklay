@@ -26,6 +26,7 @@
 
 proc init
 {
+    random_enemies();
     door_aot_set(AOT_00_DOOR, 4600, 1800, 1800, 900, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_SAVE, 3000, 3556, 1600, 1400, SCE_SAVE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_02_USEITEM, 3000, 3556, 1600, 1400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 26, 0, 1, 0);
@@ -69,6 +70,20 @@ proc init
 
 proc main
 {
+    // The tiger statue's eye tests below are too far from this `if` to hold
+    // a `picked()` of their own (its one-byte jump), so they read the pickup
+    // as the original item from here. A variant's build folds this away.
+    if (ITEM_RANDOMIZER)
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
+        {
+            picked_as(AOT_04_ITEM, IT_05_WEAPON_MAGNUM);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
+        {
+            picked_as(AOT_03_ITEM, IT_29_KEY_CREST_WIND);
+        }
+    }
     if (ck(FG_ROOM, F_ROOM_18, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))

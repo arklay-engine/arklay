@@ -494,8 +494,9 @@ fn run_zombie(
     let noise = game.re2.player.noise;
     let player_floor = game.re2.player.floor;
     let player_neck = game.re2.player.neck.position;
-    let stage = game.id.stage;
-    let room_code = u16::from(stage) << 8 | u16::from(game.id.room);
+    let origin = game.origin();
+    let stage = origin.stage;
+    let room_code = u16::from(stage) << 8 | u16::from(origin.room);
     let player_angle = game.entities[0].angle;
     let player_id = game.id.player_flag;
     let weapon = game.re2_weapon().id;

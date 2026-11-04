@@ -64,6 +64,119 @@ fn compile_error(text: &str) -> String {
 }
 
 #[test]
+fn randomizer_conditions_test_a_flag_in_the_runtime_build_only() {
+    let text = "#version 1\nproc init\n{\n    if (RANDOMIZER)\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }\n}\n";
+    let runtime = compile(text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.init[0]);
+    let test = [0x04, 5, crate::scd::opcode::system::RANDOMIZER, 0];
+    assert!(
+        bytes.windows(4).any(|window| window == test),
+        "{bytes:02x?}"
+    );
+
+    // A retail room's own build is what the bytes must stay identical to.
+    let vanilla = round("#version 1\nproc init\n{\n    set(0, 2, 0);\n}\n");
+    assert_eq!(all_bytes(&round(text)), all_bytes(&vanilla));
+}
+
+#[test]
+fn a_negated_randomizer_condition_tests_for_the_flag_clear() {
+    let text = "#version 1\nproc init\n{\n    if (!ENEMY_RANDOMIZER)\n    {\n        set(0, 1, 0);\n    }\n}\n";
+    let runtime = compile(text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.init[0]);
+    let test = [0x04, 5, crate::scd::opcode::system::ENEMY_RANDOMIZER, 1];
+    assert!(
+        bytes.windows(4).any(|window| window == test),
+        "{bytes:02x?}"
+    );
+    // Variant builds run with the flag clear, so the guarded code stays.
+    let vanilla = round("#version 1\nproc init\n{\n    set(0, 1, 0);\n}\n");
+    assert_eq!(all_bytes(&round(text)), all_bytes(&vanilla));
+}
+
+#[test]
+fn a_random_enemies_placeholder_is_a_marker_only_outside_a_variants_build() {
+    let text = |call: &str| {
+        format!(
+            "#version 1\nproc init\n{{\n    if (!ENEMY_RANDOMIZER)\n    {{\n        set(0, 1, 0);\n    }}\n    {call}\n}}\n"
+        )
+    };
+    let bytes = |text: &str| {
+        block_bytes(
+            &reader::parse(&compile(text).unwrap().to_container().unwrap())
+                .unwrap()
+                .init[0],
+        )
+    };
+    let none = bytes(&text(""));
+    let unnamed = bytes(&text("random_enemies();"));
+    let named = bytes(&text("random_enemies(jill);"));
+    let marker = |id: u16| {
+        let [low, high] = id.to_le_bytes();
+        [super::ENEMY_MARKER_OP, super::ENEMY_MARKER_TAG, low, high]
+    };
+    assert!(unnamed.windows(4).any(|w| w == marker(0)), "{unnamed:02x?}");
+    let id = super::placeholder_id(Some("jill"));
+    assert_ne!(id, 0);
+    assert!(named.windows(4).any(|w| w == marker(id)), "{named:02x?}");
+    assert_eq!(unnamed.len(), none.len() + 4);
+    // The retail build is the same bytes with or without the placeholder.
+    assert_eq!(
+        all_bytes(&round(&text("random_enemies(jill);"))),
+        all_bytes(&round(&text("")))
+    );
+}
+
+#[test]
+fn every_system_flag_is_tested_by_name() {
+    let guard = |condition: &str| {
+        format!(
+            "#version 1\nproc init\n{{\n    if ({condition})\n    {{\n        set(0, 1, 0);\n    }}\n    else\n    {{\n        set(0, 2, 0);\n    }}\n}}\n"
+        )
+    };
+    let vanilla = |body: u8| {
+        round(&format!(
+            "#version 1\nproc init\n{{\n    set(0, {body}, 0);\n}}\n"
+        ))
+    };
+    for (name, bit) in crate::scd::opcode::system::BY_NAME {
+        // `NAME` takes its `then` arm when the flag is set, so a retail build
+        // (the flag clear) keeps the `else` arm.
+        let runtime = compile(&guard(name)).unwrap();
+        let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+        let bytes = block_bytes(&runtime.init[0]);
+        let test = [0x04, 5, bit, 0];
+        assert!(
+            bytes.windows(4).any(|window| window == test),
+            "{name}: {bytes:02x?}"
+        );
+        assert_eq!(
+            all_bytes(&round(&guard(name))),
+            all_bytes(&vanilla(2)),
+            "{name}"
+        );
+
+        // `!NAME` takes its `then` arm when the flag is clear.
+        let negated = format!("!{name}");
+        let runtime = compile(&guard(negated.as_str())).unwrap();
+        let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+        let bytes = block_bytes(&runtime.init[0]);
+        let test = [0x04, 5, bit, 1];
+        assert!(
+            bytes.windows(4).any(|window| window == test),
+            "{negated}: {bytes:02x?}"
+        );
+        assert_eq!(
+            all_bytes(&round(&guard(negated.as_str()))),
+            all_bytes(&vanilla(1)),
+            "{negated}"
+        );
+    }
+}
+
+#[test]
 fn proc_blocks_end_in_an_implicit_return() {
     let scripts =
         round("#version 1\nproc init\n{\n    set(FG_COMMON, 1, 1);\n}\nproc main\n{\n}\n");
@@ -1193,4 +1306,85 @@ event on_aot
         "{lifted}"
     );
     assert!(lifted.contains("    if (USA)\n"), "{lifted}");
+}
+
+const PICKED_ROOM: &str = "#version 1\nproc init\n{\n    item_aot_set(1, 0, 0, 0, 0, 68, 1, 0, 0, 0, 0, 0, 0, 77, 0, 0);\n    item_aot_set(2, 0, 0, 0, 0, 5, 1, 0, 0, 0, 0, 0, 0, 78, 0, 0);\n    item_aot_set(2, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 79, 0, 0);\n}\n";
+
+fn picked_room(main: &str) -> String {
+    format!("{PICKED_ROOM}proc main\n{{\n{main}\n}}\n")
+}
+
+#[test]
+fn picked_folds_to_the_original_test_in_a_retail_build() {
+    let picked = picked_room("    if (picked(1))\n    {\n        set(0, 1, 0);\n    }");
+    let original = picked_room("    if (testpickup(68))\n    {\n        set(0, 1, 0);\n    }");
+    assert_eq!(all_bytes(&round(&picked)), all_bytes(&round(&original)));
+
+    // An explicit original is emitted verbatim, here a `cmpb` test.
+    let picked = picked_room(
+        "    if (picked(2, cmpb(B_PICKED_ITEM, CMP_EQ, 5)))\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }",
+    );
+    let original = picked_room(
+        "    if (cmpb(B_PICKED_ITEM, CMP_EQ, 5))\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }",
+    );
+    assert_eq!(all_bytes(&round(&picked)), all_bytes(&round(&original)));
+}
+
+#[test]
+fn picked_remaps_the_pickup_under_the_item_randomizer_at_run_time() {
+    let text =
+        picked_room("    if (picked(2, testpickup(5)))\n    {\n        set(0, 1, 0);\n    }");
+    let runtime = compile(&text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.main[0]);
+    let randomizer = [0x04, 5, crate::scd::opcode::system::ITEM_RANDOMIZER, 0];
+    // AOT 2 is reused for two items, so the item's own flag narrows it too.
+    let collected = [0x04, 7, 78, 0];
+    let picked_aot = [0x06, 20, 0, 3];
+    let remap = [0x08, 19, 5, 0];
+    let find = |needle: &[u8]| bytes.windows(needle.len()).position(|w| w == needle);
+    let (a, b, c, d) = (
+        find(&randomizer).expect("randomizer test"),
+        find(&picked_aot).expect("picked AOT test"),
+        find(&collected).expect("collected flag test of the matching item"),
+        find(&remap).expect("remap"),
+    );
+    assert!(a < b && b < c && c < d, "{bytes:02x?}");
+    // The original test still follows.
+    assert!(find(&[0x11, 5]).is_some(), "{bytes:02x?}");
+    // An AOT with one item needs no flag: the picked AOT alone names it.
+    let text = picked_room("    if (picked(1))\n    {\n        set(0, 1, 0);\n    }");
+    let runtime = compile(&text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.main[0]);
+    let find = |needle: &[u8]| bytes.windows(needle.len()).position(|w| w == needle);
+    assert!(find(&[0x06, 20, 0, 2]).is_some(), "{bytes:02x?}");
+    assert!(find(&[0x04, 7, 77, 0]).is_none(), "{bytes:02x?}");
+    // A statement form does the remap alone.
+    let alone = picked_room("    picked_as(2, 5);");
+    assert!(compile(&alone).is_ok());
+}
+
+#[test]
+fn picked_rejects_an_unknown_or_non_item_aot() {
+    let error = compile_error(&picked_room(
+        "    if (picked(7))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(
+        error.contains("no `item_aot_set`") || error.contains("which no"),
+        "{error}"
+    );
+    let error = compile_error(&picked_room(
+        "    if (picked(2, testpickup(33)))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("holds the item"), "{error}");
+    // AOT 2 holds two items with different flags, so it needs the item.
+    let error = compile_error(&picked_room(
+        "    if (picked(2))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("different"), "{error}");
+    let error = compile_error(&picked_room(
+        "    if (picked(1, ck(0, 1, 0)))\n    {\n        set(0, 1, 0);\n    }",
+    ));
+    assert!(error.contains("testpickup"), "{error}");
 }

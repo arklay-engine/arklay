@@ -1,0 +1,4466 @@
+{
+ "testCases": [
+  {
+   "start": "100",
+   "end": "617",
+   "player": 0,
+   "scenario": 0,
+   "expectations": {
+    "31": [
+     2,
+     2
+    ],
+    "47": [
+     1,
+     2
+    ],
+    "50": [
+     1,
+     1
+    ],
+    "51": [
+     2,
+     2
+    ],
+    "52": [
+     1,
+     1
+    ],
+    "53": [
+     1,
+     1
+    ],
+    "59": [
+     1,
+     1
+    ],
+    "60": [
+     1,
+     1
+    ],
+    "61": [
+     1,
+     1
+    ],
+    "62": [
+     1,
+     1
+    ],
+    "63": [
+     1,
+     1
+    ],
+    "67": [
+     1,
+     1
+    ],
+    "68": [
+     1,
+     1
+    ],
+    "69": [
+     1,
+     1
+    ],
+    "70": [
+     1,
+     1
+    ],
+    "71": [
+     1,
+     1
+    ],
+    "72": [
+     1,
+     1
+    ],
+    "73": [
+     1,
+     1
+    ],
+    "74": [
+     1,
+     1
+    ],
+    "75": [
+     1,
+     1
+    ],
+    "76": [
+     1,
+     1
+    ],
+    "77": [
+     1,
+     1
+    ],
+    "80": [
+     1,
+     1
+    ],
+    "83": [
+     1,
+     1
+    ],
+    "89": [
+     1,
+     1
+    ],
+    "90": [
+     1,
+     1
+    ],
+    "91": [
+     1,
+     1
+    ],
+    "92": [
+     1,
+     1
+    ],
+    "93": [
+     1,
+     1
+    ],
+    "96": [
+     1,
+     1
+    ],
+    "97": [
+     1,
+     1
+    ]
+   }
+  }
+ ],
+ "rooms": {
+  "100": {
+   "doors": [
+    {
+     "target": "101",
+     "kind": "noreturn"
+    }
+   ],
+   "items": []
+  },
+  "101": {
+   "doors": [
+    {
+     "target": "100",
+     "kind": "locked"
+    },
+    {
+     "target": "102"
+    }
+   ],
+   "items": [
+    {
+     "id": 8,
+     "globalId": 0,
+     "type": 20
+    },
+    {
+     "id": 9,
+     "globalId": 1,
+     "type": 20
+    },
+    {
+     "id": 11,
+     "globalId": 15,
+     "type": 7,
+     "player": 0
+    },
+    {
+     "id": 11,
+     "globalId": 15,
+     "type": 12,
+     "player": 1
+    }
+   ]
+  },
+  "102": {
+   "doors": [
+    {
+     "target": "101"
+    },
+    {
+     "target": "118",
+     "kind": "unblock"
+    }
+   ],
+   "items": [
+    {
+     "id": 7,
+     "globalId": 154,
+     "type": 20
+    }
+   ]
+  },
+  "103": {
+   "doors": [
+    {
+     "target": "200"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 211,
+     "type": 38,
+     "kind": "hidden"
+    },
+    {
+     "id": 31,
+     "globalId": 156,
+     "type": 83,
+     "kind": "low"
+    }
+   ]
+  },
+  "104": {
+   "doors": [
+    {
+     "target": "105"
+    }
+   ],
+   "items": []
+  },
+  "105": {
+   "doors": [
+    {
+     "target": "104",
+     "kind": "locked"
+    },
+    {
+     "target": "106",
+     "requires": [
+      "item(88)"
+     ],
+     "kind": "noreturn"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 4,
+     "type": 88
+    }
+   ]
+  },
+  "106": {
+   "doors": [
+    {
+     "target": "105",
+     "kind": "locked"
+    },
+    {
+     "target": "107"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 7,
+     "type": 30
+    },
+    {
+     "id": 3,
+     "globalId": 9,
+     "type": 20
+    },
+    {
+     "id": 4,
+     "globalId": 8,
+     "type": 50,
+     "scenario": 1
+    }
+   ]
+  },
+  "107": {
+   "doors": [
+    {
+     "target": "106"
+    },
+    {
+     "target": "108"
+    }
+   ],
+   "items": []
+  },
+  "108": {
+   "doors": [
+    {
+     "target": "107"
+    },
+    {
+     "target": "109"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 213,
+     "type": 20,
+     "requires": [
+      "item(50)"
+     ],
+     "player": 0,
+     "kind": "hidden"
+    },
+    {
+     "id": 5,
+     "globalId": 213,
+     "type": 26,
+     "requires": [
+      "item(50)"
+     ],
+     "player": 1,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "109": {
+   "doors": [
+    {
+     "target": "108"
+    },
+    {
+     "target": "10A"
+    },
+    {
+     "target": "116",
+     "kind": "unblock"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 13,
+     "type": 20
+    },
+    {
+     "id": 4,
+     "globalId": 146,
+     "type": 38,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 205,
+     "type": 20,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "110": {
+   "doors": [
+    {
+     "target": "200",
+     "kind": "unblock"
+    },
+    {
+     "target": "10F"
+    },
+    {
+     "target": "112",
+     "requires": [
+      "flag(HALL_COMPUTER)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 17,
+     "type": 71,
+     "scenario": 1
+    }
+   ]
+  },
+  "1110": {
+   "doors": [
+    {
+     "target": "117"
+    },
+    {
+     "target": "1111",
+     "requires": [
+      "item(67)",
+      "item(74)"
+     ]
+    }
+   ]
+  },
+  "1111": {
+   "doors": [
+    {
+     "target": "1110"
+    },
+    {
+     "target": "219",
+     "kind": "oneway",
+     "player": 0
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 55,
+     "type": 61,
+     "player": 0
+    },
+    {
+     "id": 2,
+     "globalId": 55,
+     "type": 57,
+     "player": 1
+    }
+   ]
+  },
+  "112": {
+   "doors": [
+    {
+     "target": "110"
+    },
+    {
+     "target": "113",
+     "kind": "locked"
+    },
+    {
+     "target": "117"
+    }
+   ],
+   "items": [
+    {
+     "id": 11,
+     "globalId": 21,
+     "type": 59,
+     "player": 0
+    },
+    {
+     "id": 11,
+     "globalId": 21,
+     "type": 54,
+     "player": 1
+    },
+    {
+     "id": 12,
+     "globalId": 22,
+     "type": 39
+    }
+   ]
+  },
+  "113": {
+   "doors": [
+    {
+     "target": "114"
+    },
+    {
+     "target": "112"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 30,
+     "type": 90,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 4,
+     "globalId": 18,
+     "type": 32,
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 18,
+     "type": 25,
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 4,
+     "globalId": 18,
+     "type": 20,
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 145,
+     "type": 20,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 145,
+     "type": 21,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 145,
+     "type": 20,
+     "player": 1,
+     "scenario": 0
+    }
+   ]
+  },
+  "114": {
+   "doors": [
+    {
+     "target": "10C"
+    },
+    {
+     "target": "113",
+     "requires": [
+      "item(89)"
+     ],
+     "scenario": 0
+    },
+    {
+     "target": "113",
+     "scenario": 1
+    },
+    {
+     "target": "115"
+    }
+   ],
+   "items": []
+  },
+  "115": {
+   "doors": [
+    {
+     "target": "114"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 104,
+     "type": 71,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 104,
+     "type": 71,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 104,
+     "type": 90,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 7,
+     "globalId": 20,
+     "type": 104,
+     "kind": "low"
+    },
+    {
+     "id": 9,
+     "globalId": 101,
+     "type": 20
+    },
+    {
+     "id": 13,
+     "globalId": 103,
+     "type": 7,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 13,
+     "globalId": 103,
+     "type": 5,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 13,
+     "globalId": 103,
+     "type": 9,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 13,
+     "globalId": 103,
+     "type": 12,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 16,
+     "globalId": 40,
+     "type": 35,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 19,
+     "globalId": 43,
+     "type": 105,
+     "player": 1,
+     "kind": "low"
+    },
+    {
+     "id": 29,
+     "globalId": 209,
+     "type": 80
+    }
+   ]
+  },
+  "116": {
+   "doors": [
+    {
+     "target": "20B"
+    },
+    {
+     "target": "109",
+     "kind": "side"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 57,
+     "type": 38
+    },
+    {
+     "id": 3,
+     "globalId": 58,
+     "type": 38
+    },
+    {
+     "id": 4,
+     "globalId": 59,
+     "type": 38
+    }
+   ]
+  },
+  "117": {
+   "doors": [
+    {
+     "target": "1110"
+    },
+    {
+     "target": "112"
+    }
+   ],
+   "items": [
+    {
+     "id": 0,
+     "globalId": 204,
+     "type": 24,
+     "player": 1,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "118": {
+   "doors": [
+    {
+     "target": "102"
+    },
+    {
+     "target": "119"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 161,
+     "type": 20,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "119": {
+   "doors": [
+    {
+     "target": "118"
+    },
+    {
+     "target": "11A"
+    }
+   ],
+   "items": []
+  },
+  "200": {
+   "doors": [
+    {
+     "target": "103"
+    },
+    {
+     "target": "110",
+     "kind": "side"
+    },
+    {
+     "target": "202",
+     "kind": "side"
+    },
+    {
+     "target": "201",
+     "requires": [
+      "flag(HALL_COMPUTER)"
+     ]
+    },
+    {
+     "target": "20A",
+     "requires": [
+      "flag(HALL_COMPUTER)"
+     ]
+    }
+   ],
+   "flags": [
+    {
+     "name": "HALL_COMPUTER",
+     "requires": [
+      "item(53)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 166,
+     "type": 30
+    },
+    {
+     "id": 9,
+     "globalId": 93,
+     "type": 89,
+     "requires": [
+      "item(71)"
+     ],
+     "scenario": 0
+    },
+    {
+     "id": 9,
+     "globalId": 93,
+     "type": 89,
+     "requires": [
+      "item(71)"
+     ],
+     "scenario": 1
+    },
+    {
+     "id": 19,
+     "globalId": 152,
+     "type": 20,
+     "scenario": 0
+    },
+    {
+     "id": 19,
+     "globalId": 152,
+     "type": 7,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 19,
+     "globalId": 152,
+     "type": 9,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "201": {
+   "doors": [
+    {
+     "target": "200"
+    },
+    {
+     "target": "204"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 94,
+     "type": 107
+    },
+    {
+     "id": 9,
+     "globalId": 92,
+     "type": 20,
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 9,
+     "globalId": 92,
+     "type": 21,
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 9,
+     "globalId": 92,
+     "type": 35,
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "202": {
+   "doors": [
+    {
+     "target": "200",
+     "kind": "unblock"
+    },
+    {
+     "target": "209",
+     "kind": "side"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 249,
+     "type": 31,
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 113,
+     "type": 64,
+     "player": 1
+    },
+    {
+     "id": 7,
+     "globalId": 113,
+     "type": 91,
+     "player": 0
+    },
+    {
+     "id": 12,
+     "globalId": 115,
+     "type": 20,
+     "kind": "low"
+    },
+    {
+     "id": 15,
+     "globalId": 116,
+     "type": 20
+    },
+    {
+     "id": 16,
+     "globalId": 111,
+     "type": 106
+    },
+    {
+     "id": 18,
+     "globalId": 114,
+     "type": 38
+    },
+    {
+     "id": 255,
+     "globalId": 1000,
+     "type": 53,
+     "player": 0,
+     "scenario": 0,
+     "kind": "low"
+    },
+    {
+     "id": 255,
+     "globalId": 1000,
+     "type": 53,
+     "player": 1,
+     "scenario": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "203": {
+   "doors": [
+    {
+     "target": "204"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 34,
+     "type": 20,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 1,
+     "globalId": 34,
+     "type": 35,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 2,
+     "globalId": 35,
+     "type": 30
+    },
+    {
+     "id": 5,
+     "globalId": 39,
+     "type": 67,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 39,
+     "type": 47,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 6,
+     "globalId": 153,
+     "type": 118,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "204": {
+   "requires": [
+    86
+   ],
+   "doors": [
+    {
+     "target": "201"
+    },
+    {
+     "target": "205"
+    },
+    {
+     "target": "203",
+     "requires": [
+      "item(89)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 3,
+     "type": 20
+    },
+    {
+     "id": 5,
+     "globalId": 46,
+     "type": 38
+    }
+   ]
+  },
+  "205": {
+   "doors": [
+    {
+     "target": "204"
+    },
+    {
+     "target": "206"
+    },
+    {
+     "target": "207"
+    }
+   ],
+   "items": []
+  },
+  "206": {
+   "doors": [
+    {
+     "target": "205"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 31,
+     "type": 51,
+     "requires": [
+      "item(47)"
+     ]
+    },
+    {
+     "id": 4,
+     "globalId": 19,
+     "type": 108
+    },
+    {
+     "id": 5,
+     "globalId": 28,
+     "type": 20
+    }
+   ]
+  },
+  "207": {
+   "doors": [
+    {
+     "target": "205"
+    },
+    {
+     "target": "208"
+    },
+    {
+     "target": "10C"
+    },
+    {
+     "target": "209",
+     "requires": [
+      "item(90)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 148,
+     "type": 38
+    },
+    {
+     "id": 6,
+     "globalId": 167,
+     "type": 38
+    }
+   ]
+  },
+  "208": {
+   "doors": [
+    {
+     "target": "207"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 25,
+     "type": 113
+    },
+    {
+     "id": 6,
+     "globalId": 125,
+     "type": 115,
+     "requires": [
+      "item(68)"
+     ],
+     "kind": "low"
+    },
+    {
+     "id": 7,
+     "globalId": 126,
+     "type": 116,
+     "requires": [
+      "item(69)"
+     ],
+     "kind": "low"
+    },
+    {
+     "id": 8,
+     "globalId": 127,
+     "type": 117,
+     "requires": [
+      "item(70)"
+     ],
+     "kind": "low"
+    },
+    {
+     "id": 12,
+     "globalId": 158,
+     "type": 13,
+     "requires": [
+      "item(83)"
+     ]
+    },
+    {
+     "id": 13,
+     "globalId": 216,
+     "type": 20,
+     "kind": "hidden"
+    },
+    {
+     "id": 16,
+     "globalId": 160,
+     "type": 123,
+     "requires": [
+      "item(80)"
+     ],
+     "kind": "low"
+    },
+    {
+     "id": 31,
+     "globalId": 141,
+     "type": 30
+    }
+   ]
+  },
+  "209": {
+   "doors": [
+    {
+     "target": "207"
+    },
+    {
+     "target": "202"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 72,
+     "type": 29,
+     "player": 1
+    },
+    {
+     "id": 2,
+     "globalId": 69,
+     "type": 68,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 70,
+     "type": 69,
+     "scenario": 1
+    },
+    {
+     "id": 3,
+     "globalId": 71,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 3,
+     "globalId": 73,
+     "type": 65,
+     "player": 1
+    }
+   ]
+  },
+  "210": {
+   "doors": [
+    {
+     "target": "20F"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 91,
+     "type": 119
+    },
+    {
+     "id": 2,
+     "globalId": 85,
+     "type": 5,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 85,
+     "type": 22,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 2,
+     "globalId": 85,
+     "type": 26,
+     "player": 1
+    },
+    {
+     "id": 3,
+     "globalId": 87,
+     "type": 21,
+     "player": 0,
+     "kind": "hidden"
+    },
+    {
+     "id": 3,
+     "globalId": 219,
+     "type": 30,
+     "player": 1,
+     "kind": "hidden"
+    },
+    {
+     "id": 4,
+     "globalId": 219,
+     "type": 30,
+     "player": 0,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "211": {
+   "doors": [
+    {
+     "target": "212"
+    },
+    {
+     "target": "213"
+    },
+    {
+     "target": "214",
+     "requires": [
+      "item(52)",
+      "room(213)"
+     ]
+    },
+    {
+     "target": "216"
+    },
+    {
+     "target": "20F"
+    },
+    {
+     "target": "215",
+     "requires": [
+      "item(92)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 221,
+     "type": 20,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "212": {
+   "doors": [
+    {
+     "target": "211"
+    },
+    {
+     "target": "3070"
+    }
+   ],
+   "items": [
+    {
+     "id": 31,
+     "globalId": 142,
+     "type": 39
+    }
+   ]
+  },
+  "213": {
+   "doors": [
+    {
+     "target": "211"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 24,
+     "type": 20,
+     "player": 0
+    },
+    {
+     "id": 2,
+     "globalId": 24,
+     "type": 25,
+     "player": 1
+    },
+    {
+     "id": 6,
+     "globalId": 253,
+     "type": 38
+    }
+   ]
+  },
+  "214": {
+   "doors": [
+    {
+     "target": "211"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 64,
+     "type": 20,
+     "player": 0
+    },
+    {
+     "id": 2,
+     "globalId": 65,
+     "type": 20,
+     "player": 0
+    },
+    {
+     "id": 2,
+     "globalId": 65,
+     "type": 26,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 65,
+     "type": 29,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 4,
+     "globalId": 67,
+     "type": 20,
+     "player": 1
+    },
+    {
+     "id": 5,
+     "globalId": 68,
+     "type": 22,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 68,
+     "type": 21,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 68,
+     "type": 20,
+     "player": 1
+    },
+    {
+     "id": 6,
+     "globalId": 62,
+     "type": 15,
+     "kind": "low"
+    }
+   ]
+  },
+  "215": {
+   "doors": [
+    {
+     "target": "211"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 50,
+     "type": 52
+    }
+   ]
+  },
+  "216": {
+   "doors": [
+    {
+     "target": "211"
+    },
+    {
+     "target": "219"
+    },
+    {
+     "target": "219",
+     "player": 1,
+     "kind": "locked"
+    }
+   ],
+   "items": [
+    {
+     "id": 27,
+     "globalId": 144,
+     "type": 38
+    }
+   ]
+  },
+  "219": {
+   "doors": [
+    {
+     "target": "216"
+    },
+    {
+     "target": "21A"
+    },
+    {
+     "target": "301"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 117,
+     "type": 20,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 4,
+     "globalId": 117,
+     "type": 70,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 4,
+     "globalId": 117,
+     "type": 70,
+     "player": 1
+    }
+   ]
+  },
+  "300": {
+   "doors": [
+    {
+     "target": "308"
+    },
+    {
+     "target": "309"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 201,
+     "type": 26,
+     "player": 1
+    }
+   ]
+  },
+  "301": {
+   "doors": [
+    {
+     "target": "219"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 44,
+     "type": 110,
+     "player": 0,
+     "kind": "low"
+    },
+    {
+     "id": 5,
+     "globalId": 118,
+     "type": 75,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 118,
+     "type": 29,
+     "player": 1
+    },
+    {
+     "id": 6,
+     "globalId": 136,
+     "type": 40
+    },
+    {
+     "id": 7,
+     "globalId": 172,
+     "type": 38
+    }
+   ]
+  },
+  "302": {
+   "doors": [
+    {
+     "target": "21A"
+    },
+    {
+     "target": "30B0"
+    }
+   ],
+   "items": []
+  },
+  "303": {
+   "doors": [
+    {
+     "target": "304",
+     "requires": [
+      "item(59)",
+      "item(60)",
+      "item(61)",
+      "item(62)"
+     ],
+     "player": 0
+    },
+    {
+     "target": "304",
+     "player": 1
+    },
+    {
+     "target": "30B0"
+    }
+   ],
+   "items": []
+  },
+  "304": {
+   "doors": [
+    {
+     "target": "303"
+    },
+    {
+     "target": "402"
+    }
+   ],
+   "items": []
+  },
+  "305": {
+   "doors": [
+    {
+     "target": "306"
+    },
+    {
+     "target": "3071"
+    },
+    {
+     "target": "30B1"
+    }
+   ],
+   "items": []
+  },
+  "306": {
+   "doors": [
+    {
+     "target": "305"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 119,
+     "type": 92
+    }
+   ]
+  },
+  "3070": {
+   "doors": [
+    {
+     "target": "30D"
+    },
+    {
+     "target": "212"
+    },
+    {
+     "target": "3071",
+     "player": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 119,
+     "type": 92,
+     "player": 1
+    },
+    {
+     "id": 5,
+     "globalId": 193,
+     "type": 24,
+     "player": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "3071": {
+   "doors": [
+    {
+     "target": "3070",
+     "player": 1
+    },
+    {
+     "target": "305"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 194,
+     "type": 21,
+     "player": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "308": {
+   "doors": [
+    {
+     "target": "21B"
+    },
+    {
+     "target": "300"
+    }
+   ],
+   "items": []
+  },
+  "309": {
+   "doors": [
+    {
+     "target": "300"
+    },
+    {
+     "target": "30A"
+    }
+   ],
+   "items": []
+  },
+  "4000": {
+   "doors": [
+    {
+     "target": "30A"
+    },
+    {
+     "target": "4010",
+     "player": 0
+    },
+    {
+     "target": "4001",
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "target": "4010",
+     "player": 1,
+     "scenario": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 186,
+     "type": 40
+    },
+    {
+     "id": 6,
+     "globalId": 187,
+     "type": 40
+    }
+   ]
+  },
+  "4001": {
+   "doors": [
+    {
+     "target": "4011"
+    }
+   ]
+  },
+  "4010": {
+   "doors": [
+    {
+     "target": "4000",
+     "player": 0
+    },
+    {
+     "target": "4011",
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0
+    },
+    {
+     "target": "4011",
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1
+    },
+    {
+     "target": "404",
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "target": "404",
+     "player": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 9,
+     "globalId": 128,
+     "type": 30,
+     "player": 0
+    },
+    {
+     "id": 12,
+     "globalId": 130,
+     "type": 20,
+     "player": 0
+    },
+    {
+     "id": 15,
+     "globalId": 178,
+     "type": 38,
+     "player": 0
+    },
+    {
+     "id": 16,
+     "globalId": 179,
+     "type": 38,
+     "player": 0
+    },
+    {
+     "id": 17,
+     "globalId": 168,
+     "type": 38,
+     "player": 0
+    },
+    {
+     "id": 6,
+     "globalId": 128,
+     "type": 30,
+     "player": 1
+    },
+    {
+     "id": 8,
+     "globalId": 129,
+     "type": 35,
+     "player": 1
+    },
+    {
+     "id": 9,
+     "globalId": 130,
+     "type": 20,
+     "player": 1
+    },
+    {
+     "id": 7,
+     "globalId": 132,
+     "type": 122,
+     "player": 1
+    }
+   ]
+  },
+  "4011": {
+   "doors": [
+    {
+     "target": "4001"
+    },
+    {
+     "target": "4010"
+    },
+    {
+     "target": "40F"
+    }
+   ],
+   "items": [
+    {
+     "id": 13,
+     "globalId": 131,
+     "type": 21,
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 14,
+     "globalId": 169,
+     "type": 22,
+     "requires": [
+      "item(31)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 11,
+     "globalId": 131,
+     "type": 24,
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1
+    },
+    {
+     "id": 12,
+     "globalId": 169,
+     "type": 29,
+     "requires": [
+      "item(48)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "402": {
+   "doors": [
+    {
+     "target": "304",
+     "kind": "locked"
+    },
+    {
+     "target": "4030"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 164,
+     "type": 40,
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 165,
+     "type": 40,
+     "player": 0
+    }
+   ]
+  },
+  "4030": {
+   "doors": [
+    {
+     "target": "402"
+    },
+    {
+     "target": "4031"
+    },
+    {
+     "target": "404",
+     "player": 0
+    },
+    {
+     "target": "404",
+     "player": 1,
+     "scenario": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 51,
+     "type": 30,
+     "player": 0
+    },
+    {
+     "id": 14,
+     "globalId": 52,
+     "type": 35,
+     "player": 0
+    },
+    {
+     "id": 16,
+     "globalId": 173,
+     "type": 20,
+     "player": 0
+    },
+    {
+     "id": 21,
+     "globalId": 192,
+     "type": 122,
+     "player": 0
+    },
+    {
+     "id": 3,
+     "globalId": 53,
+     "type": 38,
+     "player": 1
+    },
+    {
+     "id": 14,
+     "globalId": 173,
+     "type": 38,
+     "player": 1
+    },
+    {
+     "id": 15,
+     "globalId": 174,
+     "type": 38,
+     "player": 1
+    },
+    {
+     "id": 20,
+     "globalId": 176,
+     "type": 20,
+     "player": 1
+    }
+   ]
+  },
+  "4031": {
+   "doors": [
+    {
+     "target": "4030"
+    }
+   ],
+   "items": [
+    {
+     "id": 19,
+     "globalId": 175,
+     "type": 21,
+     "requires": [
+      "item(47)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 20,
+     "globalId": 176,
+     "type": 22,
+     "requires": [
+      "item(47)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 16,
+     "globalId": 51,
+     "type": 25,
+     "requires": [
+      "item(47)"
+     ],
+     "player": 1
+    },
+    {
+     "id": 19,
+     "globalId": 175,
+     "type": 24,
+     "requires": [
+      "item(47)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "404": {
+   "doors": [
+    {
+     "target": "4010",
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "target": "4010",
+     "player": 1
+    },
+    {
+     "target": "4030",
+     "player": 0
+    },
+    {
+     "target": "4030",
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "target": "405"
+    }
+   ],
+   "items": []
+  },
+  "405": {
+   "doors": [
+    {
+     "target": "404"
+    },
+    {
+     "target": "407"
+    },
+    {
+     "target": "40B",
+     "kind": "locked"
+    }
+   ],
+   "items": [
+    {
+     "id": 6,
+     "globalId": 190,
+     "type": 73,
+     "player": 0
+    },
+    {
+     "id": 6,
+     "globalId": 190,
+     "type": 73,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 7,
+     "globalId": 191,
+     "type": 21,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 7,
+     "globalId": 191,
+     "type": 31,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 7,
+     "globalId": 191,
+     "type": 25,
+     "player": 1
+    }
+   ]
+  },
+  "407": {
+   "doors": [
+    {
+     "target": "40D",
+     "requires": [
+      "item(72)",
+      "item(73)"
+     ]
+    },
+    {
+     "target": "4080"
+    },
+    {
+     "target": "405"
+    }
+   ],
+   "items": []
+  },
+  "4080": {
+   "doors": [
+    {
+     "target": "407"
+    },
+    {
+     "target": "4081",
+     "requires": [
+      "flag(SEWER_BRIDGE)"
+     ]
+    }
+   ],
+   "flags": [
+    {
+     "name": "SEWER_BRIDGE",
+     "requires": [
+      "item(50)"
+     ]
+    }
+   ]
+  },
+  "4081": {
+   "doors": [
+    {
+     "target": "4080",
+     "requires": [
+      "flag(SEWER_BRIDGE)"
+     ]
+    },
+    {
+     "target": "40A"
+    }
+   ],
+   "flags": [
+    {
+     "name": "SEWER_BRIDGE",
+     "requires": [
+      "item(50)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 214,
+     "type": 30,
+     "requires": [
+      "item(50)"
+     ]
+    },
+    {
+     "id": 7,
+     "globalId": 149,
+     "type": 38,
+     "requires": [
+      "item(50)"
+     ]
+    },
+    {
+     "id": 8,
+     "globalId": 150,
+     "type": 38,
+     "requires": [
+      "item(50)"
+     ]
+    },
+    {
+     "id": 9,
+     "globalId": 185,
+     "type": 21,
+     "requires": [
+      "item(50)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 9,
+     "globalId": 185,
+     "type": 25,
+     "requires": [
+      "item(50)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "4090": {
+   "doors": [
+    {
+     "target": "4091",
+     "requires": [
+      "flag(SEWER_BRIDGE)"
+     ]
+    },
+    {
+     "target": "40B",
+     "requires": [
+      "item(50)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 10,
+     "globalId": 183,
+     "type": 121
+    },
+    {
+     "id": 11,
+     "globalId": 184,
+     "type": 72
+    }
+   ]
+  },
+  "4091": {
+   "doors": [
+    {
+     "target": "4090",
+     "requires": [
+      "flag(SEWER_BRIDGE)"
+     ]
+    },
+    {
+     "target": "410"
+    }
+   ]
+  },
+  "410": {
+   "doors": [
+    {
+     "target": "4091"
+    },
+    {
+     "target": "40A"
+    }
+   ],
+   "items": [
+    {
+     "id": 7,
+     "globalId": 181,
+     "type": 30,
+     "kind": "hidden"
+    },
+    {
+     "id": 8,
+     "globalId": 45,
+     "type": 73,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "500": {
+   "doors": [
+    {
+     "target": "40E",
+     "kind": "locked"
+    },
+    {
+     "target": "501"
+    }
+   ],
+   "items": []
+  },
+  "501": {
+   "doors": [
+    {
+     "target": "500",
+     "kind": "locked"
+    },
+    {
+     "target": "502"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1018,
+     "type": 63,
+     "requires": [
+      "item(47)"
+     ]
+    }
+   ]
+  },
+  "502": {
+   "doors": [
+    {
+     "target": "501"
+    },
+    {
+     "target": "508"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 1021,
+     "type": 34,
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 1021,
+     "type": 14,
+     "player": 1
+    }
+   ]
+  },
+  "503": {
+   "doors": [
+    {
+     "target": "508"
+    },
+    {
+     "target": "504",
+     "scenario": 0
+    },
+    {
+     "target": "504",
+     "requires": [
+      "item(94)"
+     ],
+     "scenario": 1
+    },
+    {
+     "target": "506",
+     "scenario": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 1003,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 1002,
+     "type": 25,
+     "player": 1
+    },
+    {
+     "id": 5,
+     "globalId": 1002,
+     "type": 22,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1003,
+     "type": 26,
+     "player": 1
+    },
+    {
+     "id": 15,
+     "globalId": 1026,
+     "type": 35
+    },
+    {
+     "id": 3,
+     "globalId": 1080,
+     "type": 30
+    }
+   ]
+  },
+  "504": {
+   "doors": [
+    {
+     "target": "503"
+    },
+    {
+     "target": "505"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1068,
+     "type": 20
+    }
+   ]
+  },
+  "505": {
+   "doors": [
+    {
+     "target": "504"
+    },
+    {
+     "target": "606",
+     "requires": [
+      "item(93)"
+     ],
+     "scenario": 0,
+     "kind": "noreturn"
+    },
+    {
+     "target": "600",
+     "scenario": 1,
+     "kind": "noreturn"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 1023,
+     "type": 93,
+     "player": 0
+    },
+    {
+     "id": 7,
+     "globalId": 1011,
+     "type": 22,
+     "player": 0
+    },
+    {
+     "id": 7,
+     "globalId": 1011,
+     "type": 25,
+     "player": 1
+    }
+   ]
+  },
+  "506": {
+   "doors": [
+    {
+     "target": "503",
+     "scenario": 1
+    },
+    {
+     "target": "507"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1068,
+     "type": 0
+    }
+   ]
+  },
+  "507": {
+   "doors": [
+    {
+     "target": "506"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1009,
+     "type": 94
+    },
+    {
+     "id": 4,
+     "globalId": 1076,
+     "type": 21,
+     "player": 0,
+     "kind": "low"
+    },
+    {
+     "id": 4,
+     "globalId": 1076,
+     "type": 26,
+     "player": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "508": {
+   "doors": [
+    {
+     "target": "502"
+    },
+    {
+     "target": "503"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1064,
+     "type": 38
+    },
+    {
+     "id": 3,
+     "globalId": 1065,
+     "type": 38,
+     "player": 0
+    },
+    {
+     "id": 3,
+     "globalId": 1065,
+     "type": 40,
+     "player": 1
+    }
+   ]
+  },
+  "600": {
+   "doors": [
+    {
+     "target": "505",
+     "kind": "locked"
+    },
+    {
+     "target": "602"
+    }
+   ],
+   "items": []
+  },
+  "601": {
+   "doors": [
+    {
+     "target": "602"
+    },
+    {
+     "target": "606",
+     "scenario": 1
+    },
+    {
+     "target": "700",
+     "kind": "locked"
+    },
+    {
+     "target": "700",
+     "requires": [
+      "item(98)"
+     ],
+     "kind": "noreturn",
+     "scenario": 1
+    }
+   ],
+   "items": []
+  },
+  "602": {
+   "doors": [
+    {
+     "target": "600",
+     "kind": "locked"
+    },
+    {
+     "target": "601",
+     "requires": [
+      "room(605)"
+     ]
+    },
+    {
+     "target": "603"
+    }
+   ],
+   "items": [
+    {
+     "id": 0,
+     "globalId": 1073,
+     "type": 22,
+     "player": 0,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "603": {
+   "doors": [
+    {
+     "target": "602"
+    },
+    {
+     "target": "604",
+     "requires": [
+      "item(95)"
+     ]
+    },
+    {
+     "target": "605"
+    }
+   ],
+   "items": [
+    {
+     "id": 13,
+     "globalId": 1058,
+     "type": 30
+    },
+    {
+     "id": 15,
+     "globalId": 1057,
+     "type": 38
+    },
+    {
+     "id": 17,
+     "globalId": 1059,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 17,
+     "globalId": 1059,
+     "type": 25,
+     "player": 1
+    },
+    {
+     "id": 18,
+     "globalId": 1063,
+     "type": 126
+    }
+   ]
+  },
+  "604": {
+   "doors": [
+    {
+     "target": "603"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 1020,
+     "type": 98,
+     "player": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "605": {
+   "doors": [
+    {
+     "target": "603"
+    }
+   ],
+   "items": []
+  },
+  "606": {
+   "doors": [
+    {
+     "target": "601",
+     "scenario": 1
+    },
+    {
+     "target": "607",
+     "scenario": 0
+    },
+    {
+     "target": "607",
+     "requires": [
+      "item(98)"
+     ],
+     "scenario": 1
+    },
+    {
+     "target": "608"
+    }
+   ],
+   "items": []
+  },
+  "607": {
+   "doors": [
+    {
+     "target": "606"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 1027,
+     "type": 30
+    },
+    {
+     "id": 4,
+     "globalId": 1052,
+     "type": 38
+    },
+    {
+     "id": 5,
+     "globalId": 1053,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1053,
+     "type": 20,
+     "player": 1
+    },
+    {
+     "id": 6,
+     "globalId": 1054,
+     "type": 22,
+     "player": 0
+    },
+    {
+     "id": 6,
+     "globalId": 1054,
+     "type": 25,
+     "player": 1
+    }
+   ]
+  },
+  "608": {
+   "doors": [
+    {
+     "target": "606"
+    },
+    {
+     "target": "60B"
+    },
+    {
+     "target": "60C"
+    }
+   ],
+   "flags": [
+    {
+     "name": "LAB_POWER",
+     "requires": [
+      "item(76)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 1029,
+     "type": 98,
+     "player": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "609": {
+   "doors": [
+    {
+     "target": "60B",
+     "kind": "unblock"
+    }
+   ],
+   "items": [
+    {
+     "id": 7,
+     "globalId": 1006,
+     "type": 30,
+     "kind": "hidden"
+    },
+    {
+     "id": 8,
+     "globalId": 1037,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 8,
+     "globalId": 1037,
+     "type": 24,
+     "player": 1
+    },
+    {
+     "id": 9,
+     "globalId": 1038,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 9,
+     "globalId": 1038,
+     "type": 24,
+     "player": 1
+    }
+   ]
+  },
+  "610": {
+   "doors": [
+    {
+     "target": "60C"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 1045,
+     "type": 22,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 6,
+     "globalId": 1014,
+     "type": 96,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 6,
+     "globalId": 1045,
+     "type": 22,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 7,
+     "globalId": 1012,
+     "type": 35,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 3,
+     "globalId": 1046,
+     "type": 24,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 4,
+     "globalId": 1015,
+     "type": 79,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1017,
+     "type": 81,
+     "requires": [
+      "item(79)"
+     ],
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 6,
+     "globalId": 1014,
+     "type": 96,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 6,
+     "globalId": 1046,
+     "type": 24,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "611": {
+   "doors": [
+    {
+     "target": "606"
+    },
+    {
+     "target": "60B"
+    },
+    {
+     "target": "60C"
+    }
+   ],
+   "items": []
+  },
+  "612": {
+   "doors": [
+    {
+     "target": "614"
+    },
+    {
+     "target": "616"
+    }
+   ],
+   "items": []
+  },
+  "613": {
+   "doors": [
+    {
+     "target": "614"
+    }
+   ],
+   "items": []
+  },
+  "614": {
+   "doors": [
+    {
+     "target": "613",
+     "requires": [
+      "item(97)"
+     ]
+    },
+    {
+     "target": "615"
+    },
+    {
+     "target": "612"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 1056,
+     "type": 39,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1033,
+     "type": 124,
+     "player": 1,
+     "scenario": 0,
+     "kind": "low"
+    },
+    {
+     "id": 6,
+     "globalId": 1056,
+     "type": 39,
+     "player": 1
+    }
+   ]
+  },
+  "615": {
+   "doors": [
+    {
+     "target": "614"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 1043,
+     "type": 97,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 1043,
+     "type": 95,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 7,
+     "globalId": 1041,
+     "type": 33,
+     "requires": [
+      "item(63)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 13,
+     "globalId": 1055,
+     "type": 35,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 20,
+     "globalId": 1082,
+     "type": 30,
+     "player": 0,
+     "kind": "hidden"
+    },
+    {
+     "id": 5,
+     "globalId": 1043,
+     "type": 97,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1043,
+     "type": 95,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 6,
+     "globalId": 1044,
+     "type": 78,
+     "requires": [
+      "item(81)"
+     ],
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 7,
+     "globalId": 1041,
+     "type": 24,
+     "requires": [
+      "item(63)"
+     ],
+     "player": 1
+    },
+    {
+     "id": 8,
+     "globalId": 1042,
+     "type": 24,
+     "requires": [
+      "item(63)"
+     ],
+     "player": 1
+    },
+    {
+     "id": 13,
+     "globalId": 1055,
+     "type": 35,
+     "player": 1
+    },
+    {
+     "id": 20,
+     "globalId": 1082,
+     "type": 30,
+     "player": 1,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "616": {
+   "doors": [
+    {
+     "target": "60E"
+    },
+    {
+     "target": "612"
+    },
+    {
+     "target": "617",
+     "requires": [
+      "item(96)"
+     ],
+     "kind": "noreturn",
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "target": "617",
+     "requires": [
+      "item(79)",
+      "item(96)"
+     ],
+     "kind": "noreturn",
+     "player": 1,
+     "scenario": 0
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 1074,
+     "type": 38
+    },
+    {
+     "id": 5,
+     "globalId": 1075,
+     "type": 38
+    },
+    {
+     "id": 6,
+     "globalId": 1081,
+     "type": 38
+    }
+   ]
+  },
+  "617": {
+   "doors": [
+    {
+     "target": "616",
+     "kind": "locked"
+    },
+    {
+     "target": "700"
+    }
+   ],
+   "items": []
+  },
+  "700": {
+   "doors": [
+    {
+     "target": "701",
+     "requires": [
+      "item(99)"
+     ],
+     "scenario": 1
+    },
+    {
+     "target": "703",
+     "scenario": 1
+    }
+   ],
+   "items": []
+  },
+  "701": {
+   "doors": [
+    {
+     "target": "700",
+     "scenario": 1
+    },
+    {
+     "target": "702",
+     "requires": [
+      "item(84)",
+      "item(85)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 1034,
+     "type": 84,
+     "scenario": 0
+    },
+    {
+     "id": 4,
+     "globalId": 1034,
+     "type": 84,
+     "scenario": 1,
+     "kind": "low"
+    },
+    {
+     "id": 5,
+     "globalId": 1039,
+     "type": 85,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 1039,
+     "type": 85,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "702": {
+   "doors": [
+    {
+     "target": "701"
+    }
+   ],
+   "items": []
+  },
+  "703": {
+   "doors": [
+    {
+     "target": "700",
+     "scenario": 1
+    },
+    {
+     "target": "704",
+     "scenario": 1
+    }
+   ],
+   "items": []
+  },
+  "704": {
+   "doors": [
+    {
+     "target": "703"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1078,
+     "type": 30
+    },
+    {
+     "id": 3,
+     "globalId": 1079,
+     "type": 99
+    }
+   ]
+  },
+  "10A": {
+   "doors": [
+    {
+     "target": "109"
+    },
+    {
+     "target": "10F"
+    },
+    {
+     "target": "10B",
+     "requires": [
+      "item(50)",
+      "room(108)"
+     ],
+     "kind": "unblock"
+    },
+    {
+     "target": "21B",
+     "requires": [
+      "item(50)",
+      "room(108)",
+      "room(30B)"
+     ],
+     "player": 0,
+     "scenario": 1,
+     "kind": "unblock"
+    },
+    {
+     "target": "21B",
+     "requires": [
+      "item(50)",
+      "item(64)",
+      "item(65)",
+      "room(108)"
+     ],
+     "player": 1,
+     "kind": "unblock"
+    }
+   ],
+   "items": []
+  },
+  "10B": {
+   "doors": [
+    {
+     "target": "10A"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 97,
+     "type": 90,
+     "scenario": 0
+    },
+    {
+     "id": 2,
+     "globalId": 98,
+     "type": 53,
+     "scenario": 1
+    },
+    {
+     "id": 3,
+     "globalId": 99,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 220,
+     "type": 30,
+     "kind": "hidden"
+    },
+    {
+     "id": 16,
+     "globalId": 95,
+     "type": 62,
+     "requires": [
+      "item(51)",
+      "item(51)"
+     ],
+     "player": 0
+    },
+    {
+     "id": 16,
+     "globalId": 96,
+     "type": 56,
+     "requires": [
+      "item(51)",
+      "item(51)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "10C": {
+   "doors": [
+    {
+     "target": "207"
+    },
+    {
+     "target": "114"
+    },
+    {
+     "target": "113",
+     "kind": "locked"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 32,
+     "type": 51
+    },
+    {
+     "id": 12,
+     "globalId": 210,
+     "type": 20,
+     "kind": "hidden"
+    }
+   ]
+  },
+  "10D": {
+   "doors": [
+    {
+     "target": "10E"
+    },
+    {
+     "target": "21B"
+    }
+   ],
+   "items": [
+    {
+     "id": 10,
+     "type": 21,
+     "player": 0,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "10E": {
+   "doors": [
+    {
+     "target": "10D"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 105,
+     "type": 112
+    },
+    {
+     "id": 4,
+     "globalId": 106,
+     "type": 67,
+     "player": 0
+    },
+    {
+     "id": 4,
+     "globalId": 106,
+     "type": 35,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 4,
+     "globalId": 106,
+     "type": 20,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "10F": {
+   "doors": [
+    {
+     "target": "10A"
+    },
+    {
+     "target": "110"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 157,
+     "type": 20,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 3,
+     "globalId": 139,
+     "type": 30
+    },
+    {
+     "id": 4,
+     "globalId": 37,
+     "type": 111
+    },
+    {
+     "id": 5,
+     "globalId": 38,
+     "type": 31,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 39,
+     "type": 47,
+     "player": 1,
+     "scenario": 0
+    },
+    {
+     "id": 5,
+     "globalId": 157,
+     "type": 20,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "11A": {
+   "doors": [
+    {
+     "target": "119"
+    },
+    {
+     "target": "11B"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 195,
+     "type": 20
+    }
+   ]
+  },
+  "11B": {
+   "doors": [
+    {
+     "target": "11A"
+    },
+    {
+     "target": "103",
+     "kind": "noreturn"
+    }
+   ],
+   "items": []
+  },
+  "20A": {
+   "doors": [
+    {
+     "target": "200"
+    },
+    {
+     "target": "20B"
+    },
+    {
+     "target": "20C"
+    }
+   ],
+   "items": [
+    {
+     "id": 8,
+     "globalId": 33,
+     "type": 38
+    }
+   ]
+  },
+  "20B": {
+   "doors": [
+    {
+     "target": "20A"
+    },
+    {
+     "target": "20F",
+     "requires": [
+      "item(91)"
+     ]
+    },
+    {
+     "target": "116"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 82,
+     "type": 50,
+     "scenario": 1
+    },
+    {
+     "id": 4,
+     "globalId": 74,
+     "type": 20
+    },
+    {
+     "id": 5,
+     "globalId": 84,
+     "type": 30
+    },
+    {
+     "id": 10,
+     "globalId": 78,
+     "type": 21,
+     "player": 0
+    },
+    {
+     "id": 10,
+     "globalId": 79,
+     "type": 26,
+     "player": 1
+    },
+    {
+     "id": 28,
+     "globalId": 217,
+     "type": 38,
+     "kind": "hidden"
+    },
+    {
+     "id": 29,
+     "globalId": 81,
+     "type": 38,
+     "kind": "hidden"
+    },
+    {
+     "id": 31,
+     "globalId": 48,
+     "type": 20,
+     "scenario": 1
+    }
+   ]
+  },
+  "20C": {
+   "doors": [
+    {
+     "target": "20A"
+    },
+    {
+     "target": "20D",
+     "requires": [
+      "item(92)"
+     ]
+    },
+    {
+     "id": 2,
+     "target": "20E0"
+    },
+    {
+     "id": 3,
+     "target": "20E1",
+     "requires": [
+      "item(90)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 170,
+     "type": 39
+    },
+    {
+     "id": 10,
+     "globalId": 207,
+     "type": 21,
+     "player": 0,
+     "scenario": 1,
+     "kind": "low"
+    },
+    {
+     "id": 10,
+     "globalId": 207,
+     "type": 29,
+     "player": 1,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "20D": {
+   "doors": [
+    {
+     "target": "20C"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 108,
+     "type": 74,
+     "requires": [
+      "item(47)"
+     ]
+    },
+    {
+     "id": 2,
+     "globalId": 109,
+     "type": 69,
+     "scenario": 0
+    },
+    {
+     "id": 11,
+     "globalId": 215,
+     "type": 35,
+     "kind": "hidden"
+    },
+    {
+     "id": 20,
+     "globalId": 208,
+     "type": 20,
+     "scenario": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "20F": {
+   "requires": [
+    86
+   ],
+   "doors": [
+    {
+     "target": "20B"
+    },
+    {
+     "target": "211"
+    },
+    {
+     "target": "210",
+     "requires": [
+      "item(92)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 27,
+     "type": 38
+    },
+    {
+     "id": 6,
+     "globalId": 218,
+     "type": 38
+    },
+    {
+     "id": 7,
+     "globalId": 143,
+     "type": 21,
+     "player": 0,
+     "scenario": 0
+    },
+    {
+     "id": 7,
+     "globalId": 143,
+     "type": 26,
+     "player": 1,
+     "scenario": 1
+    }
+   ]
+  },
+  "21A": {
+   "doors": [
+    {
+     "target": "219"
+    },
+    {
+     "target": "302",
+     "requires": [
+      "item(75)"
+     ],
+     "player": 0
+    },
+    {
+     "target": "302",
+     "player": 1,
+     "kind": "locked"
+    }
+   ],
+   "items": [
+    {
+     "id": 10,
+     "globalId": 29,
+     "type": 67
+    },
+    {
+     "id": 13,
+     "globalId": 135,
+     "type": 40,
+     "kind": "low"
+    }
+   ]
+  },
+  "21B": {
+   "doors": [
+    {
+     "target": "10A",
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "target": "10A",
+     "player": 1
+    },
+    {
+     "target": "10D"
+    },
+    {
+     "target": "308",
+     "player": 0,
+     "kind": "locked"
+    },
+    {
+     "target": "308",
+     "requires": [
+      "item(54)",
+      "item(56)",
+      "item(57)",
+      "item(58)",
+      "room(10E)"
+     ],
+     "player": 1
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 2,
+     "type": 20,
+     "player": 0,
+     "kind": "hidden"
+    },
+    {
+     "id": 6,
+     "globalId": 12,
+     "type": 91,
+     "player": 1,
+     "requires": [
+      "room(10E)"
+     ]
+    },
+    {
+     "id": 7,
+     "globalId": 200,
+     "type": 120,
+     "player": 0
+    },
+    {
+     "id": 7,
+     "globalId": 200,
+     "type": 120,
+     "player": 1,
+     "requires": [
+      "room(10E)"
+     ]
+    },
+    {
+     "id": 8,
+     "globalId": 47,
+     "type": 109,
+     "requires": [
+      "item(54)",
+      "item(56)",
+      "item(57)",
+      "room(10E)"
+     ],
+     "player": 1
+    }
+   ]
+  },
+  "30A": {
+   "doors": [
+    {
+     "target": "309"
+    },
+    {
+     "target": "4000"
+    }
+   ],
+   "items": []
+  },
+  "30B0": {
+   "doors": [
+    {
+     "target": "302"
+    },
+    {
+     "target": "303"
+    },
+    {
+     "target": "30B1",
+     "player": 0
+    },
+    {
+     "target": "30C"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 119,
+     "type": 92,
+     "player": 0
+    },
+    {
+     "id": 5,
+     "globalId": 194,
+     "type": 21,
+     "player": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "30B1": {
+   "doors": [
+    {
+     "target": "30B0",
+     "player": 0
+    },
+    {
+     "target": "305"
+    }
+   ],
+   "items": [
+    {
+     "id": 5,
+     "globalId": 193,
+     "type": 24,
+     "player": 1,
+     "kind": "low"
+    }
+   ]
+  },
+  "30C": {
+   "doors": [
+    {
+     "target": "30B0"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 140,
+     "type": 30,
+     "player": 0
+    },
+    {
+     "id": 3,
+     "globalId": 134,
+     "type": 40
+    }
+   ]
+  },
+  "30D": {
+   "doors": [
+    {
+     "target": "3070"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 140,
+     "type": 30,
+     "player": 1
+    }
+   ]
+  },
+  "40A": {
+   "doors": [
+    {
+     "target": "410"
+    },
+    {
+     "target": "4081"
+    }
+   ],
+   "items": []
+  },
+  "40B": {
+   "doors": [
+    {
+     "target": "405",
+     "kind": "oneway"
+    },
+    {
+     "target": "4090"
+    }
+   ],
+   "items": []
+  },
+  "40C": {
+   "doors": [
+    {
+     "target": "40F"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 45,
+     "type": 73
+    }
+   ]
+  },
+  "40D": {
+   "doors": [
+    {
+     "target": "407"
+    },
+    {
+     "target": "40E"
+    }
+   ],
+   "items": []
+  },
+  "40E": {
+   "doors": [
+    {
+     "target": "500"
+    },
+    {
+     "target": "40D"
+    }
+   ],
+   "items": [
+    {
+     "id": 7,
+     "globalId": 202,
+     "type": 21,
+     "player": 0,
+     "scenario": 0,
+     "kind": "low"
+    },
+    {
+     "id": 7,
+     "globalId": 202,
+     "type": 20,
+     "player": 1,
+     "scenario": 0,
+     "kind": "low"
+    },
+    {
+     "id": 8,
+     "globalId": 203,
+     "type": 20,
+     "player": 0,
+     "scenario": 0,
+     "kind": "low"
+    },
+    {
+     "id": 8,
+     "globalId": 203,
+     "type": 25,
+     "player": 1,
+     "scenario": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "40F": {
+   "doors": [
+    {
+     "target": "4011"
+    },
+    {
+     "target": "40C"
+    }
+   ],
+   "items": []
+  },
+  "60A": {
+   "doors": [
+    {
+     "target": "60B"
+    },
+    {
+     "target": "609",
+     "requires": [
+      "item(47)"
+     ],
+     "kind": "unblock"
+    }
+   ],
+   "items": [
+    {
+     "id": 9,
+     "globalId": 1050,
+     "type": 125
+    },
+    {
+     "id": 10,
+     "globalId": 1062,
+     "type": 114
+    },
+    {
+     "id": 11,
+     "globalId": 1047,
+     "type": 97,
+     "player": 1
+    },
+    {
+     "id": 13,
+     "globalId": 1051,
+     "type": 16,
+     "player": 0
+    },
+    {
+     "id": 13,
+     "globalId": 1051,
+     "type": 29,
+     "player": 1
+    }
+   ]
+  },
+  "60B": {
+   "doors": [
+    {
+     "target": "608"
+    },
+    {
+     "target": "609",
+     "kind": "side"
+    },
+    {
+     "target": "60A"
+    },
+    {
+     "target": "60E",
+     "requires": [
+      "flag(LAB_POWER)"
+     ]
+    }
+   ],
+   "items": []
+  },
+  "60C": {
+   "doors": [
+    {
+     "target": "608"
+    },
+    {
+     "target": "60D"
+    },
+    {
+     "target": "60F",
+     "requires": [
+      "flag(LAB_POWER)",
+      "room(613)"
+     ],
+     "scenario": 1
+    },
+    {
+     "target": "610",
+     "requires": [
+      "flag(LAB_POWER)",
+      "item(97)"
+     ]
+    }
+   ],
+   "items": [
+    {
+     "id": 7,
+     "globalId": 1016,
+     "type": 82,
+     "player": 0,
+     "kind": "low"
+    }
+   ]
+  },
+  "60D": {
+   "doors": [
+    {
+     "target": "60C"
+    }
+   ],
+   "items": [
+    {
+     "id": 1,
+     "globalId": 1024,
+     "type": 76,
+     "requires": [
+      "item(77)"
+     ]
+    },
+    {
+     "id": 2,
+     "globalId": 1061,
+     "type": 77
+    },
+    {
+     "id": 3,
+     "globalId": 1069,
+     "type": 35
+    }
+   ]
+  },
+  "60E": {
+   "doors": [
+    {
+     "target": "60B"
+    },
+    {
+     "target": "616"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 1000,
+     "type": 38
+    },
+    {
+     "id": 5,
+     "globalId": 1001,
+     "type": 38
+    }
+   ]
+  },
+  "60F": {
+   "doors": [
+    {
+     "target": "60C"
+    }
+   ],
+   "items": [
+    {
+     "id": 2,
+     "globalId": 1030,
+     "type": 27,
+     "kind": "low"
+    },
+    {
+     "id": 2,
+     "globalId": 1030,
+     "type": 27
+    }
+   ]
+  },
+  "20E0": {
+   "doors": [
+    {
+     "target": "20C"
+    }
+   ],
+   "items": [
+    {
+     "id": 4,
+     "globalId": 60,
+     "type": 31,
+     "player": 0,
+     "scenario": 1
+    },
+    {
+     "id": 5,
+     "globalId": 61,
+     "type": 20,
+     "scenario": 1
+    },
+    {
+     "id": 7,
+     "type": 20,
+     "player": 1,
+     "scenario": 0
+    }
+   ]
+  },
+  "20E1": {
+   "doors": [
+    {
+     "target": "20C"
+    }
+   ],
+   "items": [
+    {
+     "id": 3,
+     "globalId": 56,
+     "type": 60,
+     "player": 0
+    },
+    {
+     "id": 3,
+     "globalId": 56,
+     "type": 58,
+     "player": 1
+    },
+    {
+     "id": 6,
+     "globalId": 110,
+     "type": 35,
+     "player": 0
+    },
+    {
+     "id": 6,
+     "globalId": 110,
+     "type": 35,
+     "player": 1,
+     "scenario": 1
+    },
+    {
+     "id": 8,
+     "globalId": 199,
+     "type": 86,
+     "scenario": 0
+    }
+   ]
+  }
+ },
+ "keys": {
+  "31": {
+   "name": "SmallKey",
+   "kind": "consumable"
+  },
+  "47": {
+   "name": "Lighter",
+   "kind": "reusuable"
+  },
+  "48": {
+   "name": "Lockpick",
+   "kind": "reusuable"
+  },
+  "50": {
+   "name": "ValveHandle",
+   "kind": "reusuable"
+  },
+  "51": {
+   "name": "RedJewel",
+   "kind": "consumable"
+  },
+  "52": {
+   "name": "RedCard",
+   "kind": "consumable"
+  },
+  "53": {
+   "name": "BlueCard",
+   "kind": "consumable"
+  },
+  "54": {
+   "name": "SerpentStone",
+   "kind": "consumable"
+  },
+  "56": {
+   "name": "JaguarStoneL",
+   "kind": "consumable"
+  },
+  "57": {
+   "name": "JaguarStoneR",
+   "kind": "consumable"
+  },
+  "58": {
+   "name": "EagleStone",
+   "kind": "consumable"
+  },
+  "59": {
+   "name": "BishopPlug",
+   "kind": "consumable"
+  },
+  "60": {
+   "name": "RookPlug",
+   "kind": "consumable"
+  },
+  "61": {
+   "name": "KnightPlug",
+   "kind": "consumable"
+  },
+  "62": {
+   "name": "KingPlug",
+   "kind": "consumable"
+  },
+  "63": {
+   "name": "WeaponBoxKey",
+   "kind": "reusuable"
+  },
+  "64": {
+   "name": "Detonator",
+   "kind": "consumable"
+  },
+  "65": {
+   "name": "C4",
+   "kind": "consumable"
+  },
+  "67": {
+   "name": "Crank",
+   "kind": "consumable"
+  },
+  "68": {
+   "name": "FilmA",
+   "kind": "consumable"
+  },
+  "69": {
+   "name": "FilmB",
+   "kind": "consumable"
+  },
+  "70": {
+   "name": "FilmC",
+   "kind": "consumable"
+  },
+  "71": {
+   "name": "UnicornMedal",
+   "kind": "consumable"
+  },
+  "72": {
+   "name": "EagleMedal",
+   "kind": "consumable"
+  },
+  "73": {
+   "name": "WolfMedal",
+   "kind": "consumable"
+  },
+  "74": {
+   "name": "Cog",
+   "kind": "consumable"
+  },
+  "75": {
+   "name": "ManholeOpener",
+   "kind": "consumable"
+  },
+  "76": {
+   "name": "MainFuse",
+   "kind": "consumable"
+  },
+  "77": {
+   "name": "FuseCase",
+   "kind": "consumable"
+  },
+  "79": {
+   "name": "VaccineCart",
+   "kind": "consumable"
+  },
+  "80": {
+   "name": "FilmD",
+   "kind": "consumable"
+  },
+  "81": {
+   "name": "VaccineBase",
+   "kind": "consumable"
+  },
+  "83": {
+   "name": "SpecialKey",
+   "kind": "consumable"
+  },
+  "84": {
+   "name": "JointPlugBlue",
+   "kind": "consumable"
+  },
+  "85": {
+   "name": "JointPlugRed",
+   "kind": "consumable"
+  },
+  "88": {
+   "name": "CabinKey",
+   "kind": "consumable"
+  },
+  "89": {
+   "name": "SpadeKey",
+   "kind": "reusuable"
+  },
+  "90": {
+   "name": "DiamondKey",
+   "kind": "reusuable"
+  },
+  "91": {
+   "name": "HeartKey",
+   "kind": "reusuable"
+  },
+  "92": {
+   "name": "ClubKey",
+   "kind": "reusuable"
+  },
+  "93": {
+   "name": "DownKey",
+   "kind": "consumable"
+  },
+  "94": {
+   "name": "UpKey",
+   "kind": "consumable"
+  },
+  "95": {
+   "name": "PowerRoomKey",
+   "kind": "consumable"
+  },
+  "96": {
+   "name": "MODisk",
+   "kind": "consumable"
+  },
+  "97": {
+   "name": "UmbrellaKeyCard",
+   "kind": "reusuable"
+  },
+  "98": {
+   "name": "MasterKey",
+   "kind": "consumable"
+  },
+  "99": {
+   "name": "PlatformKey",
+   "kind": "consumable"
+  }
+ },
+ "roomNames": {
+  "100": "A START",
+  "101": "KENDOS",
+  "102": "BASKETBALL",
+  "103": "BRAD",
+  "104": "B START",
+  "105": "B BACK",
+  "106": "CABIN",
+  "107": "CABIN STREET",
+  "108": "HELIPAD",
+  "109": "FIRST MR X",
+  "10A": "C4 CORRIDOR",
+  "10B": "RED JEWELS",
+  "10C": "STATUES",
+  "10D": "TROPHY CORRIDOR",
+  "10E": "TROPHY",
+  "10F": "2F SAVE",
+  "110": "2F HALL",
+  "1110": "CLOCK TOWER (DOWNSTAIRS)",
+  "1111": "CLOCK TOWER (UPSTAIRS)",
+  "112": "LIBRARY",
+  "113": "LIBRARY ENTRANCE",
+  "114": "STARS CORRIDOR",
+  "115": "STARS",
+  "116": "EAST STAIRS",
+  "117": "3F HALL",
+  "118": "MISTY ALLEY",
+  "119": "BUS ENTRANCE",
+  "11A": "BUS",
+  "11B": "BUS EXIT",
+  "11C": "11C",
+  "11D": "11D",
+  "200": "HALL",
+  "201": "WEST WAITING ROOM",
+  "202": "MARVIN",
+  "203": "ARCHIVE",
+  "204": "LICKER",
+  "205": "ARMS",
+  "206": "FIREPLACE",
+  "207": "DARK HALL",
+  "208": "DARK ROOM",
+  "209": "EVIDENCE",
+  "20A": "TELEPHONES",
+  "20B": "2236 ROOM",
+  "20C": "RED CORRIDOR",
+  "20D": "PRESS",
+  "20E0": "INTEGRROGATION (PRIVATE)",
+  "20E1": "INTEGRROGATION (PUBLIC)",
+  "20F": "HEART CORRIDOR",
+  "210": "WATCHMAN",
+  "211": "BASEMENT",
+  "212": "DOG ALLEY",
+  "213": "POWER",
+  "214": "SIDEPACK",
+  "215": "MORGUE",
+  "216": "CAR PARK",
+  "217": "217",
+  "218": "218",
+  "219": "BEN CORRIDOR",
+  "21A": "KENNEL",
+  "21B": "IRONS",
+  "300": "IRONS DUNGEON",
+  "301": "BEN CELL",
+  "302": "KENNEL SEWER",
+  "303": "LEON G1",
+  "304": "LEON G1 EXIT",
+  "305": "POOL",
+  "306": "PUSH BOX",
+  "3070": "SHERRY EXCHANGE (CLAIRE)",
+  "3071": "SHERRY EXCHANGE (SHERRY)",
+  "308": "DUNGEON CORRIDOR",
+  "309": "CLAIRE G1",
+  "30A": "CLAIRE G1 EXIT",
+  "30B0": "ADA EXCHANGE (LEON)",
+  "30B1": "ADA EXCHANGE (ADA)",
+  "30C": "LEON BASEMENT SAVE",
+  "30D": "CLAIRE BASEMENT SAVE",
+  "4000": "SHERRY FALL (ABOVE)",
+  "4001": "SHERRY FALL (BELOW)",
+  "4010": "CLAIRE SEWER SAVE (ABOVE)",
+  "4011": "CLAIRE SEWER SAVE (BELOW)",
+  "402": "LEON SEWER ENTRANCE",
+  "4030": "LEON SEWER SAVE (ABOVE)",
+  "4031": "LEON SEWER SAVE (BELOW)",
+  "404": "LEON DIVE",
+  "405": "ADA CHASE",
+  "406": "406",
+  "407": "MEDALS",
+  "4080": "LOWER VALVE (EMPTY)",
+  "4081": "LOWER VALVE (SAVE)",
+  "4090": "UPPER VALVE (VENT)",
+  "4091": "UPPER VALVE (EMPTY)",
+  "40A": "CROC",
+  "40B": "ADA VENT",
+  "40C": "SHERRY MEDAL",
+  "40D": "CAVE",
+  "40E": "TRAM SEWER",
+  "40F": "SHERRY VENT",
+  "410": "CROC POOL",
+  "500": "TRAM",
+  "501": "TRAM FACTORY",
+  "502": "FACTORY SPARKSHOT",
+  "503": "FACTORY SAVE",
+  "504": "G3 PLATFORM",
+  "505": "G3 INSIDE",
+  "506": "G3 PLATFORM DOWN",
+  "507": "MR X TV",
+  "508": "FACTORY LADDER",
+  "509": "G3",
+  "600": "LAB B START",
+  "601": "LAB ELEVATOR",
+  "602": "LAB ELEVATOR CORRIDOR",
+  "603": "LAB PUSH BOX",
+  "604": "LAB POWER",
+  "605": "LAB MR X",
+  "606": "LAB A START",
+  "607": "LAB SECURITY",
+  "608": "SHAFT",
+  "609": "LICKER BEDS",
+  "60A": "LAB BEDS",
+  "60B": "LAB IVIES",
+  "60C": "LAB FINGERPRINT",
+  "60D": "LAB FREEZER",
+  "60E": "LAB LADDER",
+  "60F": "LAB CAPSULE",
+  "610": "LAB CT SCAN",
+  "611": "SHAFT",
+  "612": "LAB MONITORS",
+  "613": "MOTH",
+  "614": "LAB T",
+  "615": "LAB LOWER",
+  "616": "MO DISC",
+  "617": "G5",
+  "700": "PLATFORM",
+  "701": "PLATFORM BRIDGE",
+  "702": "SUPER X",
+  "703": "TRAIN",
+  "704": "TRAIN SAVE"
+ },
+ "itemNames": {
+  "0": "KENDO'S COUNTER",
+  "1": "KENDO'S CORNER",
+  "15": "KENDO'S WEAPON",
+  "154": "BASKETBALL COURT BACK OF VAN",
+  "1000": "MARVIN'S GIFT"
+ }
+}

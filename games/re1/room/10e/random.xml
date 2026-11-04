@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="10E" name="1F WEST BEDROOM" tags="mansion mansion2able">
+    <door id="0" target="103:4" lock="11">
+      <entrance x="7400" y="0" z="10700" d="2048"/>
+    </door>
+    <item id="1" flag="146" type="11" amount="15" group="1" name="CLIP ON BED"/>
+    <item id="2" flag="5" type="12" amount="7" group="1" name="SHELLS IN CLOSET"/>
+    <item id="3" flag="4" type="97" amount="1" group="1" name="DIARY ON DESK" document="true"/>
+    <enemies id="0" exclude="2 4 10"/>
+  </room>
+</random>

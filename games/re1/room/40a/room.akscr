@@ -35,6 +35,7 @@
 
 proc init
 {
+    random_enemies();
     set(FG_STATUS, F_STATUS_1D, TRUE);
     door_aot_set(AOT_00_DOOR, 800, 2100, 1500, 1600, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 17800, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 2300, 3700, 2000, 1600, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_40B_ROOM_003_BATHROOM, 3400, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -125,7 +126,7 @@ proc main
             evt_exec(0, TASK_09, from_main_5);
         }
     }
-    if (testpickup(IT_69_FILE_V_JOLT_REPORT))
+    if (picked(AOT_03_ITEM))
     {
         evt_exec(0, TASK_09, from_main_3);
     }
@@ -135,7 +136,12 @@ event on_aot_07
 {
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_25, FALSE);
+        if (!RANDOMIZER)
+        {
+            // The bookcase stays open once moved, so the door behind it keeps
+            // working (staging's FixDoorPlant42).
+            set(FG_SCENARIO, F_SCENARIO_25, FALSE);
+        }
         aot_on(AOT_02_DOOR, SCE_DOOR, 129);
     }
     evt_finish();

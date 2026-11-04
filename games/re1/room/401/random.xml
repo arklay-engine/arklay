@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="401" name="GUARDHOUSE ROOM 001" tags="guardhouse">
+    <door id="0" target="400:1">
+      <entrance x="9700" y="0" z="2600" d="3072"/>
+    </door>
+    <door id="1" target="402:0">
+      <entrance x="9200" y="0" z="3200" d="0"/>
+    </door>
+    <item id="2" flag="99" type="62" amount="1" group="8" name="RED BOOK ON BED"/>
+    <item id="3" flag="100" type="61" amount="1" group="8" name="SMALL KEY IN CUP" hidden="true"/>
+    <item id="4" flag="165" type="12" group="8" name="LOCKED DRAWER" requires="item(61)" lock="33"/>
+    <enemies exclude="4" max-difficulty="1"/>
+  </room>
+  <spot x="4560" y="0" z="10561" d="0"/>
+  <spot x="5428" y="0" z="13758" d="1064"/>
+  <spot x="7422" y="0" z="10439" d="2080"/>
+  <spot x="9455" y="0" z="7401" d="3040"/>
+</random>

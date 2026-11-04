@@ -193,6 +193,83 @@ fn a_missing_pack_fails_with_a_read_error() {
     assert_failure(&output, "failed to read pack");
 }
 
+/// A base pack of the checked-in room definitions, room scripts and BioRand
+/// map: everything `biorand generate` reads.
+fn write_biorand_base(path: &Path) {
+    let mut manifest = manifest::Manifest::base("re1");
+    manifest.convert_version = Some(1);
+    manifest.source_hash = Some("cli".to_string());
+    let mut writer = PackWriter::new();
+    writer
+        .add(manifest::ENTRY, manifest.render().into_bytes())
+        .unwrap();
+    for (entry, text) in arklay::room::RE1_FILES {
+        writer
+            .add(&format!("room/{entry}"), text.as_bytes().to_vec())
+            .unwrap();
+    }
+    for script in arklay::scd::ROOM_SCRIPTS {
+        writer
+            .add(
+                &format!("room/{:03x}/room.scd", script.room),
+                script.container.to_vec(),
+            )
+            .unwrap();
+    }
+    for (entry, text) in arklay::biorand::BIORAND_FILES {
+        writer.add(entry, text.as_bytes().to_vec()).unwrap();
+    }
+    writer.write(path).unwrap();
+}
+
+#[test]
+fn biorand_generates_and_verifies_a_pack_per_player() {
+    let dir = TempDir::new("biorand");
+    let base = dir.join("re1.akpak");
+    write_biorand_base(&base);
+    let config = dir.join("config.json");
+    fs::write(&config, r#"{"items/random": true, "hard": true}"#).unwrap();
+    let base_arg = base.to_str().unwrap();
+    let output = run(&[
+        "biorand",
+        "generate",
+        base_arg,
+        "--seed",
+        "42",
+        "--player",
+        "both",
+        "--config",
+        config.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let packs: Vec<String> = stdout(&output).lines().map(str::to_string).collect();
+    assert_eq!(packs.len(), 2, "{packs:?}");
+    assert!(
+        packs[0].ends_with("biorand-000042-chris.akpak"),
+        "{packs:?}"
+    );
+    assert!(packs[1].ends_with("biorand-000042-jill.akpak"), "{packs:?}");
+    for pack in &packs {
+        // The base is found beside the pack.
+        let output = run(&["biorand", "verify", pack]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        let text = stdout(&output);
+        assert!(text.contains("ok, seed 000042"), "{text}");
+        assert!(text.contains("match the base pack"), "{text}");
+    }
+    let info = stdout(&run(&["pack", "info", &packs[1]]));
+    assert!(info.contains("scenario_flags"), "{info}");
+
+    let output = run(&[
+        "biorand", "generate", base_arg, "--seed", "1", "--player", "rebecca",
+    ]);
+    assert_failure(&output, "not chris, jill, both or configured");
+    let output = run(&["biorand", "verify", base_arg]);
+    assert_failure(&output, "not a generated game");
+    let output = run(&["biorand", "generate", &packs[0], "--seed", "1"]);
+    assert_failure(&output, "generate from the base game");
+}
+
 #[test]
 fn a_pack_with_bad_magic_is_rejected() {
     let dir = TempDir::new("bad-magic");
@@ -1026,10 +1103,11 @@ fn the_config_save_dir_drives_a_registered_lua_screen() {
     assert!(capture.is_file());
     assert!(stderr(&output).contains("saves=0"), "{}", stderr(&output));
 
-    // A save written there is what the screen lists.
+    // A save in the pack's folder there is what the screen lists.
     let file = arklay::save::SaveFile::from_state(&arklay::game::GameState::default());
-    std::fs::create_dir_all(&saves).unwrap();
-    arklay::save::save_to_path(&saves.join("savedat1.dat"), &file).unwrap();
+    let pack_saves = saves.join("probe");
+    std::fs::create_dir_all(&pack_saves).unwrap();
+    arklay::save::save_to_path(&pack_saves.join("savedat1.dat"), &file).unwrap();
     let output = load();
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).contains("saves=1"), "{}", stderr(&output));
