@@ -8446,6 +8446,33 @@ end
         assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
     }
 
+    /// In an enemy randomizer game (system flag 0xC2) a light kill still
+    /// leaves the crawling corpse, but it raises the death event rather than
+    /// respawning at the nest, so the wasp stays dead.
+    #[test]
+    fn wasp_dies_for_good_in_an_enemy_randomizer_game() {
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
+        let (clips, _, _) = wasp_model();
+        let mut game = wasp_game(0);
+        game.flags[5].apply(0xC2, 0);
+        let mut host = LuaEnemyHost::new();
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        game.entities[1].set_state(3);
+        game.entities[1].action_state = 0;
+        game.entities[1].action_behavior = 0;
+        game.entities[1].hit_state = 0x10;
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        assert_eq!(game.entities[1].action_state, 2, "the corpse crawls");
+        assert!(!game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
+
+        game.entities[1].set_sink_wobble(0);
+        assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+        assert_eq!(game.entities[1].state(), 3, "it does not re-run init");
+        assert_eq!(game.entities[1].action_state, 4);
+        assert_eq!(game.entities[1].wasp_respawns, 0);
+        assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
+    }
+
     /// A multi-tick scene spanning init, the nest, emerge, hover, a sting, a
     /// knockdown and a death respawn must be byte-identical with and without
     /// a VM reset between every tick.
