@@ -2309,6 +2309,10 @@ manifest without that list (the proof of concept's packs) also raises
 game. A room's retail-identical variant build folds each guard to the branch
 that the clear flag takes, so a guard does not change those bytes.
 
+A system flag is tested alone: `if (!CUTSCENES_DISABLED && ck(...))` is an error
+(a variant test and a flag test cannot mix with other conditions). Nest the
+tests, and keep each guarded block under a command `if`'s one-byte jump.
+
 ### Item puzzles: `picked()`
 
 A room that reacts to the item type just picked up (`testpickup(IT_..)` or
