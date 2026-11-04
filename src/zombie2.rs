@@ -542,7 +542,6 @@ pub fn take_hit(
     zombie.damage_cnt = (zombie.damage_cnt & 0x80) | hit.count;
 }
 
-/// The slot's first state: what `Sce_em_set` leaves.
 impl Zombie {
     /// The script's fields, for another work that reads them.
     pub fn vars(&self) -> [i32; VARS] {
@@ -562,6 +561,7 @@ impl Zombie {
     }
 }
 
+/// The slot's first state: what `Sce_em_set` leaves.
 pub fn spawned(slot: u8, floor: u8, model_type: u8) -> Zombie {
     Zombie {
         sight_turn: slot.wrapping_add(2) & 7,
@@ -870,9 +870,7 @@ impl Em<'_, '_, '_> {
         let before = self.mover.player.pos;
         self.old_pos = before;
         self.script();
-        if self.z.vars[PLANT_OBA] == 0 {
-            self.oba_ck_em();
-        }
+        self.oba_ck(self.z.vars[PLANT_OBA] == 0);
         self.sca_ck_em();
         if self.mover.tick.id == VINE_ID {
             return;
@@ -1171,6 +1169,12 @@ impl Em<'_, '_, '_> {
 
     /// `Oba_ck_em`.
     fn oba_ck_em(&mut self) {
+        self.oba_ck(true);
+    }
+
+    /// `Oba_ck_em`, or with `player` false the ivy's `FUN_00488980`, which
+    /// checks only the enemy slots.
+    fn oba_ck(&mut self, player: bool) {
         let pos = self.mover.player.pos;
         let [ahead_x, ahead_z] = self.atd_ahead();
         self.z.atd.at = [
@@ -1184,6 +1188,9 @@ impl Em<'_, '_, '_> {
             let body = &mut self.mover.player.pos;
             let mut other = *other;
             if other.slot == PLAYER_BODY {
+                if !player {
+                    continue;
+                }
                 other.be_flg = self.world.pl.be_flg;
             }
             if oba_hit(&other, *self.be_flg, &mut self.z.atd, body, old) {
@@ -1229,7 +1236,15 @@ impl Em<'_, '_, '_> {
                         ]
                     });
             }
-            let resolved = crate::sca::resolve_on_floor(sca, MASK, prev, at, radius, floor);
+            let resolved = crate::sca::resolve_with_offset(
+                sca,
+                MASK,
+                prev,
+                at,
+                radius,
+                floor,
+                [ahead_x, ahead_z],
+            );
             // `Sca_ck_info`'s push moves what `Null_pos_set` adds to as well.
             let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
             let base = &mut self.mover.work.base;
@@ -1766,7 +1781,7 @@ fn crosses_height(
 /// `Pl_life_down` with `hard_mode` and `censorship_off` at 0: the life left,
 /// the near-death bit, and 1 for the bite that leaves the player on their last
 /// legs or 2 for the one that kills.
-fn life_down(life: i16, down: i32, low: bool, near_death: bool) -> (i16, bool, u8) {
+pub(crate) fn life_down(life: i16, down: i32, low: bool, near_death: bool) -> (i16, bool, u8) {
     let mut down = down;
     if life > 0x78 && down < 0x29 {
         down += down >> 1;

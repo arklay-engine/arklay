@@ -108,6 +108,21 @@ pub fn resolve_on_floor(
     radius: i32,
     floor: u8,
 ) -> Resolved {
+    resolve_with_offset(sca, mask, prev, proposed, radius, floor, [0, 0])
+}
+
+/// [`resolve_on_floor`] for a body whose `Atd` is `ofs` (`Atw_x`, `Atw_z`)
+/// from its place. `proposed` is already `Atd`'s `X` and `Z`, and
+/// `Sca_hit_hishi` adds `ofs` to it again.
+pub fn resolve_with_offset(
+    sca: &Sca,
+    mask: u16,
+    prev: [i32; 3],
+    proposed: [i32; 3],
+    radius: i32,
+    floor: u8,
+    ofs: [i32; 2],
+) -> Resolved {
     let mut pos = proposed;
     // `Sca_ck_info` picks the quadrant once, before anything pushes the body.
     let area = area(sca, pos[0], pos[2]);
@@ -125,7 +140,7 @@ pub fn resolve_on_floor(
             2 => push_naname_b(record, prev, &mut pos, radius),
             3 => push_naname_c(record, prev, &mut pos, radius),
             4 => push_naname_d(record, prev, &mut pos, radius),
-            5 => push_hishi(record, prev, &mut pos, radius),
+            5 => push_hishi(record, prev, &mut pos, radius, ofs),
             6 => push_circle(record, &mut pos, radius),
             7 => push_koban_x(record, prev, &mut pos, radius),
             8 => push_koban_z(record, prev, &mut pos, radius),
@@ -483,18 +498,28 @@ fn push_naname_d(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i
 
 /// `Sca_hit_hishi`: a diamond, handled by the quadrant of its centre the body
 /// is in. Unlike the triangles, it judges the side after the slide.
-fn push_hishi(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) -> bool {
+///
+/// The quadrant comes from `pos`, and the rest from `pos` and `ofs`, which
+/// the original adds to `Atd`'s place again (`+0xA0` and `+0xA2`).
+fn push_hishi(
+    record: &ScaRect,
+    prev: [i32; 3],
+    pos: &mut [i32; 3],
+    radius: i32,
+    ofs: [i32; 2],
+) -> bool {
     let (x, z, width, depth) = outline(record);
     let right = short(x + width);
     let far = short(z + depth);
     let mid_z = short((depth >> 1) + z);
     let mid_x = short((width >> 1) + x);
-    let (body_x, body_z) = (pos[0], pos[2]);
+    let quadrant = (pos[2] < mid_z, pos[0] < mid_x);
+    let (body_x, body_z) = (pos[0] + ofs[0], pos[2] + ofs[1]);
     let grid = |value: i32| value / SIDE_GRID;
     let (a, b, moved);
     let open: fn(i32) -> bool;
     let (corner_x, corner_z, side_z, side_x);
-    match (body_z < mid_z, body_x < mid_x) {
+    match quadrant {
         (false, false) => {
             let span_x = right - mid_x + radius;
             let cut = div(mul(mid_z - far - radius, body_x - mid_x), span_x);
@@ -555,9 +580,10 @@ fn push_hishi(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32)
         }
     }
     if let Some((dx, dz)) = slide(a, b) {
-        pos[0] = body_x + moved.0 * dx;
-        pos[2] = body_z + moved.1 * dz;
-        let side = mul(grid(pos[0]) - corner_x, side_z) - mul(grid(pos[2]) - corner_z, side_x);
+        pos[0] += moved.0 * dx;
+        pos[2] += moved.1 * dz;
+        let (seen_x, seen_z) = (pos[0] + ofs[0], pos[2] + ofs[1]);
+        let side = mul(grid(seen_x) - corner_x, side_z) - mul(grid(seen_z) - corner_z, side_x);
         if open(side) {
             return true;
         }

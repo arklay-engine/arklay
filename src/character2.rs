@@ -822,7 +822,11 @@ pub fn init(
     // and little else.
     if std::mem::take(&mut game.re2.load_pass) {
         game.re2.tick_before();
-        game.re2.tick_effects(room.sca.as_ref());
+        let player = game
+            .entities
+            .first_mut()
+            .map(|player| (player.pos, &mut player.health));
+        game.re2.tick_effects(room.sca.as_ref(), player);
         run_load_stop(game, room, pack, npc_models, lua);
     }
 }

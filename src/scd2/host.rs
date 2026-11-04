@@ -624,7 +624,13 @@ impl Re2State {
     }
 
     /// `Esp_move`: its draws come from the game's stream, and its sounds join the rest.
-    pub fn tick_effects(&mut self, sca: Option<&crate::state::Sca>) {
+    ///
+    /// `player` is the player's place and life, for what an effect hits.
+    pub fn tick_effects(
+        &mut self,
+        sca: Option<&crate::state::Sca>,
+        player: Option<([i32; 3], &mut i16)>,
+    ) {
         // `Joint_trans2` comes just before `Esp_move`, and makes `Parts_down`'s calls.
         for character in self.characters.0.iter_mut().flatten() {
             let Some(zombie) = character.zombie.as_mut() else {
@@ -649,10 +655,32 @@ impl Re2State {
                 falling
             });
         }
+        let atd = self.player.atd;
+        self.effects.target = player.as_ref().map(|(pos, life)| crate::esp2::Target {
+            pos: *pos,
+            ofs_y: atd.map_or(-(crate::character2::PLAYER_HEIGHT as i16), |atd| atd.ofs_y),
+            at_h: atd.map_or(crate::character2::PLAYER_HEIGHT, |atd| atd.at_h),
+            life: **life,
+            near_death: self.player.near_death,
+            damage_cnt: self.player.damage_cnt,
+            ..Default::default()
+        });
         if self.flag(STOP_BANK, STOP_EFFECTS) {
             self.effects.tick_stopped(&mut self.rnd, sca);
         } else {
             self.effects.tick(&mut self.rnd, sca);
+        }
+        if let (Some(target), Some((_, life))) = (self.effects.target.take(), player) {
+            *life = target.life;
+            self.player.near_death = target.near_death;
+            self.player.damage_cnt = target.damage_cnt;
+            if let Some(routine) = target.routine {
+                self.player.routine = [routine, 0, 0, 0];
+            }
+            if target.poisoned {
+                self.player.poisoned = true;
+                self.player.poison_timer = 0x1E;
+            }
         }
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
