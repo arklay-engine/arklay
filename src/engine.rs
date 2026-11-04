@@ -10336,6 +10336,15 @@ impl App {
         })
     }
 
+    /// Whether the running bot, rather than the human, is feeding the pad.
+    ///
+    /// The interactive loop must not poll film skips with the human word while
+    /// this is true: the poll makes the film session the external sampler, so
+    /// the fixed tick would then ignore the bot's `ui.confirm` edge.
+    fn bot_owns_input(&self) -> bool {
+        self.bot.as_ref().is_some_and(|bot| !bot.finished())
+    }
+
     /// Poll the active film's skip input between ticks; see
     /// [`GameSession::poll_movie_skip`].
     fn poll_movie_skip(&mut self, buttons: u16) {
@@ -12549,6 +12558,17 @@ fn print_bot_report(app: &App, outcome: &str, elapsed: std::time::Duration) {
     }
 }
 
+/// Feed the between-tick film poll for one presented frame.
+///
+/// A running bot owns the pad: polling with the human word would make the
+/// film session the external sampler, and the fixed tick would then ignore
+/// the bot's `ui.confirm` edge. Skipping the poll lets the bot skip the film.
+fn poll_movie_skip_for_frame(app: &mut App, human_buttons: u16) {
+    if !app.bot_owns_input() {
+        app.poll_movie_skip(human_buttons);
+    }
+}
+
 /// The interactive app loop shared by `--room`, `--ui` and the standalone
 /// `--fmv` playback: fixed ticks from the latched input, frames presented at
 /// the display's `frame_rate` (tweened between the last two ticks above the
@@ -12596,7 +12616,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         clock.advance();
         // The film skip state advances on every loop pass, not the fixed
         // tick, exactly like the original's platform-driven film update.
-        app.poll_movie_skip(movie_buttons_held(input.held_word()));
+        poll_movie_skip_for_frame(app, movie_buttons_held(input.held_word()));
         let tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         while clock.accumulator >= tick_ms {
             let tick = input.tick();
@@ -33995,6 +34015,50 @@ off_0010:
         app.poll_movie_skip(l1);
         app.poll_movie_skip(0);
         assert!(matches!(tick(&mut app, 0), AppFlow::Quit));
+    }
+
+    #[test]
+    fn a_running_bot_skips_an_in_session_film_through_the_fixed_tick() {
+        let dir = TempDir::new();
+        let movie_path = crate::movie::pack_path(0);
+        let film = crate::movie::test_avi(400);
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[
+                (movie_path.as_str(), film.as_slice()),
+                (
+                    "bot/init.lua",
+                    b"function on_bot_tick(bot)\n  if bot:scene().film and bot:tick() % 2 == 0 then bot:pulse_confirm() end\nend\n",
+                ),
+            ],
+        );
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        app.attach_bot().unwrap();
+        app.enable_skips();
+        let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a play mode");
+        };
+        session.movie = Some(movie);
+        assert!(app.bot_owns_input());
+
+        // The human word is zero here, but polling it would still make the
+        // session the external sampler and starve the bot's confirm edge.
+        for _ in 0..2 {
+            poll_movie_skip_for_frame(&mut app, movie_buttons_held(0));
+            app.update(UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        assert!(
+            session.movie.is_none(),
+            "the bot confirm must reach the film through the fixed tick"
+        );
     }
 
     /// Run the app until `predicate` holds, returning the film ids seen in
