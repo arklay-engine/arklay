@@ -82,6 +82,14 @@ fn sca_record(e: &mut Api, record: i64) -> mlua::Result<&'static crate::state::S
         .ok_or_else(|| mlua::Error::RuntimeError(format!("no record {record}")))
 }
 
+fn parent(e: &mut Api) -> mlua::Result<&super::ParentView> {
+    e.em()
+        .world
+        .parent
+        .as_ref()
+        .ok_or_else(|| mlua::Error::RuntimeError("no parent".to_owned()))
+}
+
 fn routine_index(index: i64) -> mlua::Result<usize> {
     usize::try_from(index)
         .ok()
@@ -1050,6 +1058,39 @@ impl UserData for Api {
             e.em().z.atd.ofs_x = ofs;
             Ok(())
         });
+        methods.add_method_mut("body_ofs_x", |_, e, ()| Ok(e.em().z.atd.ofs_x));
+        // `Sca_ck_info` at a point, on this body's floor: whether a record of
+        // `mask`, grown by `radius`, holds it.
+        methods.add_method_mut(
+            "sca_touch",
+            |_, e, (x, y, z, radius, mask): (i32, i32, i32, i32, u16)| {
+                let em = e.em();
+                let floor = em.z.floor;
+                Ok(em.mover.tick.room.sca.as_ref().is_some_and(|sca| {
+                    crate::sca::first_hit(sca, mask, [x, y, z], radius, floor).is_some()
+                }))
+            },
+        );
+        // `Ck_em_id`: the slot of another work in play with `id`, or nil.
+        methods.add_method_mut("other_of", |_, e, id: u8| {
+            let world = &*e.em().world;
+            Ok(world
+                .works
+                .iter()
+                .find(|&&(other, other_id, in_play)| {
+                    other != world.slot && other_id == Some(id) && in_play
+                })
+                .map(|&(other, ..)| other))
+        });
+        // Its own entity id, `Id`.
+        methods.add_method_mut("id", |_, e, ()| {
+            let world = &*e.em().world;
+            Ok(world
+                .works
+                .iter()
+                .find(|&&(other, ..)| other == world.slot)
+                .and_then(|&(_, id, _)| id))
+        });
         // Where the jaw was when this tick began.
         methods.add_method_mut("jaw", |_, e, ()| {
             let em = e.em();
@@ -1070,6 +1111,115 @@ impl UserData for Api {
                 em.z.sounds.push((seq >> 28) as u8);
             }
             Ok(())
+        });
+        methods.add_method_mut("set_pos", |_, e, (x, y, z): (i32, i32, i32)| {
+            e.em().mover.player.pos = [x, y, z];
+            Ok(())
+        });
+        // A part's `Workm.t` as this work's last `FUN_004886f0` left it.
+        methods.add_method_mut("own_part", |_, e, part: usize| {
+            let t = e
+                .em()
+                .z
+                .parts
+                .get(part)
+                .copied()
+                .flatten()
+                .map_or([0; 3], |matrix| matrix.t);
+            Ok((t[0], t[1], t[2]))
+        });
+        // `Neck_no`'s turn (`+0x98`).
+        methods.add_method_mut("neck_turn", |_, e, ()| Ok(e.em().work().neck.turn[0]));
+        // `Goto00_ck` from a point, facing `angle`.
+        methods.add_method_mut(
+            "goto_ck_at",
+            |_, _, (x0, z0, angle, x, z, rate): (i32, i32, i64, i32, i32, i32)| {
+                let target = direction_ck(x0, z0, x, z);
+                Ok(turn_within(angle as u16 & 0xFFF, target, rate))
+            },
+        );
+        // The ivy a vine grew from (`pEnemy_ptr`), as it stood after its run.
+        methods.add_method_mut("has_parent", |_, e, ()| Ok(e.em().world.parent.is_some()));
+        methods.add_method_mut("parent_var", |_, e, index: usize| {
+            Ok(parent(e)?.vars.get(index).copied().unwrap_or(0))
+        });
+        methods.add_method_mut("parent_pos", |_, e, ()| {
+            let [x, y, z] = parent(e)?.pos;
+            Ok((x, y, z))
+        });
+        methods.add_method_mut("parent_angle", |_, e, ()| Ok(parent(e)?.angle));
+        methods.add_method_mut("parent_life", |_, e, ()| Ok(parent(e)?.life));
+        methods.add_method_mut("parent_kind", |_, e, ()| Ok(parent(e)?.kind));
+        methods.add_method_mut("parent_routine", |_, e, index: i64| {
+            Ok(parent(e)?.routine[routine_index(index)?])
+        });
+        // A part's `Workm.t` (`+0x5c`), as the shorts a vine reads of it.
+        methods.add_method_mut("parent_part", |_, e, part: usize| {
+            let t = parent(e)?
+                .parts
+                .get(part)
+                .copied()
+                .flatten()
+                .map_or([0; 3], |matrix| matrix.t);
+            Ok((t[0] as i16, t[1] as i16, t[2] as i16))
+        });
+        // A part's own rotation this tick (`+0x68`).
+        methods.add_method_mut("parent_part_rot", |_, e, part: usize| {
+            let r = parent(e)?.rotations.get(part).copied().unwrap_or([0; 3]);
+            Ok((r[0], r[1], r[2]))
+        });
+        // `Set_enemy_work(id)`: the slot it gave, with `kind` and the fields in
+        // `vars` set before the work's first run, or nil.
+        methods.add_method_mut("spawn", |_, e, (id, kind, vars): (u8, u16, mlua::Table)| {
+            let world = &mut *e.em().world;
+            let Some((slot, reused)) = world.set_enemy_work(id) else {
+                return Ok(None);
+            };
+            let mut fields = Vec::new();
+            for pair in vars.pairs::<usize, i32>() {
+                let (index, value) = pair?;
+                if index >= super::VARS {
+                    return Err(mlua::Error::RuntimeError(format!("no var {index}")));
+                }
+                fields.push((index, value));
+            }
+            fields.sort_unstable();
+            world.spawns.push(super::Spawn {
+                slot,
+                id,
+                kind,
+                vars: fields,
+                reused,
+            });
+            Ok(Some(slot))
+        });
+        // `Rot_neck_em` on `Neck_no` `joint`, facing `angle`, from where the
+        // joint was last tick toward the player's head.
+        methods.add_method_mut(
+            "rot_neck_joint",
+            |_, e, (joint, angle, rate, limit): (usize, i64, i32, i32)| {
+                let em = e.em();
+                let from = em.work().neck.position;
+                // Only the yaw is used, which the player's position gives
+                // before their neck has one.
+                let target = em.world.player_neck.or(Some(em.world.player));
+                em.mover
+                    .rot_neck_joint(joint, from, target, angle as i16, rate, limit);
+                Ok(())
+            },
+        );
+        // A part's own rotation this tick (`+0x68`).
+        methods.add_method_mut("part_rot", |_, e, part: usize| {
+            let em = e.em();
+            let (clips, keyframes) = em.mover.tick.banks.get(em.mover.work.bank);
+            let r = em
+                .mover
+                .player
+                .anim
+                .pose_keyframe(clips, keyframes)
+                .and_then(|pose| pose.rotations.get(part).copied())
+                .unwrap_or([0; 3]);
+            Ok((r[0], r[1], r[2]))
         });
         methods.add_method_mut("partner", |_, e, ()| Ok(e.em().world.partner));
         methods.add_method_mut("enemies", |_, e, ()| Ok(e.em().world.enemies));
@@ -1182,10 +1332,12 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 5] = [
+    const SCRIPTS: [&str; 7] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
+        include_str!("../../games/re2/enemy/2f/enemy.lua"),
+        include_str!("../../games/re2/lib/ivy.lua"),
         include_str!("../../games/re2/lib/licker.lua"),
         include_str!("../../games/re2/lib/zombie.lua"),
     ];

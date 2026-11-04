@@ -348,7 +348,7 @@ fn joint_matrix(matrix: &player2::Matrix) -> crate::anim::Mat4x3 {
 const PARTS_MASK: u16 = 0x2000;
 
 /// How many of the work's fields the script keeps for itself.
-const VARS: usize = 23;
+const VARS: usize = 32;
 /// The dog, whose script is `enemy/20/enemy.lua`.
 pub const DOG_ID: u8 = 0x20;
 /// The crow, whose script is `enemy/21/enemy.lua`.
@@ -364,6 +364,45 @@ const DOG_STUCK: usize = 18;
 pub(crate) const DOG_GROUND: usize = 20;
 /// Part 4's place, which `Game_loop`'s `Joint_trans2` left there between ticks.
 pub(crate) const DOG_JAW: usize = 21;
+/// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
+pub const IVY_ID: u8 = 0x2E;
+/// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
+/// room's template, and those a room places alone.
+pub const VINE_ID: u8 = 0x2F;
+/// The poison ivy, which runs `Em_2E`'s code.
+pub const POISON_IVY_ID: u8 = 0x39;
+/// `Em_2E`'s `Neck_no`, whose yaw its `Rot_neck_em` turns.
+const IVY_NECK: usize = 9;
+/// `+0x22d`: the ticks `Em_2E` has ended where it began.
+pub(crate) const PLANT_STUCK: usize = 31;
+/// `+0x21a`: `Em_2E` checks the others with `FUN_00488980`, not `Oba_ck_em`.
+pub(crate) const PLANT_OBA: usize = 30;
+
+/// `+0x231`: which side of its clips the ivy is on, 0 or 1.
+pub(crate) const PLANT_SIDE: usize = 29;
+
+/// The ivy and the vines.
+pub fn is_plant(id: u8) -> bool {
+    matches!(id, IVY_ID | VINE_ID | POISON_IVY_ID)
+}
+
+/// `FUN_004887d0`'s turn for an ivy: `Cdir_y`, its neck's turn and its pose
+/// there, less its side.
+pub fn plant_aim(character: &Character) -> u16 {
+    let Some(zombie) = character.zombie.as_ref() else {
+        return 0;
+    };
+    let pose = zombie
+        .rotations
+        .get(IVY_NECK)
+        .map_or(0, |rotation| rotation[1]);
+    let side = (zombie.vars[PLANT_SIDE] as i16).wrapping_mul(0x800);
+    (character.work.neck.turn[0])
+        .wrapping_sub(side)
+        .wrapping_add(pose)
+        .wrapping_add(character.body.angle as i16) as u16
+        & 0xFFF
+}
 
 /// What a zombie keeps beyond a character's [`Work`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -431,6 +470,12 @@ pub struct Zombie {
     burnt: bool,
     /// How far `Em10_Scenario` has taken a burnt body's colours down.
     charred: u8,
+    /// `pEnemy_ptr`: the slot of the ivy a vine grew from.
+    pub parent: Option<u8>,
+    /// The parts' `Workm` that the ivy's `FUN_004886f0` left, for its vines.
+    pub(crate) parts: Vec<Option<player2::Matrix>>,
+    /// The parts' own rotations on that pose (`+0x68`).
+    pub rotations: Vec<[i16; 3]>,
 }
 
 impl Zombie {
@@ -498,6 +543,25 @@ pub fn take_hit(
 }
 
 /// The slot's first state: what `Sce_em_set` leaves.
+impl Zombie {
+    /// The script's fields, for another work that reads them.
+    pub fn vars(&self) -> [i32; VARS] {
+        self.vars
+    }
+
+    /// Set one of the script's fields from outside its run.
+    pub fn set_var(&mut self, index: usize, value: i32) {
+        if let Some(var) = self.vars.get_mut(index) {
+            *var = value;
+        }
+    }
+
+    /// `+0x150`, which `Set_enemy_work` starts at the room's enemy count.
+    pub fn set_sight_turn(&mut self, turn: u8) {
+        self.sight_turn = turn;
+    }
+}
+
 pub fn spawned(slot: u8, floor: u8, model_type: u8) -> Zombie {
     Zombie {
         sight_turn: slot.wrapping_add(2) & 7,
@@ -542,6 +606,33 @@ impl Zombie {
             }
         }
     }
+}
+
+/// The ivy a vine grew from, as it stood after its own run this tick.
+#[derive(Debug, Clone)]
+pub struct ParentView {
+    pub vars: [i32; VARS],
+    pub pos: [i32; 3],
+    pub angle: u16,
+    pub life: i16,
+    pub kind: u16,
+    pub routine: [u8; 4],
+    pub(crate) parts: Vec<Option<player2::Matrix>>,
+    /// Each part's own rotation this tick (`+0x68`).
+    pub rotations: Vec<[i16; 3]>,
+    pub be_flg: u32,
+}
+
+/// A work `Set_enemy_work` gave a script: its slot, and what the script set
+/// in it before its first run.
+#[derive(Debug, Clone)]
+pub struct Spawn {
+    pub slot: usize,
+    pub id: u8,
+    pub kind: u16,
+    pub vars: Vec<(usize, i32)>,
+    /// A dead work of the id taken back, rather than a copy of the last.
+    pub reused: bool,
 }
 
 /// The rest of the game, as a zombie sees it.
@@ -602,6 +693,37 @@ pub struct World<'a> {
     /// The pack the behaviour scripts come from, and their VM. `None` parks them.
     pub pack: &'a crate::pack::Pack,
     pub lua: Option<&'a mut crate::enemy::LuaEnemyHost>,
+    /// The ivy this vine grew from.
+    pub parent: Option<ParentView>,
+    /// The works `Set_enemy_work` walks, in `player_work`'s order of the enemy
+    /// slots: each one's id and whether it's in play.
+    pub works: Vec<(usize, Option<u8>, bool)>,
+    /// What `Set_enemy_work` gave out this tick.
+    pub spawns: Vec<Spawn>,
+}
+
+impl World<'_> {
+    /// `Set_enemy_work(id)`: a dead work of the id, else a new one past the last
+    /// in play, copied from the last of the id. `None` with neither.
+    pub fn set_enemy_work(&mut self, id: u8) -> Option<(usize, bool)> {
+        let mut template = false;
+        for entry in &mut self.works {
+            if entry.1 == Some(id) {
+                template = true;
+                if !entry.2 {
+                    entry.2 = true;
+                    return Some((entry.0, true));
+                }
+            }
+        }
+        if !template {
+            return None;
+        }
+        let entry = self.works.iter_mut().find(|entry| !entry.2)?;
+        entry.1 = Some(id);
+        entry.2 = true;
+        Some((entry.0, false))
+    }
 }
 
 /// One tick's zombie: the state the original keeps in the work and globals.
@@ -738,6 +860,35 @@ impl Em<'_, '_, '_> {
         self.sca_ck_em();
     }
 
+    /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
+    /// `FUN_004886f0` composes its parts for its vines afterwards, and it
+    /// counts the ticks it ends where it began.
+    fn run_plant(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        let before = self.mover.player.pos;
+        self.old_pos = before;
+        self.script();
+        if self.z.vars[PLANT_OBA] == 0 {
+            self.oba_ck_em();
+        }
+        self.sca_ck_em();
+        if self.mover.tick.id == VINE_ID {
+            return;
+        }
+        self.z.parts = self.mover.posed_parts();
+        self.z.rotations = self.mover.posed_rotations();
+        self.work().neck.joint = Some(IVY_NECK as u8);
+        self.work().neck.position = self.z.parts.get(IVY_NECK).copied().flatten().map(|m| m.t);
+        let after = self.mover.player.pos;
+        if after[0] == before[0] && after[2] == before[2] {
+            self.z.vars[PLANT_STUCK] = (self.z.vars[PLANT_STUCK] + 1) & 0xFF;
+        } else {
+            self.z.vars[PLANT_STUCK] = 0;
+        }
+    }
+
     /// `Root_ck` with its own target: the point, or with `by_area` the middle of
     /// a guide area. 0 finds no way, 1 has its target in this area and 2 is a
     /// tick without a look. The player's sight is still checked.
@@ -813,6 +964,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == MRX_ID {
             self.run_mrx();
+            return;
+        }
+        if is_plant(self.mover.tick.id) {
+            self.run_plant();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

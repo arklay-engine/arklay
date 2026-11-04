@@ -292,7 +292,7 @@ const CAMPAIGN_ENEMY_STAGES: u8 = 3;
 pub const NO_ENEMY_FLAG: u8 = 0xFF;
 /// `splayer_work`'s place among the characters, after `enemy_work`'s 16.
 pub const SPLAYER_SLOT: usize = 16;
-const CHARACTER_SLOTS: usize = SPLAYER_SLOT + 1;
+pub(crate) const CHARACTER_SLOTS: usize = SPLAYER_SLOT + 1;
 /// `sce_em_set`'s slot for `splayer_work`.
 const SPLAYER_OPERAND: i64 = 255;
 /// `FlagGroup::Message`, `fg_message`: bit 31 is a question's answer, `no`.
@@ -1102,7 +1102,10 @@ impl GameHost<'_> {
             types[1] = sound_type;
         }
         let licker = matches!(id, 0x22 | 0x24);
-        let zombie = (0x10..=0x21).contains(&id) || licker || id == crate::zombie2::MRX_ID;
+        let zombie = (0x10..=0x21).contains(&id)
+            || licker
+            || id == crate::zombie2::MRX_ID
+            || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {

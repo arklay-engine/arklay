@@ -61,6 +61,7 @@ pub fn tick(
                     &mut zombie,
                     slot,
                     &model,
+                    false,
                 );
             }
             character.zombie = Some(zombie);
@@ -204,10 +205,18 @@ pub fn player_held(
         .get(slot)
         .and_then(|character| character.as_deref())
         .map_or(0, |character| character.body.angle);
+    let holder_aim = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .map_or(0, crate::zombie2::plant_aim);
     let re2 = &mut game.re2;
     let mut held = player2::Held {
         holder,
         holder_angle,
+        holder_aim,
         holder_id,
         draw_buffer: re2.draw_buffer,
         rnd: &mut re2.rnd,
@@ -457,6 +466,7 @@ fn run_zombie(
     zombie: &mut crate::zombie2::Zombie,
     slot: usize,
     model: &Emd,
+    loading: bool,
 ) {
     let tick = tick_of(room, game, character, slot, model, None);
     let player = game.entities[0].pos;
@@ -503,6 +513,38 @@ fn run_zombie(
         .flatten()
         .filter(|other| other.be_flg & 1 != 0 && other.id == character.id)
         .count() as u8;
+    let parent = zombie
+        .parent
+        .and_then(|parent| re2.characters.0.get(usize::from(parent))?.as_deref())
+        .and_then(|parent| {
+            let z = parent.zombie.as_ref()?;
+            Some(crate::zombie2::ParentView {
+                vars: z.vars(),
+                pos: parent.body.pos,
+                angle: parent.body.angle,
+                life: z.life,
+                kind: parent.work.kind,
+                routine: parent.work.routine,
+                parts: z.parts.clone(),
+                rotations: z.rotations.clone(),
+                be_flg: parent.be_flg,
+            })
+        });
+    let works = (0..SPLAYER_SLOT)
+        .map(|other| {
+            if other == slot {
+                return (other, Some(character.id), character.be_flg & 1 != 0);
+            }
+            match re2.characters.0.get(other).and_then(Option::as_deref) {
+                Some(other_character) => (
+                    other,
+                    Some(other_character.id),
+                    other_character.be_flg & 1 != 0,
+                ),
+                None => (other, None, false),
+            }
+        })
+        .collect();
     let effects = &mut re2.effects;
     let player_life = &mut game.entities[0].health;
     let mut world = crate::zombie2::World {
@@ -541,8 +583,12 @@ fn run_zombie(
         scene_target,
         pack,
         lua,
+        parent,
+        works,
+        spawns: Vec::new(),
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
+    let spawns = std::mem::take(&mut world.spawns);
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
     let knocks = std::mem::take(&mut world.knocks);
@@ -566,6 +612,9 @@ fn run_zombie(
                 other.hear(call);
             }
         }
+    }
+    for spawn in spawns {
+        set_enemy_work(re2, character, slot, spawn, loading);
     }
     let pos = character.body.pos;
     if player2::is_held(&re2.player)
@@ -615,6 +664,70 @@ fn run_zombie(
                 .push(crate::scd2::host::SoundRequest { id, pos });
         }
     }
+}
+
+/// What `Set_enemy_work` leaves in the work it gave `spawn`: a dead one of the
+/// id back in play, or a copy of the last of the id. `parent` is the script's
+/// own work, which it runs from (`pEnemy_ptr`).
+fn set_enemy_work(
+    re2: &mut crate::scd2::host::Re2State,
+    parent: &Character,
+    parent_slot: usize,
+    spawn: crate::zombie2::Spawn,
+    loading: bool,
+) {
+    re2.enemies = re2.enemies.wrapping_add(1);
+    let characters = &mut re2.characters.0;
+    characters.resize_with(crate::scd2::host::CHARACTER_SLOTS, || None);
+    let template = (0..SPLAYER_SLOT)
+        .rev()
+        .find_map(|other| {
+            if other == parent_slot {
+                return (parent.id == spawn.id).then_some(parent);
+            }
+            characters[other]
+                .as_deref()
+                .filter(|other| other.id == spawn.id)
+        })
+        .cloned();
+    let Some(template) = template else {
+        return;
+    };
+    let mut character = if spawn.reused {
+        match characters[spawn.slot].take() {
+            Some(mut character) => {
+                character.be_flg |= 1;
+                character.work.routine = [0; 4];
+                *character
+            }
+            None => return,
+        }
+    } else {
+        let mut character = template;
+        let mut work = player2::Work::default();
+        work.routine = [0; 4];
+        work.kind = character.work.kind;
+        work.floor = character.work.floor;
+        character.work = work;
+        character.body.angle = 0;
+        character.be_flg = 1;
+        let floor = character.zombie.as_ref().map_or(0, |z| z.floor);
+        let model_type = character.zombie.as_ref().map_or(0, |z| z.model_type);
+        let mut zombie = crate::zombie2::spawned(spawn.slot as u8, floor, model_type);
+        zombie.set_sight_turn(re2.enemies & 7);
+        character.zombie = Some(zombie);
+        character
+    };
+    character.with_room = loading;
+    character.work.kind = spawn.kind;
+    character.kind = spawn.kind;
+    if let Some(zombie) = character.zombie.as_mut() {
+        zombie.parent = Some(parent_slot as u8);
+        for (index, value) in spawn.vars {
+            zombie.set_var(index, value);
+        }
+    }
+    characters[spawn.slot] = Some(Box::new(character));
 }
 
 /// `Player_set`'s `At_w`.
@@ -675,6 +788,7 @@ pub fn init(
                     &mut zombie,
                     slot,
                     &model,
+                    true,
                 );
                 let (start, flags) = character.start;
                 if start != 0 {
@@ -688,6 +802,7 @@ pub fn init(
                         &mut zombie,
                         slot,
                         &model,
+                        true,
                     );
                 }
                 character.work.kind |= held;
@@ -845,6 +960,7 @@ fn run_load_stop(
                     &mut zombie,
                     slot,
                     &model,
+                    false,
                 );
             }
             character.zombie = Some(zombie);
