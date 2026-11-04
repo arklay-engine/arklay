@@ -18,10 +18,9 @@
 //!   (`:225-228`), but the option's own description says it applies only with
 //!   the guardhouse, and `Random` can pick that pair; here mansion 2 is
 //!   simply off.
-//! - Door randomization is a later milestone. Under it staging prepares the
-//!   map differently (`:217`, `:449`): the hook is marked below, and
-//!   [`prepare`] fails if it is asked for. [`crate::plan::generate`] turns it
-//!   off before calling it.
+//! - Under door randomization ([`prepare_for_doors`]) the areas, the second
+//!   mansion visit and the segmented caves and lab are left to the door
+//!   stage's segments, as staging leaves them.
 //! - Lock randomization ([`prepare_locks`], `:290-445`) allocates the second
 //!   mansion visit's new lock ids from 64 up, as [`crate::locks`] does, so
 //!   that they never meet a lock flag an original room script raises.
@@ -29,7 +28,7 @@
 //!   files, and the lockpick's free locks (`:185-190`) are
 //!   [`KeyOptions::implicit_keys`](crate::keys::KeyOptions::implicit_keys).
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 
 use crate::config::Config;
 use crate::map::{Door, DoorKind, Filter, Map, Player, Requirement, Room, tags};
@@ -101,7 +100,7 @@ impl Progression {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Options {
     pub player: Player,
-    /// `doors/random`. Not supported yet.
+    /// `doors/random`.
     pub door_rando: bool,
     /// `locks/random`.
     pub lock_rando: bool,
@@ -132,10 +131,7 @@ impl Options {
 /// lock randomization draws from it.
 pub fn prepare(map: &Map, options: &Options, rng: &mut Rng) -> Result<Map> {
     if options.door_rando {
-        // Hook (door milestone): with door randomization, staging skips the
-        // area and lock set-up below, lets any slot take any key (`:449-454`)
-        // and leaves the areas to the door randomizer's segments.
-        bail!("door randomization is not supported yet");
+        return prepare_for_doors(map, options, rng);
     }
 
     let mut map = for_game(map, options.door_rando, options.player);
@@ -177,6 +173,58 @@ pub fn prepare(map: &Map, options: &Options, rng: &mut Rng) -> Result<Map> {
 
     restrict_groups(&mut map, progression, mansion2_key)?;
     segment(&mut map, progression)?;
+    Ok(map)
+}
+
+/// The map of a game with door randomization (`doors/random`). Staging
+/// skips the areas, the softlock-safe doors, the second mansion visit and
+/// the segmented caves and lab (`:217`, `:277`): the door randomizer's
+/// segments take their place. Under `locks/random` the original locks the
+/// randomizer may replace go and every door may take any discard key
+/// (`:290-326`); the door stage then narrows each to its segment's keys.
+/// Any slot takes any key (`:449-454`).
+///
+/// Unlike staging, an original one-sided lock (a door locked or unlocked
+/// from one side, with no key) on a door the randomizer may rewire goes
+/// whatever the lock options: on a new layout it would seal off what it now
+/// leads to, from the side that has to open it.
+fn prepare_for_doors(map: &Map, options: &Options, rng: &mut Rng) -> Result<Map> {
+    let mut map = for_game(map, true, options.player);
+    if !options.cutscenes_disabled {
+        for door in doors_mut(&mut map).filter(|door| door.filter.has_tag(tags::PROLOGUE)) {
+            door.allowed_locks = Some(Vec::new());
+        }
+    }
+    for door in doors_mut(&mut map).filter(|door| {
+        door.randomize != Some(false)
+            && door.allowed_locks.is_none()
+            && door.key.is_none()
+            && matches!(door.kind, Some(DoorKind::Locked | DoorKind::Unlock))
+    }) {
+        door.kind = None;
+        door.lock = None;
+    }
+    if options.lock_rando {
+        if !options.lock_preserve {
+            for door in doors_mut(&mut map).filter(|door| door.allowed_locks.is_none()) {
+                if matches!(door.kind, Some(DoorKind::Locked | DoorKind::Unlock)) {
+                    door.kind = None;
+                }
+                door.lock = None;
+            }
+        }
+        let discard: Vec<u8> = map
+            .items
+            .iter()
+            .filter(|(_, def)| def.discard)
+            .map(|(&id, _)| id)
+            .collect();
+        let generic_keys = rng.shuffled(&discard);
+        for door in doors_mut(&mut map).filter(|door| door.allowed_locks.is_none()) {
+            door.allowed_locks = Some(generic_keys.clone());
+        }
+    }
+    for_each_slot(&mut map, |group| *group = groups::ALL);
     Ok(map)
 }
 

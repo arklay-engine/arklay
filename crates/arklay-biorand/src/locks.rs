@@ -30,8 +30,10 @@
 //!   Staging may lock such a pair; the game then shows no key on the
 //!   `no-unlock` side, while the graph routes through it with the key.
 //! - A door left without a lock loses its key requirements (`drop_stale_keys`).
-//! - With `locks/random` off the stage does nothing: the pack keeps the
-//!   original lock bytes, and the engine reads them the original's way.
+//! - With `locks/random` off the stage draws nothing. On the original doors
+//!   the pack keeps the original lock bytes, and the engine reads them the
+//!   original's way; under door randomization every door's lock is still
+//!   listed, as the door stage moved locks to new partners.
 
 use std::collections::{BTreeSet, HashSet, VecDeque};
 
@@ -69,9 +71,13 @@ pub struct DoorLock {
     /// The AOT id of the door's `door_aot_set`.
     pub id: u8,
     /// The room directory the door leads to, in lowercase, or `None` for a
-    /// door that leads nowhere in this game. An emitter matches the
-    /// `door_aot_set` by AOT id and this.
+    /// door that leads nowhere in this game.
     pub target: Option<String>,
+    /// The room directory, lowercase, the room script's door names: the
+    /// original's target, which an emitter matches the `door_aot_set` by,
+    /// with the AOT id. The same as `target` on the original doors; under
+    /// door randomization the plan sets it from the original map.
+    pub script_target: Option<String>,
     /// The lock flag in bank 2, the whole byte; 0 is unlocked.
     pub lock: u8,
     /// What opens it: an item, [`KEY_NONE`] (no key: a script raises the
@@ -102,7 +108,15 @@ type DoorRef = (String, usize);
 /// `locks/random` off, the map as it is and no doors.
 pub fn randomize(map: &Map, config: &Config, rng: &mut Rng) -> Result<(Map, Vec<DoorLock>)> {
     if !config.get_bool("locks/random", false) {
-        return Ok((map.clone(), Vec::new()));
+        if !config.get_bool("doors/random", false) {
+            return Ok((map.clone(), Vec::new()));
+        }
+        // The door stage gave doors new partners and one-sided locks: every
+        // door's lock is written, as staging's `SetDoorLocks` always does.
+        let doors = doors(map)?;
+        let pairs = pairs(map, &doors);
+        let locks = door_locks(map, &doors, &pairs, &HashSet::new());
+        return Ok((map.clone(), locks));
     }
     let mut map = map.clone();
     let doors = doors(&map)?;
@@ -552,6 +566,7 @@ fn door_locks(
                 room: room.clone(),
                 dir: map.rooms[room.as_str()].room_id().to_ascii_lowercase(),
                 id: door.id.unwrap_or_default(),
+                script_target: target.clone(),
                 target,
                 lock,
                 key,
