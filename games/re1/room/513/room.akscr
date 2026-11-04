@@ -28,6 +28,7 @@
 #define FX_25 0x25
 #define F_ROOM_BUBBLE_DUE 0x24                              // A bubble burst is due in the tank this frame.
 #define F_ROOM_BUBBLE_ECHO 0x0A                             // Plays a second bubble sound the next frame.
+#define F_ROOM_BOSS_BGM_STARTED 0x0B                        // CUTSCENES_DISABLED: the boss music the skipped scene would start has started.
 #define F_ROOM_DEVICE_SEEN_AFTER 0x05                       // The control device was examined after the Tyrant died; it now offers the shorter prompt.
 #define F_ROOM_DEVICE_TRIED_EARLY 0x04                      // The control device was examined while the Tyrant lived.
 #define F_ROOM_DOOR_UNLOCKED 0x06                           // The door was unlocked at the control device.
@@ -119,6 +120,12 @@ proc init
 {
     set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
+    if (CUTSCENES_DISABLED)
+    {
+        // No scene releases the Tyrant, so it is there from the start
+        // (staging adds this enemy).
+        enemy(EM_0C_TYRANT_1, EB_00, F_ENEMY_513_TYRANT_1_1, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE))
     {
         set(FG_ROOM, F_ROOM_TYRANT_SCENE_OVER, TRUE);
@@ -148,6 +155,13 @@ proc init
     else
     {
         aot_set(AOT_01_MESSAGE_CONTROL_DEVICE, 5900, 3800, 3500, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 160, 0, 255, 0, 0, 0);
+    }
+    if (CUTSCENES_DISABLED)
+    {
+        // The room is always set up as on a return visit, with no scene
+        // (staging drops the test of the self-destruct flag that raises
+        // F_ROOM_TYRANT_SCENE_OVER). The door message above has already followed the flag.
+        set(FG_ROOM, F_ROOM_TYRANT_SCENE_OVER, TRUE);
     }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
@@ -227,7 +241,10 @@ proc init
         }
         else
         {
-            enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_WESKER, ANIM_00, 0, EVAR_00);
+            if (!CUTSCENES_DISABLED)
+            {
+                enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_WESKER, ANIM_00, 0, EVAR_00);
+            }
             evt_exec(0, TASK_07, place_props_cam_00);
         }
     }
@@ -283,7 +300,10 @@ proc init
         }
         else if (ck(FG_COMMON, F_COMMON_J_WENT_ON_WITH_BARRY, FALSE))
         {
-            enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_WESKER_OR_BARRY, ANIM_00, 0, EVAR_00);
+            if (!CUTSCENES_DISABLED)
+            {
+                enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1155, 0, 9627, 0, 8092, ENEMY_00_WESKER_OR_BARRY, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ROOM, F_ROOM_TYRANT_SCENE_OVER, FALSE))
         {
@@ -319,6 +339,28 @@ proc init
 
 proc main
 {
+    if (CUTSCENES_DISABLED)
+    {
+        // F_ROOM_TYRANT_SCENE_OVER stands for "the self-destruct has started" in the tests
+        // below, as before the scene was dropped (staging retargets them to
+        // the self-destruct flag, F_SCENARIO_TYRANT_1_DEAD).
+        if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_TYRANT_SCENE_OVER, FALSE);
+            if (ck(FG_ROOM, F_ROOM_BOSS_BGM_STARTED, FALSE))
+            {
+                // The boss music the scene would have started.
+                set(FG_ROOM, F_ROOM_BOSS_BGM_STARTED, TRUE);
+                bgm_stop(BGM_MAIN);
+                bgm_stop(BGM_SUB_1);
+                bgm_play(BGM_SUB_2);
+            }
+        }
+        else
+        {
+            set(FG_ROOM, F_ROOM_TYRANT_SCENE_OVER, TRUE);
+        }
+    }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ITEM, F_ITEM_513_KEY_LAB_MASTER_0, FALSE) && ck(FG_ROOM, F_ROOM_KEY_TAKEN, FALSE))
