@@ -515,10 +515,22 @@ const GRID_NODES: usize = GRID_DIM * GRID_DIM;
 const DEFAULT_TOLERANCE: i32 = 300;
 /// The heading error at or below which the walk starts moving.
 const FORWARD_DEADBAND: i32 = 0x40;
-/// The heading error at or below which a run is allowed.
-const RUN_DEADBAND: i32 = 0x20;
+/// The heading error at or below which the run may start.
+const RUN_START_DEADBAND: i32 = 0x60;
+/// The heading error at or below which a running bot steers while moving
+/// (the engine's run turn is 0x30 a tick) instead of stopping to turn.
+const RUN_TURN_DEADBAND: i32 = 0x100;
+/// The heading error above which the run latch drops at a sharp corner.
+const RUN_STOP_DEADBAND: i32 = 0x1C0;
+/// Remaining distance above which a run may start.
+const RUN_START_DISTANCE: i32 = 1200;
+/// Remaining distance at or below which a run walks the final approach.
+const RUN_STOP_DISTANCE: i32 = 1200;
 /// Advance to the next waypoint within this distance of the current one.
-const WAYPOINT_RADIUS: i32 = 160;
+const WAYPOINT_RADIUS: i32 = 256;
+/// Target the next waypoint when the current one is this close and the next
+/// one is already in clear sight.
+const LOOKAHEAD_RADIUS: i32 = 512;
 /// A forward step shorter than this counts as no progress.
 const STUCK_STEP: i32 = 8;
 /// Forward ticks with no progress before a replan.
@@ -540,6 +552,13 @@ struct BotNav {
     blocked_goal: Option<(i32, i32)>,
     last_pos: Option<(i32, i32)>,
     last_forward: bool,
+    /// Whether the run is latched: once picked up it survives moderate
+    /// heading errors as a run-turn, and drops at sharp corners and on the
+    /// final approach.
+    running: bool,
+    /// Whether `walk_to` ran this tick. A tick without it (a scene, a door
+    /// press, a `face_to`) drops the run latch.
+    driving: bool,
     stuck: u32,
     replans: u32,
 }
@@ -568,6 +587,53 @@ struct NavOutcome {
     status: &'static str,
     distance: i32,
     angle_error: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Movement {
+    forward: bool,
+    run: bool,
+    turn: Turn,
+    /// The run latch after this tick.
+    running: bool,
+}
+
+/// Decide the pad for one navigation tick.
+///
+/// The run is latched: it starts only on a small heading error at a worthwhile
+/// distance, then survives moderate errors as a run-turn. A sharp corner drops
+/// the latch and stops for an in-place turn; the final approach always walks.
+fn movement_for(error: i32, distance: i32, allow_run: bool, running: bool) -> Movement {
+    let abs = error.abs();
+    let running = running && allow_run && distance > RUN_STOP_DISTANCE && abs <= RUN_STOP_DEADBAND;
+    let running =
+        running || (allow_run && distance > RUN_START_DISTANCE && abs <= RUN_START_DEADBAND);
+    if running {
+        let turn = turn_for(error, FORWARD_DEADBAND);
+        if abs <= RUN_TURN_DEADBAND {
+            return Movement {
+                forward: true,
+                run: true,
+                turn,
+                running: true,
+            };
+        }
+        // Stop for the sharp part of the turn but keep the latch: the run
+        // resumes as soon as the heading is back inside the run arc.
+        return Movement {
+            forward: false,
+            run: false,
+            turn,
+            running: true,
+        };
+    }
+    let turn = turn_for(error, FORWARD_DEADBAND);
+    Movement {
+        forward: turn == Turn::None,
+        run: false,
+        turn,
+        running: false,
+    }
 }
 
 /// The options `bot:walk_to(x, z, opts)` accepts.
@@ -843,6 +909,8 @@ impl BotNav {
         self.blocked_goal = None;
         self.last_pos = None;
         self.last_forward = false;
+        self.running = false;
+        self.driving = false;
         self.stuck = 0;
         self.replans = 0;
     }
@@ -853,6 +921,13 @@ impl BotNav {
         self.index = 0;
         self.unreachable_goal = None;
         self.blocked_goal = None;
+        self.running = false;
+    }
+
+    /// Drop the run latch without touching the path. The runtime calls this
+    /// when the script stops feeding movement for a tick.
+    fn clear_run(&mut self) {
+        self.running = false;
     }
 
     /// The `walk_to` skill: collision-aware movement toward `(x, z)`.
@@ -863,6 +938,7 @@ impl BotNav {
         z: i32,
         opts: WalkOptions,
     ) -> NavOutcome {
+        self.driving = true;
         let pos = (player.x, player.z);
         let goal = (x, z);
         let distance = distance_xz(pos, goal);
@@ -884,10 +960,12 @@ impl BotNav {
             self.index = 0;
             self.unreachable_goal = None;
             self.blocked_goal = None;
+            self.running = false;
             self.replans = 0;
             self.stuck = 0;
         }
         if self.blocked_goal == Some(goal) {
+            self.running = false;
             return NavOutcome {
                 forward: false,
                 run: false,
@@ -898,6 +976,7 @@ impl BotNav {
             };
         }
         if self.unreachable_goal == Some(goal) {
+            self.running = false;
             return NavOutcome {
                 forward: false,
                 run: false,
@@ -922,6 +1001,7 @@ impl BotNav {
             self.replans += 1;
             self.path.clear();
             self.index = 0;
+            self.running = false;
             if self.replans > MAX_REPLANS {
                 self.blocked_goal = Some(goal);
                 return NavOutcome {
@@ -947,6 +1027,7 @@ impl BotNav {
                 self.unreachable_goal = Some(goal);
                 self.path.clear();
                 self.index = 0;
+                self.running = false;
                 return NavOutcome {
                     forward: false,
                     run: false,
@@ -971,6 +1052,21 @@ impl BotNav {
         {
             self.index += 1;
         }
+        // The smoothed path turns at a waypoint; when the next one is already
+        // in clear sight, aim for it instead of stopping on the near one.
+        if self.index + 1 < self.path.len()
+            && distance_xz(pos, self.path[self.index]) <= LOOKAHEAD_RADIUS
+            && line_clear(
+                &self.collision,
+                pos,
+                self.path[self.index + 1],
+                player.y,
+                player.radius,
+                player.collision_flags,
+            )
+        {
+            self.index += 1;
+        }
         if self.index >= self.path.len() {
             // The smoothed path ended short of the exact goal: try the goal
             // itself as a direct final waypoint, else replan from here.
@@ -990,6 +1086,7 @@ impl BotNav {
                 self.unreachable_goal = Some(goal);
                 self.path.clear();
                 self.index = 0;
+                self.running = false;
                 return NavOutcome {
                     forward: false,
                     run: false,
@@ -1003,14 +1100,13 @@ impl BotNav {
         let target = self.path[self.index];
         let target_angle = crate::sfx::angle_between_xz(pos.0, pos.1, target.0, target.1);
         let error = angle_error(player.angle, target_angle);
-        let turn = turn_for(error, FORWARD_DEADBAND);
-        let forward = turn == Turn::None;
-        let run = forward && opts.run && error.abs() <= RUN_DEADBAND;
-        self.last_forward = forward;
+        let movement = movement_for(error, distance, opts.run, self.running);
+        self.running = movement.running;
+        self.last_forward = movement.forward;
         NavOutcome {
-            forward,
-            run,
-            turn,
+            forward: movement.forward,
+            run: movement.run,
+            turn: movement.turn,
             status: "moving",
             distance,
             angle_error: error,
@@ -1028,6 +1124,7 @@ impl BotNav {
         self.path.clear();
         self.index = 0;
         self.last_forward = false;
+        self.running = false;
         NavOutcome {
             forward: false,
             run: false,
@@ -1437,6 +1534,7 @@ impl BotRuntime {
             input.reset();
             let mut nav = self.shares.nav.borrow_mut();
             nav.sync_room(session.loaded.id, &session.loaded.room);
+            nav.driving = false;
             let mut memory = self.shares.memory.borrow_mut();
             memory.observe(&snapshot);
         }
@@ -1465,6 +1563,13 @@ impl BotRuntime {
             });
         }
         let input = *self.shares.input.borrow();
+        let mut nav = self.shares.nav.borrow_mut();
+        if !nav.driving {
+            // The script did not drive movement this tick (a scene, a door
+            // press, a `face_to`): do not resume a stale run next tick.
+            nav.clear_run();
+        }
+        drop(nav);
         Ok(input)
     }
 
@@ -1636,6 +1741,167 @@ mod tests {
         assert!(!outcome.forward);
         assert_eq!(outcome.turn, Turn::Left);
         assert!(outcome.angle_error < 0);
+    }
+
+    #[test]
+    fn run_latch_starts_only_on_a_small_error_at_distance() {
+        assert_eq!(
+            movement_for(0, 2000, true, false),
+            Movement {
+                forward: true,
+                run: true,
+                turn: Turn::None,
+                running: true,
+            }
+        );
+        // A moderate error is a run-turn, not a stop.
+        assert_eq!(
+            movement_for(0x60, 2000, true, false),
+            Movement {
+                forward: true,
+                run: true,
+                turn: Turn::Right,
+                running: true,
+            }
+        );
+        // Too sharp to start, and too near to be worthwhile: walk.
+        assert_eq!(
+            movement_for(0x80, 2000, true, false),
+            Movement {
+                forward: false,
+                run: false,
+                turn: Turn::Right,
+                running: false,
+            }
+        );
+        assert_eq!(
+            movement_for(0x100, 2000, true, false),
+            Movement {
+                forward: false,
+                run: false,
+                turn: Turn::Right,
+                running: false,
+            }
+        );
+        assert_eq!(
+            movement_for(0, 800, true, false),
+            Movement {
+                forward: true,
+                run: false,
+                turn: Turn::None,
+                running: false,
+            }
+        );
+        assert_eq!(
+            movement_for(0, 2000, false, true),
+            Movement {
+                forward: true,
+                run: false,
+                turn: Turn::None,
+                running: false,
+            }
+        );
+    }
+
+    #[test]
+    fn run_latch_survives_moderate_errors_and_drops_at_sharp_ones() {
+        assert_eq!(
+            movement_for(0x100, 2000, true, true),
+            Movement {
+                forward: true,
+                run: true,
+                turn: Turn::Right,
+                running: true,
+            }
+        );
+        // Too sharp to steer while running, but not sharp enough to drop the
+        // latch: stop and turn in place, then resume the run.
+        assert_eq!(
+            movement_for(0x140, 2000, true, true),
+            Movement {
+                forward: false,
+                run: false,
+                turn: Turn::Right,
+                running: true,
+            }
+        );
+        assert_eq!(
+            movement_for(0x1D0, 2000, true, true),
+            Movement {
+                forward: false,
+                run: false,
+                turn: Turn::Right,
+                running: false,
+            }
+        );
+        assert_eq!(
+            movement_for(0, 900, true, true),
+            Movement {
+                forward: true,
+                run: false,
+                turn: Turn::None,
+                running: false,
+            }
+        );
+    }
+
+    #[test]
+    fn walk_keeps_the_run_latch_through_an_in_place_turn() {
+        let room = RoomState::default();
+        let mut player = PlayerSnapshot {
+            x: 16000,
+            y: 0,
+            z: 16000,
+            angle: 0,
+            health: 96,
+            max_health: 96,
+            state: 1,
+            being_attacked: 0,
+            equipped: None,
+            radius: 100,
+            collision_flags: 0,
+        };
+        let mut nav = BotNav::default();
+        nav.sync_room(
+            RoomId {
+                stage: 1,
+                room: 0x06,
+                player_flag: 1,
+                mansion2: false,
+            },
+            &room,
+        );
+        let first = nav.walk_to(
+            &player,
+            20000,
+            16000,
+            WalkOptions {
+                run: true,
+                tolerance: DEFAULT_TOLERANCE,
+            },
+        );
+        assert!(
+            first.forward && first.run,
+            "the first tick picks up the run"
+        );
+        assert!(nav.running);
+        // A sharp heading error stops for an in-place turn without dropping
+        // the latch; the run resumes when the heading comes back inside the
+        // run arc.
+        player.angle = 0xEC0;
+        let turn = nav.walk_to(
+            &player,
+            20000,
+            16000,
+            WalkOptions {
+                run: true,
+                tolerance: DEFAULT_TOLERANCE,
+            },
+        );
+        assert!(!turn.forward);
+        assert!(!turn.run);
+        assert_eq!(turn.turn, Turn::Right);
+        assert!(nav.running, "the latch survives the in-place turn");
     }
 
     #[test]

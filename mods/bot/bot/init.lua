@@ -54,6 +54,11 @@ local BANK_COMMON = 1
 local BANK_STATUS = 5
 local BANK_ITEM = 7
 
+-- Short final approaches walk: running into a waypoint or door overshoots and
+-- forces a turn-back, and the bot's Rust walk_to drops the run latch at this
+-- distance anyway.
+local RUN_MIN_DISTANCE = 1200
+
 local F_COMMON_02 = 0x02 -- 104 FMV seen
 local F_COMMON_03 = 0x03 -- first 106 Barry scene started
 local F_COMMON_05 = 0x05 -- 106 camera scenes done
@@ -245,7 +250,10 @@ local function walk_waypoints(bot, points, tolerance, label)
     end
     local point = points[index]
     local tol = STATE.wp_tol or tolerance
-    local result = bot:walk_to(point[1], point[2], { run = true, tolerance = tol })
+    local result = bot:walk_to(point[1], point[2], {
+        run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
+        tolerance = tol,
+    })
     if result.status == "moving" then
         return false
     end
@@ -343,7 +351,10 @@ local function door_nav(bot, target, custom, label)
     local point = nav.points[nav.index]
 
     if not nav.pressing then
-        local result = bot:walk_to(point[1], point[2], { run = true, tolerance = 120 })
+        local result = bot:walk_to(point[1], point[2], {
+            run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
+            tolerance = 120,
+        })
         if result.status == "arrived" then
             nav.pressing = true
             nav.ticks = 0
