@@ -73,7 +73,7 @@ const RUN_CLIPS: [u8; 3] = [1, 4, 7];
 const BACK_CLIPS: [u8; 3] = [0, 9, 9];
 const ROTATE_CLIPS: [u8; 3] = [0, 3, 6];
 /// A turn per tick by health, `pl_br_01`..`04`.
-const FORWARD_TURN: [u16; 3] = [0x28, 0x20, 0x16];
+const FORWARD_TURN: [u16; 3] = [0x28, 0x20, 0x10];
 const RUN_TURN: [u16; 3] = [0x38, 0x30, 0x18];
 const BACK_TURN: [u16; 3] = [0x28, 0x10, 0x10];
 const ROTATE_TURN: [u16; 3] = [0x50, 0x30, 0x20];
@@ -2342,7 +2342,8 @@ impl Mover<'_, '_> {
             );
             self.player.angle = goto(self.player.angle, to, AIM_ENEMY_TURN);
         }
-        if self.work.key_trg & KEY_TILT_UP != 0 && !self.work.aimed_again {
+        // A tilt down looks again, for the nearest within reach (`Key_trg`'s 0x20).
+        if self.work.key_trg & KEY_TILT_DOWN != 0 && !self.work.aimed_again {
             self.em_ck(3000);
             self.work.aimed_again = true;
         }
@@ -5138,6 +5139,35 @@ mod tests {
         setup.tick(input(true, false, false), 20);
         assert_eq!(setup.work.d_life_u, 2);
         assert_eq!(setup.work.move_no, WALK_CLIPS[2]);
+    }
+
+    #[test]
+    fn a_walk_turns_by_pl_br_01s_rate_for_its_health() {
+        for (life, rate) in [(200, 0x28), (100, 0x20), (20, 0x10)] {
+            let mut setup = Setup::new(50);
+            setup.work.routine[2] = 0;
+            setup.player.angle = 0;
+            setup.tick(input(true, false, false), life);
+            assert_eq!(setup.work.routine[1], MOVE_FORWARD);
+            setup.tick(input(true, true, false), life);
+            assert_eq!(setup.player.angle, rate, "life {life}");
+        }
+    }
+
+    #[test]
+    fn raising_the_gun_looks_again_on_a_tilt_down_not_up() {
+        for (down, again) in [(false, false), (true, true)] {
+            let mut setup = armed(true, false);
+            setup.tick(aiming(false, false), 200);
+            assert_eq!(setup.work.routine, [MODE_MOVE, MOVE_AIM, 0, 1]);
+            let tilt = Input {
+                up: !down,
+                down,
+                ..aiming(false, false)
+            };
+            setup.tick(tilt, 200);
+            assert_eq!(setup.work.aimed_again, again, "down {down}");
+        }
     }
 
     #[test]
