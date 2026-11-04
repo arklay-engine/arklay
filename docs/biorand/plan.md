@@ -475,7 +475,12 @@ The pull request's description holds the live checklist. In order:
     folder).
 11. **Static analysis and the cutscene option.** The verifier's full checks,
     a seed sweep over the configuration space, and `cutscenes/disable`.
-    *Test milestone 4:* ready for main.
+    *Test milestone 4:* ready for main. **`cutscenes/disable` is done:**
+    `CUTSCENES_DISABLED` guards in 106 (the story flags), 10A, 101, 206, 20C,
+    40C, 512, 513 and 514 ([`patches.md` §E](patches.md#e-disabled-cutscenes-cutscenesdisable)).
+    The retail build of each is unchanged. Packs for several seeds and both
+    players, with doors on and off, verify and boot headless into every edited
+    room.
 
 ## Known issues
 

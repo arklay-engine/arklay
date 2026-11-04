@@ -135,12 +135,57 @@ in place (104, 10E, 208, 20C, 210, 21C, 30A, 30B) stay data in `random.xml`.
 
 ## E. Disabled cutscenes (`cutscenes/disable`)
 
-Staging clears 13 (Chris) or 18 (Jill) story flags in 106, removes event
-blocks in 201, 206, 20A (Chris), 20C, 40C, 512, 513 and 514, retargets 513's
-flag tests to the self-destruct flag, and adds Tyrant 1 to 513 when the
-self-destruct starts. All of these become guards on `CUTSCENES_DISABLED`,
-with the flag clears in the engine's new-game set-up. This is the last
-milestone.
+**Done (milestone 11).** Staging's `DisableCutscenes` (`Re1CrModBuilder.cs`
+276-446; the table is
+[`research/staging-data.md` §3.8](research/staging-data.md#38-disablecutscenes-276-446-only-with-cutscenesdisable))
+becomes guards on `CUTSCENES_DISABLED`, which the package raises with
+`cutscenes/disable`. The retail build of every edited room is byte-identical
+(`scripts/check-room-retail.sh`).
+
+The rooms are staging's, by the mansion's second-visit ids: 60A is 10A on
+the second visit, 601 is 101, 706 is 206, and 70C is 20C. (The first draft of
+this section listed 201 and 20A; staging does not touch them. The Jill flag
+list says one of its flags "also disables 115 sandwich rescue and 20A
+cutscene".)
+
+| Room | Player | Guard |
+|---|---|---|
+| 106 | both | New game: the first visit (F_COMMON_00 still clear) raises the flags below. 13 for Chris: bank 0 `101, 127, 192`, bank 1 `0, 2, 3, 36, 69, 72, 100, 167, 170, 171`. 18 for Jill: bank 0 `101, 127`, bank 1 `0, 2, 3, 5, 7, 69, 72, 86, 97, 103, 161, 170, 172, 173, 175, 192`. Staging's "clear" is the `set` opcode's value 0, which raises the bit. |
+| 10A | Chris, second visit | The hunter and Rebecca scream: no `set F_COMMON_21` in the cutscene event. |
+| 101 | Chris, second visit | Rebecca and the hunters of "Rebecca in trouble": every block in `init` after the music reset, and all of `main`. |
+| 206 | Chris, second visit | The same, for the Rebecca and hunter scenes: the whole branch but the placeholders, and all of `main`. |
+| 20C | Jill, second visit | Barry in the Yawn 2 room: AOT 3 always runs `on_aot_03_2` (staging patches event 0x2C in and drops two flag tests). |
+| 40C | Jill | Barry at plant 42: the two raises of F_ROOM_0F are skipped. |
+| 512 | both | The cell scene (Jill or Chris in the cell): the block under F_COMMON_4B is skipped. |
+| 514 | both | Wesker's, Rebecca's and Barry's scenes: all of `init` after the doors. |
+| 513 | both | The Wesker and Tyrant scene (below). |
+
+**513.** In `init`, F_ROOM_07 ("self-destruct started") is raised at the end of
+the door set-up, so the room always sets up as on a return visit: no Wesker
+spawn and none of the scene's events. `main` sets F_ROOM_07 from
+F_SCENARIO_37 every frame while the room runs, which is staging's retargeting
+of the two flag tests to the self-destruct flag, and the Tyrant fight
+therefore still starts the self-destruct. Staging retargets Jill's Wesker-route
+test only; the Barry-route block is covered too, since otherwise the
+self-destruct could not start. The Tyrant 1 (`F_ENEMY_70`) is spawned at the
+top of `init` (staging adds it there, and nothing releases it otherwise); it
+is not spawned once dead, as the flag keeps it from spawning (checked by
+booting a save with the flag raised). In the first frame before the
+self-destruct, the boss music starts, as staging's frame opcodes do (F_ROOM_0B
+as the once flag).
+
+**Why the 106 flags are a script block and not the engine's new-game
+set-up.** Staging's flags are bank 0 and bank 1; the manifest's
+`scenario_flags` holds bank 0 only, and the verifier reads that field. The
+guarded block is also staging's mechanism exactly (a prepended `ConfigureOptions`-style
+block under "the first-cutscene flag is clear"), it runs in whichever room
+copy is the start, for either player, and needs no engine, manifest or
+verifier change. It runs after the enemy placeholder, which therefore still
+reads the unraised flags.
+
+Command-`if`s test a system flag alone (`if (CUTSCENES_DISABLED)`), so a
+guard on an existing condition is a nested `if (!CUTSCENES_DISABLED)`; each
+block stays under the one-byte jump limit.
 
 ## F. Door and lock data
 
