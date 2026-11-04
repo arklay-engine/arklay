@@ -69,6 +69,8 @@ class Tick:
     splayer: str | None = None
     music: str | None = None
     zombies: str | None = None
+    # RE2's `pneck` field: where the player's head is in the world.
+    neck_position: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -76,6 +78,8 @@ class Tick:
 
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
+# Fields compared only when `--fields` names them.
+OPT_IN_FIELDS = {"pneck"}
 
 
 def normalize_room(stage: str, room: str) -> str:
@@ -142,6 +146,7 @@ def parse_trace(path: str) -> list[Tick]:
                     splayer=fields.get("es"),
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
+                    neck_position=fields.get("pneck"),
                 )
             )
     return ticks
@@ -167,6 +172,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("es", ",".join(tick.splayer.split(",")[:13])))
     if tick.music is not None:
         items.append(("bgm", tick.music))
+    if tick.neck_position is not None:
+        items.append(("pneck", tick.neck_position))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):
@@ -182,7 +189,7 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
 def selected(key: str, fields: list[str] | None) -> bool:
     """Whether `key` is compared: `None` compares everything, else a name or `e*`."""
     if fields is None:
-        return True
+        return key not in OPT_IN_FIELDS
     return key in fields or (key.startswith("e") and "e*" in fields)
 
 
@@ -270,7 +277,8 @@ def find_best_alignment(ref: list[Tick], ark: list[Tick], max_scan: int) -> dict
         length = min(len(ref) - offset, len(ark) - offset)
         matched = 0
         for i in range(length):
-            if tick_fields(ref[offset + i]) == tick_fields(ark[i]):
+            if [item for item in tick_fields(ref[offset + i]) if selected(item[0], None)] \
+                    == [item for item in tick_fields(ark[i]) if selected(item[0], None)]:
                 matched += 1
             else:
                 break

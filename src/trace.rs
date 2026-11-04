@@ -71,6 +71,9 @@ pub struct TraceTick<'a> {
     pub re2_die: Option<String>,
     /// An RE2 player's neck: flags, joint, whether it has a target, its turn.
     pub re2_neck: Option<String>,
+    /// Where an RE2 player's head is in the world (the neck joint's `+0x5C`),
+    /// or `-` before anything has posed it.
+    pub re2_neck_position: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -219,6 +222,9 @@ impl TraceWriter {
         if let Some(neck) = &tick.re2_neck {
             write!(self.out, " neck={neck}")?;
         }
+        if let Some(position) = &tick.re2_neck_position {
+            write!(self.out, " pneck={position}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -330,6 +336,7 @@ mod tests {
             re2_music: None,
             re2_die: None,
             re2_neck: None,
+            re2_neck_position: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -374,6 +381,7 @@ mod tests {
             re2_music: None,
             re2_die: None,
             re2_neck: None,
+            re2_neck_position: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -391,5 +399,47 @@ mod tests {
         assert!(lines[1].starts_with("t=0 "));
         assert!(lines[2].starts_with("t=1 "));
         assert!(lines[3].starts_with("t=2 "));
+    }
+
+    #[test]
+    fn neck_position_follows_the_neck() {
+        let game = GameState::default();
+        let path = temp_path("pneck");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        let mut tick = TraceTick {
+            room: RoomId {
+                stage: 1,
+                room: 0x1B,
+                player_flag: 0,
+                mansion2: false,
+            },
+            rng: 0,
+            rseed: 0,
+            fade_counter: 0,
+            fade_state: -1,
+            cam: 0,
+            player_flags: 0,
+            entities: &*game.entities,
+            re2_player: None,
+            re2_character: None,
+            re2_splayer: None,
+            re2_zombies: None,
+            re2_music: None,
+            re2_die: None,
+            re2_neck: Some("0,8,0,0,0".to_string()),
+            re2_neck_position: Some("-".to_string()),
+            re2_sounds: Some(String::new()),
+            frame_hash: 0,
+        };
+        writer.write_tick(&tick).unwrap();
+        tick.re2_neck_position = Some("-9500,-2514,-20302".to_string());
+        writer.write_tick(&tick).unwrap();
+        writer.flush().unwrap();
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(lines[1].ends_with(" neck=0,8,0,0,0 pneck=- snd=-"));
+        assert!(lines[2].ends_with(" neck=0,8,0,0,0 pneck=-9500,-2514,-20302 snd=-"));
     }
 }

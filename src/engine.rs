@@ -624,6 +624,7 @@ pub fn run_with_options(
                         re2_music: None,
                         re2_die: None,
                         re2_neck: None,
+                        re2_neck_position: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -6732,6 +6733,14 @@ impl GameSession {
                     neck.turn[0],
                     neck.turn[1],
                 )
+            }),
+            re2_neck_position: self.game.is_re2_room.then(|| {
+                self.game
+                    .re2
+                    .player
+                    .neck
+                    .position
+                    .map_or_else(|| "-".to_string(), |[x, y, z]| format!("{x},{y},{z}"))
             }),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds

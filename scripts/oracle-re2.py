@@ -523,6 +523,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     except OSError:
         # The game over's end frees the player's parts.
         fields.append("neck=-")
+    fields.append(neck_position(game))
     fields.append(music_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
@@ -558,6 +559,19 @@ def neck_state(game: Game) -> str:
         f"neck={flags},{joint},{target != 0 and target != PL:d},{turn[0]},{turn[1]},"
         f"{rate[0]},{rate[1]},{limit[0]},{limit[1]},{rot[0]},{rot[1]},{rot[2]}"
     )
+
+
+def neck_position(game: Game) -> str:
+    """Where the player's head is in the world: the neck joint's `+0x5C`, which `Root_ck` aims at."""
+    parts = game.u32(PL + 0x198)
+    if parts == 0:
+        return "pneck=-"
+    joint = game.u8(PL + 0x1C1)
+    try:
+        x, y, z = game.i32s(parts + joint * 0xAC + 0x5C, 3)
+    except OSError:
+        return "pneck=-"
+    return f"pneck={x},{y},{z}"
 
 
 def screenshot(display: str, path: Path) -> None:
