@@ -11,6 +11,18 @@ use crate::mask::MaskSprite;
 /// the room in hex, and the last is the player/flag digit. This matches the
 /// shipped `ROOM####.RDT` names and the `RC` background names.
 ///
+/// A generated game (door randomization) numbers its own stages and rooms:
+/// any stage 1-255 and any room 0x00-0xFF. An id the short form cannot spell
+/// (a stage other than 1-7 and `A`-`G`, or a room past 0x1F) takes the long
+/// form: the stage and the room as two hex digits each, joined by `-`
+/// (`09-40`), and the player digit after another `-` (`09-40-1`). The long
+/// form is only for those ids, so every id has one spelling
+/// ([`RoomId::has_short_form`]).
+///
+/// Such a room is usually a copy of an original room, its *origin*
+/// ([`RoomOrigins`]): the engine behaviour, music and sound tables keyed to
+/// a room follow the origin, not the id.
+///
 /// RE1's mansion (stages 1 and 2) has two visits: the second, after the
 /// guardhouse sets scenario flag 0, plays the same rooms with their own
 /// lines, lights and items. The visit is part of the identity
@@ -42,9 +54,10 @@ const SECOND_VISIT_ONLY: [(u8, u8); 14] = [
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RoomId {
     /// 1-based stage number: 1-5 for RE1, 1-7 or 10-16 (the letter stages
-    /// `A`-`G`) for RE2.
+    /// `A`-`G`) for RE2, any of 1-255 in a generated game.
     pub stage: u8,
-    /// Room number within the stage (0x00-0x1F).
+    /// Room number within the stage: 0x00-0x1F in the original games, any
+    /// byte in a generated game.
     pub room: u8,
     /// Player/flag digit (0 = Chris, 1 = Jill).
     pub player_flag: u8,
@@ -60,32 +73,116 @@ impl RoomId {
     pub const MAX_STAGE: u8 = 7;
     /// Highest stage an identity can name: the letter stage `G`.
     pub const MAX_STAGE_ID: u8 = 16;
-    /// Highest valid room number.
+    /// Highest room number the short form spells and the original's
+    /// per-room tables hold. A generated game's rooms go up to 0xFF.
     pub const MAX_ROOM: u8 = 0x1F;
     /// The rows of the original game's per-room tables: one per stage, then
     /// one per mansion stage for the second visit ([`RoomId::table_row`]).
     pub const TABLE_ROWS: usize = 7;
 
     /// Parse a three- or four-digit RDT identity, e.g. `100`, `1001`, `11C1`,
-    /// `G010`.
+    /// `G010`, or a long one, `09-40` or `09-40-1`.
     pub fn parse(text: &str) -> anyhow::Result<Self> {
+        if text.contains('-') {
+            return Self::parse_long(text, None);
+        }
         let digits = Self::digits(text)
             .ok_or_else(|| anyhow::anyhow!("`{text}` is not a hex RDT identity"))?;
         match digits.as_slice() {
             [stage, hi, lo] => Self::from_digits(*stage, (*hi << 4) | *lo, 0, text),
             [stage, hi, lo, player] => Self::from_digits(*stage, (*hi << 4) | *lo, *player, text),
-            _ => anyhow::bail!("`{text}` must be three or four hex digits, e.g. 100 or 1001"),
+            _ => anyhow::bail!(
+                "`{text}` must be three or four hex digits, e.g. 100 or 1001, or a long id such as 09-40"
+            ),
         }
     }
 
-    /// Parse a three-digit room id (`100`, `11C`) plus a player digit.
+    /// Parse a room id without its player digit (`100`, `11C`, `09-40`),
+    /// with player digit `player`.
     pub fn from_room_and_player(room: &str, player: u8) -> anyhow::Result<Self> {
+        if room.contains('-') {
+            return Self::parse_long(room, Some(player));
+        }
         let digits =
             Self::digits(room).ok_or_else(|| anyhow::anyhow!("`{room}` is not a hex room id"))?;
         match digits.as_slice() {
             [stage, hi, lo] => Self::from_digits(*stage, (*hi << 4) | *lo, player, room),
-            _ => anyhow::bail!("`{room}` must be exactly three hex digits, e.g. 100 or 11C"),
+            _ => anyhow::bail!(
+                "`{room}` must be exactly three hex digits, e.g. 100 or 11C, or a long id such as 09-40"
+            ),
         }
+    }
+
+    /// Parse a room folder's name, the room id without a player digit
+    /// (`100`, `09-40`), as player 0; `None` for anything else, an RDT
+    /// identity (`1001`, `09-40-1`) included.
+    pub fn parse_room(text: &str) -> Option<Self> {
+        Self::from_room_and_player(text, 0).ok()
+    }
+
+    /// The long form: `SS-RR` (room, with player digit `player`) or
+    /// `SS-RR-P` (RDT, when `player` is `None`), each part hex.
+    fn parse_long(text: &str, player: Option<u8>) -> anyhow::Result<Self> {
+        let parts: Vec<&str> = text.split('-').collect();
+        let byte = |part: &str, what: &str| {
+            (part.len() == 2 && part.bytes().all(|b| b.is_ascii_hexdigit()))
+                .then(|| u8::from_str_radix(part, 16).ok())
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("{what} in `{text}` must be two hex digits"))
+        };
+        let (stage, room, player_flag) = match (parts.as_slice(), player) {
+            ([stage, room], Some(player)) => (byte(stage, "stage")?, byte(room, "room")?, player),
+            ([stage, room, digit], None) => {
+                let player = match digit.as_bytes() {
+                    [b] if b.is_ascii_digit() => b - b'0',
+                    _ => anyhow::bail!("player digit in `{text}` must be 0-9"),
+                };
+                (byte(stage, "stage")?, byte(room, "room")?, player)
+            }
+            (_, Some(_)) => anyhow::bail!("`{text}` is not a long room id such as 09-40"),
+            (_, None) => anyhow::bail!("`{text}` is not a long RDT identity such as 09-40-1"),
+        };
+        if stage == 0 {
+            anyhow::bail!("stage in `{text}` must be 01-FF");
+        }
+        if player_flag > 9 {
+            anyhow::bail!("player digit in `{text}` must be 0-9");
+        }
+        let id = Self {
+            stage,
+            room,
+            player_flag,
+            mansion2: false,
+        };
+        if id.has_short_form() {
+            anyhow::bail!(
+                "`{text}` has a short form, `{}`; the long form is only for ids it cannot spell",
+                if player.is_some() {
+                    id.room3()
+                } else {
+                    id.code()
+                }
+            );
+        }
+        Ok(id)
+    }
+
+    /// Whether the short form spells this id: a stage of 1-7 or 10-16 (`A`-`G`)
+    /// and a room up to [`RoomId::MAX_ROOM`]. Every id of the original games
+    /// has one; the others take the long form (`09-40`).
+    pub fn has_short_form(self) -> bool {
+        ((1..=Self::MAX_STAGE).contains(&self.stage)
+            || (10..=Self::MAX_STAGE_ID).contains(&self.stage))
+            && self.room <= Self::MAX_ROOM
+    }
+
+    /// The room's `(stage, room)` in the original game's per-room tables:
+    /// its [`RoomId::table_row`] and room, or `None` for a room no table
+    /// row holds (a generated game's own stages and rooms past 0x1F).
+    pub fn table_slot(self) -> Option<(usize, usize)> {
+        let row = self.table_row();
+        (row < Self::TABLE_ROWS && self.room <= Self::MAX_ROOM)
+            .then_some((row, usize::from(self.room)))
     }
 
     /// The RE1 room the original game names RDT `number` (`0x6031`): its
@@ -164,6 +261,21 @@ impl RoomId {
         matches!(self.stage, 1 | 2)
     }
 
+    /// The variant of room `origin` (`(stage, room)`) this id plays as: the
+    /// origin's stage and room, this id's player, and the second visit when
+    /// this id is on it and the origin is a mansion room.
+    pub fn as_origin(self, (stage, room): (u8, u8)) -> Self {
+        let origin = Self {
+            stage,
+            room,
+            ..self
+        };
+        Self {
+            mansion2: self.mansion2 && origin.is_mansion(),
+            ..origin
+        }
+    }
+
     /// The digit values of `text`: hex, plus `G` (16) as the first one.
     fn digits(text: &str) -> Option<Vec<u8>> {
         text.chars()
@@ -199,7 +311,8 @@ impl RoomId {
         (u32::from(self.stage) << 12) | (u32::from(self.room) << 4) | u32::from(self.player_flag)
     }
 
-    /// The stage's digit: `1`-`7`, or the letter `a`-`g`.
+    /// The stage's digit: `1`-`7`, or the letter `a`-`g`. Only an id with a
+    /// short form ([`RoomId::has_short_form`]) has one.
     pub fn stage_char(self) -> char {
         debug_assert!(self.stage <= Self::MAX_STAGE_ID, "stage {}", self.stage);
         match self.stage {
@@ -208,9 +321,15 @@ impl RoomId {
         }
     }
 
-    /// Four-character RDT identity as a per-RDT folder spells it, e.g.
-    /// `1001` or `g010`.
+    /// RDT identity as a per-RDT folder spells it, e.g. `1001` or `g010`,
+    /// or the long form `09-40-1`.
     pub fn code(self) -> String {
+        if !self.has_short_form() {
+            return format!(
+                "{:02x}-{:02x}-{:x}",
+                self.stage, self.room, self.player_flag
+            );
+        }
         format!(
             "{}{:02x}{:x}",
             self.stage_char(),
@@ -266,8 +385,12 @@ impl RoomId {
         format!("{}/room.scd", self.dir())
     }
 
-    /// Three-digit room id, e.g. `100`, `11C`.
+    /// The room id without its player digit, e.g. `100`, `11C`, or the long
+    /// form `09-40`. Its lower case names the room's folder.
     pub fn room3(self) -> String {
+        if !self.has_short_form() {
+            return format!("{:02X}-{:02X}", self.stage, self.room);
+        }
         format!(
             "{}{:02X}",
             self.stage_char().to_ascii_uppercase(),
@@ -310,6 +433,91 @@ impl RoomId {
     pub fn stage_index(self) -> u8 {
         self.stage.saturating_sub(1)
     }
+}
+
+/// Where each room of a pack was made from: a room's *origin* is the
+/// original room a generated game's room is a copy of (`<room origin="10b">`
+/// in its `room.xml`, [`crate::room::xml`]). A room without one is its own
+/// origin, so a pack with no origins (every original game) maps each room to
+/// itself.
+///
+/// Engine behaviour keyed to an original room (its quirks, its music and
+/// sound table rows, its effect and light tables) reads the origin
+/// ([`RoomOrigins::of`]); the room's files, its door targets, the save and
+/// the debug menu use the room's own id. The second mansion visit is the
+/// origin's: a room plays it when its origin is a mansion room
+/// ([`RoomOrigins::with_visit`]).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RoomOrigins(std::sync::Arc<std::collections::BTreeMap<(u8, u8), (u8, u8)>>);
+
+impl RoomOrigins {
+    /// The origins of `pairs`: `(room, origin)` each as `(stage, room)`. A
+    /// room that is its own origin is left out.
+    pub fn new(pairs: impl IntoIterator<Item = ((u8, u8), (u8, u8))>) -> Self {
+        Self(std::sync::Arc::new(
+            pairs
+                .into_iter()
+                .filter(|(room, origin)| room != origin)
+                .collect(),
+        ))
+    }
+
+    /// Whether every room is its own origin.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The `(stage, room)` room `id` was made from: its own when it has no
+    /// origin.
+    pub fn origin_room(&self, id: RoomId) -> (u8, u8) {
+        let own = (id.stage, id.room);
+        self.0.get(&own).copied().unwrap_or(own)
+    }
+
+    /// Room `id` as its origin plays it ([`RoomId::as_origin`]); `id` itself
+    /// for a room without an origin.
+    pub fn of(&self, id: RoomId) -> RoomId {
+        id.as_origin(self.origin_room(id))
+    }
+
+    /// Room `id` on the second mansion visit when `mansion2` and its origin
+    /// is a mansion room; [`RoomId::with_visit`] for a room without an
+    /// origin.
+    pub fn with_visit(&self, id: RoomId, mansion2: bool) -> RoomId {
+        RoomId {
+            mansion2: mansion2 && self.of(RoomId { mansion2, ..id }).mansion2,
+            ..id
+        }
+    }
+
+    /// Every `(room, origin)` pair, in room order.
+    pub fn pairs(&self) -> impl Iterator<Item = ((u8, u8), (u8, u8))> + '_ {
+        self.0.iter().map(|(room, origin)| (*room, *origin))
+    }
+}
+
+/// A door's destination given beside the room's scripts: `room.xml`'s
+/// `<doors>` holds one `<door aot="1" target="09-40"/>` per door whose
+/// destination the door's target byte cannot name (a generated game's
+/// stages and rooms, [`RoomId::has_short_form`]).
+///
+/// The script's `door_aot_set` keeps its own bytes, target byte included,
+/// so a retail room is unchanged and the door's animation still reads the
+/// byte. When the room arms a door in AOT slot `aot` (and, if `next` is
+/// given, with target byte `next`), the door leads to `target` instead of
+/// where the byte points. The player digit is the player's and the visit
+/// follows the scenario flag, as for any other door
+/// ([`RoomOrigins::with_visit`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorTarget {
+    /// The door's AOT slot, `door_aot_set`'s first operand.
+    pub aot: u8,
+    /// The target byte the script's door names, when only that door of the
+    /// slot leads to `target` (a slot the script arms with different doors);
+    /// `None` for any door in the slot.
+    pub next: Option<u8>,
+    /// The room the door leads to, as player 0 on the first visit.
+    pub target: RoomId,
 }
 
 /// Raw RGBA8 image.
@@ -644,6 +852,12 @@ pub struct RoomState {
     pub player_flag: u8,
     /// The second visit of a mansion room ([`RoomId::mansion2`]).
     pub mansion2: bool,
+    /// The `(stage, room)` the room was made from, when it is not its own
+    /// ([`RoomOrigins`], [`RoomState::origin`]).
+    pub origin: Option<(u8, u8)>,
+    /// Where the room's doors lead beyond the targets their scripts name
+    /// (`room.xml`'s `<doors>`).
+    pub door_targets: Vec<DoorTarget>,
     /// Declared omodel pair count from header byte `0x02`; also the number of
     /// runtime object records the room's init script may build.
     pub omodel_slot_count: u8,
@@ -712,11 +926,29 @@ impl RoomState {
         Some(zone.contains_signed(x, z))
     }
 
+    /// The room's own id.
+    pub fn id(&self) -> RoomId {
+        RoomId {
+            stage: self.stage,
+            room: self.room,
+            player_flag: self.player_flag,
+            mansion2: self.mansion2,
+        }
+    }
+
+    /// The room as its origin plays it ([`RoomOrigins::of`]): the variant
+    /// of the original room it was made from, or its own id.
+    pub fn origin(&self) -> RoomId {
+        match self.origin {
+            Some(origin) => self.id().as_origin(origin),
+            None => self.id(),
+        }
+    }
+
     /// The row of the original's per-room tables the room reads
-    /// ([`RoomId::table_row`]).
+    /// ([`RoomId::table_row`]): its origin's.
     pub fn table_row(&self) -> usize {
-        let second = self.mansion2 || SECOND_VISIT_ONLY.contains(&(self.stage, self.room));
-        usize::from(self.stage.saturating_sub(1)) + if second { 5 } else { 0 }
+        self.origin().table_row()
     }
 
     /// The packed footstep zone value for `(x, z)`: the surface type in the
@@ -953,6 +1185,121 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_room_past_the_short_forms_has_the_long_form() {
+        let id = RoomId {
+            stage: 9,
+            room: 0x40,
+            player_flag: 1,
+            mansion2: false,
+        };
+        assert!(!id.has_short_form());
+        assert_eq!(id.code(), "09-40-1");
+        assert_eq!(id.room3(), "09-40");
+        assert_eq!(id.dir(), "room/09-40");
+        assert_eq!(RoomId::parse("09-40-1").unwrap(), id);
+        assert_eq!(
+            RoomId::parse("09-40-1".to_ascii_uppercase().as_str()).unwrap(),
+            id
+        );
+        assert_eq!(RoomId::from_room_and_player("09-40", 1).unwrap(), id);
+        assert_eq!(
+            RoomId::parse_room("09-40"),
+            Some(RoomId {
+                player_flag: 0,
+                ..id
+            })
+        );
+        // A short stage with a long room, and every byte.
+        for (stage, room) in [(1, 0x20), (0x10, 0xFF), (0xFF, 0), (8, 0)] {
+            let id = RoomId {
+                stage,
+                room,
+                player_flag: 0,
+                mansion2: false,
+            };
+            assert_eq!(RoomId::parse(&id.code()).unwrap(), id);
+            assert_eq!(RoomId::parse(&id.code().to_ascii_uppercase()).unwrap(), id);
+            assert_eq!(RoomId::from_room_and_player(&id.room3(), 0).unwrap(), id);
+        }
+        // The short forms are unchanged.
+        assert_eq!(RoomId::parse("1061").unwrap().code(), "1061");
+        assert_eq!(RoomId::parse("G1F0").unwrap().room3(), "G1F");
+        assert_eq!(RoomId::parse_room("10B").unwrap().room3(), "10B");
+        assert_eq!(RoomId::parse_room("1061"), None, "an RDT, not a room");
+    }
+
+    #[test]
+    fn a_long_form_is_rejected_where_a_short_form_exists() {
+        let error = RoomId::parse("01-00-0").unwrap_err().to_string();
+        assert!(error.contains("short form, `1000`"), "{error}");
+        assert!(RoomId::from_room_and_player("0a-1f", 0).is_err());
+        assert!(RoomId::from_room_and_player("00-40", 0).is_err(), "stage 0");
+        assert!(RoomId::from_room_and_player("9-40", 0).is_err());
+        assert!(RoomId::from_room_and_player("09-40-0", 0).is_err());
+        assert!(RoomId::parse("09-40").is_err(), "an RDT needs its player");
+        assert!(RoomId::parse("09-40-x").is_err());
+        assert!(RoomId::parse("09-4g-0").is_err());
+    }
+
+    #[test]
+    fn only_original_rooms_have_a_table_slot() {
+        let slot = |text| RoomId::parse_room(text).unwrap().table_slot();
+        assert_eq!(slot("10B"), Some((0, 0x0B)));
+        assert_eq!(slot("51F"), Some((4, 0x1F)));
+        assert_eq!(slot("09-40"), None);
+        assert_eq!(slot("01-20"), None);
+        assert_eq!(slot("08-00"), None);
+        let mansion2 = RoomId::parse_room("203").unwrap().with_visit(true);
+        assert_eq!(mansion2.table_slot(), Some((6, 3)));
+    }
+
+    #[test]
+    fn a_room_plays_as_its_origin() {
+        let origins = RoomOrigins::new([
+            ((9, 0x40), (1, 0x06)),
+            ((3, 3), (3, 3)),
+            ((9, 0x41), (3, 0x05)),
+        ]);
+        assert_eq!(
+            origins.pairs().count(),
+            2,
+            "a room that is its own origin is left out"
+        );
+        let high = RoomId::from_room_and_player("09-40", 1).unwrap();
+        let origin = origins.of(high);
+        assert_eq!(origin, RoomId::parse("1061").unwrap());
+        // The second visit follows a mansion origin.
+        let visit = origins.with_visit(high, true);
+        assert!(visit.mansion2);
+        assert_eq!(
+            (visit.stage, visit.room),
+            (9, 0x40),
+            "the room keeps its own id"
+        );
+        assert!(origins.of(visit).mansion2);
+        assert_eq!(origins.of(visit).table_row(), 5);
+        // A non-mansion origin has none.
+        let lab = RoomId::from_room_and_player("09-41", 0).unwrap();
+        assert!(!origins.with_visit(lab, true).mansion2);
+        assert_eq!(origins.of(lab).room3(), "305");
+        // A room without an origin is its own.
+        let plain = RoomId::parse("2030").unwrap();
+        assert_eq!(origins.of(plain), plain);
+        assert_eq!(origins.with_visit(plain, true), plain.with_visit(true));
+        assert_eq!(RoomOrigins::default().of(high), high);
+        assert!(!RoomOrigins::default().with_visit(high, true).mansion2);
+        // The room's state names it through the origin too.
+        let room = RoomState {
+            stage: 9,
+            room: 0x40,
+            origin: Some((1, 6)),
+            ..Default::default()
+        };
+        assert_eq!(room.origin().room3(), "106");
+        assert_eq!(room.table_row(), 0);
     }
 
     #[test]

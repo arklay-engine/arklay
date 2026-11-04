@@ -1115,7 +1115,7 @@ impl GameHost<'_> {
         }
         // Someone already dead stays so.
         let dead = at(8) as u8;
-        let bank = self.game.re2.enemy_flag_bank(self.game.id.stage);
+        let bank = self.game.re2.enemy_flag_bank(self.game.origin().stage);
         if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
             return;
         }
@@ -1352,7 +1352,8 @@ impl GameHost<'_> {
     /// `Obj_model_set`: a second call on a slot in use takes it away.
     fn obj_model_set(&mut self, at: impl Fn(usize) -> i64) {
         let slot = at(0) as usize;
-        let stage_room = (self.game.id.stage, self.game.id.room);
+        let origin = self.game.origin();
+        let stage_room = (origin.stage, origin.room);
         let attr = at(8) as u16;
         if attr & 2 != 0 {
             self.game
@@ -1471,6 +1472,7 @@ impl GameHost<'_> {
                 room: next(5) as u8,
                 cut: next(6) as u8,
             }),
+            target: None,
         });
     }
 }
@@ -1492,8 +1494,9 @@ impl Host for GameHost<'_> {
     fn var(&self, index: u8) -> u16 {
         match index {
             VAR_CUT => self.game.camera.current_cut as u16,
-            VAR_STAGE => u16::from(self.game.id.stage.saturating_sub(1)),
-            VAR_ROOM => u16::from(self.game.id.room),
+            // The scripts' stage and room are the origin's, as RE1's `B_STAGE`.
+            VAR_STAGE => u16::from(self.game.origin().stage.saturating_sub(1)),
+            VAR_ROOM => u16::from(self.game.origin().room),
             _ => self.game.re2.vars[usize::from(index)],
         }
     }
@@ -1628,7 +1631,11 @@ impl Host for GameHost<'_> {
                 }
             }
             "xa_on" => {
-                let stage = if at(0) == 0 { self.game.id.stage } else { 0 };
+                let stage = if at(0) == 0 {
+                    self.game.origin().stage
+                } else {
+                    0
+                };
                 let player = u8::from(self.game.re2.flag(STATUS_BANK, STATUS_PLAYER));
                 self.game.re2.voice.request =
                     Some(format!("voice/{player}/{stage:02}_{:02x}.wav", at(1)));

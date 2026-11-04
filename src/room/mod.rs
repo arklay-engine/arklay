@@ -181,7 +181,9 @@ pub fn dialect(pack: &Pack, id: RoomId) -> Dialect {
         Some(Format::Xml) => pack
             .read(&xml_entry(pack, id))
             .ok()
-            .and_then(|data| xml::parse_for(std::str::from_utf8(&data).ok()?, id).ok())
+            .and_then(|data| {
+                xml::parse_for(std::str::from_utf8(&data).ok()?, pack.room_origins().of(id)).ok()
+            })
             .map(|source| source.dialect)
             .unwrap_or_default(),
         None => Dialect::Re1,
@@ -306,9 +308,10 @@ impl Loaded {
     }
 
     /// Build room `id` from XML definition `text`, reading the rest of its
-    /// folder from `pack`.
+    /// folder from `pack`. Its `when` conditions hold for the variant of its
+    /// origin the room plays ([`crate::state::RoomOrigins::of`]).
     pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
-        let source = xml::parse_for(text, id)?;
+        let source = xml::parse_for(text, pack.room_origins().of(id))?;
         let state = source.build(id, pack)?;
         Ok(Self {
             id,
@@ -379,13 +382,45 @@ fn force_translucent_models(state: &mut RoomState, id: RoomId) {
     }
 }
 
-/// Load room `id` from whichever definition `pack` resolves it to.
+/// Load room `id` from whichever definition `pack` resolves it to. The
+/// room's state records its origin ([`RoomState::origin`]).
 pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
     let mut loaded = load_definition(pack, id)?;
+    let origins = pack.room_origins();
+    let origin = origins.origin_room(id);
+    loaded.state.origin = (origin != (id.stage, id.room)).then_some(origin);
     if loaded.dialect != Dialect::Re2 {
-        force_translucent_models(&mut loaded.state, id);
+        force_translucent_models(&mut loaded.state, origins.of(id));
     }
     Ok(loaded)
+}
+
+/// Every room's origin in `pack` (`<room origin="10b">` in its `room.xml`,
+/// [`xml::origin_of`]). A `room.xml` that does not say, or cannot be read,
+/// is its own room's origin; an unreadable origin warns.
+pub fn scan_origins(pack: &Pack) -> crate::state::RoomOrigins {
+    let mut pairs = Vec::new();
+    for path in pack.paths() {
+        let Some(stem) = path
+            .strip_prefix("room/")
+            .and_then(|rest| rest.strip_suffix("/room.xml"))
+            .filter(|stem| !stem.contains('/'))
+        else {
+            continue;
+        };
+        let Some(room) = RoomId::parse_room(stem).or_else(|| RoomId::parse(stem).ok()) else {
+            continue;
+        };
+        let origin = pack
+            .read(path)
+            .and_then(|data| xml::origin_of(std::str::from_utf8(&data).context("not UTF-8")?));
+        match origin {
+            Ok(Some(origin)) => pairs.push(((room.stage, room.room), (origin.stage, origin.room))),
+            Ok(None) => {}
+            Err(err) => eprintln!("warning: {path}: {err:#}"),
+        }
+    }
+    crate::state::RoomOrigins::new(pairs)
 }
 
 fn load_definition(pack: &Pack, id: RoomId) -> Result<Loaded> {
@@ -470,8 +505,11 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
         if file.contains('/') {
             continue;
         }
+        // A room folder (`100`, `09-40`) holds every variant; a per-RDT
+        // folder (`1001`, `09-40-1`) one.
+        let room = RoomId::parse_room(stem);
         // A raw RDT may be one variant's (`jill-mansion2.rdt`).
-        let rdt = if stem.len() == 3 {
+        let rdt = if room.is_some() {
             file.to_ascii_lowercase().ends_with(".rdt")
         } else {
             file.eq_ignore_ascii_case(RDT_FILE)
@@ -479,24 +517,21 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
         if !(file.eq_ignore_ascii_case(source::XML_FILE) || rdt) {
             continue;
         }
-        match stem.len() {
-            3 => {
-                let Ok(room) = RoomId::parse(stem) else {
-                    continue;
-                };
+        match room {
+            Some(room) => {
                 for player_flag in 0..2 {
                     let id = RoomId {
                         player_flag,
                         ..room
                     };
                     ids.push(id);
-                    if id.is_mansion() {
-                        ids.push(id.with_visit(true));
+                    let second = pack.room_origins().with_visit(id, true);
+                    if second.mansion2 {
+                        ids.push(second);
                     }
                 }
             }
-            4 => ids.extend(RoomId::parse(stem).ok()),
-            _ => {}
+            None => ids.extend(RoomId::parse(stem).ok()),
         }
     }
     ids.sort_by_key(|id| (id.mansion2, id.rdt_number()));

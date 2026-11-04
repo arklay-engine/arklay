@@ -1280,6 +1280,9 @@ pub struct Pack {
     /// `htexture/` replacements across the pack and its layers, indexed on
     /// first use.
     htexture: std::sync::OnceLock<crate::htexture::HdTable>,
+    /// Each room's origin across the pack and its layers, scanned on first
+    /// use ([`Pack::room_origins`]).
+    room_origins: std::sync::OnceLock<crate::state::RoomOrigins>,
 }
 
 impl Pack {
@@ -1335,6 +1338,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             htexture: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1477,6 +1481,7 @@ impl Pack {
         });
         pack.overlays = applied.into_iter().map(|(_, layer)| layer).collect();
         pack.htexture = std::sync::OnceLock::new();
+        pack.room_origins = std::sync::OnceLock::new();
         pack.warnings = warnings;
         Ok(pack)
     }
@@ -1578,6 +1583,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             htexture: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1867,6 +1873,13 @@ impl Pack {
     /// table of contents where [`Pack::paths`] is the merged view.
     pub fn own_paths(&self) -> impl Iterator<Item = &str> {
         self.entries.iter().map(|entry| entry.path.as_str())
+    }
+
+    /// Where each room of the pack and its layers was made from
+    /// ([`crate::room::scan_origins`]).
+    pub fn room_origins(&self) -> &crate::state::RoomOrigins {
+        self.room_origins
+            .get_or_init(|| crate::room::scan_origins(self))
     }
 
     /// The `htexture/` replacements this pack and its layers carry.

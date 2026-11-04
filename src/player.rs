@@ -2029,7 +2029,7 @@ fn update_vault(
 /// The original tests `g_roomId` with no stage guard, so the dining room (5)
 /// and the keeper's bedroom (0xE) ids match on every stage.
 fn shallow_doorway(room: &RoomState) -> bool {
-    matches!(room.room, 0x05 | 0x0E)
+    matches!(room.origin().room, 0x05 | 0x0E)
 }
 
 /// `player_door_open_sequence` (0x00457390) with msf bit 7 clear: the in-room

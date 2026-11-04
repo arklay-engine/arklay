@@ -1369,7 +1369,8 @@ mod imp {
                 Ok(api.game_ref().attract_room_camera_id())
             });
             // Whether the room is on its second mansion visit.
-            fields.add_field_method_get("mansion2", |_lua, api| Ok(api.game_ref().id.mansion2));
+            fields
+                .add_field_method_get("mansion2", |_lua, api| Ok(api.game_ref().origin().mansion2));
 
             // The zombie's state-word aliases and scratch views. The four
             // bytes at +0x84 and their mirror at +0x184 are read and written
@@ -1592,9 +1593,10 @@ mod imp {
                 Ok(())
             });
 
-            // The room the entity belongs to, for the story-flag pose variants.
-            fields.add_field_method_get("stage", |_lua, api| Ok(api.game_ref().id.stage));
-            fields.add_field_method_get("room", |_lua, api| Ok(api.game_ref().id.room));
+            // The room the entity belongs to, for the story-flag pose variants:
+            // the room's origin, the original room the behaviour is keyed to.
+            fields.add_field_method_get("stage", |_lua, api| Ok(api.game_ref().origin().stage));
+            fields.add_field_method_get("room", |_lua, api| Ok(api.game_ref().origin().room));
             // The per-frame platform random snapshot (`g_RandSeed`).
             fields.add_field_method_get("rand_seed", |_lua, api| Ok(api.game_ref().rand_seed));
             // `MSF2_ATTRACT_DEMO` (main_state_flags2 bit 0x10000000): attract
@@ -3156,7 +3158,7 @@ mod imp {
             // caller owns the playing bit; an id with no line in the package
             // simply misses at load.
             methods.add_method_mut("play_voice", |_lua, api, id: i64| {
-                let row = api.game_ref().id.table_row() as u8;
+                let row = api.game_ref().origin().table_row() as u8;
                 let volume = if row == 0 && id == 0x33 { -300 } else { 0 };
                 let game = api.game();
                 game.voice.request = Some(crate::game::VoiceRequest {

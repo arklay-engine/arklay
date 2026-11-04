@@ -691,6 +691,11 @@ enum ScdAction {
 /// The room `--room`, `--player` and `--mansion2` name.
 fn room_id(room: &str, player: u8, mansion2: bool) -> Result<arklay::state::RoomId> {
     let id = arklay::state::RoomId::from_room_and_player(room, player)?;
+    if !id.has_short_form() {
+        // A generated room's visit follows its origin, which only the pack
+        // knows: the engine settles it when it loads the room.
+        return Ok(arklay::state::RoomId { mansion2, ..id });
+    }
     if mansion2 && !id.is_mansion() {
         bail!("--mansion2 needs a mansion room (stage 1 or 2), not {room}");
     }

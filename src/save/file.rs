@@ -91,6 +91,11 @@ pub struct SaveFile {
     /// stacks and the block's shared run would overwrite ones she holds
     /// ([`super::PARTNER_TRAILER`]); `None` in a retail game.
     pub partner_slots: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
+    /// Port-only: the room the save is in, when the block's stage and room
+    /// bytes cannot name it ([`super::ROOM_TRAILER`]); the block then names
+    /// the room's origin. `None` for every retail room. Its player digit is
+    /// unused (the character byte is the player).
+    pub room_ext: Option<RoomId>,
 }
 
 impl Default for SaveFile {
@@ -133,6 +138,7 @@ impl Default for SaveFile {
             player_slots: [InventoryItem::default(); PLAYER_SLOT_COUNT],
             room_bgm: [0; ROOM_BGM_LEN],
             partner_slots: None,
+            room_ext: None,
         }
     }
 }

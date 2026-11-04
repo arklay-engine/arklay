@@ -111,6 +111,8 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         mansion2: id.mansion2,
         room: id.room,
         player_flag: id.player_flag,
+        origin: None,
+        door_targets: Vec::new(),
         omodel_slot_count,
         item_count,
         cuts,

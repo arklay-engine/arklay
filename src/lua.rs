@@ -393,8 +393,12 @@ mod imp {
     /// The author-facing API: the live game state with a fixed method set.
     impl UserData for GameState {
         fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-            // `room()` is read-only: the three hex digits of the room id.
+            // `room()` is read-only: the three hex digits of the room id (the
+            // long form, `09-40`, for a generated game's own rooms).
             methods.add_method("room", |_lua, game, ()| Ok(game.id.room3()));
+            // `origin()` is read-only: the room id of the original room this
+            // room was made from, `room()` for a room without an origin.
+            methods.add_method("origin", |_lua, game, ()| Ok(game.origin().room3()));
 
             // `authentic()` is read-only: whether the run was started with
             // `--authentic`, the original's item rules.
