@@ -32,6 +32,11 @@ fn base_pack(dir: &Path) -> PathBuf {
     manifest.name = Some("Resident Evil".to_string());
     manifest.convert_version = Some(1);
     manifest.source_hash = Some("0123456789abcdef".to_string());
+    base_pack_with(dir, manifest)
+}
+
+/// A base pack with `manifest`.
+fn base_pack_with(dir: &Path, manifest: Manifest) -> PathBuf {
     let mut writer = PackWriter::new();
     writer
         .add(crate::manifest::ENTRY, manifest.render().into_bytes())
@@ -208,6 +213,87 @@ fn the_launchers_generate_keeps_a_current_pack() {
         written,
         "the pack is reused"
     );
+}
+
+/// Whether `options` would reuse the pack of `seed` already in `games`.
+fn reused(base: &Path, seed: u32, games: &Path, options: &Options) -> bool {
+    let path = pack_path(games, seed);
+    let written = std::fs::metadata(&path).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    generate_with(base, seed, games, options, 0, QUIET).unwrap();
+    std::fs::metadata(&path).unwrap().modified().unwrap() == written
+}
+
+#[test]
+fn a_pack_is_rebuilt_when_the_options_or_the_base_change() {
+    let dir = TempDir::new("stale");
+    let base = base_pack(&dir.0);
+    let games = dir.0.join("games");
+    let defaults = default_config(&read_map(&Pack::open(&base).unwrap()).unwrap());
+    let with = |id: &str, value: bool| {
+        let mut config = defaults.clone();
+        config.set(id, value);
+        Options {
+            config: Some(config),
+            ..Options::default()
+        }
+    };
+
+    // The first pack is made with the options as the launcher holds them.
+    let wanted = Options {
+        config: Some(defaults.clone()),
+        ..Options::default()
+    };
+    assert!(!is_generated(&base, 7, &games, &wanted), "nothing yet");
+    generate_with(&base, 7, &games, &wanted, 0, QUIET).unwrap();
+    assert!(is_generated(&base, 7, &games, &wanted));
+    assert!(!is_generated(&base, 8, &games, &wanted), "another seed");
+
+    // The same options, spelled as staging's JSON spells them or by the
+    // defaults alone, keep it.
+    assert!(reused(&base, 7, &games, &wanted));
+    assert!(reused(&base, 7, &games, &Options::default()));
+    let reread = Config::from_json(&defaults.to_json()).unwrap();
+    assert!(reused(
+        &base,
+        7,
+        &games,
+        &Options {
+            config: Some(reread),
+            ..Options::default()
+        }
+    ));
+
+    // A changed option or player rebuilds, and then the new pack is current.
+    let hard = with("hard", true);
+    assert!(!is_generated(&base, 7, &games, &hard));
+    assert!(!reused(&base, 7, &games, &hard));
+    assert!(is_generated(&base, 7, &games, &hard));
+    assert!(!is_generated(&base, 7, &games, &wanted));
+    let chris = Options {
+        players: PlayerChoice::Chris,
+        ..hard.clone()
+    };
+    assert!(!is_generated(&base, 7, &games, &chris));
+    assert!(!reused(&base, 7, &games, &chris));
+    assert!(reused(&base, 7, &games, &chris));
+
+    // A pack made by another generator is rebuilt, and a pack tells how it
+    // was made.
+    let path = pack_path(&games, 7);
+    let recorded = pack_options(&path).unwrap();
+    assert_eq!(recorded.players, PlayerChoice::Chris);
+    assert!(recorded.config.unwrap().get_bool("hard", false));
+
+    // A rebuilt base game makes every pack of it stale.
+    let mut manifest = Manifest::base(BASE_PACK_ID);
+    manifest.name = Some("Resident Evil".to_string());
+    manifest.convert_version = Some(1);
+    manifest.source_hash = Some("fedcba9876543210".to_string());
+    let rebuilt = dir.0.join("rebuilt");
+    std::fs::create_dir_all(&rebuilt).unwrap();
+    let other = base_pack_with(&rebuilt, manifest);
+    assert!(!is_generated(&other, 7, &games, &chris));
 }
 
 #[test]

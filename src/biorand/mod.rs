@@ -284,13 +284,6 @@ pub fn generate_with(
     if seed > MAX_SEED {
         bail!("seed {seed} has more than six digits");
     }
-    if !options.force
-        && options.config.is_none()
-        && options.players == PlayerChoice::Configured
-        && let Some(existing) = reusable(base, seed, games_dir)?
-    {
-        return Ok(vec![existing]);
-    }
     let source = Pack::open(base).with_context(|| format!("failed to open {}", base.display()))?;
     let base_manifest = source
         .manifest()
@@ -327,6 +320,13 @@ pub fn generate_with(
             _ => pack_id(seed),
         };
         let out = games_dir.join(format!("{id}.akpak"));
+        if !options.force && is_current(&out, base_manifest, &request) {
+            written.push(Generated {
+                path: out,
+                player: game.player,
+            });
+            continue;
+        }
         let writer = emit::pack(&source, &id, &request, &plan, game)
             .with_context(|| format!("failed to write the {} game", player_name(game.player)))?;
         emit::write(writer, &out, jobs, progress)?;
@@ -343,26 +343,93 @@ pub fn generate_with(
     Ok(written)
 }
 
-/// The launcher's pack for `seed` when it is already there from this
-/// generator and base, generated with the defaults.
-fn reusable(base: &Path, seed: u32, games_dir: &Path) -> Result<Option<Generated>> {
-    let out = pack_path(games_dir, seed);
-    let Ok(Some(existing)) = crate::pack::read_manifest(&out) else {
-        return Ok(None);
+/// Whether the pack at `path` is what `request` would write now: made by
+/// this generator and plan version from the same base game, and for the same
+/// seed, players and configuration. Anything else (a changed option, a new
+/// generator, a rebuilt base) makes it stale, and it is written again.
+fn is_current(path: &Path, base: &crate::manifest::Manifest, request: &Request) -> bool {
+    let Ok(Some(existing)) = crate::pack::read_manifest(path) else {
+        return false;
     };
-    let Some(base_manifest) = crate::pack::read_manifest(base)? else {
-        return Ok(None);
-    };
-    let current = existing.seed == Some(seed)
+    let same_build = existing.seed == Some(request.seed)
         && existing.generator_version == Some(GENERATOR_VERSION)
         && existing.plan_version == Some(arklay_biorand::plan::GENERATOR_VERSION)
-        && existing.convert_version == base_manifest.convert_version
-        && existing.source_hash == base_manifest.source_hash;
-    let player = match existing.character {
-        Some(1) => Player::Jill,
-        _ => Player::Chris,
+        && existing.convert_version == base.convert_version
+        && existing.source_hash == base.source_hash;
+    same_build
+        && recorded_request(path).is_some_and(|recorded| {
+            // Compare as written: a number round-trips through JSON as the
+            // reader sees it.
+            Request::from_json(&request.to_json()).is_ok_and(|wanted| wanted == recorded)
+        })
+}
+
+/// The request a generated pack records.
+fn recorded_request(path: &Path) -> Option<Request> {
+    let pack = Pack::open(path).ok()?;
+    Request::from_json(&read_text(&pack, REQUEST_ENTRY).ok()?).ok()
+}
+
+/// The options that make the pack at `path` again: its recorded
+/// configuration and players. The launcher rebuilds a stale pack with these
+/// rather than with whatever configuration it holds now.
+pub fn pack_options(path: &Path) -> Option<Options> {
+    let request = recorded_request(path)?;
+    Some(Options {
+        config: Some(request.config),
+        players: request.players,
+        force: false,
+    })
+}
+
+/// Whether the pack for `seed` in `games_dir` is already what generating it
+/// from the base pack at `base` with `options` would write, so the launcher
+/// can say "already generated" and play it as it is. `options.config` is
+/// taken over the definition's defaults, as [`generate_with`] does.
+pub fn is_generated(base: &Path, seed: u32, games_dir: &Path, options: &Options) -> bool {
+    let Ok(Some(base_manifest)) = crate::pack::read_manifest(base) else {
+        return false;
     };
-    Ok(current.then_some(Generated { path: out, player }))
+    let Some(config) = options.config.clone() else {
+        return false;
+    };
+    let request = Request {
+        seed,
+        players: options.players,
+        config,
+    };
+    options.players != PlayerChoice::Both
+        && is_current(&pack_path(games_dir, seed), &base_manifest, &request)
+}
+
+/// A pack's spoiler log.
+pub struct Spoiler {
+    pub text: String,
+    /// The text file the log was written to, beside the pack.
+    pub path: PathBuf,
+}
+
+/// Read `seed`'s spoiler log from its pack in `games_dir` and write it
+/// beside the pack as `biorand-<seed>-spoiler.txt`, a file any editor opens.
+pub fn read_spoiler(games_dir: &Path, seed: u32) -> Result<Spoiler> {
+    let pack_path = pack_path(games_dir, seed);
+    let pack = Pack::open(&pack_path)
+        .with_context(|| format!("no generated game at {}", pack_path.display()))?;
+    let text = read_text(&pack, SPOILER_TEXT_ENTRY)
+        .with_context(|| format!("{} has no spoiler log", pack_path.display()))?;
+    let path = games_dir.join(format!("{}-spoiler.txt", pack_id(seed)));
+    if let Err(err) = std::fs::write(&path, &text) {
+        bail!("failed to write {}: {err}", path.display());
+    }
+    Ok(Spoiler { text, path })
+}
+
+/// The base pack's configuration definition, which depends on its map.
+pub fn load_definition(base: &Path) -> Result<config::Definition> {
+    let pack = Pack::open(base).with_context(|| format!("failed to open {}", base.display()))?;
+    let map =
+        read_map(&pack).with_context(|| format!("failed to read the map of {}", base.display()))?;
+    Ok(config::definition(&map))
 }
 
 /// Check a generated pack, as [`verify_with`] with the base pack found beside
