@@ -8228,7 +8228,15 @@ impl GameState {
         }
         if dest < 0x20 {
             // A generated stage's room keeps the visit when its own origin
-            // has one; an original stage's always does.
+            // has one; an original stage's always does. A copy that plays
+            // the second visit whatever the game is on (its origin has no
+            // first one) leads on by the scenario flag.
+            let copy = self.origins.origin_room(from) != (from.stage, from.room);
+            let visit = if copy && self.origins.of(from).second_visit_only() {
+                self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false)
+            } else {
+                from.mansion2
+            };
             Some(self.origins.with_visit(
                 RoomId {
                     stage: from.stage,
@@ -8236,7 +8244,7 @@ impl GameState {
                     player_flag: from.player_flag,
                     mansion2: false,
                 },
-                from.mansion2,
+                visit,
             ))
         } else {
             let row = usize::from((dest >> 5) - 1);

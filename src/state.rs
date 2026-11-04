@@ -483,9 +483,20 @@ impl RoomOrigins {
     /// Room `id` on the second mansion visit when `mansion2` and its origin
     /// is a mansion room; [`RoomId::with_visit`] for a room without an
     /// origin.
+    ///
+    /// A copy of a room only the second visit has always plays it, on any
+    /// visit: the origin's first visit is a stub RDT without the doors, so a
+    /// generated game that places the copy before the scenario flag would
+    /// otherwise be left without them. (A retail room follows the flag; the
+    /// original never leads to its first visit.)
     pub fn with_visit(&self, id: RoomId, mansion2: bool) -> RoomId {
+        let origin = self.of(RoomId {
+            mansion2: true,
+            ..id
+        });
+        let copy = self.origin_room(id) != (id.stage, id.room);
         RoomId {
-            mansion2: mansion2 && self.of(RoomId { mansion2, ..id }).mansion2,
+            mansion2: (mansion2 || (copy && origin.second_visit_only())) && origin.mansion2,
             ..id
         }
     }
@@ -1254,6 +1265,33 @@ mod tests {
         assert_eq!(slot("08-00"), None);
         let mansion2 = RoomId::parse_room("203").unwrap().with_visit(true);
         assert_eq!(mansion2.table_slot(), Some((6, 3)));
+    }
+
+    #[test]
+    fn a_copy_of_a_second_visit_only_room_always_plays_the_second_visit() {
+        // Room 110 has no first visit: its RDT there is a stub without doors.
+        let origins = RoomOrigins::new([((1, 5), (1, 0x10)), ((9, 0x40), (1, 0x06))]);
+        let copy = RoomId::parse("1050").unwrap();
+        assert!(origins.with_visit(copy, false).mansion2);
+        assert!(origins.with_visit(copy, true).mansion2);
+        assert_eq!(origins.of(origins.with_visit(copy, false)).room3(), "110");
+        // The room's own id is untouched, and a copy of any other room still
+        // follows the scenario.
+        assert_eq!((copy.stage, copy.room), (1, 5));
+        assert!(
+            !origins
+                .with_visit(RoomId::parse_room("09-40").unwrap(), false)
+                .mansion2
+        );
+        // A retail room follows the scenario, whatever visits it has.
+        let retail = RoomId::parse("1100").unwrap();
+        assert!(!origins.with_visit(retail, false).mansion2);
+        assert!(origins.with_visit(retail, true).mansion2);
+        assert!(
+            !RoomOrigins::default()
+                .with_visit(RoomId::parse("1060").unwrap(), false)
+                .mansion2
+        );
     }
 
     #[test]

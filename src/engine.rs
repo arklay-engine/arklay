@@ -2360,6 +2360,8 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let character = character & 1;
+        // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
+        let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
@@ -7856,12 +7858,14 @@ const RE2_SCENARIO_B_ANGLE: u16 = 400;
 /// The new-game identity: the base pack's `start_room` ([`pack_start_room`]),
 /// else the shipped card's start room, the main hall.
 fn new_game_id(pack: &Pack, character: u8) -> RoomId {
-    pack_start_room(pack, character).unwrap_or(RoomId {
+    let id = pack_start_room(pack, character).unwrap_or(RoomId {
         stage: 1,
         room: NEW_GAME_ROOM,
         player_flag: character & 1,
         mansion2: false,
-    })
+    });
+    // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
+    pack.room_origins().with_visit(id, id.mansion2)
 }
 
 /// The new-game room a base pack's manifest names (an RE2 pack's room 100),
