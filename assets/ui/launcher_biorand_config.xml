@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BIORAND CONFIGURATION: the options of the BioRand package's definition,
+     one page at a time (Ctrl+Up/Down or LB/RB turn the page). The host
+     generates every row from that definition and publishes them at
+     `biorand_config.rows`: a group heading (`heading`, `warning`), or one
+     option, whose `toggle`, `choice` or `slider` is set to match its kind and
+     whose others are nil, which hides them. The focused option's description
+     shows beside the list. -->
+<screen use="standard-screen" title="BIORAND OPTIONS">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="tab_prev" cap="Ctrl+Up/Down" label="Page" action="biorand_page:-1"/>
+  <command key="tab_next" label="Page" action="biorand_page:1" hint="false"/>
+  <command key="aux" cap="R" label="Reset" action="biorand_reset" confirm="Reset every BioRand option to its default?"/>
+  <text variant="value-dim" text="{biorand_config.page}" wrap="none"/>
+  <rule/>
+  <split>
+    <list scrollbar="always">
+      <stack gap="none" items="{biorand_config.rows}">
+        <template>
+          <text variant="heading" text="{item.heading}" visible="{item.heading}" wrap="none"/>
+          <text variant="warn" text="{item.warning}" visible="{item.warning}"/>
+          <toggle def="{item.toggle}"/>
+          <choice def="{item.choice}"/>
+          <slider def="{item.slider}"/>
+        </template>
+      </stack>
+    </list>
+    <option-detail/>
+  </split>
+</screen>

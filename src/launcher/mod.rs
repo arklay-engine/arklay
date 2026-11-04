@@ -58,6 +58,8 @@ use sdl3_sys::scancode::{
     SDL_SCANCODE_W, SDL_Scancode,
 };
 
+use arklay_biorand::config::{Config as BiorandSettings, Definition as BiorandDefinition};
+
 use crate::biorand;
 use crate::build_info;
 use crate::config::{Config, Mods, UpdateChannel};
@@ -188,6 +190,10 @@ enum Screen {
     Play,
     /// A generated game from a seed.
     Biorand,
+    /// The BioRand options, generated from the package's definition.
+    BiorandConfig,
+    /// A generated game's spoiler log.
+    Spoiler,
     /// The games Install / Rebuild offers.
     Games,
     /// One game's install.
@@ -199,10 +205,12 @@ enum Screen {
 }
 
 impl Screen {
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 11] = [
         Self::Main,
         Self::Play,
         Self::Biorand,
+        Self::BiorandConfig,
+        Self::Spoiler,
         Self::Games,
         Self::Install,
         Self::Update,
@@ -217,6 +225,8 @@ impl Screen {
             Self::Main => "launcher_main",
             Self::Play => "launcher_play",
             Self::Biorand => "launcher_biorand",
+            Self::BiorandConfig => "launcher_biorand_config",
+            Self::Spoiler => "launcher_spoiler",
             Self::Games => "launcher_games",
             Self::Install => "launcher_install",
             Self::Update => "launcher_update",
@@ -239,8 +249,10 @@ impl Screen {
     }
 }
 
+mod biorand_config;
+
 /// The launcher's screens and components.
-const DOCUMENTS: [(&str, &str); 10] = [
+const DOCUMENTS: [(&str, &str); 12] = [
     (
         "launcher_components",
         include_str!("../../assets/ui/launcher_components.xml"),
@@ -256,6 +268,14 @@ const DOCUMENTS: [(&str, &str); 10] = [
     (
         "launcher_biorand",
         include_str!("../../assets/ui/launcher_biorand.xml"),
+    ),
+    (
+        "launcher_biorand_config",
+        include_str!("../../assets/ui/launcher_biorand_config.xml"),
+    ),
+    (
+        "launcher_spoiler",
+        include_str!("../../assets/ui/launcher_spoiler.xml"),
     ),
     (
         "launcher_games",
@@ -394,6 +414,11 @@ struct BiorandJob {
     seed: u32,
 }
 
+/// The spoiler log on show: the text file written beside its pack.
+struct Spoiler {
+    path: PathBuf,
+}
+
 /// A background engine download.
 struct UpdateJob {
     receiver: mpsc::Receiver<Result<(), String>>,
@@ -502,6 +527,21 @@ struct Launcher {
     biorand_job: Option<BiorandJob>,
     /// The digits of the seed the BioRand screen shows.
     biorand_seed: String,
+    /// The BioRand options, over the defaults once [`Self::biorand_def`] is
+    /// known; saved to `biorand_path` on every change.
+    biorand_cfg: BiorandSettings,
+    biorand_path: PathBuf,
+    /// The option definition of the base game's map, and the base pack it
+    /// was read from.
+    biorand_def: Option<(PathBuf, BiorandDefinition)>,
+    /// The definition page the configuration screen shows.
+    biorand_page: usize,
+    /// The option id of each row the configuration screen shows (`None` for
+    /// a heading).
+    biorand_rows: Vec<Option<String>>,
+    /// Whether the seed's pack is already what the options would make.
+    biorand_current: bool,
+    spoiler: Option<Spoiler>,
     update_job: Option<UpdateJob>,
     checking: bool,
     check_rx: Option<mpsc::Receiver<Result<Option<UpdateInfo>, String>>>,
@@ -561,6 +601,13 @@ impl Launcher {
             job: None,
             biorand_job: None,
             biorand_seed: String::new(),
+            biorand_cfg: biorand_config::load(&biorand_config::config_path()),
+            biorand_path: biorand_config::config_path(),
+            biorand_def: None,
+            biorand_page: 0,
+            biorand_rows: Vec::new(),
+            biorand_current: false,
+            spoiler: None,
             update_job: None,
             checking: false,
             check_rx: None,
@@ -769,6 +816,8 @@ impl Launcher {
             Screen::Main | Screen::Message => {}
             Screen::Play => self.publish_play(),
             Screen::Biorand => self.publish_biorand(),
+            Screen::BiorandConfig => self.publish_biorand_config(),
+            Screen::Spoiler => {}
             Screen::Games => self.publish_games(),
             Screen::Install => self.publish_install(),
             Screen::Update => self.publish_update(),
@@ -869,15 +918,66 @@ impl Launcher {
         let pack = seed.map_or_else(String::new, biorand::pack_id);
         let exists = seed.is_some_and(|seed| {
             let id = biorand::pack_id(seed);
-            self.packs.iter().any(|row| row.id == id && !row.stale)
+            self.packs.iter().any(|row| row.id == id)
         });
         self.ui.set("biorand.seed", self.biorand_seed.clone());
         self.ui.set("biorand.base", base_text);
         self.ui.set("biorand.base_tone", tone(warn));
         self.ui.set("biorand.pack", pack);
+        let action = match (exists, self.biorand_current) {
+            (_, true) => "Already generated",
+            (true, false) => "Will rebuild",
+            _ => "",
+        };
+        self.ui.set("biorand.action", action);
+        self.ui
+            .set("biorand.spoiler", if exists { "Available" } else { "" });
+        // The player is the configuration's own `player` option.
+        let player = self
+            .biorand_def
+            .as_ref()
+            .and_then(|(_, def)| def.items().find(|item| item.id == "player"))
+            .map(|item| biorand_config::control(item, &self.biorand_cfg));
+        self.ui.set("biorand.player", player.unwrap_or_default());
+        let changed = self.biorand_def.as_ref().map_or(0, |(_, def)| {
+            let defaults = BiorandSettings::defaults(def);
+            def.items()
+                .filter(|item| self.biorand_cfg.get(&item.id) != defaults.get(&item.id))
+                .count()
+        });
         self.ui.set(
-            "biorand.action",
-            if exists { "Already generated" } else { "" },
+            "biorand.config",
+            match changed {
+                0 => String::new(),
+                1 => "1 changed".to_string(),
+                n => format!("{n} changed"),
+            },
+        );
+    }
+
+    fn publish_biorand_config(&mut self) {
+        let Some((_, def)) = &self.biorand_def else {
+            return;
+        };
+        let titles = biorand_config::page_titles(def);
+        let page = self.biorand_page.min(titles.len().saturating_sub(1));
+        let rows = biorand_config::rows(def, page, &self.biorand_cfg);
+        self.ui.set(
+            "biorand_config.page",
+            format!(
+                "{} ({}/{})",
+                titles.get(page).copied().unwrap_or(""),
+                page + 1,
+                titles.len()
+            ),
+        );
+        self.biorand_rows = rows
+            .iter()
+            .map(|row| row.item.map(|item| item.id.clone()))
+            .collect();
+        self.ui.set(
+            "biorand_config.rows",
+            Value::list(rows.into_iter().map(|row| row.ui).collect()),
         );
     }
 
@@ -1339,10 +1439,50 @@ impl Launcher {
             "play_screen" => self.enter(Screen::Play),
             "biorand_screen" => {
                 self.new_biorand_seed();
+                self.load_biorand_definition();
+                self.refresh_biorand_current();
                 self.enter(Screen::Biorand);
             }
-            "biorand_new_seed" => self.new_biorand_seed(),
-            "biorand_generate" => self.start_biorand(self.biorand_seed.parse().ok()),
+            "biorand_new_seed" => {
+                self.new_biorand_seed();
+                self.refresh_biorand_current();
+            }
+            "biorand_generate" => self.start_biorand(self.biorand_seed.parse().ok(), None),
+            "biorand_config_screen" => {
+                if self.load_biorand_definition() {
+                    self.biorand_page = 0;
+                    self.enter(Screen::BiorandConfig);
+                } else {
+                    let line = format!("Install {} from Install / Rebuild.", Game::Re1.title());
+                    self.show_message("NO GAME TO CONFIGURE", &[&line], Screen::Biorand);
+                }
+            }
+            "biorand_page" => {
+                let pages = self
+                    .biorand_def
+                    .as_ref()
+                    .map_or(1, |(_, def)| def.pages.len());
+                let step = arg.as_int().unwrap_or(0);
+                self.biorand_page =
+                    (self.biorand_page as i64 + step).rem_euclid(pages as i64) as usize;
+                self.publish();
+                self.ui.set_focus_index(0);
+            }
+            "biorand_reset" => {
+                if let Some((_, def)) = &self.biorand_def {
+                    self.biorand_cfg = BiorandSettings::defaults(def);
+                    self.save_biorand_config();
+                    self.refresh_biorand_current();
+                }
+            }
+            "biorand_spoiler_screen" => self.open_spoiler(),
+            "spoiler_folder" => {
+                if let Some(spoiler) = &self.spoiler
+                    && let Some(dir) = spoiler.path.parent()
+                {
+                    open_folder(dir);
+                }
+            }
             "install_screen" => self.enter(Screen::Games),
             "update_screen" => self.enter(Screen::Update),
             "mods_screen" => self.enter(Screen::Mods),
@@ -1356,7 +1496,12 @@ impl Launcher {
                     .filter(|pack| pack.stale)
                     .and_then(|pack| pack.seed);
                 if let Some(seed) = stale_seed {
-                    self.start_biorand(Some(seed));
+                    // Rebuild it as it was made, not with today's options.
+                    let options = self
+                        .packs
+                        .get(index)
+                        .and_then(|pack| biorand::pack_options(&pack.path));
+                    self.start_biorand(Some(seed), options);
                     return false;
                 }
                 return self.play(display);
@@ -1417,7 +1562,13 @@ impl Launcher {
         let Some(index) = value.as_int() else {
             return;
         };
+        if let Some(row) = biorand_config::changed_row(path) {
+            let id = self.biorand_rows.get(row).cloned().flatten();
+            self.set_biorand_option(id.as_deref(), index);
+            return;
+        }
         match path {
+            "biorand.player.value" => self.set_biorand_option(Some("player"), index),
             "update.channel.value" => {
                 let channel = if index == 0 {
                     UpdateChannel::Release
@@ -1608,6 +1759,8 @@ impl Launcher {
             SDL_SCANCODE_MINUS => GuiKey::TabNext,
             SDL_SCANCODE_B if !options && self.screen() == Screen::Install => GuiKey::Aux,
             SDL_SCANCODE_O if !options && self.screen() == Screen::Mods => GuiKey::Aux,
+            SDL_SCANCODE_O if !options && self.screen() == Screen::Spoiler => GuiKey::Aux,
+            SDL_SCANCODE_R if !options && self.screen() == Screen::BiorandConfig => GuiKey::Aux,
             _ => return None,
         })
     }
@@ -1916,7 +2069,129 @@ impl Launcher {
         }
     }
 
-    /// Start (or restart) the conversion for the current source and target.
+    /// The base game's pack when it can be generated from.
+    fn biorand_base(&self) -> Option<PathBuf> {
+        pack_for(&self.packs, Game::Re1)
+            .filter(|pack| pack.error.is_none() && !pack.stale)
+            .map(|pack| pack.path.clone())
+    }
+
+    /// Read the option definition from the base game's map (once per base
+    /// pack) and complete the saved options with its defaults. Returns
+    /// whether a definition is available.
+    fn load_biorand_definition(&mut self) -> bool {
+        let Some(base) = self.biorand_base() else {
+            return false;
+        };
+        if self
+            .biorand_def
+            .as_ref()
+            .is_some_and(|(from, _)| *from == base)
+        {
+            return true;
+        }
+        match biorand::load_definition(&base) {
+            Ok(def) => {
+                self.biorand_cfg = biorand_config::complete(&def, &self.biorand_cfg);
+                self.biorand_def = Some((base, def));
+                true
+            }
+            Err(err) => {
+                logging::write(&format!("biorand: no option definition: {err:#}"));
+                false
+            }
+        }
+    }
+
+    /// What to generate with: the options as they are now.
+    fn biorand_options(&self) -> biorand::Options {
+        biorand::Options {
+            config: Some(self.biorand_cfg.clone()),
+            ..biorand::Options::default()
+        }
+    }
+
+    /// Store an option a control set, and save the options.
+    fn set_biorand_option(&mut self, id: Option<&str>, shown: i64) {
+        let Some((_, def)) = &self.biorand_def else {
+            return;
+        };
+        let Some(item) = id.and_then(|id| def.items().find(|item| item.id == id)) else {
+            return;
+        };
+        biorand_config::set(item, shown, &mut self.biorand_cfg);
+        self.save_biorand_config();
+        self.refresh_biorand_current();
+    }
+
+    fn save_biorand_config(&self) {
+        if let Err(err) = biorand_config::save(&self.biorand_path, &self.biorand_cfg) {
+            logging::write(&format!("warning: BioRand options not saved: {err:#}"));
+        }
+    }
+
+    /// Work out whether the seed's pack is already what the options make.
+    fn refresh_biorand_current(&mut self) {
+        let seed = self.biorand_seed.parse::<u32>().ok();
+        self.biorand_current = match (seed, self.biorand_base(), &self.biorand_def) {
+            (Some(seed), Some(base), Some(_)) => biorand::is_generated(
+                &base,
+                seed,
+                &paths::games_dir(&paths::primary_data_dir()),
+                &self.biorand_options(),
+            ),
+            _ => false,
+        };
+    }
+
+    /// Show the spoiler log of the seed's pack, and write it beside the pack
+    /// as a text file the user can open elsewhere.
+    fn open_spoiler(&mut self) {
+        let Ok(seed) = self.biorand_seed.parse::<u32>() else {
+            self.show_message(
+                "NO SEED",
+                &["Type a seed of up to six digits."],
+                Screen::Biorand,
+            );
+            return;
+        };
+        let games = paths::games_dir(&paths::primary_data_dir());
+        match biorand::read_spoiler(&games, seed) {
+            Ok(spoiler) => {
+                let lines: Vec<Value> = spoiler
+                    .text
+                    .lines()
+                    .map(|line| Value::map([("text", Value::from(line))]))
+                    .collect();
+                self.ui.set("spoiler.pack", biorand::pack_id(seed));
+                self.ui.set("spoiler.lines", Value::list(lines));
+                self.ui
+                    .set("spoiler.path", spoiler.path.display().to_string());
+                self.spoiler = Some(Spoiler { path: spoiler.path });
+                self.enter(Screen::Spoiler);
+            }
+            Err(err) => {
+                let line = format!("{err:#}");
+                self.show_message(
+                    "NO SPOILER LOG",
+                    &[&line, "Generate the seed first."],
+                    Screen::Biorand,
+                );
+            }
+        }
+    }
+
+    /// The seed a preview shows: `ARKLAY_LAUNCHER_SEED`, else a random one.
+    fn capture_biorand_seed(&mut self) {
+        match env::var("ARKLAY_LAUNCHER_SEED") {
+            Ok(seed) => self.biorand_seed = seed,
+            Err(_) => self.new_biorand_seed(),
+        }
+        self.load_biorand_definition();
+        self.refresh_biorand_current();
+    }
+
+    /// A new random seed.
     fn new_biorand_seed(&mut self) {
         self.biorand_seed = format!("{:06}", biorand::random_seed());
     }
@@ -1937,15 +2212,18 @@ impl Launcher {
         } else {
             return false;
         }
+        self.refresh_biorand_current();
         self.publish();
         true
     }
 
     /// Generate `seed`'s game in the background, to be played when it is done.
-    fn start_biorand(&mut self, seed: Option<u32>) {
+    fn start_biorand(&mut self, seed: Option<u32>, options: Option<biorand::Options>) {
         if self.biorand_job.is_some() || self.job.is_some() {
             return;
         }
+        self.load_biorand_definition();
+        let options = options.unwrap_or_else(|| self.biorand_options());
         let Some(seed) = seed else {
             self.show_message(
                 "NO SEED",
@@ -1982,7 +2260,14 @@ impl Launcher {
                     state.elapsed = started.elapsed();
                 }
             };
-            let result = biorand::generate(&base, seed, &games, 0, &report);
+            let result = biorand::generate_with(&base, seed, &games, &options, 0, &report)
+                .and_then(|packs| {
+                    packs
+                        .into_iter()
+                        .next()
+                        .map(|generated| generated.path)
+                        .ok_or_else(|| anyhow!("seed {seed} planned no game"))
+                });
             let _ = sender.send(result.map_err(|err| format!("{err:#}")));
         });
         logging::write(&format!("biorand: generating seed {seed:06}"));
@@ -2011,6 +2296,7 @@ impl Launcher {
         let seed = job.seed;
         self.biorand_job = None;
         self.packs = scan_packs();
+        self.refresh_biorand_current();
         self.refresh_mods();
         self.goto(Screen::Biorand);
         let path = match result {
@@ -2341,8 +2627,18 @@ impl Launcher {
         let screen = match name {
             "play" => Screen::Play,
             "biorand" => {
-                self.new_biorand_seed();
+                self.capture_biorand_seed();
                 Screen::Biorand
+            }
+            "spoiler" => {
+                self.capture_biorand_seed();
+                self.open_spoiler();
+                return;
+            }
+            "biorand_config" => {
+                self.capture_biorand_seed();
+                self.load_biorand_definition();
+                Screen::BiorandConfig
             }
             "games" => Screen::Games,
             "install" => Screen::Install,
@@ -3057,7 +3353,7 @@ pub fn run() -> Result<()> {
     {
         launcher.goto(Screen::Biorand);
         launcher.biorand_seed = seed;
-        launcher.start_biorand(launcher.biorand_seed.parse().ok());
+        launcher.start_biorand(launcher.biorand_seed.parse().ok(), None);
     }
     if capture.is_none() && env::var_os("ARKLAY_LAUNCHER_AUTOUPDATE").is_some() {
         launcher.auto_update = true;
@@ -3344,11 +3640,69 @@ mod tests {
     }
 
     #[test]
+    fn biorand_options_are_edited_saved_and_reset() {
+        let dir = std::env::temp_dir().join(format!("arklay-launcher-cfg-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut launcher =
+            Launcher::with(&Config::default(), Vec::new(), HashMap::new(), Vec::new()).unwrap();
+        launcher.biorand_path = dir.join("biorand.json");
+        let def = biorand_config::tests::definition_for_tests();
+        launcher.biorand_cfg = BiorandSettings::defaults(&def);
+        launcher.biorand_def = Some((PathBuf::from("re1.akpak"), def));
+        launcher.enter(Screen::BiorandConfig);
+        launcher.publish();
+
+        // The first row is the player: a choice over Chris, Jill and Random.
+        assert_eq!(launcher.biorand_rows[0].as_deref(), Some("player"));
+        let page = launcher.ui.get("biorand_config.rows");
+        assert_eq!(page.at("0.choice.value"), Some(&Value::Int(2)));
+        launcher.changed("biorand_config.rows.0.choice.value", &Value::Int(1));
+        assert_eq!(launcher.biorand_cfg.get_str("player", ""), "Jill");
+        assert_eq!(
+            biorand_config::load(&launcher.biorand_path).get_str("player", ""),
+            "Jill",
+            "saved on every change"
+        );
+        // The BioRand screen's player row edits the same option.
+        launcher.changed("biorand.player.value", &Value::Int(0));
+        assert_eq!(
+            launcher
+                .biorand_options()
+                .config
+                .unwrap()
+                .get_str("player", ""),
+            "Chris"
+        );
+
+        // Pages turn and wrap, and reset restores the defaults.
+        let pages = launcher.biorand_def.as_ref().unwrap().1.pages.len();
+        let display_free = |launcher: &mut Launcher, step: i64| {
+            let page = (launcher.biorand_page as i64 + step).rem_euclid(pages as i64);
+            launcher.biorand_page = page as usize;
+            launcher.publish();
+        };
+        display_free(&mut launcher, -1);
+        assert_eq!(launcher.biorand_page, pages - 1);
+        assert!(launcher.biorand_rows.iter().any(Option::is_some));
+        display_free(&mut launcher, 1);
+        assert_eq!(launcher.biorand_page, 0);
+
+        let def = launcher.biorand_def.as_ref().unwrap().1.clone();
+        launcher.biorand_cfg = BiorandSettings::defaults(&def);
+        launcher.save_biorand_config();
+        assert_eq!(
+            biorand_config::load(&launcher.biorand_path),
+            BiorandSettings::defaults(&def)
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn biorand_says_what_is_missing_instead_of_generating() {
         let mut launcher =
             Launcher::with(&Config::default(), Vec::new(), HashMap::new(), Vec::new()).unwrap();
         launcher.enter(Screen::Biorand);
-        launcher.start_biorand(Some(1));
+        launcher.start_biorand(Some(1), None);
         assert_eq!(launcher.screen(), Screen::Message);
         assert!(launcher.biorand_job.is_none());
 
@@ -3357,7 +3711,7 @@ mod tests {
         let mut launcher =
             Launcher::with(&Config::default(), vec![stale], HashMap::new(), Vec::new()).unwrap();
         launcher.enter(Screen::Biorand);
-        launcher.start_biorand(Some(1));
+        launcher.start_biorand(Some(1), None);
         assert_eq!(launcher.screen(), Screen::Message);
 
         let mut launcher = Launcher::with(
@@ -3368,7 +3722,7 @@ mod tests {
         )
         .unwrap();
         launcher.enter(Screen::Biorand);
-        launcher.start_biorand(None);
+        launcher.start_biorand(None, None);
         assert_eq!(
             launcher.screen(),
             Screen::Message,
