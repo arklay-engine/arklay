@@ -2250,6 +2250,10 @@ same seed, configuration and generator always make the same bytes. `verify`
 plans the game again from what the pack records and checks it, and names
 every problem it finds. Given the base pack (by default `re1.akpak` beside the
 generated one), it also checks that nothing outside the planned bytes differs.
+It also runs a static audit of the plan (a route walk, item, enemy, door and
+lock checks); problems print as `audit: ...` and exit non-zero, and a route
+that can strand a player who spends a consumable key wrongly prints a
+`warning:` line.
 
 A generated game is an ordinary base pack with id `biorand-<seed>`, the seed
 padded to six digits. It is its base pack with the planned pickups written

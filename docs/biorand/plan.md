@@ -354,9 +354,41 @@ planned keys (the lockpick's with the lockpick), that reaches the end room.
 Given the base pack, it also checks that every other byte matches: each
 room script equals the base's with the planned fields written, and every
 other entry is identical. `generate` runs it on every pack it writes and
-deletes a pack that fails. Milestone 11 adds the rest of the route checks:
-nothing waiting on a story flag the route can't raise, and every guard a
-patch needs reached.
+deletes a pack that fails. It also runs the package's static audit
+(`arklay_biorand::audit`, milestone 11) on the plan it re-derives: a faithful
+walk of the route (event-driven doors, story-flag gates, consumable keys,
+one-way and no-return doors, the lockpick and sword key rules), and checks of
+the item ids and amounts, enemies, door targets and entrances, lock flags,
+pickup flag sharing, start inventory and system flags. A failure is reported as
+`audit: ...` and exits non-zero. A "greedy spend" stranding (a player who
+spends a consumable key on the wrong lock) is printed as a `warning:` only.
+
+### The seed sweep
+
+`scripts/biorand-sweep.sh --base re1.akpak [--plan-cases N] [--packs N]
+[--first N] [--out DIR] [--no-plan] [--no-packs]` runs both levels and exits
+non-zero on any failure (defaults: 2000 cases, 40 packs, output in
+`target/scratch/sweep`).
+
+- **Plan level** (`tests/re1_sweep.rs`, `re1_sweep`, ignored): each case is a
+  config planned for both players, and every game goes through
+  `audit::check_all` and the greedy-spend measurement. About 19 ms per game.
+  Cases rotate through named (one factor level on the defaults), factorial (a
+  random level per factor: doors incl. segment/room ratios, locks, enemies,
+  item options, ammo, health, inventory 6/8, progression, tyrants,
+  lockpick/ink/hard, cutscenes) and fully random configs. Knobs (env):
+  `SWEEP_CASES`, `SWEEP_FIRST`, `SWEEP_THREADS`, `SWEEP_OUT` (absolute),
+  `SWEEP_GREEDY`, `SWEEP_ONLY`, `SWEEP_FORCE` (JSON applied to every case).
+  `re1_repro` reruns one case (`SWEEP_CONFIG`, `SWEEP_SEED`, `SWEEP_PLAYER`,
+  `SWEEP_LOG`, `SWEEP_DOORS`). The summary lists failure classes with repro
+  lines (seed, player, config).
+- **Pack level**: `re1_sweep_dump` writes a sample of the cases; the script
+  generates each pack, runs `arklay biorand verify --base`, and deletes it.
+
+Results: 12000 plan-level games failed about 27 times (0.2%); the last run,
+6000 games (seeds 1..3000), failed 13 (6 of them refused seeds, see Known
+issues). 100 real packs in all generated and verified, one with a
+consumable-key `warning:`.
 
 ### How to test milestone 1
 
@@ -475,7 +507,10 @@ The pull request's description holds the live checklist. In order:
     folder).
 11. **Static analysis and the cutscene option.** The verifier's full checks,
     a seed sweep over the configuration space, and `cutscenes/disable`.
-    *Test milestone 4:* ready for main. **`cutscenes/disable` is done:**
+    *Test milestone 4:* ready for main. **Static analysis done:** the
+    `audit` module (shared by the verifier, the package tests and the sweep),
+    the new verifier checks, `scripts/biorand-sweep.sh`
+    ([The seed sweep](#the-seed-sweep)). **`cutscenes/disable` is done:**
     `CUTSCENES_DISABLED` guards in 106 (the story flags), 10A, 101, 206, 20C,
     40C, 512, 513 and 514 ([`patches.md` §E](patches.md#e-disabled-cutscenes-cutscenesdisable)).
     The retail build of each is unchanged. Packs for several seeds and both
@@ -494,3 +529,28 @@ The pull request's description holds the live checklist. In order:
   routes. Staging has the same weakness. The fix belongs in the route finder
   itself (restore the potential-softlock check for consumable keys), not a
   reroll around it.
+
+- **Door layouts with `doors/segments` 1 and many rooms sometimes fail the
+  audit (plan level, about 1.1% of such games; under 0.1% otherwise).** The
+  walk reports "end room 501 never reached", keys never picked up or locks
+  never open. Repro: `{"doors/rooms":0.7,"doors/segments":1}` seeds 80 (jill),
+  260 (chris), 1868, 2073 (chris), 2499 (chris); also segments 6 with locks
+  (4421, 5858) and segments 2 with `items/hidden/keys: false` (3810). In 2073
+  the finder places 5 keys though N107 needs the Small Key, yet reports
+  `all_nodes_visited`: suspected frontier loss in the finder's fork/join
+  logic. Not fixed. (Layouts with a pocket no edge leads into are now rejected
+  and retried: `keys.rs` `topology_reaches_all`. `GENERATOR_VERSION` was not
+  bumped.)
+- **Circular dependency with `items/hidden/keys: false` (seed 182, jill,
+  otherwise default config).** Room 50C is reachable only via 213:2 (locked
+  from the 213 side), 408:2 (needs the 003 Key, held in 403 behind 50C) or
+  508:2, whose Unblock door needs room 513, also behind 50C. The finder missed
+  the cycle.
+- **`cutscenes/disable` with locks on, doors off: about 7% of Jill's seeds are
+  refused** ("the route finder left part of the map unreachable"); 0 with
+  cutscenes enabled. The prologue doors become lockable when cutscenes are
+  disabled (`prepare.rs`). Belongs to the cutscene work.
+- **Greedy-spend strandings measured at about 0.55%** of games (66 of about
+  11970; 0.3-0.6% in most configs, 1.85% with segments 6 / rooms 1.0): a
+  player spending a consumable key on the wrong lock first. 0 in the 60 real
+  packs. The route finder is not fixed for it (see the first issue).
