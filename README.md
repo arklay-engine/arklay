@@ -45,7 +45,14 @@ options screen itself, key configuration included, writing every change back
 to `arklay.toml` (the renderer settings take effect when a game starts). MODS
 lists every discovered mod, whatever its game, in application order: the top
 row is applied first (lowest priority) and the bottom row last (highest);
-Ctrl+Down moves a mod toward higher priority.
+Ctrl+Down moves a mod toward higher priority. BIORAND generates a game from a
+seed (type digits, or New Seed), as `games/biorand-<seed>.akpak`, and plays it;
+its Player row and Options screen (every BioRand option, by page and group,
+with a description of the focused one; Ctrl+Up/Down turn the page and R resets
+them) are saved to `biorand.json` beside `arklay.toml` in BioRand's own JSON.
+A seed's pack is reused while its options, player and base game are the same
+and rebuilt when any changed. Spoiler Log shows the pack's spoiler and writes
+it to `games/biorand-<seed>-spoiler.txt`.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
 UPDATE values left and right; A/Start confirms; B/Back backs out, quitting
