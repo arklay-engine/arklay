@@ -44,7 +44,7 @@ impl Api {
 
     fn var(&mut self, index: i64) -> mlua::Result<&mut i32> {
         let vars: &mut [i32] = if self.l.is_null() {
-            &mut self.em().z.vars
+            &mut self.em().z.vars[..]
         } else {
             &mut self.l()?.vars
         };
@@ -175,6 +175,11 @@ impl UserData for Api {
         });
         methods.add_method_mut("set_speed", |_, e, (x, y, z): (i64, i64, i64)| {
             e.em().work().spd = [x as i16, y as i16, z as i16];
+            Ok(())
+        });
+        // `Spd_base`, which `Spd_get` takes the next frame's place from.
+        methods.add_method_mut("set_speed_base", |_, e, (x, y, z): (i64, i64, i64)| {
+            e.em().work().spd_base = [x as i16, y as i16, z as i16];
             Ok(())
         });
 
@@ -852,10 +857,14 @@ impl UserData for Api {
                 Ok(())
             },
         );
-        methods.add_method_mut("blow_part", |_, e, (part, dir): (usize, i32)| {
-            e.em().blow_part(part, dir as u16);
-            Ok(())
-        });
+        methods.add_method_mut(
+            "blow_part",
+            |_, e, (part, dir, speed, up): (usize, i32, Option<i16>, Option<i16>)| {
+                e.em()
+                    .blow_part(part, dir as u16, speed.unwrap_or(800), up.unwrap_or(0));
+                Ok(())
+            },
+        );
         methods.add_method_mut(
             "fling_part",
             |_, e, (part, dir, along, gravity, rest): (usize, i32, i16, i16, i32)| {
@@ -1130,6 +1139,10 @@ impl UserData for Api {
         });
         // `Neck_no`'s turn (`+0x98`).
         methods.add_method_mut("neck_turn", |_, e, ()| Ok(e.em().work().neck.turn[0]));
+        methods.add_method_mut("set_neck_turn", |_, e, turn: i16| {
+            e.em().work().neck.turn[0] = turn;
+            Ok(())
+        });
         // `Goto00_ck` from a point, facing `angle`.
         methods.add_method_mut(
             "goto_ck_at",
@@ -1148,6 +1161,13 @@ impl UserData for Api {
             Ok((x, y, z))
         });
         methods.add_method_mut("parent_angle", |_, e, ()| Ok(parent(e)?.angle));
+        // The ivy's `Ground`, which `Game_loop` finds under its body.
+        methods.add_method_mut("parent_ground", |_, e, ()| {
+            let at = parent(e)?.pos;
+            Ok(e.em().mover.tick.room.sca.as_ref().map_or(0, |sca| {
+                crate::sca::ground_at(sca, at, 0, super::MASK).height
+            }))
+        });
         methods.add_method_mut("parent_life", |_, e, ()| Ok(parent(e)?.life));
         methods.add_method_mut("parent_kind", |_, e, ()| Ok(parent(e)?.kind));
         methods.add_method_mut("parent_routine", |_, e, index: i64| {
