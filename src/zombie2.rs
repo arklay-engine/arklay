@@ -1151,7 +1151,6 @@ impl Em<'_, '_, '_> {
         self.z.thrown.push(thrown);
     }
 
-    /// `FUN_00461f40`.
     /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
     /// at 300 and up at 150.
     fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16) {
