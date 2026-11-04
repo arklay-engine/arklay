@@ -227,6 +227,57 @@ fn the_pointer_hovers_and_clicks_rows_and_hints() {
 }
 
 #[test]
+fn the_wheel_scrolls_a_list_and_leaves_the_focus_alone() {
+    let rows: String = (0..60)
+        .map(|n| format!("<item text=\"Row {n}\" action=\"a{n}\"/>"))
+        .collect();
+    let screen = format!(r#"<screen use="standard-screen" title="T"><list>{rows}</list></screen>"#);
+    let mut ui = Ui::new(library(&[("test", screen.as_str())])).unwrap();
+    ui.open("test").unwrap();
+    ui.draw(1920, 1080);
+    let scroll = |ui: &Ui| {
+        ui.with_tree(|tree, _| {
+            let list = tree.select(tree.root.unwrap(), "list")[0];
+            tree[list].scroll
+        })
+        .unwrap()
+    };
+    assert_eq!(scroll(&ui), 0.0);
+    assert_eq!(ui.focus_prop("text"), Value::from("Row 0"));
+
+    // Turning the wheel down scrolls the list; the first row stays focused
+    // even though it left the view, and the list stays where the wheel put it.
+    ui.handle(&[GuiEvent::Wheel(-3.0)]);
+    ui.draw(1920, 1080);
+    let scrolled = scroll(&ui);
+    assert!(scrolled > 0.0, "the list scrolled: {scrolled}");
+    assert_eq!(ui.focus_prop("text"), Value::from("Row 0"));
+    ui.draw(1920, 1080);
+    assert_eq!(scroll(&ui), scrolled, "the focus does not pull it back");
+
+    // Back up the other way.
+    ui.handle(&[GuiEvent::Wheel(10.0)]);
+    ui.draw(1920, 1080);
+    assert_eq!(scroll(&ui), 0.0);
+
+    // A key still moves the focus, and the list follows it.
+    ui.handle(&[GuiEvent::Wheel(-3.0)]);
+    ui.draw(1920, 1080);
+    ui.handle(&[key(GuiKey::Down)]);
+    ui.draw(1920, 1080);
+    assert_eq!(ui.focus_prop("text"), Value::from("Row 1"));
+    let visible = ui
+        .with_tree(|tree, _| {
+            let list = tree.select(tree.root.unwrap(), "list")[0];
+            let row = tree.select(tree.root.unwrap(), "item")[1];
+            tree[row].rect.y >= tree[list].rect.y - 0.5
+                && tree[row].rect.bottom() <= tree[list].rect.bottom() + 0.5
+        })
+        .unwrap();
+    assert!(visible, "the list follows the focus again");
+}
+
+#[test]
 fn lua_scripts_build_and_drive_a_screen() {
     let screen = r#"<screen use="standard-screen" title="Lua" script="test.lua">
         <list id="rows"/>

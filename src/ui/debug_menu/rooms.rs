@@ -208,6 +208,11 @@ impl RoomSelect {
         }
     }
 
+    /// Scroll the grid `rows` rows (positive = up); the cursor stays put.
+    pub(super) fn scroll_by(&mut self, rows: i32) {
+        self.scroll[self.stage].scroll_by(rows);
+    }
+
     /// Show stage tab `stage`.
     pub(super) fn set_stage(&mut self, stage: usize) {
         self.stage = stage.min(self.stages.len() - 1);

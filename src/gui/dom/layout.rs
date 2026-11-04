@@ -519,10 +519,19 @@ fn arrange_list(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) 
             y += h + gap;
         }
     };
-    let scroll = tree[id].scroll.clamp(0.0, (total - rect.h).max(0.0));
+    // The wheel scrolls the list a couple of rows a notch, wherever the
+    // focus is.
+    let wheel = std::mem::take(&mut tree[id].wheel);
+    let row = total / children.len().max(1) as f32;
+    let scroll = (tree[id].scroll - wheel * row * 2.0).clamp(0.0, (total - rect.h).max(0.0));
     lay(tree, scroll, cx);
     let mut want = scroll;
-    if let Some(focus) = cx.focus
+    // The list follows the focus when the focus moves, not on every layout:
+    // otherwise the wheel could never scroll it away from the focused row.
+    let follow = cx.focus != tree[id].followed;
+    tree[id].followed = cx.focus;
+    if follow
+        && let Some(focus) = cx.focus
         && tree.contains(focus)
         && tree.ancestry(focus).contains(&id)
     {

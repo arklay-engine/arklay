@@ -26,6 +26,11 @@ const LEAD_W: f32 = 64.0;
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Scroll {
     top: usize,
+    /// The cursor row as last laid out: the view follows the cursor only
+    /// when it moves, so a wheel scroll can leave it out of view.
+    cursor: Option<usize>,
+    /// Wheel rows waiting for the next layout (positive = up).
+    pending: i32,
 }
 
 impl Scroll {
@@ -34,16 +39,29 @@ impl Scroll {
         self.top
     }
 
+    /// Scroll the view `rows` rows (positive = up) at the next layout,
+    /// leaving the cursor where it is.
+    pub fn scroll_by(&mut self, rows: i32) {
+        self.pending = self.pending.saturating_add(rows);
+    }
+
     /// Lay out `total` rows of which `visible` fit, the cursor on row
-    /// `cursor`; returns the first shown row.
+    /// `cursor`; returns the first shown row. The view follows the cursor
+    /// when the cursor moved since the last layout, and the wheel moves the
+    /// view otherwise.
     pub fn layout(&mut self, cursor: usize, visible: usize, total: usize) -> usize {
         let visible = visible.max(1);
-        if cursor < self.top {
-            self.top = cursor;
-        } else if cursor >= self.top + visible {
-            self.top = cursor + 1 - visible;
+        let last = total.saturating_sub(visible);
+        if self.cursor != Some(cursor) {
+            self.cursor = Some(cursor);
+            if cursor < self.top {
+                self.top = cursor;
+            } else if cursor >= self.top + visible {
+                self.top = cursor + 1 - visible;
+            }
         }
-        self.top = self.top.min(total.saturating_sub(visible));
+        let wheel = std::mem::take(&mut self.pending);
+        self.top = self.top.saturating_add_signed(-(wheel as isize)).min(last);
         self.top
     }
 }
@@ -334,5 +352,35 @@ pub(super) fn grid_picture(
             .stroke_rect(frame.inset(-outline, -outline), outline, palette::ACCENT);
     } else {
         p.canvas.stroke_rect(frame, rule, palette::RULE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_view_follows_a_moving_cursor() {
+        let mut scroll = Scroll::default();
+        assert_eq!(scroll.layout(0, 5, 20), 0);
+        assert_eq!(scroll.layout(7, 5, 20), 3);
+        assert_eq!(scroll.layout(2, 5, 20), 2);
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_view_and_leaves_the_cursor_out_of_view() {
+        let mut scroll = Scroll::default();
+        assert_eq!(scroll.layout(0, 5, 20), 0);
+        scroll.scroll_by(-3);
+        // The cursor has not moved, so the view does not snap back to it.
+        assert_eq!(scroll.layout(0, 5, 20), 3);
+        assert_eq!(scroll.layout(0, 5, 20), 3);
+        // Up past the top and down past the end both stop.
+        scroll.scroll_by(10);
+        assert_eq!(scroll.layout(0, 5, 20), 0);
+        scroll.scroll_by(-100);
+        assert_eq!(scroll.layout(0, 5, 20), 15);
+        // Moving the cursor brings the view back to it.
+        assert_eq!(scroll.layout(1, 5, 20), 1);
     }
 }

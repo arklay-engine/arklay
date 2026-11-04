@@ -869,14 +869,15 @@ impl DebugMenu {
                 Some(Hit::Key(key)) => Some(self.handle_input(key_input(key), game)),
                 None => None,
             },
-            // The wheel moves the cursor, as on every other screen.
+            // The wheel scrolls the view and leaves the cursor alone.
             GuiEvent::Wheel(notches) if notches != 0.0 => {
-                let key = if notches > 0.0 {
-                    GuiKey::Up
-                } else {
-                    GuiKey::Down
-                };
-                Some(self.handle_input(key_input(key), game))
+                let rows = if notches > 0.0 { 1 } else { -1 };
+                match self.tool {
+                    Some(Tool::Rooms) => self.rooms.scroll_by(rows),
+                    Some(Tool::Inventory) => self.inventory.scroll_by(rows),
+                    _ => {}
+                }
+                Some(DebugMenuEvent::None)
             }
             GuiEvent::Wheel(_) => None,
             GuiEvent::PointerMove { x, y } => {

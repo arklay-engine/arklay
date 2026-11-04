@@ -210,6 +210,11 @@ pub struct Node {
     /// A list's content height and scroll offset, in pixels.
     pub content: f32,
     pub scroll: f32,
+    /// Wheel notches waiting to scroll a list (positive scrolls up).
+    pub wheel: f32,
+    /// The focus a list last scrolled into view: it follows the focus only
+    /// when the focus moves, so the wheel can scroll it away from the focus.
+    pub followed: Option<NodeId>,
     /// A tab strip's selected tab.
     pub index: usize,
     /// A tab's focus when it was left.
@@ -239,6 +244,8 @@ impl Node {
             rect: Rect::new(0.0, 0.0, 0.0, 0.0),
             content: 0.0,
             scroll: 0.0,
+            wheel: 0.0,
+            followed: None,
             index: 0,
             last_focus: None,
             depth: 0,

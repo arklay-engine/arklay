@@ -182,6 +182,15 @@ impl InventoryEditor {
         }
     }
 
+    /// Scroll the open picker's grid or the slot list by the wheel's `rows`
+    /// (positive = up); the cursor stays put.
+    pub(super) fn scroll_by(&mut self, rows: i32) {
+        match self.picker.as_mut() {
+            Some(picker) => picker.scroll.scroll_by(rows),
+            None => self.scroll.scroll_by(rows * 2),
+        }
+    }
+
     /// One input edge against the live inventory.
     pub(super) fn handle_input(&mut self, input: UiInput, game: &mut GameState) -> Step {
         let capacity = game.inventory_capacity();

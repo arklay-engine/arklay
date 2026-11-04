@@ -128,6 +128,8 @@ pub struct Ui {
     /// The size the screens are laid out at.
     size: (u32, u32),
     outputs: Vec<UiOutput>,
+    /// Where the pointer last was, in canvas pixels.
+    pointer: Option<(f32, f32)>,
     /// Something shown changed: repaint on the next draw.
     dirty: bool,
     /// Something changed since the last evaluation and layout.
@@ -150,6 +152,7 @@ impl Ui {
             text_scale: 1.0,
             size: (1920, 1080),
             outputs: Vec::new(),
+            pointer: None,
             dirty: true,
             stale: true,
             next_uid: 1,
@@ -468,25 +471,56 @@ impl Ui {
                     self.device = device;
                     self.key(key);
                 }
-                GuiEvent::PointerMove { x, y } => self.pointer_move(x, y),
-                GuiEvent::PointerDown { x, y } => self.pointer_down(x, y),
+                GuiEvent::PointerMove { x, y } => {
+                    self.pointer = Some((x, y));
+                    self.pointer_move(x, y);
+                }
+                GuiEvent::PointerDown { x, y } => {
+                    self.pointer = Some((x, y));
+                    self.pointer_down(x, y);
+                }
                 GuiEvent::PointerUp { .. } => {
                     if let Some(screen) = self.screens.last_mut() {
                         screen.capture = None;
                     }
                 }
-                GuiEvent::Wheel(notches) if notches != 0.0 => {
-                    self.key(if notches > 0.0 {
-                        GuiKey::Up
-                    } else {
-                        GuiKey::Down
-                    });
-                }
+                GuiEvent::Wheel(notches) if notches != 0.0 => self.wheel(notches),
                 GuiEvent::Wheel(_) => {}
             }
             self.refresh();
         }
         std::mem::take(&mut self.outputs)
+    }
+
+    /// A wheel turn on the top screen: it scrolls the list under the pointer
+    /// (or holding the focus) and leaves the focus where it is. A screen with
+    /// nothing to scroll takes it as the Up and Down keys.
+    fn wheel(&mut self, notches: f32) {
+        let Some(s) = self.screens.len().checked_sub(1) else {
+            return;
+        };
+        let tree = &self.screens[s].tree;
+        let scrolls = |id: &NodeId| {
+            let node = &tree[*id];
+            node.kind == Kind::List && node.shown && node.content > node.rect.h + 0.5
+        };
+        let under_pointer = self
+            .pointer
+            .and_then(|(x, y)| self.hit(x, y).into_iter().find(scrolls));
+        let around_focus = || {
+            let focus = self.screens[s].focus.filter(|&f| tree.contains(f))?;
+            tree.ancestry(focus).into_iter().find(scrolls)
+        };
+        if let Some(list) = under_pointer.or_else(around_focus) {
+            self.screens[s].tree[list].wheel += notches;
+            self.touch();
+            return;
+        }
+        self.key(if notches > 0.0 {
+            GuiKey::Up
+        } else {
+            GuiKey::Down
+        });
     }
 
     /// Press `key` on the top screen.
