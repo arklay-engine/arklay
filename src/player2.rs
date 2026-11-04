@@ -469,6 +469,8 @@ pub struct Neck {
     /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
     /// so a new room doesn't restart it.
     pub wait: u8,
+    /// `Neck_no` when it isn't [`NECK_JOINT`]: the joint the yaw turns.
+    pub joint: Option<u8>,
 }
 
 impl Work {
@@ -499,6 +501,12 @@ impl Neck {
                 if let Some(rotation) = pose.rotations.get_mut(joint) {
                     rotation[1] = rotation[1].wrapping_add(turn);
                 }
+            }
+            return;
+        }
+        if let Some(joint) = self.joint {
+            if let Some(rotation) = pose.rotations.get_mut(usize::from(joint)) {
+                rotation[1] = rotation[1].wrapping_add(self.turn[0]);
             }
             return;
         }
@@ -1098,6 +1106,9 @@ pub fn is_held(work: &Work) -> bool {
 pub struct Held<'a> {
     pub holder: [i32; 3],
     pub holder_angle: u16,
+    /// Where an ivy's head points (`FUN_004887d0`'s turn): its `Cdir_y`, its
+    /// neck's turn and pose, less its side.
+    pub holder_aim: u16,
     /// Its id, whose table says what becomes of the player.
     pub holder_id: u8,
     /// `DWORD_009888d8`'s low byte, which some of the frames wait on.
@@ -1851,12 +1862,55 @@ impl Mover<'_, '_> {
         old: i16,
         target: Option<[i32; 3]>,
     ) -> Option<i16> {
+        let angle = self.player.angle as i16;
+        self.rot_joint_with(
+            joint,
+            from,
+            old,
+            target,
+            angle,
+            NECK_RATES[0],
+            NECK_LIMITS[0],
+        )
+    }
+
+    /// `Rot_neck_em` on `Neck_no` `joint`, given the work's direction and the
+    /// joint's rate and limit (its `+0x9C` and `+0xA0`).
+    pub(crate) fn rot_neck_joint(
+        &mut self,
+        joint: usize,
+        from: Option<[i32; 3]>,
+        target: Option<[i32; 3]>,
+        angle: i16,
+        rate: i32,
+        limit: i32,
+    ) {
+        if self.work.neck.flags & 1 != 0 {
+            return;
+        }
+        let old = self.work.neck.turn[0];
+        if let Some(turn) = self.rot_joint_with(joint, from, old, target, angle, rate, limit) {
+            self.work.neck.turn[0] = turn;
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn rot_joint_with(
+        &mut self,
+        joint: usize,
+        from: Option<[i32; 3]>,
+        old: i16,
+        target: Option<[i32; 3]>,
+        angle: i16,
+        rate: i32,
+        limit: i32,
+    ) -> Option<i16> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         let bone = pose.rotations.get(joint).copied()?;
         let root = pose.rotations.first().copied()?;
         let bone = i32::from(bone[1]);
-        let facing = i32::from(self.player.angle as i16) + i32::from(root[1]);
+        let facing = i32::from(angle) + i32::from(root[1]);
         let neck = &self.work.neck;
         let mut aim = match (from, target) {
             (Some(from), Some(target)) => neck_direction(from, target)[0],
@@ -1868,9 +1922,8 @@ impl Mover<'_, '_> {
         let rate = if neck.flags & 0x80 != 0 {
             i32::from(neck.rates[0])
         } else {
-            NECK_RATES[0]
+            rate
         };
-        let limit = NECK_LIMITS[0];
         if limit * 2 < (aim - facing + limit) & 0xFFF {
             aim = if (aim - facing) & 0x800 == 0 {
                 limit + facing
@@ -2108,6 +2161,59 @@ impl Mover<'_, '_> {
             return None;
         }
         self.chain_matrix(&chain)
+    }
+
+    /// Every part's `Workm` on the current pose, with the neck's turn on its
+    /// joint, as the skeleton composes them from the root: what `FUN_004886f0`
+    /// leaves for the ivy's vines.
+    pub(crate) fn posed_parts(&self) -> Vec<Option<Matrix>> {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let skeleton = &self.tick.skeleton;
+        let mut parts = vec![None; skeleton.relative.len()];
+        let Some(mut pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
+            return parts;
+        };
+        self.work.neck.apply(&mut pose);
+        let root = Matrix {
+            m: self.work.body_rotation(self.player.angle),
+            t: self.player.pos,
+        };
+        let mut stack = vec![(0usize, root)];
+        while let Some((part, parent)) = stack.pop() {
+            let Some(rotation) = pose.rotations.get(part) else {
+                continue;
+            };
+            let t = if part == 0 {
+                let [x, y, z] = pose.offset;
+                [x, self.work.scaled_height(y), z]
+            } else {
+                match skeleton.relative.get(part) {
+                    Some(t) => *t,
+                    None => continue,
+                }
+            };
+            let world = parent.comp(&Matrix {
+                m: rot_matrix(*rotation),
+                t: t.map(i32::from),
+            });
+            if let Some(slot) = parts.get_mut(part) {
+                *slot = Some(world);
+            }
+            for &child in skeleton.children.get(part).map_or(&[][..], Vec::as_slice) {
+                stack.push((usize::from(child), world));
+            }
+        }
+        parts
+    }
+
+    /// The parts' own rotations on the current pose: `+0x68`, which
+    /// `Rot_neck_em` puts back after it builds the neck's matrix.
+    pub(crate) fn posed_rotations(&self) -> Vec<[i16; 3]> {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        self.player
+            .anim
+            .pose_keyframe(clips, keyframes)
+            .map_or_else(Vec::new, |pose| pose.rotations)
     }
 
     /// A part's `M`: its own rotation and its place under its parent.
@@ -2790,6 +2896,13 @@ impl Mover<'_, '_> {
             self.em2a_held(held);
             return;
         }
+        if matches!(
+            held.holder_id,
+            crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
+        ) {
+            self.em2e_held(held);
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -2835,6 +2948,158 @@ impl Mover<'_, '_> {
             }
             _ => {}
         }
+    }
+
+    /// `FUN_00487c70`: the ivy's table, on its `pSub1` clips. `Routine_1` 0
+    /// pulls the player in, 1 holds them while it squeezes, 2 lets them go.
+    fn em2e_held(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x40;
+        self.work.bank = Bank::Held;
+        match self.work.routine[1] {
+            0 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.held_clip(0, 0x3F);
+                    self.work.neck.flags |= 1;
+                    let [x, _, z] = held.holder;
+                    let (dx, dz) = (self.player.pos[0] - x, self.player.pos[2] - z);
+                    let distance = crate::sca::square_root0(
+                        dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)),
+                    );
+                    self.work.timers[1] = (distance as i16).wrapping_sub(0x5BF) as u16;
+                    self.work.timers[2] = 7;
+                    self.work.sounds.push(0x401_0001);
+                }
+                let left = self.work.timers[2] as u8;
+                let reach = if left == 0 {
+                    0
+                } else {
+                    self.work.timers[2] = u16::from(left - 1);
+                    (i32::from(self.work.timers[1] as i16) >> 3) * i32::from(left as i8)
+                };
+                self.em2e_place(held, reach + 0x5BF);
+                if self.joint_move_late(LATE) {
+                    self.work.routine[1] = 1;
+                    self.work.routine[2] = 0;
+                    self.work.routine[3] = 0;
+                }
+            }
+            1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.held_clip(1, 0x1F);
+                    self.work.timers[2] = 0x1F;
+                } else if self.work.routine[2] == 2 {
+                    // `Timer3` starts at 1, so the squeeze shows this tick.
+                    self.work.routine[2] = 1;
+                    self.work.routine[3] = 0;
+                    self.work.sounds.push(0x402_0001);
+                    self.em2e_blood();
+                }
+                let left = self.work.timers[2] as u8;
+                let reach = if left == 0 {
+                    0
+                } else {
+                    self.work.timers[2] = u16::from(left - 1);
+                    (i32::from(left as i8) * 0x11C) / 0x1F
+                };
+                self.em2e_place(held, reach + 0x4A3);
+                if self.joint_move_late(0x80) {
+                    self.work.hokan = 0x1F;
+                }
+            }
+            2 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.held_clip(4, 0x1F);
+                    self.spd_get();
+                    self.joint_move_late(LATE);
+                    self.work.timers[0] = 0x4A3;
+                    return;
+                }
+                self.spd_get();
+                if self.joint_move_late(LATE) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt &= 0x7F;
+                    self.work.be_flg &= !0x42;
+                    self.work.bank = Bank::Weapon;
+                    self.work.neck.flags &= 0xED;
+                    held.released = true;
+                }
+                self.add_speed_xz_at(0x800);
+                self.work.timers[0] = self.work.timers[0].wrapping_add(self.work.spd[0] as u16);
+                if self.work.timers[0] as i16 > 0x739 {
+                    self.work.be_flg &= !0x42;
+                }
+            }
+            3 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.held_clip(3, 0x3F);
+                    self.work.neck.flags |= 1;
+                }
+                self.joint_move_late(LATE);
+            }
+            5 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.held_clip(2, 0x3F);
+                    self.work.be_flg |= 8;
+                } else if self.work.routine[2] != 1 {
+                    return;
+                }
+                self.null_pos_set(0x800);
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+            }
+            6..=8 => {}
+            _ => match self.work.routine[2] {
+                0 => {
+                    self.work.routine[2] = 1;
+                    self.held_clip(0, 0x3F);
+                    self.work.neck.flags |= 1;
+                }
+                1 => {
+                    self.null_pos_set(0x800);
+                    if self.joint_move_late(LATE) {
+                        self.work.routine[2] = 2;
+                        self.held_clip(1, 0x3F);
+                    }
+                }
+                2 => {
+                    self.null_pos_set(0x800);
+                    if self.joint_move_late(LATE) {
+                        self.work.routine[1] = 2;
+                        self.work.routine[2] = 0;
+                        self.work.routine[3] = 0;
+                    }
+                }
+                _ => {}
+            },
+        }
+    }
+
+    /// `FUN_004887d0`: the player `reach` out along the ivy's head.
+    fn em2e_place(&mut self, held: &Held<'_>, reach: i32) {
+        let m = rot_matrix([0, held.holder_aim as i16, 0]);
+        let turned = |row: usize| (i32::from(m[row][0]) * reach) >> 12;
+        self.player.pos[0] = held.holder[0] + i32::from(turned(0) as i16);
+        self.player.pos[2] = held.holder[2] + i32::from(turned(2) as i16);
+    }
+
+    /// `FUN_00488570(player, 0, 8)`: blood at the player's first part.
+    fn em2e_blood(&mut self) {
+        let at = self
+            .part_matrix(0)
+            .map_or(self.player.pos, |matrix| matrix.t);
+        let [x, _, z] = self.player.pos;
+        self.work.effects.push(EffectCall {
+            kind: 4,
+            row: 0x0F,
+            size: 0x1400,
+            dir: direction_ck(x, z, x, z) as i16,
+            at: at.map(|axis| axis as i16),
+        });
     }
 
     /// `FUN_004805e0`: Mr. X's table, on his `pSub1` clips. `Routine_1` 0 and
@@ -4287,6 +4552,7 @@ mod tests {
             let mut held = Held {
                 holder: [0; 3],
                 holder_angle: 0,
+                holder_aim: 0,
                 holder_id: 0x10,
                 draw_buffer: 0,
                 rnd: &mut rnd,
