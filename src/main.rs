@@ -1325,6 +1325,9 @@ fn main() -> Result<()> {
                     None => arklay::biorand::verify_pack(&pack)?,
                 };
                 println!("{}: ok, {report}", pack.display());
+                for warning in &report.warnings {
+                    println!("  warning: {warning}");
+                }
                 Ok(())
             }
         },
