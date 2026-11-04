@@ -7669,6 +7669,43 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     Ok(game)
 }
 
+/// Whether any of `id`'s scripts raises the screen-border flag (the caves),
+/// whose backgrounds are 316x236 artwork stored under a 320x240 header. The
+/// flag is raised by the init script or by an event it (or the room) starts,
+/// so the scripts are scanned rather than run.
+pub(crate) fn room_sets_screen_border(pack: &Pack, id: RoomId) -> bool {
+    let Ok(loaded) = crate::room::load(pack, id) else {
+        return false;
+    };
+    let Ok((scripts, _)) = room_scripts(pack, id, &loaded) else {
+        return false;
+    };
+    scripts_raise_screen_border(&scripts)
+}
+
+/// Whether any stream in `scripts` raises the screen-border flag: command
+/// 0x05 (set a flag) on bank 5, selector [`game::MSF2_SCREEN_BORDER`], bit 0.
+fn scripts_raise_screen_border(scripts: &scd::ir::Scripts) -> bool {
+    let raises = |insn: &scd::ir::Insn| {
+        matches!(insn.decoded, scd::ir::Decoded::Command(op) if op.op == 0x05)
+            && insn
+                .operands
+                .iter()
+                .take(3)
+                .map(|operand| operand.value)
+                .eq([5, i64::from(game::MSF2_SCREEN_BORDER), 0])
+    };
+    scripts
+        .init
+        .iter()
+        .chain(&scripts.main)
+        .any(|block| block.insns.iter().any(raises))
+        || scripts
+            .events
+            .iter()
+            .any(|stream| stream.insns.iter().any(raises))
+}
+
 /// The paired-arrival miss fallback: a free spot at the first walk zone's
 /// edge, picked from the entry door's direction, then the zone centre and
 /// three inset edge spots. `None` when the room has no walk zone or every
@@ -33907,5 +33944,68 @@ end
                 .any(|pixel| pixel[..3] != [0, 0, 0]),
             "the packed page painted"
         );
+    }
+
+    #[test]
+    fn entry_doors_lists_stairs_first_then_the_rest_by_slot() {
+        let mut doors: [Option<game::Door>; game::ROOM_ACTION_SLOTS] = Default::default();
+        let door = |slot: u8, door_type: u8| game::Door {
+            slot,
+            door_type,
+            ..Default::default()
+        };
+        doors[1] = Some(door(1, 0));
+        doors[2] = Some(door(2, 0x16));
+        doors[4] = Some(door(4, 0));
+        let slots: Vec<u8> = entry_doors(&doors).iter().map(|door| door.slot).collect();
+        assert_eq!(slots, [2, 1, 4]);
+        assert_eq!(entry_door(&doors).map(|door| door.slot), Some(2));
+        assert!(entry_doors(&Default::default()).is_empty());
+    }
+
+    #[test]
+    fn a_script_raising_the_screen_border_flag_is_detected_wherever_it_sits() {
+        let insn = |bank: i64, selector: i64| {
+            let op = scd::opcode::command_op(0x05).unwrap();
+            scd::ir::Insn {
+                offset: 0,
+                op: 0x05,
+                bytes: Vec::new(),
+                decoded: scd::ir::Decoded::Command(op),
+                operands: [bank, selector, 0]
+                    .map(|value| scd::ir::Operand {
+                        value,
+                        target: None,
+                    })
+                    .to_vec(),
+            }
+        };
+        let block = |insns| scd::ir::Block {
+            insns,
+            ..Default::default()
+        };
+        let border = i64::from(game::MSF2_SCREEN_BORDER);
+        assert!(!scripts_raise_screen_border(&Default::default()));
+
+        let mut scripts = scd::ir::Scripts::default();
+        scripts
+            .main
+            .push(block(vec![insn(5, 0x10), insn(4, border)]));
+        assert!(!scripts_raise_screen_border(&scripts), "another flag");
+
+        // An init script, a main script and an event stream each count.
+        let mut init = scd::ir::Scripts::default();
+        init.init.push(block(vec![insn(5, border)]));
+        assert!(scripts_raise_screen_border(&init));
+        scripts.main.push(block(vec![insn(5, border)]));
+        assert!(scripts_raise_screen_border(&scripts));
+        let mut event = scd::ir::Scripts::default();
+        event.events.push(scd::ir::Stream {
+            kind: scd::ir::StreamKind::default(),
+            offset: 0,
+            insns: vec![insn(5, border)],
+            trailing: Vec::new(),
+        });
+        assert!(scripts_raise_screen_border(&event));
     }
 }
