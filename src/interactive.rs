@@ -928,7 +928,7 @@ impl UserData for ScreenApi {
         });
         methods.add_method_mut("voice", |_, api, id: i64| {
             let game = api.game_mut();
-            let row = game.id.table_row() as u8;
+            let row = game.origin().table_row() as u8;
             game.voice.request = Some(game::VoiceRequest {
                 path: crate::voice::pack_path(row, id as u16),
                 volume: 0,

@@ -411,6 +411,8 @@ pub fn update_entity(
     clips: &[Clip],
     look_at_target: Option<[i32; 3]>,
 ) {
+    // The idle poses keyed to a room are its origin's.
+    let origin = game.origin();
     let advance = match game.entities[slot].state() {
         0 => {
             idle::init(
@@ -418,7 +420,7 @@ pub fn update_entity(
                 &mut game.entity_anims[slot],
                 clips,
                 &game.flags,
-                game.id,
+                origin,
             );
             false
         }

@@ -225,6 +225,7 @@ impl BgmCache {
 /// [`crate::bgm2`]), so this sleeps no frames.
 fn update_re2_room_bgm(game: &mut GameState, id: RoomId) {
     use crate::bgm2;
+    let id = game.origins.of(id);
     let main = id
         .stage
         .checked_sub(1)
@@ -258,8 +259,11 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
         update_re2_room_bgm(game, id);
         return 0;
     }
-    let stage = id.table_row();
-    let room = usize::from(id.room);
+    // A room's music is its origin's: its table entry and music group.
+    let id = game.origins.of(id);
+    let Some((stage, room)) = id.table_slot() else {
+        return 0;
+    };
     let Some(&target) = game.room_bgm.get(stage * 32 + room) else {
         return 0;
     };
@@ -281,8 +285,11 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
 
     let new_group = game.music.group_for(stage, room, target);
     let old_group = from.and_then(|from| {
-        game.music
-            .group_for(stage, usize::from(from.room), previous as u8)
+        game.music.group_for(
+            stage,
+            usize::from(game.origins.of(from).room),
+            previous as u8,
+        )
     });
 
     // A different track is coming and something is playing: tear the old banks
@@ -364,8 +371,9 @@ pub fn init_room_sleep(game: &GameState, id: RoomId) -> u8 {
     if game.is_re2_room {
         return 0;
     }
-    let stage = id.table_row();
-    let room = usize::from(id.room);
+    let Some((stage, room)) = game.origins.of(id).table_slot() else {
+        return 0;
+    };
     match game.room_bgm.get(stage * 32 + room) {
         Some(&target) if target != 0xFF && matches!(target >> 6, 1 | 2) => FADE_OUT_ALL_FRAMES,
         _ => 0,
@@ -381,8 +389,10 @@ pub fn init_room_demo_override(game: &mut GameState, id: RoomId) {
     if !game.flags[5].bit(crate::game::MSF2_ATTRACT_DEMO) {
         return;
     }
-    let stage = id.table_row();
-    if let Some(target) = game.room_bgm.get_mut(stage * 32 + usize::from(id.room)) {
+    let Some((stage, room)) = game.origins.of(id).table_slot() else {
+        return;
+    };
+    if let Some(target) = game.room_bgm.get_mut(stage * 32 + room) {
         *target = 0xFF;
     }
 }
@@ -395,6 +405,8 @@ pub fn init_room_demo_override(game: &mut GameState, id: RoomId) {
 /// original loads muted start at `-9999` millibels. The stage-2 room-7
 /// special case drops the third channel unless Jill's exact flag combination
 /// holds.
+///
+/// `id` is the room's origin ([`update_room_bgm`] maps it).
 fn load_and_start(game: &mut GameState, id: RoomId, state: u8) {
     let mut slot_count = BGM_CHANNELS;
     if id.stage == 3 && id.room == 0x07 && !underground_third_channel(game, id) {
@@ -641,7 +653,8 @@ fn apply_re2_music(mixer: &mut Mixer, game: &mut GameState, cache: &mut BgmCache
 
 fn apply_re2_levels(mixer: &mut Mixer, game: &GameState) {
     // `Bgm_ck_room115` takes this off every volume in that room.
-    let quieter = game.id.stage == 1 && game.id.room == 0x15;
+    let origin = game.origin();
+    let quieter = origin.stage == 1 && origin.room == 0x15;
     for (index, channel) in game.re2.music.channels.iter().enumerate() {
         let volume = channel.volume.saturating_sub(if quieter { 0xf } else { 0 });
         mixer.set_bgm_channel_volume(index, crate::se2::volume_gain(volume));
