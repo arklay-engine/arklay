@@ -196,6 +196,21 @@ fn a_seed_makes_a_verified_pack_per_player() {
             spoiler.contains("000042") || spoiler.contains("42"),
             "{spoiler}"
         );
+        // The segments are the stages, so the debug room select says so
+        // rather than naming the original's stages.
+        let segments = game
+            .doors
+            .as_ref()
+            .unwrap()
+            .rooms
+            .values()
+            .map(|room| room.stage)
+            .max()
+            .unwrap();
+        let names = crate::lua::stage_names(&pack);
+        assert_eq!(names.len(), usize::from(segments));
+        assert_eq!(names.first().map(String::as_str), Some("Seg. 1"));
+        assert_eq!(names.last().cloned(), Some(format!("Seg. {segments}")),);
         // The other entries are the base's.
         assert_eq!(pack.read("bgm/000.wav").unwrap().as_ref(), b"music");
     }
