@@ -420,11 +420,12 @@ impl UserData for Api {
         methods.add_method_mut("floor", |_, e, ()| Ok(e.em().z.floor));
         methods.add_method_mut(
             "sca_list",
-            |_, e, (x, z, floor, mask): (i32, i32, i32, i64)| {
+            |_, e, (x, z, floor, mask, radius): (i32, i32, i32, i64, Option<i32>)| {
                 let room = e.em().mover.tick.room;
                 Ok(room.sca.as_ref().map_or_else(Vec::new, |sca| {
                     let floor = (floor & 0x1F) as u8;
-                    let list = crate::sca::list_at(sca, mask as u16, x, z, 10, floor);
+                    let radius = radius.unwrap_or(10);
+                    let list = crate::sca::list_at(sca, mask as u16, x, z, radius, floor);
                     list.into_iter().map(|record| record + 1).collect()
                 }))
             },
@@ -775,6 +776,10 @@ impl UserData for Api {
             e.em().work().spd[0] = x as i16;
             Ok(())
         });
+        methods.add_method_mut("set_speed_z", |_, e, z: i64| {
+            e.em().work().spd[2] = z as i16;
+            Ok(())
+        });
         methods.add_method_mut("add_speed_xz_at", |_, e, dir: i64| {
             e.em().mover.add_speed_xz_at(dir as u16);
             Ok(())
@@ -947,6 +952,70 @@ impl UserData for Api {
             let [x, y, z] = e.em().world.player;
             Ok((x, y, z))
         });
+        // `Goto01` and `Goto00` on the player, from where this tick has turned it.
+        methods.add_method_mut("player_goto_angle", |_, e, (to, rate): (i64, i32)| {
+            let world = &mut *e.em().world;
+            let angle = world.turn_player.unwrap_or(world.player_angle);
+            world.turn_player = Some(player2::goto(angle, to as u16, rate));
+            Ok(())
+        });
+        methods.add_method_mut(
+            "player_goto_point",
+            |_, e, (x, z, rate): (i32, i32, i32)| {
+                let world = &mut *e.em().world;
+                let angle = world.turn_player.unwrap_or(world.player_angle);
+                let [from_x, _, from_z] = world.player;
+                let target = direction_ck(from_x, from_z, x, z);
+                world.turn_player = Some(player2::goto(angle, target, rate));
+                Ok(())
+            },
+        );
+        methods.add_method_mut("player_floor", |_, e, ()| Ok(e.em().world.player_floor));
+        // `Approach` on the player's position.
+        methods.add_method_mut("player_approach", |_, e, (x, z, rate): (i32, i32, i32)| {
+            let world = &mut *e.em().world;
+            let [old_x, _, old_z] = world.player;
+            let angle = direction_ck(old_x, old_z, x, z);
+            let (dx, dz) = player2::rotate(angle, rate, 0);
+            let (new_x, new_z) = (old_x + dx, old_z + dz);
+            world.player_moved = true;
+            let stays = (new_x - x < 0) == (old_x - x < 0) && (new_z - z < 0) == (old_z - z < 0);
+            let (x, z) = if stays { (new_x, new_z) } else { (x, z) };
+            world.player[0] = x;
+            world.player[2] = z;
+            Ok(!stays)
+        });
+        // `Old_x` and `Old_z`: where the player ended the last tick.
+        methods.add_method_mut("player_old", |_, e, ()| {
+            let world = &*e.em().world;
+            let [x, _, z] = world.pl.old.unwrap_or(world.player);
+            Ok((x, z))
+        });
+        methods.add_method_mut("hypot", |_, e, (dx, dz): (i32, i32)| {
+            let _ = e;
+            Ok(square_root0(
+                dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)),
+            ))
+        });
+        methods.add_method_mut("hand", |_, e, hand: usize| {
+            let at = super::MRX_HANDS + hand.min(1) * 3;
+            let vars = &e.em().z.vars;
+            Ok((vars[at], vars[at + 1], vars[at + 2]))
+        });
+        methods.add_method_mut("player_at_w", |_, e, ()| {
+            let world = &*e.em().world;
+            Ok(world
+                .bodies
+                .iter()
+                .find(|body| body.slot == PLAYER_BODY)
+                .map_or(0, |body| body.atd.at_w))
+        });
+        methods.add_method_mut("draw_buffer", |_, e, ()| Ok(e.em().world.draw_buffer));
+        methods.add_method_mut("room_code", |_, e, ()| Ok(e.em().world.room_code));
+        methods.add_method_mut("set_status", |_, e, bits: i64| {
+            e.em().world.status_or |= bits as u32;
+            Ok(())
+        });
         methods.add_method_mut("set_player_angle", |_, e, angle: i64| {
             e.em().world.turn_player = Some(angle as u16 & 0xFFF);
             Ok(())
@@ -1020,6 +1089,23 @@ impl UserData for Api {
                 em.world.player,
                 mask as u16,
             ))
+        });
+        // `FUN_004e2ec0` on `pSca_hit_data`, from where the body stands, and
+        // the middle of that record: nothing if `Sca_ck_em` hit none.
+        methods.add_method_mut("hit_side", |_, e, ()| {
+            let em = e.em();
+            let [x, _, z] = em.mover.player.pos;
+            Ok(em.z.sca_hit.map(|[left, near, width, depth]| {
+                crate::sca::side_across(x, z, [left, near], [width, depth])
+            }))
+        });
+        methods.add_method_mut("hit_middle", |_, e, ()| {
+            Ok(match e.em().z.sca_hit {
+                Some([left, near, width, depth]) => {
+                    (Some(left + (width >> 1)), Some(near + (depth >> 1)))
+                }
+                None => (None, None),
+            })
         });
         methods.add_method_mut("wall_side", |_, e, return_to: i32| {
             Ok(e.em().wall_side(return_to))
@@ -1096,9 +1182,10 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 4] = [
+    const SCRIPTS: [&str; 5] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
+        include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/lib/licker.lua"),
         include_str!("../../games/re2/lib/zombie.lua"),
     ];
@@ -1200,15 +1287,19 @@ mod tests {
         };
         lua.scope(|scope| {
             let e = scope.create_userdata_ref_mut(&mut api)?;
-            for call in SCRIPTS.iter().flat_map(|script| script.split("e:").skip(1)) {
-                let name: String = call
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
+            // Each name once: the lookups share the sandbox's budget.
+            let names: std::collections::BTreeSet<String> = SCRIPTS
+                .iter()
+                .flat_map(|script| script.split("e:").skip(1))
+                .map(|call| {
+                    call.chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect()
+                })
                 // The end of a word, in a comment.
-                if name.is_empty() {
-                    continue;
-                }
+                .filter(|name: &String| !name.is_empty())
+                .collect();
+            for name in names {
                 let found: mlua::Value = method.call((&e, name.as_str()))?;
                 assert!(!found.is_nil(), "e:{name} has no binding");
             }

@@ -606,6 +606,10 @@ fn copy_text(
             include_str!("../games/re2/enemy/21/enemy.lua"),
         ),
         (
+            "enemy/2a/enemy.lua",
+            include_str!("../games/re2/enemy/2a/enemy.lua"),
+        ),
+        (
             "lib/licker.lua",
             include_str!("../games/re2/lib/licker.lua"),
         ),

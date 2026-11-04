@@ -1,0 +1,76 @@
+# room 20d: Mr. X takes a shot every two seconds (oracle/re2.md)
+360 aim
+380 aim fire
+385 aim
+440 aim fire
+445 aim
+500 aim fire
+505 aim
+560 aim fire
+565 aim
+620 aim fire
+625 aim
+680 aim fire
+685 aim
+740 aim fire
+745 aim
+800 aim fire
+805 aim
+860 aim fire
+865 aim
+920 aim fire
+925 aim
+980 aim fire
+985 aim
+1040 aim fire
+1045 aim
+1100 aim fire
+1105 aim
+1160 aim fire
+1165 aim
+1220 aim fire
+1225 aim
+1280 aim fire
+1285 aim
+1340 aim fire
+1345 aim
+1400 aim fire
+1405 aim
+1460 aim fire
+1465 aim
+1520 aim fire
+1525 aim
+1580 aim fire
+1585 aim
+1640 aim fire
+1645 aim
+1700 aim fire
+1705 aim
+1760 aim fire
+1765 aim
+1820 aim fire
+1825 aim
+1880 aim fire
+1885 aim
+1940 aim fire
+1945 aim
+2000 aim fire
+2005 aim
+2060 aim fire
+2065 aim
+2120 aim fire
+2125 aim
+2180 aim fire
+2185 aim
+2240 aim fire
+2245 aim
+2300 aim fire
+2305 aim
+2360 aim fire
+2365 aim
+2420 aim fire
+2425 aim
+2480 aim fire
+2485 aim
+2540 aim fire
+2545 aim

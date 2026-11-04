@@ -84,6 +84,9 @@ pub struct Re2State {
     pub rnd: crate::zombie2::Rnd,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: u8,
+    /// `DWORD_009888d8`'s low byte: the draw buffer, which `Swap_Cbuff` flips
+    /// once a frame.
+    pub draw_buffer: u8,
     /// `BYTE_00989eeb`: the room's enemies so far.
     pub enemies: u8,
     /// `Se_tmp0`: the sound types of the room's enemies, as `sce_em_set` saw them.
@@ -375,6 +378,7 @@ impl Default for Re2State {
             scroll: 0,
             rnd: Default::default(),
             tongue_owner: 0,
+            draw_buffer: 0,
             enemies: 0,
             sound_types: [0; 2],
             enemy_bank: None,
@@ -1098,7 +1102,7 @@ impl GameHost<'_> {
             types[1] = sound_type;
         }
         let licker = matches!(id, 0x22 | 0x24);
-        let zombie = (0x10..=0x21).contains(&id) || licker;
+        let zombie = (0x10..=0x21).contains(&id) || licker || id == crate::zombie2::MRX_ID;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {

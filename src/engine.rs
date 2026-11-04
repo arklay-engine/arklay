@@ -14891,6 +14891,8 @@ fn tick_room_timed(
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
     context.game.re2.set_key(crate::player2::key_word(&input));
+    // `Swap_Cbuff` ends each of these frames.
+    context.game.re2.draw_buffer ^= 1;
     // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
     let input = if context.game.re2.input_stopped()
         || (context.game.is_re2_room && context.game.message.active)
@@ -15068,6 +15070,10 @@ fn tick_room_timed(
         if let Some(angle) = context.game.re2.player.turn_to.take() {
             context.player.angle = angle;
             context.game.entities[0].angle = angle;
+        }
+        if let Some([x, z]) = context.game.re2.player.move_to.take() {
+            context.player.pos[0] = x;
+            context.player.pos[2] = z;
         }
     }
     if state != 1 || frozen {

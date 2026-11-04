@@ -346,6 +346,8 @@ pub struct Work {
     pub die_held_back: bool,
     /// The angle an enemy turned the player to this tick.
     pub turn_to: Option<u16>,
+    /// Where an enemy's `Approach` moved the player this tick, `x` and `z`.
+    pub move_to: Option<[i32; 2]>,
     /// `+0x164`, which `Null_pos_set` adds a clip's movement to.
     pub base: [i16; 3],
     /// `Timer0`, `Timer1` and `Timer2` of the held states.
@@ -392,6 +394,8 @@ pub const fn character_shadow(id: u8) -> (i32, i32) {
         0x10..0x20 => (0x190, 0x258),
         // `Em22_Init`'s, and `Em_24`'s copy.
         0x22 | 0x24 => (0x44C, 0x352),
+        // `MrX_init`'s.
+        0x2A => (0x226, 0x2EE),
         0x45 | 0x4F => (0x172, 0x1CC),
         0x4D => (500, 600),
         id if id & 1 != 0 => (0x1A4, 0x208),
@@ -687,6 +691,7 @@ impl Default for Work {
             held_kill: false,
             die_held_back: false,
             turn_to: None,
+            move_to: None,
             base: [0; 3],
             timers: [0; 3],
             at_em_flg: 0,
@@ -1092,8 +1097,11 @@ pub fn is_held(work: &Work) -> bool {
 /// What [`player_held`] sees of the rest of the game.
 pub struct Held<'a> {
     pub holder: [i32; 3],
+    pub holder_angle: u16,
     /// Its id, whose table says what becomes of the player.
     pub holder_id: u8,
+    /// `DWORD_009888d8`'s low byte, which some of the frames wait on.
+    pub draw_buffer: u8,
     pub rnd: &'a mut crate::zombie2::Rnd,
     pub life: &'a mut i16,
     /// `Be_flg`'s bits to clear from the holder: the hold has ended.
@@ -2778,6 +2786,10 @@ impl Mover<'_, '_> {
             self.em21_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::MRX_ID {
+            self.em2a_held(held);
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -2819,6 +2831,193 @@ impl Mover<'_, '_> {
                 if self.joint_move_late(LATE) {
                     self.held_clip(1, 7);
                     self.held_end(held);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `FUN_004805e0`: Mr. X's table, on his `pSub1` clips. `Routine_1` 0 and
+    /// 1 are the blow that throws the player back or turns them round, and 2
+    /// is the kill.
+    fn em2a_held(&mut self, held: &mut Held<'_>) {
+        self.work.bank = Bank::Held;
+        match self.work.routine[1] {
+            0 => self.em2a_thrown(),
+            2 => self.em2a_killed(held),
+            _ => self.em2a_turned(),
+        }
+    }
+
+    /// `FUN_004805e0`'s `Routine_1` 0: thrown back, sliding to a stop.
+    fn em2a_thrown(&mut self) {
+        const LATE: u16 = 0x400;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x401_0001);
+                    self.work.spd = [-0x258, 0, 0];
+                    self.work.move_no = 2;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                if self.work.hokan == 0 {
+                    self.work.routine[2] = 2;
+                }
+                self.add_speed_xz();
+                self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0x70);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.move_no = 3;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 3;
+                }
+                self.add_speed_xz();
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0xF);
+                self.work.routine[2] += u8::from(first) + u8::from(second);
+                if self.work.spd[0] > 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+            }
+            _ => {}
+        }
+    }
+
+    /// `FUN_004805e0`'s `Routine_1` 1: hit from behind, turned round, and
+    /// back to the player's own clip.
+    fn em2a_turned(&mut self) {
+        const LATE: u16 = 0x400;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x402_0001);
+                    self.work.move_no = 4;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.spd = [500, 0, 0];
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                self.add_speed_xz();
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+                let slow = if self.work.hokan == 0 { 0x3C } else { 0x1E };
+                self.work.spd[0] = self.work.spd[0].wrapping_sub(slow);
+                if self.work.spd[0] < 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            2 | 4 | 5 => {
+                if self.work.routine[2] != 5 {
+                    self.work.move_no = 1;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 5;
+                    self.work.damage_cnt = 0;
+                }
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                if first || second {
+                    self.work.routine[2] = 6;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                }
+            }
+            6 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(0x400, true) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt = 0;
+                    self.work.neck.flags &= 0xED;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `FUN_004805e0`'s `Routine_1` 2: lifted and killed. It turns to face him,
+    /// or away if it faces his way, and some of its frames wait for the
+    /// other draw buffer.
+    fn em2a_killed(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x400;
+        let same_way = held
+            .holder_angle
+            .wrapping_sub(self.player.angle)
+            .wrapping_add(0x400)
+            & 0xFFF
+            < 0x800;
+        let [x, _, z] = held.holder;
+        let sound = (u32::from(same_way) + 1) << 16 | 0x400_0001;
+        let turn = |mover: &mut Self, rate: i32| {
+            let target = direction_ck(mover.player.pos[0], mover.player.pos[2], x, z);
+            let rate = if same_way { -rate } else { rate };
+            mover.player.angle = goto(mover.player.angle, target, rate);
+        };
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.work.move_no = 3 + (self.work.routine[1] & 1);
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.be_flg |= 0xA;
+                    self.work.timers[0] = 0;
+                    self.work.sounds.push(sound);
+                    self.work.neck.flags |= 0x12;
+                }
+                turn(self, 0x40);
+                if self.work.move_cnt < 6 || held.draw_buffer != 0 {
+                    self.joint_move_late(LATE);
+                }
+                if self.work.move_cnt == 0x1A {
+                    self.work.routine[2] = 2;
+                }
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.sounds.push(sound);
+                    self.work.move_no = 0;
+                    self.work.move_cnt = 0x10;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 3;
+                }
+                turn(self, 0x10);
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+            }
+            4 => {
+                self.work.timers[0] = self.work.timers[0].wrapping_add(1);
+                if self.work.timers[0] as i16 > 0x23 {
+                    self.work.routine[2] = 5;
+                }
+            }
+            5 | 6 => {
+                if self.work.routine[2] == 5 {
+                    self.work.sounds.push(sound);
+                    self.work.move_no = 5;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 6;
+                }
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+                if self.work.move_cnt == 0xC {
+                    self.work.routine[2] += 1;
                 }
             }
             _ => {}
@@ -4087,7 +4286,9 @@ mod tests {
         for _ in 0..200 {
             let mut held = Held {
                 holder: [0; 3],
+                holder_angle: 0,
                 holder_id: 0x10,
+                draw_buffer: 0,
                 rnd: &mut rnd,
                 life,
                 released: false,
