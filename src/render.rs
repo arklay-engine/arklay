@@ -3646,7 +3646,7 @@ impl Lighting {
     }
 
     /// Whether these are an RE2 camera's lights, which a part's normals meet
-    /// in its own space ([`re2_vertex_shade`]).
+    /// in its own space (`re2_vertex_shade`).
     pub fn is_re2(&self) -> bool {
         self.lights[0].re2_gain.is_some()
     }
@@ -4651,13 +4651,13 @@ pub(crate) fn re2_vertex_shade(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LightSpace {
     /// RE1's entities: the stored row through the camera
-    /// ([`reference_vertex_shade`]).
+    /// (`reference_vertex_shade`).
     Camera,
     /// RE1's room objects: the row turned by the object's rotation, then
     /// through the camera.
     RoomObject,
     /// RE2: the row turned by the part's rotation, met in the part's own
-    /// space ([`re2_vertex_shade`]).
+    /// space (`re2_vertex_shade`).
     Part,
 }
 
