@@ -163,6 +163,33 @@ struct Cli {
     #[arg(long, requires = "pack")]
     no_mods: bool,
 
+    /// Drive the game with the pack's restricted `bot/**.lua` mod instead of
+    /// the keyboard: normal player input only, no state authoring. Without
+    /// `--ui` it implies `--ui game --character 1` (Jill); use
+    /// `--ui game --character 0` for Chris. Example:
+    /// `arklay re1.akpak --mod mods/bot --bot`
+    #[arg(long, requires = "pack")]
+    bot: bool,
+
+    /// Run `--bot` without a window or audio, as fast as the simulation
+    /// allows, and exit when the bot finishes, dies or `--bot-max-ticks` is
+    /// reached. Example: `arklay re1.akpak --mod mods/bot --bot --bot-headless`
+    #[arg(
+        long,
+        requires = "bot",
+        conflicts_with_all = ["capture", "trace", "input", "stats"]
+    )]
+    bot_headless: bool,
+
+    /// Maximum app updates a `--bot-headless` run may take (default 100000)
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = arklay::engine::DEFAULT_MAX_TICKS,
+        requires = "bot_headless"
+    )]
+    bot_max_ticks: u64,
+
     /// Enable Classic REbirth's quick turn for this run: while walking
     /// backward, RUN turns the player 180 degrees in place over eight ticks.
     /// Overrides `[game] quick_turn` in arklay.toml
@@ -1377,6 +1404,37 @@ fn main() -> Result<()> {
             {
                 bail!("--setup-script/--save-out require --room, --load or a --ui boot");
             }
+            let bot_enabled = cli.bot || cli.bot_headless;
+            if bot_enabled {
+                if let Some(screen) = cli.ui.as_deref()
+                    && screen != "game"
+                {
+                    bail!(
+                        "--bot/--bot-headless are only supported with `--ui game`, not `{screen}`"
+                    );
+                }
+                if cli.capture.is_some() {
+                    bail!("--bot does not take --capture; let the bot finish and report instead");
+                }
+                if cli.stats {
+                    bail!("--bot does not take --stats");
+                }
+                if tracing {
+                    bail!("--bot does not take --trace/--input");
+                }
+            }
+            // A bare `--bot` implies the new Jill game the opening route starts
+            // from; an explicit `--ui game --character N` keeps N.
+            let (ui_screen, character) = if bot_enabled && cli.ui.is_none() {
+                (Some("game".to_string()), 1)
+            } else {
+                (cli.ui.clone(), cli.character)
+            };
+            let bot_options = arklay::engine::BotOptions {
+                enabled: bot_enabled,
+                headless: cli.bot_headless,
+                max_ticks: cli.bot_max_ticks,
+            };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
                 None => None,
@@ -1452,7 +1510,7 @@ fn main() -> Result<()> {
                     renderer,
                 );
             }
-            if let Some(screen) = cli.ui {
+            if let Some(screen) = ui_screen {
                 // `--ui game --room <id>` boots the new game straight into the
                 // room through the session flow, the anchor the reference's
                 // test-only room boot mirrors.
@@ -1469,7 +1527,7 @@ fn main() -> Result<()> {
                     &screen,
                     cli.capture.as_deref(),
                     &save_dir,
-                    cli.character,
+                    character,
                     room,
                     cli.demo,
                     &mods,
@@ -1478,6 +1536,7 @@ fn main() -> Result<()> {
                     player_options,
                     trace_options,
                     authoring,
+                    bot_options,
                 );
             }
             // `--load` without `--ui` is the interactive continue: the same
@@ -1488,7 +1547,7 @@ fn main() -> Result<()> {
                     "game",
                     cli.capture.as_deref(),
                     &save_dir,
-                    cli.character,
+                    character,
                     None,
                     cli.demo,
                     &mods,
@@ -1497,6 +1556,7 @@ fn main() -> Result<()> {
                     player_options,
                     trace_options,
                     authoring,
+                    bot_options,
                 );
             }
             if let Some(room) = cli.room {
