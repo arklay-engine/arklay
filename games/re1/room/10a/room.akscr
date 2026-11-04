@@ -231,7 +231,10 @@ event hunter_film
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE);
+            if (!CUTSCENES_DISABLED)
+            {
+                set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE);
+            }
         }
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }

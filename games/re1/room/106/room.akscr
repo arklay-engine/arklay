@@ -132,6 +132,45 @@ proc init
             }
         }
     }
+    if (CUTSCENES_DISABLED)
+    {
+        // The new game's first visit (the "first cutscene" flag is still
+        // clear) raises the flags of the story scenes, so none plays
+        // (staging's DisableCutscenes, 13 flags for Chris, 18 for Jill). The
+        // enemy placeholder above has already read the unraised flags.
+        if (ck(FG_COMMON, F_COMMON_INTRO_SEEN, FALSE))
+        {
+            set(FG_SCENARIO, F_SCENARIO_CELL_DOOR_TALK, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE);
+            set(FG_COMMON, F_COMMON_INTRO_SEEN, TRUE);
+            set(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, TRUE);
+            set(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, TRUE);
+            set(FG_COMMON, F_COMMON_HELIPORT_PASSAGE_TALK, TRUE);
+            set(FG_COMMON, F_COMMON_ENRICO_SHOT, TRUE);
+            set(FG_COMMON, F_COMMON_J_FIREPLACE_WOOD_EMBLEM, TRUE);
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+            {
+                set(FG_SCENARIO, F_SCENARIO_C0, TRUE);
+                set(FG_COMMON, F_COMMON_C_REBECCA_MET, TRUE);
+                set(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE);
+                set(FG_COMMON, F_COMMON_C_FIREPLACE_WOOD_EMBLEM, TRUE);
+                set(FG_COMMON, F_COMMON_C_WESKER_GUARDHOUSE_MET, TRUE);
+            }
+            else
+            {
+                set(FG_COMMON, F_COMMON_J_BARRY_LOCKPICK_SCENE, TRUE);
+                set(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE);
+                set(FG_COMMON, F_COMMON_J_POISON_COLLAPSE_DONE, TRUE);
+                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                set(FG_COMMON, F_COMMON_J_GAS_HOLE_1_COVERED, TRUE);
+                set(FG_COMMON, F_COMMON_C_REBECCA_PRACTISED, TRUE);
+                set(FG_COMMON, F_COMMON_J_ENTERED_TEA_ROOM, TRUE);
+                set(FG_COMMON, F_COMMON_J_KENNETH_ZOMBIE_DEAD, TRUE);
+                set(FG_COMMON, F_COMMON_J_WESKER_GUARDHOUSE_MET, TRUE);
+                set(FG_COMMON, F_COMMON_PARTNER_LOST, TRUE);
+            }
+        }
+    }
     set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     door_aot_set(AOT_00_DOOR_107, 31100, 10000, 2000, 3000, 6, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_111, 31100, 18600, 2000, 1200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_106_111, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
