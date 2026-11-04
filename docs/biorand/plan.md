@@ -333,9 +333,15 @@ cat target/scratch/seed/biorand/spoiler.txt
 target/test-release/arklay games/biorand-123456-chris.akpak
 ```
 
-The launcher's BioRand screen generates `games/biorand-<seed>.akpak` with the
-default configuration and the configured (random) player, and plays it. A
-generated game saves in its own folder, `<save_dir>/<pack id>/`.
+The launcher's BioRand screen (Main menu, BioRand; needs `re1.akpak` converted
+by this build) generates `games/biorand-<seed>.akpak` and plays it. Type
+digits for the seed, or pick New Seed; pick the player on the Player row;
+Options opens the configuration (every non-cosmetic option staging has, by
+page and group) and Spoiler Log reads the generated game's spoiler. Changing
+an option, the player or the seed and choosing Generate & Play again rebuilds
+the pack ("Will rebuild" shows beside it); the same ones reuse it. The options
+are kept in `biorand.json` in the config directory. A generated game saves in
+its own folder, `<save_dir>/<pack id>/`.
 
 What to look for: the start inventory and slot count match the spoiler's;
 pickups hold the spoiler's items; documents, maps and the MO disc pass codes
@@ -377,7 +383,24 @@ The pull request's description holds the live checklist. In order:
    door patches (106, 207, the lifts, 303/305, plant 42, the bookcases, 500).
    *Test milestone 3.*
 10. **Launcher and logs.** The configuration screen as in staging, seeds, the
-    spoiler log and stale-pack rebuilds.
+    spoiler log and stale-pack rebuilds. **Done:** BIORAND has a Player row,
+    an Options screen and a Spoiler Log screen. Options is generated from the
+    package's definition (`arklay_biorand::config::definition`, read from the
+    base pack's map): a page per definition page (Ctrl+Up/Down or LB/RB turn
+    it), a heading per group, and per item a toggle (switch), choice
+    (dropdown, with its Default and Random choices) or slider (range, percent),
+    with the item's label and, in the pane beside the list, its description.
+    R (X on a pad) resets every option to its default. The options are saved on
+    every change to `biorand.json` beside `arklay.toml`, as staging's flat JSON
+    (a file exported from staging loads, and keys the definition doesn't know
+    are kept). Generate & Play writes `games/biorand-<seed>.akpak` with them.
+    A pack is rebuilt unless it records this seed, the same options and
+    player (`biorand/request.json`), generator and plan version, and base
+    game; the launcher says "Already generated" or "Will rebuild" before it
+    starts, and a stale pack picked from PLAY is rebuilt with its own recorded
+    options. The Spoiler Log screen scrolls `biorand/spoiler.txt` and writes it
+    to `games/biorand-<seed>-spoiler.txt`, whose path it shows (O opens the
+    folder).
 11. **Static analysis and the cutscene option.** The verifier's full checks,
     a seed sweep over the configuration space, and `cutscenes/disable`.
     *Test milestone 4:* ready for main.
