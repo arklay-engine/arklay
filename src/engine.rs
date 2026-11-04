@@ -15108,6 +15108,9 @@ fn tick_room_timed(
             // recoil. Clear the machine with the state change.
             if state != 1 {
                 context.player.weapon = crate::weapons::WeaponState::default();
+                // The same one byte held any locked action (the reach, the
+                // stairway, the push): it cannot resume either.
+                context.player.abandon_locked_action();
                 context.player.scripted_hold = true;
             }
             let weapon_item = player_weapon_item(context.game, context.player);
@@ -27033,6 +27036,89 @@ return M
             );
         }
         assert_eq!(player_state.idle_phase, 0, "the idle machine never ran");
+    }
+
+    /// A wasp that pins the player mid item pickup: the grab's state 5 takes
+    /// over the reach, and its crawl must hand back a free player. Regression:
+    /// the reach stayed latched on the player's locked action while the crawl
+    /// played, resumed after the hand-back with the damage bank's clip on the
+    /// clock, which never completes through the pad machine, and froze the
+    /// player for good.
+    #[test]
+    fn a_grab_during_an_item_reach_hands_back_a_free_player() {
+        let (pack, _id, mut room, mut game, mut player_state, assets) = scripted_room_fixture();
+        let crawl = Clip {
+            frames: (0..12)
+                .map(|_| ClipFrame {
+                    keyframe: 0,
+                    timing: 1,
+                    flags: 0,
+                })
+                .collect(),
+        };
+        game.player_damage = Some(std::sync::Arc::new(game::PlayerDamageBank {
+            keyframes: std::sync::Arc::new(vec![Keyframe::default()]),
+            clips: std::sync::Arc::new(vec![crawl]),
+        }));
+        let scripts = scd::ir::Scripts::default();
+        let mut command_vm = scd::vm::CommandVm::new(&scripts);
+        let mut event_vm = scd::vm::EventVm::new(&scripts);
+        let mut tick = |game: &mut game::GameState, player_state: &mut player::PlayerState| {
+            tick_scripted_room(
+                &pack,
+                &mut room,
+                game,
+                player_state,
+                &assets,
+                &mut command_vm,
+                &mut event_vm,
+                player::Input::default(),
+            );
+            if let Some((behavior, action_state, _)) = player_state.trace_state
+                && game.entities[0].state() == 1
+            {
+                game.entities[0].action_behavior = behavior;
+                game.entities[0].action_state = action_state;
+            }
+        };
+        for _ in 0..3 {
+            tick(&mut game, &mut player_state);
+        }
+        // The gated pickup press: the health lock, the message bit and the
+        // reach behaviour, whose entry tick runs.
+        game.health_status |= 0x80;
+        game.message_flags &= !0x0040;
+        player_state.begin_interact(game::ReachRequest {
+            slot: 0,
+            handler: 0,
+        });
+        tick(&mut game, &mut player_state);
+        assert_eq!(player_state.locked, player::LockedAction::Interact);
+
+        // The wasp's grab lands before the reach clip finishes.
+        game.grab_player(1);
+        let mut released = None;
+        for step in 0..60 {
+            tick(&mut game, &mut player_state);
+            if game.entities[0].state() == 1 && released.is_none() {
+                released = Some(step);
+            }
+        }
+        assert!(released.is_some(), "the crawl hands back");
+        assert_eq!(game.entities[0].is_being_attacked, 0);
+        assert_eq!(
+            player_state.locked,
+            player::LockedAction::None,
+            "the reach is gone"
+        );
+        assert_ne!(
+            player_state.clip_source,
+            player::ClipSource::Damage,
+            "the pad machine left the crawl clip"
+        );
+        assert_eq!(game.health_status & 0x80, 0, "the health lock is released");
+        assert_ne!(game.message_flags & 0x0040, 0, "the message bit is back");
+        assert!(!player_script::control_gate(&mut game, &mut player_state));
     }
 
     /// The end-of-tick joint store poses from the live clock: a pad-driven

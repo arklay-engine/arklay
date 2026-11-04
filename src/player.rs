@@ -1635,6 +1635,32 @@ impl PlayerState {
         self.interact_finished.take()
     }
 
+    /// A scripted state (a grab, a hit, a cutscene pose) took the player over
+    /// mid locked action. The reference keeps the behaviour in the entity's
+    /// one `action_behavior` byte, which the takeover overwrites, so the
+    /// action can never resume when the state returns to 1. The port's
+    /// locked action lives on [`PlayerState`] instead and would resume with
+    /// the reaction's clip on the clock: the damage bank never completes
+    /// through [`Self::advance`], so an interrupted reach froze the player
+    /// for good. Drop the action and undo the side state only its own
+    /// completion clears. The health lock and message bit an interrupted
+    /// reach raised are released by the reaction windows' prelude.
+    pub(crate) fn abandon_locked_action(&mut self) {
+        match self.locked {
+            LockedAction::None => return,
+            LockedAction::Stairs | LockedAction::Ladder => self.restore_shadow(),
+            LockedAction::Vault => {
+                self.vault_bit = false;
+                self.vault_return = false;
+            }
+            _ => {}
+        }
+        self.locked = LockedAction::None;
+        self.action_state = 0;
+        self.interact_request = None;
+        self.interact_finished = None;
+    }
+
     /// Queue a one-shot sound at the player's current position.
     pub(crate) fn queue_sound(&mut self, id: u16) {
         self.sounds.push(PlayerSound { id, pos: self.pos });

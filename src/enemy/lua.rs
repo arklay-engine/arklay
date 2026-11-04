@@ -8178,6 +8178,79 @@ end
         assert_eq!(game.entities[1].action_state, 2, "Jill's hit frame");
     }
 
+    /// The pin-and-sting end to end with the player's own state-5 crawl
+    /// running each tick: whether the crawl clip outlasts the wasp's payout
+    /// or ends before it, the player is handed back to pad control.
+    #[test]
+    fn wasp_grab_releases_the_player_after_the_sting() {
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
+        let (clips, keyframes, skeleton) = wasp_model();
+        for crawl_frames in [10usize, 50, 120] {
+            for respawn_off in [false, true] {
+                let mut game = wasp_game(0);
+                game.entity_anims[1].keyframes = Some(keyframes.clone());
+                game.entity_anims[1].skeleton = Some(skeleton.clone());
+                if respawn_off {
+                    // The enemy randomizer's "stay dead" system flag.
+                    game.flags[5].apply(0xC2, 0);
+                }
+                game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
+                    keyframes: std::sync::Arc::new(vec![crate::model::Keyframe::default()]),
+                    clips: std::sync::Arc::new(vec![crate::model::Clip {
+                        frames: (0..crawl_frames)
+                            .map(|_| crate::model::ClipFrame {
+                                keyframe: 0,
+                                timing: 1,
+                                flags: 0,
+                            })
+                            .collect(),
+                    }]),
+                }));
+                let mut host = LuaEnemyHost::new();
+                assert!(wasp_step(&mut host, &mut game, &pack, &clips));
+                game.entities[0].set_state(1);
+                game.entities[0].health = 100;
+                game.entities[0].pos = [1234, 0, 5678];
+                game.entities[1].set_state(1);
+                game.entities[1].action_behavior = 5;
+                game.entities[1].action_state = 0;
+                game.entities[1].set_ignore(1);
+                game.entities[1].pos[1] = -2600;
+                let mut player = crate::player::spawn(game.id, &RoomState::default());
+                player.pos = game.entities[0].pos;
+
+                let mut grabbed = false;
+                let mut stung = false;
+                for _ in 0..400 {
+                    wasp_step(&mut host, &mut game, &pack, &clips);
+                    stung |= game.entities[1].health == -44;
+                    if game.entities[0].state() != 1 {
+                        grabbed = true;
+                        crate::player_script::update(
+                            &mut game,
+                            &mut player,
+                            &RoomState::default(),
+                            &[],
+                            &[],
+                            &[],
+                        );
+                    }
+                }
+                let label = format!("crawl {crawl_frames} frames, stay dead {respawn_off}");
+                assert!(grabbed, "{label}: the wasp pinned the player");
+                assert!(stung, "{label}: the wasp stung itself");
+                let entity = &game.entities[0];
+                assert_eq!(entity.state(), 1, "{label}: pad control is back");
+                assert_eq!(entity.ignore(), 0, "{label}");
+                assert_eq!(entity.is_being_attacked & 0x3F, 0, "{label}: released");
+                assert!(
+                    !crate::player_script::control_gate(&mut game, &mut player),
+                    "{label}: the control gate lets the pad through"
+                );
+            }
+        }
+    }
+
     /// The knockdown: the drop, the landing tint, the growing shadow and the
     /// crush that drops a limp wasp into the death state.
     #[test]
