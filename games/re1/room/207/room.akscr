@@ -44,10 +44,11 @@ proc init
         }
     }
     door_aot_set(AOT_03_DOOR, 5995, 18200, 2605, 2100, 1, DOOR_SND_05_ST_WD, DOOR_17_KAI03, 96, 0, STAGE_1 | ROOM_10B_1F_RIGHT_STAIRS, 2900, 0, 19000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (LOCK_RANDOMIZER)
+    if (BR_LOCK_FULL_BYTE)
     {
         // The other side of 206's door 1, so a lock on that pair can be met
-        // from either side (BioRand's AddDoor207).
+        // from either side, and door randomization can use it (BioRand's
+        // AddDoor207). Raised with LOCK_RANDOMIZER and DOOR_RANDOMIZER.
         door_aot_set(AOT_04_MESSAGE, 800, 10400, 1900, 1700, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 2, DOOR_LOCKED | F_LOCK_15, ROOM_206_DOLL_ROOM, 9180, 0, 11280, 2048, LOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     else

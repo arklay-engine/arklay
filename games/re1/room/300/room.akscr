@@ -70,6 +70,11 @@
 
 proc init
 {
+    if (DOOR_RANDOMIZER)
+    {
+        // The lift starts at this level (staging's ForceLift302).
+        set(FG_SCENARIO, F_SCENARIO_31, TRUE);
+    }
     set(FG_STATUS, F_STATUS_1D, TRUE);
     door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);

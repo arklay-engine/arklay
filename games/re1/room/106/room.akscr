@@ -136,7 +136,14 @@ proc init
         }
     }
     door_aot_set(AOT_02_DOOR, 1000, 15000, 1950, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (DOOR_RANDOMIZER)
+    {
+        // The front door is an ordinary door, for either player
+        // (staging's FixDoor106). It names this room; the emitter writes
+        // where it leads and the arrival.
+        door_aot_set(AOT_03_DOOR, 14600, 800, 5200, 2200, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_106_MAIN_HALL, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else if (CHRIS)
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {

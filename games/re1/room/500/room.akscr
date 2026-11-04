@@ -88,13 +88,18 @@ proc init
                 }
             }
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+        if (!DOOR_RANDOMIZER)
         {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-        }
-        else
-        {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 255, 0);
+            // With door rando the lift stays a door after Tyrant 1, since it
+            // may be the only way out (staging's FixDoor500).
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+            {
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+            }
+            else
+            {
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 255, 0);
+            }
         }
         if (JILL)
         {

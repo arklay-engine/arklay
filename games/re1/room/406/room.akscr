@@ -83,6 +83,15 @@ proc init
     {
         item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, IMDL_02, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_87, SAT_MANUAL | SAT_PLAYER, 0);
     }
+    if (DOOR_RANDOMIZER)
+    {
+        // The bookcase starts moved. Only 40D records it as moved, and with
+        // door rando this room's door 406:2 may lead elsewhere, so coming
+        // back through it would put the player behind the bookcase
+        // (staging's FixBookcase406, which sets the flag in the room
+        // the door leads to).
+        set(FG_SCENARIO, F_SCENARIO_45, TRUE);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_45, TRUE))
     {
         obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 10180, 0, 8970, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);

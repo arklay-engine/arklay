@@ -91,7 +91,13 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (DOOR_RANDOMIZER)
+        {
+            // The nest's double doors open before the first visit to the
+            // plant's room (staging's FixDoorPlant42).
+            door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        }
+        else if (CHRIS)
         {
             aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 141, 0, 255, 0, 0, 0);
         }

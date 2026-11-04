@@ -35,6 +35,15 @@ proc init
     item_aot_set(AOT_03_ITEM, 2600, 8700, 1500, 1500, IT_66_FILE_SCRAPBOOK, 1, IMDL_00, SCA_NONE, 3432, -800, 9407, 1024, F_ITEM_54, SAT_MANUAL | SAT_PLAYER, 0);
     item_aot_set(AOT_04_ITEM, 0, 2, 0, 2, IT_0E_AMMO_MAGNUM, 6, IMDL_01, SCA_NONE, 13520, -1440, 14040, -2710, F_ITEM_79, 0, 0);
     setbyte(1, 0, 0);
+    if (DOOR_RANDOMIZER)
+    {
+        // The bookcase starts moved. Only 218 records it as moved, and with
+        // door rando this room's door 216:2 may lead elsewhere, so coming
+        // back through it would put the player behind the bookcase
+        // (staging's FixBookcase216, which sets the flag in the room
+        // the door leads to).
+        set(FG_SCENARIO, F_SCENARIO_4F, TRUE);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_4F, TRUE))
     {
         obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 2532, 0, 15307, 1024, 0, -270, 0, 270, 270, 3420, 1260, 540);

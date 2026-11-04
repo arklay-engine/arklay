@@ -136,7 +136,12 @@ event on_aot_07
 {
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_25, FALSE);
+        if (!RANDOMIZER)
+        {
+            // The bookcase stays open once moved, so the door behind it keeps
+            // working (staging's FixDoorPlant42).
+            set(FG_SCENARIO, F_SCENARIO_25, FALSE);
+        }
         aot_on(AOT_02_DOOR, SCE_DOOR, 129);
     }
     evt_finish();

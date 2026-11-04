@@ -104,29 +104,52 @@ proc init
         }
         if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_5F, FALSE))
+            if (DOOR_RANDOMIZER)
             {
-                set(FG_LOCK, F_LOCK_00, FALSE);
-                set(FG_LOCK, F_LOCK_01, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                evt_exec(0, TASK_09, on_enter);
-            }
-            else if (ck(FG_COMMON, F_COMMON_29, FALSE))
-            {
-                set(FG_LOCK, F_LOCK_00, FALSE);
-                set(FG_LOCK, F_LOCK_01, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                set(FG_LOCK, F_LOCK_01, TRUE);
-                evt_exec(0, TASK_09, on_enter_2);
+                // No first ceiling trap with Barry's rescue for Jill
+                // (staging's DiableJillSandwich).
+                if (ck(FG_COMMON, F_COMMON_29, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                    evt_exec(0, TASK_09, on_enter_2);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_00, TRUE);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                }
             }
             else
             {
-                set(FG_LOCK, F_LOCK_00, TRUE);
-                set(FG_LOCK, F_LOCK_01, TRUE);
+                if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_5F, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    evt_exec(0, TASK_09, on_enter);
+                }
+                else if (ck(FG_COMMON, F_COMMON_29, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_00, FALSE);
+                    set(FG_LOCK, F_LOCK_01, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                    evt_exec(0, TASK_09, on_enter_2);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_00, TRUE);
+                    set(FG_LOCK, F_LOCK_01, TRUE);
+                }
             }
         }
         else

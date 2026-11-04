@@ -9,6 +9,7 @@
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
 #define AOT_01_MESSAGE 0x01
 #define AOT_02_USEITEM 0x02
 #define AOT_03_ITEM 0x03
@@ -73,7 +74,16 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1100, 8000, 1500, 3900, 11, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 26000, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_MESSAGE, 1000, 12400, 1500, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 255, 0, 0, 0);
+    if (RANDOMIZER)
+    {
+        // The passage to the bookcase room is a door (staging's
+        // FixDoorPlant42), so either side of the nest leads out.
+        door_aot_set(AOT_01_DOOR, 1000, 12400, 1500, 3000, 0, DOOR_SND_00_DR_WD, DOOR_05_DOOR05, 7, 0, ROOM_40A_ROOM_003, 14300, 0, 5200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        aot_set(AOT_01_MESSAGE, 1000, 12400, 1500, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 255, 0, 0, 0);
+    }
     aot_set(AOT_02_USEITEM, 9800, 16600, 2200, 1200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
     item_aot_set(AOT_03_ITEM, 9800, 17700, 2200, 1800, IT_36_KEY_MANSION_HELMET, 3, IMDL_00, SCA_NONE, 10550, -460, 18010, 1024, F_ITEM_58, 0, 0);
     eml_rot(IMDL_00, 250, -2020);
@@ -222,17 +232,23 @@ proc init
         }
         else
         {
-            enemy(EM_08_PLANT_42, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10800, 200, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
-            room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_OFF);
-            set(FG_ROOM, F_ROOM_0A, FALSE);
-            if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_COMMON, F_COMMON_27, FALSE))
+            // With door rando, Jill's game crashes reloading the room after
+            // plant 42 is dead (staging's FixDoorPlant42), so its body and
+            // Barry's scene are skipped.
+            if (!DOOR_RANDOMIZER)
             {
-                aot_set(AOT_07_EVENT, 6862, 8109, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
-                aot_set(AOT_08_USEITEM, 7600, 9900, 1300, 800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
-                aot_set(AOT_09_USEITEM, 8300, 8800, 1500, 1300, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
-                enemy(EM_2B_NPC_BARRY_2_STARS, EB_05, NO_FLAG, SPAWN_FORCE, 2, 0, 3873, 0, 7762, 0, 9009, ENEMY_06_NPC_BARRY_2_STARS, ANIM_2A, 0, EVAR_00);
-                set(FG_ROOM, F_ROOM_0C, TRUE);
-                evt_exec(0, TASK_09, on_enter_jill);
+                enemy(EM_08_PLANT_42, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10800, 200, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+                room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_OFF);
+                set(FG_ROOM, F_ROOM_0A, FALSE);
+                if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_COMMON, F_COMMON_27, FALSE))
+                {
+                    aot_set(AOT_07_EVENT, 6862, 8109, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
+                    aot_set(AOT_08_USEITEM, 7600, 9900, 1300, 800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
+                    aot_set(AOT_09_USEITEM, 8300, 8800, 1500, 1300, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
+                    enemy(EM_2B_NPC_BARRY_2_STARS, EB_05, NO_FLAG, SPAWN_FORCE, 2, 0, 3873, 0, 7762, 0, 9009, ENEMY_06_NPC_BARRY_2_STARS, ANIM_2A, 0, EVAR_00);
+                    set(FG_ROOM, F_ROOM_0C, TRUE);
+                    evt_exec(0, TASK_09, on_enter_jill);
+                }
             }
         }
     }
@@ -256,7 +272,12 @@ proc main
     }
     if (ck(FG_ENEMY, F_ENEMY_60, TRUE))
     {
-        set(FG_SCENARIO, F_SCENARIO_00, TRUE);
+        if (!DOOR_RANDOMIZER)
+        {
+            // Not the switch to the second mansion visit: with door rando the
+            // way back to the mansion is any door (staging's FixDoorPlant42).
+            set(FG_SCENARIO, F_SCENARIO_00, TRUE);
+        }
     }
     if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0A, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
     {
@@ -284,33 +305,65 @@ proc main
     }
     if (CHRIS)
     {
-        if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+        if (DOOR_RANDOMIZER)
         {
-            if (ck(FG_ITEM, F_ITEM_58, TRUE))
+            // The door to the nest stays blocked until plant 42 is dead, and
+            // no event takes its place (staging's FixDoorPlant42).
+            if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
             {
-                aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
             }
             else
             {
                 aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
+            }
+        }
+        else
+        {
+            if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+            {
+                if (ck(FG_ITEM, F_ITEM_58, TRUE))
+                {
+                    aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
+                }
+                else
+                {
+                    aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
+                }
             }
         }
     }
     else
     {
-        if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+        if (DOOR_RANDOMIZER)
         {
-            if (ck(FG_ITEM, F_ITEM_58, TRUE))
+            // The door to the nest stays blocked until plant 42 is dead, and
+            // no event takes its place (staging's FixDoorPlant42).
+            if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
             {
-                aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
             }
             else
             {
                 aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
+            }
+        }
+        else
+        {
+            if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+            {
+                if (ck(FG_ITEM, F_ITEM_58, TRUE))
+                {
+                    aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
+                }
+                else
+                {
+                    aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
+                }
             }
         }
         if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_SCENARIO, F_SCENARIO_29, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
