@@ -74,7 +74,9 @@ use crate::draw2d::{self, DrawList};
 use crate::htexture;
 use crate::model::{Texture8, Tmd};
 use crate::pack::Pack;
-use crate::render::{EntityLight, EntityMesh, Framebuffer, GameplayScene, root_position};
+use crate::render::{
+    EntityLight, EntityMesh, Framebuffer, GameplayScene, LightSpace, root_position,
+};
 use crate::state::Image;
 use crate::video;
 
@@ -2240,16 +2242,9 @@ impl GpuRenderer {
             };
         let per_joint = &per_joint;
         let primary = scene.meshes.iter().enumerate().flat_map(|(index, mesh)| {
-            let room_object =
-                index < scene.mirror_from && scene.lighting.lights[0].re2_gain.is_none();
+            let space = LightSpace::of(scene.lighting, index < scene.mirror_from);
             per_joint(mesh, &|light| {
-                scene::draw_uniforms(
-                    scene.camera,
-                    mesh,
-                    &mesh.primary_light(light),
-                    room_object,
-                    None,
-                )
+                scene::draw_uniforms(scene.camera, mesh, &mesh.primary_light(light), space, None)
             })
             .into_iter()
             .map(move |uniforms| (index, mesh, uniforms))
@@ -2267,7 +2262,7 @@ impl GpuRenderer {
                             &mirror.camera,
                             mesh,
                             &mesh.fixed_light.unwrap_or(light),
-                            false,
+                            LightSpace::of(scene.lighting, false),
                             Some(mirror),
                         )
                     })
