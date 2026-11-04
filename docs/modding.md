@@ -2224,8 +2224,9 @@ them.
 
 BioRand is ported to the new randomizer (`crates/arklay-biorand`) in
 milestones; the plan is in [`biorand/plan.md`](biorand/plan.md). Today a
-generated game randomizes the items, the start inventory and the enemies; the
-doors and locks stay the original's whatever the configuration asks.
+generated game randomizes the items, the start inventory, the doors
+(`doors/random`, on by default; it needs `items/random`), the locks
+(`locks/random`) and the enemies (`enemies/random`).
 
 Conversion packs the randomizer's inputs into the base pack: each room's
 `random.xml` as `room/<id>/random.xml`, and the map-wide files from
@@ -2265,7 +2266,21 @@ the rooms' `random_enemies()` markers (see below), and these entries added:
 - `biorand/request.json`: the seed, the players and the configuration asked
   for, so `verify` can plan the game again.
 - `biorand/spoiler.json` and `biorand/spoiler.txt`: the start inventory, where
-  every key is, and every room's pickups.
+  every key is, the locked doors, the room ids and doors (with random
+  doors), and every room's pickups.
+
+With random doors the rooms are renumbered: segment *n* of the route is
+stage *n*, numbered in the order the route reaches its rooms. Each room the
+game uses is its base folder copied to `room/<new id>/`, with
+`<room origin="...">` and a `<doors>` entry for each door whose target byte
+would not reach its planned room (see [Room definitions](#room-definitions)). Each planned
+door's `door_aot_set` holds the arrival at its far door (position, facing
+and camera cut) and keeps its animation and sound; a door leading out of
+the game is sealed (lock and key 255). Room 311 keeps its folder and id.
+Rooms the game leaves out are not in the pack, and every room's
+`random.xml` is at `biorand/rooms/<dir>.xml` instead. The manifest's
+`start_room` is the main hall's new id, and the spoiler lists the room ids
+and the doors.
 
 A new generator or plan version, or a new conversion, makes the pack stale.
 Saves belong to their pack: `re1` keeps `save_dir` itself, and every other
