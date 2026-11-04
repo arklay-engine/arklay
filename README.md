@@ -124,8 +124,9 @@ cargo run -- convert-game /path/to/re2
 # docs/modding.md for the mapping
 cargo run -- convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
 
-# Generate a BioRand game (items and the start inventory randomized; see
-# docs/modding.md), one pack per player, and check one again
+# Generate a BioRand game (items, the start inventory and doors randomized,
+# locks and enemies on request; see docs/modding.md), one pack per player,
+# and check one again
 cargo run -- biorand generate re1.akpak --seed 123456 --player both
 cargo run -- biorand verify biorand-123456-chris.akpak
 

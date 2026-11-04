@@ -4,7 +4,12 @@
 //! it carries, then checks the pack against that plan: the manifest's flags
 //! and setup, the spoiler, every room script decoding, every planned
 //! pickup in its room, and, when locks are randomized, every door's lock
-//! byte and key against the plan. Given the base pack the game was
+//! byte and key against the plan. With doors randomized it checks the
+//! layout ([`check_layout`]): every room at its new id playing its
+//! original, every door leading where the plan says and putting the player
+//! at the far door, every target there, and a walk from the start room that
+//! reaches the end room opening locks only with keys picked up on the way.
+//! Given the base pack the game was
 //! generated from, it also checks that the pack is the base byte for byte
 //! apart from the planned bytes: the item fields and the SCEs
 //! [`super::emit::patch_room`] writes, the door bytes
@@ -36,6 +41,10 @@ pub struct Report {
     pub doors: usize,
     /// Planned enemies found in place (created or retyped).
     pub enemies: usize,
+    /// With doors randomized, the doors checked against the plan, and the
+    /// rooms the walk from the start room reached.
+    pub routed_doors: usize,
+    pub walked_rooms: usize,
     /// Whether the pack was compared with its base pack.
     pub against_base: bool,
     /// Entries compared with the base pack's, when it was.
@@ -55,6 +64,13 @@ impl fmt::Display for Report {
         }
         if self.enemies > 0 {
             write!(f, ", {} planned enemies in place", self.enemies)?;
+        }
+        if self.routed_doors > 0 {
+            write!(
+                f,
+                ", {} doors lead as planned, the walk to the end reaches {} rooms",
+                self.routed_doors, self.walked_rooms
+            )?;
         }
         if self.against_base {
             write!(
@@ -179,9 +195,11 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
     let mut rooms = Vec::new();
     let mut checked_doors = Vec::new();
     for path in pack.own_paths() {
-        let Some(dir) = emit::room_script_dir(path) else {
+        let Some(folder) = emit::room_script_dir(path) else {
             continue;
         };
+        // A moved room's plan is its original's.
+        let dir = origin_dir(game, &folder);
         rooms.push(dir.clone());
         let scd = match pack.read(path) {
             Ok(scd) => scd,
@@ -236,6 +254,9 @@ pub(super) fn verify(path: &Path, base: Option<&Pack>) -> Result<Report> {
             rooms.contains(dir) || emit::planned_flags(game, dir).is_empty(),
             || format!("the plan places pickups in room {dir}, which the pack has no script for"),
         );
+    }
+    if game.doors.is_some() {
+        check_layout(&pack, game, &mut problems, &mut report);
     }
 
     if let Some(base) = base {
@@ -359,12 +380,17 @@ fn check_doors(
                 declared.insert((door.room.as_str(), door.id));
                 report.doors += 1;
             }
-            None => problems.check(held.0 < 0x40, || {
-                format!(
-                    "{path}: the door_aot_set at {:#x} keeps the original's lock byte {:#04x}",
-                    insn.offset, held.0
-                )
-            }),
+            // A door out of a door-randomized game is sealed for good,
+            // which `check_layout` checks.
+            None => problems.check(
+                held.0 < 0x40 || (game.doors.is_some() && held == (0xFF, 0xFF)),
+                || {
+                    format!(
+                        "{path}: the door_aot_set at {:#x} keeps the original's lock byte {:#04x}",
+                        insn.offset, held.0
+                    )
+                },
+            ),
         }
     }
     for door in planned.values().flatten().filter(|door| door.lock != 0) {
@@ -403,43 +429,300 @@ fn compare_with_base(
         .filter(|path| !emit::is_generated_entry(path))
         .map(str::to_ascii_lowercase)
         .collect();
-    let theirs: std::collections::BTreeSet<String> = base
+    // Each of the game's entries by the base entry it comes from.
+    let mut theirs: BTreeMap<String, String> = BTreeMap::new();
+    for path in base
         .own_paths()
         .filter(|path| !emit::is_generated_entry(path))
-        .map(str::to_ascii_lowercase)
-        .collect();
-    for missing in theirs.difference(&own) {
-        problems.push(format!("{missing} is in the base pack but not the game"));
+    {
+        if let Some(ours) = super::doors::entry_path(game, path) {
+            theirs.insert(ours.to_ascii_lowercase(), path.to_string());
+        }
     }
-    for extra in own.difference(&theirs) {
-        problems.push(format!("{extra} is in the game but not the base pack"));
+    for (missing, from) in &theirs {
+        problems.check(own.contains(missing), || {
+            format!("{missing} (the base's {from}) is not in the game")
+        });
     }
-    for path in own.intersection(&theirs) {
+    for extra in own.iter().filter(|path| !theirs.contains_key(*path)) {
+        problems.push(format!(
+            "{extra} is in the game but comes from no base entry"
+        ));
+    }
+    for (path, from) in &theirs {
+        if !own.contains(path) {
+            continue;
+        }
         report.entries += 1;
         // A copied entry keeps the base's stored bytes, so most compare
         // without decompressing.
-        if pack.read_stored(path)?.0 == base.read_stored(path)?.0 {
+        if pack.read_stored(path)?.0 == base.read_stored(from)?.0 {
             continue;
         }
         let ours = pack.read(path)?;
-        let original = base.read(path)?;
-        if let Some(dir) = emit::room_script_dir(path) {
-            let expected = emit::patch_room(&original, pickups).and_then(|(patched, _)| {
-                let patched = locks::patch_doors(&patched, &dir, game)?;
-                super::enemies::patch_for_game(&patched, &dir, game)
-            });
-            match expected {
-                Ok(expected) if expected == ours.as_ref() => {}
-                Ok(expected) => problems.push(room_difference(path, &expected, &ours)),
+        let original = base.read(from)?;
+        if let Some(dir) = emit::room_script_dir(from) {
+            match emit::patch_script_entry(&original, &dir, game, pickups) {
+                Ok((expected, _)) if expected == ours.as_ref() => {}
+                Ok((expected, _)) => problems.push(room_difference(path, &expected, &ours)),
                 Err(err) => problems.push(format!("{path}: the base's script: {err:#}")),
             }
         } else {
-            problems.check(ours == original, || {
-                format!("{path} differs from the base pack's")
+            let expected = emit::patch_room_xml_entry(base, from, game)
+                .with_context(|| format!("{path}: the base's {from}"))?;
+            let expected = expected.as_deref().unwrap_or(&original);
+            problems.check(ours.as_ref() == expected, || {
+                format!("{path} differs from what the game makes of the base's {from}")
             });
         }
     }
     Ok(())
+}
+
+/// The original room directory room folder `folder` of the game plays:
+/// itself unless doors are randomized.
+fn origin_dir(game: &arklay_biorand::plan::Game, folder: &str) -> String {
+    game.doors
+        .as_ref()
+        .and_then(|plan| {
+            plan.rooms
+                .iter()
+                .find(|(_, room)| room.id == folder)
+                .map(|(dir, _)| dir.clone())
+        })
+        .unwrap_or_else(|| folder.to_string())
+}
+
+/// The Sword Key and the desk key (staging's Small Key), whose locks the
+/// lockpick opens.
+const IT_KEY_SWORD: u8 = 0x33;
+const IT_KEY_DESK: u8 = 0x3D;
+
+/// A door of the game as its pack has it, for the walk.
+struct WalkDoor {
+    to: String,
+    lock: u8,
+    key: u8,
+}
+
+/// Check a door-randomized pack's layout against the plan: each planned room
+/// is at its new id and names its original as its origin, no other room is
+/// there but 311, each planned door's `door_aot_set` puts the player at the
+/// far door's entrance and leads (by `<doors>` or its byte, as the engine
+/// reads them) to the plan's room, and every door leads to a room the pack
+/// has. Then walks the pack's doors from the start room: a door opens when
+/// unlocked, when its lock opens from this side, when its lock flag was
+/// opened from the other, or with a key picked up in a room reached. The
+/// end room must be reached.
+fn check_layout(
+    pack: &Pack,
+    game: &arklay_biorand::plan::Game,
+    problems: &mut Problems,
+    report: &mut Report,
+) {
+    use super::doors::{DoorBytes, expected_door, held_arrival};
+    let Some(plan) = &game.doors else {
+        return;
+    };
+    let folders: std::collections::BTreeSet<String> = pack
+        .own_paths()
+        .filter_map(|path| {
+            let rest = path.strip_prefix("room/")?;
+            let (folder, _) = rest.split_once('/')?;
+            Some(folder.to_ascii_lowercase())
+        })
+        .collect();
+    for folder in &folders {
+        problems.check(
+            plan.rooms.values().any(|room| &room.id == folder)
+                || arklay_biorand::doors::RESERVED_IDS.contains(&folder.as_str()),
+            || format!("room {folder} is in the pack but not in the plan"),
+        );
+    }
+    let pickups = emit::planned_pickups(game).unwrap_or_default();
+    let mut walk: BTreeMap<String, (Vec<WalkDoor>, Vec<u8>)> = BTreeMap::new();
+    for (dir, room) in &plan.rooms {
+        let id = &room.id;
+        // The room plays its original's variant (`RoomOrigins::of`).
+        let variant = crate::state::RoomId {
+            player_flag: u8::from(game.player == arklay_biorand::map::Player::Jill),
+            ..crate::state::RoomId::parse_room(dir).unwrap_or_default()
+        };
+        let source = match super::read_text(pack, &format!("room/{id}/room.xml"))
+            .and_then(|text| crate::room::xml::parse_for(&text, variant))
+        {
+            Ok(source) => source,
+            Err(err) => {
+                problems.push(format!("room {id} (the original {dir}): room.xml: {err:#}"));
+                continue;
+            }
+        };
+        let origin = source
+            .origin
+            .map(|origin| origin.room3().to_ascii_lowercase());
+        problems.check(origin.as_deref() == Some(dir.as_str()), || {
+            format!("room {id} plays {origin:?}, the plan's original is {dir}")
+        });
+        let scripts = match pack
+            .read(&format!("room/{id}/room.scd"))
+            .and_then(|scd| crate::scd::reader::parse(&scd))
+        {
+            Ok(scripts) => scripts,
+            Err(err) => {
+                problems.push(format!("room {id}: room.scd: {err:#}"));
+                continue;
+            }
+        };
+        let mut doors = Vec::new();
+        let mut keys = Vec::new();
+        for insn in emit::commands(&scripts).filter(|insn| insn.op == emit::ITEM_AOT_SET) {
+            let flag = insn.bytes[emit::ITEM_FLAG];
+            if let Some(&(item, _)) = pickups.get(&flag)
+                && emit::planned_flags(game, dir).contains(&flag)
+            {
+                keys.push(item);
+            }
+        }
+        for insn in locks::doors(&scripts) {
+            let bytes = &insn.bytes;
+            let at = format!(
+                "room {id} (the original {dir}): the door_aot_set at {:#x}",
+                insn.offset
+            );
+            let expected = match expected_door(plan, dir, bytes) {
+                Ok(expected) => expected,
+                Err(err) => {
+                    problems.push(format!("{at}: {err:#}"));
+                    continue;
+                }
+            };
+            if let DoorBytes::Arrival { .. } = expected {
+                problems.check(held_arrival(bytes) == expected, || {
+                    format!(
+                        "{at} puts the player at {:?}, the far door's entrance is {expected:?}",
+                        held_arrival(bytes)
+                    )
+                });
+            }
+            let (lock, key) = (bytes[locks::DOOR_LOCK], bytes[locks::DOOR_KEY]);
+            if expected == DoorBytes::LockedForGood {
+                problems.check((lock, key) == (0xFF, 0xFF), || {
+                    format!("{at} leads out of the game but is not locked for good")
+                });
+                continue;
+            }
+            let next = bytes[locks::DOOR_NEXT_ROOM];
+            if bytes[13] & 0x80 != 0 || next == 0xFF {
+                continue;
+            }
+            // Where the engine sends it: `GameState::door_target_of`, then
+            // the byte.
+            let aot = bytes[locks::DOOR_ID] & 0x7F;
+            let entries = || source.doors.iter().filter(|door| door.aot == aot);
+            let by_entry = entries()
+                .find(|door| door.next == Some(next))
+                .or_else(|| entries().find(|door| door.next.is_none()))
+                .map(|door| door.target.room3().to_ascii_lowercase());
+            let goes = by_entry.or_else(|| {
+                if next < 0x20 {
+                    Some(arklay_biorand::doors::room_id(room.stage, next))
+                } else {
+                    locks::target_dir("100", next)
+                }
+            });
+            let Some(goes) = goes else {
+                continue;
+            };
+            let wanted = super::doors::new_target(plan, dir, bytes);
+            if let Some(planned) = super::doors::planned_door(plan, dir, bytes)
+                && planned.target.is_some()
+            {
+                report.routed_doors += 1;
+            }
+            match &wanted {
+                Some(wanted) => problems.check(&goes == wanted, || {
+                    format!("{at} leads to {goes}, the plan's room is {wanted}")
+                }),
+                None => problems.check(lock != 0 && key == 0xFF, || {
+                    format!("{at} leads to {goes}, out of the game, and opens")
+                }),
+            }
+            problems.check(
+                folders.contains(&goes) || (lock != 0 && key == 0xFF),
+                || format!("{at} leads to room {goes}, which the pack has not"),
+            );
+            doors.push(WalkDoor {
+                to: goes,
+                lock,
+                key,
+            });
+        }
+        walk.insert(id.clone(), (doors, keys));
+    }
+
+    // The walk.
+    let Some(start) = plan.new_id(&plan.start).map(str::to_string) else {
+        problems.push(format!("the start room {} has no new id", plan.start));
+        return;
+    };
+    let end = plan.new_id(&plan.end).map(str::to_string);
+    let mut reached = std::collections::BTreeSet::from([start]);
+    // The lockpick opens the Sword Key's and the Small Key's locks
+    // (`arklay_biorand::keys`'s implicit keys).
+    let lockpick = game
+        .scenario_flags
+        .iter()
+        .any(|flag| flag.name == "lockpick" && flag.raised);
+    let mut held: std::collections::BTreeSet<u8> = if lockpick {
+        [IT_KEY_SWORD, IT_KEY_DESK].into()
+    } else {
+        Default::default()
+    };
+    let mut opened = std::collections::BTreeSet::new();
+    loop {
+        let mut changed = false;
+        for room in reached.clone() {
+            let Some((doors, keys)) = walk.get(&room) else {
+                continue;
+            };
+            for &key in keys {
+                changed |= held.insert(key);
+            }
+            for door in doors {
+                let opens = door.lock == 0
+                    || opened.contains(&door.lock)
+                    || door.key == 0xFE
+                    || (door.key != 0xFF && (door.key == 0 || held.contains(&door.key)));
+                if opens {
+                    if door.lock != 0 {
+                        changed |= opened.insert(door.lock);
+                    }
+                    changed |= reached.insert(door.to.clone());
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    report.walked_rooms = reached.len();
+    if let Some(end) = end {
+        problems.check(reached.contains(&end), || {
+            let shut: Vec<String> = reached
+                .iter()
+                .filter_map(|room| Some((room, walk.get(room)?)))
+                .flat_map(|(room, (doors, _))| {
+                    doors
+                        .iter()
+                        .filter(|door| !reached.contains(&door.to))
+                        .map(move |door| format!("{room}->{} (lock {} key {})", door.to, door.lock, door.key))
+                })
+                .collect();
+            format!(
+                "walking from the start room never reaches the end room {end}: it reaches {reached:?}, holding {held:?}; shut: {shut:?}"
+            )
+        });
+    }
 }
 
 /// Where a room script differs from the planned patch of its base's.

@@ -2725,7 +2725,21 @@ impl GameSession {
         // `g_AttractMode_RoomCameraId` on a same-stage door; `init_room`
         // resets it to 0x1F. The hunter's scripted intro reads it as a camera
         // selector.
+        // Between copied rooms the scripts read it as the original would:
+        // the origin's room, when the two origins share a stage.
+        let origin_of = |id: RoomId| self.game.origins.origin_room(id);
         let attract_room_camera_id = match from {
+            Some(source)
+                if origin_of(source) != (source.stage, source.room)
+                    || origin_of(self.loaded.id) != (self.loaded.id.stage, self.loaded.id.room) =>
+            {
+                let (stage, room) = origin_of(source);
+                if stage == origin_of(self.loaded.id).0 {
+                    room
+                } else {
+                    0x1F
+                }
+            }
             Some(source) if !init_room => source.room,
             _ => 0x1F,
         };
@@ -19608,6 +19622,121 @@ mod tests {
         // The retail save of the same spot stays the plain block.
         let retail = save::SaveFile::from_state(&into_origin.game);
         assert_eq!(retail.to_file_bytes(), retail.to_bytes().to_vec());
+    }
+
+    /// Door-randomized games generated from the real pack, for both players:
+    /// a new game boots in the main hall's new id, and each planned door a
+    /// fresh room sets up leads, through the headless door transition, into
+    /// its planned room, which plays as its original.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn a_door_randomized_real_game_leads_through_its_doors() {
+        let _sdl = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let base = Path::new(&path);
+        // The packs are the size of the base: beside it, not in the
+        // temporary directory.
+        let games = base.with_file_name(format!("doors-test-{}", std::process::id()));
+        let mut config = arklay_biorand::config::Config::new();
+        for option in [
+            "items/random",
+            "doors/random",
+            "locks/random",
+            "enemies/random",
+        ] {
+            config.set(option, true);
+        }
+        let options = crate::biorand::Options {
+            config: Some(config),
+            players: crate::biorand::PlayerChoice::Both,
+            force: true,
+        };
+        let packs = crate::biorand::generate_with(base, 5, &games, &options, 0, &|_, _| {});
+        let result = std::panic::catch_unwind(|| {
+            for generated in packs.as_ref().unwrap() {
+                let pack = Pack::open(&generated.path).unwrap();
+                let game = crate::biorand::planned_game(&pack).unwrap();
+                let plan = game.doors.as_ref().unwrap();
+                let character = u8::from(game.player == arklay_biorand::map::Player::Jill);
+                let id_of = |folder: &str| RoomId::from_room_and_player(folder, character).unwrap();
+                let origin_of = |dir: &str| RoomId::from_room_and_player(dir, character).unwrap();
+
+                let session = GameSession::new(&pack, character, &games.join("saves")).unwrap();
+                assert_eq!(session.loaded.id, id_of(plan.new_id(&plan.start).unwrap()));
+                assert_eq!(session.game.origin(), origin_of(&plan.start));
+
+                let (mut walked, mut unset) = (0, 0);
+                for door in plan.doors.iter().filter(|door| door.randomized) {
+                    let Some(target) = &door.target else {
+                        continue;
+                    };
+                    let from = id_of(plan.new_id(&door.dir).unwrap());
+                    let zone = {
+                        let mut loaded = load_room(&pack, from).unwrap();
+                        let mut state =
+                            new_game_state(&pack, from, &loaded.room, player::Options::default());
+                        seed_fresh_state(&pack, &mut state);
+                        run_room_init(&mut loaded, &mut state);
+                        state
+                            .doors
+                            .get(usize::from(door.id))
+                            .copied()
+                            .flatten()
+                            .map(|door| door.zone)
+                    };
+                    match zone {
+                        // A door its room sets up only later in the game, or
+                        // an event's (a lift's) without a zone of its own.
+                        None => {
+                            unset += 1;
+                            continue;
+                        }
+                        Some(zone) if zone[2] <= 1 && zone[3] <= 1 => {
+                            unset += 1;
+                            continue;
+                        }
+                        Some(_) => {}
+                    }
+                    let Ok(sim) = simulate_door(&pack, from, door.id, None) else {
+                        // Locked: the key is not held in a fresh state.
+                        unset += 1;
+                        continue;
+                    };
+                    let what = format!(
+                        "{}:{} ({}) into {}",
+                        door.room,
+                        door.id,
+                        from.room3(),
+                        target.room
+                    );
+                    assert_eq!(sim.game.id, id_of(&target.id), "{what}");
+                    assert_eq!(sim.game.origin(), origin_of(&target.dir), "{what}");
+                    // A fresh state's first entry into the main hall plays
+                    // the opening, which places the player itself, as 310's
+                    // script does for its lift's door (entrance 0, 0).
+                    let placed = (target.entrance.x, target.entrance.z) == (0, 0);
+                    if target.dir != plan.start && !placed {
+                        assert_eq!(
+                            [sim.player.pos[0], sim.player.pos[2]],
+                            [target.entrance.x, target.entrance.z],
+                            "{what}"
+                        );
+                    }
+                    walked += 1;
+                }
+                eprintln!(
+                    "{}: {walked} doors walked, {unset} not set up or locked in a fresh room",
+                    generated.path.display()
+                );
+                assert!(walked > 60, "{walked} doors walked, {unset} not set up");
+            }
+        });
+        let _ = std::fs::remove_dir_all(&games);
+        if let Err(panic) = result {
+            std::panic::resume_unwind(panic);
+        }
     }
 
     #[test]

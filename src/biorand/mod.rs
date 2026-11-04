@@ -10,13 +10,14 @@
 //! [`verify_pack`] reads a finished pack back and checks it against the plan,
 //! which it makes again from what the pack records.
 //!
-//! Milestones 5 and 6 of `docs/biorand/plan.md` apply items and locks: the
-//! doors and enemies stay the original's, whatever the configuration asks,
-//! and the pack raises none of their flags (see [`emit::applied_flags`]).
+//! Every part the configuration randomizes is applied: items, locks,
+//! enemies and doors. With doors randomized the rooms move to new ids
+//! ([`doors`]).
 //!
 //! The same seed, configuration and [`GENERATOR_VERSION`] always make the same
 //! bytes; bump the version whenever a change would alter a seed's output.
 
+mod doors;
 mod emit;
 mod enemies;
 mod locks;
@@ -38,7 +39,7 @@ pub use verify::Report;
 /// The version of the emitter's output for a given plan. A pack also records
 /// the plan's own version ([`arklay_biorand::plan::GENERATOR_VERSION`]) as
 /// `plan_version`; a change to either makes an older pack stale.
-pub const GENERATOR_VERSION: u32 = 3;
+pub const GENERATOR_VERSION: u32 = 4;
 
 /// The base pack a game is generated from.
 pub const BASE_PACK_ID: &str = "re1";
@@ -179,8 +180,7 @@ impl Request {
         })
     }
 
-    /// Plans the request's games on `map`, with the options this milestone
-    /// doesn't apply turned off.
+    /// Plans the request's games on `map`.
     fn plan(&self, map: &Map) -> Result<Plan> {
         arklay_biorand::generate(
             map,
@@ -192,7 +192,8 @@ impl Request {
 }
 
 /// The map a pack carries: `biorand/map.xml` and every room's `random.xml`,
-/// read in room directory order.
+/// read in room directory order. A door-randomized pack keeps them as
+/// `biorand/rooms/<room>.xml`, by the original rooms.
 fn read_map(pack: &Pack) -> Result<Map> {
     let map_xml = read_text(pack, "biorand/map.xml")?;
     let mut rooms: Vec<(String, String)> = Vec::new();
@@ -200,6 +201,11 @@ fn read_map(pack: &Pack) -> Result<Map> {
         let Some(dir) = path
             .strip_prefix("room/")
             .and_then(|rest| rest.strip_suffix("/random.xml"))
+            .or_else(|| {
+                path.strip_prefix(doors::MAP_ROOMS)
+                    .and_then(|rest| rest.strip_suffix(".xml"))
+            })
+            .filter(|dir| !dir.contains('/'))
         else {
             continue;
         };
@@ -456,6 +462,21 @@ fn game_for(plan: &Plan, character: u8) -> Option<&Game> {
     plan.games
         .iter()
         .find(|game| character_of(game.player) == character)
+}
+
+/// The game generated pack `pack` plays: its request's plan, for its
+/// manifest's character.
+#[cfg(test)]
+pub(crate) fn planned_game(pack: &Pack) -> Result<Game> {
+    let request = Request::from_json(std::str::from_utf8(&pack.read(REQUEST_ENTRY)?)?)?;
+    let plan = request.plan(&read_map(pack)?)?;
+    let character = pack
+        .manifest()
+        .and_then(|manifest| manifest.character)
+        .context("the pack names no character")?;
+    game_for(&plan, character)
+        .cloned()
+        .context("the plan has no game for the pack's character")
 }
 
 #[cfg(test)]
