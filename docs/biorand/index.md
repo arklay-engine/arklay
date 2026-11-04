@@ -28,6 +28,10 @@ same seed, configuration and generator always make the same bytes. `verify`
 plans the game again from what the pack records and checks it, and names
 every problem it finds. Given the base pack (by default `re1.akpak` beside the
 generated one), it also checks that nothing outside the planned bytes differs.
+It also runs a static audit of the plan (a route walk, item, enemy, door and
+lock checks); problems print as `audit: ...` and exit non-zero, and a route
+that can strand a player who spends a consumable key wrongly prints a
+`warning:` line.
 
 A generated game is an ordinary base pack with id `biorand-<seed>`, the seed
 padded to six digits. It is its base pack with the planned pickups written
@@ -125,10 +129,10 @@ the pickup flag.
   that the room reuses for several items (room 106's AOT 6) also tests the
   item's own pickup flag, `ck(FG_ITEM, <flag>, TRUE)`.
 
-  The test is not an `if (...) {} else {}` copy of the bodies: a command's
-  `if` jumps by one byte, so a doubled body would not fit a long `main`.
-- `picked_as(AOT, ITEM);` is the remap alone, for a test too far from its
-  `if` to add 20 bytes (room 10D). It folds away in a retail build.
+  The test is not an `if (...) {} else {}` copy of the bodies, which would
+  double each body in the script.
+- `picked_as(AOT, ITEM);` is the remap alone, for a test far from its `if`
+  (room 10D). It folds away in a retail build.
 
 
 ## Enemies: `random_enemies()`
