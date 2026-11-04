@@ -50,7 +50,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x2B)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -421,6 +421,63 @@ pub struct Effects {
     unported: u128,
     /// `Snd_se_on`s since the last tick was taken.
     pub sounds: Vec<(u32, [i16; 3])>,
+    /// The player, for what `Esp_20` hits: the caller sets it before a tick
+    /// and takes back what the hits left.
+    pub target: Option<Target>,
+}
+
+/// The player as `FUN_004d8260` tests them against an effect, and what the
+/// hits of a tick left them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Target {
+    pub pos: [i32; 3],
+    /// `Atd[0]`'s `Ofs_y` and `At_h`: the height range is from `Ofs_y`
+    /// above the feet, `At_h` either way.
+    pub ofs_y: i16,
+    pub at_h: u16,
+    /// `+0x156`, the life, and `+0x154`'s `0x1000`.
+    pub life: i16,
+    pub near_death: bool,
+    /// The routine the last hit set: `[2, 0, 0, 0]`, or `[3, 0, 0, 0]` when
+    /// `Pl_life_down` said it killed.
+    pub routine: Option<u8>,
+    /// `+0x1d3`, `Damage_cnt`: a hit waits until it's 0 again. A killing
+    /// hit, and a poisoning one, set its `0x80`.
+    pub damage_cnt: u8,
+    /// A hit by an effect whose row has bit 8: `poison_status` 0x1518,
+    /// `poison_timer` 0x1E.
+    pub poisoned: bool,
+}
+
+impl Target {
+    /// `FUN_004d8260(pos, reach, down)` for the player alone: the player's
+    /// in reach of `pos` across, and inside their height range, and still
+    /// alive, and no hit reaction is running (`+0x1d3`).
+    ///
+    /// `+0x10f`'s `0xC0`, which also stops the hit, isn't modelled.
+    fn hit(&mut self, pos: [i16; 3], reach: u32, down: i32) -> bool {
+        let [x, y, z] = pos.map(i32::from);
+        let h = u32::from(self.at_h);
+        let above = (i32::from(self.ofs_y) - y + self.pos[1]) as u32;
+        if self.damage_cnt != 0 || self.life < 0 || above.wrapping_add(h) >= h * 2 {
+            return false;
+        }
+        let (dz, dx) = (z.wrapping_sub(self.pos[2]), x.wrapping_sub(self.pos[0]));
+        let across = dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx));
+        if crate::sca::square_root0(across) as u32 >= reach {
+            return false;
+        }
+        self.routine = Some(2);
+        let (left, near_death, result) =
+            crate::zombie2::life_down(self.life, down, false, self.near_death);
+        self.life = left;
+        self.near_death = near_death;
+        if result == 2 {
+            self.damage_cnt |= 0x80;
+            self.routine = Some(3);
+        }
+        true
+    }
 }
 
 impl Effects {
@@ -709,6 +766,51 @@ impl Effects {
                         this.delay = delay;
                     }
                 }
+            }
+            // `Esp_20`: what's thrown hits the player in reach, and takes the
+            // behaviour `+2` names; or swells as it goes.
+            0x20 => {
+                let hit = self
+                    .target
+                    .as_mut()
+                    .is_some_and(|target| target.hit(slot.pos, 800, 20));
+                if hit {
+                    if slot.row & 8 != 0
+                        && let Some(target) = self.target.as_mut()
+                    {
+                        target.poisoned = true;
+                        target.damage_cnt |= 0x80;
+                    }
+                    self.behave(index, slot.start, sca);
+                    return;
+                }
+                let this = &mut self.slots[index];
+                if (this.generation as i8) < 0x14 {
+                    let grow = (u32::from(this.scale[0]) * 0x26 / 1000) as u16;
+                    this.scale[0] = this.scale[0].wrapping_add(grow);
+                    this.generation += 1;
+                }
+                let grow = (u32::from(this.scale[1]) * 5 / 1000) as u16;
+                this.scale[1] = this.scale[1].wrapping_add(grow);
+            }
+            // `Esp_34`: a splash where it hit, with its sound, and it stops
+            // to play out from frame 0xD.
+            0x34 => {
+                self.sounds.push((0x304_0001, slot.pos));
+                let this = &mut self.slots[index];
+                this.frame = 0x0D;
+                this.delay = 2;
+                self.call(3, 0x0F, 0x2800, 0, slot.pos, true);
+                let this = &mut self.slots[index];
+                this.accel[0] = 0;
+                this.accel[1] = 0;
+                this.velocity[0] = 0;
+                this.velocity[1] = 0;
+                this.flags = 0xB001;
+                this.anim = 0;
+                this.update = 0;
+                this.start = 0;
+                this.count = 0;
             }
             0x23 => self.slots[index].kill(),
             // A falling case's first and second bounce.
@@ -1593,6 +1695,69 @@ mod tests {
         let slot = effects.slots[slot];
         assert_eq!((slot.anim, slot.update), (0, 0));
         assert_eq!(slot.flags & FLAG_INTEGRATE, 0);
+    }
+
+    fn spit(effects: &mut Effects, target: Target) -> usize {
+        effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
+        effects.target = Some(target);
+        let slot = effects.call(7, 8, 0x1000, 0, [0, -500, 0], false).unwrap();
+        let this = &mut effects.slots[slot];
+        this.anim = 0x20;
+        this.update = 0;
+        this.start = 0x34;
+        this.scale = [0x1000, 0x1000];
+        this.pos = [0, -500, 0];
+        slot
+    }
+
+    fn player_at(x: i32) -> Target {
+        Target {
+            pos: [x, 0, 0],
+            ofs_y: -0x5FA,
+            at_h: 0x5FA,
+            life: 200,
+            ..Target::default()
+        }
+    }
+
+    #[test]
+    fn a_spit_in_reach_hurts_and_poisons_the_player_and_splashes() {
+        let mut effects = Effects::default();
+        let slot = spit(&mut effects, player_at(700));
+        effects.tick(&mut Default::default(), None);
+        let target = effects.target.unwrap();
+        assert_eq!(target.life, 170);
+        assert_eq!(target.routine, Some(2));
+        assert!(target.poisoned);
+        assert_eq!(target.damage_cnt, 0x80);
+        let this = effects.slots[slot];
+        assert_eq!((this.anim, this.update, this.flags), (0, 0, 0xB001));
+        assert!(effects.sounds.iter().any(|&(id, _)| id == 0x304_0001));
+    }
+
+    #[test]
+    fn a_spit_out_of_reach_swells_as_it_flies() {
+        let mut effects = Effects::default();
+        let slot = spit(&mut effects, player_at(900));
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.target.unwrap().life, 200);
+        let this = effects.slots[slot];
+        assert_eq!(this.scale, [0x1000 + 0x9B, 0x1000 + 0x14]);
+        assert_eq!((this.anim, this.generation), (0x20, 1));
+    }
+
+    #[test]
+    fn a_spit_misses_a_player_still_reeling_from_a_hit() {
+        let mut effects = Effects::default();
+        spit(
+            &mut effects,
+            Target {
+                damage_cnt: 1,
+                ..player_at(0)
+            },
+        );
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.target.unwrap().life, 200);
     }
 
     #[test]

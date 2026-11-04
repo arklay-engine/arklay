@@ -8,14 +8,16 @@
 -- `+0x231` is the side it walks on: its clips come in two sets of 13, and it
 -- faces `Cdir_y + side * 0x800`.
 --
--- The engine (`run_plant`) runs `Oba_ck_em` after `update` unless
--- `vars[30]` (`+0x21a`) is set, then `Sca_ck_em`, then poses the parts and
+-- The engine (`run_plant`) runs `Oba_ck_em` after `update`, or while
+-- `vars[30]` (`+0x21a`) is set `FUN_00488980`, the push out of the other
+-- enemies but not the player. Then it runs `Sca_ck_em`, poses the parts and
 -- counts the ticks it didn't move in `vars[31]` (`+0x22d`).
 --
--- Only the player as the target is ported (`FUN_004881c0` can pick the
--- partner too), and none of the damage, the dying, the spit (state 6), the
--- retreat (state 7) or states 8, 9 and 11, nor the spit from range's
--- effect (state 5 runs, with its sound): no run reaches them yet.
+-- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
+-- the player (`esp2.rs`). Only the player as the target is ported
+-- (`FUN_004881c0` can pick the partner too), and none of the damage, the
+-- dying and its blood (`+0x23c`), the spit at close range (state 6), the
+-- retreat (state 7) or states 8, 9 and 11: no run reaches them yet.
 
 local M = {}
 
@@ -663,8 +665,17 @@ local function spat(e)
     e:set_speed_z(0)
 end
 
--- `FUN_00485f20`: `Routine_1` 5, the poison spit from range. The spit itself
--- (`Esp_call` 0x1d from part 11) isn't ported, only its sound.
+-- `Esp_call` 0x1d: the spit, from part 11's last matrix, along the head.
+-- Its row is `+0x224`, which `spit`'s start set from the id and `+0x23e`.
+local function spit_out(e)
+    local _, neck = e:part_rot(9)
+    local x, y, z = e:own_part(11)
+    local dir = i16(neck + side(e) * 0x800 + e:angle())
+    e:call_effect(0x1D, e:var(KEPT) & 0xFF, 0xC00, dir, x, y, z)
+    e:sound(3)
+end
+
+-- `FUN_00485f20`: `Routine_1` 5, the spit from range.
 local function spit(e)
     local two = e:routine(2)
     if two == 0 then
@@ -687,7 +698,7 @@ local function spit(e)
         if e:routine(3) == 0 then
             if seq & 0x10000 ~= 0 then
                 e:set_routine(3, 1)
-                e:sound(3)
+                spit_out(e)
             end
         elseif seq & 0x20000 ~= 0 then
             spat(e)
@@ -698,7 +709,7 @@ local function spit(e)
         if (three == 0 and done) or three == 1 then
             e:set_routine(3, 2)
             twist(e, 2)
-            e:sound(3)
+            spit_out(e)
         elseif three == 2 and done then
             spat(e)
         end

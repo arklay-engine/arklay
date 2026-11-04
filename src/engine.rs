@@ -3681,7 +3681,12 @@ impl GameSession {
             self.tick_re2_weapon(pack);
             let re2 = &mut self.game.re2;
             re2.tick_before();
-            re2.tick_effects(self.loaded.room.sca.as_ref());
+            let player = self
+                .game
+                .entities
+                .first_mut()
+                .map(|player| (player.pos, &mut player.health));
+            re2.tick_effects(self.loaded.room.sca.as_ref(), player);
             self.re2_sounds.played.clear();
             play_re2_sounds(
                 &mut self.music,
@@ -14740,6 +14745,11 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
         return;
     }
+    if !context.game.re2.player_stopped()
+        && let Some(player) = context.game.entities.first_mut()
+    {
+        crate::player2::poison_tick(&mut context.game.re2.player, &mut player.health);
+    }
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
     let targets = crate::character2::targets(context.game);
@@ -14760,7 +14770,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         options: context.game.player_options,
         id: context.game.id.player_flag,
         life: i32::from(context.game.entities[0].health),
-        poisoned: false,
+        poisoned: context.game.re2.player.poisoned,
         stopped: context.game.re2.player_stopped(),
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),

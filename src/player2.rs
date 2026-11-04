@@ -362,6 +362,11 @@ pub struct Work {
     pub old: Option<[i32; 3]>,
     /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
     pub near_death: bool,
+    /// `poison_status`: an ivy's spit poisoned the player. The life level
+    /// and [`poison_tick`] read it; the screen's tint isn't ported.
+    pub poisoned: bool,
+    /// `poison_timer`: the ticks to the next life poison takes.
+    pub poison_timer: u8,
     /// `Snd_se_on`s of the held states, for the caller.
     pub sounds: Vec<u32>,
     /// What `Weapon_at_ck` found this tick, for the enemy to take.
@@ -706,6 +711,8 @@ impl Default for Work {
             atd: None,
             old: None,
             near_death: false,
+            poisoned: false,
+            poison_timer: 0,
             sounds: Vec::new(),
             hit: None,
             noise: 0,
@@ -1070,6 +1077,22 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.arrived
+}
+
+/// `Player_move`'s poison, before its routine: while `poison_status` is set,
+/// a life each time `poison_timer` runs out, never the last one.
+pub fn poison_tick(work: &mut Work, life: &mut i16) {
+    if !work.poisoned {
+        return;
+    }
+    let left = work.poison_timer;
+    work.poison_timer = left.wrapping_sub(1);
+    if left == 0 {
+        work.poison_timer = 0x1E;
+        if *life > 1 {
+            *life -= 1;
+        }
+    }
 }
 
 /// `Player_move` while an enemy has hold of the player (`Pl_Em_damage`,
@@ -4361,6 +4384,26 @@ mod tests {
             neck: pos,
             distance,
         }
+    }
+
+    #[test]
+    fn poison_takes_a_life_every_31_ticks_but_never_the_last() {
+        let mut work = Work {
+            poisoned: true,
+            poison_timer: 0x1E,
+            ..Work::default()
+        };
+        let mut life = 2;
+        for _ in 0..0x1E {
+            poison_tick(&mut work, &mut life);
+        }
+        assert_eq!(life, 2);
+        poison_tick(&mut work, &mut life);
+        assert_eq!((life, work.poison_timer), (1, 0x1E));
+        for _ in 0..0x1F {
+            poison_tick(&mut work, &mut life);
+        }
+        assert_eq!(life, 1);
     }
 
     #[test]
