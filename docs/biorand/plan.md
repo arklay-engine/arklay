@@ -256,9 +256,14 @@ reaches them. Milestone 8 made the engine ready for that:
 
 Milestone 9's emitter copies each renumbered room's folder to its new id
 with `<room origin="...">` set, and adds a `<doors>` entry for every door
-that leads to a renumbered room (by AOT, with `next` where a slot is armed
-more than once). Room 303's death replay draws room 311 relative to the
-origin, so 311 keeps its folder and its id.
+whose byte would not reach its planned room (by AOT, with `next` where a
+slot is armed with more than one target byte). Room 303's death replay draws
+room 311 relative to the origin, so 311 keeps its folder and its id. Rooms
+the plan leaves out are not in the pack. Every room's `random.xml` moves to
+`biorand/rooms/<dir>.xml`, so the plan can be made again from the pack.
+`B_PREV_ROOM` reads the previous room's origin when either room is a copy
+(`0x1F` across stages), so a script that places the player by where they
+came from sees the original's room.
 
 ### Enemy placeholders
 
@@ -322,24 +327,36 @@ writes one new base pack per planned player (`src/biorand/`):
   `biorand/spoiler.txt`. Every other entry is the base pack's, copied as it
   is stored.
 
-Until their milestones land, the doors and enemies stay the original's:
-`generate` defers `doors/random`, the engine side turns `enemies/random` off
-and lists it as deferred in the spoiler, and the manifest raises neither
-`DOOR_RANDOMIZER` nor `ENEMY_RANDOMIZER`. Locks are randomized with
-`locks/random` (milestone 6), which raises `LOCK_RANDOMIZER` and
-`BR_LOCK_FULL_BYTE`; without it the pack keeps the original lock bytes.
+- **Doors** (`doors/random`, milestone 9; it needs `items/random`). The
+  plan gives each room its new id and each door its target. The emitter
+  writes each planned door's arrival (position, facing and camera cut from
+  the far door's entrance) into its `door_aot_set`, keeping its animation
+  and sound, and seals a door of a planned room that leads out of the game
+  (lock and key 255). The manifest's `start_room` is the main hall's new id.
+  `DOOR_RANDOMIZER` and `BR_LOCK_FULL_BYTE` are raised.
+
+Locks are randomized with `locks/random` (milestone 6), which raises
+`LOCK_RANDOMIZER` and `BR_LOCK_FULL_BYTE`; without it (and without random
+doors) the pack keeps the original lock bytes.
 
 `verify` reads the finished pack back. It plans the game again from the
 request and the map the pack carries, then checks the manifest's flags and
 setup, the spoiler, that every room script decodes, and that every planned
 pickup is declared by an `item_aot_set` in its room with the planned item and
 amount (a slot no reachable `item_aot_set` declares could never be picked
-up), and, with random locks, every door's lock and key bytes. Given the base pack, it also checks that every other byte matches: each
+up), and, with random locks, every door's lock and key bytes. With random
+doors it checks the layout: each planned room at its new id naming its
+original as origin, no other room folder but 311, every planned door
+arriving at the far door's entrance and leading (by `<doors>` or its byte,
+as the engine resolves it) to the planned room, every door's target in the
+pack, and a walk of the pack's doors from the start room, picking up the
+planned keys (the lockpick's with the lockpick), that reaches the end room.
+Given the base pack, it also checks that every other byte matches: each
 room script equals the base's with the planned fields written, and every
 other entry is identical. `generate` runs it on every pack it writes and
-deletes a pack that fails. Later milestones add the route checks: every room
-reachable, every key before its lock, nothing waiting on a story flag the
-route can't raise, and every guard a patch needs reached.
+deletes a pack that fails. Milestone 11 adds the rest of the route checks:
+nothing waiting on a story flag the route can't raise, and every guard a
+patch needs reached.
 
 ### How to test milestone 1
 
@@ -359,6 +376,9 @@ target/test-release/arklay biorand generate re1.akpak --seed 7 --player jill --c
 # Random locks (milestone 6):
 echo '{"locks/random": true}' > locks.json
 target/test-release/arklay biorand generate re1.akpak --seed 7 --player both --config locks.json --force
+# Random doors are on by default (milestone 9, as staging's default); the original layout:
+echo '{"doors/random": false}' > original.json
+target/test-release/arklay biorand generate re1.akpak --seed 7 --player both --config original.json --force
 # Check a pack again (the base is found beside it, or given with --base):
 target/test-release/arklay biorand verify games/biorand-123456-chris.akpak --base re1.akpak
 # Read what it set up, and the spoiler:
@@ -418,7 +438,22 @@ The pull request's description holds the live checklist. In order:
    **Done:** see [Room ids and segments](#room-ids-and-segments).
 9. **Door randomization**: segments as stages, renumbered rooms, and the
    door patches (106, 207, the lifts, 303/305, plant 42, the bookcases, 500).
-   *Test milestone 3.*
+   *Test milestone 3.* **Done:** the package plans the layout (up to 32
+   layouts per seed, see below), the emitter copies and retargets the rooms
+   ([Room ids and segments](#room-ids-and-segments),
+   [Emitting and verifying](#emitting-and-verifying)), the door patches are
+   `DOOR_RANDOMIZER` guards (the patch catalogue's rows), and the verifier
+   checks the layout and walks it. Deviations from staging:
+   - staging ships whatever its route finder reaches; arklay retries the
+     door layout (a new stream per attempt) until every room is reachable
+     and every key node visited, and refuses the seed after 32 attempts;
+   - one-sided vanilla locks (a `locked` door with no key and no allowed
+     locks, such as 201:1) are dropped under door rando, since connected to
+     a random room they strand the far side;
+   - a connected pair's lock kinds mirror each other (staging copies the
+     source's lock to the target but keeps both kinds);
+   - random doors need random items: the key placement is what makes a
+     layout completable.
 10. **Launcher and logs.** The configuration screen as in staging, seeds, the
     spoiler log and stale-pack rebuilds. **Done:** BIORAND has a Player row,
     an Options screen and a Spoiler Log screen. Options is generated from the
