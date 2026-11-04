@@ -246,18 +246,18 @@ impl ThrownPart {
     }
 
     /// `FUN_00461f40`: on its way to `Parts_bomb`.
-    fn blown(part: u8, matrix: player2::Matrix, dir: u16) -> Self {
+    fn blown(part: u8, matrix: player2::Matrix, dir: u16, speed: i16, up: i16) -> Self {
         Self {
             part,
             matrix,
-            velocity: [0; 3],
+            velocity: [0, up, 0],
             gravity: 10,
             bounces: 0,
             rest: player2::rot_matrix([0; 3]),
             turning: -1,
             blown: Some(BlownPart {
                 dir,
-                speed: 800,
+                speed,
                 count: 0,
             }),
             below: Vec::new(),
@@ -348,7 +348,7 @@ fn joint_matrix(matrix: &player2::Matrix) -> crate::anim::Mat4x3 {
 const PARTS_MASK: u16 = 0x2000;
 
 /// How many of the work's fields the script keeps for itself.
-const VARS: usize = 32;
+const VARS: usize = 34;
 /// The dog, whose script is `enemy/20/enemy.lua`.
 pub const DOG_ID: u8 = 0x20;
 /// The crow, whose script is `enemy/21/enemy.lua`.
@@ -404,6 +404,29 @@ pub fn plant_aim(character: &Character) -> u16 {
         & 0xFFF
 }
 
+/// The script's fields: an array too long to derive `Default`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Vars([i32; VARS]);
+
+impl Default for Vars {
+    fn default() -> Self {
+        Self([0; VARS])
+    }
+}
+
+impl std::ops::Deref for Vars {
+    type Target = [i32; VARS];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Vars {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 /// What a zombie keeps beyond a character's [`Work`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Zombie {
@@ -419,7 +442,7 @@ pub struct Zombie {
     /// off the player.
     shot_high: bool,
     /// The script's fields (`e:var`), which only it reads.
-    vars: [i32; VARS],
+    vars: Vars,
     at_em_no: u8,
     /// `FUN_00459ef0` took hold of its body this tick, from this base.
     pub grabbed: Option<[i16; 3]>,
@@ -545,7 +568,7 @@ pub fn take_hit(
 impl Zombie {
     /// The script's fields, for another work that reads them.
     pub fn vars(&self) -> [i32; VARS] {
-        self.vars
+        self.vars.0
     }
 
     /// Set one of the script's fields from outside its run.
@@ -873,6 +896,15 @@ impl Em<'_, '_, '_> {
         self.oba_ck(self.z.vars[PLANT_OBA] == 0);
         self.sca_ck_em();
         if self.mover.tick.id == VINE_ID {
+            // A vine falling with its dead ivy reads its own part 2, turned
+            // as it's drawn.
+            let [pitch, roll] = self.z.tilt;
+            let angle = self.mover.player.angle;
+            self.z.parts = self.mover.posed_parts_turned(player2::rot_matrix([
+                pitch as i16,
+                angle as i16,
+                roll as i16,
+            ]));
             return;
         }
         self.z.parts = self.mover.posed_parts();
@@ -1119,10 +1151,11 @@ impl Em<'_, '_, '_> {
         self.z.thrown.push(thrown);
     }
 
-    /// `FUN_00461f40`.
-    fn blow_part(&mut self, part: usize, dir: u16) {
+    /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
+    /// at 300 and up at 150.
+    fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16) {
         if let Some(matrix) = self.mover.part_matrix(part) {
-            self.push_thrown(ThrownPart::blown(part as u8, matrix, dir));
+            self.push_thrown(ThrownPart::blown(part as u8, matrix, dir, speed, up));
         }
     }
 
@@ -1845,7 +1878,7 @@ mod tests {
             m: player2::rot_matrix([0, 0, 0]),
             t: [0, 1000, 0],
         };
-        let mut part = ThrownPart::blown(3, matrix, 0);
+        let mut part = ThrownPart::blown(3, matrix, 0, 800, 0);
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         let start = rnd;
@@ -1859,6 +1892,22 @@ mod tests {
         assert_eq!(part.matrix.t[0], 700 + 600 + 500 + 400 + 300 + 200 + 100);
         assert_eq!(rnd, start);
         assert!(!part.takes_below());
+    }
+
+    /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
+    #[test]
+    fn an_ivys_blown_part_starts_slow_and_rises() {
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t: [0, 1000, 0],
+        };
+        let mut part = ThrownPart::blown(3, matrix, 0, 300, -150);
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert_eq!(part.matrix.t, [200, 860, 0]);
+        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert_eq!(part.matrix.t, [300, 730, 0]);
     }
 
     #[test]

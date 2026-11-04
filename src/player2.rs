@@ -278,7 +278,7 @@ pub struct Work {
     pub bank: Bank,
     pub d_life_u: u8,
     pub spd: [i16; 3],
-    spd_base: [i16; 3],
+    pub(crate) spd_base: [i16; 3],
     timer0: u16,
     /// `Timer1` and `Timer2`: the climb's steps left and whether it goes down.
     timer1: i16,
@@ -2190,6 +2190,11 @@ impl Mover<'_, '_> {
     /// joint, as the skeleton composes them from the root: what `FUN_004886f0`
     /// leaves for the ivy's vines.
     pub(crate) fn posed_parts(&self) -> Vec<Option<Matrix>> {
+        self.posed_parts_turned(self.work.body_rotation(self.player.angle))
+    }
+
+    /// [`Self::posed_parts`] from a root turned by `turn`.
+    pub(crate) fn posed_parts_turned(&self, turn: [[i16; 3]; 3]) -> Vec<Option<Matrix>> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let skeleton = &self.tick.skeleton;
         let mut parts = vec![None; skeleton.relative.len()];
@@ -2198,7 +2203,7 @@ impl Mover<'_, '_> {
         };
         self.work.neck.apply(&mut pose);
         let root = Matrix {
-            m: self.work.body_rotation(self.player.angle),
+            m: turn,
             t: self.player.pos,
         };
         let mut stack = vec![(0usize, root)];

@@ -14,10 +14,13 @@
 -- counts the ticks it didn't move in `vars[31]` (`+0x22d`).
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
--- the player (`esp2.rs`). Only the player as the target is ported
--- (`FUN_004881c0` can pick the partner too), and none of the damage, the
--- dying and its blood (`+0x23c`), the spit at close range (state 6), the
--- retreat (state 7) or states 8, 9 and 11: no run reaches them yet.
+-- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
+-- are ported for the weapons arklay fires, 2 to 8, with `censorship_off` and
+-- `hard_mode` clear, and so is the retreat at half its life (state 7). Only
+-- the player as the target is ported (`FUN_004881c0` can pick the partner
+-- too), and neither are the other weapons' entries, the spit at close range
+-- (state 6), states 8, 9 and 11, the head's twist on parts 11 to 13
+-- (`FUN_004883d0`), the parts' colours and the dead ivy's shadow.
 
 local M = {}
 
@@ -43,7 +46,7 @@ local T23A <const> = 18 -- `+0x23a`: the left vine's wait.
 local T23B <const> = 19 -- `+0x23b`: the right's.
 local BLOOD <const> = 20 -- `+0x23c`.
 local F23D <const> = 21 -- `+0x23d`.
-local HOLDS <const> = 22 -- `+0x23e`: the squeezes left in a hold.
+local HOLDS <const> = 22 -- `+0x23e`: which spit, added to the id's row.
 local F23F <const> = 23 -- `+0x23f`.
 local KEPT <const> = 24 -- `+0x224`: `+0x21c` while it holds.
 local TWIST_RATE <const> = 25 -- `+0x22c`.
@@ -51,6 +54,8 @@ local SAVED <const> = 26 -- `+0x22e` to `+0x230`: last tick's routines.
 local SIDE <const> = 29 -- `+0x231`.
 local OBA <const> = 30 -- `+0x21a`: skip `Oba_ck_em`.
 local STUCK <const> = 31 -- `+0x22d`.
+local HOLD_COUNT <const> = 32 -- `+0x240`: the squeezes left in a hold.
+local DEAD <const> = 33 -- `+0x233`: how far `FUN_004880c0` has gone.
 
 local ROOM_SPAT <const> = 0x20
 local ROOM_LASHING <const> = 0x40
@@ -120,6 +125,47 @@ local function routines(e, one, two, three)
     e:set_routine(1, one)
     e:set_routine(2, two or 0)
     e:set_routine(3, three or 0)
+end
+
+-- `0x529fe0`, `FUN_00488570`'s rows: `Esp_call`'s kind, row and size.
+local BLOOD_ROWS <const> = {
+    [0] = { 0, 0x11, 0x1800 },
+    { 0, 0x11, 0x1000 },
+    { 5, 4, 0x1000 },
+    { 5, 1, 0x1000 },
+    { 0, 0x1D, 0x1000 },
+    { 0, 5, 0x800 },
+    { 0, 0x1D, 0x1800 },
+    { 4, 0xF, 0xC00 },
+    { 4, 0xF, 0x1400 },
+    { 6, 0, 0x1000 },
+    { 4, 0xC, 0x1800 },
+}
+-- `0x529e08`: the parts a spray of blood picks from.
+local BLOOD_PARTS <const> = { [0] = 0, 1, 9, 14, 5, 10, 20, 17, 2, 21, 10, 0, 7, 15, 3, 9 }
+-- `0x529f64`: the parts `FUN_004872e0` bleeds from.
+local HIT_PARTS <const> = { [0] = 11, 10, 14, 20, 0, 1, 5, 21 }
+
+-- `FUN_00488570`: a row's effect at a part, facing from the ivy to its
+-- target (`+0x218`, only the player here).
+local function blood(e, part, row)
+    local effect = BLOOD_ROWS[row]
+    local x, y, z = e:own_part(part)
+    e:call_effect(effect[1], effect[2], effect[3], e:direction_to_player(), x, y, z)
+end
+
+-- `FUN_00487450`: `count` parts in a row of `BLOOD_PARTS` from a random one.
+local function spray(e, row, count)
+    local first = e:rnd() & 7
+    for index = 0, count - 1 do
+        blood(e, BLOOD_PARTS[first + index], row)
+    end
+end
+
+-- The vines' command, and which of them it is for.
+local function command(e, value, to)
+    e:set_var(COMMAND, value)
+    e:set_var(COMMAND_TO, to)
 end
 
 -- `FUN_00488450`: at half its life it backs off.
@@ -531,7 +577,7 @@ local function hold_start(e)
         e:set_var(OBA, 1)
         e:set_timer(0, 0x1E)
         e:set_timer(1, 0x2D)
-        e:set_var(HOLDS, 0x83)
+        e:set_var(HOLD_COUNT, 0x83)
         e:set_var(COMMAND_TO, 3)
         e:set_var(T223, 0x5A)
         e:set_var(KEPT, e:var(HELD))
@@ -573,7 +619,7 @@ local function hold_squeeze(e)
         e:set_timer(1, timer)
         if timer == 0 then
             e:set_routine(3, 2)
-            e:set_var(HOLDS, (e:var(HOLDS) - 1) & 0xFF)
+            e:set_var(HOLD_COUNT, (e:var(HOLD_COUNT) - 1) & 0xFF)
         end
     elseif three == 2 or three == 3 then
         if three == 2 then
@@ -613,13 +659,13 @@ local function hold_squeeze(e)
     if e:gacha() then
         e:set_timer(0, i16(e:timer(0) - 1))
     end
-    if (i16(e:timer(0)) < 0 and e:player_life() >= 0) or e:var(HOLDS) & 0x7F == 0 then
+    if (i16(e:timer(0)) < 0 and e:player_life() >= 0) or e:var(HOLD_COUNT) & 0x7F == 0 then
         e:set_routine(2, 2)
         e:set_routine(3, 0)
         e:pl_set_routine_at(1, 2)
         e:pl_set_routine_at(2, 0)
         e:pl_set_routine_at(3, 0)
-        e:set_var(HOLDS, 0)
+        e:set_var(HOLD_COUNT, 0)
     end
 end
 
@@ -719,7 +765,31 @@ local function spit(e)
     end
 end
 
-local STATES <const> = { [0] = wait, walk, turn, stuck, lash, spit, [10] = hold }
+-- `FUN_004865c0`: `Routine_1` 7, backing off at half its life, its head
+-- twisted round until `twist_step` is done.
+local function retreat(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        side_clip(e, 0)
+        e:set_neck_flags(e:neck_flags() | 2)
+        e:set_var(TWIST_BY, 1)
+        e:set_var(TWISTED, 0)
+        e:set_var(TWIST_RATE, 8)
+        e:set_room_enemy(e:room_enemy() & ~ROOM_LASHING)
+        e:set_var(OBA, 0)
+    else
+        if e:rnd() & 7 == 0 then
+            blood(e, e:rnd() % 3 + 0xB, 4)
+        end
+        if e:var(TWISTED) ~= 0 then
+            e:routines(1, 1, 0, 0)
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        end
+    end
+    e:joint(0x40)
+end
+
+local STATES <const> = { [0] = wait, walk, turn, stuck, lash, spit, [7] = retreat, [10] = hold }
 
 -- `FUN_00488160` and `FUN_00488190`, from `FUN_00488140`: the head twists
 -- one way and back for the spit.
@@ -768,6 +838,206 @@ local function send_vine(e)
         e:set_var(COMMAND_TO, right + 1)
         e:set_var(COMMAND, 4)
         e:set_var(T23A + right, 0xF)
+    end
+end
+
+-- The vines take the hit too (state 5), unless `+0x23d` is set.
+local function shake_vines(e)
+    if e:var(F23D) == 0 then
+        command(e, 6, 3)
+    end
+end
+
+-- A hit's blood: on the head or the body for every third `Damage_no`.
+local function hit_part(e)
+    if e:damage_no() % 3 == 0 and e:var(F23D) == 0 then
+        return (e:rnd() & 1) * 4 + 3
+    end
+    return 10
+end
+
+-- `caseD_2` (`0x487080`): blood and a sound, then back to the routine it
+-- was in, or to walking.
+local function resume(e)
+    shake_vines(e)
+    local weapon = e:routine(1)
+    if weapon ~= 1 then
+        blood(e, hit_part(e), 1)
+    end
+    if weapon ~= 0x10 then
+        e:sound(2)
+    end
+    e:spd()
+    local one = e:var(SAVED)
+    if one == 0 then
+        e:routines(1, 1, 0, 0)
+        e:set_neck_flags(e:neck_flags() & ~2)
+        command(e, 3, 3)
+        return
+    end
+    e:routines(1, one, e:var(SAVED + 1), e:var(SAVED + 2))
+end
+
+-- `caseD_5` (`0x4872e0`).
+local function bleed(e)
+    shake_vines(e)
+    local weapon = e:routine(1)
+    blood(e, HIT_PARTS[e:rnd() & 7], 0)
+    if weapon == 0x12 then
+        blood(e, HIT_PARTS[e:rnd() & 7], 1)
+    end
+    e:sound(2)
+    e:routines(1, e:var(SAVED), e:var(SAVED + 1), e:var(SAVED + 2))
+end
+
+-- `caseD_6` (`0x487160`): the flinch, then walking.
+local function flinch(e)
+    if e:var(F23D) ~= 0 then
+        resume(e)
+        return
+    end
+    if e:routine(2) ~= 0 then
+        e:spd()
+        if not e:joint(0x400) then
+            e:add_speed_xz()
+            return
+        end
+        e:routines(1, e:var(F23D) == 0 and 1 or 9, 0, 0)
+        e:set_body_ofs_x(side(e) ~= 0 and -800 or 800)
+        return
+    end
+    e:set_routine(2, 1)
+    e:set_routine(3, 0)
+    e:set_room_enemy(e:room_enemy() & ~ROOM_LASHING)
+    e:clip(side(e) * 13 + 3 + (e:cdir_player() and 1 or 0), 0, 0)
+    e:spd()
+    e:joint(0x400)
+    -- `Spd_base`, so the next `Spd_get` takes frame 1's whole place.
+    e:set_speed_base(0, 0, 0)
+    shake_vines(e)
+    blood(e, hit_part(e), 0)
+    e:sound(0xB)
+    e:set_be_flg(e:be_flg() & ~4)
+end
+
+-- `funcs_487037` (`0x529ec4`), by weapon, with `censorship_off` and
+-- `hard_mode` clear. Only the weapons arklay fires are ported.
+local HURTS <const> = { resume, resume, resume, bleed, flinch, flinch, flinch, flinch }
+
+-- `FUN_00487010`: `Routine_0` 2.
+local function hurt(e)
+    local entry = HURTS[e:routine(1)]
+    if entry then
+        entry(e)
+    end
+    send_vine(e)
+    twist_step(e)
+    e:rot_neck_joint(9, (e:angle() + side(e) * 0x800) & 0xFFFF, 0xC, 0x200)
+end
+
+-- `FUN_00487640`: lets go of the player it holds and starts its fall.
+local function die_start(e)
+    if e:var(HOLD_COUNT) ~= 0 then
+        e:pl_set_routine_at(1, 2)
+        e:pl_set_routine_at(2, 0)
+        e:pl_set_routine_at(3, 0)
+        e:set_var(HOLD_COUNT, 0)
+    end
+    if e:var(F23D) ~= 0 then
+        e:routines(7, 0, 0, 0)
+        return
+    end
+    e:set_routine(2, 1)
+    side_clip(e, 12)
+    e:set_room_enemy(e:room_enemy() & ~ROOM_LASHING)
+    e:set_neck_flags(e:neck_flags() | 2)
+    e:set_be_flg(e:be_flg() | 4)
+end
+
+-- `FUN_004876c0`: the fall, its vines with it, until `Routine_0` 7.
+local function dying(e)
+    e:spd()
+    local done = e:joint(0x40)
+    if e:neck_flags() & 1 ~= 0 then
+        -- `J_seq` builds the neck's matrix from the clip, and `Rot_neck_em`
+        -- no longer turns it.
+        e:set_neck_turn(0)
+    end
+    if done then
+        e:routines(7, 0, 0, 0)
+    end
+    e:add_speed_xz()
+    e:seq_sound()
+    shake_vines(e)
+    if e:now_seq() & 0x10000 ~= 0 then
+        command(e, 0x41, 3)
+    end
+end
+
+-- `FUN_00487600`.
+local function die_plain(e)
+    if e:routine(2) ~= 0 then
+        dying(e)
+        return
+    end
+    die_start(e)
+    if e:routine(1) ~= 1 then
+        blood(e, 10, 1)
+    end
+end
+
+-- `FUN_00487740`: the shotguns and magnums blow its head or body apart.
+local function die_blown(e)
+    if e:routine(2) ~= 0 then
+        dying(e)
+        return
+    end
+    local weapon = e:routine(1)
+    die_start(e)
+    e:set_neck_flags(e:neck_flags() | 1)
+    local first, last = 12, 14
+    if e:damage_no() % 3 == 0 and e:var(F23D) == 0 then
+        first, last = 6, 9
+    end
+    blood(e, first - 1, 0)
+    if e:damage_no() < 3 or weapon == 6 or weapon == 8 then
+        -- `FUN_00487800`.
+        for part = first, last - 1 do
+            e:blow_part(part, e:angle(), 300, -150)
+        end
+    end
+end
+
+-- `0x529f6c`, by weapon. Only the weapons arklay fires are ported.
+local DIES <const> = { die_plain, die_plain, die_plain, die_plain, die_blown, die_blown, die_blown, die_blown }
+
+-- `FUN_004875c0`: `Routine_0` 3.
+local function die(e)
+    local entry = DIES[e:routine(1)]
+    if entry then
+        entry(e)
+    end
+    e:rot_neck_joint(9, (e:angle() + side(e) * 0x800) & 0xFFFF, 0xC, 0x200)
+    e:set_died()
+end
+
+-- `0x4880a0`: `Routine_0` 7, dead. `FUN_004880c0` grows its shadow, which
+-- isn't drawn, over 0x5a ticks.
+local function dead(e)
+    e:set_var(F238, 0)
+    e:set_var(F239, 0)
+    e:set_be_flg(e:be_flg() | 0x42)
+    local done = e:var(DEAD)
+    if done == 0 then
+        e:set_var(DEAD, 1)
+        e:set_timer(3, 0x5A)
+    elseif done ~= 1 then
+        return
+    end
+    local left = (e:timer(3) - 1) & 0xFF
+    e:set_timer(3, left)
+    if left == 0 then
+        e:set_var(DEAD, 2)
     end
 end
 
@@ -856,7 +1126,7 @@ local function main(e)
     end
 end
 
-local ROUTINES <const> = { [0] = init, main }
+local ROUTINES <const> = { [0] = init, main, hurt, die, [7] = dead }
 
 -- `Em_2E`.
 function M.update(e)
@@ -871,6 +1141,11 @@ function M.update(e)
     local routine = ROUTINES[e:routine(0)]
     if routine then
         routine(e)
+    end
+    local blood_left = e:var(BLOOD)
+    if blood_left ~= 0 then
+        e:set_var(BLOOD, blood_left - 1)
+        blood(e, BLOOD_PARTS[e:rnd() & 0xF], 9)
     end
 end
 

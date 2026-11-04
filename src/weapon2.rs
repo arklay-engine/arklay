@@ -266,6 +266,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
+        IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT_DAMAGE,
         _ => &DAMAGE,
     };
     table.get(usize::from(weapon).checked_sub(2)?)
@@ -402,6 +403,50 @@ const MRX_DAMAGE: [Damage; 7] = [
         damage: 0x0461_2C50,
         stun: 0x078F_1FB4,
         heights: MRX_SHOTGUN,
+    },
+];
+
+const IVY_ID: u8 = crate::zombie2::IVY_ID;
+const VINE_ID: u8 = crate::zombie2::VINE_ID;
+const POISON_IVY_ID: u8 = crate::zombie2::POISON_IVY_ID;
+const PLANT_HANDGUN: [i32; 6] = [-4000, -2000, -3000, 2000, -500, 3000];
+const PLANT_SHOTGUN: [i32; 6] = [-3000, 500, -3000, 2000, -500, 3000];
+/// The same rows for the plants, `Em_2E` and `Em_2F` (`0x536850`).
+const PLANT_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x0070_1C07,
+        stun: 0x0285_0A14,
+        heights: PLANT_HANDGUN,
+    },
+    Damage {
+        damage: 0x0070_1C07,
+        stun: 0x0285_0A14,
+        heights: PLANT_HANDGUN,
+    },
+    Damage {
+        damage: 0x0070_1C07,
+        stun: 0x0081_0214,
+        heights: PLANT_HANDGUN,
+    },
+    Damage {
+        damage: 0x02D0_C032,
+        stun: 0x078F_1E0A,
+        heights: PLANT_HANDGUN,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: PLANT_HANDGUN,
+    },
+    Damage {
+        damage: 0x01C0_741E,
+        stun: 0x078F_1E0A,
+        heights: PLANT_SHOTGUN,
+    },
+    Damage {
+        damage: 0x03A0_EC3C,
+        stun: 0x078F_1E0A,
+        heights: PLANT_SHOTGUN,
     },
 ];
 
@@ -788,6 +833,18 @@ mod tests {
             [2, 3, 4, 5, 6, 7, 8].map(damage),
             [18, 18, 18, 200, 300, 59, 300]
         );
+    }
+
+    #[test]
+    fn the_plants_share_one_row_for_each_weapon() {
+        for id in [IVY_ID, VINE_ID, POISON_IVY_ID] {
+            let damage = |weapon| damage_table(id, weapon).unwrap().damage & 0x3FF;
+            assert_eq!(
+                [2, 3, 4, 5, 6, 7, 8].map(damage),
+                [7, 7, 7, 50, 100, 30, 60]
+            );
+            assert_eq!(damage_table(id, 7).unwrap().heights[1], 500);
+        }
     }
 
     #[test]

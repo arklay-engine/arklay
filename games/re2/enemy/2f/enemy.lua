@@ -7,8 +7,10 @@
 -- command the ivy left in its `+0x225` and `+0x227`. The engine runs the
 -- animation and `Oba_ck_em` and `Sca_ck_em` after `update`.
 --
--- The vines alone (`Routine_1` 9) and the vines' damage and death
--- (`Routine_0` 2 and 3) aren't ported: no run reaches them yet.
+-- When its ivy dies the vine falls with it (`Routine_0` 2). The vines alone
+-- (`Routine_1` 9 and `Routine_0` 3), their lash (`Routine_1` 3, and
+-- `FUN_004898f0` once the ivy is dead) and the acid's and the grenades'
+-- ends aren't ported: no run reaches them yet.
 
 local INDEX <const> = 0 -- `+0x218`: which of its ivy's vines, from 0.
 local BITS <const> = 1 -- `+0x219`: the commands `+0x227` that are for it.
@@ -18,7 +20,10 @@ local CHOSEN <const> = 7 -- `+0x223`.
 local SPIN <const> = 8 -- `+0x224`: the turn `Em_2F`'s init chose.
 local ROLL <const> = 9 -- `+0x226`: its roll from its ivy's.
 local HIT <const> = 10 -- `+0x229`: its lash hit this swing.
+local SHAKEN <const> = 11 -- `+0x22a`: state 6 ran.
+local FALLEN <const> = 12 -- `+0x22b`: state 8 ran.
 local ALONE <const> = 13 -- `+0x22c`: placed alone, with no ivy.
+local LASHES <const> = 14 -- `+0x22f`: the lashes left after its ivy dies.
 
 -- The ivy's fields (`lib/ivy.lua`).
 local IVY_TARGET <const> = 0
@@ -55,8 +60,8 @@ local function init(e)
     e:set_var(WAIT, 0)
     e:set_var(ROLL, 0)
     e:set_var(HIT, 0)
-    e:set_var(11, 0)
-    e:set_var(12, 0)
+    e:set_var(SHAKEN, 0)
+    e:set_var(FALLEN, 0)
     e:set_body_ofs_x(0)
     e:set_body_box(-500, 500, 500, 500)
     local rnd = e:rnd()
@@ -137,7 +142,166 @@ local function wrap(e)
     place(e)
 end
 
-local STATES <const> = { [0] = rest, rest, rest, nil, wrap }
+-- `FUN_004891a0`: `Routine_1` 5, shaken by its ivy's hit, then at rest.
+local function shaken(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        local rnd = e:rnd()
+        e:set_var(ROLL, 0)
+        e:clip(5, rnd & 7, 7)
+        e:set_var(YAW, e:var(SPIN))
+    end
+    if e:joint(0x200) then
+        e:routines(1, 2, 0, 0)
+    end
+    place(e)
+end
+
+-- `FUN_00489210`: `Routine_1` 6.
+local function shake(e)
+    e:set_var(SHAKEN, 1)
+    e:joint(0x200)
+    e:set_var(CHOSEN, e:var(CHOSEN) & 0x7F)
+    e:set_routine(2, 0)
+    e:set_routine(3, 0)
+    e:set_routine(1, e:var(FALLEN) == 0 and 2 or 8)
+end
+
+-- `FUN_00489260`: `Routine_1` 7.
+local function hang(e)
+    e:joint(0x200)
+    e:set_var(ROLL, 0x400)
+    place(e)
+end
+
+-- `FUN_00489290`: `Routine_1` 8.
+local function drop(e)
+    if e:routine(2) == 0 then
+        e:set_var(ROLL, 0x400)
+        e:set_routine(2, 1)
+        e:set_var(FALLEN, 1)
+        local rnd = e:rnd()
+        e:clip(0, rnd & 7, 0)
+        e:joint(0x200)
+        if e:var(CHOSEN) == 1 and e:var(SHAKEN) == 0 then
+            e:routines(2, 2, 0, 0)
+            e:set_var(WAIT, 0)
+            e:set_timer(2, 1)
+        end
+    end
+    place(e)
+end
+
+local STATES <const> = { [0] = rest, rest, rest, nil, wrap, shaken, shake, hang, drop }
+
+-- `FUN_004894b0`'s `Routine_1` 0: falls with its dead ivy, rolling out to
+-- one side and down until part 2 meets the ivy's `Ground`.
+local function fall(e)
+    local two = e:routine(2)
+    if two == 0 then
+        e:set_routine(2, 1)
+        local rnd = e:rnd()
+        e:set_timer(0, rnd & 1 ~= 0 and 0x18 or -0x18)
+        e:set_var(YAW, e:var(SPIN))
+        e:clip(1, (e:var(INDEX) * 8) & 0xFF, 0xF)
+        two = 1
+    end
+    if two == 1 then
+        local turn = i16(e:timer(0))
+        e:set_var(YAW, i16(e:var(YAW) + 0x18))
+        e:set_var(ROLL, i16(e:var(ROLL) + turn))
+        local roll = e:var(ROLL)
+        if roll > 0x3FF or roll < -0x3FF then
+            e:set_routine(2, 2)
+            e:set_timer(0, turn < 1 and -8 or 8)
+        end
+        e:joint(0x100)
+    elseif two == 2 then
+        e:set_var(ROLL, i16(e:var(ROLL) - i16(e:timer(0))))
+        e:set_var(YAW, i16(e:var(YAW) - 8))
+        local _, y = e:own_part(2)
+        if e:parent_ground() <= y then
+            e:set_routine(2, 3)
+            e:set_timer(0, (e:rnd() & 7) + 0xF)
+        end
+        e:joint(0x100)
+    elseif two == 3 then
+        if e:joint(0x100) then
+            e:set_routine(2, 4)
+            e:clip(3, e:var(INDEX) & 0xFF, 0xF)
+        end
+    elseif two == 4 then
+        if e:joint(0x100) then
+            if e:var(CHOSEN) == 1 and e:var(SHAKEN) == 0 then
+                e:routines(2, 2, 0, 0)
+                e:set_var(WAIT, 0)
+                e:set_var(LASHES, 2)
+            else
+                e:set_routine(2, 5)
+            end
+        end
+    end
+    place(e)
+end
+
+-- `FUN_00489840`: the chosen vine waits by its dead ivy for the player.
+local function idle(e)
+    local three = e:routine(3)
+    if three == 0 then
+        e:set_routine(3, 1)
+        e:set_timer(0, (e:rnd() & 0x1F) + 0x1E)
+        three = 1
+    end
+    if three == 1 then
+        local left = (e:timer(0) - 1) & 0xFFFF
+        e:set_timer(0, left)
+        if left == 0 then
+            e:set_routine(3, 2)
+            e:clip(3, 0x3C, 7)
+        end
+    elseif three == 2 then
+        if e:joint(0x200) then
+            e:set_routine(3, 0)
+        end
+    end
+    -- The ivy's target `+0x218`: only the player (0) is ported.
+    if e:distance() < 1000 and e:var(WAIT) == 0 then
+        e:set_routine(2, 1)
+        e:set_routine(3, 0)
+    end
+end
+
+-- `FUN_004894b0`'s `Routine_1` 2. Its lash (`FUN_004898f0`, `Routine_2`
+-- 1) isn't ported.
+local function wait_dead(e)
+    if e:routine(2) == 0 then
+        idle(e)
+    end
+    if e:var(FALLEN) ~= 0 then
+        local command = e:parent_var(IVY_COMMAND)
+        if command == 7 then
+            shake(e)
+            e:set_routine(0, 1)
+            return
+        end
+        if command == 0x45 then
+            shake(e)
+            e:routines(2, 4, 0, 0)
+        end
+    end
+    place(e)
+end
+
+-- `FUN_004894b0`: `Routine_0` 2, by `Routine_1`. Its 3 to 5 (the acid's
+-- and the grenades' ends) aren't ported.
+local FALLS <const> = { [0] = fall, nil, wait_dead }
+
+local function falling(e)
+    local entry = FALLS[e:routine(1)]
+    if entry then
+        entry(e)
+    end
+end
 
 -- `FUN_0048a190`: the command's state, or with `0x40` a `Routine_0`.
 local function obey(e, state)
@@ -179,7 +343,7 @@ local function main(e)
     end
 end
 
-local ROUTINES <const> = { [0] = init, main }
+local ROUTINES <const> = { [0] = init, main, falling }
 
 -- `Em_2F`.
 function update(e)
