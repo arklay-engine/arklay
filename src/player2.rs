@@ -2836,7 +2836,7 @@ impl Mover<'_, '_> {
     }
 
     pub(crate) fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
-        let (clips, _) = self.tick.banks.get(self.work.bank);
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return true;
         };
@@ -2865,6 +2865,10 @@ impl Mover<'_, '_> {
         anim.reverse = reverse;
         anim.timing = 0;
         let ended = anim.update(clips);
+        // `J_seq` writes the pose into the parts at once. The queued step names
+        // a keyframe of this bank, and a hold's end switches the bank after its
+        // last frame (`FUN_00463210`'s release), so fold it now.
+        anim.pose_keyframe(clips, keyframes);
         self.work.move_cnt = anim.frame as u8;
         self.work.hokan = anim.blend_counter as u8;
         ended
@@ -4628,6 +4632,75 @@ mod tests {
         run_held(&mut setup, &mut life, |work| work.routine[2] == 3);
         assert_eq!(setup.work.move_no, 0x10);
         assert_eq!(life, i16::MIN);
+    }
+
+    #[test]
+    fn a_crows_release_keeps_the_last_frame_of_its_own_bank() {
+        let keyframes = |rotation: i16, count: usize| -> Vec<Keyframe> {
+            (0..count)
+                .map(|index| Keyframe {
+                    offset: [0; 3],
+                    vertex: [0; 3],
+                    rotations: vec![[rotation + index as i16, 0, 0]],
+                })
+                .collect()
+        };
+        let setup = Setup::new(0);
+        let (held_clips, _) = bank(3, 2, 0);
+        let held_keyframes = keyframes(100, 2);
+        let weapon_keyframes = keyframes(3000, 2);
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: (&held_clips, &weapon_keyframes),
+                weapon: (&held_clips, &weapon_keyframes),
+                room: (&held_clips, &weapon_keyframes),
+                held: (&held_clips, &held_keyframes),
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &[],
+        };
+        let Setup {
+            mut work,
+            mut player,
+            ..
+        } = setup;
+        // `FUN_00463210`'s peck, on its last frame.
+        work.routine = [MODE_HELD, 0, 4, 0];
+        work.bank = Bank::Held;
+        work.move_no = 2;
+        work.move_cnt = 1;
+        work.hokan = 0;
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut life = 200;
+        let mut held = Held {
+            holder: [0; 3],
+            holder_angle: 0,
+            holder_aim: 0,
+            holder_id: crate::zombie2::CROW_ID,
+            draw_buffer: 0,
+            rnd: &mut rnd,
+            life: &mut life,
+            released: false,
+            knocks: 0,
+        };
+        player_held(&mut work, &mut player, &tick, &mut held);
+        assert!(held.released);
+        assert_eq!(work.bank, Bank::Weapon);
+        let pose = player
+            .anim
+            .pose_keyframe(&held_clips, &weapon_keyframes)
+            .unwrap();
+        assert_eq!(pose.rotations, vec![[101, 0, 0]]);
     }
 
     #[test]
