@@ -119,6 +119,7 @@ pub(super) fn manifest(base: &Manifest, id: &str, seed: u32, game: &Game) -> Res
         arklay_biorand::map::Player::Jill => "Jill",
     };
     let mut manifest = base.clone();
+    manifest.base = Some(base.id.clone());
     manifest.id = id.to_string();
     manifest.name = Some(format!("BioRand {seed:06} ({player})"));
     manifest.description = Some(format!(

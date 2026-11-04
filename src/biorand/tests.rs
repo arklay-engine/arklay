@@ -147,6 +147,7 @@ fn a_seed_makes_a_verified_pack_per_player() {
         let pack = Pack::open(&generated.path).unwrap();
         let manifest = pack.manifest().unwrap();
         assert_eq!(manifest.seed, Some(42));
+        assert_eq!(manifest.base.as_deref(), Some(BASE_PACK_ID));
         assert_eq!(manifest.generator_version, Some(GENERATOR_VERSION));
         assert_eq!(
             manifest.plan_version,

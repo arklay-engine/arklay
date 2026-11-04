@@ -1388,12 +1388,14 @@ impl Pack {
             ));
             pack.manifest = Some(manifest::Manifest::base(id));
         }
-        let base_id = pack
+        let base_manifest = pack
             .manifest
             .as_ref()
-            .expect("a base manifest always exists here")
-            .id
-            .clone();
+            .expect("a base manifest always exists here");
+        let base_id = base_manifest.id.clone();
+        // A game derived from another (a BioRand pack from `re1`) names that
+        // game as its own `base`, and the mods made for it apply too.
+        let derived_from = base_manifest.base.clone();
 
         let mut applied = Vec::with_capacity(layers.len());
         let mut discovered_ids: HashSet<String> = HashSet::new();
@@ -1426,6 +1428,7 @@ impl Pack {
             // mod builder's check.
             if let Some(declared) = &manifest.base
                 && declared != &base_id
+                && derived_from.as_ref() != Some(declared)
                 && !opened.only_hd_textures()
             {
                 // A shared mods folder holds every game's mods; an explicit
@@ -3329,6 +3332,37 @@ mod tests {
             &[(manifest::ENTRY, &mod_manifest("empty", "re1", 0))],
         );
         assert!(Pack::open_layered(&base, &[empty]).is_err());
+    }
+
+    #[test]
+    fn a_mod_for_a_game_applies_to_a_pack_derived_from_it() {
+        let dir = TempDir::new("derived-base");
+        let derived = dir.join("biorand-000042.akpak");
+        let mut manifest = manifest::Manifest::base("biorand-000042");
+        manifest.base = Some("re1".to_string());
+        write_pack(&derived, &[(manifest::ENTRY, manifest.render().as_bytes())]);
+        let movies = dir.join("hd.akpak");
+        write_pack(
+            &movies,
+            &[
+                (manifest::ENTRY, &mod_manifest("hd", "re1", 0)),
+                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+                ("movie/1a.mp4", b"film"),
+            ],
+        );
+        let pack = Pack::open_layered(&derived, std::slice::from_ref(&movies)).unwrap();
+        assert!(pack.contains("movie/1a.mp4"));
+
+        // Another game's mod still does not.
+        let other = dir.join("other.akpak");
+        write_pack(
+            &other,
+            &[
+                (manifest::ENTRY, &mod_manifest("other", "re2", 0)),
+                ("movie/1a.mp4", b"film"),
+            ],
+        );
+        assert!(Pack::open_layered(&derived, &[other]).is_err());
     }
 
     #[test]

@@ -34,7 +34,7 @@ lua = ["lua/demo.lua"]
 | `name`, `version` | Human-facing labels. Optional. |
 | `description` | Longer human-facing text (credits, a seed); `\n` breaks lines. Optional. |
 | `kind` | `"base"` or `"mod"`. Required. |
-| `base` | A mod's base pack id. Required for mods. |
+| `base` | A mod's base pack id. Required for mods. A base pack derived from another game's (a BioRand pack, from `re1`) names that game, and the mods made for it apply to the derived pack too. |
 | `load_order` | Layer order; lower applies first. Default 0. |
 | `language` | The language of the pack's own room text (`ja-JP` for the Japanese install). Optional. |
 | `engine` | Optional note about the target engine build. |

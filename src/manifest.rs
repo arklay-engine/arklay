@@ -76,7 +76,9 @@ pub struct Manifest {
     pub description: Option<String>,
     /// Whether this is the base pack or a mod.
     pub kind: PackKind,
-    /// Mods: the base pack id this mod layers over.
+    /// Mods: the base pack id this mod layers over. A base pack derived from
+    /// another game's (a BioRand pack) names that game here, so the mods made
+    /// for it apply to the derived pack too.
     pub base: Option<String>,
     /// Mods: layer order; lower layers are applied first.
     pub load_order: i32,
