@@ -14817,11 +14817,16 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
             .player
             .adopt_scripted_handback(&context.game.entities[0]);
     } else if context.game.entities[0].action_state == 2
+        && context.player.locked == player::LockedAction::None
         && context.player.behavior == player::BEHAVIOR_IDLE
         && context.player.idle_phase == 0
     {
         // `sys_multi(SYS_IDLE)` while the player already stands idle: the idle
         // publishes state 1 in this phase, so a 2 can only be the script's.
+        // A locked action (the stairway, the vault, the ladder) started from
+        // the idle mirrors its own `action_state` onto the entity while the
+        // pad behaviour still reads idle; its 2 is the climb in progress, and
+        // adopting it would swap the climb clip for the breathe-in.
         context
             .player
             .adopt_scripted_handback(&context.game.entities[0]);
@@ -26952,6 +26957,82 @@ return M
         game.set_equipped(Some(0x07));
         let armed = walk(&mut game, &mut player_state);
         assert_ne!(armed, bare, "the launcher walk played the no-weapon pose");
+    }
+
+    /// A stairway started from a fresh idle plays its room climb clip to the
+    /// end. The stairway mirrors its `action_state` 2 onto the entity while the
+    /// pad behaviour still reads idle, and the idle's `sys_multi(SYS_IDLE)`
+    /// handback check took that 2 for a script's: inside the idle's first 100
+    /// settle ticks it swapped the climb clip for the breathe-in, so the
+    /// player stood frozen on the stairs until the warp (an intermittent
+    /// glitch, depending on how long the player had stood still).
+    #[test]
+    fn a_stairway_from_a_fresh_idle_keeps_its_climb_clip() {
+        let (pack, _id, mut room, mut game, mut player_state, assets) = scripted_room_fixture();
+        let climb = Clip {
+            frames: (0..20)
+                .map(|_| ClipFrame {
+                    keyframe: 0,
+                    timing: 1,
+                    flags: 0,
+                })
+                .collect(),
+        };
+        room.room_anim = Some(crate::model::RoomAnim {
+            skeleton: Skeleton::default(),
+            keyframes: vec![Keyframe::default()],
+            clips: vec![climb; player::VAULT_CLIP_PLAIN + 2],
+        });
+        let scripts = scd::ir::Scripts::default();
+        let mut command_vm = scd::vm::CommandVm::new(&scripts);
+        let mut event_vm = scd::vm::EventVm::new(&scripts);
+        let mut tick = |game: &mut game::GameState, player_state: &mut player::PlayerState| {
+            tick_scripted_room(
+                &pack,
+                &mut room,
+                game,
+                player_state,
+                &assets,
+                &mut command_vm,
+                &mut event_vm,
+                player::Input::default(),
+            );
+            // The session's tail mirrors the machine's bytes onto entity 0
+            // (`GameSession::tick`), which is where the stairway's 2 lands.
+            if let Some((behavior, action_state, _)) = player_state.trace_state
+                && game.entities[0].state() == 1
+            {
+                game.entities[0].action_behavior = behavior;
+                game.entities[0].action_state = action_state;
+            }
+        };
+        // A few ticks of standing still: the idle settle, well before its
+        // 100-tick countdown hands over to the breathe.
+        for _ in 0..3 {
+            tick(&mut game, &mut player_state);
+        }
+        assert_eq!(player_state.behavior, player::BEHAVIOR_IDLE);
+        assert_eq!(player_state.idle_phase, 0, "still in the settle");
+
+        // The zone branch latched the stairway and its turn already lined up.
+        player_state.locked = player::LockedAction::Stairs;
+        player_state.action_state = 1;
+        tick(&mut game, &mut player_state);
+        assert_eq!(player_state.action_state, 2, "the climb started");
+        for step in 0..10 {
+            tick(&mut game, &mut player_state);
+            assert_eq!(
+                player_state.locked,
+                player::LockedAction::Stairs,
+                "tick {step}: still climbing"
+            );
+            assert_eq!(
+                (player_state.clip_source, player_state.anim.clip),
+                (player::ClipSource::Room, player::VAULT_CLIP_PLAIN),
+                "tick {step}: the climb clip kept playing"
+            );
+        }
+        assert_eq!(player_state.idle_phase, 0, "the idle machine never ran");
     }
 
     /// The end-of-tick joint store poses from the live clock: a pad-driven
