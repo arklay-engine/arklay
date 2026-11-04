@@ -346,8 +346,36 @@ pub fn place(key_graph: &KeyGraph, rng: &mut Rng) -> Result<KeyPlacement> {
         .collect();
     Ok(KeyPlacement {
         keys,
-        all_nodes_visited: route.all_nodes_visited(),
+        // The finder's frontier is empty when no visited node opens onto
+        // anything new, which also holds for a pocket of rooms that only
+        // its own doors open (a door that opens only from inside it).
+        all_nodes_visited: route.all_nodes_visited() && topology_reaches_all(graph),
         dead_ends: route.dead_ends(),
         log: route.log().to_vec(),
     })
+}
+
+/// Whether every node of `graph` can be reached from its start along the
+/// edges in their direction, whatever they require: two-way edges both ways,
+/// every other edge from its source to its destination (an unlock edge opens
+/// only from its source).
+fn topology_reaches_all(graph: &Graph) -> bool {
+    let mut seen = vec![false; graph.nodes().len()];
+    let mut stack = vec![graph.start()];
+    seen[graph.start().index()] = true;
+    while let Some(node) = stack.pop() {
+        for &edge_id in graph.edges_from(node).iter().chain(graph.edges_to(node)) {
+            let edge = graph.edge(edge_id);
+            let forward = edge.source == node;
+            if !forward && edge.kind != EdgeKind::TwoWay {
+                continue;
+            }
+            let other = edge.other_end(node);
+            if !seen[other.index()] {
+                seen[other.index()] = true;
+                stack.push(other);
+            }
+        }
+    }
+    seen.iter().all(|&seen| seen)
 }
