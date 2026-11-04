@@ -105,29 +105,52 @@ proc init
         }
         if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, FALSE))
+            if (DOOR_RANDOMIZER)
             {
-                set(FG_LOCK, F_LOCK_109_115, FALSE);
-                set(FG_LOCK, F_LOCK_115_116, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                evt_exec(0, TASK_09, jill_trap_start);
-            }
-            else if (ck(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE))
-            {
-                set(FG_LOCK, F_LOCK_109_115, FALSE);
-                set(FG_LOCK, F_LOCK_115_116, FALSE);
-                cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
-                dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                set(FG_LOCK, F_LOCK_115_116, TRUE);
-                evt_exec(0, TASK_09, ceiling_trap_no_rescue);
+                // No first ceiling trap with Barry's rescue for Jill
+                // (staging's DiableJillSandwich).
+                if (ck(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_109_115, FALSE);
+                    set(FG_LOCK, F_LOCK_115_116, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_115_116, TRUE);
+                    evt_exec(0, TASK_09, ceiling_trap_no_rescue);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_109_115, TRUE);
+                    set(FG_LOCK, F_LOCK_115_116, TRUE);
+                }
             }
             else
             {
-                set(FG_LOCK, F_LOCK_109_115, TRUE);
-                set(FG_LOCK, F_LOCK_115_116, TRUE);
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_109_115, FALSE);
+                    set(FG_LOCK, F_LOCK_115_116, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    evt_exec(0, TASK_09, jill_trap_start);
+                }
+                else if (ck(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE))
+                {
+                    set(FG_LOCK, F_LOCK_109_115, FALSE);
+                    set(FG_LOCK, F_LOCK_115_116, FALSE);
+                    cut_auto(CUT_LOCKED);
+                    setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
+                    dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+                    set(FG_LOCK, F_LOCK_115_116, TRUE);
+                    evt_exec(0, TASK_09, ceiling_trap_no_rescue);
+                }
+                else
+                {
+                    set(FG_LOCK, F_LOCK_109_115, TRUE);
+                    set(FG_LOCK, F_LOCK_115_116, TRUE);
+                }
             }
         }
         else

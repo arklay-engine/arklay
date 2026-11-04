@@ -136,7 +136,12 @@ event enter_bookcase_gap
 {
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, FALSE);
+        if (!RANDOMIZER)
+        {
+            // The bookcase stays open once moved, so the door behind it keeps
+            // working (staging's FixDoorPlant42).
+            set(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, FALSE);
+        }
         aot_on(AOT_02_DOOR_40C, SCE_DOOR, 129);
     }
     evt_finish();

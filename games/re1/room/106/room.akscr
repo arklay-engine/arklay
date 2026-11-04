@@ -11,6 +11,7 @@
 #define AOT_00_DOOR_107 0x00
 #define AOT_01_DOOR_111 0x01
 #define AOT_02_DOOR_105 0x02
+#define AOT_03_DOOR_FRONT 0x03                              // A randomized game's front door (DOOR_RANDOMIZER).
 #define AOT_03_DOOR_111_REBECCA 0x03                        // Chris's game played as Rebecca only: a locked door over the front door.
 #define AOT_03_EVENT_FRONT_DOOR 0x03                        // Likely: an SCE_SAVE spot with action 4, which main reads as B_FWD_AOT.
 #define AOT_03_USEITEM_FRONT_DOOR 0x03
@@ -143,7 +144,14 @@ proc init
         }
     }
     door_aot_set(AOT_02_DOOR_105, 1000, 15000, 1950, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+    if (DOOR_RANDOMIZER)
+    {
+        // The front door is an ordinary door, for either player
+        // (staging's FixDoor106). It names this room; the emitter writes
+        // where it leads and the arrival.
+        door_aot_set(AOT_03_DOOR_FRONT, 14600, 800, 5200, 2200, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_106_MAIN_HALL, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
