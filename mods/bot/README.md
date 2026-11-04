@@ -46,6 +46,11 @@ gallery (room 107):
    outside the door zone, face east and press action. Entering 107 logs
    `east wing reached` and finishes the run.
 
+Long legs run and short final approaches (within 1200 units) walk. `walk_to`
+keeps the run latched through moderate heading errors and only stops for a
+sharp turn, so the route does not flicker between walk and run at every
+smoothed waypoint.
+
 The east-wing door is restored by the camera 3/4 -> 2/5 scenes. The lockpick
 item's zone is at the room origin, so the route uses `bot:use_action(slot)` on
 that item action (the same handler a normal action press runs) and closes the
@@ -104,6 +109,11 @@ force a walk. The default tolerance is 300. `status` is one of `moving`,
 `arrived`, `unreachable` or `blocked`. A blocked/unreachable goal is terminal
 for that goal; call with a different point (or a different tolerance) to retry.
 `angle_error` is signed 12-bit units, positive meaning turn right.
+
+With `run = true`, `walk_to` latches the run: it starts only on a small heading
+error at more than 1200 units, keeps it through moderate errors as a run-turn,
+and walks the final approach. A sharp corner stops for an in-place turn and
+then resumes the run.
 
 The Lua sandbox has no `math` or `os` library; use plain arithmetic,
 `string.format` and `table.concat`.
