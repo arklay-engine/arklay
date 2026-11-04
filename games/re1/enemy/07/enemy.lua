@@ -631,6 +631,11 @@ end
 -- for 20 frames and then respawns at the fixed nest coordinates, with every
 -- tenth respawn coming back as nest kind 0x12. A big wasp crushed while
 -- knocked down skips the corpse and just fades its shadow out.
+--
+-- In an enemy randomizer game (system flag 0xC2) a wasp dies for good: the
+-- corpse still crawls for its 20 frames, but then raises the death event
+-- instead of respawning at the nest, so the kill is remembered and it stays
+-- gone when the player comes back to the room.
 local function death(e)
     local st = e.action_state
 
@@ -650,6 +655,12 @@ local function death(e)
         local timer = e.wasp_timer
         e.wasp_timer = timer - 1
         if timer ~= 0 then
+            return
+        end
+
+        if e:flag_bit(5, 0xC2) then
+            e.action_state = 4
+            e:raise_death_event()
             return
         end
 
