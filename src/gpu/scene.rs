@@ -340,10 +340,10 @@ pub fn pass_range(
 
 /// The uniform block of one mesh draw through `camera`.
 ///
-/// `room_object` selects the room pass's light rotation (the software
-/// `room_object` flag; never set for the mirror copy). `mirror` hides the
-/// joints the mirror probe rejects, on top of the mesh's own hidden joints,
-/// and draws unculled like the software's reflection.
+/// `space` is where the mesh's corner normals meet its light rows
+/// ([`LightSpace`]). `mirror` hides the joints the mirror probe rejects, on
+/// top of the mesh's own hidden joints, and draws unculled like the
+/// software's reflection.
 pub fn draw_uniforms(
     camera: &Camera,
     mesh: &EntityMesh<'_>,
