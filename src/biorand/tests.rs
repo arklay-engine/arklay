@@ -64,6 +64,15 @@ fn base_pack_with(dir: &Path, manifest: Manifest) -> PathBuf {
     path
 }
 
+/// The pack folder room directory `dir` is in: its new id when the game's
+/// doors are randomized, `None` for a room the game leaves out.
+fn folder(game: &arklay_biorand::plan::Game, dir: &str) -> Option<String> {
+    match &game.doors {
+        Some(plan) => plan.new_id(dir).map(str::to_string),
+        None => Some(dir.to_string()),
+    }
+}
+
 fn both(seed: u32, dir: &TempDir) -> (PathBuf, Vec<Generated>) {
     let base = base_pack(&dir.0);
     let options = Options {
@@ -123,8 +132,14 @@ fn a_seed_makes_a_verified_pack_per_player() {
         );
         let report = verify_with(&generated.path, Some(&base)).unwrap();
         assert!(report.against_base);
-        assert!(report.rooms > 100, "{report}");
+        // The default configuration randomizes the doors, which leaves some
+        // rooms out.
+        assert!(report.rooms > 50, "{report}");
         assert!(report.pickups > 50, "{report}");
+        assert!(
+            report.routed_doors > 50 && report.walked_rooms > 50,
+            "{report}"
+        );
         // The base is found beside the games directory's packs only when it
         // is there.
         assert!(!verify_pack(&generated.path).unwrap().against_base);
@@ -141,9 +156,28 @@ fn a_seed_makes_a_verified_pack_per_player() {
         assert_eq!(manifest.source_hash.as_deref(), Some("0123456789abcdef"));
         let flags = manifest.biorand_flags.as_ref().unwrap();
         assert!(flags.iter().any(|flag| flag == "ITEM_RANDOMIZER"));
-        for deferred in ["DOOR_RANDOMIZER", "LOCK_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
-            assert!(!flags.iter().any(|flag| flag == deferred), "{deferred}");
+        // Random doors write every door's lock byte; the locks themselves
+        // are not randomized.
+        for on in ["DOOR_RANDOMIZER", "BR_LOCK_FULL_BYTE"] {
+            assert!(flags.iter().any(|flag| flag == on), "{on}");
         }
+        assert!(!flags.iter().any(|flag| flag == "LOCK_RANDOMIZER"));
+        // The game starts in the main hall, wherever it is now.
+        let plan =
+            Request::from_json(std::str::from_utf8(&pack.read(REQUEST_ENTRY).unwrap()).unwrap())
+                .unwrap()
+                .plan(&read_map(&pack).unwrap())
+                .unwrap();
+        let game = game_for(&plan, character_of(generated.player)).unwrap();
+        let hall = game.doors.as_ref().unwrap().new_id("106").unwrap();
+        assert_eq!(
+            manifest
+                .start_room
+                .as_deref()
+                .map(str::to_ascii_lowercase)
+                .as_deref(),
+            Some(hall)
+        );
         let start = manifest.setup.start_items.as_ref().unwrap();
         assert!(!start.is_empty());
         assert!(
@@ -375,11 +409,12 @@ fn verification_names_what_is_wrong() {
         let game = game_for(&plan, 0).unwrap();
         game.items
             .keys()
-            .find(|dir| !emit::planned_flags(game, dir).is_empty())
+            .find(|dir| !emit::planned_flags(game, dir).is_empty() && folder(game, dir).is_some())
+            .map(|dir| (dir.clone(), folder(game, dir).unwrap()))
             .unwrap()
-            .clone()
     };
-    let path = format!("room/{plan_room}/room.scd");
+    let (plan_room, plan_folder) = plan_room;
+    let path = format!("room/{plan_folder}/room.scd");
     let scd = source.read(&path).unwrap().into_owned();
     let scripts = crate::scd::reader::parse(&scd).unwrap();
     let request =
@@ -470,7 +505,7 @@ fn a_locked_seed_writes_and_verifies_every_door_lock() {
             .iter()
             .find(|lock| lock.drawn && lock.key_item().is_some())
             .unwrap();
-        let path = format!("room/{}/room.scd", door.dir);
+        let path = format!("room/{}/room.scd", folder(game, &door.dir).unwrap());
         let scd = source.read(&path).unwrap().into_owned();
         let scripts = crate::scd::reader::parse(&scd).unwrap();
         let planned = locks::planned(game, &door.dir);

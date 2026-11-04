@@ -452,7 +452,7 @@ impl GameArg {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Generate and check randomized games (BioRand: items and the start inventory for now)
+    /// Generate and check randomized games (BioRand: items, the start inventory, doors, locks and enemies)
     Biorand {
         #[command(subcommand)]
         action: BiorandAction,
@@ -720,8 +720,8 @@ fn run_script(
 #[derive(Subcommand, Debug)]
 enum BiorandAction {
     /// Generate a seed's game from a base pack: the original game with its
-    /// items randomized, and its locks with `locks/random` (doors and
-    /// enemies stay the original's)
+    /// items randomized, its doors with `doors/random`, its locks with
+    /// `locks/random` and its enemies with `enemies/random`
     Generate {
         /// The base game pack, such as re1.akpak
         #[arg(value_name = "PACK")]

@@ -9,7 +9,9 @@
 //! (documents, maps and MO disc readers turned into pickups, Jill's missing
 //! pickups, the scripted locks and Rebecca's refusals) are in the shipped
 //! scripts already, gated on `ITEM_RANDOMIZER`, `LOCK_RANDOMIZER` and
-//! `BR_LOCK_FULL_BYTE`.
+//! `BR_LOCK_FULL_BYTE`. With doors randomized, the rooms move to their new
+//! ids and their doors lead where the plan says ([`super::doors`]); the
+//! door patches the new layout needs are gated on `DOOR_RANDOMIZER`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -17,7 +19,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail, ensure};
 use arklay_biorand::items::Pickup;
-use arklay_biorand::plan::{Game, InventorySizes, Plan, system_flags};
+use arklay_biorand::plan::{Game, InventorySizes, Plan};
 
 use super::{Request, character_of};
 use crate::manifest::{self, GameSetup, Manifest};
@@ -39,17 +41,10 @@ pub(super) const AOT_SCE: usize = 2;
 /// The pickup SCEs: an item, a document, a map.
 pub(super) const PICKUP_SCES: [u8; 3] = [0x04, 0x0D, 0x0F];
 
-/// The system flags of options this milestone leaves to later ones, which a
-/// pack must not raise: the scripts would act on doors the pack does not
-/// change.
-const DEFERRED_FLAGS: [&str; 1] = [system_flags::DOOR_RANDOMIZER];
-
-/// The system flags a pack of `game` raises: the plan's, less the deferred
-/// options' ([`DEFERRED_FLAGS`]).
+/// The system flags a pack of `game` raises: the plan's.
 pub(super) fn applied_flags(game: &Game) -> Vec<String> {
     game.system_flags
         .iter()
-        .filter(|flag| !DEFERRED_FLAGS.contains(flag))
         .map(|flag| (*flag).to_string())
         .collect()
 }
@@ -96,10 +91,13 @@ pub(super) fn setup(game: &Game) -> Result<GameSetup> {
 }
 
 /// What a pack of `game` randomizes, for its description: "items",
-/// "items and locks", "items, locks and enemies".
+/// "items and locks", "items, doors, locks and enemies".
 fn randomized_parts(game: &Game) -> String {
     let mut parts = vec!["items"];
-    if !game.locks.is_empty() {
+    if game.doors.is_some() {
+        parts.push("doors");
+    }
+    if game.locks.iter().any(|lock| lock.drawn) {
         parts.push("locks");
     }
     if game
@@ -134,6 +132,20 @@ pub(super) fn manifest(base: &Manifest, id: &str, seed: u32, game: &Game) -> Res
     manifest.character = Some(character_of(game.player));
     manifest.biorand_flags = Some(applied_flags(game));
     manifest.setup = setup(game)?;
+    if let Some(plan) = &game.doors {
+        // The start room moved: a new game starts where the original's does,
+        // in its copy.
+        let start = plan
+            .new_id(&plan.start)
+            .with_context(|| format!("the start room {} has no new id", plan.start))?;
+        manifest.start_room = Some(start.to_string());
+        manifest.start_pos = Some([
+            crate::engine::NEW_GAME_POS_X,
+            0,
+            crate::engine::NEW_GAME_POS_Z,
+        ]);
+        manifest.start_angle = Some(crate::engine::NEW_GAME_ANGLE);
+    }
     Ok(manifest)
 }
 
@@ -247,6 +259,59 @@ pub(super) fn patch_room(
     Ok((out, written))
 }
 
+/// Room `dir`'s script `scd` as the game has it: the planned pickups, the
+/// door locks, the enemies and, with doors randomized, the doors' arrivals.
+/// Returns the pickup flags written.
+pub(super) fn patch_script_entry(
+    scd: &[u8],
+    dir: &str,
+    game: &Game,
+    pickups: &BTreeMap<u8, (u8, u8)>,
+) -> Result<(Vec<u8>, BTreeSet<u8>)> {
+    let (patched, written) = patch_room(scd, pickups)?;
+    let patched =
+        super::locks::patch_doors(&patched, dir, game).context("failed to write the door locks")?;
+    let patched = super::enemies::patch_for_game(&patched, dir, game)
+        .context("failed to place the enemies")?;
+    let patched =
+        super::doors::patch_script(&patched, dir, game).context("failed to write the doors")?;
+    Ok((patched, written))
+}
+
+/// The base's `room/<dir>/room.xml` entry `path` as the game has it, when
+/// it differs: with doors randomized, a planned room's names its origin
+/// and its doors ([`super::doors::patch_room_xml`]).
+pub(super) fn patch_room_xml_entry(
+    source: &Pack,
+    path: &str,
+    game: &Game,
+) -> Result<Option<Vec<u8>>> {
+    let Some(plan) = &game.doors else {
+        return Ok(None);
+    };
+    let Some(dir) = path
+        .strip_prefix("room/")
+        .and_then(|rest| rest.strip_suffix("/room.xml"))
+        .filter(|dir| !dir.contains('/'))
+        .map(str::to_ascii_lowercase)
+    else {
+        return Ok(None);
+    };
+    if !plan.rooms.contains_key(&dir) {
+        return Ok(None);
+    }
+    let scd = source
+        .read(&format!("room/{dir}/room.scd"))
+        .with_context(|| format!("room {dir} has no script"))?;
+    let scripts = crate::scd::reader::parse(&scd)?;
+    let targets = super::doors::door_targets(plan, &dir, &scripts)?;
+    let text = source.read(path)?;
+    let text = std::str::from_utf8(&text).context("not UTF-8")?;
+    Ok(Some(
+        super::doors::patch_room_xml(text, &dir, &targets)?.into_bytes(),
+    ))
+}
+
 /// The entries a generated pack adds beside its base's.
 pub(super) fn extra_entries(request: &Request, game: &Game) -> Vec<(&'static str, Vec<u8>)> {
     let mut spoiler_json =
@@ -302,14 +367,13 @@ pub(super) fn pack(
         if is_generated_entry(path) {
             continue;
         }
+        let Some(out_path) = super::doors::entry_path(game, path) else {
+            continue;
+        };
         if let Some(dir) = room_script_dir(path) {
             let scd = source.read(path)?;
-            let (patched, written) =
-                patch_room(&scd, &pickups).with_context(|| format!("failed to patch {path}"))?;
-            let patched = super::locks::patch_doors(&patched, &dir, game)
-                .with_context(|| format!("failed to write the door locks of {path}"))?;
-            let patched = super::enemies::patch_for_game(&patched, &dir, game)
-                .with_context(|| format!("failed to place the enemies of {path}"))?;
+            let (patched, written) = patch_script_entry(&scd, &dir, game, &pickups)
+                .with_context(|| format!("failed to patch {path}"))?;
             let missing: Vec<_> = planned_flags(game, &dir)
                 .difference(&written)
                 .copied()
@@ -320,12 +384,17 @@ pub(super) fn pack(
             );
             rooms.insert(dir);
             if patched != scd.as_ref() {
-                writer.add(path, patched)?;
+                writer.add(&out_path, patched)?;
                 continue;
             }
+        } else if let Some(patched) = patch_room_xml_entry(source, path, game)
+            .with_context(|| format!("failed to patch {path}"))?
+        {
+            writer.add(&out_path, patched)?;
+            continue;
         }
         let (data, zstd) = source.read_stored(path)?;
-        writer.add_stored(path, data.into_owned(), zstd)?;
+        writer.add_stored(&out_path, data.into_owned(), zstd)?;
     }
     for dir in game.items.keys() {
         ensure!(

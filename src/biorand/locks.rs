@@ -5,8 +5,8 @@
 //! byte the new way into every `door_aot_set` of every room script
 //! ([`patch_doors`]):
 //!
-//! - a door the plan has (matched by its room, AOT id and the room it leads
-//!   to) gets the plan's lock flag and key byte ([`DoorLock`]), in every
+//! - a door the plan has (matched by its room, AOT id and the room its
+//!   script names, [`DoorLock::script_target`]) gets the plan's lock flag and key byte ([`DoorLock`]), in every
 //!   branch and variant that declares it;
 //! - any other door keeps its key and gets its original lock flag: `byte &
 //!   0x3F` when the original locks it (`0x80`), otherwise 0. Its `0x40` bit
@@ -83,17 +83,18 @@ pub(super) fn expected<'a>(
     let id = bytes[DOOR_ID] & 0x7F;
     let target = target_dir(dir, bytes[DOOR_NEXT_ROOM]);
     let candidates = planned.get(&id).map_or(&[][..], Vec::as_slice);
-    // By target; a door the plan has leading nowhere matches by id.
+    // By the target the script names; a door the plan has naming none
+    // matches by id.
     let mut matches: Vec<&DoorLock> = candidates
         .iter()
         .copied()
-        .filter(|lock| target.is_some() && lock.target == target)
+        .filter(|lock| target.is_some() && lock.script_target == target)
         .collect();
     if matches.is_empty() {
         matches = candidates
             .iter()
             .copied()
-            .filter(|lock| lock.target.is_none())
+            .filter(|lock| lock.script_target.is_none())
             .collect();
     }
     if let Some(&first) = matches.first() {
@@ -190,6 +191,7 @@ mod tests {
             dir: "201".into(),
             id,
             target: target.map(str::to_string),
+            script_target: target.map(str::to_string),
             lock,
             key,
             drawn: true,
