@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPOILER LOG: a generated game's `biorand/spoiler.txt`, a line per row
+     (up and down scroll, left and right page). The host publishes
+     `spoiler.pack`, `spoiler.lines` and `spoiler.path`, the text file the log
+     was also written to. -->
+<screen use="standard-screen" title="SPOILER LOG">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="aux" cap="O" label="Folder" action="spoiler_folder"/>
+  <text variant="value-dim" text="{spoiler.pack}" wrap="none"/>
+  <rule/>
+  <list items="{spoiler.lines}" scrollbar="always">
+    <template>
+      <item variant="dialog">
+        <text variant="value" text="{item.text}" wrap="none"/>
+      </item>
+    </template>
+  </list>
+  <text slot="footer" variant="value-dim" text="{spoiler.path}" wrap="none"/>
+</screen>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- BIORAND: a generated game from a seed. The host publishes `biorand.*`, and
-     takes digit and backspace keys for the seed itself. -->
+     takes digit and backspace keys for the seed itself. `biorand.player` is
+     the options' player (a choice row, nil until a game is installed). -->
 <screen use="standard-screen" title="BIORAND">
   <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
   <stack gap="small">
@@ -14,5 +15,8 @@
   <list width="1100" height="auto">
     <menu-entry label="Generate &amp; Play" action="biorand_generate" hint="Start" status="{biorand.action}" tone="value-dim"/>
     <menu-entry label="New Seed" action="biorand_new_seed" hint="Roll"/>
+    <choice def="{biorand.player}"/>
+    <menu-entry label="Options" action="biorand_config_screen" hint="Open" status="{biorand.config}" tone="value-dim"/>
+    <menu-entry label="Spoiler Log" action="biorand_spoiler_screen" hint="Open" status="{biorand.spoiler}" tone="value-dim"/>
   </list>
 </screen>
