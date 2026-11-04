@@ -34,8 +34,11 @@
 //!   only rendering, the camera-switch cull and effect attach compose the SCA
 //!   parent chain.
 
+mod bot;
 mod debug_hud;
 mod debug_view;
+
+pub use bot::{BotOptions, DEFAULT_MAX_TICKS};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -8163,6 +8166,9 @@ struct App {
     /// Where the in-game menu's RESTART goes: the save last loaded or
     /// written, else the new game this run started.
     restart_point: Option<RestartPoint>,
+    /// The optional Lua-driven player bot. While it is active its input
+    /// replaces the human one; once it finishes, the normal input returns.
+    bot: Option<bot::BotRuntime>,
 }
 
 /// Ticks (one second) the player must keep control, with no event starting
@@ -8239,6 +8245,7 @@ impl App {
             ending: None,
             system_menu: None,
             restart_point: None,
+            bot: None,
         }
     }
 
@@ -8643,6 +8650,25 @@ impl App {
         self.autosave = true;
     }
 
+    /// Attach the pack's Lua bot to the running game session.
+    fn attach_bot(&mut self) -> Result<()> {
+        if !matches!(self.mode, Mode::Play(_)) {
+            bail!("--bot requires a game session (use `--ui game`)");
+        }
+        self.bot = Some(bot::BotRuntime::load(&self.pack)?);
+        Ok(())
+    }
+
+    /// Whether the running bot's player has died.
+    fn bot_player_dead(&self) -> bool {
+        matches!(&self.mode, Mode::Play(session) if {
+            let entity = &session.game.entities[0];
+            !session.death.is_idle()
+                || session.game.flags[5].bit(game::MSF_PLAYER_DEAD)
+                || entity.health <= 0
+        })
+    }
+
     /// Follow the subtitle options of `[game]`.
     fn set_subtitle_options(&mut self, game: &crate::config::Game) {
         self.subtitles = game.subtitles;
@@ -8671,6 +8697,9 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        if let Some(bot) = &mut self.bot {
+            bot.reset();
+        }
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
         session.subtitles_off = !self.subtitles;
@@ -9157,6 +9186,31 @@ impl App {
         if let ScreenResult::Done(action) = result {
             return self.apply(action);
         }
+        // A running bot owns the pad: its tick runs once, before the game
+        // tick, and its input replaces the human one. Once it finishes the
+        // normal input returns.
+        let bot_input = if let Mode::Play(session) = &mut self.mode {
+            if let Some(runtime) = self.bot.as_mut()
+                && !runtime.finished()
+            {
+                let input = runtime.tick(session)?;
+                // A scripted item handover can name a room action whose zone
+                // is not reachable (the 106 lockpick item sits at the room
+                // origin). Run the same handler a normal action press would.
+                if let Some((slot, handler)) = input.room_action {
+                    session.game.run_room_action(slot, handler);
+                }
+                Some(input)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let (ui, input, action) = match bot_input {
+            Some(bot) => (bot.ui, bot.input, bot.action),
+            None => (ui, input, action),
+        };
         self.play_update(ui, input, action)
     }
 
@@ -9579,6 +9633,7 @@ pub fn run_ui_with_options(
         player::Options::default(),
         trace::TraceOptions::default(),
         Authoring::default(),
+        BotOptions::default(),
     )
 }
 
@@ -9589,7 +9644,8 @@ pub fn run_ui_with_options(
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
 /// the CLI's oracle seams: a `--load` continue boot, the `--setup-script`
 /// chunk and the `--save-out` dump. `player_options` are the run options the
-/// booted sessions run with.
+/// booted sessions run with. `bot` enables the pack's restricted Lua player
+/// bot and, when `headless`, runs it without a display.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
 pub fn run_ui_with_mods(
     pack: &Path,
@@ -9605,6 +9661,7 @@ pub fn run_ui_with_mods(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
+    bot: BotOptions,
 ) -> Result<()> {
     if authoring.load.is_some() && screen != "game" {
         bail!("--load is only supported with `--ui game`");
@@ -9657,6 +9714,7 @@ pub fn run_ui_with_mods(
         player_options,
         trace,
         authoring,
+        bot,
         None,
     )
 }
@@ -9689,6 +9747,7 @@ pub fn run_root(
             renderer,
             ..Authoring::default()
         },
+        BotOptions::default(),
         None,
     )
 }
@@ -9722,6 +9781,7 @@ pub(crate) fn run_root_with_display(
             renderer,
             ..Authoring::default()
         },
+        BotOptions::default(),
         Some(display),
     )
 }
@@ -9777,8 +9837,31 @@ fn run_ui_impl(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
+    bot: BotOptions,
     shared: Option<&mut Display>,
 ) -> Result<()> {
+    if bot.headless {
+        if capture.is_some() || trace.path.is_some() || trace.input.is_some() {
+            bail!("--bot-headless does not take --capture, --trace or --input");
+        }
+        let pack = open_game_pack(pack, mods, language)?;
+        let mut app = App::new(pack, save_dir.to_path_buf(), false);
+        app.player_options = player_options;
+        app.boot(boot)?;
+        app.enable_skips();
+        app.attach_bot()?;
+        // A headless run has no frame to stay responsive for: let one update
+        // fast-forward a whole second of scene instead of a 12 ms burst.
+        if let Mode::Play(session) = &mut app.mode {
+            session.cutscene_skip_burst = std::time::Duration::from_secs(1);
+        }
+        let max_ticks = if bot.max_ticks == 0 {
+            bot::DEFAULT_MAX_TICKS
+        } else {
+            bot.max_ticks
+        };
+        return run_bot_headless(&mut app, max_ticks);
+    }
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -9972,6 +10055,10 @@ fn run_ui_impl(
     } else if authoring.setup_script.is_some() {
         bail!("--setup-script requires a boot that opens a game session");
     }
+    if bot.enabled {
+        app.enable_skips();
+        app.attach_bot()?;
+    }
     let mut owned = None;
     let display = match shared {
         Some(display) => display,
@@ -10143,6 +10230,64 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
         &presented_image(app.frame()),
         &dir.join(format!("f{index:05}.bmp")),
     )
+}
+
+/// Run the attached bot with no display or audio until it finishes, dies or
+/// spends `max_ticks` app updates. Prints a concise `[bot]` report.
+fn run_bot_headless(app: &mut App, max_ticks: u64) -> Result<()> {
+    let started = Instant::now();
+    let mut outcome = "max_ticks";
+    for _ in 0..max_ticks {
+        if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
+            outcome = "finished";
+            break;
+        }
+        if app.bot_player_dead() {
+            outcome = "death";
+            break;
+        }
+        match app.update(UiInput::default(), player::Input::default(), false) {
+            Ok(AppFlow::Quit) => {
+                outcome = "quit";
+                break;
+            }
+            Ok(AppFlow::Continue) => {}
+            Err(err) => {
+                print_bot_report(app, "error", started.elapsed());
+                return Err(err);
+            }
+        }
+        app.post_present();
+    }
+    if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
+        outcome = "finished";
+    } else if outcome == "max_ticks" && app.bot_player_dead() {
+        outcome = "death";
+    }
+    print_bot_report(app, outcome, started.elapsed());
+    Ok(())
+}
+
+/// Print the headless run's tick count, room path and finish reason.
+fn print_bot_report(app: &App, outcome: &str, elapsed: std::time::Duration) {
+    let Some(runtime) = app.bot.as_ref() else {
+        println!("[bot] no bot attached");
+        return;
+    };
+    println!(
+        "[bot] outcome={outcome} ticks={} elapsed={:.2}s",
+        runtime.ticks(),
+        elapsed.as_secs_f64()
+    );
+    if let Some(reason) = runtime.finish_reason() {
+        println!("[bot] finish: {reason}");
+    }
+    let path = runtime.room_path();
+    if path.is_empty() {
+        println!("[bot] rooms: (none)");
+    } else {
+        println!("[bot] rooms: {}", path.join(" -> "));
+    }
 }
 
 /// The interactive app loop shared by `--room`, `--ui` and the standalone
@@ -24365,6 +24510,40 @@ mod tests {
     }
 
     #[test]
+    fn headless_bot_attaches_and_finishes_on_a_pack_mod() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[(
+                "bot/init.lua",
+                b"function on_bot_tick(bot)\n  bot:finish('test done')\nend\n",
+            )],
+        );
+        let saves = dir.0.join("saves");
+        run_ui_with_mods(
+            &pack_path,
+            "game",
+            None,
+            &saves,
+            1,
+            None,
+            0,
+            &ModOptions::default(),
+            false,
+            None,
+            player::Options::default(),
+            trace::TraceOptions::default(),
+            Authoring::default(),
+            BotOptions {
+                enabled: true,
+                headless: true,
+                max_ticks: 20,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn app_debug_clear_game_plays_the_ending_chain() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
@@ -24482,6 +24661,7 @@ mod tests {
                 save_out: Some(&saved),
                 ..Authoring::default()
             },
+            BotOptions::default(),
         )
         .unwrap();
 
@@ -24514,6 +24694,7 @@ mod tests {
                 load: Some(&saved),
                 ..Authoring::default()
             },
+            BotOptions::default(),
         )
         .unwrap();
 
@@ -24784,6 +24965,7 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
+                BotOptions::default(),
             )
             .unwrap();
         }
@@ -24989,6 +25171,7 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
+                BotOptions::default(),
             )
             .unwrap();
         }
