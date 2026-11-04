@@ -812,6 +812,22 @@ restore their own `room_bgm` bytes and do not run this file.
 Both files are whole-file replacements, like `game/new_game.lua`: a mod that
 ships one must reproduce every group, room row or state byte it wants to keep.
 
+## Stage names in the debug room select
+
+The debug menu's ROOM SELECT has a tab per stage. An RE1 pack's tabs take the
+language's `UI_DEBUG_STAGE_<n>` names (`1 MANSION`, ...). A pack names its own
+with the entry `game/stages.lua`, a chunk that returns the names in stage order,
+stage 1 first:
+
+```lua
+return { "Seg. 1", "Seg. 2", "Seg. 3" }
+```
+
+The chunk runs in the Lua sandbox without the `api`. Its names are the tabs
+(a stage past the list still gets one if a room is in it); a chunk that fails
+is logged and the language's names apply. A BioRand game with random doors
+writes one, since its stages are segments.
+
 ## The new-game start inventory
 
 The items a new game starts with come from the Lua chunk `game/new_game.lua`,
