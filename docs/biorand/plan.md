@@ -254,8 +254,7 @@ reaches them. Milestone 8 made the engine ready for that:
 - **Second-visit-only rooms.** The first visit of 110, 119, 200, 20C and 213-21C
   is a stub RDT without the doors, because the original never leads there. A
   copy of one (`RoomOrigins::with_visit`) therefore always plays the second
-  visit, whatever the scenario flag says, and leads on by the flag. The
-  planner places these rooms in the first visit too.
+  visit, whatever the scenario flag says, and leads on by the flag.
 - **The map screen** is off under `DOOR_RANDOMIZER` (bank 5, `0xC1`): the
   map button and the MAP tab do nothing.
 
