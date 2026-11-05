@@ -243,3 +243,45 @@ function BotPuzzle.answer(bot)
     end
     return nil
 end
+
+-- Item errands (<deliver>/<fetch>, bot:errand_facts(), every room). A
+-- <deliver> is wanted while its done flag is clear and its `after` flag, if
+-- any, is set; a <fetch> offers its item while its flag is set.
+function BotPuzzle.deliver_wanted(bot, fact)
+    return fact.kind == "deliver" and not bot:flag(fact.bank, fact.bit)
+        and (fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit))
+end
+
+function BotPuzzle.fetch_offered(bot, fact)
+    return fact.kind == "fetch" and bot:flag(fact.bank, fact.bit)
+end
+
+-- Every room's errand facts (none for a test double without them).
+function BotPuzzle.errands(bot)
+    return bot.errand_facts and bot:errand_facts() or {}
+end
+
+-- The items a wanted <deliver> needs: {[item] = the deliver fact}.
+function BotPuzzle.wanted_items(bot)
+    local out = {}
+    for _, fact in ipairs(BotPuzzle.errands(bot)) do
+        if BotPuzzle.deliver_wanted(bot, fact) then
+            out[fact.item] = out[fact.item] or fact
+        end
+    end
+    return out
+end
+
+-- The <fetch> facts worth doing now: on offer, for an item a wanted
+-- <deliver> needs and the bot does not hold.
+function BotPuzzle.fetches_due(bot)
+    local wanted = BotPuzzle.wanted_items(bot)
+    local out = {}
+    for _, fact in ipairs(BotPuzzle.errands(bot)) do
+        if wanted[fact.item] and not bot:has_item(fact.item)
+            and BotPuzzle.fetch_offered(bot, fact) then
+            out[#out + 1] = fact
+        end
+    end
+    return out
+end

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20D east corridor (2F), Jill. Common 0x61..0x64 are Richard's.
+
+     The first entry plays Richard's scene (event_01): it sets common 0x62
+     (he waits, poisoned), sets common 0x23 (the serum in 100 is on offer
+     again) and zeroes state word 4, the seconds counter. While 0x62 is set
+     and 0x61 clear, room main turns the door to 20E (AOT 1) into a message,
+     so the way on waits on Richard.
+
+     On a later entry with the serum held and word 4 at most 420 (seven
+     minutes), init sets 0x63 and clears 0x64; walking into camera 3 (state
+     byte 2 == 3, Richard's cut) then runs event_02, which takes the serum
+     and sets 0x61. Past 420 seconds the entry sets 0x61 too (Richard dies)
+     and the door opens either way. -->
+<bot format="2">
+  <deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62"
+           character="jill" label="the serum to Richard"/>
+</bot>

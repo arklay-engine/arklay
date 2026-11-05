@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 100 the storeroom off the main hall: typewriter, item box and the
+     serum shelf. The shelf event (AOT 5, event_02) turns on the serum pickup
+     (AOT 3, a zone at the room origin) while common 0x23 is set, and taking
+     the serum clears 0x23. Richard's scene in 20D sets 0x23, so a serum is
+     on offer here whenever he waits for one. -->
+<bot format="2">
+  <fetch slot="5" item="0x42" bank="1" bit="0x23" character="jill"
+         label="the serum from the shelf"/>
+</bot>
