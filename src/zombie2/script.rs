@@ -1138,11 +1138,11 @@ impl UserData for Api {
             e.em().mover.player.pos = [x, y, z];
             Ok(())
         });
-        // A part's `Workm.t` as this work's last `FUN_004886f0` left it.
         // `Water_ck`.
         methods.add_method_mut("water_ck", |_, e, (x, z): (i32, i32)| {
             Ok(super::water_ck(&e.em().world.water, x, z))
         });
+        // A part's `Workm.t` as this work's last `FUN_004886f0` left it.
         methods.add_method_mut("own_part", |_, e, part: usize| {
             let t = e
                 .em()
