@@ -1531,15 +1531,12 @@ mod tests {
                 .sequence_values()
                 .map(Result::unwrap)
                 .collect();
-            let fields = [
-                "r0", "r1", "r2", "life", "be", "angle", "spd", "moved", "timer", "drawn",
-                "timer1", "spd_y", "spd_z", "add_dir", "cooldown", "pl0", "pl1", "pl_life",
-                "pl_dc", "sounds", "bite_sound", "effect_row", "effect_dir", "rot_dir",
-                "rot_by",
-            ]
-            .into_iter()
-            .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
-            .collect();
+            let fields = "r0 r1 r2 life be angle spd moved timer drawn timer1 spd_y spd_z \
+                add_dir cooldown pl0 pl1 pl_life pl_dc sounds bite_sound effect_row \
+                effect_dir rot_dir rot_by"
+                .split_whitespace()
+                .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+                .collect();
             Spider(fields, clips)
         })
         .unwrap()
@@ -1681,7 +1678,10 @@ mod tests {
         let dir = 0x400 + 0x800 + 0x380 + 0x10;
         assert_eq!(spider.get("timer"), dir);
         assert_eq!((spider.get("rot_dir"), spider.get("rot_by")), (dir, 405));
-        assert_eq!((spider.get("spd"), spider.get("spd_y"), spider.get("spd_z")), (11, 0, 22));
+        assert_eq!(
+            (spider.get("spd"), spider.get("spd_y"), spider.get("spd_z")),
+            (11, 0, 22)
+        );
         assert_eq!(spider.get("add_dir"), dir);
         let spider = run_spider_with(0, &draws, 6, noise);
         assert_eq!(spider.get("r2"), 2);
