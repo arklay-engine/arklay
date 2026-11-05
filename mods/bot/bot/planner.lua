@@ -703,6 +703,17 @@ local function interact_goal(bot, fact, index, count)
     if not action then
         return nil, string.format("interact slot %d is not a live action", fact.slot)
     end
+    if fact.kind == "climb" then
+        local label = string.format("climb %d/%d object %d to slot %d (%s)", index, count,
+            fact.object, fact.slot, fact.label or "unnamed")
+        return {
+            kind = "interact", slot = fact.slot, label = label,
+            job = {
+                climb = true, object = fact.object, zone = zone_of(action), label = label,
+                taken = function(b) return BotPuzzle.flag_done(b, fact) end,
+            },
+        }
+    end
     if fact.kind == "push" then
         local label = string.format("push %d/%d object %d onto slot %d (%s)", index, count,
             fact.object, fact.slot, fact.label or "unnamed")
@@ -1218,6 +1229,12 @@ local function choose(bot)
     if fact then
         if BotPuzzle.avoided(bot, fact.slot) then
             bot:log(string.format("interact slot %d is also an <avoid>; skipped", fact.slot))
+        elseif fact.kind == "climb" and inventory_full(bot) and not BotNav.on_top(bot) then
+            -- The climb is for an item: no free slot, no climb. Retried
+            -- once the inventory changes (a box deposit makes room).
+            if not blocked(bot, "interact", room, fact.slot) then
+                mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
+            end
         elseif not blocked(bot, "interact", room, fact.slot or ("camera" .. fact.cut)) then
             local goal, why = interact_goal(bot, fact, index, count)
             if goal then
@@ -2076,6 +2093,8 @@ function BotPlanner.step(bot)
         status = combine_step(bot, goal.job)
     elseif goal.job.push then
         status = BotNav.push_object(bot, goal.job)
+    elseif goal.job.climb then
+        status = BotNav.climb_object(bot, goal.job)
     else
         status = BotNav.press_zone(bot, goal.job)
     end

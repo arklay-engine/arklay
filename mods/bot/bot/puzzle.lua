@@ -12,6 +12,11 @@
 --                                   (a swap: lift one item while holding
 --                                   the one that goes in its place); it
 --                                   combines with the flag gate
+--   <climb object slot bank bit [done] label>
+--                                   push object `object` under AOT `slot`'s
+--                                   item zone (a high shelf), climb it, take
+--                                   the item, climb down; the item flag
+--                                   (done="clear" for bank 7) = done
 --   <watch bank bit [after_bank after_bit] label>
 --                                   let a scene play, not skip it, while
 --                                   the flag is clear (and the `after` flag
@@ -142,8 +147,11 @@ function BotPuzzle.next_interact(bot)
     BOT_STATE.puzzle = BOT_STATE.puzzle or {}
     local room = bot:room().id
     local done = BOT_STATE.puzzle[room] or 0
+    -- A climb is not done while the player still stands on the object.
+    local on_top = BotNav.on_top(bot)
     for index, fact in ipairs(interacts) do
-        if index > done and fact.bank and BotPuzzle.flag_done(bot, fact) then
+        if index > done and fact.bank and BotPuzzle.flag_done(bot, fact)
+            and not (fact.kind == "climb" and on_top) then
             done = index
         end
     end
@@ -154,6 +162,8 @@ function BotPuzzle.next_interact(bot)
         local finished
         if fact.kind == "push" then
             finished = BotPuzzle.push_done(bot, fact)
+        elseif fact.kind == "climb" then
+            finished = BotPuzzle.flag_done(bot, fact) and not on_top
         elseif fact.bank then
             finished = BotPuzzle.flag_done(bot, fact)
         else

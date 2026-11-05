@@ -512,6 +512,12 @@ function BotNav.push_object(bot, job)
     local function error_on(axis)
         return axis == "x" and ex or ez
     end
+    if job.axis and error_on(job.axis) == 0 then
+        -- The object moved: a stand point the other axis could not reach
+        -- before may be reachable now (11B's crate, pushed east out of the
+        -- corner before it can be pushed north).
+        job.tries = { x = 0, z = 0 }
+    end
     if not job.axis or error_on(job.axis) == 0 or job.tries[job.axis] >= PUSH_TRIES then
         local order = BotNav.abs(ex) >= BotNav.abs(ez) and { "x", "z" } or { "z", "x" }
         job.axis = nil
@@ -597,6 +603,158 @@ function BotNav.push_object(bot, job)
     end
     if bot:face_to(fx, fz).status == "facing" then
         bot:set_input({ up = true })
+    end
+    return "busy"
+end
+
+local CLIMB_HEIGHT = C.CLIMB_HEIGHT
+local CLIMB_STAND = C.CLIMB_STAND
+local CLIMB_INSET = C.CLIMB_INSET
+-- Ticks to wait for a vault press to lift (or drop) the player.
+local CLIMB_WAIT = 2 * C.SECOND
+-- Presses per phase before it fails.
+local CLIMB_PRESSES = 4
+
+function BotNav.on_top(bot)
+    return bot:player().y <= -CLIMB_HEIGHT
+end
+
+-- Whether the box of `object` (its centre and half extents) overlaps `zone`.
+local function covers(object, zone)
+    return object.x - object.half_x < zone.x + zone.width
+        and zone.x < object.x + object.half_x
+        and object.z - object.half_z < zone.z + zone.depth
+        and zone.z < object.z + object.half_z
+end
+
+-- Where to climb `object` to reach `zone` beyond it: the stand point
+-- behind the face away from the zone, on the axis the zone lies further
+-- along (in half extents), across at the middle of the object's and the
+-- zone's common span; and a point ahead (toward the zone) to face.
+function BotNav.climb_point(object, zone)
+    local zx, zz = zone.x + zone.width // 2, zone.z + zone.depth // 2
+    local dx, dz = zx - object.x, zz - object.z
+    local along_x = BotNav.abs(dx) * object.half_z > BotNav.abs(dz) * object.half_x
+    local function across(centre, half, lo, size)
+        local a, b = centre - half + CLIMB_INSET, centre + half - CLIMB_INSET
+        if lo > a then a = lo end
+        if lo + size < b then b = lo + size end
+        if a > b then
+            return centre
+        end
+        return (a + b) // 2
+    end
+    if along_x then
+        local sign = dx > 0 and 1 or -1
+        local z = across(object.z, object.half_z, zone.z, zone.depth)
+        return { x = object.x - sign * (object.half_x + CLIMB_STAND), z = z },
+            { x = zx, z = z }, { x = object.x - sign * 4 * object.half_x, z = z }
+    end
+    local sign = dz > 0 and 1 or -1
+    local x = across(object.x, object.half_x, zone.x, zone.width)
+    return { x = x, z = object.z - sign * (object.half_z + CLIMB_STAND) },
+        { x = x, z = zz }, { x = x, z = object.z - sign * 4 * object.half_z }
+end
+
+-- One tick of a climb job: an item zone (a high shelf) reachable only from
+-- on top of a pushable object. `job` fields set by the caller: object
+-- (slot), zone, label, taken(bot) (the item is gone), timeout. Push the
+-- object toward the zone until it covers the zone and stalls (against the
+-- wall under the shelf), climb it from the side away from the zone, press
+-- toward the zone until the item is taken (the scene handler answers the
+-- pickup prompt), then climb down the far side. Returns "done", "busy" or
+-- "failed" (with job.reason).
+function BotNav.climb_object(bot, job)
+    job.total = (job.total or 0) + 1
+    local top = BotNav.on_top(bot)
+    local taken = job.taken(bot)
+    if taken and not top then
+        return "done"
+    end
+    if job.total > (job.timeout or 6 * WALK_TICKS) then
+        job.reason = "timed out"
+        return "failed"
+    end
+    local object = BotNav.object_by_slot(bot, job.object)
+    if not object then
+        job.reason = string.format("object %d is not here", job.object)
+        job.permanent = true
+        return "failed"
+    end
+    local now = bot:tick()
+    -- A press phase: press, wait for `moved` (or the wait to run out), press
+    -- again, at most CLIMB_PRESSES times.
+    local function press_until(phase, aim, moved)
+        if job.phase ~= phase then
+            job.phase, job.presses, job.press_tick = phase, 0, nil
+            bot:log(string.format("%s: %s", job.label, phase))
+        end
+        if moved() then
+            return true
+        end
+        if job.press_tick and now - job.press_tick < CLIMB_WAIT then
+            return false
+        end
+        if job.presses >= CLIMB_PRESSES then
+            job.reason = string.format("%s: no effect after %d presses", phase, job.presses)
+            return nil
+        end
+        if bot:face_to(aim.x, aim.z).status == "facing" then
+            bot:press_action()
+            job.presses, job.press_tick = job.presses + 1, now
+        end
+        return false
+    end
+    local stand, ahead, behind = BotNav.climb_point(object, job.zone)
+    if top then
+        local aim = taken and behind or ahead
+        local result = press_until(taken and "climb down" or "take from the top", aim,
+            function() return not taken and job.taken(bot) or (taken and not BotNav.on_top(bot)) end)
+        if result == nil then
+            return "failed"
+        end
+        return "busy"
+    end
+    if not job.pushed then
+        job.shove = job.shove or {
+            object = job.object, zone = job.zone, label = job.label,
+            timeout = 3 * WALK_TICKS,
+            done = function(b, push)
+                local o = BotNav.object_by_slot(b, job.object)
+                return o ~= nil and covers(o, job.zone)
+                    and (push.tries ~= nil and push.tries.x + push.tries.z > 0)
+            end,
+        }
+        local status = BotNav.push_object(bot, job.shove)
+        if status == "busy" then
+            return "busy"
+        end
+        if not covers(object, job.zone) then
+            job.reason = job.shove.reason or "the push left the object short of the zone"
+            job.permanent = job.shove.permanent
+            return "failed"
+        end
+        job.pushed = true
+        job.walk_ticks = 0
+        bot:log(string.format("%s: object at (%d,%d) covers the zone; climb from (%d,%d)",
+            job.label, object.x, object.z, stand.x, stand.z))
+    end
+    if job.phase ~= "climb up" then
+        job.walk_ticks = (job.walk_ticks or 0) + 1
+        local result = bot:walk_to(stand.x, stand.z, {
+            tolerance = C.APPROACH // 3, face = ahead,
+            avoid_enemies = BotTactics.avoiding(),
+        })
+        if result.status ~= "arrived" then
+            if result.status ~= "moving" or job.walk_ticks > WALK_TICKS then
+                job.reason = "climb stand point " .. result.status
+                return "failed"
+            end
+            return "busy"
+        end
+    end
+    if press_until("climb up", ahead, function() return BotNav.on_top(bot) end) == nil then
+        return "failed"
     end
     return "busy"
 end

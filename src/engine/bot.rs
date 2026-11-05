@@ -2631,6 +2631,11 @@ impl UserData for BotCtx {
                             row.set("dz", dz)?;
                         }
                     }
+                    meta::Target::Climb { object, slot } => {
+                        row.set("kind", "climb")?;
+                        row.set("object", object)?;
+                        row.set("slot", slot)?;
+                    }
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
