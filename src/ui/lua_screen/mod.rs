@@ -570,6 +570,8 @@ impl crate::ui::save_load::SaveScreen for LuaScreen {
             cursor: self.state_int("cursor").unwrap_or(0),
             exit_row: (slots.len() + autosaves) as i64,
             slots,
+            rows: None,
+            answer: None,
         })
     }
 }

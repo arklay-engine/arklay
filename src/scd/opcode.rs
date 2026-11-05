@@ -372,6 +372,17 @@ pub mod system {
         ("BR_NO_TITLE_DEMO", BR_NO_TITLE_DEMO),
     ];
 
+    /// The proof of concept's `RANDOMIZER`, `DOOR_RANDOMIZER` and
+    /// `ENEMY_RANDOMIZER`, before they moved to `0xC0`: a pack it generated
+    /// (a seed and no `biorand_flags`) tests these bits, so the engine raises
+    /// them for such a pack, and clears them for any other.
+    pub const PROOF_OF_CONCEPT: [u8; 3] = [0xF0, 0xF1, 0xF2];
+
+    /// Every bank-5 bit the engine sets or clears from a pack's manifest.
+    pub fn managed() -> impl Iterator<Item = u8> {
+        BY_NAME.iter().map(|&(_, bit)| bit).chain(PROOF_OF_CONCEPT)
+    }
+
     /// The bit of the system flag `name` names, or `None` for any other name.
     pub fn bit_named(name: &str) -> Option<u8> {
         BY_NAME
@@ -502,6 +513,14 @@ mod tests {
                 assert!(other != name && other_bit != bit, "{name} repeats {other}");
             }
         }
+        for bit in system::PROOF_OF_CONCEPT {
+            assert!(
+                (0xD0..=0xFF).contains(&bit),
+                "{bit:#x} is outside the spare bits"
+            );
+            assert!(system::BY_NAME.iter().all(|&(_, named)| named != bit));
+        }
+        assert_eq!(system::managed().count(), system::BY_NAME.len() + 3);
         assert_eq!(system::bit_named("NOT_A_FLAG"), None);
         assert_eq!(system::bit_named("lab"), None, "names are exact");
     }

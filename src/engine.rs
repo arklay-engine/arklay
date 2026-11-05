@@ -2593,7 +2593,7 @@ impl GameSession {
             .manifest()
             .map(crate::manifest::Manifest::system_flags)
             .unwrap_or_default();
-        for (_, flag) in scd::opcode::system::BY_NAME {
+        for flag in scd::opcode::system::managed() {
             // `apply_flag` mode 0 sets the bit and mode 1 clears it.
             game.apply_flag(5, flag, u8::from(!raised.contains(&flag)));
         }
@@ -6603,7 +6603,7 @@ impl GameSession {
         );
         if !self.game.message.active {
             self.boot_message = None;
-            self.arm_room_fade();
+            self.arm_room_entry_fade();
         }
     }
 
@@ -9362,7 +9362,10 @@ impl App {
         // A running bot owns the pad on the title and its load screen too,
         // where it loads its latest save after a death.
         let ui = match self.bot_screen_input()? {
-            Some(bot) => bot.ui,
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                bot.ui
+            }
             None => ui,
         };
         let result = self.screen_update(ui);
@@ -9388,10 +9391,28 @@ impl App {
             None
         };
         let (ui, input, action) = match bot_input {
-            Some(bot) => (bot.ui, bot.input, bot.action),
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                (bot.ui, bot.input, bot.action)
+            }
             None => (ui, input, action),
         };
         self.play_update(ui, input, action)
+    }
+
+    /// Hand the running bot's pad presses to the open native save/load
+    /// screen, which reads key events rather than the tick's input: the
+    /// same keys a player's presses give it.
+    fn feed_bot_native_screen(&mut self, ui: &UiInput) {
+        let events = ui::save_load::pad_events(ui);
+        if events.is_empty() {
+            return;
+        }
+        let Some(screen) = self.native_screen() else {
+            return;
+        };
+        let sounds = screen.handle(&events);
+        self.play_ui_cues(gui_cues(sounds));
     }
 
     /// The running bot's input on the title or the title's load screen, read
@@ -10842,16 +10863,19 @@ fn drive_native_screen(
     scale_pointer(display, &mut events);
     let sounds = screen.handle(&events);
     input.discard_presses();
-    app.play_ui_cues(
-        sounds
-            .into_iter()
-            .map(|sound| match sound {
-                gui::Sound::Cursor => ui::UiCue::Cursor,
-                gui::Sound::Decide => ui::UiCue::Decide,
-                gui::Sound::Cancel => ui::UiCue::Cancel,
-            })
-            .collect(),
-    );
+    app.play_ui_cues(gui_cues(sounds));
+}
+
+/// A native screen's sounds as the UI cues that play them.
+fn gui_cues(sounds: Vec<gui::Sound>) -> Vec<ui::UiCue> {
+    sounds
+        .into_iter()
+        .map(|sound| match sound {
+            gui::Sound::Cursor => ui::UiCue::Cursor,
+            gui::Sound::Decide => ui::UiCue::Decide,
+            gui::Sound::Cancel => ui::UiCue::Cancel,
+        })
+        .collect()
 }
 
 /// Load the system faces the in-game menu needs for `language`'s strings
@@ -27015,6 +27039,64 @@ mod tests {
             session.room_fade_draw_alpha(),
             Some(255),
             "the room fades up from black as after a watched narration"
+        );
+    }
+
+    /// A continue's narration ends in the room-entry fade with the room-events
+    /// gate armed, and the gate's release restores the menu bit START needs.
+    /// The save restores `MESSAGE_FLAGS_INITIAL`, which has that bit clear, so
+    /// START was ignored until a door or pickup set it.
+    #[test]
+    fn start_opens_the_menu_after_the_continue_narration() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        session.set_skips_enabled(true);
+        session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), action_press(), true)
+            .unwrap();
+        assert!(
+            session.boot_message.is_none(),
+            "the press ended the narration"
+        );
+        assert!(session.room_boot_gate, "the room is held during the fade");
+        for _ in 0..120 {
+            if !session.room_boot_gate {
+                break;
+            }
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(!session.room_boot_gate, "the fade released the room");
+        assert_eq!(
+            session.game.message_flags & START_MESSAGE_BITS,
+            START_MESSAGE_BITS,
+            "the release restores the START bits"
+        );
+        for start in [true, false] {
+            session
+                .tick(
+                    &pack,
+                    UiInput {
+                        start,
+                        ..UiInput::default()
+                    },
+                    player::Input::default(),
+                    false,
+                )
+                .unwrap();
+        }
+        assert!(
+            session.menu.is_some(),
+            "START opens the menu after a continue"
         );
     }
 

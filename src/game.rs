@@ -295,7 +295,7 @@ pub const BANK_SCENARIO: u8 = 0;
 /// Second scenario flag bank index (`g_ScenarioFlags2`).
 pub const BANK_SCENARIO2: u8 = 1;
 /// Door lock flag bank index.
-const BANK_LOCKS: u8 = 2;
+pub const BANK_LOCKS: u8 = 2;
 /// `room_check_actions` index of the item pickup handler.
 const HANDLER_ITEM: u8 = 4;
 /// `room_check_actions` index of the include-key prompt handler.
@@ -5238,6 +5238,12 @@ impl GameState {
         // A room load runs the same per-frame reset before reseeding the rest
         // of the room state.
         self.room_state_reset();
+        // The first system word is the room's own scratch (`FG_ROOM` bits
+        // 0-31): it survives a frame but not a door. Every room script sets
+        // and tests these bits for itself; one left set by another room
+        // (room 210's bit 15) would start room 106's Barry scenes with no
+        // Barry in the room and hold the player in state 8 for good.
+        self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[0..4].fill(0);
         // `room_set` parks the special-room-light state at -1 (no overlay) and
         // clears the delta and the scripted channel masks.
         self.state_words[1] = 0xFFFF;
@@ -18029,11 +18035,6 @@ mod tests {
             0,
             "g_SysFlags[1] is cleared by the room reset"
         );
-        assert_eq!(
-            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
-            0x55,
-            "the first system word survives (room_state_reset only clears [1])"
-        );
     }
 
     #[test]
@@ -18043,6 +18044,11 @@ mod tests {
         let mut state = seeded_room_state();
         state.room_state_reset();
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
+            0x55,
+            "the first system word survives a frame (room_state_reset only clears [1])"
+        );
 
         let mut state = seeded_room_state();
         state.state_words[1] = 5;
@@ -18054,6 +18060,11 @@ mod tests {
         state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
 
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0..4],
+            [0; 4],
+            "the first system word (FG_ROOM 0-31) does not survive a door"
+        );
         assert_eq!(state.state_words[1], 0xFFFF, "the light parks at -1");
         assert_eq!(state.state_words[2], 0);
         assert_eq!(state.special_light_masks, [0; 3]);
