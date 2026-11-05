@@ -111,7 +111,13 @@ Priorities, highest first:
    event may still be arming the probe: 116's rack turns AOT 5 into one
    only after the lift that the shotgun pickup starts, and 10F's hollow
    arms after the gold emblem pickup. The log line is `waiting for the use
-   probe`.
+   probe`. Then the item errands (`BotPuzzle.errands`): a `<deliver>` here
+   whose item is held, whose `after` flag is set and whose done flag is
+   clear walks into a switch zone that cuts to camera `cut` and waits for
+   the flag; then a `<fetch>` here whose done flag is set and whose item is
+   not held presses AOT `slot` (marked `inventory full` when the item does
+   not fit). An item a wanted `<deliver>` needs is kept like a `<use>` item,
+   and a due `<fetch>` counts as a pickup needing a free slot.
 4. Inventory room ([Inventory room](#inventory-room)): with every slot
    full and a known pickup needing one, a MOVE that empties a slot; then an
    item box here when a deposit or a withdrawal is due.
@@ -138,7 +144,11 @@ Priorities, highest first:
    distance cost over the doors here and the first door of the route
    (breadth-first over the remembered doors) to each remote frontier item or
    door, and to each room whose `<use>` fact (`bot:use_facts()`) needs a
-   held item with its done flag clear. The cost is the path length to the
+   held item with its done flag clear, and to each room with a due errand
+   (`bot:errand_facts()`): a `<fetch>` while its `<deliver>` is wanted, a
+   `<deliver>` while its item is held. An errand route gets 140 reach off
+   its cost (twice a key's), since the room may want the item only for a
+   while. The cost is the path length to the
    door's approach, plus 20 reach per door step of the route, plus, for a
    remote goal, its path length in its own room from where the bot last
    stood there (`REACH^3` when the planner found none), minus 15 reach for
@@ -551,6 +561,7 @@ leaves the game session.
 | `bot:ammo_for(weapon)` | The ammunition item `weapon` fires, or `nil` when the catalog does not list it as a weapon with an ammunition item. |
 | `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack. |
 | `bot:item_facts()` | Every room's `<holds>` facts, the same way: `{room, item, label}`. |
+| `bot:errand_facts()` | Every room's `<deliver>` and `<fetch>` facts, the same way: `{room, kind, cut, slot, item, bank, bit, after_bank, after_bit, label}`, `kind` `"deliver"` (with `cut`) or `"fetch"` (with `slot`); `after_bank`/`after_bit` are `nil` without an `after` flag. |
 | `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind, heals}` with the menu's 0-based `slot`; `heals` is the catalog's word that a USE restores health (false for a blue herb, the serum or a red herb alone). `move_cursor` is the MOVE cursor byte while `mode == "move"`. While the item box screen is up, `box = {mode, box_cursor, cursor, sliding, items}`: `mode` is `browse` or `armed`, `box_cursor` the box slot (0..47), `cursor` the inventory cursor byte, `sliding` true while a page slides (no input is read), and `items` the box rows `{slot, item, quantity, kind}`. |
 | `bot:combine_result(slot, target)` | Read-only: what a MOVE of menu slot `slot` onto `target` would do, from the engine's recipe: `{result, cursor_item, cursor_quantity, target_item, target_quantity, frees}`. `result` is `applied`, `herb` (a herb mix; the menu asks first), `no_recipe`, `herb_no_recipe` or `drug_store`; `frees` is true when the combine empties a slot. Nothing is changed. |
 | `bot:memory()` | String map set by `remember`. |
@@ -665,6 +676,8 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done. |
 | `<watch>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Let a skippable scene play instead of skipping it while flag `bank`/`bit` is clear and, if given, the `after` flag is set: a scene a skip breaks. |
 | `<holds>` | `item` (non-zero), optional `label` | The room holds `item`: what is where, never when to go. Read by `bot:item_facts()` for every room. |
+| `<deliver>` | `item` (non-zero), `cut`, `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Bring `item` here and walk into camera `cut`, where a room event takes it; flag `bank`/`bit` set means done. With an `after` flag, wanted only once it is set. Read by `bot:errand_facts()` for every room. |
+| `<fetch>` | `item` (non-zero), `slot`, `bank`, `bit`, optional `label` | Press AOT `slot` to take `item`, offered while flag `bank`/`bit` is set; fetched only while a `<deliver>` of the same item is wanted. Read by `bot:errand_facts()` for every room. |
 
 Every fact element also takes `character="jill"` or `character="chris"`: the
 fact then holds for that character only (player flag bit 0: 1 Jill, 0 Chris).
@@ -723,6 +736,8 @@ files. The checked-in facts:
 | 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
+| 20D | Jill: `<deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62">`: poisoned Richard waits (`0x62`) for the serum; walking into camera 3 with it hands it over and sets `0x61` (so does his death after 420 seconds). Until then the door to 20E is a message. |
+| 100 | Jill: `<fetch slot="5" item="0x42" bank="1" bit="0x23">`: the serum on the shelf, offered once Richard's scene sets `0x23`. |
 | 219 | `<interact slot="4" bank="7" bit="0x39" done="clear">`: the shelf event hands over the battery, whose own pickup zone sits at the room origin. |
 
 `set_input` keys are literal: `up down left right` (player directions plus the

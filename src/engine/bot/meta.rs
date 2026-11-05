@@ -62,6 +62,33 @@ pub struct RoomMeta {
     pub avoids: Vec<Avoid>,
     pub watches: Vec<Watch>,
     pub holds: Vec<Holds>,
+    pub errands: Vec<Errand>,
+}
+
+/// `<deliver>` or `<fetch>`: one end of an item errand between rooms.
+///
+/// `<deliver item cut bank bit [after_bank after_bit]>`: the room wants
+/// `item` carried into camera cut `cut` (a room script keyed on the camera
+/// takes it there) while flag `bank`/`bit` is clear and, if given, the
+/// `after` flag is set; the flag set means done. `<fetch item slot bank
+/// bit>`: pressing AOT `slot` hands `item` over while flag `bank`/`bit` is
+/// set (the offer).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Errand {
+    pub kind: ErrandKind,
+    pub item: u8,
+    pub flag: (u8, u8),
+    pub after: Option<(u8, u8)>,
+    pub label: Option<String>,
+}
+
+/// Which end of an [`Errand`] a fact is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrandKind {
+    /// Carry the item into this camera cut.
+    Deliver { cut: u8 },
+    /// Press this AOT slot to receive the item.
+    Fetch { slot: u8 },
 }
 
 /// `<holds>`: the room holds `item` (a location fact; it names no slot,
@@ -278,6 +305,28 @@ pub fn load_holds(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomHolds>> {
     Ok(holds)
 }
 
+/// One room's `<deliver>` or `<fetch>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomErrand {
+    /// The room id as `bot:room().id` spells it (`"20D"`).
+    pub room: String,
+    pub fact: Errand,
+}
+
+/// Every room's errand facts, by room id then document order: the planner's
+/// index of which room wants an item and which hands it over
+/// (`bot:errand_facts()`).
+pub fn load_errands(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomErrand>> {
+    let mut errands = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        errands.extend(meta.errands.into_iter().map(|fact| RoomErrand {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(errands)
+}
+
 /// Every room's parsed `bot.xml`, by room id (upper case).
 fn load_all(pack: &Pack, jill: Option<bool>) -> Result<Vec<(String, RoomMeta)>> {
     let mut rooms: Vec<String> = pack
@@ -351,7 +400,16 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
         let name = child.tag_name().name();
         let fact = matches!(
             name,
-            "interact" | "camera" | "push" | "use" | "answer" | "avoid" | "watch" | "holds"
+            "interact"
+                | "camera"
+                | "push"
+                | "use"
+                | "answer"
+                | "avoid"
+                | "watch"
+                | "holds"
+                | "deliver"
+                | "fetch"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -418,6 +476,12 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 let fact = parse_holds(child)?;
                 if keep {
                     meta.holds.push(fact);
+                }
+            }
+            "deliver" | "fetch" => {
+                let fact = parse_errand(child)?;
+                if keep {
+                    meta.errands.push(fact);
                 }
             }
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -655,6 +719,61 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
     })
 }
 
+fn parse_errand(node: Node<'_, '_>) -> Result<Errand> {
+    let name = node.tag_name().name();
+    let deliver = name == "deliver";
+    let place = if deliver { "cut" } else { "slot" };
+    let mut allowed = vec![place, "item", "bank", "bit", "label", "character"];
+    if deliver {
+        allowed.extend(["after_bank", "after_bit"]);
+    }
+    check_attributes(node, &allowed)?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    if item == 0 {
+        bail!("{}: <{name}> `item` must not be 0 (no item)", at(node));
+    }
+    let kind = if deliver {
+        ErrandKind::Deliver {
+            cut: attr(node, "cut")?,
+        }
+    } else {
+        ErrandKind::Fetch {
+            slot: attr(node, "slot")?,
+        }
+    };
+    Ok(Errand {
+        kind,
+        item,
+        flag: (bank_attr(node)?, attr(node, "bit")?),
+        after: after_flag(node)?,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+/// The optional `after_bank`/`after_bit` pair: both or neither.
+fn after_flag(node: Node<'_, '_>) -> Result<Option<(u8, u8)>> {
+    match (node.attribute("after_bank"), node.attribute("after_bit")) {
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, "after_bank")?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: after_bank {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Ok(Some((bank, attr(node, "after_bit")?)))
+        }
+        (None, None) => Ok(None),
+        _ => bail!(
+            "{}: <{}> needs both `after_bank` and `after_bit`, or neither",
+            at(node),
+            node.tag_name().name()
+        ),
+    }
+}
+
 fn parse_watch(node: Node<'_, '_>) -> Result<Watch> {
     check_attributes(
         node,
@@ -668,24 +787,7 @@ fn parse_watch(node: Node<'_, '_>) -> Result<Watch> {
         ],
     )?;
     check_leaf(node)?;
-    let after = match (node.attribute("after_bank"), node.attribute("after_bit")) {
-        (Some(_), Some(_)) => {
-            let bank: u8 = attr(node, "after_bank")?;
-            if usize::from(bank) >= FLAG_BANK_COUNT {
-                bail!(
-                    "{}: after_bank {bank} is out of range 0..={}",
-                    at(node),
-                    FLAG_BANK_COUNT - 1
-                );
-            }
-            Some((bank, attr(node, "after_bit")?))
-        }
-        (None, None) => None,
-        _ => bail!(
-            "{}: <watch> needs both `after_bank` and `after_bit`, or neither",
-            at(node)
-        ),
-    };
+    let after = after_flag(node)?;
     Ok(Watch {
         flag: (bank_attr(node)?, attr(node, "bit")?),
         after,
@@ -1279,6 +1381,67 @@ mod tests {
         let typo =
             r#"<bot format="2"><use slot="1" item="0" bank="1" bit="1" character="chris"/></bot>"#;
         assert!(parse_for(typo, Some(true)).is_err());
+    }
+
+    #[test]
+    fn errand_facts_name_both_ends_of_an_item_errand() {
+        let text = r#"<bot format="2">
+            <deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62"
+                     label="serum"/>
+            <fetch item="0x42" slot="5" bank="1" bit="0x23"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.errands,
+            vec![
+                Errand {
+                    kind: ErrandKind::Deliver { cut: 3 },
+                    item: 0x42,
+                    flag: (1, 0x61),
+                    after: Some((1, 0x62)),
+                    label: Some("serum".to_string()),
+                },
+                Errand {
+                    kind: ErrandKind::Fetch { slot: 5 },
+                    item: 0x42,
+                    flag: (1, 0x23),
+                    after: None,
+                    label: None,
+                },
+            ]
+        );
+        let error = |text: &str| parse(text).unwrap_err().to_string();
+        let no_item = r#"<bot format="2"><fetch item="0" slot="5" bank="1" bit="1"/></bot>"#;
+        assert!(error(no_item).contains("must not be 0"));
+        let slot_on_deliver =
+            r#"<bot format="2"><deliver item="1" slot="5" cut="1" bank="1" bit="1"/></bot>"#;
+        assert!(error(slot_on_deliver).contains("slot"));
+        let after_on_fetch = r#"<bot format="2"><fetch item="1" slot="5" bank="1" bit="1"
+            after_bank="1" after_bit="2"/></bot>"#;
+        assert!(error(after_on_fetch).contains("after_bank"));
+        let v1 = r#"<bot><deliver item="1" cut="1" bank="1" bit="1"/></bot>"#;
+        assert!(error(v1).contains("needs <bot format=\"2\">"));
+    }
+
+    #[test]
+    fn the_errand_index_lists_the_serum_errand() {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        let errands = load_errands(&pack, Some(true)).unwrap();
+        let rooms: Vec<(&str, ErrandKind)> = errands
+            .iter()
+            .map(|entry| (entry.room.as_str(), entry.fact.kind))
+            .collect();
+        assert_eq!(
+            rooms,
+            vec![
+                ("100", ErrandKind::Fetch { slot: 5 }),
+                ("20D", ErrandKind::Deliver { cut: 3 }),
+            ]
+        );
+        assert!(
+            load_errands(&pack, Some(false)).unwrap().is_empty(),
+            "Jill's only"
+        );
     }
 
     #[test]
