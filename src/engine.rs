@@ -3185,6 +3185,14 @@ impl GameSession {
     /// camera cut or a room change and otherwise pans gently, so a fixed
     /// camera keeps the player in view. The scene itself, its masks and the
     /// camera stay in 4:3 space.
+    /// The cut a tick's RE2 sounds are placed from: the one it started on,
+    /// since the original places them before its cut check moves the camera.
+    fn sound_cut(&self) -> usize {
+        self.tick_cut
+            .filter(|(room, _)| *room == self.loaded.id)
+            .map_or(self.loaded.room.current_cut, |(_, cut)| cut)
+    }
+
     fn follow_view(&mut self) {
         let aspect = video::aspect();
         if aspect.is_standard() {
@@ -3728,6 +3736,7 @@ impl GameSession {
                 .map(|player| (player.pos, &mut player.health));
             re2.tick_effects(self.loaded.room.sca.as_ref(), player);
             self.re2_sounds.played.clear();
+            let cut = self.sound_cut();
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -3736,6 +3745,7 @@ impl GameSession {
                 &self.loaded.room,
                 &mut self.game,
                 &mut self.player,
+                cut,
             );
         }
         // `MSF2_EFFECT_ZONE` (the second dword of main-state flag bank 5) is
@@ -3831,6 +3841,7 @@ impl GameSession {
         self.tick_death(pack, input);
         // `Die`'s cry, this tick.
         if self.game.is_re2_room && !self.game.re2.sounds.is_empty() {
+            let cut = self.sound_cut();
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -3839,6 +3850,7 @@ impl GameSession {
                 &self.loaded.room,
                 &mut self.game,
                 &mut self.player,
+                cut,
             );
         }
         // The attract watchdog runs after the gameplay tick: it advances the
@@ -5966,7 +5978,15 @@ impl GameSession {
         if session.door.re2.is_some() {
             self.room_fade_draw = frame.room_veil;
         }
+        if self.game.is_re2_room {
+            self.re2_sounds.played.clear();
+        }
         for effect in session.transition.stepper_mut().take_sfx() {
+            if session.door.re2.is_some()
+                && let Some(volume) = session.transition.stepper().re2_sound_volume(effect)
+            {
+                self.re2_sounds.played.push((0, effect.id, volume, 0));
+            }
             play_door_animation_sfx(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -5989,6 +6009,27 @@ impl GameSession {
         if frame.clear {
             // The source room's characters are gone the tick before `Set_room`.
             self.game.re2.characters = Default::default();
+            // A held `Set_room` gets through `Snd_bgm_set` on the frame the
+            // music's banks are free, a tick before the room's load shows.
+            if let Some(door) = session
+                .door
+                .re2
+                .filter(|_| session.transition.re2_held() && !self.game.re2.music.waiting())
+                && let Some(word) = self
+                    .game
+                    .re2
+                    .bgm
+                    .get(door.stage.saturating_sub(1), door.room)
+            {
+                let place = crate::bgm2::Place {
+                    stage: door.stage.saturating_sub(1),
+                    room: door.room,
+                    cut: usize::from(door.cut),
+                    ..self.game.re2_music_place()
+                };
+                self.game.re2.music.set_room(word, place);
+                self.game.re2.music_set = true;
+            }
         }
         if frame.place {
             // `Set_door`'s `Snd_bgm_ck`.
@@ -6001,6 +6042,12 @@ impl GameSession {
             {
                 let system = self.game.re2_music_place().system;
                 self.game.re2.music.leave_room(word, system);
+                // `Snd_se_call` runs after `Set_door` in the frame, so the
+                // door's countdown starts on this tick; across a stage change
+                // `Snd_bgm_ck` comes a frame later, as the clear does.
+                if !session.stage_change {
+                    self.game.re2.music.tick();
+                }
             }
         }
         // A door's `Pl_init` keeps the speed the last room left.
@@ -10162,6 +10209,10 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     if let Mode::Play(session) = &mut app.mode {
         session.arm_new_game_boot();
         session.sound_device |= options.sound;
+        if options.sound_wav.is_some() {
+            session.music = Some(Mixer::capture());
+            session.start_audio(&app.pack);
+        }
     }
     let mut writer = trace::TraceWriter::create(path)?;
     if options.capture_every > 0
@@ -10181,6 +10232,11 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     let mut emitted = 0u32;
     let mut iterations = 0u32;
     let mut script_input = InputState::default();
+    // The `--sound-wav` frames owed but not yet mixed, a fraction of one.
+    let mut sound_due = 0.0f64;
+    // `--sound-wav`'s `.ticks`: each traced tick's end in the WAV, in seconds.
+    let mut sound_ticks = String::new();
+    let mut traced = None;
     let bound = options
         .ticks
         .saturating_mul(2)
@@ -10193,6 +10249,14 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         let was_play = matches!(app.mode, Mode::Play(_));
         let in_transition =
             matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
+        // The wall time this frame takes when played: a door's frames run on
+        // the 16 ms limiter, and `--sound-wav` mixes that much sound for it.
+        let frame_ms = match &app.mode {
+            Mode::Play(session) => {
+                session_tick_interval(session.transition.is_some(), session.room_frozen())
+            }
+            _ => TICK_MS,
+        };
         // The reference's `game_loop` hook emits no line while the DIED screen
         // runs: its display loop is outside `game_loop`, so the tick that opens
         // the screen is the last traced one until the title cycles back into
@@ -10235,13 +10299,57 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
             let index = writer.tick_index();
             writer.write_tick(&session.trace_tick(&app.framebuffer))?;
             emitted += 1;
+            traced = Some(index);
             if options.capture_every > 0 && index % options.capture_every == 0 {
                 write_trace_capture(app, options, index)?;
             }
         }
         app.post_present();
+        if let Mode::Play(session) = &mut app.mode
+            && let Some(mixer) = &mut session.music
+        {
+            sound_due += frame_ms * f64::from(audio::SAMPLE_RATE) / 1000.0;
+            let frames = sound_due.floor();
+            sound_due -= frames;
+            mixer.capture_frames(frames as usize);
+            if let Some(index) = traced.take() {
+                let mixed = mixer.captured().map_or(0, |pcm| pcm.len() / 4);
+                let seconds = mixed as f64 / f64::from(audio::SAMPLE_RATE);
+                sound_ticks.push_str(&format!("{index} {seconds:.4}\n"));
+            }
+        }
+    }
+    if let Some(wav) = options.sound_wav {
+        let pcm = match &app.mode {
+            Mode::Play(session) => session.music.as_ref().and_then(Mixer::captured),
+            _ => None,
+        };
+        write_stereo_wav(wav, pcm.unwrap_or_default())?;
+        let ticks = wav.with_extension("ticks");
+        std::fs::write(&ticks, sound_ticks)
+            .with_context(|| format!("failed to write {}", ticks.display()))?;
     }
     writer.flush()
+}
+
+/// Write interleaved stereo s16le `pcm` at [`audio::SAMPLE_RATE`] as a WAV.
+fn write_stereo_wav(path: &Path, pcm: &[u8]) -> Result<()> {
+    let mut out = Vec::with_capacity(44 + pcm.len());
+    let rate = audio::SAMPLE_RATE;
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + pcm.len() as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&rate.to_le_bytes());
+    out.extend_from_slice(&(rate * 4).to_le_bytes());
+    out.extend_from_slice(&4u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(pcm.len() as u32).to_le_bytes());
+    out.extend_from_slice(pcm);
+    std::fs::write(path, out).with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Write one `capture_every` frame from the app framebuffer.
@@ -11262,6 +11370,18 @@ impl DoorAnimation {
     /// scale when it names none). A pack without the bank falls back to the
     /// DO2's own PlayStation VAB: the same tone decoded from ADPCM at
     /// [`door2::vab::SAMPLE_RATE`], with the tone's pan.
+    /// The volume an RE2 door sound plays at, for the trace's `snd`.
+    fn re2_sound_volume(&self, effect: door::vm::Sfx) -> Option<u8> {
+        let DoorArt::Re2(do2, ..) = &self.art else {
+            return None;
+        };
+        let tone = do2.sound_tone(usize::from(effect.id));
+        if self.bank_sound(effect).is_some() {
+            return Some(tone.map_or(0x7f, |tone| tone.volume));
+        }
+        tone.map(|tone| tone.volume)
+    }
+
     fn re2_sound(&self, effect: door::vm::Sfx) -> Option<(audio::Wav, f32, f32)> {
         let DoorArt::Re2(do2, ..) = &self.art else {
             return None;
@@ -11734,13 +11854,14 @@ fn update_transition_bgm(
 
 /// Play the door transition's close SE (the original's `play_sfx(0, 1, 0)`
 /// at the end of `room_transition_load`), unless the record suppressed it.
+/// An RE2 door has no such call: its `.do2` script plays its own sounds.
 fn play_room_close_sfx(
     music: &mut Option<Mixer>,
     sfx_cache: &mut SfxCache,
     pack: &Pack,
     session: &TransitionMode,
 ) {
-    if !session.silent {
+    if !session.silent && session.door.re2.is_none() {
         play_room_sfx(music, sfx_cache, pack, session.door.sfx, 1);
     }
 }
@@ -13042,11 +13163,9 @@ impl Re2Sounds {
     }
 }
 
-/// `Snd_se_walk`'s sound column for a footfall in water.
-const WATER_FOOTSTEP: u8 = 0x1A;
-
 /// One tick's sounds of an RE2 room: `se_on`'s, the player's footsteps
 /// (`Snd_se_walk`) and the weapon's.
+#[allow(clippy::too_many_arguments)]
 fn play_re2_sounds(
     music: &mut Option<Mixer>,
     cache: &mut SfxCache,
@@ -13055,6 +13174,7 @@ fn play_re2_sounds(
     room: &RoomState,
     game: &mut game::GameState,
     player: &mut player::PlayerState,
+    cut: usize,
 ) {
     use crate::se2::{self, Kind, SoundId};
     let requests = std::mem::take(&mut game.re2.sounds);
@@ -13068,7 +13188,7 @@ fn play_re2_sounds(
         game.re2_weapon().id,
         game.re2.enemy_bank,
     );
-    let Some(cut) = room.cuts.get(room.current_cut) else {
+    let Some(cut) = room.cuts.get(cut) else {
         return;
     };
     let mut played = std::mem::take(&mut sounds.played);
@@ -13119,24 +13239,10 @@ fn play_re2_sounds(
         play(request.id, request.pos);
     }
     for footstep in footsteps {
-        let floor = crate::sca::floor_of(footstep.pos[1]);
-        let zone = if footstep.water {
-            WATER_FOOTSTEP
-        } else {
-            se2::floor_sound(
-                &room.footstep_zones,
-                footstep.pos[0],
-                footstep.pos[2],
-                floor,
-            )
-        };
-        let id = SoundId {
-            kind: Kind::Room,
-            slot: footstep.sound_type + (zone & 0x7f),
-            positional: true,
-            muffled: true,
-        };
-        play(id, footstep.pos);
+        play(
+            se2::footstep_sound(&room.footstep_zones, &footstep),
+            footstep.pos,
+        );
     }
     for sound in weapon {
         let id = SoundId {
@@ -14700,8 +14806,12 @@ fn run_re2_init(
         .checked_sub(1)
         .and_then(|stage| game.re2.bgm.get(stage, game.id.room))
         .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
-    let place = game.re2_music_place();
-    game.re2.music.enter_room(word, place);
+    if std::mem::take(&mut game.re2.music_set) {
+        game.re2.music.play_ck();
+    } else {
+        let place = game.re2_music_place();
+        game.re2.music.enter_room(word, place);
+    }
     game.re2.effects.enter_room(std::sync::Arc::clone(effects));
     let loaded = game.re2_weapon().loaded;
     game.re2.player.enter_room(loaded);
@@ -24631,6 +24741,7 @@ mod tests {
                 ticks: 3,
                 input: None,
                 sound: false,
+                sound_wav: None,
             },
             Authoring {
                 load: Some(&saved),

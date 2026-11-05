@@ -75,6 +75,8 @@ pub struct Re2State {
     pub main_music: Option<u8>,
     /// The music and ambience's channels.
     pub music: crate::bgm2::Music,
+    /// A held door's `Set_room` already ran `Snd_bgm_set` for the room it loads.
+    pub music_set: bool,
     /// `Esp_`: the effect sprites.
     pub effects: crate::esp2::Effects,
     /// `se_on`'s sounds, not yet played.
@@ -401,6 +403,7 @@ impl Default for Re2State {
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
+            music_set: false,
             effects: Default::default(),
             sounds: Vec::new(),
             scroll: 0,

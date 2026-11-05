@@ -258,6 +258,9 @@ pub struct Music {
     /// `Snd_bgm_ck`'s wait: the door holds the room's load this long, so what
     /// the room asks of the music waits for it here.
     door_wait: u8,
+    /// `Snd_se_call`'s state 2: the fade stopped the music, and the next
+    /// tick frees its banks.
+    door_free: bool,
     deferred: Vec<Deferred>,
     pub channels: [Channel; CHANNELS],
 }
@@ -278,6 +281,7 @@ impl Default for Music {
             }; SEQUENCES],
             door_fade: 0,
             door_wait: 0,
+            door_free: false,
             deferred: Vec::new(),
             channels: Default::default(),
         }
@@ -416,6 +420,22 @@ impl Music {
         if place.system & SYSTEM_NO_MUSIC != 0 {
             return;
         }
+        self.set_room(word, place);
+        self.play_ck();
+    }
+
+    /// `Snd_bgm_ck`'s wait still holds what a room asks of the music.
+    pub fn waiting(&self) -> bool {
+        self.door_wait > 0
+    }
+
+    /// `Snd_bgm_set` alone, which a held door's `Set_room` gets through a
+    /// frame before the room's load: the banks load, and [`Music::play_ck`]
+    /// starts them with the load.
+    pub fn set_room(&mut self, word: RoomMusic, place: Place) {
+        if place.system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
         let main_changed = (word.main ^ self.current.main) & 0x3f != 0;
         if main_changed {
             let loaded = self.load_main(word.main, place.system);
@@ -447,6 +467,10 @@ impl Music {
             self.sequences[2].hold = HOLD_NOTHING;
         }
         self.current = word;
+    }
+
+    /// `Snd_bgm_play_ck`: the sequences the room plays on its load start.
+    pub fn play_ck(&mut self) {
         for sequence in 0..SEQUENCES {
             if self.sequences[sequence].hold == 0 {
                 if self.sequences[sequence].loaded {
@@ -535,6 +559,17 @@ impl Music {
 
     /// One tick of `Snd_se_call`'s fades.
     pub fn tick(&mut self) {
+        if std::mem::take(&mut self.door_free) {
+            // The banks go and their names with them; the frame does nothing
+            // else of the music's.
+            for channel in &mut self.channels {
+                channel.track = None;
+                channel.load = true;
+                channel.play = None;
+            }
+            self.count_door_wait();
+            return;
+        }
         for sequence in 0..SEQUENCES {
             if self.sequences[sequence].fade > 0 {
                 self.sequences[sequence].fade -= 1;
@@ -560,8 +595,14 @@ impl Music {
                         self.stop(sequence);
                     }
                 }
+                self.door_free = true;
             }
         }
+        self.count_door_wait();
+    }
+
+    /// The door's hold on what the room asks of the music.
+    fn count_door_wait(&mut self) {
         if self.door_wait > 0 {
             self.door_wait -= 1;
             if self.door_wait == 0 {
@@ -798,6 +839,49 @@ mod tests {
         assert!(!music.channels[0].stop);
         music.tick();
         assert!(music.channels[0].stop);
+    }
+
+    /// `Snd_se_call`'s state 2: the frame after the fade's stop frees the
+    /// banks and their names, and does nothing else.
+    #[test]
+    fn a_doors_stop_frees_the_banks_on_the_next_tick() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.leave_room(word(1, 0xff), 0);
+        for _ in 0..89 {
+            music.tick();
+        }
+        assert!(music.channels[0].stop);
+        assert!(music.channels[0].track.is_some());
+        music.channels[0].load = false;
+        music.tick();
+        assert!(music.channels.iter().all(|channel| channel.track.is_none()));
+        assert!(music.channels[0].load);
+    }
+
+    /// A held door's `Set_room` gets through `Snd_bgm_set` a frame before the
+    /// room's load, whose `Snd_bgm_play_ck` starts the sequences.
+    #[test]
+    fn snd_bgm_set_loads_and_the_play_check_starts() {
+        let mut music = Music::default();
+        music.set_room(word(0, 0xff), street());
+        assert_eq!(
+            music.channels[0].track,
+            crate::convert_re2::bgm_track("main00_1")
+        );
+        assert_eq!(music.channels[0].play, None);
+        assert!(
+            music.trace_field().starts_with("ff00,0000,"),
+            "{}",
+            music.trace_field()
+        );
+        music.play_ck();
+        assert_eq!(music.channels[0].play, Some(true));
+        assert!(
+            music.trace_field().starts_with("ff00,0100,"),
+            "{}",
+            music.trace_field()
+        );
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! WAV parsing and a software mixer feeding one SDL3 stream.
 //!
 //! [`Mixer`] owns the only SDL audio stream in the engine. Every source is
-//! converted to 16-bit signed mono at 22050 Hz on load (8-bit samples are
+//! converted to 16-bit signed mono at 22050 Hz on load, but a two-channel
+//! BGM track, which keeps its stereo (8-bit samples are
 //! upsampled, other rates are linearly resampled). Each [`Mixer::update`]
 //! renders and queues interleaved stereo samples: three independently
 //! controlled BGM channels, one dedicated voice (dialogue) channel and a pool
@@ -370,6 +371,34 @@ fn resample_linear(input: &[i16], from: u32, to: u32) -> Result<Vec<i16>> {
 }
 
 /// Convert a WAV for playback, logging and dropping an over-cap source.
+/// Convert a parsed two-channel WAV to interleaved signed 16-bit stereo at
+/// [`SAMPLE_RATE`], each channel converted as [`to_mono`] converts one.
+fn to_stereo(wav: &Wav) -> Result<Vec<i16>> {
+    let channel = |index: usize| -> Result<Vec<i16>> {
+        let sample = match wav.format {
+            WavFormat::U8 => 1,
+            WavFormat::S16Le => 2,
+        };
+        let data: Vec<u8> = wav
+            .data
+            .chunks_exact(sample * 2)
+            .flat_map(|frame| frame[index * sample..(index + 1) * sample].to_vec())
+            .collect();
+        to_mono(&Wav {
+            format: wav.format,
+            channels: 1,
+            sample_rate: wav.sample_rate,
+            data,
+        })
+    };
+    let (left, right) = (channel(0)?, channel(1)?);
+    Ok(left
+        .iter()
+        .zip(&right)
+        .flat_map(|(&l, &r)| [l, r])
+        .collect())
+}
+
 fn mono_or_warn(wav: &Wav) -> Option<Vec<i16>> {
     match to_mono(wav) {
         Ok(mono) => Some(mono),
@@ -454,8 +483,13 @@ impl Voice {
 /// either way so a later restart needs no reload.
 #[derive(Clone, Debug)]
 pub(crate) struct BgmChannel {
+    /// Mono samples, or interleaved left and right when `stereo`.
     pcm: Vec<i16>,
+    /// The position in frames.
     pos: usize,
+    /// A two-channel track: the original's DirectSound buffers keep a stereo
+    /// track's two channels, and its pan lowers one of them.
+    stereo: bool,
     gain: f32,
     pan: f32,
     looping: bool,
@@ -469,11 +503,34 @@ impl BgmChannel {
         Self {
             pcm,
             pos: 0,
+            stereo: false,
             gain: 1.0,
             pan: 0.0,
             looping,
             playing: true,
             kind: TrackKind::Music,
+        }
+    }
+
+    /// The frames the buffer holds.
+    fn frames(&self) -> usize {
+        if self.stereo {
+            self.pcm.len() / 2
+        } else {
+            self.pcm.len()
+        }
+    }
+
+    /// The left and right samples of the frame at `pos`.
+    fn frame(&self) -> (f32, f32) {
+        if self.stereo {
+            (
+                f32::from(self.pcm[self.pos * 2]),
+                f32::from(self.pcm[self.pos * 2 + 1]),
+            )
+        } else {
+            let sample = f32::from(self.pcm[self.pos]);
+            (sample, sample)
         }
     }
 }
@@ -554,6 +611,17 @@ impl MixState {
             return;
         }
         self.bgm_channels[index] = (!pcm.is_empty()).then(|| BgmChannel::new(pcm, looping));
+    }
+
+    /// [`MixState::load_bgm_channel`] for interleaved stereo `pcm`.
+    pub(crate) fn load_bgm_channel_stereo(&mut self, index: usize, pcm: Vec<i16>, looping: bool) {
+        if index >= Self::BGM_CHANNELS {
+            return;
+        }
+        self.bgm_channels[index] = (pcm.len() >= 2).then(|| BgmChannel {
+            stereo: true,
+            ..BgmChannel::new(pcm, looping)
+        });
     }
 
     /// Load `pcm` into BGM channel `index` and start it from sample 0.
@@ -840,7 +908,7 @@ impl MixState {
                     if !channel.playing {
                         continue;
                     }
-                    if channel.pos >= channel.pcm.len() {
+                    if channel.pos >= channel.frames() {
                         if channel.looping {
                             channel.pos = 0;
                         } else {
@@ -853,12 +921,12 @@ impl MixState {
                         TrackKind::Ambient => volumes.ambient,
                         TrackKind::Voice => volumes.voice,
                     };
-                    let sample = f32::from(channel.pcm[channel.pos]) * channel.gain * player;
+                    let (sample_l, sample_r) = channel.frame();
                     let (l, r) = pan_gains(channel.pan);
-                    left += sample * l;
-                    right += sample * r;
+                    left += sample_l * channel.gain * player * l;
+                    right += sample_r * channel.gain * player * r;
                     channel.pos += 1;
-                    if channel.pos >= channel.pcm.len() {
+                    if channel.pos >= channel.frames() {
                         if channel.looping {
                             channel.pos = 0;
                         } else {
@@ -940,18 +1008,48 @@ fn push_sample(out: &mut Vec<u8>, sample: f32) {
 
 /// A software mixer backed by a single SDL audio stream.
 pub struct Mixer {
+    /// The SDL stream, or null for a capture mixer ([`Mixer::capture`]).
     stream: *mut SDL_AudioStream,
     state: MixState,
+    /// A capture mixer's rendered output, interleaved stereo s16le.
+    capture: Option<Vec<u8>>,
     /// Stereo frames put into the stream since it was last cleared. The
     /// device-playback cursor is this minus what is still queued.
     written_frames: u64,
     /// A share of the SDL lifetime: declared last so [`Drop`] destroys the
     /// stream before this releases the ref, and `SDL_Quit` cannot tear the
     /// audio subsystem down under a live stream.
-    _sdl: SdlHandle,
+    _sdl: Option<SdlHandle>,
 }
 
 impl Mixer {
+    /// A mixer with no device that renders only when told to
+    /// ([`Mixer::capture_frames`]), for writing a run's sound to a WAV.
+    pub fn capture() -> Mixer {
+        Mixer {
+            stream: ptr::null_mut(),
+            state: MixState::new(),
+            capture: Some(Vec::new()),
+            written_frames: 0,
+            _sdl: None,
+        }
+    }
+
+    /// Render `frames` stereo frames into a capture mixer's output, at the
+    /// default levels. A device mixer ignores it.
+    pub fn capture_frames(&mut self, frames: usize) {
+        if let Some(out) = &mut self.capture {
+            self.state.render(frames, out);
+            self.written_frames += frames as u64;
+        }
+    }
+
+    /// A capture mixer's output so far, interleaved stereo s16le at
+    /// [`SAMPLE_RATE`].
+    pub fn captured(&self) -> Option<&[u8]> {
+        self.capture.as_deref()
+    }
+
     /// Initialize SDL audio and open a default playback device.
     ///
     /// Returns `None` when the audio subsystem or a default playback device
@@ -979,8 +1077,9 @@ impl Mixer {
         Some(Mixer {
             stream,
             state: MixState::new(),
+            capture: None,
             written_frames: 0,
-            _sdl: SdlHandle::retain(),
+            _sdl: Some(SdlHandle::retain()),
         })
     }
 
@@ -996,12 +1095,8 @@ impl Mixer {
     /// the channel's volume and pan before the first samples are rendered (a
     /// bank that loads muted must not leak a full-gain burst).
     pub fn play_bgm_channel(&mut self, index: usize, wav: Wav, looping: bool) {
-        let Some(mono) = mono_or_warn(&wav) else {
-            return;
-        };
-        self.state.load_bgm_channel(index, mono, looping);
+        self.load_bgm_channel(index, wav, looping);
         self.state.restart_bgm_channel(index);
-        self.resume();
     }
 
     /// Load `wav` into BGM channel `index` without starting it.
@@ -1009,10 +1104,17 @@ impl Mixer {
     /// `looping` is the channel's whole-buffer loop flag; see
     /// [`Mixer::play_bgm_channel`].
     pub fn load_bgm_channel(&mut self, index: usize, wav: Wav, looping: bool) {
-        let Some(mono) = mono_or_warn(&wav) else {
-            return;
-        };
-        self.state.load_bgm_channel(index, mono, looping);
+        if wav.channels == 2 {
+            match to_stereo(&wav) {
+                Ok(pcm) => self.state.load_bgm_channel_stereo(index, pcm, looping),
+                Err(error) => eprintln!("[audio] dropping WAV: {error:#}"),
+            }
+        } else {
+            let Some(mono) = mono_or_warn(&wav) else {
+                return;
+            };
+            self.state.load_bgm_channel(index, mono, looping);
+        }
         self.resume();
     }
 
@@ -1070,7 +1172,7 @@ impl Mixer {
     /// queued stream so a fresh track starts clean, exactly as M5 left it.
     pub fn play_bgm(&mut self, wav: Wav) -> Result<()> {
         self.state.stop_bgm();
-        if !unsafe { SDL_ClearAudioStream(self.stream) } {
+        if !self.stream.is_null() && !unsafe { SDL_ClearAudioStream(self.stream) } {
             bail!("SDL_ClearAudioStream failed");
         }
         self.written_frames = 0;
@@ -1083,8 +1185,7 @@ impl Mixer {
     /// Stop channel 0 and clear anything still queued.
     pub fn stop_bgm(&mut self) {
         self.state.stop_bgm();
-        let _ = unsafe { SDL_ClearAudioStream(self.stream) };
-        self.written_frames = 0;
+        self.clear_stream();
     }
 
     /// Set channel 0's gain; negative values are clamped to zero.
@@ -1170,6 +1271,9 @@ impl Mixer {
     /// the original's `waveOutGetPosition` cursor, so the picture follows the
     /// audible position rather than the mixer's render-ahead.
     pub fn movie_samples_played(&self) -> u64 {
+        if self.stream.is_null() {
+            return self.written_frames;
+        }
         let queued = unsafe { SDL_GetAudioStreamQueued(self.stream) };
         let queued_frames = if queued > 0 {
             queued as u64 / BYTES_PER_FRAME as u64
@@ -1216,6 +1320,9 @@ impl Mixer {
     /// consumed: the engine then treats the run as device-less and paces films
     /// with the fixed 30 Hz tick.
     pub fn is_dummy(&self) -> bool {
+        if self.stream.is_null() {
+            return true;
+        }
         let driver = unsafe { SDL_GetCurrentAudioDriver() };
         if driver.is_null() {
             return false;
@@ -1226,7 +1333,7 @@ impl Mixer {
     /// Render and queue enough samples to keep the device fed; call once per
     /// frame. A no-op when no voice is active.
     pub fn update(&mut self) {
-        if self.state.is_silent() {
+        if self.stream.is_null() || self.state.is_silent() {
             return;
         }
         let queued = unsafe { SDL_GetAudioStreamQueued(self.stream) };
@@ -1291,6 +1398,9 @@ impl Mixer {
     /// The queue stays topped up, so [`Mixer::update`] renders nothing more
     /// while it is held.
     pub fn set_device_paused(&mut self, paused: bool) {
+        if self.stream.is_null() {
+            return;
+        }
         if paused {
             let _ = unsafe { SDL_PauseAudioStreamDevice(self.stream) };
         } else {
@@ -1300,6 +1410,9 @@ impl Mixer {
 
     /// Resume the device, ignoring failure: audio is best-effort.
     fn resume(&self) {
+        if self.stream.is_null() {
+            return;
+        }
         let _ = unsafe { SDL_ResumeAudioStreamDevice(self.stream) };
     }
 
@@ -1307,14 +1420,18 @@ impl Mixer {
     /// [`Mixer::update`] refills from the current mixer state. The playback
     /// cursor rewinds to zero with the queue.
     fn clear_stream(&mut self) {
-        let _ = unsafe { SDL_ClearAudioStream(self.stream) };
+        if !self.stream.is_null() {
+            let _ = unsafe { SDL_ClearAudioStream(self.stream) };
+        }
         self.written_frames = 0;
     }
 }
 
 impl Drop for Mixer {
     fn drop(&mut self) {
-        unsafe { SDL_DestroyAudioStream(self.stream) };
+        if !self.stream.is_null() {
+            unsafe { SDL_DestroyAudioStream(self.stream) };
+        }
     }
 }
 
@@ -1643,6 +1760,36 @@ mod tests {
         state.stop_bgm();
         assert!(!state.bgm_channel_playing(0));
         assert!(state.is_silent());
+    }
+
+    #[test]
+    fn mixer_bgm_keeps_a_stereo_track_and_pans_it() {
+        let mut state = MixState::new();
+        state.load_bgm_channel_stereo(0, vec![100, -40, 60, 20], true);
+        state.restart_bgm_channel(0);
+        let mut out = Vec::new();
+        state.render(3, &mut out);
+        // Each channel to its own side, the two frames then the loop.
+        assert_eq!(out_samples(&out), vec![100, -40, 60, 20, 100, -40]);
+
+        // A pan to the right lowers the left channel only, as DirectSound's
+        // `SetPan` does on a stereo buffer.
+        state.set_bgm_channel_pan(0, 0.2);
+        let (far, near) = pan_gains(0.2);
+        let mut out = Vec::new();
+        state.render(1, &mut out);
+        assert_eq!(
+            out_samples(&out),
+            vec![(60.0 * far) as i16, (20.0 * near) as i16]
+        );
+    }
+
+    #[test]
+    fn a_stereo_wav_converts_each_channel() {
+        let wav = Wav::from_s16(&[1000, -1000, 2000, -2000], 2, SAMPLE_RATE);
+        assert_eq!(to_stereo(&wav).unwrap(), vec![1000, -1000, 2000, -2000]);
+        let wav = Wav::from_s16(&[1000, -1000, 2000, -2000], 2, SAMPLE_RATE * 2);
+        assert_eq!(to_stereo(&wav).unwrap().len(), 2);
     }
 
     #[test]
