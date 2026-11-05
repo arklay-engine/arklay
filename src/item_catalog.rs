@@ -26,7 +26,8 @@
 //!   box's count (0, the default, for an item whose quantity is not shown).
 //! - `merge="true"` merges a picked-up item into a stack the player already
 //!   carries.
-//! - `<effect kind="heal" amount="third|two_thirds|full">` restores health;
+//! - `<effect kind="heal" amount="third|two_thirds|full|<points>">` restores health (a
+//!   number is that many life points);
 //!   `cure_poison` clears the `0x02` poison and `cure_serious_poison` the
 //!   `0x20` one.
 //! - `<string key="name|name_unchecked|description">` are the language-file
@@ -158,6 +159,8 @@ pub enum HealAmount {
     TwoThirds,
     /// Full health.
     Full,
+    /// A fixed number of life points (RE 2's herbs: `amount="50"`).
+    Points(u16),
 }
 
 impl HealAmount {
@@ -173,6 +176,7 @@ impl HealAmount {
             Self::Third => i32::from(health) + max / 3,
             Self::TwoThirds => i32::from(health) + (max * 2) / 3,
             Self::Full => max,
+            Self::Points(points) => i32::from(health) + i32::from(points),
         };
         raised.min(max) as i16
     }
@@ -348,6 +352,9 @@ fn parse_effects(node: Node) -> Result<HealEffect> {
                     "third" => HealAmount::Third,
                     "two_thirds" => HealAmount::TwoThirds,
                     "full" => HealAmount::Full,
+                    points if points.parse::<u16>().is_ok_and(|points| points > 0) => {
+                        HealAmount::Points(points.parse()?)
+                    }
                     other => bail!("unknown heal amount `{other}`"),
                 };
             }
@@ -700,6 +707,25 @@ mod tests {
         assert_eq!(HealAmount::Third.apply(96, 96), 96);
         assert_eq!(HealAmount::None.apply(50, 96), 50);
         assert_eq!(HealAmount::Full.apply(200, 96), 200);
+    }
+
+    #[test]
+    fn heal_points_add_a_fixed_amount_and_clamp() {
+        assert_eq!(HealAmount::Points(50).apply(100, 200), 150);
+        assert_eq!(HealAmount::Points(50).apply(190, 200), 200);
+        assert_eq!(HealAmount::Points(100).apply(1, 200), 101);
+        assert_eq!(HealAmount::Points(50).apply(200, 200), 200);
+        let def = ItemDef::parse(
+            r#"<item kind="heal"><effects><effect kind="heal" amount="50" /></effects></item>"#,
+        )
+        .unwrap();
+        assert_eq!(def.heal.amount, HealAmount::Points(50));
+        assert!(
+            ItemDef::parse(
+                r#"<item kind="heal"><effects><effect kind="heal" amount="0" /></effects></item>"#
+            )
+            .is_err()
+        );
     }
 
     #[test]

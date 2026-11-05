@@ -86,7 +86,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **Start items.** `games/re2/game/new_game.lua` copies `Stage_init_item`'s table for Leon and Claire, with the lighter or lockpick in slot 2 rather than slot 10, and no other character's or mode's row.
 - **Text screens.** The title, new-game choice, inventory and item box are plain text stand-ins (`games/re2/ui`), and the save screen has no background: RE2's own art is not converted.
 - **The inventory.** Confirm equips a weapon or uses a healing item. There is no CHECK, MOVE, combining, map or file tab, and equipping fires only the handguns, magnums and shotguns.
-- **Healing.** Herbs and first aid heal in RE1's thirds of the maximum, not RE2's amounts (`item_definitions`).
+- **Healing.** The amounts and the cap of 200 are the original's, measured (`item_definitions`): a green herb heals 50, two greens 100, and three greens, green and red and the first aid spray heal to the maximum. The blue herb's poison cure is RE1's rule, not measured in RE2.
 - **Item definitions.** Only weapons, ammo and healing items have a kind; everything else can't be used from the inventory. Key items work from the door or script that wants them.
 - **Save labels.** The save screen names the room by its number, not its place.
 - **Item stacks.** Ammo stacks to 255 and stacks into any stack of its own kind.

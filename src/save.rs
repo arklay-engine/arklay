@@ -311,6 +311,7 @@ impl SaveFile {
         state.item_box = self.item_box;
         if let Some(re2) = &self.re2 {
             state.is_re2_room = true;
+            state.max_health = crate::game::RE2_MAX_HEALTH;
             if state.re2.load_save_bytes(re2).is_none() {
                 eprintln!("warning: the save's RE2 state has the wrong size; ignoring it");
             }
