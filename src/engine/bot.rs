@@ -13,11 +13,13 @@
 //!
 //! Per-room puzzle data lives next to the room in `room/<id>/bot.xml`; the
 //! parser is in [`meta`] and the Lua API exposes it read-only as
-//! `bot:room_meta()`.
+//! `bot:room_meta()`. The observed world model is in [`world`] and reaches
+//! Lua as `bot:world()`.
 
 mod meta;
 mod stats;
 mod steer;
+mod world;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
@@ -39,8 +41,11 @@ use crate::weapons::WeaponState;
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
+/// The default `--bot-risk`: how much danger the planner may accept, 0..=1.
+pub const DEFAULT_RISK: f64 = 0.25;
+
 /// The bot run options the CLI adds on top of a normal boot.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BotOptions {
     /// Drive the game from the pack's `bot/**.lua` entries.
     pub enabled: bool,
@@ -50,6 +55,21 @@ pub struct BotOptions {
     pub max_ticks: u64,
     /// Write the headless run's statistics as JSON to this path.
     pub stats_path: Option<std::path::PathBuf>,
+    /// The planner's risk setting (`--bot-risk`), `0.0..=1.0`; read-only to
+    /// Lua as `bot:risk()`.
+    pub risk: f64,
+}
+
+impl Default for BotOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            headless: false,
+            max_ticks: 0,
+            stats_path: None,
+            risk: DEFAULT_RISK,
+        }
+    }
 }
 
 /// One tick of input the Lua script asked for. Reset before every call.
@@ -179,6 +199,8 @@ struct BotMemory {
     visited: BTreeSet<String>,
     rooms: BTreeMap<String, (Vec<ActionMemory>, Vec<DoorMemory>)>,
     values: BTreeMap<String, String>,
+    /// The observed world model (`bot:world()`).
+    world: world::World,
 }
 
 impl BotMemory {
@@ -1751,6 +1773,8 @@ struct BotCtx {
     /// The current room's authored metadata, cached by [`BotRuntime`].
     meta: Option<Rc<meta::RoomMeta>>,
     tick: u64,
+    /// The `--bot-risk` setting.
+    risk: f64,
     shares: BotShares,
 }
 
@@ -1860,8 +1884,43 @@ impl UserData for BotCtx {
                 puzzles.set(puzzle_index + 1, puzzle_table)?;
             }
             table.set("puzzles", puzzles)?;
+            let interacts = lua.create_table()?;
+            for fact in &meta.interacts {
+                let row = lua.create_table()?;
+                row.set("slot", fact.slot)?;
+                row.set("bank", fact.bank)?;
+                row.set("bit", fact.bit)?;
+                row.set("label", fact.label.as_deref())?;
+                interacts.push(row)?;
+            }
+            table.set("interacts", interacts)?;
+            let answers = lua.create_table()?;
+            for fact in &meta.answers {
+                let row = lua.create_table()?;
+                row.set("choice", if fact.yes { "yes" } else { "no" })?;
+                row.set("slot", fact.slot)?;
+                row.set("bank", fact.flag.map(|(bank, _)| bank))?;
+                row.set("bit", fact.flag.map(|(_, bit)| bit))?;
+                row.set("label", fact.label.as_deref())?;
+                answers.push(row)?;
+            }
+            table.set("answers", answers)?;
+            let avoids = lua.create_table()?;
+            for fact in &meta.avoids {
+                let row = lua.create_table()?;
+                row.set("slot", fact.slot)?;
+                row.set("reason", fact.reason.as_str())?;
+                avoids.push(row)?;
+            }
+            table.set("avoids", avoids)?;
             Ok(Value::Table(table))
         });
+
+        methods.add_method("world", |lua, bot, ()| {
+            bot.shares.memory.borrow().world.to_lua(lua, &bot.snapshot)
+        });
+
+        methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
 
         methods.add_method("player", |lua, bot, ()| {
             let p = &bot.snapshot.player;
@@ -2297,6 +2356,8 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
+    /// The `--bot-risk` setting; kept across [`Self::reset`].
+    risk: f64,
     /// Run statistics for `--bot-stats`.
     stats: stats::BotStats,
 }
@@ -2310,8 +2371,19 @@ impl BotRuntime {
             tick: 0,
             meta: None,
             meta_room: None,
+            risk: DEFAULT_RISK,
             stats: stats::BotStats::default(),
         })
+    }
+
+    /// Set the planner's risk setting (`--bot-risk`), clamped to `0..=1`.
+    pub fn with_risk(mut self, risk: f64) -> Self {
+        self.risk = if risk.is_finite() {
+            risk.clamp(0.0, 1.0)
+        } else {
+            DEFAULT_RISK
+        };
+        self
     }
 
     /// Reload the pack's bot chunks in place, preserving the Lua globals, the
@@ -2351,11 +2423,13 @@ impl BotRuntime {
             nav.begin_tick();
             let mut memory = self.shares.memory.borrow_mut();
             memory.observe(&snapshot);
+            memory.world.observe(self.tick, &snapshot);
         }
         let ctx = BotCtx {
             snapshot,
             meta: self.meta.clone(),
             tick: self.tick,
+            risk: self.risk,
             shares: BotShares {
                 memory: Rc::clone(&self.shares.memory),
                 nav: Rc::clone(&self.shares.nav),
@@ -2379,6 +2453,11 @@ impl BotRuntime {
         }
         let input = *self.shares.input.borrow();
         self.stats.observe_input(&input);
+        self.shares
+            .memory
+            .borrow_mut()
+            .world
+            .observe_input(self.tick, &input);
         self.shares.nav.borrow_mut().end_tick(&input);
         Ok(input)
     }
@@ -2527,6 +2606,8 @@ mod tests {
             "visited",
             "distance",
             "path",
+            "world",
+            "risk",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -3152,6 +3233,82 @@ mod tests {
         assert_eq!(runtime.ticks(), 0);
         assert!(!runtime.finished());
         assert_eq!(runtime.vm.lua.globals().get::<i64>("VERSION").unwrap(), 1);
+    }
+
+    #[test]
+    fn room_meta_facts_world_and_risk_reach_lua() {
+        let temp = TempDir::new("facts");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(
+            bot.join("init.lua"),
+            br#"function on_bot_tick(bot)
+                local m = bot:room_meta()
+                local i, a, v = m.interacts[1], m.answers[1], m.avoids[1]
+                local w = bot:world()
+                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g",
+                    m.format, #m.puzzles, i.slot, i.bank, i.bit, i.label,
+                    a.choice, tostring(a.slot), tostring(a.bank), v.slot, v.reason,
+                    w.room, #w.frontier, bot:risk())
+            end
+"#,
+        )
+        .unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let vm = BotVm::load(&pack).unwrap();
+        let meta = meta::parse(
+            r#"<bot format="2">
+                <interact slot="4" bank="1" bit="0x22" label="statue"/>
+                <answer choice="no" slot="6"/>
+                <avoid slot="7" reason="plant"/>
+            </bot>"#,
+        )
+        .unwrap();
+        let mut snapshot = world::tests::snapshot(0x117, 0, 0);
+        snapshot.doors.push(DoorSnapshot {
+            slot: 1,
+            target: Some("118".to_string()),
+            next_room: 0x18,
+            key: 0,
+            lock: 0,
+            x: 0,
+            z: 0,
+            width: 100,
+            depth: 100,
+        });
+        let shares = BotShares::default();
+        shares.memory.borrow_mut().world.observe(1, &snapshot);
+        vm.call(BotCtx {
+            snapshot,
+            meta: Some(Rc::new(meta)),
+            tick: 1,
+            risk: 0.6,
+            shares,
+        })
+        .unwrap();
+        assert_eq!(
+            vm.lua.globals().get::<String>("RESULT").unwrap(),
+            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6"
+        );
+    }
+
+    #[test]
+    fn bot_runtime_keeps_a_clamped_risk_across_reset() {
+        let temp = TempDir::new("risk");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(bot.join("init.lua"), b"function on_bot_tick(bot) end\n").unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut runtime = BotRuntime::load(&pack).unwrap();
+        assert_eq!(runtime.risk, DEFAULT_RISK);
+        runtime = runtime.with_risk(0.75);
+        runtime.reset(&pack).unwrap();
+        assert_eq!(runtime.risk, 0.75);
+        assert_eq!(BotRuntime::load(&pack).unwrap().with_risk(3.0).risk, 1.0);
+        assert_eq!(
+            BotRuntime::load(&pack).unwrap().with_risk(f64::NAN).risk,
+            DEFAULT_RISK
+        );
     }
 
     #[test]
