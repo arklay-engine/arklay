@@ -1937,7 +1937,6 @@ mod tests {
         assert!(!part.takes_below());
     }
 
-    /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
     /// `Em_25`'s `nFloor`: a floor for each 1800 units up, from where it
     /// stands.
     #[test]
@@ -1955,6 +1954,7 @@ mod tests {
         }
     }
 
+    /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
     #[test]
     fn an_ivys_blown_part_starts_slow_and_rises() {
         let matrix = player2::Matrix {
