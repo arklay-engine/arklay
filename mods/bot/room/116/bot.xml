@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 116 shotgun rack. Lifting the shotgun without hanging the broken one in
+     its place springs the ceiling trap next door in 115: the door to 109
+     locks and the ceiling comes down. The planner has no swap skill, so it
+     leaves the rack alone. -->
+<bot format="2">
+  <avoid slot="1" reason="the shotgun rack springs the 115 ceiling trap"/>
+</bot>
