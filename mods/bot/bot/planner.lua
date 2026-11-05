@@ -1553,13 +1553,25 @@ local function choose(bot)
             cost = cost, order = order, door = row.door, why = why,
         })
     end
+    -- The ammunition of the guns the bot holds: a remote trip for any other
+    -- (rounds for a gun not found yet) only fills a slot a needed pickup
+    -- wants, and one for a document unlocks nothing. Both are still taken
+    -- when the bot is in their room.
+    local gun_rounds = {}
+    for id, _ in pairs((bot:knowledge() or {}).weapons or {}) do
+        if bot:has_item(id) and bot:ammo_for(id) then
+            gun_rounds[bot:ammo_for(id)] = true
+        end
+    end
     local function consider_frontier(allow_unfit)
         for _, goal in ipairs(world.frontier) do
             -- A remote item that would not fit is no trip: arriving full only
             -- marks it again. The box (box_why) or a combine makes room first.
             local fits = allow_unfit or goal.kind ~= "item"
                 or pickup_fits(bot, goal.item, full)
-            if goal.room ~= room and fits then
+            local useless = goal.kind == "item" and (goal.item_kind == "file"
+                or goal.item_kind == "ammo" and not gun_rounds[goal.item])
+            if goal.room ~= room and fits and not useless then
                 local steps = usable(goal) and route(bot, world, room, goal.room)
                 local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
                 if first then
@@ -1741,18 +1753,19 @@ local function forgive_approaches(bot)
 end
 
 -- Before the run finishes on an empty frontier: each door a room event
--- made a message is retried, once it has waited EVENT_WAIT (doubled per
--- attempt) since it failed. Standing in its room on the entry it failed
--- on, the bot first steps out (p.reenter): the room's script decides the
--- door again only on an entry. Returns the forgiven count and whether a
--- mark is still waiting (the bot then idles instead of finishing).
+-- made a message is retried. Away from its room, at once: the walk back is
+-- the wait. In its room, once it has waited EVENT_WAIT (doubled per
+-- attempt) since it failed; standing there on the entry it failed on, the
+-- bot then steps out (p.reenter): the room's script decides the door again
+-- only on an entry. Returns the forgiven count and whether a mark is still
+-- waiting (the bot then idles instead of finishing).
 forgive_events = function(bot)
     local p = plan()
     local n, waiting = 0, false
     for key, m in pairs(p.marks) do
         if m.event and not m.event.forgiven then
             local wait = EVENT_WAIT * (1 << (m.attempts - 1))
-            if bot:tick() - m.event.tick >= wait then
+            if m.room ~= bot:room().id or bot:tick() - m.event.tick >= wait then
                 m.event.forgiven = true
                 n = n + 1
                 if m.room == bot:room().id and p.entries[m.room] == m.event.entry then
