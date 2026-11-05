@@ -74,9 +74,10 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
 
 /// The item definitions, which replace RE1's for the ids they share: what the
 /// ids are, and how the menu may use them. The amounts are RE2's, measured in
-/// the original: a green herb heals 50, two 100 and the first aid spray, three
-/// greens and the red-herb mixes heal to the maximum (200). The blue herb's
-/// cure is assumed.
+/// the original: a green herb heals 50, two 100, green with blue 50 and two
+/// greens with blue 100. Three greens and the first aid spray heal to the
+/// maximum (200). The red-herb mixes are taken to heal to the maximum too,
+/// and the blue herb's cure is assumed.
 pub(super) fn item_definitions() -> Vec<(u8, String)> {
     const HEAL: [(u8, &str); 9] = [
         (0x23, r#"<effect kind="heal" amount="full" />"#),
