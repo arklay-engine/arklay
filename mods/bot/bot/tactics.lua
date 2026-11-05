@@ -130,6 +130,7 @@ end
 --   health, max_health, risk
 --   crossing   this room still has frontier work (the bot comes back)
 --   distance, reach  the target's distance and attack reach (nil unknown)
+--   engage     the far edge of the weapon's distance band (nil unknown)
 --   outrun     Jill's run beats its chase (nil unknown)
 --   sourcing   the bot is under its ammo floor with no ammunition it can
 --              reach (BotSurvival.sourcing): the rounds left are for what
@@ -137,8 +138,8 @@ end
 --              is run past
 -- Returns "fight" or "run" and why. The rule: never fight what the file
 -- says to pass or avoid, or knows nothing about, or without a firearm;
--- fight what is closing in (inside twice its reach) with whatever rounds
--- are left, even at low health when it cannot be outrun (or its speed is
+-- fight what is closing in (inside twice its reach, or inside the band's
+-- far edge) with whatever rounds are left, even at low health when it cannot be outrun (or its speed is
 -- unknown); below a risk-scaled health floor run; otherwise only with the rounds
 -- for the target (a margin at low risk) and for the crowd, and then what
 -- cannot be outrun and anything in a room the bot must cross again;
@@ -154,8 +155,13 @@ function BotTactics.decide(o)
         return "run", "no firearm with rounds"
     end
     -- Inside twice its reach it gets the bot anyway: shoot what is left.
+    -- So is one inside the band's far edge: a zombie closes on the bot
+    -- about as fast as the handgun brings it down, so a fight opened at
+    -- twice its reach (3000) ends in its grab, while one opened at the
+    -- band's edge (4000) gets the two more shots that finish it first.
     -- At low health only what the bot cannot outrun (or may not).
-    local closing = o.reach and o.distance <= 2 * o.reach and o.rounds > 0
+    local closing = o.reach and o.rounds > 0
+        and (o.distance <= 2 * o.reach or o.distance <= (o.engage or 0))
     if closing and o.outrun ~= true then
         return "fight", "closing in, cannot outrun it"
     end
@@ -193,17 +199,21 @@ end
 -- Where to stand. `o`: distance, min, max (the knowledge band), reloading,
 -- headshot (the weapon's headshot distance or nil), crawl_reach (a downed
 -- enemy's reach or nil), reach and speed (the enemy's attack reach and
--- chase speed, nil when unknown). Returns "back", "close" or "hold", and the
--- distance to walk to. Reloading backs off to the band's far edge; a target
--- inside the band's near edge (or a crawler's reach) backs off to the
--- middle; a shotgun target just past the band steps in to the middle, where
--- a torso or up shot pops the head; otherwise hold and shoot. A back-off
--- starts with turning around (tank controls), so it is taken only when the
--- enemy cannot close the gap to its reach in that time. Before that, an
--- enemy whose chase speed is known and slower than the backward walk
--- (o.back_speed) is backpedalled from: "retreat" walks backwards to the
--- same distance while the bot keeps facing it, no turn needed. Otherwise
--- the bot holds and shoots, since a hit makes it flinch.
+-- chase speed, nil when unknown). Returns "back", "retreat", "close" or
+-- "hold", and the distance to walk to. Reloading backs off to the band's
+-- far edge: the aim is down anyway. A target inside the band's near edge
+-- (or a crawler's reach) is held and shot, never backed off from: leaving
+-- the aim plays the holster (behaviour 0x17), which drifts the player a few
+-- hundred units toward the target before a backward step lands, and the
+-- shots it skips are the ones that would have finished the target, so a
+-- zombie the bot backed off from caught it at once. A shotgun target just
+-- past the band steps in to the middle, where a torso or up shot pops the
+-- head; otherwise hold and shoot. The reloading back-off starts with
+-- turning around (tank controls), so it is taken only when the enemy cannot
+-- close the gap to its reach in that time. Before that, an enemy whose
+-- chase speed is known and slower than the backward walk (o.back_speed) is
+-- backpedalled from: "retreat" walks backwards to the same distance while
+-- the bot keeps facing it, no turn needed.
 function BotTactics.spacing(o)
     local turn_ticks = C.FULL_TURN // 2 // C.TURN_STEP
     local room_to_turn = not o.speed
@@ -233,12 +243,6 @@ function BotTactics.spacing(o)
         return "hold", o.distance
     end
     if o.distance < min then
-        if outpaced then
-            return "retreat", middle
-        end
-        if room_to_turn then
-            return "back", middle
-        end
         return "hold", o.distance
     end
     -- Close in only from outside the headshot distance: inside it the shot
@@ -283,10 +287,10 @@ function BotTactics.pick_gun(guns, entry, health)
     local function shots(row)
         local band = entry and entry.keep and entry.keep[row.item]
         local damage = band and band.damage
-        if not damage or damage <= 0 or not health or health <= 0 then
+        if not damage or damage <= 0 or not health or health < 0 then
             return nil
         end
-        return (health + damage - 1) // damage
+        return health // damage + 1
     end
     local plain
     for _, row in ipairs(guns) do
@@ -343,7 +347,7 @@ local function rounds_for(enemy, entry, gun)
     if not damage or damage <= 0 then
         return enemy.health
     end
-    return (enemy.health + damage - 1) // damage
+    return enemy.health // damage + 1
 end
 
 local function crossing(bot)
@@ -495,6 +499,7 @@ local function choose(bot, s, k, enemies, player)
                 sourcing = s.sourcing,
                 distance = enemy.distance,
                 reach = entry and entry.reach,
+                engage = far,
                 outrun = entry and entry.outrun,
             })
             if verdict == "run" then

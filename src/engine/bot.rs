@@ -861,7 +861,9 @@ fn enemy_snapshots(
 ) -> Vec<EnemySnapshot> {
     let mut enemies = Vec::new();
     for (slot, entity) in game.entities.iter().enumerate().skip(1) {
-        if !entity.active() || entity.id >= 0x20 || entity.health <= 0 {
+        // Dead is below zero, as the engine's damage rule has it: a zombie
+        // shot down to exactly 0 still walks and bites.
+        if !entity.active() || entity.id >= 0x20 || entity.health < 0 {
             continue;
         }
         let dx = entity.pos[0] - player_pos[0];
@@ -4055,14 +4057,16 @@ mod tests {
         // Far zombie, near boss, a dead monster, and a scripted character.
         spawn(1, 0x00, 100, 3000, true);
         spawn(2, 0x0C, 400, 1000, true);
-        spawn(3, 0x00, 0, 500, true);
+        spawn(3, 0x00, -1, 500, true);
         spawn(4, 0x20, 100, 200, true);
         spawn(5, 0x00, 100, 2000, false);
+        // Health 0 is still alive: a monster dies below zero.
+        spawn(6, 0x00, 0, 4000, true);
 
         let enemies = enemy_snapshots(&game, [0, 0, 0], &room);
         assert_eq!(
             enemies.iter().map(|enemy| enemy.slot).collect::<Vec<_>>(),
-            [2, 1],
+            [2, 1, 6],
             "nearest living monster first; scripted characters, corpses and \
              inactive slots are excluded"
         );
@@ -5055,10 +5059,11 @@ mod tests {
                 &format!("local m, d = BotTactics.spacing({args}) return m .. ':' .. d"),
             )
         };
-        // The zombie's handgun band is 2000..4000.
+        // The zombie's handgun band is 2000..4000. Inside its near edge the
+        // bot holds and shoots: leaving the aim drifts it into the grab.
         assert_eq!(
             space("{ distance = 1600, min = 2000, max = 4000 }"),
-            "back:3000"
+            "hold:1600"
         );
         assert_eq!(
             space("{ distance = 2500, min = 2000, max = 4000 }"),
@@ -5100,10 +5105,11 @@ mod tests {
             space("{ distance = 1300, min = 3200, max = 6000, reach = 3000 }"),
             "hold:1300"
         );
-        // A crawler reaches 2200: the near edge moves out to 2500.
+        // A crawler reaches 2200: the near edge moves out to 2500, and the
+        // bot holds there too.
         assert_eq!(
             space("{ distance = 2300, min = 2000, max = 4000, crawl_reach = 2200 }"),
-            "back:3250"
+            "hold:2300"
         );
         // The shotgun (band 1800..2800, headshot 3000) steps in from just
         // past the band, but not from across the room.
@@ -5121,13 +5127,13 @@ mod tests {
             "hold:2900"
         );
         // The backward walk (0x40 a tick) outpaces a zombie (45): inside the
-        // near edge the bot backpedals, still facing it, to the middle; a
-        // reload backpedals to the far edge. Inside its reach it shoots.
+        // near edge the bot still holds and shoots; a reload backpedals,
+        // still facing it, to the far edge. Inside its reach it shoots.
         assert_eq!(
             space(
                 "{ distance = 1900, min = 2000, max = 4000, reach = 1500, speed = 45, back_speed = 0x40 }"
             ),
-            "retreat:3000"
+            "hold:1900"
         );
         assert_eq!(
             space(
@@ -5156,7 +5162,7 @@ mod tests {
         );
         assert_eq!(
             space("{ distance = 3100, min = 3200, max = 6000, reach = 3000, back_speed = 0x40 }"),
-            "back:4600"
+            "hold:3100"
         );
     }
 
