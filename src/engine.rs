@@ -3178,13 +3178,6 @@ impl GameSession {
         !(self.game.message.is_subtitle() && (self.subtitles_off || self.native_subtitle))
     }
 
-    /// Move the presented band one tick toward the player.
-    ///
-    /// A wider aspect shows fewer rows than the 4:3 frame, so the band
-    /// follows the player's projected body ([`video::follow`]): it snaps on a
-    /// camera cut or a room change and otherwise pans gently, so a fixed
-    /// camera keeps the player in view. The scene itself, its masks and the
-    /// camera stay in 4:3 space.
     /// The cut a tick's RE2 sounds are placed from: the one it started on,
     /// since the original places them before its cut check moves the camera.
     fn sound_cut(&self) -> usize {
@@ -3193,6 +3186,13 @@ impl GameSession {
             .map_or(self.loaded.room.current_cut, |(_, cut)| cut)
     }
 
+    /// Move the presented band one tick toward the player.
+    ///
+    /// A wider aspect shows fewer rows than the 4:3 frame, so the band
+    /// follows the player's projected body ([`video::follow`]): it snaps on a
+    /// camera cut or a room change and otherwise pans gently, so a fixed
+    /// camera keeps the player in view. The scene itself, its masks and the
+    /// camera stay in 4:3 space.
     fn follow_view(&mut self) {
         let aspect = video::aspect();
         if aspect.is_standard() {
@@ -6015,14 +6015,11 @@ impl GameSession {
                 .door
                 .re2
                 .filter(|_| session.transition.re2_held() && !self.game.re2.music.waiting())
-                && let Some(word) = self
-                    .game
-                    .re2
-                    .bgm
-                    .get(door.stage.saturating_sub(1), door.room)
+                && let Some(stage) = door.stage.checked_sub(1)
+                && let Some(word) = self.game.re2.bgm.get(stage, door.room)
             {
                 let place = crate::bgm2::Place {
-                    stage: door.stage.saturating_sub(1),
+                    stage,
                     room: door.room,
                     cut: usize::from(door.cut),
                     ..self.game.re2_music_place()
@@ -11362,14 +11359,6 @@ impl DoorAnimation {
         }
     }
 
-    /// An RE2 door sound, its gain and pan. `None` for RE1 art.
-    ///
-    /// As the PC original does, the sound is the door bank's WAV in the
-    /// effect's slot ([`door_bank`]), centred, at the volume of the tone the
-    /// DO2's sound table names for it ([`crate::se2::Edh::volume`]; full
-    /// scale when it names none). A pack without the bank falls back to the
-    /// DO2's own PlayStation VAB: the same tone decoded from ADPCM at
-    /// [`door2::vab::SAMPLE_RATE`], with the tone's pan.
     /// The volume an RE2 door sound plays at, for the trace's `snd`.
     fn re2_sound_volume(&self, effect: door::vm::Sfx) -> Option<u8> {
         let DoorArt::Re2(do2, ..) = &self.art else {
@@ -11382,6 +11371,14 @@ impl DoorAnimation {
         tone.map(|tone| tone.volume)
     }
 
+    /// An RE2 door sound, its gain and pan. `None` for RE1 art.
+    ///
+    /// As the PC original does, the sound is the door bank's WAV in the
+    /// effect's slot ([`door_bank`]), centred, at the volume of the tone the
+    /// DO2's sound table names for it ([`crate::se2::Edh::volume`]; full
+    /// scale when it names none). A pack without the bank falls back to the
+    /// DO2's own PlayStation VAB: the same tone decoded from ADPCM at
+    /// [`door2::vab::SAMPLE_RATE`], with the tone's pan.
     fn re2_sound(&self, effect: door::vm::Sfx) -> Option<(audio::Wav, f32, f32)> {
         let DoorArt::Re2(do2, ..) = &self.art else {
             return None;

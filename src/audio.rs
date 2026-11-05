@@ -1,12 +1,12 @@
 //! WAV parsing and a software mixer feeding one SDL3 stream.
 //!
 //! [`Mixer`] owns the only SDL audio stream in the engine. Every source is
-//! converted to 16-bit signed mono at 22050 Hz on load, but a two-channel
-//! BGM track, which keeps its stereo (8-bit samples are
-//! upsampled, other rates are linearly resampled). Each [`Mixer::update`]
-//! renders and queues interleaved stereo samples: three independently
-//! controlled BGM channels, one dedicated voice (dialogue) channel and a pool
-//! of one-shot voices, each with its own gain and pan.
+//! converted to 16-bit signed mono at 22050 Hz on load (8-bit samples are
+//! upsampled, other rates are linearly resampled), except a two-channel BGM
+//! track loaded through [`Mixer::load_bgm_channel`], which keeps its stereo.
+//! Each [`Mixer::update`] renders and queues interleaved stereo samples: three
+//! independently controlled BGM channels, one dedicated voice (dialogue)
+//! channel and a pool of one-shot voices, each with its own gain and pan.
 //!
 //! A one-shot started on a bank restarts that bank's voice (seek to sample 0)
 //! when it is already sounding, matching the original's one DirectSound buffer
@@ -370,7 +370,6 @@ fn resample_linear(input: &[i16], from: u32, to: u32) -> Result<Vec<i16>> {
     Ok(out)
 }
 
-/// Convert a WAV for playback, logging and dropping an over-cap source.
 /// Convert a parsed two-channel WAV to interleaved signed 16-bit stereo at
 /// [`SAMPLE_RATE`], each channel converted as [`to_mono`] converts one.
 fn to_stereo(wav: &Wav) -> Result<Vec<i16>> {
@@ -382,7 +381,7 @@ fn to_stereo(wav: &Wav) -> Result<Vec<i16>> {
         let data: Vec<u8> = wav
             .data
             .chunks_exact(sample * 2)
-            .flat_map(|frame| frame[index * sample..(index + 1) * sample].to_vec())
+            .flat_map(|frame| frame[index * sample..(index + 1) * sample].iter().copied())
             .collect();
         to_mono(&Wav {
             format: wav.format,
@@ -399,9 +398,22 @@ fn to_stereo(wav: &Wav) -> Result<Vec<i16>> {
         .collect())
 }
 
+/// Convert a WAV to mono for playback, logging and dropping an over-cap source.
 fn mono_or_warn(wav: &Wav) -> Option<Vec<i16>> {
     match to_mono(wav) {
         Ok(mono) => Some(mono),
+        Err(error) => {
+            eprintln!("[audio] dropping WAV: {error:#}");
+            None
+        }
+    }
+}
+
+/// Convert a two-channel WAV to stereo for playback, logging and dropping an
+/// over-cap source.
+fn stereo_or_warn(wav: &Wav) -> Option<Vec<i16>> {
+    match to_stereo(wav) {
+        Ok(stereo) => Some(stereo),
         Err(error) => {
             eprintln!("[audio] dropping WAV: {error:#}");
             None
@@ -1093,22 +1105,29 @@ impl Mixer {
     ///
     /// The stream is fed on the next [`Mixer::update`], so the caller can set
     /// the channel's volume and pan before the first samples are rendered (a
-    /// bank that loads muted must not leak a full-gain burst).
+    /// bank that loads muted must not leak a full-gain burst). A two-channel
+    /// track is mixed down to mono here; [`Mixer::load_bgm_channel`] keeps it.
     pub fn play_bgm_channel(&mut self, index: usize, wav: Wav, looping: bool) {
-        self.load_bgm_channel(index, wav, looping);
+        let Some(mono) = mono_or_warn(&wav) else {
+            return;
+        };
+        self.state.load_bgm_channel(index, mono, looping);
         self.state.restart_bgm_channel(index);
+        self.resume();
     }
 
     /// Load `wav` into BGM channel `index` without starting it.
     ///
     /// `looping` is the channel's whole-buffer loop flag; see
-    /// [`Mixer::play_bgm_channel`].
+    /// [`Mixer::play_bgm_channel`]. A two-channel track keeps its stereo here,
+    /// which RE 2's music uses; any other track loads as
+    /// [`Mixer::play_bgm_channel`] loads it.
     pub fn load_bgm_channel(&mut self, index: usize, wav: Wav, looping: bool) {
         if wav.channels == 2 {
-            match to_stereo(&wav) {
-                Ok(pcm) => self.state.load_bgm_channel_stereo(index, pcm, looping),
-                Err(error) => eprintln!("[audio] dropping WAV: {error:#}"),
-            }
+            let Some(stereo) = stereo_or_warn(&wav) else {
+                return;
+            };
+            self.state.load_bgm_channel_stereo(index, stereo, looping);
         } else {
             let Some(mono) = mono_or_warn(&wav) else {
                 return;
@@ -2286,5 +2305,47 @@ mod tests {
         assert_eq!(percent_gain(50), 0.25);
         assert_eq!(percent_gain(100), 1.0);
         assert_eq!(percent_gain(200), 1.0);
+    }
+
+    #[test]
+    fn a_stereo_track_is_mixed_down_unless_it_is_loaded_as_re2_stereo() {
+        // Left 1000 and right -3000 on every frame: a mixed-down track plays
+        // the same average on both sides, a kept stereo track does not.
+        let samples: Vec<i16> = (0..64).flat_map(|_| [1000, -3000]).collect();
+        let track = || Wav::from_s16(&samples, 2, SAMPLE_RATE);
+        let played = |mixer: &mut Mixer| {
+            mixer.capture_frames(64);
+            mixer
+                .captured()
+                .expect("a capture mixer keeps its output")
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|frame| {
+                    (
+                        i16::from_le_bytes([frame[0], frame[1]]),
+                        i16::from_le_bytes([frame[2], frame[3]]),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut mixer = Mixer::capture();
+        mixer.play_bgm_channel(0, track(), true);
+        let mixed = played(&mut mixer);
+        assert!(mixed.iter().any(|&(left, _)| left != 0), "the track sounds");
+        assert!(
+            mixed.iter().all(|&(left, right)| left == right),
+            "play_bgm_channel mixes the track down"
+        );
+
+        let mut mixer = Mixer::capture();
+        mixer.load_bgm_channel(0, track(), true);
+        mixer.restart_bgm_channel(0);
+        let stereo = played(&mut mixer);
+        assert!(
+            stereo.iter().any(|&(left, right)| left != right),
+            "load_bgm_channel keeps the track's two channels"
+        );
     }
 }

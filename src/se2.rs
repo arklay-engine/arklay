@@ -767,6 +767,8 @@ const FOOTSTEPS: [[i8; 3]; 7 * FOOTSTEP_ROOMS] = [
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn a_footstep_plays_its_zones_slot_or_the_waters() {
         let step = crate::player::Footstep {
@@ -786,8 +788,6 @@ mod tests {
         );
         assert_eq!(id.slot, 0x1b);
     }
-
-    use super::*;
 
     #[test]
     fn enemy_bank_follows_the_pairs_in_either_order() {
