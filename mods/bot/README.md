@@ -1,7 +1,9 @@
 # Player bot
 
 A restricted Lua route that drives a normal new Jill game through the same pad
-a human would use. It cannot set flags, items or positions.
+a human would use. It cannot set flags, items or positions. Its only legal
+state-changing actions are normal input, the room's own item action and an
+equip request that the host applies like the inventory menu.
 
 ```sh
 # Watch the bot in the normal window (bare --bot implies --ui game --character 1)
@@ -155,6 +157,52 @@ press transition. The 11A -> 11B test uses the known-good west approach and
 stops after its first timeout when the lock is `F_LOCK_17`, reporting the
 crest bits instead of trying wall-side approaches for a door that cannot open.
 
+### Combat
+
+`combat_step(bot, scene, player)` runs after scene/menu handling and only on a
+controllable, non-grabbed tick. It is a conservative first combat layer, not a
+replacement for the route:
+
+- The nearest active monster in front (within 4500 units and 0x400 of the
+  player's facing) is a threat. A room with more than one monster within that
+  range is treated as a crowd and the route runs past.
+- It fights only common zombies (`0x00`, `0x01`, `0x11`) with the handgun
+  (`0x02`). Bosses, hunters and every other id stand the policy down. It never
+  equips anything the inventory does not hold, and never changes ammo, health
+  or flags.
+- If health is at or below 40, the handgun is missing, the clip and reserve
+  are both empty, or the clip is too small to finish a fresh zombie without
+  spare ammunition, it returns `false` and the route's normal movement
+  continues.
+- It equips the handgun through `bot:equip(0x02)`, faces the target, holds aim
+  until the reticle locks, and fires one pulse every 14 ticks. It follows the
+  target's `status_flags` 0x20/0x80 vertical bit with up/down aim, because the
+  damage pipeline only connects when the aim direction matches the monster's
+  status bit.
+- A hit puts the zombie into its reaction window; more bullets during that
+  window are discarded, so the policy waits for `hit_state` to clear.
+- The handgun's near cone excludes bodies closer than their collision radius
+  plus 200 units. If the zombie closes inside 1800 units, the policy releases
+  aim, backs away to 2600, then resumes firing.
+- An empty clip with reserve uses the tactical reload (aim + run) when the
+  build supports it. If the reload does not start or finish in its window, the
+  policy disengages instead of standing in front of the monster.
+- A kill, a target that leaves range/sight, a timeout (420 combat ticks), low
+  health or an empty gun ends the fight and disarms combat for the rest of
+  that room. A room change re-arms it. This keeps one bad fight from stalling
+  a door approach or a scripted scene; `handle_scene` still owns every
+  transition, message and film.
+
+The `--watch` reload keeps `BOT_STATE.combat` with the rest of the route
+state, so editing the policy mid-fight does not restart or reset the fight.
+
+Headless evidence from the checked-in route: the 10A zombie is engaged and
+killed, the player drops from 96 to 76 health and the handgun from 15 to 8
+rounds. The route continues to 117 and 11A and finishes at the locked 11B
+door. A later 10A/11A zombie still lands hits during the existing route, so
+the run ends at 36 health rather than full health; combat did not add any
+ammunition or healing.
+
 ### Failure handling
 
 - Every phase has a tick deadline. A timeout logs the phase, room, position,
@@ -189,10 +237,13 @@ crest bits instead of trying wall-side approaches for a door that cannot open.
 | `bot:tick()` | Monotonic app-update counter. |
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
-| `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). |
+| `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags, grabbed}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `grabbed` is the entity's grab zone flag. |
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, pickup, frozen, controls_locked, controllable, dead}`. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
+| `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |
+| `bot:weapon()` | `{equipped, weapon, clip, reserve, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, and `target` is the locked entity slot or nil. |
+| `bot:can_see(slot)` | Whether monster `slot` is in the current snapshot with a clear weapon sight line. |
 | `bot:flag(bank, bit)` | A flag bit, read-only. |
 | `bot:has_item(item)` / `bot:item_count(item)` | Inventory queries. |
 | `bot:memory()` | String map set by `remember`. |
@@ -203,6 +254,7 @@ crest bits instead of trying wall-side approaches for a door that cannot open.
 | `bot:set_input(table)` | Set the next tick's player/UI input. |
 | `bot:press_action()` | Hold and edge the action button for one tick. |
 | `bot:pulse_confirm()` | Edge UI confirm for one tick. |
+| `bot:equip(item)` | Queue an equip for the next tick; returns `false` and logs when the item is not held or is not a weapon. The host applies the same `set_equipped` the menu does before the tick. |
 | `bot:use_action(slot)` | Run the item room action in `slot` for one tick (the same handler a normal action press runs). Restricted to `kind == "item"`; used for scripted handovers whose zone is outside the walkable floor. |
 | `bot:walk_to(x, z, opts)` | Collision-aware A* walk. Returns `{status, distance, angle_error}`. |
 | `bot:face_to(x, z)` | Turn toward a point. Returns `{status, distance, angle_error}`. |
