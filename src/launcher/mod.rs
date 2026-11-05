@@ -1945,6 +1945,7 @@ impl Launcher {
                 order: self.config.mods.order.clone(),
             },
             global_dirs: Config::mod_dirs(),
+            watch: false,
         };
         let player_options = player::Options {
             quick_turn: self.config.game.quick_turn,

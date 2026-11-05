@@ -24,7 +24,10 @@
 -- waypoint or door approach; a phase that cannot make progress fails with a
 -- precise log instead of spinning until --bot-max-ticks.
 
-local STATE = {
+-- The route state is a global so a `--watch` reload of this chunk keeps its
+-- progress. Re-running the chunk reuses the same table instead of starting the
+-- route over.
+BOT_STATE = BOT_STATE or {
     phase = "boot",
     phase_ticks = 0,
     room = nil,
@@ -122,7 +125,7 @@ local function fail(bot, reason)
         "FAIL phase=%s reason=%s room=%s pos=(%d,%d) camera=%d health=%d/%d "
             .. "common02=%s common03=%s common05=%s status1a=%s lockpick=%s "
             .. "scene(film=%s trans=%s skip=%s skippable=%s msg=%s ctrl=%s frozen=%s)",
-        STATE.phase, reason, room.id, p.x, p.z, room.camera, p.health, p.max_health,
+        BOT_STATE.phase, reason, room.id, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
         tostring(flag_common(bot, F_COMMON_05)),
@@ -136,35 +139,35 @@ local function fail(bot, reason)
 end
 
 local function reset_phase_data()
-    STATE.wp = 1
-    STATE.wp_retry = false
-    STATE.wp_tol = nil
-    STATE.nav = nil
-    STATE.press_ticks = 0
-    STATE.saw_scene = false
-    STATE.saw_film = false
-    STATE.controllable_ticks = 0
-    STATE.locked_ticks = 0
-    STATE.cam_stage = "north"
-    STATE.cam_wait = 0
-    STATE.cam_visited_34 = false
-    STATE.west_wait = 0
-    STATE.barry_scene_logged = false
-    STATE.lockpick_used = false
-    STATE.barry_done_ticks = 0
+    BOT_STATE.wp = 1
+    BOT_STATE.wp_retry = false
+    BOT_STATE.wp_tol = nil
+    BOT_STATE.nav = nil
+    BOT_STATE.press_ticks = 0
+    BOT_STATE.saw_scene = false
+    BOT_STATE.saw_film = false
+    BOT_STATE.controllable_ticks = 0
+    BOT_STATE.locked_ticks = 0
+    BOT_STATE.cam_stage = "north"
+    BOT_STATE.cam_wait = 0
+    BOT_STATE.cam_visited_34 = false
+    BOT_STATE.west_wait = 0
+    BOT_STATE.barry_scene_logged = false
+    BOT_STATE.lockpick_used = false
+    BOT_STATE.barry_done_ticks = 0
 end
 
 local function set_phase(bot, phase, note)
-    if STATE.phase == phase then
+    if BOT_STATE.phase == phase then
         return
     end
     if note then
-        log(bot, string.format("phase %s -> %s (%s)", STATE.phase, phase, note))
+        log(bot, string.format("phase %s -> %s (%s)", BOT_STATE.phase, phase, note))
     else
-        log(bot, string.format("phase %s -> %s", STATE.phase, phase))
+        log(bot, string.format("phase %s -> %s", BOT_STATE.phase, phase))
     end
-    STATE.phase = phase
-    STATE.phase_ticks = 0
+    BOT_STATE.phase = phase
+    BOT_STATE.phase_ticks = 0
     reset_phase_data()
 end
 
@@ -177,7 +180,7 @@ local function handle_scene(bot, scene)
     end
     local tick = bot:tick()
     if not scene.transition then
-        STATE.transition_start = nil
+        BOT_STATE.transition_start = nil
     end
     if scene.film then
         if tick % 2 == 0 then
@@ -191,10 +194,10 @@ local function handle_scene(bot, scene)
         -- transition-relative parity: release on the first tick, then press on
         -- frames 1, 3, 5, ... so the press on frame 11 is the first allowed
         -- one whatever tick the transition started on.
-        if not STATE.transition_start then
-            STATE.transition_start = tick
+        if not BOT_STATE.transition_start then
+            BOT_STATE.transition_start = tick
         end
-        if (tick - STATE.transition_start) % 2 == 1 then
+        if (tick - BOT_STATE.transition_start) % 2 == 1 then
             bot:press_action()
         end
         return true
@@ -256,12 +259,12 @@ local function scene_signature(scene)
 end
 
 local function walk_waypoints(bot, points, tolerance, label)
-    local index = STATE.wp or 1
+    local index = BOT_STATE.wp or 1
     if index > #points then
         return true
     end
     local point = points[index]
-    local tol = STATE.wp_tol or tolerance
+    local tol = BOT_STATE.wp_tol or tolerance
     local result = bot:walk_to(point[1], point[2], {
         run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
         tolerance = tol,
@@ -274,16 +277,16 @@ local function walk_waypoints(bot, points, tolerance, label)
             "%s: waypoint %d/%d arrived at (%d,%d) d=%d",
             label, index, #points, point[1], point[2], result.distance
         ))
-        STATE.wp = index + 1
-        STATE.wp_retry = false
-        STATE.wp_tol = nil
-        return STATE.wp > #points
+        BOT_STATE.wp = index + 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        return BOT_STATE.wp > #points
     end
-    if not STATE.wp_retry then
+    if not BOT_STATE.wp_retry then
         -- A terminal status is sticky for one goal. Retry it once with a
         -- tighter tolerance, then move on so one bad point cannot stall us.
-        STATE.wp_retry = true
-        STATE.wp_tol = 60
+        BOT_STATE.wp_retry = true
+        BOT_STATE.wp_tol = 60
         log(bot, string.format(
             "%s: waypoint %d/%d %s at d=%d; retrying tighter",
             label, index, #points, result.status, result.distance
@@ -294,10 +297,10 @@ local function walk_waypoints(bot, points, tolerance, label)
         "%s: waypoint %d/%d %s at d=%d; skipping",
         label, index, #points, result.status, result.distance
     ))
-    STATE.wp = index + 1
-    STATE.wp_retry = false
-    STATE.wp_tol = nil
-    return STATE.wp > #points
+    BOT_STATE.wp = index + 1
+    BOT_STATE.wp_retry = false
+    BOT_STATE.wp_tol = nil
+    return BOT_STATE.wp > #points
 end
 
 -- A generic fallback approach from each side of a door zone. The reach probe
@@ -318,7 +321,7 @@ end
 -- generic sides follow as retries. Returns false while working; the room
 -- change is observed by enter_room.
 local function door_nav(bot, target, custom, label)
-    local nav = STATE.nav
+    local nav = BOT_STATE.nav
     if not nav or nav.target ~= target then
         local door = door_by_target(bot, target)
         if not door then
@@ -329,7 +332,7 @@ local function door_nav(bot, target, custom, label)
         if kind ~= "door" then
             log(bot, string.format("door to %s is %s, not a door", target, tostring(kind)))
             -- Remember the failed target so the message is logged once.
-            STATE.nav = {
+            BOT_STATE.nav = {
                 target = target,
                 points = {},
                 index = 1,
@@ -353,7 +356,7 @@ local function door_nav(bot, target, custom, label)
             pressing = false,
             ticks = 0,
         }
-        STATE.nav = nav
+        BOT_STATE.nav = nav
         log(bot, string.format("door %s: navigating with %d approaches", target, #points))
     end
 
@@ -416,12 +419,12 @@ local function enter_room(bot, room, tick)
         tostring(flag_common(bot, F_COMMON_05)),
         tostring(bot:has_item(ITEM_LOCKPICK))
     ))
-    STATE.room = room.id
-    STATE.room_ticks = 0
-    STATE.nav = nil
-    STATE.wp = 1
-    STATE.wp_retry = false
-    STATE.wp_tol = nil
+    BOT_STATE.room = room.id
+    BOT_STATE.room_ticks = 0
+    BOT_STATE.nav = nil
+    BOT_STATE.wp = 1
+    BOT_STATE.wp_retry = false
+    BOT_STATE.wp_tol = nil
 
     if room.id == "107" then
         log(bot, "east wing reached")
@@ -434,9 +437,9 @@ local function enter_room(bot, room, tick)
     end
 
     if room.id == "106" then
-        if STATE.phase == "boot" then
+        if BOT_STATE.phase == "boot" then
             set_phase(bot, "opening")
-        elseif STATE.phase == "to_106" or STATE.phase == "back_from_203"
+        elseif BOT_STATE.phase == "to_106" or BOT_STATE.phase == "back_from_203"
             or bot:visited("104") then
             set_phase(bot, "barry", "returned to the main hall")
         else
@@ -461,11 +464,11 @@ local function phase_opening(bot)
     -- The shipped opening scene normally scripts the walk into 105 by itself.
     -- If this build leaves the player in 106, use the 106 -> 105 door once the
     -- scene has clearly ended.
-    if STATE.phase_ticks > 900 and STATE.controllable_ticks > 30 then
+    if BOT_STATE.phase_ticks > 900 and BOT_STATE.controllable_ticks > 30 then
         set_phase(bot, "goto_105_from_106", "opening ended in 106")
         return
     end
-    if STATE.phase_ticks > 1500 then
+    if BOT_STATE.phase_ticks > 1500 then
         fail(bot, "opening scene did not leave 106")
     end
 end
@@ -473,7 +476,7 @@ end
 local function phase_goto_105_from_106(bot)
     local custom = { { 3300, 16900, 2000, 16900 } }
     door_nav(bot, "105", custom, "door 106->105")
-    if STATE.phase_ticks > 900 then
+    if BOT_STATE.phase_ticks > 900 then
         fail(bot, "could not open the 106 -> 105 door")
     end
 end
@@ -492,7 +495,7 @@ local function phase_to_104(bot)
         local custom = { { 6700, 13700, 6700, 16000 } }
         door_nav(bot, "104", custom, "door 105->104")
     end
-    if STATE.phase_ticks > 1500 then
+    if BOT_STATE.phase_ticks > 1500 then
         fail(bot, "could not reach the 105 -> 104 door")
     end
 end
@@ -509,8 +512,8 @@ local function phase_walk_104(bot)
         { 4300, 4800 },
     }
     if walk_waypoints(bot, points, 200, "104 tea room") then
-        STATE.west_wait = STATE.west_wait + 1
-        if STATE.west_wait > 600 then
+        BOT_STATE.west_wait = BOT_STATE.west_wait + 1
+        if BOT_STATE.west_wait > 600 then
             if flag_common(bot, F_COMMON_02) then
                 set_phase(bot, "return_104", "FMV flag set late")
             else
@@ -518,7 +521,7 @@ local function phase_walk_104(bot)
             end
         end
     end
-    if STATE.phase_ticks > 1500 then
+    if BOT_STATE.phase_ticks > 1500 then
         fail(bot, "could not trigger the 104 FMV")
     end
 end
@@ -535,7 +538,7 @@ local function phase_return_104(bot)
         local custom = { { 12000, 2700, 12000, 0 } }
         door_nav(bot, "105", custom, "door 104->105")
     end
-    if STATE.phase_ticks > 900 then
+    if BOT_STATE.phase_ticks > 900 then
         fail(bot, "could not return to 105 from the tea room")
     end
 end
@@ -550,7 +553,7 @@ local function phase_to_106(bot)
         local custom = { { 31300, 8300, 33000, 8300 } }
         door_nav(bot, "106", custom, "door 105->106")
     end
-    if STATE.phase_ticks > 1500 then
+    if BOT_STATE.phase_ticks > 1500 then
         fail(bot, "could not reach the 105 -> 106 door")
     end
 end
@@ -559,8 +562,8 @@ local function phase_barry(bot)
     -- The room init gives the lockpick item and starts on_enter_3 as soon as
     -- 106 is entered with F_COMMON_02 set. Let that scene settle before the
     -- camera walk. If it never starts, try the 203 round trip once.
-    if STATE.saw_scene and not STATE.barry_scene_logged then
-        STATE.barry_scene_logged = true
+    if BOT_STATE.saw_scene and not BOT_STATE.barry_scene_logged then
+        BOT_STATE.barry_scene_logged = true
         log(bot, "Barry lockpick scene started")
     end
     if bot:has_item(ITEM_LOCKPICK) then
@@ -569,16 +572,16 @@ local function phase_barry(bot)
     end
     -- The tick only reaches this phase while the scene is already over, so a
     -- seen-and-finished scene is enough: do not spend 120 ticks idling.
-    if STATE.saw_scene then
+    if BOT_STATE.saw_scene then
         set_phase(bot, "barry_camera", "walking the hall camera cuts")
         return
     end
-    if STATE.phase_ticks > 120 then
+    if BOT_STATE.phase_ticks > 120 then
         set_phase(bot, "goto_203", "Barry scene did not start")
         return
     end
-    if STATE.phase_ticks > 900 then
-        if STATE.tried_203 then
+    if BOT_STATE.phase_ticks > 900 then
+        if BOT_STATE.tried_203 then
             set_phase(bot, "barry_camera", "203 round trip did not start Barry")
         else
             set_phase(bot, "goto_203", "Barry scene timed out")
@@ -587,10 +590,10 @@ local function phase_barry(bot)
 end
 
 local function phase_goto_203(bot)
-    STATE.tried_203 = true
+    BOT_STATE.tried_203 = true
     local custom = { { 17000, 15400, 17000, 17500 } }
     door_nav(bot, "203", custom, "door 106->203")
-    if STATE.phase_ticks > 900 then
+    if BOT_STATE.phase_ticks > 900 then
         fail(bot, "could not take the 203 stairs")
     end
 end
@@ -598,7 +601,7 @@ end
 local function phase_back_from_203(bot)
     local custom = { { 17000, 24000, 17000, 22500 } }
     door_nav(bot, "106", custom, "door 203->106")
-    if STATE.phase_ticks > 900 then
+    if BOT_STATE.phase_ticks > 900 then
         fail(bot, "could not return to 106 from 203")
     end
 end
@@ -614,7 +617,7 @@ local function phase_barry_camera(bot)
     end
 
     local camera = bot:room().camera
-    if STATE.cam_stage == "north" then
+    if BOT_STATE.cam_stage == "north" then
         -- The camera 4 switch zone starts at z ~24305 on this line, so the
         -- old 22000 point was pure detour. One goal just inside the zone is
         -- enough for the cut.
@@ -622,51 +625,51 @@ local function phase_barry_camera(bot)
             { 11000, 25000 },
         }
         if walk_waypoints(bot, points, 250, "106 north hall") then
-            STATE.cam_stage = "north_wait"
-            STATE.cam_wait = 0
+            BOT_STATE.cam_stage = "north_wait"
+            BOT_STATE.cam_wait = 0
         end
-    elseif STATE.cam_stage == "north_wait" then
-        STATE.cam_wait = STATE.cam_wait + 1
+    elseif BOT_STATE.cam_stage == "north_wait" then
+        BOT_STATE.cam_wait = BOT_STATE.cam_wait + 1
         if camera == 3 or camera == 4 then
             log(bot, string.format("camera %d reached; heading to camera 2/5", camera))
-            STATE.cam_visited_34 = true
-            STATE.cam_stage = "mid"
-            STATE.wp = 1
-            STATE.wp_retry = false
-            STATE.wp_tol = nil
-            STATE.cam_wait = 0
-        elseif STATE.cam_wait > 240 then
-            STATE.cam_stage = "north"
-            STATE.wp = 1
-            STATE.wp_retry = false
-            STATE.wp_tol = nil
-            STATE.cam_wait = 0
+            BOT_STATE.cam_visited_34 = true
+            BOT_STATE.cam_stage = "mid"
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            BOT_STATE.cam_wait = 0
+        elseif BOT_STATE.cam_wait > 240 then
+            BOT_STATE.cam_stage = "north"
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            BOT_STATE.cam_wait = 0
         end
-    elseif STATE.cam_stage == "mid" then
+    elseif BOT_STATE.cam_stage == "mid" then
         local points = { { 11000, 23000 } }
         if walk_waypoints(bot, points, 250, "106 mid hall") then
-            STATE.cam_stage = "mid_wait"
-            STATE.cam_wait = 0
+            BOT_STATE.cam_stage = "mid_wait"
+            BOT_STATE.cam_wait = 0
         end
-    elseif STATE.cam_stage == "mid_wait" then
-        STATE.cam_wait = STATE.cam_wait + 1
+    elseif BOT_STATE.cam_stage == "mid_wait" then
+        BOT_STATE.cam_wait = BOT_STATE.cam_wait + 1
         if flag_common(bot, F_COMMON_05) then
             set_phase(bot, "barry_done", "hall camera scenes done")
             return
         end
-        if STATE.cam_wait > 600 then
+        if BOT_STATE.cam_wait > 600 then
             log(bot, "camera 2/5 did not set F_COMMON_05; retrying camera 3/4")
-            STATE.cam_stage = "north"
-            STATE.cam_visited_34 = false
-            STATE.wp = 1
-            STATE.wp_retry = false
-            STATE.wp_tol = nil
-            STATE.cam_wait = 0
+            BOT_STATE.cam_stage = "north"
+            BOT_STATE.cam_visited_34 = false
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            BOT_STATE.cam_wait = 0
         end
     end
 
-    if STATE.phase_ticks > 2400 then
-        if STATE.tried_203 then
+    if BOT_STATE.phase_ticks > 2400 then
+        if BOT_STATE.tried_203 then
             fail(bot, "hall camera cuts did not restore the east-wing door")
         else
             set_phase(bot, "goto_203", "camera cuts timed out")
@@ -685,14 +688,14 @@ local function room_flag_list(bot)
 end
 
 local function phase_barry_done(bot)
-    STATE.barry_done_ticks = STATE.barry_done_ticks + 1
+    BOT_STATE.barry_done_ticks = BOT_STATE.barry_done_ticks + 1
     local has_lockpick = bot:has_item(ITEM_LOCKPICK)
     local kind = door_action_kind(bot, "107")
-    if STATE.barry_done_ticks % 60 == 1 then
+    if BOT_STATE.barry_done_ticks % 60 == 1 then
         local p = bot:player()
         log(bot, string.format(
             "barry item wait %d pos=(%d,%d) roombits=[%s] lockpick=%s door107=%s",
-            STATE.barry_done_ticks, p.x, p.z, room_flag_list(bot),
+            BOT_STATE.barry_done_ticks, p.x, p.z, room_flag_list(bot),
             tostring(has_lockpick), tostring(kind)
         ))
     end
@@ -700,23 +703,23 @@ local function phase_barry_done(bot)
         log(bot, "lockpick acquired")
         if kind == "door" then
             set_phase(bot, "to_107", "lockpick acquired and east-wing door unlocked")
-        elseif STATE.barry_done_ticks > 600 then
+        elseif BOT_STATE.barry_done_ticks > 600 then
             log(bot, "lockpick acquired; east-wing door did not become a door")
             bot:finish("lockpick acquired")
         end
         return
     end
-    if not STATE.lockpick_used then
+    if not BOT_STATE.lockpick_used then
         local slot = item_action_slot(bot, ITEM_LOCKPICK)
         if slot then
-            STATE.lockpick_used = true
+            BOT_STATE.lockpick_used = true
             log(bot, "using the lockpick item action in slot " .. tostring(slot))
             bot:use_action(slot)
         else
             log(bot, "lockpick item action is not present")
         end
     end
-    if STATE.barry_done_ticks > 2000 then
+    if BOT_STATE.barry_done_ticks > 2000 then
         fail(bot, "lockpick did not arrive after the hall scene")
     end
 end
@@ -734,7 +737,7 @@ local function phase_to_107(bot)
         local custom = { { 31000, 12500, 33000, 12500 } }
         door_nav(bot, "107", custom, "door 106->107")
     end
-    if STATE.phase_ticks > 900 then
+    if BOT_STATE.phase_ticks > 900 then
         fail(bot, "could not open the 106 -> 107 east-wing door")
     end
 end
@@ -745,32 +748,32 @@ function on_bot_tick(bot)
     local scene = bot:scene()
     local player = bot:player()
 
-    if STATE.room ~= room.id then
+    if BOT_STATE.room ~= room.id then
         enter_room(bot, room, tick)
         if room.id == "107" then
             return
         end
     end
 
-    STATE.phase_ticks = STATE.phase_ticks + 1
-    STATE.room_ticks = STATE.room_ticks + 1
+    BOT_STATE.phase_ticks = BOT_STATE.phase_ticks + 1
+    BOT_STATE.room_ticks = BOT_STATE.room_ticks + 1
 
     local signature = scene_signature(scene)
-    if signature ~= STATE.scene_sig then
-        STATE.scene_sig = signature
+    if signature ~= BOT_STATE.scene_sig then
+        BOT_STATE.scene_sig = signature
         local p = bot:player()
         log(bot, string.format(
             "scene %s pos=(%d,%d) camera=%d", signature, p.x, p.z, room.camera
         ))
     end
     if scene.skippable or scene.cutscene_skip or scene.film then
-        STATE.saw_scene = true
+        BOT_STATE.saw_scene = true
     end
     if scene.film then
-        STATE.saw_film = true
+        BOT_STATE.saw_film = true
     end
 
-    if STATE.phase == "barry_done" and STATE.phase_ticks > 4000 and not scene.controllable then
+    if BOT_STATE.phase == "barry_done" and BOT_STATE.phase_ticks > 4000 and not scene.controllable then
         fail(bot, "pickup viewer did not close")
         return
     end
@@ -779,9 +782,9 @@ function on_bot_tick(bot)
         return
     end
     if not scene.controllable then
-        STATE.controllable_ticks = 0
-        STATE.locked_ticks = STATE.locked_ticks + 1
-        if STATE.locked_ticks > 150 then
+        BOT_STATE.controllable_ticks = 0
+        BOT_STATE.locked_ticks = BOT_STATE.locked_ticks + 1
+        if BOT_STATE.locked_ticks > 150 then
             -- A grab or an unmarked lock: mash so it cannot stall the route.
             local dirs = { "left", "right", "up", "down" }
             bot:press_action()
@@ -789,10 +792,10 @@ function on_bot_tick(bot)
         end
         return
     end
-    STATE.controllable_ticks = STATE.controllable_ticks + 1
-    STATE.locked_ticks = 0
+    BOT_STATE.controllable_ticks = BOT_STATE.controllable_ticks + 1
+    BOT_STATE.locked_ticks = 0
 
-    local phase = STATE.phase
+    local phase = BOT_STATE.phase
     if phase == "opening" then
         phase_opening(bot)
     elseif phase == "goto_105_from_106" then
