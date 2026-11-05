@@ -77,6 +77,31 @@ pub trait SaveScreen: Screen {
     fn native_canvas(&self) -> Option<&gui::Canvas> {
         None
     }
+
+    /// What a player sees on the screen, for the player bot's read-only
+    /// view; `None` for a screen that keeps no readable state (the bot
+    /// cannot drive it).
+    fn bot_view(&self) -> Option<SaveScreenView> {
+        None
+    }
+}
+
+/// The save/load screen as a player sees it, read from the shipped script's
+/// `M.state` without running any of its code.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SaveScreenView {
+    /// Save mode (a typewriter); load mode otherwise.
+    pub save: bool,
+    /// The script's stage: `idle`, `confirm_overwrite`, `save_anim`,
+    /// `error` or `fade_out`.
+    pub stage: String,
+    /// The highlighted row: `0..8` the slots, then the autosave rows, then
+    /// the exit row.
+    pub cursor: i64,
+    /// The exit row's index.
+    pub exit_row: i64,
+    /// Whether each numbered slot holds a save.
+    pub slots: Vec<bool>,
 }
 
 /// A screen drawn at the window's resolution: the app hands it the menus'

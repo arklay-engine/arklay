@@ -5,6 +5,15 @@
 -- bot:risk() (0.0 heals early, 1.0 heals late), use a held heal item through
 -- the inventory menu. Never in a grab, a scene or a fight.
 --
+-- BotSurvival.critical(bot, player): health under a risk-scaled floor
+-- (0.2 of max at risk 0, 0.05 at risk 1), no heal item held and damage taken
+-- in the last 5 seconds. The rule for a critical tick (bot/init.lua):
+--   1. save if possible: a typewriter in this room and a save the
+--      BotSave decision allows (critical health skips its cooldown);
+--   2. otherwise keep playing when a save exists: a death loads it;
+--   3. only with no save at all does the run stop, with
+--      "health critical with no heal item and no save while under attack".
+--
 -- BotSurvival.step(bot, scene, player): a conservative fight layer. It fights
 -- only the common zombie classes with a held firearm, one target at a time,
 -- and stands down for bosses, crowds, low health or an empty gun. Health
@@ -362,6 +371,11 @@ function BotSurvival.step(bot, scene, player)
     s.cooldown = FIRE_CADENCE
     s.shots = s.shots + 1
     return true
+end
+
+-- The tick the player last lost health (BotSurvival.critical tracks it).
+function BotSurvival.hurt_tick()
+    return state().hurt_tick
 end
 
 function BotSurvival.active()
