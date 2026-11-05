@@ -409,12 +409,14 @@ mod tests {
                     id: 0x02,
                     quantity: 15,
                     kind: "weapon",
+                    heals: false,
                 },
                 MenuItem {
                     slot: 1,
                     id: 0x44,
                     quantity: herbs,
                     kind: "heal",
+                    heals: true,
                 },
             ],
             ..MenuSnapshot::default()
