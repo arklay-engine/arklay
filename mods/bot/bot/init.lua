@@ -2,8 +2,10 @@
 --
 -- The script owns route policy only. It drives the same pad a human would:
 -- skip the opening scenes, walk with the engine's collision-aware navigation,
--- face doors and press action. It cannot author flags, items or positions;
--- the one scripted-handover skill it uses is the room's own item action.
+-- face doors and press action. It cannot author flags, items or positions,
+-- and it never runs a room or item handler: equip, heal and item use go
+-- through the inventory menu (bot/menu.lua) by pad input, and room actions
+-- and stair checks are reached by walking into the zone and pressing action.
 --
 -- Route:
 --   106 opening scene -> scripted walk-in to 105
@@ -15,9 +17,9 @@
 --   106 main hall: the return triggers Barry's lockpick scene (on_enter_3).
 --       Walk to camera 3/4 and then camera 2/5; that plays the rest of the
 --       hall scene and restores the east-wing door. The lockpick item is
---       registered at the room origin, outside the walkable floor; the route
---       runs that item action, closes the got-item viewer and waits until
---       has_item(0x31) is true.
+--       registered at the room origin, outside the walkable floor, and no
+--       Jill event fires it; the Barry scene's F_SCENARIO_7C is the game's
+--       own handover (the door rule tests it), so the route waits for it.
 --   107 gallery: take the ink ribbon (0x2F) from the south gallery when the
 --       build registers it (jill_ink_ribbons on), then open the sword-key door
 --       (AOT_01) to 108. Jill's lockpick substitutes for the sword key
@@ -314,6 +316,10 @@ local function action_by_slot(bot, slot)
         end
     end
     return nil
+end
+
+local function lockpick_ready(bot)
+    return bot:has_item(ITEM_LOCKPICK) or bot:flag(0, SCENARIO_HAS_LOCKPICK)
 end
 
 local function has_lockpick_action(bot)
@@ -938,23 +944,31 @@ local function action_nav(bot, slot, label, custom, opts)
     end
 
     if nav.scripted then
+        -- A zone at the room origin (0,0,16,16) is outside the walkable floor:
+        -- no walk or press can put the reach point or the player inside it.
+        -- Only the room's own script can hand the item over (aot_on /
+        -- give_item), so wait for that; never run the handler directly.
         if not nav.used then
             nav.used = true
-            nav.pressed = true
             log(bot, string.format(
-                "%s: using scripted item action slot %d", label, slot
+                "%s: item 0x%02X slot %d sits at the room origin (flags=%#x); "
+                    .. "waiting for the room script to hand it over",
+                label, nav.item, slot, action and action.flags or -1
             ))
-            bot:use_action(slot)
-            return false
         end
         if nav.total > ACTION_TIMEOUT_TICKS then
-            fail(bot, string.format(
-                "%s: scripted handover slot %d did not award item 0x%02X "
-                    .. "(count=%d action=%s pickup=%s)",
-                label, slot, nav.item, count,
-                tostring(action and action.kind or "gone"),
-                tostring(BOT_STATE.saw_pickup)
-            ))
+            local message = string.format(
+                "%s: BLOCKER scripted handover slot %d (zone 0,0,16,16 at the "
+                    .. "room origin, flags=%#x) never awarded item 0x%02X by "
+                    .. "input or by the room script (count=%d action=%s)",
+                label, slot, action and action.flags or -1, nav.item, count,
+                tostring(action and action.kind or "gone"))
+            BOT_STATE.nav = nil
+            if nav.optional then
+                log(bot, message)
+                return "failed"
+            end
+            fail(bot, message)
         end
         return false
     end
@@ -1406,16 +1420,31 @@ local function stair_nav(bot, slot, label, approach)
         local moved = abs(p.x - nav.x) + abs(p.y - nav.y) + abs(p.z - nav.z)
         if moved > 1000 then
             log(bot, string.format(
-                "%s: stair warp landed pos=(%d,%d,%d) moved=%d",
-                label, p.x, p.y, p.z, moved))
+                "%s: stair warp landed pos=(%d,%d,%d) moved=%d after %d press(es)",
+                label, p.x, p.y, p.z, moved, nav.presses or 1))
             BOT_STATE.nav = nil
             return true
         end
         nav.ticks = nav.ticks + 1
+        -- A press that did not start the climb is repeated, still facing the
+        -- flight from the same spot, the way a player taps action again.
+        if nav.ticks % 40 == 0 and (nav.presses or 1) < 5 then
+            local facing = bot:face_to(approach[3], approach[4])
+            if facing.status == "facing" then
+                nav.presses = (nav.presses or 1) + 1
+                bot:press_action()
+            end
+        end
         if nav.ticks > 600 then
+            local stair = action_by_slot(bot, slot)
             fail(bot, string.format(
-                "%s: stair warp did not move the player (pos=(%d,%d,%d))",
-                label, p.x, p.y, p.z))
+                "%s: BLOCKER stair check slot %d (zone=(%d,%d,%d,%d) flags=%#x) "
+                    .. "did not start the climb after %d action press(es) at "
+                    .. "pos=(%d,%d,%d) angle=%d",
+                label, slot, stair and stair.x or -1, stair and stair.z or -1,
+                stair and stair.width or -1, stair and stair.depth or -1,
+                stair and stair.flags or -1, nav.presses or 1,
+                p.x, p.y, p.z, p.angle))
         end
         return false
     end
@@ -1431,7 +1460,7 @@ local function stair_nav(bot, slot, label, approach)
             log(bot, string.format(
                 "%s: pressing stair check at (%d,%d) d=%d",
                 label, approach[1], approach[2], result.distance))
-            bot:use_stair(slot)
+            nav.presses = 1
             bot:press_action()
         end
     elseif result.status ~= "moving" then
@@ -1719,7 +1748,7 @@ end
 
 -- In 11A the room itself tests each crest in the inventory and plays its
 -- placement event. The route only waits on the resulting scenario flag; it
--- never calls use_action, sets a flag or forces F_LOCK_17.
+-- never runs a room handler, sets a flag or forces F_LOCK_17.
 local function phase_place_crests_11a(bot)
     local expected = {
         { item = ITEM_SUN_CREST, bit = F_SCENARIO_6A, name = "sun" },
@@ -1870,7 +1899,7 @@ local function take_105_wood_key(bot)
     local p = bot:player()
     local slots = #bot:inventory()
     if bot:item_count(ITEM_GREEN_HERB) > 0 and slots >= 8 then
-        local used = bot:use_heal(ITEM_GREEN_HERB)
+        local used = BotMenu.use_heal(bot, ITEM_GREEN_HERB, "105 free slot")
         log(bot, string.format(
             "105 wood key: using the green herb to free an inventory slot "
                 .. "accepted=%s slots=%d health=%d/%d herb=%d",
@@ -2022,7 +2051,7 @@ local function use_10f_wood_key(bot)
                 tostring(room22), bot:player().x, bot:player().z))
         end
         if item_use and room22 and facing.status == "facing" then
-            local accepted = bot:use_item(ITEM_WOOD_EMBLEM)
+            local accepted = BotMenu.use_item(bot, ITEM_WOOD_EMBLEM, "10F wood key")
             log(bot, string.format(
                 "10F wood key: use accepted=%s count=%d", tostring(accepted),
                 bot:item_count(ITEM_WOOD_EMBLEM)))
@@ -2104,7 +2133,7 @@ local function use_10f_gold_escape(bot)
                 tostring(room21), bot:player().x, bot:player().z))
         end
         if item_use and room21 and facing.status == "facing" then
-            local accepted = bot:use_item(ITEM_GOLD_EMBLEM)
+            local accepted = BotMenu.use_item(bot, ITEM_GOLD_EMBLEM, "10F gold escape")
             log(bot, string.format(
                 "10F gold escape: use accepted=%s count=%d", tostring(accepted),
                 bot:item_count(ITEM_GOLD_EMBLEM)))
@@ -2142,7 +2171,7 @@ end
 -- F_ROOM_22; the menu USE then lets the 105 main script run its gold-emblem
 -- event, which tweens OBJ_02 from (18000,14300) to (16000,14300). Nothing here
 -- writes a flag, item or position: every leg is door_nav/action_nav and the
--- one menu USE is bot:use_item.
+-- one menu USE is BotMenu.use_item (the inventory menu, by pad input).
 local function phase_emblem_detour(bot)
     local e = BOT_STATE.emblem
     local room = bot:room().id
@@ -2236,7 +2265,7 @@ local function phase_emblem_detour(bot)
                     tostring(room22), gold, bot:player().x, bot:player().z))
             end
             if item_use and room22 and facing.status == "facing" then
-                local accepted = bot:use_item(ITEM_GOLD_EMBLEM)
+                local accepted = BotMenu.use_item(bot, ITEM_GOLD_EMBLEM, "105 fireplace")
                 e.used = accepted
                 e.gold_used_105 = accepted and true or e.gold_used_105
                 e.stage = "use"
@@ -2497,7 +2526,7 @@ local function phase_emblem_detour(bot)
                     local pp = bot:player()
                     if bot:item_count(ITEM_GREEN_HERB) > 0
                         and #bot:inventory() >= 8 then
-                        local used = bot:use_heal(ITEM_GREEN_HERB)
+                        local used = BotMenu.use_heal(bot, ITEM_GREEN_HERB, "10F free slot")
                         e.tenf_cleared = true
                         log(bot, string.format(
                             "10F music score: using a green herb to free an "
@@ -2604,7 +2633,7 @@ local function phase_emblem_detour(bot)
                             tostring(room23), bot:player().x, bot:player().z))
                     end
                     if item_use and room23 and facing.status == "facing" then
-                        local accepted = bot:use_item(ITEM_MUSIC_SCORE)
+                        local accepted = BotMenu.use_item(bot, ITEM_MUSIC_SCORE, "10F piano")
                         log(bot, string.format(
                             "10F piano: use music score accepted=%s count=%d",
                             tostring(accepted),
@@ -3019,7 +3048,7 @@ local function phase_to_10c_item(bot)
                     tostring(bot:flag(4, 0x20))))
             end
             if bot:flag(BANK_ITEM_USE, 11) and bot:flag(4, 0x20) then
-                local accepted = bot:use_item(ITEM_HERBICIDE)
+                local accepted = BotMenu.use_item(bot, ITEM_HERBICIDE, "10C pump")
                 log(bot, string.format(
                     "10C pump: use herbicide accepted=%s count=%d",
                     tostring(accepted), bot:item_count(ITEM_HERBICIDE)))
@@ -3952,8 +3981,8 @@ local function phase_barry(bot)
         BOT_STATE.barry_scene_logged = true
         log(bot, "Barry lockpick scene started")
     end
-    if bot:has_item(ITEM_LOCKPICK) then
-        set_phase(bot, "barry_done", "lockpick already held")
+    if lockpick_ready(bot) then
+        set_phase(bot, "barry_done", "lockpick already granted")
         return
     end
     -- The tick only reaches this phase while the scene is already over, so a
@@ -3997,8 +4026,8 @@ local function phase_barry_camera(bot)
         set_phase(bot, "barry_done", "hall camera scenes done")
         return
     end
-    if bot:has_item(ITEM_LOCKPICK) then
-        set_phase(bot, "barry_done", "lockpick acquired")
+    if lockpick_ready(bot) then
+        set_phase(bot, "barry_done", "lockpick granted")
         return
     end
 
@@ -4073,41 +4102,57 @@ local function room_flag_list(bot)
     return table.concat(parts, ",")
 end
 
+-- Jill's lockpick. The 106 init registers the lockpick item (IT_31) as
+-- AOT_06 at (0,0,16,16) with SAT_UNDER|SAT_PLAYER: an automatic probe of the
+-- player's own position at the room origin, which is outside the walkable
+-- floor. No Jill event in 106 fires it (the only aot_on/give_item calls on
+-- AOT_06 are in the CHRIS branches), so the inventory item cannot be obtained
+-- by input. The game's own handover is the Barry scene's
+-- `set(FG_SCENARIO, F_SCENARIO_7C, TRUE)` in from_main_11, and the door rule
+-- (`has_lockpick`) tests that flag. The route waits for the flag (or the item)
+-- and never runs the item handler.
 local function phase_barry_done(bot)
     BOT_STATE.barry_done_ticks = BOT_STATE.barry_done_ticks + 1
     local has_lockpick = bot:has_item(ITEM_LOCKPICK)
+    local scenario = bot:flag(0, SCENARIO_HAS_LOCKPICK)
     local kind = door_action_kind(bot, "107")
     if BOT_STATE.barry_done_ticks % 60 == 1 then
         local p = bot:player()
+        local slot = item_action_slot(bot, ITEM_LOCKPICK)
+        local action = slot and action_by_slot(bot, slot)
         log(bot, string.format(
-            "barry item wait %d pos=(%d,%d) roombits=[%s] lockpick=%s door107=%s",
+            "barry handover wait %d pos=(%d,%d) roombits=[%s] lockpick_item=%s "
+                .. "scenario7C=%s door107=%s lockpick_action=%s",
             BOT_STATE.barry_done_ticks, p.x, p.z, room_flag_list(bot),
-            tostring(has_lockpick), tostring(kind)
+            tostring(has_lockpick), tostring(scenario), tostring(kind),
+            action and string.format("slot %d zone=(%d,%d,%d,%d) flags=%#x",
+                action.slot, action.x, action.z, action.width, action.depth,
+                action.flags) or "none"
         ))
     end
-    if has_lockpick then
-        log(bot, "lockpick acquired")
+    if has_lockpick or scenario then
+        if not has_lockpick and not BOT_STATE.lockpick_item_logged then
+            BOT_STATE.lockpick_item_logged = true
+            local note = "lockpick inventory item (0x31) not awarded: AOT_06 is a "
+                .. "SAT_UNDER probe at the room origin and no Jill event fires it; "
+                .. "the Barry scene set F_SCENARIO_7C, which the door rule uses"
+            log(bot, note)
+            bot:remember("blocker_lockpick_item", note)
+        end
         if kind == "door" then
-            set_phase(bot, "to_107", "lockpick acquired and east-wing door unlocked")
+            set_phase(bot, "to_107", string.format(
+                "lockpick ready (item=%s scenario7C=%s) and east-wing door unlocked",
+                tostring(has_lockpick), tostring(scenario)))
         elseif BOT_STATE.barry_done_ticks > 600 then
-            log(bot, "lockpick acquired; east-wing door did not become a door")
-            bot:finish("lockpick acquired")
+            log(bot, "lockpick ready; east-wing door did not become a door")
+            bot:finish("lockpick ready; east-wing door did not become a door")
         end
         return
     end
-    if not has_lockpick then
-        local slot = item_action_slot(bot, ITEM_LOCKPICK)
-        if slot then
-            -- The lockpick zone is 0,0,16,16 at the room origin, outside the
-            -- walkable floor: action_nav recognises that scripted handover and
-            -- runs the room item action.
-            action_nav(bot, slot, "lockpick handover")
-        else
-            log(bot, "lockpick item action is not present")
-        end
-    end
     if BOT_STATE.barry_done_ticks > 2000 then
-        fail(bot, "lockpick did not arrive after the hall scene")
+        fail(bot, "BLOCKER lockpick handover: neither the item 0x31 nor "
+            .. "F_SCENARIO_7C arrived after the hall scene; the item zone is "
+            .. "at the room origin and is not reachable by input")
     end
 end
 
@@ -4442,7 +4487,7 @@ local function place_11a_star_crest(bot)
         crest.star_ticks = crest.star_ticks + 1
         local item_use = bot:flag(BANK_ITEM_USE, 18)
         if item_use and facing.status == "facing" then
-            local accepted = bot:use_item(ITEM_STAR_CREST)
+            local accepted = BotMenu.use_item(bot, ITEM_STAR_CREST, "11A star hollow")
             log(bot, string.format(
                 "11A star crest: use accepted=%s count=%d pos=(%d,%d)",
                 tostring(accepted), bot:item_count(ITEM_STAR_CREST),
@@ -4769,7 +4814,7 @@ local function step_healing(bot, player)
         return false
     end
     local health = player.health
-    if not bot:use_heal(item) then
+    if not BotMenu.use_heal(bot, item, "heal " .. name) then
         heal.cooldown = HEAL_COOLDOWN
         return false
     end
@@ -4937,7 +4982,7 @@ local function combat_step(bot, scene, player)
 
     local weapon = bot:weapon()
     if weapon.equipped ~= ITEM_HANDGUN or weapon.weapon ~= ITEM_HANDGUN then
-        if not bot:equip(ITEM_HANDGUN) then
+        if not BotMenu.equip(bot, ITEM_HANDGUN, "combat equip") then
             combat_end(bot, combat, "cannot equip the handgun", true)
         end
         return true
@@ -5091,6 +5136,13 @@ function on_bot_tick(bot)
         if room.id == "10A" then
             return
         end
+    end
+
+    -- An inventory job (equip, heal, item use) owns the pad until the menu
+    -- is closed again; the route and the scene handler do not run, so their
+    -- presses cannot leak into the menu. Phase deadlines do not count it.
+    if BotMenu and BotMenu.step(bot) then
+        return
     end
 
     BOT_STATE.phase_ticks = BOT_STATE.phase_ticks + 1

@@ -29,7 +29,6 @@ use mlua::{Function, Lua, Table, UserData, UserDataMethods, Value};
 use super::GameSession;
 use crate::budget;
 use crate::game::{self, FlagBank, InventoryItem, RoomActionKind};
-use crate::item_catalog::ItemKind;
 use crate::pack::Pack;
 use crate::player;
 use crate::state::{RoomId, RoomState};
@@ -61,26 +60,6 @@ pub struct BotInput {
     pub input: player::Input,
     /// The action/confirm held level the message window reads.
     pub action: bool,
-    /// A room action the script asked the host to run this tick. This is the
-    /// same handler a normal action press on that zone would run; it is used
-    /// for scripted handovers whose zone is not reachable (the 106 lockpick
-    /// item sits at the room origin) and for the in-room 203 stair check.
-    pub room_action: Option<(u8, u8)>,
-    /// An item the script asked to equip this tick. The host validates that
-    /// the player holds it and applies the same `set_equipped` the menu does,
-    /// before the gameplay tick.
-    pub equip: Option<u8>,
-    /// A heal item the script asked to use this tick. The host validates the
-    /// inventory and catalog kind again, runs the same `use_item` rule the
-    /// menu USE does, and consumes one unit through `select_item` +
-    /// `use_selected_item`, before the gameplay tick.
-    pub heal: Option<u8>,
-    /// A non-heal item (a key, chemical or document) the script asked to use
-    /// this tick. This is the same menu USE path as [`BotInput::heal`]: the
-    /// host validates the unit, runs `use_item` (which requires the room's
-    /// use-item zone to have raised the item's use flag), and consumes it
-    /// through `select_item` + `use_selected_item`.
-    pub use_item: Option<u8>,
 }
 
 impl BotInput {
@@ -154,26 +133,6 @@ impl BotInput {
     /// Pulse the UI confirm edge, for one tick.
     fn pulse_confirm(&mut self) {
         self.set("confirm", true);
-    }
-
-    /// Ask the host to run the item action in `slot` this tick.
-    fn use_action(&mut self, slot: u8, handler: u8) {
-        self.room_action = Some((slot, handler));
-    }
-
-    /// Ask the host to equip `item` this tick.
-    fn equip(&mut self, item: u8) {
-        self.equip = Some(item);
-    }
-
-    /// Ask the host to use the heal `item` this tick.
-    fn use_heal(&mut self, item: u8) {
-        self.heal = Some(item);
-    }
-
-    /// Ask the host to use a non-heal `item` this tick (the menu USE path).
-    fn use_item(&mut self, item: u8) {
-        self.use_item = Some(item);
     }
 }
 
@@ -331,12 +290,8 @@ struct SessionSnapshot {
     doors: Vec<DoorSnapshot>,
     enemies: Vec<EnemySnapshot>,
     weapon: WeaponSnapshot,
-    /// The weapon items in the inventory, so `bot:equip` can refuse a
-    /// non-weapon the menu would not equip.
-    held_weapons: BTreeSet<u8>,
-    /// The heal items in the inventory, so `bot:use_heal` can refuse a
-    /// non-heal before it reaches the host.
-    held_heals: BTreeSet<u8>,
+    /// The pause menu as the engine shows it, read-only.
+    menu: MenuSnapshot,
     flags: [FlagBank; game::FLAG_BANK_COUNT],
     inventory: Vec<InventoryItem>,
 }
@@ -445,32 +400,148 @@ struct DoorSnapshot {
     depth: i32,
 }
 
-/// The item ids in `inventory` whose catalog kind is `kind`.
-fn held_items(
-    inventory: &[InventoryItem],
-    item_defs: &crate::item_catalog::ItemCatalog,
-    kind: ItemKind,
-) -> BTreeSet<u8> {
-    inventory
-        .iter()
-        .filter(|stack| item_defs.get(stack.id).kind == kind)
-        .map(|stack| stack.id)
-        .collect()
+/// One inventory slot as the pause menu lays it out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MenuItem {
+    /// The menu's zero-based slot (cursor `8 + 2 * slot`).
+    slot: usize,
+    /// Item id; `0` is an empty slot.
+    id: u8,
+    quantity: u8,
+    /// The catalog kind (`"weapon"`, `"heal"`, `"key"`, ...).
+    kind: &'static str,
 }
 
-/// The heal items with at least one unit, so a depleted stack cannot be used.
-fn heal_items(
-    inventory: &[InventoryItem],
-    item_defs: &crate::item_catalog::ItemCatalog,
-) -> BTreeSet<u8> {
-    inventory
-        .iter()
-        .filter(|stack| stack.quantity > 0 && item_defs.get(stack.id).kind == ItemKind::Heal)
-        .map(|stack| stack.id)
-        .collect()
+/// The pause/inventory menu, read from the engine's real UI state: the
+/// session's menu slot, fade phase and sub-screens, the values the menu
+/// script publishes (`cursor`, `slot`, `selected_item`, ...) and the
+/// submenu fields of its `M.state` table. Nothing here is derived from what
+/// the bot pressed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct MenuSnapshot {
+    /// The menu screen exists (open, fading in, or fading out to close).
+    open: bool,
+    /// START was taken this frame; the menu opens on the next one.
+    requested: bool,
+    /// `"closed"`, `"requested"`, `"fade_out"`, `"fade_in"`, `"opening"`,
+    /// `"closing"`, `"screen"` (a sub-screen owns the input), `"message"` or
+    /// `"input"`.
+    phase: &'static str,
+    /// The menu takes pad input this frame (`phase == "input"`).
+    accepts_input: bool,
+    /// The sub-screen over the panel: `"item_box"`, `"map"`, `"file"`,
+    /// `"examine"` or `"pickup"`.
+    screen: Option<&'static str>,
+    /// The menu's cursor byte: `0, 2, 4, 6` the top tabs, `8 + 2 * slot`
+    /// the item slots.
+    cursor: Option<i64>,
+    /// The inventory slot under the cursor, if it is on one.
+    slot: Option<i64>,
+    /// `"navigation"`, `"actions"` (the item submenu) or `"move"`.
+    mode: Option<&'static str>,
+    /// The highlighted submenu option, zero-based.
+    option: Option<i64>,
+    /// The submenu's options for the selected item, top to bottom.
+    options: Vec<&'static str>,
+    /// The item under the cursor (`0` for none).
+    selected_item: u8,
+    /// The submenu's open animation has finished.
+    ready: bool,
+    /// The submenu's close animation is running.
+    closing: bool,
+    /// The CHECK slide or viewer is up.
+    viewing: bool,
+    /// The character's inventory slot count.
+    capacity: usize,
+    items: Vec<MenuItem>,
 }
 
-/// The display name of a room action kind.
+/// The submenu labels the RE1 menu script draws (`draw_submenu`): the first
+/// option is EQUIP for a weapon and USE otherwise; MOVE is the combine.
+fn menu_options(equippable: bool) -> Vec<&'static str> {
+    vec![if equippable { "EQUIP" } else { "USE" }, "CHECK", "MOVE"]
+}
+
+impl MenuSnapshot {
+    fn build(session: &GameSession) -> Self {
+        let game = &session.game;
+        let capacity = game.inventory_capacity();
+        let items = (0..capacity)
+            .map(|slot| {
+                let stack = game.inventory.get(slot).copied().unwrap_or_default();
+                MenuItem {
+                    slot,
+                    id: stack.id,
+                    quantity: stack.quantity,
+                    kind: game.item_defs.get(stack.id).kind.name(),
+                }
+            })
+            .collect();
+        let screen = if session.pickup_view.is_some() {
+            Some("pickup")
+        } else if session.examine.is_some() {
+            Some("examine")
+        } else if session.item_box.is_some() {
+            Some("item_box")
+        } else if session.map.is_some() {
+            Some("map")
+        } else if session.file.is_some() {
+            Some("file")
+        } else {
+            None
+        };
+        let requested = session.menu_request.is_some();
+        let Some(menu) = session.menu.as_deref() else {
+            return Self {
+                requested,
+                phase: if requested { "requested" } else { "closed" },
+                capacity,
+                items,
+                ..Self::default()
+            };
+        };
+        let viewing = menu.value("viewing") != 0;
+        let phase = match session.menu_fade_phase {
+            super::MenuFadePhase::Out => "fade_out",
+            super::MenuFadePhase::In => "fade_in",
+            super::MenuFadePhase::Closing => "closing",
+            super::MenuFadePhase::None if session.menu_open_delay => "opening",
+            super::MenuFadePhase::None if screen.is_some() || viewing => "screen",
+            super::MenuFadePhase::None if game.message.active => "message",
+            super::MenuFadePhase::None => "input",
+        };
+        let mode = menu.state_int("mode").map(|mode| match mode {
+            0 => "navigation",
+            1 => "actions",
+            _ => "move",
+        });
+        let selected_item = menu.value("selected_item") as u8;
+        let options = match menu.state_int("equippable") {
+            Some(equippable) if selected_item != 0 => menu_options(equippable != 0),
+            _ => Vec::new(),
+        };
+        let slot = menu.value("slot");
+        Self {
+            open: true,
+            requested,
+            phase,
+            accepts_input: phase == "input",
+            screen,
+            cursor: Some(menu.value("cursor")),
+            slot: (slot >= 0).then_some(slot),
+            mode,
+            option: menu.state_int("action"),
+            options,
+            selected_item,
+            ready: menu.value("ready") != 0,
+            closing: menu.value("closing") != 0,
+            viewing,
+            capacity,
+            items,
+        }
+    }
+}
+
 fn action_kind_name(kind: RoomActionKind) -> &'static str {
     match kind {
         RoomActionKind::Door => "door",
@@ -666,8 +737,7 @@ impl SessionSnapshot {
             .collect();
         let enemies = enemy_snapshots(game, session.player.pos, &session.loaded.room);
         let weapon = weapon_snapshot(game, &session.player.weapon);
-        let held_weapons = held_items(&game.inventory, &game.item_defs, ItemKind::Weapon);
-        let held_heals = heal_items(&game.inventory, &game.item_defs);
+        let menu = MenuSnapshot::build(session);
         Self {
             room: id,
             camera: session.loaded.room.current_cut,
@@ -677,8 +747,7 @@ impl SessionSnapshot {
             doors,
             enemies,
             weapon,
-            held_weapons,
-            held_heals,
+            menu,
             flags: game.flags,
             inventory: game.inventory.clone(),
         }
@@ -1678,6 +1747,41 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
+        methods.add_method("menu", |lua, bot, ()| {
+            let menu = &bot.snapshot.menu;
+            let table = lua.create_table()?;
+            table.set("open", menu.open)?;
+            table.set("requested", menu.requested)?;
+            table.set("phase", menu.phase)?;
+            table.set("accepts_input", menu.accepts_input)?;
+            table.set("screen", menu.screen)?;
+            table.set("cursor", menu.cursor)?;
+            table.set("slot", menu.slot)?;
+            table.set("mode", menu.mode)?;
+            table.set("option", menu.option)?;
+            table.set(
+                "options",
+                lua.create_sequence_from(menu.options.iter().copied())?,
+            )?;
+            table.set("selected_item", menu.selected_item)?;
+            table.set("ready", menu.ready)?;
+            table.set("closing", menu.closing)?;
+            table.set("viewing", menu.viewing)?;
+            table.set("capacity", menu.capacity)?;
+            table.set("equipped", bot.snapshot.player.equipped)?;
+            let items = lua.create_table()?;
+            for (index, item) in menu.items.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("slot", item.slot)?;
+                row.set("item", item.id)?;
+                row.set("quantity", item.quantity)?;
+                row.set("kind", item.kind)?;
+                items.set(index + 1, row)?;
+            }
+            table.set("items", items)?;
+            Ok(table)
+        });
+
         methods.add_method("can_see", |_lua, bot, slot: u8| {
             Ok(bot
                 .snapshot
@@ -1743,91 +1847,9 @@ impl UserData for BotCtx {
             Ok(())
         });
 
-        methods.add_method("use_action", |_lua, bot, slot: u8| {
-            let Some(action) = bot.snapshot.actions.iter().find(|a| a.slot == slot) else {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "no room action in slot {slot}"
-                )));
-            };
-            if action.kind != "item" {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "room action slot {slot} is `{}`, not an item",
-                    action.kind
-                )));
-            }
-            bot.input().use_action(slot, action.handler);
-            Ok(())
-        });
-
-        methods.add_method("use_stair", |_lua, bot, slot: u8| {
-            let Some(action) = bot.snapshot.actions.iter().find(|a| a.slot == slot) else {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "no room action in slot {slot}"
-                )));
-            };
-            if action.kind != "door_check" {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "room action slot {slot} is `{}`, not a stair check",
-                    action.kind
-                )));
-            }
-            bot.input().use_action(slot, action.handler);
-            Ok(())
-        });
-
         methods.add_method("pulse_confirm", |_lua, bot, ()| {
             bot.input().pulse_confirm();
             Ok(())
-        });
-
-        methods.add_method("equip", |_lua, bot, item: u8| {
-            if !bot.snapshot.has_item(item) {
-                bot.log(&format!(
-                    "equip refused: item {item:#04X} is not in the inventory"
-                ));
-                return Ok(false);
-            }
-            if !bot.snapshot.held_weapons.contains(&item) {
-                bot.log(&format!("equip refused: item {item:#04X} is not a weapon"));
-                return Ok(false);
-            }
-            bot.input().equip(item);
-            Ok(true)
-        });
-
-        methods.add_method("use_heal", |_lua, bot, item: u8| {
-            if !bot.snapshot.has_item(item) {
-                bot.log(&format!(
-                    "use_heal refused: item {item:#04X} is not in the inventory"
-                ));
-                return Ok(false);
-            }
-            if !bot.snapshot.held_heals.contains(&item) {
-                bot.log(&format!(
-                    "use_heal refused: item {item:#04X} is not a heal item"
-                ));
-                return Ok(false);
-            }
-            bot.input().use_heal(item);
-            Ok(true)
-        });
-
-        methods.add_method("use_item", |_lua, bot, item: u8| {
-            if !bot.snapshot.has_item(item) {
-                bot.log(&format!(
-                    "use_item refused: item {item:#04X} is not in the inventory"
-                ));
-                return Ok(false);
-            }
-            if bot.snapshot.held_heals.contains(&item) {
-                // Heals keep their own skill and its explicit threshold policy.
-                bot.log(&format!(
-                    "use_item refused: item {item:#04X} is a heal item; use use_heal"
-                ));
-                return Ok(false);
-            }
-            bot.input().use_item(item);
-            Ok(true)
         });
 
         methods.add_method(
@@ -2180,68 +2202,101 @@ mod tests {
         assert!(!input.input.action_pressed);
     }
 
+    /// The bot may only press buttons. Every `BotCtx` method is listed here
+    /// by what it may touch; a new method fails this test until it is
+    /// classified, and nothing may be added to `INPUT` that is not pad/UI
+    /// input. The methods are read from the userdata's registered method
+    /// table, not from this source file.
     #[test]
-    fn use_action_is_a_one_tick_room_action_request() {
-        let mut input = BotInput::default();
-        input.use_action(6, 4);
-        assert_eq!(input.room_action, Some((6, 4)));
-        input.reset();
-        assert_eq!(input.room_action, None);
-    }
-
-    #[test]
-    fn equip_is_a_one_tick_request() {
-        let mut input = BotInput::default();
-        input.equip(0x02);
-        assert_eq!(input.equip, Some(0x02));
-        input.reset();
-        assert_eq!(input.equip, None);
-    }
-
-    #[test]
-    fn use_heal_is_a_one_tick_request() {
-        let mut input = BotInput::default();
-        input.use_heal(0x44);
-        assert_eq!(input.heal, Some(0x44));
-        assert_eq!(input.equip, None);
-        input.reset();
-        assert_eq!(input.heal, None);
-    }
-
-    #[test]
-    fn use_item_is_a_one_tick_request() {
-        let mut input = BotInput::default();
-        input.use_item(0x26);
-        assert_eq!(input.use_item, Some(0x26));
-        assert_eq!(input.heal, None);
-        input.reset();
-        assert_eq!(input.use_item, None);
-    }
-
-    #[test]
-    fn heal_items_follow_the_catalog_kind_and_need_a_unit() {
-        let defs = crate::item_catalog::ItemCatalog::embedded();
-        let inventory = vec![
-            InventoryItem {
-                id: 0x44,
-                quantity: 2,
-            },
-            InventoryItem {
-                id: 0x02,
-                quantity: 15,
-            },
-            InventoryItem {
-                id: 0x41,
-                quantity: 0,
-            },
+    fn bot_ctx_has_no_state_changing_method_but_input() {
+        // Reads of the per-tick snapshot or the room metadata.
+        const READ: &[&str] = &[
+            "tick",
+            "room",
+            "room_meta",
+            "player",
+            "enemies",
+            "weapon",
+            "scene",
+            "actions",
+            "doors",
+            "flag",
+            "has_item",
+            "item_count",
+            "inventory",
+            "menu",
+            "can_see",
+            "memory",
+            "visited",
+            "distance",
         ];
-        let heals = heal_items(&inventory, &defs);
-        assert!(heals.contains(&0x44), "green herb is a heal");
-        assert!(!heals.contains(&0x02), "the handgun is not a heal");
-        assert!(
-            !heals.contains(&0x41),
-            "an empty spray stack cannot be used"
-        );
+        // The bot's own memory and run bookkeeping, never the game.
+        const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
+        // Pad/UI input for this tick. `walk_to`/`face_to` only compute and
+        // set the direction/run buttons.
+        const INPUT: &[&str] = &[
+            "set_input",
+            "press_action",
+            "pulse_confirm",
+            "walk_to",
+            "face_to",
+        ];
+        // The removed shortcuts into game handlers must never come back.
+        const FORBIDDEN: &[&str] = &["use_item", "use_heal", "equip", "use_action", "use_stair"];
+
+        let lua = Lua::new();
+        let proxy = lua.create_proxy::<BotCtx>().expect("BotCtx proxy");
+        let index: Table = proxy
+            .metatable()
+            .expect("BotCtx metatable")
+            .get("__index")
+            .expect("BotCtx methods are an __index table");
+        let mut names = Vec::new();
+        for pair in index.pairs::<String, Value>() {
+            let (name, value) = pair.expect("method entry");
+            assert!(
+                matches!(value, Value::Function(_)),
+                "{name} is not a method"
+            );
+            names.push(name);
+        }
+        names.sort();
+        assert!(!names.is_empty(), "no BotCtx methods were found");
+        for name in &names {
+            assert!(
+                !FORBIDDEN.contains(&name.as_str()),
+                "BotCtx exposes the removed state-changing method `{name}`"
+            );
+            assert!(
+                READ.contains(&name.as_str())
+                    || BOT_ONLY.contains(&name.as_str())
+                    || INPUT.contains(&name.as_str()),
+                "BotCtx method `{name}` is not classified as a read, bot bookkeeping \
+                 or pad/UI input; the bot may not change game state any other way"
+            );
+        }
+        for name in READ.iter().chain(BOT_ONLY).chain(INPUT) {
+            assert!(
+                names.iter().any(|n| n == name),
+                "listed method `{name}` is gone"
+            );
+        }
+    }
+
+    #[test]
+    fn bot_input_carries_only_pad_and_ui_state() {
+        // The struct is the whole host-facing output of a bot tick; any field
+        // beyond these three would be a side channel into the game.
+        let BotInput { ui, input, action } = BotInput::default();
+        assert_eq!(ui, UiInput::default());
+        assert_eq!(input, player::Input::default());
+        assert!(!action);
+    }
+
+    #[test]
+    fn menu_options_follow_the_menu_scripts_labels() {
+        assert_eq!(menu_options(true), vec!["EQUIP", "CHECK", "MOVE"]);
+        assert_eq!(menu_options(false), vec!["USE", "CHECK", "MOVE"]);
     }
 
     #[test]

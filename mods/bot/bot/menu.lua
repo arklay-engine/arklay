@@ -1,0 +1,418 @@
+-- Inventory menu skills for the player bot.
+--
+-- Equip, heal and item use go through the pause menu exactly as a player
+-- does it: START opens the menu, the d-pad moves the cursor to the item's
+-- slot, confirm opens the item's submenu, the d-pad picks the option
+-- (EQUIP/USE, CHECK, MOVE), confirm applies it and cancel backs out and
+-- closes the menu. Every step is one button pulse with a release tick between
+-- pulses, and every step waits on the engine's real menu state from
+-- `bot:menu()` (the menu phase, the cursor byte, the submenu mode and
+-- option). A job succeeds only when the engine's state says it happened: the
+-- equipped item changed to the weapon, or the item's count dropped.
+--
+-- API (all take the bot handle):
+--   BotMenu.equip(bot, item, label)     start an EQUIP job
+--   BotMenu.use_heal(bot, item, label)  start a USE job on a heal item
+--   BotMenu.use_item(bot, item, label)  start a USE job on any other item
+--     Each returns true when the job started (or, for equip, the weapon is
+--     already equipped) and false when the item is not held, is the wrong
+--     kind, a job is already running, or the same job failed recently.
+--   BotMenu.step(bot)    run one tick of the active job; true when the job
+--                        owns this tick and the route must not run
+--   BotMenu.busy()       a job is running
+--   BotMenu.last()       the last finished job {kind, item, ok, reason, tick}
+--
+-- The job state is a global so a --watch reload keeps a job in flight.
+
+BOT_MENU = BOT_MENU or {}
+BOT_MENU.failed = BOT_MENU.failed or {}
+BOT_MENU.stray_ticks = BOT_MENU.stray_ticks or 0
+
+BotMenu = BotMenu or {}
+
+local FIRST_SLOT_CURSOR = 8
+-- Ticks between two pulses of the same or another button: one press tick,
+-- then at least one release tick, so every press is a fresh edge.
+local PRESS_GAP = 2
+-- START is retried this rarely, so a slow open is not toggled shut.
+local START_GAP = 20
+local OPEN_TIMEOUT = 150
+local STEP_TIMEOUT = 90
+local JOB_TIMEOUT = 1200
+local SETTLE_TIMEOUT = 120
+-- A failed job for the same item and kind is not retried for this long.
+local RETRY_COOLDOWN = 300
+
+local function log(bot, text)
+    bot:log("menu: " .. text)
+end
+
+local function find_item(menu, item)
+    for i = 1, #menu.items do
+        local row = menu.items[i]
+        if row.item == item then
+            return row
+        end
+    end
+    return nil
+end
+
+local function describe(menu)
+    return string.format(
+        "phase=%s screen=%s cursor=%s slot=%s mode=%s option=%s options=[%s] selected=0x%02X",
+        tostring(menu.phase), tostring(menu.screen), tostring(menu.cursor),
+        tostring(menu.slot), tostring(menu.mode), tostring(menu.option),
+        table.concat(menu.options or {}, ","), menu.selected_item or 0)
+end
+
+local function start(bot, kind, item, label)
+    label = label or kind
+    if BOT_MENU.job then
+        log(bot, string.format("%s 0x%02X refused: job %s 0x%02X is running",
+            kind, item, BOT_MENU.job.kind, BOT_MENU.job.item))
+        return false
+    end
+    local key = kind .. ":" .. item
+    local failed_at = BOT_MENU.failed[key]
+    if failed_at and bot:tick() - failed_at < RETRY_COOLDOWN then
+        return false
+    end
+    local menu = bot:menu()
+    local row = find_item(menu, item)
+    if not row then
+        log(bot, string.format("%s 0x%02X refused: not in the inventory", kind, item))
+        return false
+    end
+    if kind == "equip" then
+        if row.kind ~= "weapon" then
+            log(bot, string.format("equip 0x%02X refused: kind %s is not a weapon",
+                item, row.kind))
+            return false
+        end
+        if bot:player().equipped == item then
+            return true
+        end
+    else
+        if row.quantity <= 0 then
+            log(bot, string.format("%s 0x%02X refused: the stack is empty", kind, item))
+            return false
+        end
+        if kind == "heal" and row.kind ~= "heal" then
+            log(bot, string.format("heal 0x%02X refused: kind %s is not a heal",
+                item, row.kind))
+            return false
+        end
+    end
+    BOT_MENU.job = {
+        kind = kind,
+        item = item,
+        label = label,
+        stage = "open",
+        ticks = 0,
+        stage_ticks = 0,
+        last_press = -100,
+        last_start = -100,
+        before_count = bot:item_count(item),
+        before_equipped = bot:player().equipped,
+        ok = nil,
+        reason = nil,
+    }
+    log(bot, string.format("%s: start %s 0x%02X (slot %d, count %d, equipped %s)",
+        label, kind, item, row.slot, bot:item_count(item),
+        tostring(bot:player().equipped)))
+    return true
+end
+
+function BotMenu.equip(bot, item, label)
+    return start(bot, "equip", item, label)
+end
+
+function BotMenu.use_heal(bot, item, label)
+    return start(bot, "heal", item, label)
+end
+
+function BotMenu.use_item(bot, item, label)
+    return start(bot, "use", item, label)
+end
+
+function BotMenu.busy()
+    return BOT_MENU.job ~= nil
+end
+
+function BotMenu.last()
+    return BOT_MENU.last
+end
+
+local function set_stage(job, stage)
+    job.stage = stage
+    job.stage_ticks = 0
+end
+
+-- Record the outcome; the menu still has to be closed before the job ends.
+local function conclude(bot, job, ok, reason)
+    if job.ok == nil then
+        job.ok = ok
+        job.reason = reason
+        log(bot, string.format("%s: %s 0x%02X %s (%s)", job.label, job.kind, job.item,
+            ok and "done" or "FAILED", reason))
+    end
+    set_stage(job, "close")
+end
+
+local function finish(bot, job)
+    BOT_MENU.job = nil
+    BOT_MENU.last = {
+        kind = job.kind, item = job.item, ok = job.ok and true or false,
+        reason = job.reason, tick = bot:tick(),
+    }
+    if not job.ok then
+        BOT_MENU.failed[job.kind .. ":" .. job.item] = bot:tick()
+    end
+end
+
+-- One button pulse, if the previous one has been released for a tick.
+local function pulse(bot, job, key)
+    local tick = bot:tick()
+    if tick - job.last_press < PRESS_GAP then
+        return false
+    end
+    job.last_press = tick
+    if key == "action" then
+        bot:press_action()
+    else
+        bot:set_input({ [key] = true })
+    end
+    return true
+end
+
+-- The d-pad key that moves the 2-wide menu grid's cursor toward `target`.
+-- Left/right flip the column; up/down step a row (and wrap at the ends).
+local function cursor_key(cursor, target)
+    if (cursor & 2) ~= (target & 2) then
+        return "right"
+    end
+    if target > cursor then
+        return "down"
+    end
+    return "up"
+end
+
+local function wanted_option(job)
+    if job.kind == "equip" then
+        return "EQUIP"
+    end
+    return "USE"
+end
+
+local function result_seen(bot, job)
+    if job.kind == "equip" then
+        return bot:player().equipped == job.item
+    end
+    return bot:item_count(job.item) < job.before_count
+end
+
+-- The menu is open and takes input: navigate it.
+local function drive(bot, job, menu)
+    if job.stage == "cursor" then
+        if menu.mode ~= "navigation" then
+            pulse(bot, job, "cancel")
+            return
+        end
+        local row = find_item(menu, job.item)
+        if not row then
+            conclude(bot, job, false, "item left the inventory before the use")
+            return
+        end
+        local target = FIRST_SLOT_CURSOR + 2 * row.slot
+        if menu.cursor == target then
+            set_stage(job, "select")
+            return
+        end
+        pulse(bot, job, cursor_key(menu.cursor, target))
+    elseif job.stage == "select" then
+        if menu.mode == "actions" then
+            set_stage(job, "option")
+            return
+        end
+        if menu.selected_item ~= job.item then
+            set_stage(job, "cursor")
+            return
+        end
+        pulse(bot, job, "confirm")
+    elseif job.stage == "option" then
+        if menu.mode ~= "actions" then
+            -- The submenu closed under us (a cancel or a refused confirm).
+            set_stage(job, "cursor")
+            return
+        end
+        if not menu.ready or menu.closing then
+            return
+        end
+        local want = wanted_option(job)
+        local index = nil
+        for i = 1, #menu.options do
+            if menu.options[i] == want then
+                index = i - 1
+            end
+        end
+        if index == nil then
+            conclude(bot, job, false, string.format("the submenu offers no %s (%s)",
+                want, describe(menu)))
+            return
+        end
+        if menu.option == index then
+            if pulse(bot, job, "confirm") then
+                set_stage(job, "result")
+            end
+            return
+        end
+        pulse(bot, job, (menu.option or 0) < index and "down" or "up")
+    elseif job.stage == "result" then
+        if result_seen(bot, job) then
+            conclude(bot, job, true, job.kind == "equip"
+                and string.format("equipped 0x%02X", job.item)
+                or string.format("count %d -> %d", job.before_count, bot:item_count(job.item)))
+        elseif job.stage_ticks > 60 then
+            conclude(bot, job, false, string.format(
+                "no effect after the %s confirm (count %d, equipped %s; %s)",
+                wanted_option(job), bot:item_count(job.item),
+                tostring(bot:player().equipped), describe(menu)))
+        end
+    elseif job.stage == "close" then
+        -- Back out of the submenu, then close the panel, as a player would.
+        if menu.closing or (menu.mode == "actions" and not menu.ready) then
+            return
+        end
+        pulse(bot, job, "cancel")
+    end
+end
+
+-- Run one tick of the active job. Returns true when the job owns the tick.
+function BotMenu.step(bot)
+    local job = BOT_MENU.job
+    local menu = bot:menu()
+    if not job then
+        -- An inventory panel left open with nothing over it (no pick-up
+        -- viewer, item box or message) is closed with cancel.
+        if menu.open and menu.phase == "input" and menu.screen == nil then
+            BOT_MENU.stray_ticks = BOT_MENU.stray_ticks + 1
+            if BOT_MENU.stray_ticks > 30 then
+                if BOT_MENU.stray_ticks % 2 == 0 then
+                    bot:set_input({ cancel = true })
+                end
+                return true
+            end
+        else
+            BOT_MENU.stray_ticks = 0
+        end
+        return false
+    end
+    job.ticks = job.ticks + 1
+    job.stage_ticks = job.stage_ticks + 1
+    local tick = bot:tick()
+
+    if job.ticks > JOB_TIMEOUT and job.stage ~= "settle" then
+        if job.ok == nil then
+            conclude(bot, job, false, "job timed out; " .. describe(menu))
+        end
+        if not menu.open then
+            set_stage(job, "settle")
+        elseif job.ticks > JOB_TIMEOUT + 300 then
+            -- The panel would not close: give the tick back to the route
+            -- with the failure on record rather than holding it forever.
+            log(bot, string.format("%s: menu still open after the timeout; %s",
+                job.label, describe(menu)))
+            finish(bot, job)
+            return false
+        end
+    end
+
+    if job.stage == "open" then
+        if menu.open or menu.requested then
+            set_stage(job, "wait_input")
+            return true
+        end
+        if job.stage_ticks > OPEN_TIMEOUT then
+            local scene = bot:scene()
+            local player = bot:player()
+            job.ok = false
+            job.reason = string.format(
+                "START did not open the menu (controllable=%s attacked=%d message=%s)",
+                tostring(scene.controllable), player.being_attacked or 0,
+                tostring(scene.message))
+            log(bot, string.format("%s: %s 0x%02X FAILED (%s)", job.label, job.kind,
+                job.item, job.reason))
+            finish(bot, job)
+            return false
+        end
+        if tick - job.last_start >= START_GAP and pulse(bot, job, "start") then
+            job.last_start = tick
+        end
+        return true
+    end
+
+    if job.stage == "settle" then
+        -- Wait for the close fade and the room's post-menu freeze without
+        -- pressing anything: a press buffered there reaches the room tick.
+        if menu.open or menu.requested then
+            job.stage_ticks = 0
+            return true
+        end
+        local scene = bot:scene()
+        local other_scene = scene.film or scene.transition or scene.skippable
+            or scene.cutscene_skip or scene.pickup or scene.message_takes_input
+        if scene.controllable or other_scene or job.stage_ticks > SETTLE_TIMEOUT then
+            finish(bot, job)
+            return false
+        end
+        return true
+    end
+
+    if not menu.open then
+        if menu.requested then
+            return true
+        end
+        -- The menu closed: by our cancel, or by itself after a key item use.
+        if job.ok == nil then
+            if result_seen(bot, job) then
+                conclude(bot, job, true, "menu closed after the effect")
+            else
+                conclude(bot, job, false, "menu closed before the " .. wanted_option(job))
+            end
+        end
+        set_stage(job, "settle")
+        return true
+    end
+
+    if menu.phase == "message" then
+        -- A refusal ("You can't use it here") or a prompt: dismiss it with
+        -- the action button, like the message window expects.
+        if job.stage == "result" and job.ok == nil and not result_seen(bot, job) then
+            job.refused = true
+        end
+        pulse(bot, job, "action")
+        return true
+    end
+    if job.refused and job.ok == nil then
+        conclude(bot, job, false, string.format("the menu refused the %s",
+            wanted_option(job)))
+    end
+    if menu.phase == "screen" then
+        -- A sub-screen the job did not ask for (CHECK viewer, map): back out.
+        pulse(bot, job, "cancel")
+        return true
+    end
+    if not menu.accepts_input then
+        -- Fades and the open delay take no input.
+        return true
+    end
+    if job.stage == "wait_input" then
+        set_stage(job, "cursor")
+    end
+    if job.stage_ticks > STEP_TIMEOUT and job.stage ~= "close" and job.ok == nil then
+        conclude(bot, job, false, string.format("stage %s stalled; %s", job.stage,
+            describe(menu)))
+    end
+    drive(bot, job, menu)
+    return true
+end
