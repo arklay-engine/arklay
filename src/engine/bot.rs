@@ -340,6 +340,8 @@ struct SessionSnapshot {
     saves: SaveSnapshot,
     /// The item catalog, for each item's kind and a weapon's ammunition.
     item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
+    /// The player stands in the guardhouse drug store, where chemicals mix.
+    drug_store: bool,
 }
 
 /// The session's save facts: what the save screen reported writing, and
@@ -593,6 +595,46 @@ struct MenuSnapshot {
     /// The character's inventory slot count.
     capacity: usize,
     items: Vec<MenuItem>,
+    /// The MOVE (combine) cursor byte while `mode` is `"move"`.
+    move_cursor: Option<i64>,
+    /// The item box screen, while it is up over the panel.
+    item_box: Option<ItemBoxView>,
+}
+
+/// The item box screen as a player sees it, read from the shipped script's
+/// `M.state` (`ui/item_box.lua`) and the box's slots, without running any of
+/// its code.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ItemBoxView {
+    /// `"browse"` (the inventory cursor moves) or `"armed"` (a confirmed
+    /// inventory slot waits for the box slot to swap with).
+    mode: String,
+    /// The box slot shown in the preview (0-based).
+    box_cursor: i64,
+    /// The inventory cursor byte (`8 + 2 * slot`; `4`/`6` the EXIT tab).
+    cursor: i64,
+    /// A page slide is running; the screen reads no buttons until it ends.
+    sliding: bool,
+    /// The box's slots in order: item id (`0` empty) and quantity.
+    slots: Vec<(u8, u8)>,
+}
+
+impl ItemBoxView {
+    fn build(session: &GameSession) -> Option<Self> {
+        let screen = session.item_box.as_deref()?;
+        Some(Self {
+            mode: screen.state_str("mode")?,
+            box_cursor: screen.state_int("box_cursor")?,
+            cursor: screen.state_int("player_cursor")?,
+            sliding: screen.state_int("slide_dir")? != 0,
+            slots: session
+                .game
+                .item_box
+                .iter()
+                .map(|stack| (stack.id, stack.quantity))
+                .collect(),
+        })
+    }
 }
 
 /// The submenu labels the RE1 menu script draws (`draw_submenu`): the first
@@ -630,6 +672,7 @@ impl MenuSnapshot {
             None
         };
         let requested = session.menu_request.is_some();
+        let item_box = ItemBoxView::build(session);
         let Some(menu) = session.menu.as_deref() else {
             return Self {
                 requested,
@@ -677,8 +720,55 @@ impl MenuSnapshot {
             viewing,
             capacity,
             items,
+            move_cursor: (mode == Some("move"))
+                .then(|| menu.state_int("move_cursor"))
+                .flatten(),
+            item_box,
         }
     }
+}
+
+/// The `bot:combine_result(slot, target)` table: `result` is `"applied"`
+/// (an ordinary recipe), `"herb"` (a herb mix, applied after the menu's
+/// yes/no prompt), `"no_recipe"`, `"herb_no_recipe"` or `"drug_store"`; for
+/// the first two, the two slots afterwards (`cursor_item`/`cursor_quantity`,
+/// `target_item`/`target_quantity`, id `0` when emptied) and `frees`, one of
+/// them is emptied.
+fn combine_result_table(
+    lua: &Lua,
+    snapshot: &SessionSnapshot,
+    slot: usize,
+    target: usize,
+) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    match game::combine_outcome(
+        &snapshot.item_defs,
+        &snapshot.inventory,
+        slot,
+        target,
+        snapshot.drug_store,
+    ) {
+        Ok(outcome) => {
+            table.set("result", if outcome.herb { "herb" } else { "applied" })?;
+            table.set("cursor_item", outcome.cursor.id)?;
+            table.set("cursor_quantity", outcome.cursor.quantity)?;
+            table.set("target_item", outcome.target.id)?;
+            table.set("target_quantity", outcome.target.quantity)?;
+            table.set("frees", outcome.cursor.id == 0 || outcome.target.id == 0)?;
+        }
+        Err(refusal) => {
+            table.set(
+                "result",
+                match refusal {
+                    game::CombineResult::HerbNoRecipe => "herb_no_recipe",
+                    game::CombineResult::NeedsDrugStore => "drug_store",
+                    _ => "no_recipe",
+                },
+            )?;
+            table.set("frees", false)?;
+        }
+    }
+    Ok(table)
 }
 
 fn action_kind_name(kind: RoomActionKind) -> &'static str {
@@ -955,6 +1045,7 @@ impl SessionSnapshot {
                 ribbons: game.item_count(game.ink_ribbon_item()),
             },
             item_defs: game.item_defs.clone(),
+            drug_store: game.is_drug_store(),
         }
     }
 
@@ -2443,10 +2534,20 @@ impl UserData for BotCtx {
                         row.set("kind", "camera")?;
                         row.set("cut", cut)?;
                     }
-                    meta::Target::Push { object, slot } => {
+                    meta::Target::Push {
+                        object,
+                        slot,
+                        direction,
+                    } => {
                         row.set("kind", "push")?;
                         row.set("object", object)?;
                         row.set("slot", slot)?;
+                        if let Some(direction) = direction {
+                            let (dx, dz) = direction.step();
+                            row.set("direction", direction.name())?;
+                            row.set("dx", dx)?;
+                            row.set("dz", dz)?;
+                        }
                     }
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
@@ -2777,8 +2878,37 @@ impl UserData for BotCtx {
                 items.set(index + 1, row)?;
             }
             table.set("items", items)?;
+            table.set("move_cursor", menu.move_cursor)?;
+            if let Some(view) = &menu.item_box {
+                let item_box = lua.create_table()?;
+                item_box.set("mode", view.mode.as_str())?;
+                item_box.set("box_cursor", view.box_cursor)?;
+                item_box.set("cursor", view.cursor)?;
+                item_box.set("sliding", view.sliding)?;
+                let slots = lua.create_table()?;
+                for (index, (id, quantity)) in view.slots.iter().enumerate() {
+                    let row = lua.create_table()?;
+                    row.set("slot", index)?;
+                    row.set("item", *id)?;
+                    row.set("quantity", *quantity)?;
+                    row.set("kind", bot.snapshot.item_kind(*id))?;
+                    slots.set(index + 1, row)?;
+                }
+                item_box.set("items", slots)?;
+                table.set("box", item_box)?;
+            }
             Ok(table)
         });
+
+        // What the menu's MOVE of inventory slot `slot` onto `target` (both
+        // 0-based menu slots) would do, from the engine's recipe and effect
+        // code on the snapshot's inventory; nothing is written.
+        methods.add_method(
+            "combine_result",
+            |lua, bot, (slot, target): (usize, usize)| {
+                combine_result_table(lua, &bot.snapshot, slot, target)
+            },
+        );
 
         methods.add_method("can_see", |_lua, bot, slot: u8| {
             Ok(bot
@@ -3590,6 +3720,7 @@ mod tests {
             "item_kind",
             "ammo_for",
             "use_facts",
+            "combine_result",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -3691,6 +3822,39 @@ mod tests {
         assert_eq!(ui, UiInput::default());
         assert_eq!(input, player::Input::default());
         assert!(!action);
+    }
+
+    #[test]
+    fn combine_result_reports_the_engine_recipe_and_whether_it_frees_a_slot() {
+        let lua = Lua::new();
+        let mut snapshot = world::tests::snapshot(0x100, 0, 0);
+        let herb = |id| InventoryItem { id, quantity: 1 };
+        snapshot.inventory = vec![
+            herb(game::HERB_MIN + 1),
+            herb(game::HERB_MIN),
+            InventoryItem {
+                id: 0x02,
+                quantity: 15,
+            },
+            herb(game::HERB_MIN + 1),
+        ];
+        let row = |slot, target| combine_result_table(&lua, &snapshot, slot, target).unwrap();
+        // Green onto red is a herb mix: the menu asks first, and one slot
+        // empties.
+        let mix = row(0, 1);
+        assert_eq!(mix.get::<String>("result").unwrap(), "herb");
+        assert!(mix.get::<bool>("frees").unwrap());
+        // Green onto green mixes too.
+        let greens = row(0, 3);
+        assert_eq!(greens.get::<String>("result").unwrap(), "herb");
+        assert!(greens.get::<bool>("frees").unwrap());
+        // A herb onto the handgun has no recipe.
+        let none = row(0, 2);
+        assert_eq!(none.get::<String>("result").unwrap(), "no_recipe");
+        assert!(!none.get::<bool>("frees").unwrap());
+        // A slot onto itself, or past the inventory, is no recipe.
+        assert_eq!(row(1, 1).get::<String>("result").unwrap(), "no_recipe");
+        assert_eq!(row(0, 7).get::<String>("result").unwrap(), "no_recipe");
     }
 
     #[test]
@@ -4757,6 +4921,153 @@ mod tests {
             ),
             "o1,o2,o3,o4,o5,o6,l7,l8,l9,l10,l11,l12,f13:1"
         );
+    }
+
+    #[test]
+    fn box_policy_keeps_needs_and_takes_back_what_is_wanted() {
+        let vm = route_vm();
+        // An 8-slot inventory: the handgun (equipped), its clips, a key, a
+        // crest a <use> fact needs, a herb, the grenade gun the knowledge
+        // file does not list, a spare clip of another gun and a book.
+        let deposits: String = eval(
+            &vm,
+            r#"local ctx = { equipped = 0x02, guns = { [0x02] = true }, ammo = { [0x0B] = true },
+                uses = { [0x2C] = true } }
+            local items = {
+                { slot = 0, item = 0x02, kind = "weapon", quantity = 15 },
+                { slot = 1, item = 0x0B, kind = "ammo", quantity = 15 },
+                { slot = 2, item = 0x34, kind = "key", quantity = 1 },
+                { slot = 3, item = 0x2C, kind = "special", quantity = 1 },
+                { slot = 4, item = 0x44, kind = "heal", quantity = 1 },
+                { slot = 5, item = 0x07, kind = "weapon", quantity = 0 },
+                { slot = 6, item = 0x0D, kind = "ammo", quantity = 6 },
+                { slot = 7, item = 0x50, kind = "book", quantity = 1 },
+            }
+            local out = {}
+            for _, row in ipairs(BotInventory.deposits(items, ctx)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end
+            return table.concat(out, ",")"#,
+        );
+        assert_eq!(deposits, "07,0D,50");
+        // Withdrawals: a use item, a key a locked door needs, the low ammo,
+        // and one heal stack when none is held, capped at the free slots.
+        let withdrawals = |free: u8| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ uses = {{ [0x2C] = true }}, keys = {{ [0x35] = true }},
+                        ammo_low = 0x0B, heals = 0 }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x07, kind = "weapon" }},
+                        {{ slot = 1, item = 0x44, kind = "heal" }},
+                        {{ slot = 2, item = 0x2C, kind = "special" }},
+                        {{ slot = 3, item = 0x43, kind = "heal" }},
+                        {{ slot = 4, item = 0x35, kind = "key" }},
+                        {{ slot = 5, item = 0x0B, kind = "ammo" }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.withdrawals(rows, ctx, {free})) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(withdrawals(8), "44,2C,35,0B");
+        assert_eq!(withdrawals(2), "44,2C");
+        assert_eq!(withdrawals(0), "");
+        // Paging the box cursor: the nearest wanted slot, wrapping.
+        let target = |cursor: u8, want: u8| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local rows = {{}}
+                    for i = 0, 47 do rows[#rows + 1] = {{ slot = i, item = 0 }} end
+                    rows[3].item, rows[47].item = 0x2C, 0x0B
+                    local row, dir = BotInventory.box_target(rows, {cursor},
+                        function(r) return r.item == {want} end)
+                    return row and (row.slot .. ":" .. dir) or "none""#
+                ),
+            )
+        };
+        assert_eq!(target(0, 0x2C), "2:1");
+        assert_eq!(target(5, 0x2C), "2:-1");
+        assert_eq!(target(2, 0x2C), "2:0");
+        assert_eq!(target(1, 0x0B), "46:-1");
+        assert_eq!(target(40, 0x0B), "46:1");
+        assert_eq!(target(0, 0x99), "none");
+    }
+
+    #[test]
+    fn combine_rule_frees_a_slot_heals_first_and_spares_use_items() {
+        let vm = route_vm();
+        // A fake engine reply: herb pairs mix, the clip goes into the gun,
+        // and nothing else combines.
+        let pick = |uses: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local items = {{
+                        {{ slot = 0, item = 0x02, kind = "weapon", quantity = 0 }},
+                        {{ slot = 1, item = 0x0B, kind = "ammo", quantity = 15 }},
+                        {{ slot = 2, item = 0x44, kind = "heal", quantity = 1 }},
+                        {{ slot = 3, item = 0x43, kind = "heal", quantity = 1 }},
+                        {{ slot = 4, item = 0x2C, kind = "special", quantity = 1 }},
+                    }}
+                    local function result(a, b)
+                        local x, y = items[a + 1].item, items[b + 1].item
+                        if (x == 0x44 and y == 0x43) or (x == 0x43 and y == 0x44) then
+                            return {{ result = "herb", frees = true }}
+                        end
+                        if x == 0x02 and y == 0x0B then
+                            return {{ result = "applied", frees = true }}
+                        end
+                        if x == 0x2C then
+                            return {{ result = "applied", frees = true }}
+                        end
+                        return {{ result = "no_recipe", frees = false }}
+                    end
+                    local p = BotInventory.combine_pick(items, {{ uses = {uses} }}, result)
+                    return p and string.format("%d>%d", p.slot, p.target) or "none""#
+                ),
+            )
+        };
+        // Herbs first (rank 1+1), and the crest is never a candidate kind.
+        assert_eq!(pick("{}"), "2>3");
+        // A <use> fact on a herb leaves only the gun and its clip.
+        assert_eq!(pick("{ [0x44] = true }"), "0>1");
+        assert_eq!(pick("{ [0x44] = true, [0x0B] = true }"), "none");
+    }
+
+    #[test]
+    fn push_error_with_a_direction_clears_the_zone_that_way() {
+        let vm = route_vm();
+        // The 10F shelf (centre 17394,11190, half 1300x550) over the score
+        // zone (17000,11500, 800x1000).
+        let error = |x: i32, dir: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ex, ez = BotNav.push_error({{ x = {x}, z = 11190, half_x = 1300,
+                        half_z = 550 }}, {{ x = 17000, z = 11500, width = 800, depth = 1000 }}, {dir})
+                    return ex .. "," .. ez"#
+                ),
+            )
+        };
+        // East: the west face must pass 17600 (the zone's far quarter).
+        assert_eq!(error(17394, "{ x = 1, z = 0 }"), "1506,0");
+        assert_eq!(error(19000, "{ x = 1, z = 0 }"), "0,0");
+        // West: the east face must pass 17200.
+        assert_eq!(error(17394, "{ x = -1, z = 0 }"), "-1494,0");
+        assert_eq!(error(15800, "{ x = -1, z = 0 }"), "0,0");
+        // No direction: the centre into the middle half on both axes.
+        assert_eq!(error(17394, "nil"), "0,560");
+        assert!(eval::<bool>(
+            &vm,
+            r#"local d = BotPuzzle.push_dir({ direction = "east", dx = 1, dz = 0 })
+            return d.x == 1 and d.z == 0 and BotPuzzle.push_dir({}) == nil"#
+        ));
     }
 
     #[test]

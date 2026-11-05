@@ -24,7 +24,13 @@
 //!   submenu's highlighted option changed while the menu stayed open;
 //! - `item_uses`: an item in the inventory lost quantity while the menu was
 //!   open on the previous tick (`heal_uses` counts the heal-kind ones);
-//! - `equips`: the equipped item changed while the menu was open.
+//! - `equips`: the equipped item changed while the menu was open;
+//! - `box_deposits` / `box_withdrawals`: an item box slot went from empty to
+//!   an item / from an item to empty while the box screen was up on both
+//!   ticks (a swap of two items counts one of each);
+//! - `combines`: the inventory changed while the menu was in its MOVE mode
+//!   on the previous tick (a mix). Neither a box swap nor a mix counts as an
+//!   item use.
 
 use super::{BotInput, EnemySnapshot, MenuSnapshot, SessionSnapshot};
 use serde_json::{Value, json};
@@ -91,6 +97,9 @@ struct MenuCounters {
     item_uses: u64,
     heal_uses: u64,
     equips: u64,
+    box_deposits: u64,
+    box_withdrawals: u64,
+    combines: u64,
 }
 
 impl MenuCounters {
@@ -124,6 +133,34 @@ impl MenuCounters {
                 self.option_moves += 1;
             }
         }
+        if let (Some(was), Some(box_now)) = (&before.item_box, &now.item_box) {
+            for (old, new) in was.slots.iter().zip(&box_now.slots) {
+                if old.0 == 0 && new.0 != 0 {
+                    self.box_deposits += 1;
+                } else if old.0 != 0 && new.0 == 0 {
+                    self.box_withdrawals += 1;
+                } else if old.0 != new.0 {
+                    self.box_deposits += 1;
+                    self.box_withdrawals += 1;
+                }
+            }
+        }
+        if equipped != *was_equipped {
+            self.equips += 1;
+        }
+        if before.item_box.is_some() || now.item_box.is_some() {
+            return;
+        }
+        let stacks = |menu: &MenuSnapshot| {
+            menu.items
+                .iter()
+                .map(|item| (item.id, item.quantity))
+                .collect::<Vec<_>>()
+        };
+        if before.mode == Some("move") && stacks(before) != stacks(now) {
+            self.combines += 1;
+            return;
+        }
         let held = |menu: &MenuSnapshot| {
             let mut counts: BTreeMap<u8, (u32, &'static str)> = BTreeMap::new();
             for item in menu.items.iter().filter(|item| item.id != 0) {
@@ -141,9 +178,6 @@ impl MenuCounters {
                 }
             }
         }
-        if equipped != *was_equipped {
-            self.equips += 1;
-        }
     }
 
     fn to_json(&self) -> Value {
@@ -156,6 +190,9 @@ impl MenuCounters {
             "item_uses": self.item_uses,
             "heal_uses": self.heal_uses,
             "equips": self.equips,
+            "box_deposits": self.box_deposits,
+            "box_withdrawals": self.box_withdrawals,
+            "combines": self.combines,
         })
     }
 }
@@ -355,7 +392,7 @@ impl BotStats {
 
 #[cfg(test)]
 mod tests {
-    use super::super::MenuItem;
+    use super::super::{ItemBoxView, MenuItem};
     use super::*;
 
     fn menu(open: bool, screen: Option<&'static str>, cursor: i64, herbs: u8) -> MenuSnapshot {
@@ -410,5 +447,44 @@ mod tests {
         assert_eq!(counters.item_uses, 1);
         assert_eq!(counters.heal_uses, 1);
         assert_eq!(counters.equips, 1);
+    }
+
+    #[test]
+    fn box_swaps_and_mixes_are_counted_apart_from_item_uses() {
+        let boxed = |slots: Vec<(u8, u8)>, herbs: u8| MenuSnapshot {
+            item_box: Some(ItemBoxView {
+                mode: "browse".to_string(),
+                slots,
+                ..ItemBoxView::default()
+            }),
+            ..menu(true, Some("item_box"), 8, herbs)
+        };
+        let mut counters = MenuCounters::default();
+        let mut prev: Option<(MenuSnapshot, Option<u8>)> = None;
+        let mut moving = menu(true, None, 10, 2);
+        moving.mode = Some("move");
+        let steps = [
+            boxed(vec![(0, 0), (0, 0)], 1),
+            // Deposit the herb into box slot 0.
+            boxed(vec![(0x44, 1), (0, 0)], 0),
+            // Withdraw it again.
+            boxed(vec![(0, 0), (0, 0)], 1),
+            menu(false, None, 0, 1),
+            menu(true, None, 10, 2),
+            moving,
+            // The mix leaves one herb stack.
+            menu(true, None, 10, 1),
+        ];
+        for now in steps {
+            counters.observe(prev.as_ref(), &now, None);
+            prev = Some((now, None));
+        }
+        assert_eq!(counters.box_deposits, 1);
+        assert_eq!(counters.box_withdrawals, 1);
+        assert_eq!(counters.combines, 1);
+        assert_eq!(
+            counters.item_uses, 0,
+            "neither a box swap nor a mix is a use"
+        );
     }
 }

@@ -64,6 +64,10 @@ function on_bot_tick(bot)
     if BotMenu.step(bot) then
         return
     end
+    -- The item box screen, its lid and its close fade.
+    if BotInventory.screen_step(bot) then
+        return
+    end
 
     local signature = BotScene.signature(scene)
     if signature ~= BOT_STATE.scene_sig then

@@ -14,6 +14,13 @@
 --   BotMenu.equip(bot, item, label)     start an EQUIP job
 --   BotMenu.use_heal(bot, item, label)  start a USE job on a heal item
 --   BotMenu.use_item(bot, item, label)  start a USE job on any other item
+--   BotMenu.combine(bot, slot, target, label)
+--                                       start a MOVE job: the item in menu
+--                                       slot `slot` onto slot `target`
+--                                       (0-based), answering a herb mix's
+--                                       yes/no prompt Yes; it succeeds when
+--                                       the engine's inventory holds one
+--                                       stack fewer
 --     Each returns true when the job started (or, for equip, the weapon is
 --     already equipped) and false when the item is not held, is the wrong
 --     kind, a job is already running, or the same job failed recently.
@@ -66,7 +73,18 @@ local function describe(menu)
         table.concat(menu.options or {}, ","), menu.selected_item or 0)
 end
 
-local function start(bot, kind, item, label)
+-- Occupied inventory slots in the menu's list.
+local function used_slots(menu)
+    local n = 0
+    for _, row in ipairs(menu.items or {}) do
+        if row.item ~= 0 then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+local function start(bot, kind, item, label, extra)
     label = label or kind
     if BOT_MENU.job then
         log(bot, string.format("%s 0x%02X refused: job %s 0x%02X is running",
@@ -80,6 +98,12 @@ local function start(bot, kind, item, label)
     end
     local menu = bot:menu()
     local row = find_item(menu, item)
+    if extra and extra.slot then
+        row = menu.items[extra.slot + 1]
+        if not row or row.item ~= item then
+            row = nil
+        end
+    end
     if not row then
         log(bot, string.format("%s 0x%02X refused: not in the inventory", kind, item))
         return false
@@ -94,7 +118,8 @@ local function start(bot, kind, item, label)
             return true
         end
     else
-        if row.quantity <= 0 then
+        -- An empty gun still takes a clip in a combine.
+        if row.quantity <= 0 and not (kind == "combine" and row.kind == "weapon") then
             log(bot, string.format("%s 0x%02X refused: the stack is empty", kind, item))
             return false
         end
@@ -115,6 +140,9 @@ local function start(bot, kind, item, label)
         last_start = -SECOND,
         before_count = bot:item_count(item),
         before_equipped = bot:player().equipped,
+        before_used = used_slots(menu),
+        slot = extra and extra.slot or nil,
+        target = extra and extra.target or nil,
         ok = nil,
         reason = nil,
     }
@@ -134,6 +162,17 @@ end
 
 function BotMenu.use_item(bot, item, label)
     return start(bot, "use", item, label)
+end
+
+-- MOVE the item in menu slot `slot` onto the one in `target`. The caller
+-- checks the pair with bot:combine_result first.
+function BotMenu.combine(bot, slot, target, label)
+    local row = bot:menu().items[slot + 1]
+    if not row or row.item == 0 then
+        log(bot, string.format("combine slot %d refused: the slot is empty", slot))
+        return false
+    end
+    return start(bot, "combine", row.item, label, { slot = slot, target = target })
 end
 
 function BotMenu.busy()
@@ -202,12 +241,18 @@ local function wanted_option(job)
     if job.kind == "equip" then
         return "EQUIP"
     end
+    if job.kind == "combine" then
+        return "MOVE"
+    end
     return "USE"
 end
 
 local function result_seen(bot, job)
     if job.kind == "equip" then
         return bot:player().equipped == job.item
+    end
+    if job.kind == "combine" then
+        return used_slots(bot:menu()) < job.before_used
     end
     return bot:item_count(job.item) < job.before_count
 end
@@ -220,6 +265,12 @@ local function drive(bot, job, menu)
             return
         end
         local row = find_item(menu, job.item)
+        if job.slot then
+            row = menu.items[job.slot + 1]
+            if row and row.item ~= job.item then
+                row = nil
+            end
+        end
         if not row then
             conclude(bot, job, false, "item left the inventory before the use")
             return
@@ -263,16 +314,40 @@ local function drive(bot, job, menu)
         end
         if menu.option == index then
             if pulse(bot, job, "confirm") then
-                set_stage(job, "result")
+                set_stage(job, job.kind == "combine" and "move" or "result")
             end
             return
         end
         pulse(bot, job, (menu.option or 0) < index and "down" or "up")
+    elseif job.stage == "move" then
+        -- The MOVE cursor: d-pad onto the target slot, then confirm.
+        if menu.mode ~= "move" then
+            set_stage(job, menu.mode == "actions" and "option" or "cursor")
+            return
+        end
+        local target = FIRST_SLOT_CURSOR + 2 * job.target
+        local at = menu.move_cursor
+        if at == nil then
+            return
+        end
+        if at == target then
+            if pulse(bot, job, "confirm") then
+                set_stage(job, "result")
+            end
+            return
+        end
+        pulse(bot, job, cursor_key(at, target))
     elseif job.stage == "result" then
         if result_seen(bot, job) then
-            conclude(bot, job, true, job.kind == "equip"
-                and string.format("equipped 0x%02X", job.item)
-                or string.format("count %d -> %d", job.before_count, bot:item_count(job.item)))
+            local why
+            if job.kind == "equip" then
+                why = string.format("equipped 0x%02X", job.item)
+            elseif job.kind == "combine" then
+                why = string.format("slots %d -> %d", job.before_used, used_slots(menu))
+            else
+                why = string.format("count %d -> %d", job.before_count, bot:item_count(job.item))
+            end
+            conclude(bot, job, true, why)
         elseif job.stage_ticks > 60 then
             conclude(bot, job, false, string.format(
                 "no effect after the %s confirm (count %d, equipped %s; %s)",
@@ -386,9 +461,21 @@ function BotMenu.step(bot)
     end
 
     if menu.phase == "message" then
+        local scene = bot:scene()
+        if job.kind == "combine" and job.stage == "result" and scene.prompt then
+            -- A herb mix asks first: right selects Yes, then a fresh edge
+            -- confirms it.
+            if pulse(bot, job, scene.prompt_choice == "yes" and "action" or "right") then
+                -- The mix applies a few ticks after the answer.
+                job.stage_ticks = 0
+            end
+            return true
+        end
         -- A refusal ("You can't use it here") or a prompt: dismiss it with
         -- the action button, like the message window expects.
-        if job.stage == "result" and job.ok == nil and not result_seen(bot, job) then
+        -- A combine's prompt text is no refusal: its result stage decides.
+        if job.stage == "result" and job.ok == nil and job.kind ~= "combine"
+            and not result_seen(bot, job) then
             job.refused = true
         end
         pulse(bot, job, "action")

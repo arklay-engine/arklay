@@ -11,7 +11,8 @@
 //! `<use>` (an item to USE from the menu while standing in an AOT slot's
 //! use-item zone), `<answer>` (the choice to make at a yes/no prompt) and
 //! `<avoid>` (an AOT slot the planner should not use) and `<push>` (push a
-//! room object until it stands in an AOT slot's zone). `<interact>`,
+//! room object until it stands in an AOT slot's zone, or, with a compass
+//! `direction`, push it that way until it clears the zone). `<interact>`,
 //! `<camera>` and `<push>` share one ordered step list. A format-1 document may not use them.
 //!
 //! The merged pack resolves the file next to the room's other entries, so a
@@ -66,8 +67,44 @@ pub enum Target {
     /// Walk into a camera switch zone that leads to this cut.
     Camera(u8),
     /// Push room object `object` until its position lies in AOT `slot`'s
-    /// zone (done by position; the step has no flag).
-    Push { object: u8, slot: u8 },
+    /// zone, or, with a `direction`, push it that way until it no longer
+    /// covers that zone (done by position; the step has no flag).
+    Push {
+        object: u8,
+        slot: u8,
+        direction: Option<Direction>,
+    },
+}
+
+/// A compass direction in room coordinates: east is `+x`, north is `+z`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    North,
+    South,
+    East,
+    West,
+}
+
+impl Direction {
+    /// The attribute spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::North => "north",
+            Self::South => "south",
+            Self::East => "east",
+            Self::West => "west",
+        }
+    }
+
+    /// The unit step `(dx, dz)` in room coordinates.
+    pub fn step(self) -> (i32, i32) {
+        match self {
+            Self::North => (0, 1),
+            Self::South => (0, -1),
+            Self::East => (1, 0),
+            Self::West => (-1, 0),
+        }
+    }
 }
 
 /// `<use>`: stand where the room's use-item probe in AOT `slot` (a
@@ -292,12 +329,24 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
 }
 
 fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["object", "slot", "label"])?;
+    check_attributes(node, &["object", "slot", "direction", "label"])?;
     check_leaf(node)?;
+    let direction = match node.attribute("direction") {
+        None => None,
+        Some("north") => Some(Direction::North),
+        Some("south") => Some(Direction::South),
+        Some("east") => Some(Direction::East),
+        Some("west") => Some(Direction::West),
+        Some(other) => bail!(
+            "{}: <push> `direction` must be north, south, east or west, not `{other}`",
+            at(node)
+        ),
+    };
     Ok(Interact {
         target: Target::Push {
             object: attr(node, "object")?,
             slot: attr(node, "slot")?,
+            direction,
         },
         flag: None,
         label: node.attribute("label").map(str::to_string),
@@ -613,6 +662,7 @@ mod tests {
             <camera cut="3" label="north hall"/>
             <camera cut="2" bank="1" bit="0x05"/>
             <push object="1" slot="2" label="armor onto the vent"/>
+            <push object="3" slot="5" direction="east" label="shelf off the score"/>
             <answer choice="no" slot="6" label="do not drink"/>
             <answer choice="yes" bank="4" bit="0x10"/>
             <avoid slot="7" reason="the plant stuns the player"/>
@@ -644,9 +694,22 @@ mod tests {
                     label: None,
                 },
                 Interact {
-                    target: Target::Push { object: 1, slot: 2 },
+                    target: Target::Push {
+                        object: 1,
+                        slot: 2,
+                        direction: None,
+                    },
                     flag: None,
                     label: Some("armor onto the vent".to_string()),
+                },
+                Interact {
+                    target: Target::Push {
+                        object: 3,
+                        slot: 5,
+                        direction: Some(Direction::East),
+                    },
+                    flag: None,
+                    label: Some("shelf off the score".to_string()),
                 },
             ]
         );
@@ -674,6 +737,16 @@ mod tests {
                 reason: "the plant stuns the player".to_string(),
             }]
         );
+    }
+
+    #[test]
+    fn push_direction_is_a_compass_point() {
+        let bad = r#"<bot format="2"><push object="1" slot="5" direction="up"/></bot>"#;
+        let error = parse(bad).unwrap_err().to_string();
+        assert!(error.contains("north, south, east or west"), "{error}");
+        assert_eq!(Direction::East.step(), (1, 0));
+        assert_eq!(Direction::North.step(), (0, 1));
+        assert_eq!(Direction::West.name(), "west");
     }
 
     #[test]
@@ -756,6 +829,7 @@ mod tests {
             vec![
                 ("105", 11, 0x20),
                 ("10C", 2, 0x26),
+                ("10F", 13, 0x23),
                 ("10F", 6, 0x1F),
                 ("11A", 5, 0x2D),
                 ("11A", 3, 0x2E),

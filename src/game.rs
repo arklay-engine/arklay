@@ -1107,6 +1107,264 @@ pub enum CombineCheck {
     Applied,
 }
 
+/// What a menu MOVE/combine between two inventory slots would leave in
+/// them, computed without writing anything (the bot reads it to see whether
+/// a mix frees a slot). An emptied slot has id `0`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CombineOutcome {
+    /// What the cursor slot holds afterwards.
+    pub cursor: InventoryItem,
+    /// What the target slot holds afterwards.
+    pub target: InventoryItem,
+    /// A herb mix: the menu asks the `0xF5` yes/no prompt before it applies.
+    pub herb: bool,
+}
+
+/// What a combine depends on besides the two slots.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CombineRules {
+    /// The player stands in the guardhouse drug store (chemicals mix only
+    /// there).
+    pub drug_store: bool,
+    /// BioRand's extra herb mixes (`BR_HERB_MIXES`).
+    pub herb_mixes: bool,
+    /// `--authentic`: the ammunition transfer keeps the original's 7 bits.
+    pub authentic: bool,
+}
+
+/// The outcome of the menu MOVE/combine of `cursor_slot` onto `target_slot`
+/// of `inventory`, or the refusal the menu would report, under `rules`. This
+/// runs the same recipe and effect code the menu applies.
+pub fn combine_outcome(
+    item_defs: &crate::item_catalog::ItemCatalog,
+    inventory: &[InventoryItem],
+    cursor_slot: usize,
+    target_slot: usize,
+    rules: CombineRules,
+) -> Result<CombineOutcome, CombineResult> {
+    let (record, herb) = combine_recipe(inventory, cursor_slot, target_slot, rules)?;
+    let (cursor, target) = combine_slots_after(
+        item_defs,
+        inventory[cursor_slot],
+        inventory[target_slot],
+        record,
+        rules.authentic,
+    );
+    Ok(CombineOutcome {
+        cursor,
+        target,
+        herb,
+    })
+}
+
+/// The recipe between two inventory slots, or the refusal the reference
+/// reports. `Ok` carries the record and whether the cursor item is a herb
+/// (the deferred prompt case).
+fn combine_recipe(
+    inventory: &[InventoryItem],
+    cursor_slot: usize,
+    target_slot: usize,
+    rules: CombineRules,
+) -> Result<(items::CombineRecord, bool), CombineResult> {
+    if cursor_slot == target_slot {
+        return Err(CombineResult::NoRecipe);
+    }
+    let Some(cursor) = inventory.get(cursor_slot).copied() else {
+        return Err(CombineResult::NoRecipe);
+    };
+    let Some(target) = inventory.get(target_slot).copied() else {
+        return Err(CombineResult::NoRecipe);
+    };
+    if cursor.id == 0 || target.id == 0 {
+        return Err(CombineResult::NoRecipe);
+    }
+    let Some(record) = items::combine_with_mixes(cursor.id, target.id, rules.herb_mixes) else {
+        // No recipe: the original distinguishes two herbs (its result 3,
+        // the `0xF6` "cannot combine" message) from every other pair.
+        return Err(
+            if (HERB_MIN..=HERB_MAX).contains(&cursor.id)
+                && (HERB_MIN..=HERB_MAX).contains(&target.id)
+            {
+                CombineResult::HerbNoRecipe
+            } else {
+                CombineResult::NoRecipe
+            },
+        );
+    };
+    // The one-way ammo transfers need an empty destination: effect 6 fills
+    // the cursor stack, effect 7 the target stack, and the original refuses
+    // the recipe untouched when that slot already holds rounds.
+    if (record.effect == 6 && cursor.quantity != 0) || (record.effect == 7 && target.quantity != 0)
+    {
+        return Err(CombineResult::NoRecipe);
+    }
+    if (CHEMICAL_MIN..=CHEMICAL_MAX).contains(&cursor.id) && !rules.drug_store {
+        return Err(CombineResult::NeedsDrugStore);
+    }
+    let herb = (HERB_MIN..=HERB_MAX).contains(&cursor.id);
+    Ok((record, herb))
+}
+
+/// A stack's count as the ammunition transfer adds it. The original keeps
+/// 7 bits, so a count of 128 or more (fuel, ammunition) is truncated; only
+/// `--authentic` keeps that.
+fn combine_count(quantity: u8, authentic: bool) -> u16 {
+    if authentic {
+        u16::from(quantity) & 0x7F
+    } else {
+        u16::from(quantity)
+    }
+}
+
+/// The two slots after a recipe: `new_cursor` and `new_target` replace the
+/// ids first (an emptied target loses its quantity), then the record's
+/// effect byte rearranges the quantities: 1/2 ammo transfer with the cursor
+/// / other slot winning, 3 quantity merge (cap `0xFA`), 6/7 one-way ammo
+/// transfer. Effects 4 (the chemical flag, which the caller raises) and 5
+/// (mode only) leave the quantities alone.
+fn combine_slots_after(
+    item_defs: &crate::item_catalog::ItemCatalog,
+    cursor: InventoryItem,
+    target: InventoryItem,
+    record: items::CombineRecord,
+    authentic: bool,
+) -> (InventoryItem, InventoryItem) {
+    let cursor = InventoryItem {
+        id: record.new_cursor,
+        quantity: cursor.quantity,
+    };
+    let target = InventoryItem {
+        id: record.new_target,
+        quantity: if record.new_target == 0 {
+            0
+        } else {
+            target.quantity
+        },
+    };
+    match record.effect {
+        1 => {
+            let sum = u16::from(target.quantity) + combine_count(cursor.quantity, authentic);
+            let max = u16::from(item_defs.get(cursor.id).stack);
+            if max < sum {
+                (
+                    InventoryItem {
+                        quantity: max as u8,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_sub(max as u8),
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        2 => {
+            let sum = u16::from(cursor.quantity) + combine_count(target.quantity, authentic);
+            let max = u16::from(item_defs.get(target.id).stack);
+            if max < sum {
+                (
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_sub(max as u8),
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: max as u8,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem::default(),
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..target
+                    },
+                )
+            }
+        }
+        3 => {
+            let sum = u16::from(cursor.quantity) + u16::from(target.quantity);
+            if sum > u16::from(items::ITEM_QUANTITY_CAP) {
+                (
+                    InventoryItem {
+                        quantity: items::ITEM_QUANTITY_CAP,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_add(6),
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        6 => {
+            let other = target.quantity;
+            let max = item_defs.get(cursor.id).stack;
+            if max < other {
+                (
+                    InventoryItem {
+                        quantity: max,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: other - max,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: other,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        7 => {
+            let other = cursor.quantity;
+            let max = item_defs.get(target.id).stack;
+            if max < other {
+                (
+                    InventoryItem {
+                        quantity: other - max,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: max,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem::default(),
+                    InventoryItem {
+                        quantity: other,
+                        ..target
+                    },
+                )
+            }
+        }
+        _ => (cursor, target),
+    }
+}
+
 /// What a room action does when the player triggers it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoomActionKind {
@@ -6564,48 +6822,12 @@ impl GameState {
         cursor_slot: usize,
         target_slot: usize,
     ) -> Result<(items::CombineRecord, bool), CombineResult> {
-        if cursor_slot == target_slot {
-            return Err(CombineResult::NoRecipe);
-        }
-        let Some(cursor) = self.inventory.get(cursor_slot).copied() else {
-            return Err(CombineResult::NoRecipe);
-        };
-        let Some(target) = self.inventory.get(target_slot).copied() else {
-            return Err(CombineResult::NoRecipe);
-        };
-        if cursor.id == 0 || target.id == 0 {
-            return Err(CombineResult::NoRecipe);
-        }
-        let Some(record) = items::combine_with_mixes(
-            cursor.id,
-            target.id,
-            self.system_flag(crate::scd::opcode::system::BR_HERB_MIXES),
-        ) else {
-            // No recipe: the original distinguishes two herbs (its result 3,
-            // the `0xF6` "cannot combine" message) from every other pair.
-            return Err(
-                if (HERB_MIN..=HERB_MAX).contains(&cursor.id)
-                    && (HERB_MIN..=HERB_MAX).contains(&target.id)
-                {
-                    CombineResult::HerbNoRecipe
-                } else {
-                    CombineResult::NoRecipe
-                },
-            );
-        };
-        // The one-way ammo transfers need an empty destination: effect 6 fills
-        // the cursor stack, effect 7 the target stack, and the original refuses
-        // the recipe untouched when that slot already holds rounds.
-        if (record.effect == 6 && cursor.quantity != 0)
-            || (record.effect == 7 && target.quantity != 0)
-        {
-            return Err(CombineResult::NoRecipe);
-        }
-        if (CHEMICAL_MIN..=CHEMICAL_MAX).contains(&cursor.id) && !self.is_drug_store() {
-            return Err(CombineResult::NeedsDrugStore);
-        }
-        let herb = (HERB_MIN..=HERB_MAX).contains(&cursor.id);
-        Ok((record, herb))
+        combine_recipe(
+            &self.inventory,
+            cursor_slot,
+            target_slot,
+            self.combine_rules(),
+        )
     }
 
     /// Write a resolved recipe into the slots and run its effect.
@@ -6616,6 +6838,13 @@ impl GameState {
         record: items::CombineRecord,
         herb: bool,
     ) -> CombineResult {
+        let (cursor, target) = combine_slots_after(
+            &self.item_defs,
+            self.inventory[cursor_slot],
+            self.inventory[target_slot],
+            record,
+            self.player_options.authentic,
+        );
         // The original's equipped marker is the slot's 1-based index, so a
         // recipe that rewrites the equipped slot's id (other rounds loaded
         // into the equipped grenade launcher turn it into that loading's
@@ -6623,15 +6852,14 @@ impl GameState {
         let equipped_slot = self
             .equipped
             .and_then(|equipped| self.inventory.iter().position(|stack| stack.id == equipped));
-        self.inventory[cursor_slot].id = record.new_cursor;
-        self.inventory[target_slot].id = record.new_target;
-        if record.new_target == 0 {
-            self.inventory[target_slot].quantity = 0;
-        }
+        self.inventory[cursor_slot] = cursor;
+        self.inventory[target_slot] = target;
         let rewritten = equipped_slot
             .map(|slot| self.inventory[slot].id)
             .filter(|&id| id != 0 && Some(id) != self.equipped);
-        self.apply_combine_effect(cursor_slot, target_slot, record.effect);
+        if record.effect == 4 {
+            self.apply_flag(0, SCENARIO_FLAG_CHEMICAL_COMBINE, 0);
+        }
         self.rebuild_slots();
         if let Some(id) = rewritten {
             self.set_equipped(Some(id));
@@ -6644,83 +6872,13 @@ impl GameState {
         }
     }
 
-    /// A stack's count as the ammunition transfer adds it. The original keeps
-    /// 7 bits, so a count of 128 or more (fuel, ammunition) is truncated; only
-    /// `--authentic` keeps that.
-    fn combine_count(&self, quantity: u8) -> u16 {
-        if self.player_options.authentic {
-            u16::from(quantity) & 0x7F
-        } else {
-            u16::from(quantity)
-        }
-    }
-
-    /// The combine record's effect byte: 1/2 ammo transfer with the cursor /
-    /// other slot winning, 3 quantity merge (cap `0xFA`), 4 chemical flag,
-    /// 5 mode only, 6/7 one-way ammo transfer.
-    fn apply_combine_effect(&mut self, cursor_slot: usize, target_slot: usize, effect: u8) {
-        let cursor = self.inventory[cursor_slot];
-        let target = self.inventory[target_slot];
-        match effect {
-            1 => {
-                let sum = u16::from(target.quantity) + self.combine_count(cursor.quantity);
-                let max = u16::from(self.item_defs.get(cursor.id).stack);
-                if max < sum {
-                    self.inventory[cursor_slot].quantity = max as u8;
-                    self.inventory[target_slot].quantity = (sum as u8).wrapping_sub(max as u8);
-                } else {
-                    self.inventory[cursor_slot].quantity = sum as u8;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            2 => {
-                let sum = u16::from(cursor.quantity) + self.combine_count(target.quantity);
-                let max = u16::from(self.item_defs.get(target.id).stack);
-                if max < sum {
-                    self.inventory[target_slot].quantity = max as u8;
-                    self.inventory[cursor_slot].quantity = (sum as u8).wrapping_sub(max as u8);
-                } else {
-                    self.inventory[target_slot].quantity = sum as u8;
-                    self.inventory[cursor_slot] = InventoryItem::default();
-                }
-            }
-            3 => {
-                let sum = u16::from(cursor.quantity) + u16::from(target.quantity);
-                if sum > u16::from(items::ITEM_QUANTITY_CAP) {
-                    self.inventory[cursor_slot].quantity = items::ITEM_QUANTITY_CAP;
-                    self.inventory[target_slot].quantity = (sum as u8).wrapping_add(6);
-                } else {
-                    self.inventory[cursor_slot].quantity = sum as u8;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            4 => {
-                self.apply_flag(0, SCENARIO_FLAG_CHEMICAL_COMBINE, 0);
-            }
-            5 => {}
-            6 => {
-                let other = target.quantity;
-                let max = self.item_defs.get(cursor.id).stack;
-                if max < other {
-                    self.inventory[cursor_slot].quantity = max;
-                    self.inventory[target_slot].quantity = other - max;
-                } else {
-                    self.inventory[cursor_slot].quantity = other;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            7 => {
-                let other = cursor.quantity;
-                let max = self.item_defs.get(target.id).stack;
-                if max < other {
-                    self.inventory[target_slot].quantity = max;
-                    self.inventory[cursor_slot].quantity = other - max;
-                } else {
-                    self.inventory[target_slot].quantity = other;
-                    self.inventory[cursor_slot] = InventoryItem::default();
-                }
-            }
-            _ => {}
+    /// The rules a combine runs under here: the drug store, BioRand's herb
+    /// mixes and the authentic 7-bit ammunition count.
+    pub fn combine_rules(&self) -> CombineRules {
+        CombineRules {
+            drug_store: self.is_drug_store(),
+            herb_mixes: self.system_flag(crate::scd::opcode::system::BR_HERB_MIXES),
+            authentic: self.player_options.authentic,
         }
     }
 
@@ -11921,10 +12079,8 @@ mod tests {
 
     #[test]
     fn the_ammunition_transfer_truncates_to_seven_bits_only_when_authentic() {
-        let mut state = game();
-        assert_eq!(state.combine_count(200), 200);
-        state.player_options.authentic = true;
-        assert_eq!(state.combine_count(200), 72);
+        assert_eq!(combine_count(200, false), 200);
+        assert_eq!(combine_count(200, true), 72);
     }
 
     #[test]
