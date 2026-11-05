@@ -314,11 +314,18 @@ impl From<&DoorSnapshot> for DoorMemory {
 #[derive(Debug)]
 struct SessionSnapshot {
     room: RoomId,
+    /// The room's state is the room's own. Between a door load's room-id
+    /// switch and the destination's `room_set` (a stage change yields a
+    /// frame there) the doors and actions are still the source room's, so
+    /// the snapshot leaves them empty and the world model skips the tick.
+    booted: bool,
     camera: usize,
     player: PlayerSnapshot,
     scene: SceneSnapshot,
     actions: Vec<ActionSnapshot>,
     doors: Vec<DoorSnapshot>,
+    /// The room's active objects.
+    objects: Vec<ObjectSnapshot>,
     enemies: Vec<EnemySnapshot>,
     weapon: WeaponSnapshot,
     /// The pause menu as the engine shows it, read-only.
@@ -500,6 +507,23 @@ struct ActionSnapshot {
     lock: Option<u8>,
     handler: u8,
     flags: u8,
+}
+
+/// One active room object (a pushable block, a statue, a shelf), read-only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ObjectSnapshot {
+    slot: usize,
+    /// The live position (the record's `pos`).
+    x: i32,
+    z: i32,
+    /// The collision half-extents along X and Z.
+    half_x: i32,
+    half_z: i32,
+    /// Solid and without `OF_NOT_PUSHABLE`: walking into it can push it.
+    pushable: bool,
+    /// Neither intangible nor without collision: the player cannot walk
+    /// through it, so the navigation plans around it.
+    solid: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -868,16 +892,52 @@ impl SessionSnapshot {
                 depth: i32::from(door.zone[3]),
             })
             .collect();
+        let booted = !session
+            .transition
+            .as_ref()
+            .is_some_and(|transition| transition.placed && !transition.entered);
+        let objects = game
+            .objects
+            .records
+            .iter()
+            .enumerate()
+            .filter(|(_, record)| record.active())
+            .map(|(slot, record)| {
+                use crate::objects::{
+                    OBJECT_FLAG_INTANGIBLE, OBJECT_FLAG_NO_COLLISION, OBJECT_FLAG_NOT_PUSHABLE,
+                };
+                ObjectSnapshot {
+                    slot,
+                    x: record.pos[0],
+                    z: record.pos[2],
+                    half_x: i32::from(record.half_extents[0]),
+                    half_z: i32::from(record.half_extents[2]),
+                    pushable: record.flag
+                        & (OBJECT_FLAG_NOT_PUSHABLE
+                            | OBJECT_FLAG_INTANGIBLE
+                            | OBJECT_FLAG_NO_COLLISION)
+                        == 0,
+                    solid: record.flag & (OBJECT_FLAG_INTANGIBLE | OBJECT_FLAG_NO_COLLISION) == 0,
+                }
+            })
+            .collect();
+        let (actions, doors, objects) = if booted {
+            (actions, doors, objects)
+        } else {
+            (Vec::new(), Vec::new(), Vec::new())
+        };
         let enemies = enemy_snapshots(game, session.player.pos, &session.loaded.room);
         let weapon = weapon_snapshot(game, &session.player.weapon);
         let menu = MenuSnapshot::build(session);
         Self {
             room: id,
+            booted,
             camera: session.loaded.room.current_cut,
             player,
             scene,
             actions,
             doors,
+            objects,
             enemies,
             weapon,
             menu,
@@ -978,13 +1038,22 @@ const TELEPORT_STEP: i32 = 1500;
 const STUCK_TICKS: u32 = 12;
 /// Replans before `walk_to` reports `blocked`.
 const MAX_REPLANS: u32 = 3;
+/// How much smaller than a room object its navigation box is, per side
+/// ([`BotNav::sync_objects`]).
+const OBJECT_NAV_INSET: i32 = 128;
 
 /// The per-room navigation state.
 #[derive(Debug, Default)]
 struct BotNav {
     room_id: Option<RoomId>,
     /// Only the collision query is needed; the rest of `RoomState` stays out.
+    /// It holds the room's boxes plus one box per solid room object.
     collision: RoomState,
+    /// The room's own collision, before the object boxes.
+    base_collision: crate::state::Collision,
+    /// The object boxes `collision` was built with, as `(x, z, half_x,
+    /// half_z)`.
+    object_boxes: Vec<(i32, i32, i32, i32)>,
     goal: Option<(i32, i32)>,
     tolerance: i32,
     path: Vec<(i32, i32)>,
@@ -1595,6 +1664,8 @@ impl BotNav {
         }
         self.room_id = Some(id);
         self.collision = collision_room(room);
+        self.base_collision = self.collision.collision.clone();
+        self.object_boxes.clear();
         self.fine = RefCell::new(None);
         self.goal = None;
         self.path.clear();
@@ -1612,6 +1683,60 @@ impl BotNav {
         self.avoid = false;
         self.zones.clear();
         self.avoid_ticks = 0;
+    }
+
+    /// Plan around the room's solid objects: walking into a pushable one
+    /// would push it (a solved block pushed off its mark), and a solid one
+    /// stops the walk. A moved object rebuilds the boxes and drops the cached
+    /// path and the narrow-passage lattice. RE2's SCA rooms keep their own
+    /// collision.
+    ///
+    /// The boxes are [`OBJECT_NAV_INSET`] smaller than the object on each
+    /// side, so the narrow strip between an object and a wall (where a push
+    /// stand point often lies) stays on the lattice; a walk that grazes the
+    /// box edge slides off without the nine forward frames a push needs.
+    fn sync_objects(&mut self, objects: &[ObjectSnapshot]) {
+        if self.collision.sca.is_some() {
+            return;
+        }
+        let boxes: Vec<(i32, i32, i32, i32)> = objects
+            .iter()
+            .filter(|object| {
+                object.solid && object.half_x > OBJECT_NAV_INSET && object.half_z > OBJECT_NAV_INSET
+            })
+            .map(|object| {
+                (
+                    object.x,
+                    object.z,
+                    object.half_x - OBJECT_NAV_INSET,
+                    object.half_z - OBJECT_NAV_INSET,
+                )
+            })
+            .collect();
+        if boxes == self.object_boxes {
+            return;
+        }
+        let mut collision = self.base_collision.clone();
+        let clamp = |value: i32| value.clamp(0, i32::from(u16::MAX)) as u16;
+        for &(x, z, half_x, half_z) in &boxes {
+            let rect = crate::state::CollisionRect {
+                x_max: clamp(x + half_x),
+                z_max: clamp(z + half_z),
+                x_min: clamp(x - half_x),
+                z_min: clamp(z - half_z),
+                kind: 1,
+                flags: 0,
+            };
+            for quadrant in &mut collision.quadrants {
+                quadrant.push(rect);
+            }
+        }
+        self.collision.collision = collision;
+        self.object_boxes = boxes;
+        self.fine = RefCell::new(None);
+        self.drop_path();
+        self.unreachable_goal = None;
+        self.blocked_goal = None;
     }
 
     fn clear_goal(&mut self) {
@@ -2318,6 +2443,11 @@ impl UserData for BotCtx {
                         row.set("kind", "camera")?;
                         row.set("cut", cut)?;
                     }
+                    meta::Target::Push { object, slot } => {
+                        row.set("kind", "push")?;
+                        row.set("object", object)?;
+                        row.set("slot", slot)?;
+                    }
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
@@ -2542,6 +2672,21 @@ impl UserData for BotCtx {
                 row.set("to", zone.to)?;
                 row.set("x", zone.x)?;
                 row.set("z", zone.z)?;
+                table.set(index + 1, row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("objects", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (index, object) in bot.snapshot.objects.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("slot", object.slot)?;
+                row.set("x", object.x)?;
+                row.set("z", object.z)?;
+                row.set("half_x", object.half_x)?;
+                row.set("half_z", object.half_z)?;
+                row.set("pushable", object.pushable)?;
                 table.set(index + 1, row)?;
             }
             Ok(table)
@@ -3131,6 +3276,7 @@ impl BotRuntime {
             input.reset();
             let mut nav = self.shares.nav.borrow_mut();
             nav.sync_room(session.loaded.id, &session.loaded.room);
+            nav.sync_objects(&snapshot.objects);
             nav.begin_tick();
             let mut memory = self.shares.memory.borrow_mut();
             memory.observe(&snapshot);
@@ -3423,6 +3569,7 @@ mod tests {
             "scene",
             "actions",
             "doors",
+            "objects",
             "flag",
             "has_item",
             "item_count",
@@ -3815,6 +3962,49 @@ mod tests {
             collision_flags: 0,
             grabbed: false,
         }
+    }
+
+    #[test]
+    fn solid_room_objects_block_the_plan_and_follow_a_push() {
+        let mut nav = BotNav::default();
+        nav.sync_room(
+            RoomId {
+                stage: 2,
+                room: 0x05,
+                player_flag: 1,
+                mansion2: false,
+            },
+            &RoomState::default(),
+        );
+        let object = |x: i32, solid: bool| ObjectSnapshot {
+            slot: 1,
+            x,
+            z: 8000,
+            half_x: 450,
+            half_z: 450,
+            pushable: solid,
+            solid,
+        };
+        let centre = (8000, 8000);
+        assert!(!blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
+        nav.sync_objects(&[object(8000, true)]);
+        assert!(blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
+        // The box is inset, so the floor just past the object's edge (inside
+        // the inset plus the body) stays free.
+        assert!(!blocked(
+            &nav.collision,
+            8000 + 450 - OBJECT_NAV_INSET + 120,
+            8000,
+            0,
+            100,
+            0
+        ));
+        // A pushed object moves its box; an intangible one has none.
+        nav.sync_objects(&[object(5000, true)]);
+        assert!(!blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
+        assert!(blocked(&nav.collision, 5000, 8000, 0, 100, 0));
+        nav.sync_objects(&[object(5000, false)]);
+        assert!(!blocked(&nav.collision, 5000, 8000, 0, 100, 0));
     }
 
     #[test]

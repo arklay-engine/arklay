@@ -135,6 +135,11 @@ fn counts(snapshot: &SessionSnapshot) -> BTreeMap<u8, u32> {
 impl World {
     /// Fold one tick's snapshot into the model. Call before the route runs.
     pub(super) fn observe(&mut self, tick: u64, snapshot: &SessionSnapshot) {
+        // Mid door load the room id is the destination's but the room state
+        // is not yet; the entry is counted on the first booted tick.
+        if !snapshot.booted {
+            return;
+        }
         let key = snapshot.room.room3();
         let entered = self.current.as_deref() != Some(key.as_str());
         if entered {
@@ -472,6 +477,7 @@ pub(super) mod tests {
     pub(in crate::engine::bot) fn snapshot(code: u16, x: i32, z: i32) -> SessionSnapshot {
         SessionSnapshot {
             room: room(code),
+            booted: true,
             camera: 0,
             player: PlayerSnapshot {
                 x,
@@ -508,6 +514,7 @@ pub(super) mod tests {
             },
             actions: Vec::new(),
             doors: Vec::new(),
+            objects: Vec::new(),
             enemies: Vec::new(),
             weapon: WeaponSnapshot {
                 equipped: None,
@@ -636,6 +643,58 @@ pub(super) mod tests {
         assert!(!target.get::<bool>("visited").unwrap());
         assert_eq!(target.get::<u32>("entries").unwrap(), 0);
         assert_eq!(target.get::<Option<u64>>("last_entry").unwrap(), None);
+    }
+
+    #[test]
+    fn a_door_load_tick_does_not_copy_the_source_rooms_doors() {
+        // The engine switches the room id at the door load's placement and
+        // boots the destination's doors at its `room_set`, a frame later on a
+        // stage change. That frame carries the destination id with the
+        // source room's doors and items.
+        let mut world = World::default();
+        let mut source = snapshot(0x204, 5000, 5000);
+        for (slot, target) in ["111", "112", "202", "21A", "219"].iter().enumerate() {
+            source
+                .doors
+                .push(door(slot as u8, target, 0, 2000 * slot as i32, 9000));
+        }
+        source.actions.push(item(7, 0x44, 20000, 20000));
+        world.observe(1, &source);
+
+        let mut loading = snapshot(0x112, 5000, 5000);
+        loading.booted = false;
+        loading.doors = source.doors.clone();
+        loading.actions = source.actions.clone();
+        world.observe(2, &loading);
+
+        let mut dest = snapshot(0x112, 5000, 5000);
+        dest.doors.push(door(0, "204", 0, 1000, 1000));
+        dest.doors.push(door(1, "113", 0, 3000, 3000));
+        world.observe(3, &dest);
+        world.observe(4, &dest);
+
+        let (_lua, table) = world_table(&world, &dest);
+        let room = room_row(&table, "112");
+        assert_eq!(room.get::<u32>("entries").unwrap(), 1);
+        assert_eq!(
+            room.get::<u64>("last_entry").unwrap(),
+            3,
+            "entered when booted"
+        );
+        let doors: Table = room.get("doors").unwrap();
+        let slots: Vec<u8> = doors
+            .sequence_values::<Table>()
+            .map(|row| row.unwrap().get::<u8>("slot").unwrap())
+            .collect();
+        assert_eq!(slots, [0, 1], "only the destination's own doors");
+        assert_eq!(row(&doors, 0).get::<String>("target").unwrap(), "204");
+        let items: Table = room.get("items").unwrap();
+        assert_eq!(items.raw_len(), 0, "no source room item");
+        // The source room's doors are untouched, and its only door to 112
+        // is credited.
+        let doors: Table = room_row(&table, "204").get("doors").unwrap();
+        assert_eq!(doors.raw_len(), 5);
+        assert!(row(&doors, 1).get::<bool>("traversed").unwrap());
     }
 
     #[test]
