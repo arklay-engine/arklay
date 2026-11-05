@@ -513,6 +513,10 @@ pub fn character_max_health(character: u8) -> i16 {
     140 - 44 * i16::from(character & 1)
 }
 
+/// RE 2's maximum health, for both characters: the cap a heal stops at
+/// (measured: a herb at 190 gives 200 for Leon and Claire).
+pub const RE2_MAX_HEALTH: i16 = 200;
+
 /// One MSB-first flag bank.
 ///
 /// A selector byte chooses a little-endian dword by its high three bits and a
@@ -5844,7 +5848,7 @@ impl GameState {
         match kind {
             ItemKind::Heal => {
                 let health = self.entities[0].health;
-                let max = self.max_health;
+                let max = self.heal_cap();
                 let mut healed = false;
                 if health < max {
                     let raised = effect.amount.apply(health, max);
@@ -5907,6 +5911,16 @@ impl GameState {
         }
     }
 
+    /// The health a heal stops at: RE 2's 200 for both characters, else the
+    /// character's maximum.
+    fn heal_cap(&self) -> i16 {
+        if self.is_re2_room {
+            RE2_MAX_HEALTH
+        } else {
+            self.max_health
+        }
+    }
+
     /// Whether a heal item with no effect this use is still used up.
     ///
     /// The original refuses these. Outside authentic mode the menu takes a
@@ -5922,7 +5936,7 @@ impl GameState {
         // health bar and the original's herb rule. The `0x40` fast drain is
         // not counted, so a herb used with only that set changes nothing.
         self.item_defs.get(item).accepts_ineffective_use(
-            self.entities[0].health >= self.max_health,
+            self.entities[0].health >= self.heal_cap(),
             self.health_status & 0x22 != 0,
         )
     }

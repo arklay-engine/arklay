@@ -73,23 +73,26 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
 }
 
 /// The item definitions, which replace RE1's for the ids they share: what the
-/// ids are, and how the menu may use them. Every herb's amount is an
-/// approximation in RE1's thirds (`docs/re2-deviations.md`).
+/// ids are, and how the menu may use them. The amounts are RE2's, measured in
+/// the original: a green herb heals 50, two 100, green with blue 50 and two
+/// greens with blue 100. Three greens and the first aid spray heal to the
+/// maximum (200). The red-herb mixes are taken to heal to the maximum too,
+/// and the blue herb's cure is assumed.
 pub(super) fn item_definitions() -> Vec<(u8, String)> {
     const HEAL: [(u8, &str); 9] = [
         (0x23, r#"<effect kind="heal" amount="full" />"#),
-        (0x26, r#"<effect kind="heal" amount="third" />"#),
+        (0x26, r#"<effect kind="heal" amount="50" />"#),
         (0x28, r#"<effect kind="cure_poison" />"#),
-        (0x29, r#"<effect kind="heal" amount="two_thirds" />"#),
+        (0x29, r#"<effect kind="heal" amount="100" />"#),
         (0x2A, r#"<effect kind="heal" amount="full" />"#),
         (
             0x2B,
-            r#"<effect kind="heal" amount="third" /><effect kind="cure_poison" />"#,
+            r#"<effect kind="heal" amount="50" /><effect kind="cure_poison" />"#,
         ),
         (0x2C, r#"<effect kind="heal" amount="full" />"#),
         (
             0x2D,
-            r#"<effect kind="heal" amount="two_thirds" /><effect kind="cure_poison" />"#,
+            r#"<effect kind="heal" amount="100" /><effect kind="cure_poison" />"#,
         ),
         (
             0x2E,
@@ -171,6 +174,71 @@ mod tests {
         assert_eq!(kind(0x23), ItemKind::Heal);
         // The lighter: RE1's id means the ink ribbon.
         assert_eq!(kind(0x2F), ItemKind::Other);
+    }
+
+    #[test]
+    fn the_item_definitions_heal_re2_amounts() {
+        use crate::item_catalog::{HealAmount, ItemDef};
+        let defs = item_definitions();
+        let amount = |item: u8| {
+            ItemDef::parse(&defs[usize::from(item) - 1].1)
+                .unwrap()
+                .heal
+                .amount
+        };
+        assert_eq!(amount(0x26), HealAmount::Points(50));
+        assert_eq!(amount(0x29), HealAmount::Points(100));
+        assert_eq!(amount(0x2B), HealAmount::Points(50));
+        assert_eq!(amount(0x2D), HealAmount::Points(100));
+        for full in [0x23, 0x2A, 0x2C, 0x2E] {
+            assert_eq!(amount(full), HealAmount::Full, "{full:#x}");
+        }
+        assert_eq!(amount(0x28), HealAmount::None);
+        // Full means the RE2 maximum.
+        assert_eq!(HealAmount::Full.apply(1, crate::game::RE2_MAX_HEALTH), 200);
+    }
+
+    #[test]
+    fn using_a_herb_in_re2_heals_its_points_and_stops_at_200() {
+        use crate::game::{GameState, UseResult};
+        let mut writer = crate::pack::PackWriter::new();
+        for (item, xml) in item_definitions() {
+            writer
+                .add(&crate::item_catalog::entry(item), xml.into_bytes())
+                .unwrap();
+        }
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let catalog = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(&pack));
+        // (item, life before, life after), as measured in the original.
+        for (item, before, after) in [
+            (0x26, 100, 150),
+            (0x26, 190, 200),
+            (0x29, 50, 150),
+            (0x2B, 1, 51),
+            (0x2D, 1, 101),
+            (0x2C, 1, 200),
+            (0x2A, 50, 200),
+            (0x23, 1, 200),
+        ] {
+            let mut state = GameState::default();
+            state.item_defs = catalog.clone();
+            state.is_re2_room = true;
+            // RE1's maximum for Jill must not be the cap in an RE2 room.
+            state.max_health = 96;
+            state.entities[0].health = before;
+            assert!(
+                matches!(state.use_item(item), UseResult::Used { healed: true, .. }),
+                "{item:#x} at {before}"
+            );
+            assert_eq!(state.entities[0].health, after, "{item:#x} at {before}");
+        }
+        // At the maximum a herb changes nothing.
+        let mut state = GameState::default();
+        state.item_defs = catalog;
+        state.is_re2_room = true;
+        state.entities[0].health = 200;
+        state.use_item(0x26);
+        assert_eq!(state.entities[0].health, 200);
     }
 
     #[test]
