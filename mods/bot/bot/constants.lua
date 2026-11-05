@@ -18,6 +18,17 @@ BotConst.REACH = 600
 BotConst.APPROACH = 300
 -- walk_to walks the last 400 units; a shorter run overshoots the goal.
 BotConst.RUN_MIN_DISTANCE = 600
+-- Climbing an object (a crate): the vault lifts the player off the floor
+-- (y 0) onto its top (11B's crate top is y -1800); a y this far up means on
+-- top.
+BotConst.CLIMB_HEIGHT = 500
+-- How far behind the object's face to stand for the vault press: the
+-- vault's probe reaches about 470 ahead, so the player stands just short
+-- of it, where a push leaves it.
+BotConst.CLIMB_STAND = 420
+-- How far inside the object's ends to stand, so the vault probe hits its
+-- face and the player lands on its top.
+BotConst.CLIMB_INSET = 200
 -- A position jump this large without a room change is a scripted warp.
 BotConst.WARP_DISTANCE = 1000
 -- Angles are 12-bit: a full turn is 0x1000 units.
