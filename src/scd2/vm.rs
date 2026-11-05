@@ -17,8 +17,10 @@ const AUTO_TASKS: std::ops::Range<usize> = 2..10;
 const AUTO_TASK_ID: usize = 10;
 /// How many instructions one task may run in a tick before it is cut off, so
 /// a retail script that spins waiting on a state this engine never reaches
-/// costs a tick, not the session.
-const MAX_STEPS: usize = 4096;
+/// costs a tick, not the session. The original has no such limit, so it sits
+/// far above any loop a room runs to its end: room 103's main procedure walks
+/// two 255-step `for` loops over the item flags in the load's one pass.
+const MAX_STEPS: usize = 0x10000;
 /// The `gosub` nesting the original has room for.
 const MAX_DEPTH: usize = 4;
 
@@ -825,6 +827,21 @@ mod tests {
         run(code, &mut host);
         assert_eq!(host.var(4), 8);
         assert!(host.flag(3, 9));
+    }
+
+    #[test]
+    fn a_long_loop_runs_to_its_end_in_one_tick() {
+        // for (4096) { calc var0 += 1 }, 8192 steps: room 103's load pass
+        // runs two 255-step loops over the item flags, nine instructions
+        // each, and has to reach the `sce_em_set`s after them in that pass.
+        let body = [0x26, 0, 0, 0, 1, 0];
+        let code = concat(&[&[0x0D, 0, 6 + 2, 0, 0, 0x10], &body, &[0x0E, 0], &END]);
+        let mut host = TestHost::default();
+        let mut vm = vm(vec![code]);
+        vm.start_main();
+        vm.tick(&mut host);
+        assert_eq!(host.var(0), 4096);
+        assert!(!vm.running());
     }
 
     #[test]

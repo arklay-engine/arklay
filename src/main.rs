@@ -251,6 +251,12 @@ struct Cli {
     #[arg(long, value_name = "FILE", requires = "pack")]
     input: Option<PathBuf>,
 
+    /// Trace a `--ui game` run as the game plays with a sound device, to
+    /// compare with the RE2 oracle's `--sound` recordings: a door holds the
+    /// next room's load for the music. Requires `--trace`.
+    #[arg(long, requires = "trace")]
+    sound: bool,
+
     /// Write a frame BMP every N traced ticks; requires `--capture-dir` and
     /// `--trace`
     #[arg(
@@ -1385,6 +1391,7 @@ fn main() -> Result<()> {
                 capture_dir: cli.capture_dir.as_deref(),
                 ticks: cli.ticks,
                 input: input_script.as_ref(),
+                sound: cli.sound,
             };
             let authoring = arklay::engine::Authoring {
                 load: cli.load.as_deref(),
