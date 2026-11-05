@@ -90,14 +90,42 @@ function BotPuzzle.next_interact(bot)
 end
 
 -- A <push> step is done while its object's centre sits in the middle half
--- of its zone (the room's object probe tests the object's position).
+-- of its zone (the room's object probe tests the object's position). A push
+-- with a direction is done once the object has cleared the zone that way,
+-- or once the zone is gone or its item was taken (the item it hid).
+function BotPuzzle.push_dir(fact)
+    if fact.direction then
+        return { x = fact.dx, z = fact.dz }
+    end
+    return nil
+end
+
+-- Whether the world model saw the item of this room's `slot` taken.
+local function item_taken(bot, slot)
+    local room = bot:room().id
+    for _, r in ipairs(bot:world().rooms) do
+        if r.id == room then
+            for _, item in ipairs(r.items) do
+                if item.slot == slot then
+                    return item.taken
+                end
+            end
+        end
+    end
+    return false
+end
+
 function BotPuzzle.push_done(bot, fact)
+    local dir = BotPuzzle.push_dir(fact)
     local object = BotNav.object_by_slot(bot, fact.object)
     local action = BotNav.action_by_slot(bot, fact.slot)
+    if dir and (not action or (action.kind == "item" and item_taken(bot, fact.slot))) then
+        return true
+    end
     if not object or not action then
         return false
     end
-    local ex, ez = BotNav.push_error(object, action)
+    local ex, ez = BotNav.push_error(object, action, dir)
     return ex == 0 and ez == 0
 end
 

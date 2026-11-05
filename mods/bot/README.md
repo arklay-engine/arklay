@@ -55,8 +55,9 @@ Chunks run in path order, so the modules are global tables:
 | --- | --- | --- |
 | `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the enemy status (aim) bits, the tank turn step, the gun hold and reload behaviours, the item-use flag bank and selector base, and the AOT probe and action-key flag bits. |
 | `bot/init.lua` | | `on_bot_tick`: the priority order below, plus damage and room-entry logging. |
-| `bot/menu.lua` | `BotMenu` | Equip, heal and item use through the inventory menu ([Menu skills](#menu-skills)). |
-| `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press), `visit_camera` (walk into a camera switch zone) and `push_object` (push a room object onto a zone, one axis at a time). |
+| `bot/inventory.lua` | `BotInventory` | The item box and combine rules and the box screen driver ([Inventory room](#inventory-room)). |
+| `bot/menu.lua` | `BotMenu` | Equip, heal, item use and combine through the inventory menu ([Menu skills](#menu-skills)). |
+| `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press), `visit_camera` (walk into a camera switch zone) and `push_object` (push a room object onto a zone, one axis at a time, or off it in a fact's direction). |
 | `bot/planner.lua` | `BotPlanner` | Goal choice, the pursued target, attempt marks, the loop rule, the door route and the finish. |
 | `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>`/`<push>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
 | `bot/save.lua` | `BotSave` | Saving at typewriters, the latest-save tracking and the reload after a death ([Saving and reloading](#saving-and-reloading)). |
@@ -66,7 +67,8 @@ Chunks run in path order, so the modules are global tables:
 
 Priorities, highest first:
 
-1. A running menu job owns the pad. A death goes to `BotSave.on_death`; the
+1. A running menu job owns the pad, then an open item box screen
+   (`BotInventory.screen_step`, [Inventory room](#inventory-room)). A death goes to `BotSave.on_death`; the
    typewriter's save screen and its fades go to `BotSave`. Scenes, films,
    transitions, messages and viewers go to `BotScene`. A yes/no prompt takes the `<answer>` that
    matches the last press or a set flag, and Yes otherwise. A document
@@ -95,7 +97,10 @@ Priorities, highest first:
    item's use flag (bank 9, selector `item - 0x1B`), uses the item from the
    menu and waits up to 20 seconds for the done flag. A menu failure or a
    flag that never rises marks the fact.
-4. Ground items here, keys (catalog kind `key`) first, then the nearest
+4. Inventory room ([Inventory room](#inventory-room)): with every slot
+   full and a known pickup needing one, a MOVE that empties a slot; then an
+   item box here when a deposit or a withdrawal is due.
+   Ground items here, keys (catalog kind `key`) first, then the nearest
    planned path. A visible item here is taken before the bot moves on,
    unless every inventory slot is full and the item does not merge into a
    held stack (`inventory full`, retried once the inventory changes). A
@@ -304,7 +309,8 @@ finishes with a reason.
 ### Menu skills
 
 `bot/menu.lua` defines `BotMenu.equip(bot, item)`, `BotMenu.use_heal(bot,
-item)` and `BotMenu.use_item(bot, item)`. Each starts a job and returns
+item)`, `BotMenu.use_item(bot, item)` and `BotMenu.combine(bot, slot,
+target)`. Each starts a job and returns
 `true`, or returns `false` (and logs) when the item is not held, is the wrong
 kind, another job is running, or the same job failed in the last 300 ticks.
 While a job runs, `on_bot_tick` hands it the tick before the scene handler,
@@ -318,10 +324,14 @@ between pulses), each step waiting on `bot:menu()`:
    step rows), reading the cursor back after every press.
 4. `select`: confirm on the item until `mode == "actions"`.
 5. `option`: when the submenu is `ready`, d-pad to the `EQUIP`/`USE` row of
-   `options`, then confirm.
+   `options` (`MOVE` for a combine), then confirm. A combine then d-pads the
+   MOVE cursor (`bot:menu().move_cursor`) onto `8 + 2 * target` and
+   confirms; a herb mix's yes/no prompt is answered Yes (right, then
+   action).
 6. `result`: success only when the engine's state shows it: `equipped` is
-   the weapon, or the item's count dropped. A refusal message is dismissed
-   with action and fails the job.
+   the weapon, the item's count dropped, or (a combine) fewer slots are
+   used. A refusal message is dismissed with action and fails the job; a
+   combine with no effect 60 ticks after its confirm or prompt fails.
 7. `close`: cancel out of the submenu and the panel (a key item's use closes
    the menu itself), then `settle` waits through the closing fade and the
    room's post-menu freeze without pressing, so no press leaks into the room.
@@ -329,7 +339,43 @@ between pulses), each step waiting on `bot:menu()`:
 The stats JSON's `menu` block counts, from the engine's menu state alone:
 `opens` (inventory panel opened), `viewer_opens` (the same menu slot under a
 pick-up viewer or item box), `open_ticks`, `cursor_moves`, `option_moves`,
-`item_uses`, `heal_uses` and `equips`.
+`item_uses`, `heal_uses`, `equips`, `combines` (a MOVE that changed the
+stacks), `box_deposits` and `box_withdrawals` (box slots that filled or
+emptied; a swap counts one of each). Box swaps and combines are not item
+uses.
+
+### Inventory room
+
+The inventory has 8 slots (`bot:menu().capacity`); the item box has 48,
+shared by every box. `bot/inventory.lua` decides from the world model and
+drives the box screen with pad input only.
+
+- Keep (never deposit): keys, an item an open `<use>` fact needs, the
+  equipped weapon, a firearm the knowledge file lists, the ammunition of
+  those guns (the reserve), and heal items. Everything else may go in.
+- Deposit only when every slot is used and a known frontier pickup needs a
+  free slot (it merges into no held stack, and the planner has not given
+  up on it for a reason other than the full inventory).
+- Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
+  written whenever the box screen is up) when a `<use>` fact needs it, a
+  remembered locked door needs it, it is the equipped gun's ammunition
+  under the reserve floor, or it is a heal and none is held (one stack).
+  At most the free slots, after the deposits.
+- Combine first, when every slot is used and a pickup needs room: the best
+  pair of heal, ammo or weapon stacks that `bot:combine_result` says the
+  engine applies and that empties a slot, heals first (rank 1, guns and
+  ammo rank 2), never an item a `<use>` fact needs. Mixing herbs keeps the
+  healing; a full herb stack stays reachable.
+
+A box visit is a planner goal: press the live `item_box` zone here, or
+route to a remembered one (`BOX_BONUS`). The screen driver waits out the
+lid, then per operation: in browse mode d-pad the inventory cursor to the
+slot and confirm; in armed mode page the box cursor with up/down to the
+target slot (nearest way round) and confirm (the engine swaps). A
+deposit is done when the item's count drops, a withdrawal when it rises.
+Then cancel closes the box and the menu, and the visit ends once the
+player has been controllable for a second. A visit that moved nothing is
+marked and not chosen again until the inventory changes.
 
 
 ## API
@@ -371,7 +417,8 @@ leaves the game session.
 | `bot:item_kind(item)` | The item catalog's kind (`"weapon"`, `"ammo"`, `"key"`, `"heal"`, ...) and whether a pickup merges into a held stack (two values). |
 | `bot:ammo_for(weapon)` | The ammunition item `weapon` fires, or `nil` when the catalog does not list it as a weapon with an ammunition item. |
 | `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack. |
-| `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind}` with the menu's 0-based `slot`. |
+| `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind}` with the menu's 0-based `slot`. `move_cursor` is the MOVE cursor byte while `mode == "move"`. While the item box screen is up, `box = {mode, box_cursor, cursor, sliding, items}`: `mode` is `browse` or `armed`, `box_cursor` the box slot (0..47), `cursor` the inventory cursor byte, `sliding` true while a page slides (no input is read), and `items` the box rows `{slot, item, quantity, kind}`. |
+| `bot:combine_result(slot, target)` | Read-only: what a MOVE of menu slot `slot` onto `target` would do, from the engine's recipe: `{result, cursor_item, cursor_quantity, target_item, target_quantity, frees}`. `result` is `applied`, `herb` (a herb mix; the menu asks first), `no_recipe`, `herb_no_recipe` or `drug_store`; `frees` is true when the combine empties a slot. Nothing is changed. |
 | `bot:memory()` | String map set by `remember`. |
 | `bot:visited(room)` | Whether a room id such as `"106"` (or packed `0x106`) was seen. |
 | `bot:remember(key, value)` | Store a string/number/boolean in memory; `nil` removes it. |
@@ -478,7 +525,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason` | The planner should not use AOT `slot`; `reason` is a non-empty note. |
-| `<push>` | `object`, `slot`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, then 400 units behind its face) and holding forward; an axis that stalls twice is given up for the other. |
+| `<push>` | `object`, `slot`, optional `direction`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, then 400 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter. Such a step is also done once the zone is gone or the item it names was taken. |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done. |
 
 ```xml
@@ -521,7 +568,7 @@ files. The checked-in facts:
 | --- | --- |
 | 105 | `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. |
 | 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. |
-| 10F | `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
+| 10F | `<push object="1" slot="5" direction="east">`: the bookshelf off the music score's pickup. `<use>` the music score (`0x23`) at slot 13, the piano; done flag bank 1 `0xA5` (the bar counter moves off the gold emblem). `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
 | 11A | Four `<use>` crests at slots 5, 3, 4 and 6 (star `0x2D`, sun `0x2E`, moon `0x2C`, wind `0x29`); done flags bank 0 `0x6A`, `0x69`, `0x6B`, `0x6C`. |
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
 | 116 | `<avoid slot="1">`: lifting the shotgun without the broken one springs the 115 ceiling trap. |

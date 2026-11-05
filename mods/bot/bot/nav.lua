@@ -216,9 +216,20 @@ function BotNav.press_zone(bot, job)
             job.side_presses = 0
             bot:log(string.format("%s: at approach %d/%d (%d,%d)",
                 job.label, job.index, #job.points, point[1], point[2]))
+        elseif result.status == "unreachable"
+            and bot:distance(point[1], point[2]) <= C.APPROACH then
+            -- The exact point is inside grown geometry, but the player is
+            -- already beside it: press from here (the probe reaches past the
+            -- point; a side that gets nothing times out as usual).
+            job.pressing = true
+            job.ticks = 0
+            job.side_presses = 0
+            bot:log(string.format("%s: near approach %d/%d (%d,%d) from (%d,%d)",
+                job.label, job.index, #job.points, point[1], point[2], here.x, here.z))
         elseif result.status ~= "moving" then
-            bot:log(string.format("%s: approach %d/%d %s; next side",
-                job.label, job.index, #job.points, result.status))
+            bot:log(string.format("%s: approach %d/%d (%d,%d) %s from (%d,%d); next side",
+                job.label, job.index, #job.points, point[1], point[2], result.status,
+                here.x, here.z))
             job.index = job.index + 1
             job.walk_ticks = 0
             return "busy"
@@ -332,6 +343,11 @@ end
 -- the centre is in the middle half of the zone on that axis. An axis whose
 -- push stalls twice (a wall, another object, an unreachable side) is given
 -- up for the other one.
+--
+-- A push with a direction (`dir = {x, z}`, a compass step from the fact)
+-- clears the zone instead: the object goes that way only, until its
+-- trailing face has passed the far quarter of the zone on that axis (a
+-- shelf moved off the item it hides).
 
 function BotNav.object_by_slot(bot, slot)
     for _, object in ipairs(bot:objects()) do
@@ -354,8 +370,27 @@ local function band_error(value, lo, span)
     return 0
 end
 
--- How far `object`'s centre is from the middle half of `zone`, per axis.
-function BotNav.push_error(object, zone)
+-- How far the trailing face (centre `value`, half size `half`) is from
+-- passing the far quarter of [lo, lo + span] going in `step` (+1 or -1).
+local function clear_error(value, half, lo, span, step)
+    if step > 0 then
+        local goal = lo + span - span // 4
+        local face = value - half
+        return face < goal and goal - face or 0
+    end
+    local goal = lo + span // 4
+    local face = value + half
+    return face > goal and goal - face or 0
+end
+
+-- How far `object`'s centre is from the middle half of `zone`, per axis;
+-- with `dir`, how far its trailing face is from clearing the zone that way.
+function BotNav.push_error(object, zone, dir)
+    if dir then
+        local ex = dir.x ~= 0 and clear_error(object.x, object.half_x, zone.x, zone.width, dir.x) or 0
+        local ez = dir.z ~= 0 and clear_error(object.z, object.half_z, zone.z, zone.depth, dir.z) or 0
+        return ex, ez
+    end
     return band_error(object.x, zone.x, zone.width), band_error(object.z, zone.z, zone.depth)
 end
 
@@ -368,9 +403,12 @@ local PUSH_TRIES = 2
 -- walks the player into the face. A wall close behind the object leaves
 -- room only for the nearer points (the probe reaches 470 ahead).
 local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3 }
+-- Where along the face to stand, in thirds of the object's half size across
+-- the push: the middle first, then either side (a wall band over one end).
+local PUSH_LATERALS = { 0, -1, 1 }
 
 -- One tick of a push job. `job` fields set by the caller: object (slot),
--- zone, label, done(bot, job), timeout. Returns "done", "busy" or "failed"
+-- zone, label, done(bot, job), timeout, and optionally dir. Returns "done", "busy" or "failed"
 -- (with job.reason).
 function BotNav.push_object(bot, job)
     job.total = (job.total or 0) + 1
@@ -387,7 +425,7 @@ function BotNav.push_object(bot, job)
         job.permanent = true
         return "failed"
     end
-    local ex, ez = BotNav.push_error(object, job.zone)
+    local ex, ez = BotNav.push_error(object, job.zone, job.dir)
     job.tries = job.tries or { x = 0, z = 0 }
     local function error_on(axis)
         return axis == "x" and ex or ez
@@ -415,16 +453,19 @@ function BotNav.push_object(bot, job)
     local sign = error_on(axis) > 0 and 1 or -1
     local here = bot:player()
     job.stand = job.stand or { x = 1, z = 1 }
+    job.lateral = job.lateral or { x = 1, z = 1 }
     local back = PUSH_STANDS[job.stand[axis]]
     local sx, sz, fx, fz, along, across
     if axis == "x" then
-        sx, sz = object.x - sign * (object.half_x + back), object.z
+        local line = object.z + PUSH_LATERALS[job.lateral[axis]] * object.half_z // 3
+        sx, sz = object.x - sign * (object.half_x + back), line
         fx, fz = here.x + sign * C.REACH, here.z
-        along, across = object.x, BotNav.abs(here.z - object.z) > object.half_z // 2
+        along, across = object.x, BotNav.abs(here.z - line) > object.half_z // 2
     else
-        sx, sz = object.x, object.z - sign * (object.half_z + back)
+        local line = object.x + PUSH_LATERALS[job.lateral[axis]] * object.half_x // 3
+        sx, sz = line, object.z - sign * (object.half_z + back)
         fx, fz = here.x, here.z + sign * C.REACH
-        along, across = object.z, BotNav.abs(here.x - object.x) > object.half_x // 2
+        along, across = object.z, BotNav.abs(here.x - line) > object.half_x // 2
     end
     local function stalled(why)
         job.tries[axis] = job.tries[axis] + 1
@@ -448,8 +489,13 @@ function BotNav.push_object(bot, job)
             if job.stand[axis] < #PUSH_STANDS then
                 job.stand[axis] = job.stand[axis] + 1
                 job.walk_ticks = 0
+            elseif job.lateral[axis] < #PUSH_LATERALS then
+                job.stand[axis] = 1
+                job.lateral[axis] = job.lateral[axis] + 1
+                job.walk_ticks = 0
             else
                 job.stand[axis] = 1
+                job.lateral[axis] = 1
                 stalled("stand point " .. result.status)
             end
         end
