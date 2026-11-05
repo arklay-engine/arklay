@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 202 balcony over the dining room. While scenario 0x0B is clear the
+     statue (object 0) stands on the balcony and AOT 3, an object probe
+     (SAT_UNDER | SAT_OBJECT) at the railing gap, waits for it. Pushed onto
+     that zone, the statue falls through the gap: the event sets scenario
+     0x0B and the statue breaks in 105, where the blue jewel (0x21) appears
+     (105's item AOT 23 exists only once 0x0B is set). The statue is gone
+     after that, so the flag marks the step done. -->
+<bot format="2">
+  <push object="0" slot="3" bank="0" bit="0x0B" label="statue off the balcony"/>
+</bot>

@@ -6,7 +6,8 @@
 --   1. a running inventory-menu job (bot/menu.lua) owns the pad;
 --   2. scenes, films, door transitions, messages, prompts and viewers
 --      (bot/scene.lua);
---   3. survival: heal below a risk-scaled threshold (bot/survival.lua);
+--   3. survival: cure a poison with a held <cure> item, then heal below a
+--      risk-scaled threshold (bot/survival.lua);
 --   4. saving at a typewriter here when the risk-scaled decision says so
 --      (bot/save.lua); at critical health with no heal item, a save if one
 --      is possible, else play on when a save exists, else stop;
@@ -97,7 +98,7 @@ function on_bot_tick(bot)
     end
     BOT_STATE.locked_ticks = 0
 
-    if BotSurvival.heal(bot, player) then
+    if BotSurvival.cure(bot, player) or BotSurvival.heal(bot, player) then
         return
     end
     local critical = BotSurvival.critical(bot, player)
