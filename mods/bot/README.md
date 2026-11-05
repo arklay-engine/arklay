@@ -28,12 +28,15 @@ through `bot:room_meta()` on the next tick.
 
 ## Route
 
-The route starts a fresh Jill game. It used to stop when it entered room 10A;
-it now continues through 117, 11A, the east-wing return, the 203 stair landing
-and 10C. The 10C greenhouse's six plant fountains stunlock the player in the
-only bed crossing, so the route attempts the reachable green herbs, tries the
-armor-key corridor, and then retreats to 103 with a precise item/health report
-instead of dying:
+The route starts a fresh Jill game. It continues through 117, 11A, the
+east-wing return and the 105/10F gold-emblem detour, and stops with a precise
+item/health report. The detour now reaches and picks the 10F gold emblem key,
+but the pick-up event moves the bar counter back across the only north-south
+gap and traps the player in the secret passage, so the route cannot return to
+105 to use it. The 10C/204/205 armor-room path remains implemented; it was
+verified in a run that skipped the 10F key attempt. The 10C greenhouse's six
+plant fountains stunlock the player in the only bed crossing, so that path uses
+the 118 herbicide at the pump, takes the armor key, and goes on to 205:
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -122,17 +125,39 @@ instead of dying:
     `door_nav`; `enter_room` hands the arrival to the next named travel phase,
     so the outward room defaults cannot restart the opening route.
 13. **105 shield key and blue jewel key.** The shield key (0x35) action exists
-    at `(17400, 14500, 1000, 1000)`, but the north wall and the sideboard leave
-    no standable point inside the 600 reach. The north wall
+    at `(17400, 14500, 1000, 1000)`, behind the north wall and the active
+    OBJ_02 sideboard at `(18000, 14300)`. The north wall
     (`z 14454..16632`) grown by Jill's 372 radius plus the 18-unit nav skin
-    leaves `z <= 14064`; the sideboard (`18000, 14300`, half extents
-    `700, 600`) grown by the same radius covers `x 16928..19072,
-    z 13328..15272`. The only corner left is `(16928, 14064)`; its reach ends
-    at `(17377, 14462)`, 23 short in x and 38 short in z of the zone's
-    south-west corner `(17400, 14500)`. The route walks to `(16900, 14060)`,
-    presses for 60 ticks, logs the count, and continues to 106. The blue jewel
-    key (0x21) is only registered when scenario flag `0x0B` is set; in the
-    checked-in Jill route it is absent and is logged as such.
+    leaves `z <= 14064`; the sideboard (half extents `700, 600`) grown by the
+    same radius covers `x 16928..19072, z 13328..15272`. The only corner left
+    is `(16928, 14064)`; its reach ends at `(17377, 14462)`, 23 short in x and
+    38 in z of the zone's south-west corner `(17400, 14500)`. The sideboard
+    cannot be pushed: its two-point floor probe uses the 300-unit body radius
+    and the body already sits 154 units from the north wall, so the probe
+    always reports the object blocked and the push counter parks at 10. The
+    room moves the sideboard to `(16000, 14300)` only through its scripted
+    gold-emblem event (`from_main`, raised by F_COMMON_AB): the 10F bar's gold
+    emblem key (0x20) is used at the 105 fireplace after the room's
+    SCE_USEITEM actions raise the item use flag (bank 9 bit 5) and F_ROOM_22
+    (bank 4 bit 0x22).
+
+    The route wires the detour: 105 -> 104 -> 10F, push OBJ_01 (the bookshelf
+    at `17394,11190`) **east** with the normal forward+push input, use the green
+    herb if the pack is full, take the music score (0x23) at slot 5, play the
+    piano at `(10200,7300,600,1500)`, wait for F_COMMON_A5, then walk north
+    through the now-open `x8356..9720` gap and pick the gold key at
+    `(8100,18800,1500,1000)`. The pick-up is real: the run logs
+    `gold=1 held=true`.
+
+    It is a trap in this build. The gold-key pick-up raises
+    `testpickup(IT_20)` and runs `from_main_2_jill`, which sets OBJ_00 to about
+    `(13380,12596)` (half extents 16000/400). That covers
+    `x -2620..29380, z 12196..12996` and closes the only north-south gap, so
+    the player at `(8996,13447)` cannot reach 104 or 105. There is no other
+    walkable exit from the north half. The route logs the exact bar geometry
+    and finishes with the gold key held, shield=0; the 105 sideboard therefore
+    stays at `(18000,14300)` and the shield-key corner remains outside reach.
+    The blue jewel key (0x21) is also absent while scenario `0x0B` is clear.
 14. **106 -> 203 -> 202.** The 203 stair door lands on the balcony landing,
     which is sealed by the room collision. The route recognises the in-room
     `check_door` zones, walks to the west side of the east flight at
@@ -147,21 +172,41 @@ instead of dying:
     zombie is bypassed instead of fought: the route runs the long north leg in
     a straight line at `x 2800`, but the zombie can still catch and grab it
     (about 20 health); the room policy logs the bypass and does not stop to
-    shoot it. In 10C the armor key (0x34, AOT_04 at
-    `5000, 4500, 800, 2000`) is behind six plant fountains
-    (`0x0F` at `8400/8300/8200, 5800/6100/6200` and `7900/8400/8200,
-    4700/4900/4800`). Their Manhattan trigger is 3000, and a hit knocks the
-    player out of the 498-unit-wide bed band (`z 3072..3570`) before the item
-    reach animation can finish. The route takes the 8100 green-herb action from
-    `(9300, 3280)` first (a 60-tick attempt budget), then either crosses the
-    band west to the key from `(6100, 3280)` or retreats to 103 at 26 health
-    with a report. It does not force the key or the crest route.
-16. **Unreached crest/key phases.** The 205 sun crest, 20D/20E/210 moon crest,
-    the return to 11A and the final crest-hollow report are implemented as
-    normal travel/item phases, but cannot run until the 10C armor key is
-    obtainable. The shield-key door to 210 is also blocked because the 105
-    shield key is geometrically out of reach. The finish reason names the exact
-    blocker and the held items.
+    shoot it. The east-wing return detours through 10B and 118 for the
+    herbicide (0x26): 10A -> 10B (the `0xFE` far-side door opens on the second
+    press) -> 118, where the herbicide is picked from `(4560,3369)`, then back
+    through 10B (fighting the stair zombie on the way in, running past the
+    restored one on the way out and taking the room's green herb), and on to
+    109. In 10C the armor key (0x34, AOT_04 at `5000, 4500, 800, 2000`) is
+    behind six plant fountains (`0x0F`). Their Manhattan trigger covers the
+    whole 498-unit bed band (`z 3072..3570`), so the route uses the room's own
+    pump solution: walk to `(16200, 4700)`, face north so the 600 reach lands
+    in the pump's use-item zone `(15300, 5100, 1800, 600)`, wait for the
+    herbicide use flag (bank 9 bit 11) and F_ROOM_20 (bank 4 bit 0x20), then
+    call `bot:use_item(0x26)`. The room's `from_main` event withers all six
+    fountains and sets F_COMMON_A9. The key is then taken from `(6100,6300)`
+    with the normal reach. The 10C green-herb actions are reach-gated and can
+    re-arm each other's got-item viewers; the route swallows the viewer-close
+    press and waits for the last viewer before moving on. Their awards are
+    unreliable in this build (the run logs the viewer closing with `count=0`),
+    so the route relies on the first-aid spray and the 10B/202/101 herbs for
+    health rather than the greenhouse bed.
+16. **Current stop: 10F north passage.** The checked-in run finishes in 10F
+    at `(8996,13447)` with the gold key held and health 96. `from_main_2_jill`
+    moved OBJ_00 back to ~`(13380,12596)` after the pickup and closed the
+    `x8356..9720` gap; the route logs the bar extents and stops rather than
+    forcing a wall. It never reaches 105/10C/205 on this branch, so shield=0,
+    armor=0, sun=0, moon=0 and 11B stays locked.
+
+    The armor-room path was verified separately by skipping the 10F key
+    attempt: 10C's herbicide pump yields the armor key, the 204 armor door
+    opens, and the run reaches 205. There the sun-crest action is disabled at
+    room init: slot 9 is `kind=other` with handler 0 after
+    `aot_delete(AOT_09_ITEM, SCE_NONE, ...)`, while the room-item flag
+    `F_ITEM_24` is still present. The armor switch at `(9235,6736,1000,1000)`
+    is not pressed at 5 health because the route must not die. The 20D/20E/210
+    moon phases, the return to 11A and the 11B lock report remain implemented
+    but are not reached; 210 also needs the missing shield key.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -200,7 +245,12 @@ the narrow gallery and the herb's wall corner. With `opts.optional = true` a
 missing/unreachable item logs the same diagnostics and returns `"failed"` to
 the phase instead of ending the run; the 117 star crest, 11A radio key and
 11B desk/crank keys use that so a blocked optional item does not hide the next
-milestone.
+milestone. `opts.side_ticks` extends the per-side wait for reach-gated items,
+`opts.single_press` sends only one action edge per side (the 10C herbs), and
+`opts.require_count` refuses to treat a got-item viewer closing as success
+unless the item count actually rose (the 10C armor key). The pickup viewer's
+dismissal press is swallowed by the host until the button is released, so the
+same press cannot immediately re-arm a reach-gated item.
 
 `door_nav` keeps its four-side approach. For a keyed door it logs the door
 slot, key byte, lock byte, the lock-bank bit and the scenario flag when the
@@ -245,28 +295,29 @@ replacement for the route:
   kill because it has two corridor zombies, and uses a full-circle threat arc
   so the second one cannot grab from behind. The 101 corridor zombie is
   explicitly bypassed: fighting a 97-health zombie with the 7-round clip costs
-  more health than running the long west-edge line. `handle_scene` still owns
-  every transition, message and film.
+  more health than running the long west-edge line. The 204 corridor zombie is
+  bypassed for the same reason, though it can still catch the route once.
+  `handle_scene` still owns every transition, message and film.
 
 The `--watch` reload keeps `BOT_STATE.combat` with the rest of the route
 state, so editing the policy mid-fight does not restart or reset the fight.
 
 Headless evidence from the checked-in route: the 104 ammunition pickup gives
-30 rounds of reserve, the 10A zombies are engaged and killed, the one 109 green
-herb is used at 56 health, and the 202/201 groundskeeper fights are won with the
-handgun. The 101 corridor zombie is bypassed and the 202 corridor is crossed at
-`z 3000`; the checked-in run still takes one grab in 101 and reaches 10C with
-31 health. The 8100 green-herb press is knocked out of reach by the nearest
-fountain before the reach animation finishes; after the 60-tick attempt health
-is 27, below the 26 key-lane floor, so the route retreats through the
-10C -> 103 door and finishes with `103 retreat; 10C armor key blocked: ...` at
-about 15 health. The room path is
+30 rounds of reserve, the 10A zombies are engaged and killed, and the
+202/201/103 fights are won with the handgun. The first-aid spray is used at 56
+health in 10A; later green herbs are used at 56 health in 10B and 202 and at 43
+in 101. The 10F detour uses a green herb at 76 health to free an inventory slot
+(health rises to 96), pushes the bookshelf east, takes the music score, plays
+the piano, and picks the gold key. The run path is
 `106 -> 105 -> 104 -> 105 -> 106 -> 107 -> 108 -> 109 -> 10A -> 117 ->
-10A -> 11A -> 10A -> 109 -> 108 -> 107 -> 106 -> 105 -> 106 -> 203 -> 202 ->
-201 -> 101 -> 103 -> 10C -> 103`, with 0 shield keys, 0 blue jewels, 0 armor
-keys, 1 star crest, and the 11B lock still closed. The 105 shield key is
-pressed from `(16900,14060)` and logs the 23/38-unit reach shortfall. This is
-the current blocker, not a finish of the crest collection.
+10A -> 11A -> 10A -> 10B -> 118 -> 10B -> 10A -> 109 -> 108 -> 107 -> 106 ->
+105 -> 104 -> 10F`, with **1 gold key**, 0 shield keys, 0 blue jewels,
+0 armor keys, 1 star crest and the 11B lock still closed. The pickup's bar
+event closes the only north-south gap, so the run finishes in 10F at
+`(8996,13447)`, health 96, no death and no max-ticks. The earlier separate run
+that skipped the 10F key reached 10C and 205 with **5 armor keys**, no shield,
+and the disabled sun-crest action. The 10C green-herb viewers still show
+`count=0`; the spray and the other-room herbs are the reliable heals.
 
 ### Healing
 
@@ -278,12 +329,17 @@ and on `UseResult::Used` consumes one unit through
 `select_item` + `use_selected_item`, before the gameplay tick. The bot never
 writes health, status, flags or inventory quantities itself.
 
-The route calls it below 60 health with a green herb (0x44), at most once per
-60 controllable ticks, and only when no fight is active. Scenes, menus and
-grabs never reach the healing step; an active fight is allowed to finish
-first, so a heal cannot interrupt a grab or a shooting sequence. The
-checked-in run uses the one 109 green herb after the first 10A fight. Later
-zombie fights are supplied by the 104 handgun ammunition pickup.
+The route calls it below 60 health, preferring the first-aid spray (0x41,
+full heal) and falling back to a green herb (0x44), at most once per 60
+controllable ticks and only when no fight is active. Scenes, menus and grabs
+never reach the healing step; an active fight is allowed to finish first, so a
+heal cannot interrupt a grab or a shooting sequence. The first-aid spray from
+the new-game inventory is used at 56 health in 10A. The checked-in 10F branch
+also uses a green herb at 76 health before the music-score pick-up: the pack is
+full, and the menu USE both heals to 96 and frees the slot. The separate
+10C/205 path used the 10B/202/101 herbs at 56/56/43. The 118 spray is a
+second-visit (`MANSION2`) item and is logged absent on this first-mansion
+route.
 
 ### Failure handling
 
@@ -310,21 +366,42 @@ zombie fights are supplied by the 104 handgun ammunition pickup.
 - The 105 shield key action exists at `(17400,14500,1000,1000)` but every
   standable point is outside the 600 reach: the north wall's grown edge is
   `z=14064`, the sideboard's grown box starts at `x=16928`, and the
-  south-west corner's probe ends 23 units short in x and 38 in z. The route
-  walks to `(16900,14060)`, presses, logs the count, and continues. The blue
-  jewel key action is absent while scenario `0x0B` is clear.
+  south-west corner's probe ends 23 units short in x and 38 in z. The
+  sideboard also cannot be pushed: its two-point floor probe uses its 300-unit
+  body radius and it sits 154 units from the north wall, so the counter parks
+  at 10.
+- The gold-emblem detour is wired and reaches the 10F key: push OBJ_01 east
+  from its west face at `(15700,10800)`, use a green herb if the pack is full,
+  take the music score at slot 5, play the piano at `(9700,8000)` facing the
+  zone at `(10500,8000)`, wait for F_COMMON_A5, then take the gold key at
+  `(8100,18800,1500,1000)` from `(8850,18500)`. The item is awarded
+  (`gold=1 held=true`). The pickup's `from_main_2_jill` then moves OBJ_00 to
+  about `(13380,12596)` with half extents 16000/400, covering
+  `x -2620..29380, z 12196..12996` and closing the only `x8356..9720` gap. The
+  player is trapped at `(8996,13447)`; the route logs the bar extents and
+  finishes with the key held instead of pressing a wall. The 105 sideboard
+  stays at `(18000,14300)`, so shield=0 and the blue jewel key (scenario
+  `0x0B` clear) remains absent.
 - The 203 landing is sealed by room collision; the route uses the room's
   `check_door` stair zones through `bot:use_stair(slot)` instead of trying to
   walk through the wall. A stair that does not move the player is a precise
   `fail`, not an endless press.
 - The 10C bed band is `z 3072..3570` (498 units after the 372 radius and
-  18-unit nav skin). The plant fountains' 3000 Manhattan trigger covers the
-  whole crossing, and each hit knocks the player out of the band before the
-  herb reach finishes. The route spends at most 60 ticks on the 8100 green
-  herb, then tries the key lane; at 26 health it retreats to 103 and reports
-  the position, health, held keys/crests and hollow count instead of dying.
-  The armor key's action zone itself is standable at `(6100,6300)` (west wall
-  grown edge `x=5634`), but the path to it crosses the stunlock.
+  18-unit nav skin). The plant fountains' Manhattan trigger covers the whole
+  crossing, so the route first collects the 118 herbicide, stands at
+  `(16200,4700)` so the 600 reach hits the pump zone, and uses the herbicide
+  from the menu. The room's own withering event removes the fountains. The
+  armor key is then taken from `(6100,6300)`. The green herbs run after the
+  key; their overlapping reach-gated actions can re-arm each other, and the
+  viewer-close action is swallowed until release. Their awards show `count=0`
+  in this build, so the route does not depend on them. The armor key's action
+  zone itself is standable at `(6100,6300)` (west wall grown edge `x=5634`),
+  but the path to it crosses the stunlock without the herbicide.
+- The 205 sun-crest item action is disabled at room init: slot 9 is
+  `kind=other`/handler 0 after `aot_delete(AOT_09_ITEM, SCE_NONE, ...)`, even
+  though `F_ITEM_24` is present. The route logs the action table and stops in
+  205 rather than pressing the armor switch at 5 health. The 20D/20E/210 moon
+  branch also needs the missing shield key.
 - A locked 11B door is not a failed run: the route records the lock and stops
   in 11A with the lock, key, crest and inventory state in the finish reason.
 
@@ -356,6 +433,7 @@ zombie fights are supplied by the 104 handgun ammunition pickup.
 | `bot:pulse_confirm()` | Edge UI confirm for one tick. |
 | `bot:equip(item)` | Queue an equip for the next tick; returns `false` and logs when the item is not held or is not a weapon. The host applies the same `set_equipped` the menu does before the tick. |
 | `bot:use_heal(item)` | Queue a heal for the next tick; returns `false` and logs when the item is not held, has no units, or is not a `Heal` catalog item. The host runs the menu `use_item` rule and consumes one unit through `select_item` + `use_selected_item` before the tick. |
+| `bot:use_item(item)` | Queue a non-heal menu USE for the next tick (a key, chemical or document); returns `false` and logs when the item is not held or is a heal. The host runs the same `use_item` rule, which only succeeds after the room's use-item zone has raised the item's bank-9 use flag, and then consumes one unit. |
 | `bot:use_action(slot)` | Run the item room action in `slot` for one tick (the same handler a normal action press runs). Restricted to `kind == "item"`; used for scripted handovers whose zone is outside the walkable floor. |
 | `bot:use_stair(slot)` | Run the `door_check` room action in `slot` for one tick, the in-room stair/climb handler a normal action press runs. Combined with `press_action`, this is how 203's sealed landing is climbed. |
 | `bot:walk_to(x, z, opts)` | Collision-aware A* walk. Returns `{status, distance, angle_error}`. |
