@@ -270,6 +270,11 @@ pub struct Work {
     /// stairs, slopes, climbs and drops change it, so a script that moves the
     /// player to another height leaves it behind.
     pub floor: u8,
+    /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
+    /// `Sce_at` clears it each tick after `Player_move` and a water area
+    /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
+    /// previous tick's.
+    pub water: i16,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
     pub move_no: u8,
@@ -717,6 +722,7 @@ impl Default for Work {
             hit: None,
             noise: 0,
             effects: Vec::new(),
+            water: 0,
             d_life_u: 0,
             spd: [0; 3],
             spd_base: [0; 3],
@@ -3600,7 +3606,51 @@ impl Mover<'_, '_> {
     /// `Snd_se_walk` on a frame marked as a footfall.
     fn footstep(&mut self, sound_type: u8) {
         if self.work.now_seq & FRAME_FOOTSTEP != 0 {
-            self.player.emit_footstep(self.work.move_cnt, sound_type);
+            let water = self.work.water != 0;
+            self.player
+                .emit_footstep_in(self.work.move_cnt, sound_type, water);
+            if water {
+                // The callers' foot: part 4 or 7 by the frame's other bit.
+                let right = self.work.now_seq & FRAME_FOOTSTEP_ALT != 0;
+                self.water_ripples(sound_type, right);
+            }
+        }
+    }
+
+    /// `Snd_se_walk`'s `Water` path: three ripples (`Esp_call` kind 0x1a) on
+    /// part 1's matrix, at the water's level beside the foot.
+    fn water_ripples(&mut self, sound_type: u8, right: bool) {
+        /// `Snd_se_walk`'s smaller character, whose ripples are smaller.
+        const SMALL_ID: u8 = 0x0F;
+        let small = self.tick.id == SMALL_ID;
+        // `[first size, other size, first vx]` of the walk and the run.
+        let (first, other, ahead): (u16, u16, i32) = match (sound_type, small) {
+            (0, false) => (0xE00, 0xC00, 200),
+            (0, true) => (0xE00, 0xC00, 100),
+            (1, false) => (0x1600, 0x1100, 600),
+            (1, true) => (0x1200, 0xE00, 300),
+            _ => return,
+        };
+        let Some(part) = self.part_matrix(1) else {
+            return;
+        };
+        let mut up = i32::from(self.work.water) - part.t[1];
+        if small {
+            up += 100;
+        }
+        let side = if right { 0xA0 } else { -0xA0 };
+        let dir = self.player.angle;
+        for (size, ahead, turn) in [(first, ahead, 0), (other, 0, 0x400), (other, 0, 0xC00)] {
+            let Some(at) = self.part_point(1, [ahead, up, side]) else {
+                return;
+            };
+            self.work.effects.push(EffectCall {
+                kind: 0x1A,
+                row: 0,
+                size,
+                dir: dir.wrapping_add(turn) as i16,
+                at: at.map(|axis| axis as i16),
+            });
         }
     }
 
@@ -4540,6 +4590,67 @@ mod tests {
             mover.work.neck.position,
             Some([before[0] + 18, before[1], before[2] - 14])
         );
+    }
+
+    /// `Snd_se_walk` in water: the footfall plays the water's sound, and three
+    /// ripples (`Esp_call` kind 0x1a) start on part 1 at the water's level.
+    #[test]
+    fn a_footfall_in_water_starts_three_ripples() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 2];
+        }
+        setup.skeleton.relative = vec![[0; 3], [0, -900, 0]];
+        setup.skeleton.children = vec![vec![1], Vec::new()];
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0x100;
+        setup.work.water = -180;
+        setup.work.now_seq = FRAME_FOOTSTEP;
+        setup.player.take_footsteps();
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.footstep(0);
+        let effects = std::mem::take(&mut mover.work.effects);
+        let calls: Vec<_> = effects
+            .iter()
+            .map(|call| (call.kind, call.row, call.size, call.dir, call.at[1]))
+            .collect();
+        assert_eq!(
+            calls,
+            [
+                (0x1A, 0, 0xE00, 0x100, -180),
+                (0x1A, 0, 0xC00, 0x500, -180),
+                (0x1A, 0, 0xC00, 0xD00, -180),
+            ]
+        );
+        let steps = mover.player.take_footsteps();
+        assert_eq!(steps.len(), 1);
+        assert!(steps[0].water);
+        // Out of the water the same footfall starts nothing.
+        mover.work.water = 0;
+        mover.footstep(0);
+        assert!(mover.work.effects.is_empty());
+        assert!(!mover.player.take_footsteps()[0].water);
     }
 
     #[test]

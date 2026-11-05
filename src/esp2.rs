@@ -50,7 +50,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x4E)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -673,8 +673,10 @@ impl Effects {
                     self.slots[index].start -= 1;
                 }
             }
-            0x0b => {
-                self.next_block(index, false);
+            // `Esp_0B` scales the block's motion by the slot's size; its
+            // `0x4E` does the same from a random first frame (`Esp_02`).
+            0x0b | 0x4e => {
+                self.next_block(index, id == 0x4e);
                 let slot = &mut self.slots[index];
                 let size = i32::from(slot.size);
                 for accel in &mut slot.accel {
@@ -1628,6 +1630,31 @@ mod tests {
             );
         }
         assert_eq!(effects.slots[slot].update, 0);
+    }
+
+    /// `Esp_tbl`'s `0x4E`, a water ripple's: the next block from `Esp_02`'s
+    /// random frame, one draw of `Rnd`, with its motion scaled by the size.
+    #[test]
+    fn a_ripple_draws_once_and_scales_its_motion_by_its_size() {
+        let mut first = [0u8; BLOCK_LEN];
+        first[0] = 0x4E;
+        first[11] = 1;
+        let mut next = [0u8; BLOCK_LEN];
+        next[8] = 30;
+        next[12..14].copy_from_slice(&300i16.to_le_bytes());
+        next[18..20].copy_from_slice(&0xa003u16.to_le_bytes());
+        next[22..24].copy_from_slice(&1u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank_of(0x1A, &[first, next]));
+        let slot = effects.call(0x1A, 0, 1500, 0, [0; 3], false).unwrap();
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut expected = rnd;
+        expected.draw();
+        effects.tick(&mut rnd, None);
+        assert_eq!(rnd, expected);
+        let slot = effects.slots[slot];
+        assert_eq!(slot.accel[0], 15);
+        assert_eq!(slot.velocity[0], 150);
     }
 
     #[test]

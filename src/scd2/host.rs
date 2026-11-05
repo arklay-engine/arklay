@@ -333,6 +333,8 @@ const SCE_DOOR: u8 = 1;
 const SCE_ITEM: u8 = 2;
 const SCE_MESSAGE: u8 = 4;
 const SCE_EVENT: u8 = 5;
+/// `Sce_Water`'s area: the player's `Water` while inside it.
+pub const SCE_WATER: u8 = 7;
 const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
 pub const SCE_DAMAGE: u8 = 11;
@@ -2450,6 +2452,23 @@ mod tests {
         restored.load_save_bytes(&bytes).unwrap();
         assert_eq!(restored, state);
         assert!(restored.load_save_bytes(&bytes[1..]).is_none());
+    }
+
+    /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives
+    /// the player its level while inside, and `Sce_at` clears it outside.
+    #[test]
+    fn a_water_area_sets_the_players_water_while_inside() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [
+            2, 7, 79, 0, 0, -20592, -20566, 18000, 29370, 76, 255, 0, 0, 0, 0,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &ops);
+        game.interact([-13500, 0, -8500], 2048, false);
+        assert_eq!(game.re2.player.water, -180);
+        game.interact([0, 0, 10000], 2048, false);
+        assert_eq!(game.re2.player.water, 0);
     }
 
     #[test]
