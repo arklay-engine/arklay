@@ -1912,6 +1912,12 @@ struct GameSession {
     /// functions; one VM per session, reset only by tests.
     enemy_lua: enemy::LuaEnemyHost,
     music: Option<Mixer>,
+    /// The game has a sound device: the mixer opened, or a trace runs as the
+    /// oracle's `--sound` does. RE2's doors then hold for `Snd_bgm_ck`.
+    sound_device: bool,
+    /// An RE2 door has handed back: the next tick's frame draws the player's
+    /// head (see [`GameSession::place_re2_door_neck`]).
+    re2_door_neck: bool,
     /// Decoded pack text tables (messages, item names, descriptions).
     text: Text,
     /// Decoded glyph sheet for the message window; absent packs cannot draw
@@ -2595,6 +2601,8 @@ impl GameSession {
             npc_models: enemy::EntityModelCache::default(),
             enemy_lua: enemy::LuaEnemyHost::new(),
             music: None,
+            sound_device: false,
+            re2_door_neck: false,
             text,
             font,
             menu: None,
@@ -3582,6 +3590,9 @@ impl GameSession {
             },
             input,
         );
+        if std::mem::take(&mut self.re2_door_neck) {
+            self.place_re2_door_neck();
+        }
         self.game.apply_invincible();
         // While the pad-driven locomotion owns the player, mirror its
         // reference scratch into entity 0: `player_behavior_00_idle` keeps
@@ -3765,13 +3776,20 @@ impl GameSession {
             let record = self.game.transition_door.take().unwrap_or_default();
             let door_yield = self.game.door_yield.take();
             if self.transition.is_none() {
-                self.transition = Some(start_transition(
-                    pack,
-                    &record,
-                    &transition,
-                    self.loaded.id,
-                    &self.room_fade,
-                )?);
+                let mut mode =
+                    start_transition(pack, &record, &transition, self.loaded.id, &self.room_fade)?;
+                if record.re2.is_some() {
+                    // `Snd_bgm_ck` holds the door only with a sound device and
+                    // the music on (`fg_system`'s `0x2000` off).
+                    let music = self.game.re2_music_place().system & 0x2000 == 0;
+                    let hold = if self.sound_device && music {
+                        RE2_SOUND_HOLD_TICKS
+                    } else {
+                        0
+                    };
+                    mode.transition = mode.transition.with_re2_load(mode.stage_change, hold);
+                }
+                self.transition = Some(mode);
                 if let Some(session) = self.transition.as_mut() {
                     session.door_yield = door_yield;
                 }
@@ -5953,6 +5971,12 @@ impl GameSession {
         self.transition_finished = frame.finished;
         if frame.place {
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
+        }
+        if frame.clear {
+            // The source room's characters are gone the tick before `Set_room`.
+            self.game.re2.characters = Default::default();
+        }
+        if frame.place {
             // `Set_door`'s `Snd_bgm_ck`.
             if session.door.re2.is_some()
                 && let Some(word) = session
@@ -6008,11 +6032,72 @@ impl GameSession {
     /// Drop the finished transition's timeline once its last frame was
     /// presented; [`GameSession::tick_transition`] already ran the tail.
     fn finish_transition(&mut self, _pack: &Pack) {
+        if self
+            .transition
+            .as_ref()
+            .is_some_and(|session| session.door.re2.is_some())
+        {
+            self.rest_re2_player();
+        }
         self.transition = None;
         self.transition_finished = false;
         // A door back into the same room and cut must not tween from the
         // pre-door poses.
         self.tween.reset();
+    }
+
+    /// An RE2 door's load leaves the player's joints at the skeleton's rest,
+    /// every turn zeroed: the pose the next frame draws, and the one the first
+    /// blend starts from.
+    fn rest_re2_player(&mut self) {
+        let Some(assets) = self.loaded.player_assets.as_ref() else {
+            return;
+        };
+        let relative = &assets.emd.skeleton.relative;
+        self.player
+            .anim
+            .set_applied_pose(Some(crate::model::Keyframe {
+                offset: relative.first().copied().unwrap_or_default(),
+                vertex: [0; 3],
+                rotations: vec![[0; 3]; relative.len()],
+            }));
+        self.re2_door_neck = true;
+    }
+
+    /// The frame after an RE2 door's last one draws the new room: the
+    /// render's joint matrices put the player's head where the rest pose has
+    /// it, after that tick's push out of the walls and before the routines
+    /// run again.
+    fn place_re2_door_neck(&mut self) {
+        let Some(assets) = self.loaded.player_assets.as_ref() else {
+            return;
+        };
+        let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
+        let room_anim = self.loaded.room.room_anim.as_ref();
+        let held_bank = self.game.player_damage.clone();
+        let tick = crate::player2::Tick {
+            room: &self.loaded.room,
+            skeleton: &assets.emd.skeleton,
+            banks: crate::player2::Banks {
+                pld: (&assets.emd.clips, &assets.emd.keyframes),
+                weapon: (&assets.emw.clips, &assets.emw.keyframes),
+                room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+                held: held_bank.as_ref().map_or(empty, |bank| {
+                    (bank.clips.as_slice(), bank.keyframes.as_slice())
+                }),
+            },
+            input: player::Input::default(),
+            options: self.game.player_options,
+            id: self.game.id.player_flag,
+            life: i32::from(self.game.entities[0].health),
+            poisoned: self.game.re2.player.poisoned,
+            stopped: true,
+            weapon: self.game.re2_weapon(),
+            necks: self.game.re2.necks(),
+            targets: &[],
+            neck_targets: &[],
+        };
+        crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
     }
 
     /// The tail of `room_transition_load` and `game_loop`'s return into
@@ -7510,6 +7595,7 @@ impl GameSession {
                 eprintln!("warning: no audio device; continuing without sound");
             }
         }
+        self.sound_device |= self.music.is_some();
         bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
     }
 
@@ -10052,6 +10138,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     // reference's hook sees it.
     if let Mode::Play(session) = &mut app.mode {
         session.arm_new_game_boot();
+        session.sound_device |= options.sound;
     }
     let mut writer = trace::TraceWriter::create(path)?;
     if options.capture_every > 0
@@ -11281,6 +11368,10 @@ impl DoorStepper for DoorAnimation {
     }
 }
 
+/// The ticks `Snd_bgm_ck` holds an RE2 door after the placement with sound:
+/// the oracle's `--sound` runs load rooms 101, 118 and 200 90 ticks later.
+const RE2_SOUND_HOLD_TICKS: u8 = 90;
+
 /// Start a transition for `record`'s destination: resolve and parse its
 /// `.dor`, create the VM and load the destination room behind the black.
 fn start_transition(
@@ -11314,7 +11405,9 @@ fn start_transition(
         .with_fade(fade.fade_type(), fade.counter(), fade.state())
         .with_load(camera_only, stage_change || record.re2.is_some());
     if record.re2.is_some() {
-        timeline = timeline.with_timing(transition::Timing::Re2);
+        timeline = timeline
+            .with_timing(transition::Timing::Re2)
+            .with_re2_load(stage_change && !camera_only, 0);
     }
     Ok(TransitionMode {
         stage_change: stage_change && !camera_only,
@@ -24509,6 +24602,7 @@ mod tests {
                 capture_dir: None,
                 ticks: 3,
                 input: None,
+                sound: false,
             },
             Authoring {
                 load: Some(&saved),

@@ -384,6 +384,9 @@ pub struct TransitionFrame {
     pub place: bool,
     /// `room_transition_load` ran the destination's `room_set` this frame.
     pub load: bool,
+    /// RE2's door took the source room's enemies down this frame, the tick
+    /// before the destination's `Set_room` (see [`Transition::with_re2_load`]).
+    pub clear: bool,
     /// `room_transition_load` returned this frame: the engine runs its tail
     /// (camera, close SE, entry fade) now and gameplay resumes on the next
     /// tick.
@@ -403,6 +406,7 @@ struct FrameOut {
     drew: bool,
     place: bool,
     load: bool,
+    clear: bool,
     finished: bool,
 }
 
@@ -424,6 +428,11 @@ enum MainTask {
     Place,
     /// A stage change's `init_room` yielded once before its `room_set`.
     Load,
+    /// RE2: placed, counting the ticks to the enemies' clear
+    /// ([`Transition::with_re2_load`]).
+    Re2Clear(u8),
+    /// RE2: cleared, counting the ticks to `Set_room`.
+    Re2Load(u8),
     /// Polling the animation task's `MSF_ROOM_TRANSITION` bit.
     Wait,
     /// `room_transition_load` returned.
@@ -491,6 +500,10 @@ pub struct Transition<S> {
     timing: Timing,
     /// The ticks of [`RE2_FADE_TICKS`] gone.
     room_fade: u8,
+    /// RE2: the ticks `Snd_bgm_ck`'s wait holds the load for with sound.
+    re2_hold: u8,
+    /// RE2: the destination is on another stage.
+    re2_stage_change: bool,
 }
 
 impl<S: DoorStepper> Transition<S> {
@@ -519,6 +532,8 @@ impl<S: DoorStepper> Transition<S> {
             skip_released: false,
             timing: Timing::Re1,
             room_fade: 0,
+            re2_hold: 0,
+            re2_stage_change: false,
         }
     }
 
@@ -541,6 +556,19 @@ impl<S: DoorStepper> Transition<S> {
     pub fn with_load(mut self, camera_only: bool, stage_change: bool) -> Self {
         self.camera_only = camera_only;
         self.load_yields = stage_change && !camera_only;
+        self
+    }
+
+    /// RE2's load after `Set_door` placed the player, as the oracle traces
+    /// it. On a door within a stage the source room's enemies are gone on the
+    /// placement's own tick and `Set_room` runs on the next. A stage change
+    /// takes them down a tick later and loads two ticks after that. With
+    /// sound, `Snd_bgm_ck` holds the clear and the load `hold` ticks more (90
+    /// on every door measured), while the animation runs on: the room's play
+    /// starts on the same tick either way.
+    pub fn with_re2_load(mut self, stage_change: bool, hold: u8) -> Self {
+        self.re2_stage_change = stage_change;
+        self.re2_hold = hold;
         self
     }
 
@@ -639,6 +667,17 @@ impl<S: DoorStepper> Transition<S> {
                 self.anim = AnimTask::Start;
                 self.main = MainTask::Place;
             }
+            MainTask::Place if self.timing == Timing::Re2 && !self.camera_only => {
+                out.place = true;
+                let stage = u8::from(self.re2_stage_change);
+                self.re2_clear(self.re2_hold.saturating_add(stage), out);
+            }
+            MainTask::Re2Clear(ticks) => self.re2_clear(ticks - 1, out),
+            MainTask::Re2Load(ticks) if ticks > 1 => self.main = MainTask::Re2Load(ticks - 1),
+            MainTask::Re2Load(_) => {
+                out.load = true;
+                self.wait(out);
+            }
             MainTask::Place => {
                 out.place = !self.camera_only;
                 if self.load_yields {
@@ -654,6 +693,16 @@ impl<S: DoorStepper> Transition<S> {
             }
             MainTask::Wait => self.wait(out),
             MainTask::Done => {}
+        }
+    }
+
+    /// RE2: `ticks` more to the clear, which is followed by the load.
+    fn re2_clear(&mut self, ticks: u8, out: &mut FrameOut) {
+        if ticks > 0 {
+            self.main = MainTask::Re2Clear(ticks);
+        } else {
+            out.clear = true;
+            self.main = MainTask::Re2Load(1 + u8::from(self.re2_stage_change));
         }
     }
 
@@ -821,6 +870,7 @@ impl<S: DoorStepper> Transition<S> {
             black: out.black || !out.drew,
             place: out.place,
             load: out.load,
+            clear: out.clear,
             finished: out.finished,
             room_veil: out.room_veil,
             ..self.output_with()
@@ -1000,6 +1050,66 @@ mod tests {
         assert_eq!(fade(&transition), (0, 0));
         assert_eq!(transition.stepper().steps, 10);
         assert!(!frame.finished);
+    }
+
+    /// An RE2 door's ticks from its placement: the ticks of the placement,
+    /// the enemies' clear and the load, counted from the placement, and the
+    /// animation's passes up to the load.
+    fn re2_load(stage_change: bool, hold: u8) -> ([u32; 3], u32) {
+        let mut transition = Transition::new(FakeStepper::default())
+            .with_fade(2, -6144, -4097)
+            .with_load(false, true)
+            .with_timing(Timing::Re2)
+            .with_re2_load(stage_change, hold);
+        let mut ticks = [None; 3];
+        let mut placed = None;
+        for tick in 0..400 {
+            let frame = transition.tick(false);
+            if frame.place {
+                placed = Some(tick);
+            }
+            let Some(start) = placed else { continue };
+            for (slot, seen) in [frame.place, frame.clear, frame.load]
+                .into_iter()
+                .enumerate()
+            {
+                if seen {
+                    assert!(ticks[slot].is_none(), "event {slot} twice");
+                    ticks[slot] = Some(tick - start);
+                }
+            }
+            if frame.load {
+                break;
+            }
+        }
+        (
+            ticks.map(|tick| tick.expect("every event")),
+            transition.stepper().steps,
+        )
+    }
+
+    #[test]
+    fn an_re2_door_clears_on_the_placement_and_loads_on_the_next_tick() {
+        // Rooms 102 to 118, 11B to 103: the zombies are gone on the tick the
+        // player is placed, and the next room's are there on the next.
+        assert_eq!(re2_load(false, 0).0, [0, 0, 1]);
+    }
+
+    #[test]
+    fn an_re2_stage_change_clears_a_tick_later_and_loads_two_after() {
+        // Room 103 to 200: room 103's enemies stay through the placement and
+        // room 200's script shows two ticks after they go.
+        assert_eq!(re2_load(true, 0).0, [0, 1, 3]);
+    }
+
+    #[test]
+    fn the_sound_hold_delays_the_clear_and_the_load_but_not_the_door() {
+        // With sound the original loads rooms 101, 118 and 200 90 ticks
+        // later; the door's animation steps on through the hold.
+        let (ticks, steps) = re2_load(false, 0);
+        assert_eq!(ticks, [0, 0, 1]);
+        assert_eq!(re2_load(false, 90), ([0, 90, 91], steps + 90));
+        assert_eq!(re2_load(true, 90).0, [0, 91, 93]);
     }
 
     #[test]

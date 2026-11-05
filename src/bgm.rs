@@ -221,8 +221,9 @@ impl BgmCache {
 /// `Snd_bgm_set`: an RE2 room's music comes from the table its scripts wrote.
 /// The same main music plays on across a door; another replaces all three
 /// channels, of which only the ones [`crate::bgm2::main_audible`] marks start
-/// audible.
-fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
+/// audible. RE2's door doesn't sleep for its music here (its fade runs in
+/// [`crate::bgm2`]), so this sleeps no frames.
+fn update_re2_room_bgm(game: &mut GameState, id: RoomId) {
     use crate::bgm2;
     let main = id
         .stage
@@ -230,7 +231,7 @@ fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
         .and_then(|stage| game.re2.bgm.get(stage, id.room))
         .and_then(|music| music.main_id());
     if game.re2.main_music == main {
-        return game.bgm.state as u8;
+        return;
     }
     game.re2.main_music = main;
     let mut state = 0;
@@ -240,7 +241,6 @@ fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
         }
     }
     game.bgm.state = state;
-    state as u8
 }
 
 /// Apply the per-room BGM state machine for room `id`, entered from `from`.
@@ -255,7 +255,8 @@ fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
 /// arms the room-entry fade, once those sleeps are over.
 pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -> u8 {
     if game.is_re2_room {
-        return update_re2_room_bgm(game, id);
+        update_re2_room_bgm(game, id);
+        return 0;
     }
     let stage = id.table_row();
     let room = usize::from(id.room);
@@ -359,6 +360,9 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
 /// The port keeps the outgoing state across the load (its BGM handoff tears
 /// the old banks down itself), so only the timing follows `init_room` here.
 pub fn init_room_sleep(game: &GameState, id: RoomId) -> u8 {
+    if game.is_re2_room {
+        return 0;
+    }
     let stage = id.table_row();
     let room = usize::from(id.room);
     match game.room_bgm.get(stage * 32 + room) {
@@ -665,6 +669,20 @@ mod tests {
             pending_load: false,
             stop: false,
         };
+    }
+
+    #[test]
+    fn an_re2_door_sleeps_no_frames_for_its_music() {
+        // Room 11A's main makes its first channel audible: the state is 8,
+        // which a door from room 119 used to sleep as frames.
+        let id = RoomId::parse("11A0").unwrap();
+        let mut game = game_for(id);
+        game.is_re2_room = true;
+        game.re2.bgm.set(id.room, id.stage, 0xff01, 0);
+        set_row(&mut game, id, 0x48);
+        assert_eq!(update_room_bgm(&mut game, id, None), 0);
+        assert_eq!(game.re2.main_music, Some(1));
+        assert_eq!(init_room_sleep(&game, id), 0);
     }
 
     #[test]

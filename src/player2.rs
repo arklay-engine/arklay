@@ -800,8 +800,11 @@ impl Work {
         Self {
             d_life_u: self.d_life_u,
             kind: self.kind,
+            // The head's world position is the joints' last matrix, which a
+            // room load leaves alone until the new room is drawn.
             neck: Neck {
                 wait: self.neck.wait,
+                position: self.neck.position,
                 ..Neck::default()
             },
             ..Self::default()
@@ -1081,6 +1084,19 @@ struct ShotEffect {
 /// An `Esp_call`'s word of kind, row and size, and what to add to the player's
 /// facing for its direction.
 type ShotCall = (u32, Option<i16>);
+
+/// The head where the render's joint matrices put it on the pose on screen,
+/// with the routines not run: a door's last frame draws the new room.
+pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    }
+    .place_neck();
+}
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
 pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {

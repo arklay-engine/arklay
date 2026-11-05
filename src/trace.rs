@@ -100,6 +100,9 @@ pub struct TraceOptions<'a> {
     pub ticks: u32,
     /// Scripted per-tick input playback (`--input`), or `None` for an idle run.
     pub input: Option<&'a crate::engine::InputScript>,
+    /// Run as the game does with a sound device (`--sound`), for the
+    /// oracle's `--sound` recordings: an RE2 door holds for the music.
+    pub sound: bool,
 }
 
 /// The streaming oracle trace file.
@@ -136,9 +139,15 @@ impl TraceWriter {
             self.out,
             "t={} room={}:{} rng={} rseed={} fade={}:{}",
             self.ticks,
-            // The reference's own stage numbering: the second mansion
-            // visit is its stages 6 and 7.
-            tick.room.table_row() + 1,
+            // The reference's own stage numbering: RE1's second mansion
+            // visit is its stages 6 and 7. RE2 has one visit, so its rooms
+            // that share a number with an RE1 second-visit room (119, 200)
+            // keep their stage.
+            if tick.re2_player.is_some() {
+                usize::from(tick.room.stage)
+            } else {
+                tick.room.table_row() + 1
+            },
             tick.room.room,
             tick.rng,
             tick.rseed,
@@ -353,6 +362,52 @@ mod tests {
              e=0,0,17000,0,5000,3072,0,0,0,140,0,0,0 \
              e=1,36,1,2,3,3076,0,7,8,5,6,1,9 f=3735928559\n"
         );
+    }
+
+    #[test]
+    fn an_re2_room_prints_its_own_stage() {
+        // Rooms 119 and 200 share their numbers with RE1 rooms only the
+        // second mansion visit has; the reference prints RE2's 1:25 and 2:0.
+        let game = GameState::default();
+        let path = temp_path("re2-stage");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        for (stage, room) in [(1, 0x19), (2, 0x00)] {
+            let tick = TraceTick {
+                room: RoomId {
+                    stage,
+                    room,
+                    player_flag: 0,
+                    mansion2: false,
+                },
+                rng: 0,
+                rseed: 0,
+                fade_counter: 0,
+                fade_state: -1,
+                cam: 0,
+                player_flags: 0,
+                entities: &*game.entities,
+                re2_player: Some(([1, 0], [0; 9])),
+                re2_character: None,
+                re2_splayer: None,
+                re2_zombies: None,
+                re2_music: None,
+                re2_die: None,
+                re2_neck: None,
+                re2_neck_position: None,
+                re2_sounds: None,
+                frame_hash: 0,
+            };
+            writer.write_tick(&tick).unwrap();
+        }
+        writer.flush().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let rooms: Vec<&str> = text
+            .lines()
+            .skip(1)
+            .filter_map(|line| line.split(' ').nth(1))
+            .collect();
+        assert_eq!(rooms, ["room=1:25", "room=2:0"]);
     }
 
     #[test]
