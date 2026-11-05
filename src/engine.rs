@@ -37,6 +37,7 @@
 mod bot;
 mod debug_hud;
 mod debug_view;
+mod watch;
 
 pub use bot::{BotOptions, DEFAULT_MAX_TICKS};
 
@@ -696,6 +697,7 @@ pub fn run_with_options(
     // confirmed F9 return and the debug tools' load/clear game requests all
     // need the mode machine to own the next screen.
     let mut app = App::new(pack, save_dir, true);
+    app.configure_watch(mods.watch);
     app.player_options = player_options;
     app.start_session(session);
     run_app_loop(&mut app, &mut display, stats)
@@ -809,6 +811,9 @@ pub struct ModOptions {
     /// Extra mod directories to scan in addition to the pack's sibling
     /// `mods/` directory, in precedence order.
     pub global_dirs: Vec<PathBuf>,
+    /// Watch the applied source directories and reload `lua/**.lua` hooks and
+    /// the `bot/**.lua` route while the interactive game runs.
+    pub watch: bool,
 }
 
 /// Open a game pack together with its runtime mod layers.
@@ -5464,6 +5469,24 @@ impl GameSession {
         Ok(())
     }
 
+    /// Reload the pack's `lua/**.lua` hooks into a fresh VM.
+    ///
+    /// The session, room and game state stay live: the room's init script is
+    /// not re-run, but the new VM's `on_init` and `on_room_load` run over the
+    /// current state so a hook sees the room it is already in. Hook globals are
+    /// fresh, exactly as when the session opened. A load failure returns the
+    /// error and leaves the previous VM in place, so `--watch` can log it and
+    /// keep playing.
+    fn reload_lua(&mut self, pack: &Pack) -> Result<()> {
+        let lua = lua::LuaVm::load(pack)?;
+        if let Some(vm) = lua.as_ref() {
+            vm.call_init(&mut self.game);
+            vm.call_room_load(&mut self.game, self.loaded.id);
+        }
+        self.lua = lua;
+        Ok(())
+    }
+
     /// Write the session's current state to `path` as a save block.
     ///
     /// The `--save-out` authoring seam: the same capture the typewriter save
@@ -8169,6 +8192,8 @@ struct App {
     /// The optional Lua-driven player bot. While it is active its input
     /// replaces the human one; once it finishes, the normal input returns.
     bot: Option<bot::BotRuntime>,
+    /// The `--watch` source-directory poller; `None` outside interactive runs.
+    watch: Option<watch::Watch>,
 }
 
 /// Ticks (one second) the player must keep control, with no event starting
@@ -8246,6 +8271,7 @@ impl App {
             system_menu: None,
             restart_point: None,
             bot: None,
+            watch: None,
         }
     }
 
@@ -8668,6 +8694,49 @@ impl App {
         Ok(())
     }
 
+    /// Start watching the pack's source directories (`--watch`).
+    ///
+    /// A pack that is only `.akpak` files has nothing to watch; the watcher
+    /// logs that and stays off.
+    fn configure_watch(&mut self, enabled: bool) {
+        self.watch = watch::Watch::new(enabled, &self.pack, &[]);
+    }
+
+    /// Poll for changed Lua files and reload the live session's hooks and bot.
+    ///
+    /// Called between presented frames, never inside a game tick. With no
+    /// game session the change is logged and the next session picks it up from
+    /// the pack; a reload error is logged and the old hooks keep running.
+    fn watch_tick(&mut self) {
+        let changed = match self.watch.as_mut() {
+            Some(watch) => watch.poll(),
+            None => return,
+        };
+        if changed.is_empty() {
+            return;
+        }
+        let count = changed.len();
+        if let Mode::Play(session) = &mut self.mode {
+            if let Err(err) = session.reload_lua(&self.pack) {
+                eprintln!("[watch] Lua hook reload failed: {err:#}");
+                return;
+            }
+            // The app caches the save/load screen entry from `App::new`'s
+            // throwaway VM. A changed `on_init` registration must replace it
+            // along with the session's hooks.
+            self.save_screen = crate::lua::registered_save_screen(&self.pack);
+            eprintln!("[watch] reloaded {count} Lua file(s)");
+            if let Some(bot) = self.bot.as_mut() {
+                match bot.reload(&self.pack) {
+                    Ok(()) => eprintln!("[watch] reloaded the bot route"),
+                    Err(err) => eprintln!("[watch] bot route reload failed: {err:#}"),
+                }
+            }
+        } else {
+            eprintln!("[watch] {count} Lua file(s) changed; waiting for a game session");
+        }
+    }
+
     /// Whether the running bot's player has died.
     fn bot_player_dead(&self) -> bool {
         matches!(&self.mode, Mode::Play(session) if {
@@ -8706,8 +8775,10 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
-        if let Some(bot) = &mut self.bot {
-            bot.reset();
+        let reset = self.bot.as_mut().map(|bot| bot.reset(&self.pack));
+        if let Some(Err(err)) = reset {
+            eprintln!("[bot] warning: could not reset the bot route: {err:#}");
+            self.bot = None;
         }
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
@@ -10057,6 +10128,7 @@ fn run_ui_impl(
 
     let pack = open_game_pack(pack, mods, language)?;
     let mut app = App::new(pack, save_dir.to_path_buf(), true);
+    app.configure_watch(mods.watch);
     app.player_options = player_options;
     app.boot(boot)?;
     if let Mode::Play(session) = &mut app.mode {
@@ -10336,6 +10408,8 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
             return clock.report();
         }
+        // Hot reload happens between frames, never in the middle of a tick.
+        app.watch_tick();
         screenshot |= keys.screenshot;
         if keys.cut_delta != 0 {
             app.step_camera_cut(keys.cut_delta);
@@ -10973,6 +11047,7 @@ pub fn run_fmv(
     let pack = open_game_pack(pack, mods, None)?;
     let session = MovieSession::open_reference(&pack, film, character)?;
     let mut app = App::new(pack, save_dir, true);
+    app.configure_watch(mods.watch);
     app.queue_movie(session, None);
     let mut display = Display::new("Arklay", false, renderer)?;
     run_app_loop(&mut app, &mut display, false)
@@ -11020,6 +11095,9 @@ pub fn run_ending(
     let save_dir = save::default_save_dir();
     let pack = open_game_pack(pack, mods, None)?;
     let mut app = App::new(pack, save_dir, capture.is_none());
+    if capture.is_none() {
+        app.configure_watch(mods.watch);
+    }
     app.player_options = player_options;
     // Keep the missing-film diagnostic the pre-sequence entry had: a pack
     // without the films would otherwise warn per film and run the RESULT
