@@ -6268,6 +6268,58 @@ impl GameState {
         // (`Sce_Water`) sets it again.
         self.re2.player.water = 0;
         self.probe_actions(pos, angle, 1, pos, action_press);
+        if self.is_re2_room {
+            self.probe_enemy_areas();
+        }
+    }
+
+    /// `Sce_at_check`'s enemy pass (mask 2), which the original runs after the
+    /// player's on each enemy in play. An area the enemy is in, at its body or
+    /// at the point ahead of it, goes in its `+0xB` (script member 9), which
+    /// keeps the last until another, and in the script's area variable. Only
+    /// `SCE_NORMAL` areas, whose handler does nothing, have the enemy bit on
+    /// the route; the other kinds' handlers aren't run for an enemy.
+    fn probe_enemy_areas(&mut self) {
+        for slot in 0..self.re2.characters.0.len() {
+            let Some(character) = self.re2.characters.0[slot].as_deref() else {
+                continue;
+            };
+            if character.be_flg & 1 == 0 {
+                continue;
+            }
+            let pos = character.body.pos;
+            let floor = character
+                .zombie
+                .as_ref()
+                .map_or_else(|| crate::sca::floor_of(pos[1]), |zombie| zombie.floor);
+            let (dx, dz) = crate::player::reach_offset_re2(character.body.angle);
+            let reach = [pos[0] + dx, pos[1], pos[2] + dz];
+            let mut found = None;
+            for (index, room_action) in self.room_actions.iter().enumerate() {
+                let Some(room_action) = room_action else {
+                    continue;
+                };
+                let flags = room_action.flags;
+                if room_action.handler == 0 || flags & 0x80 != 0 || flags & 2 == 0 {
+                    continue;
+                }
+                let probe = if flags & 0x40 != 0 { pos } else { reach };
+                if self.re2.gates[index].contains(room_action.zone, probe[0], probe[2], floor) {
+                    found = Some(index);
+                    let var = if flags & 0x40 != 0 {
+                        crate::scd2::host::VAR_BODY_AREA
+                    } else {
+                        crate::scd2::host::VAR_FORWARD_AREA
+                    };
+                    self.re2.vars[var] = index as u16;
+                }
+            }
+            if let (Some(index), Some(character)) =
+                (found, self.re2.characters.0[slot].as_deref_mut())
+            {
+                character.area = index as u8;
+            }
+        }
     }
 
     /// `check_action_object` (0x0041c150): the action-key probe

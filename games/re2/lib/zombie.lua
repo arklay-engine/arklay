@@ -1591,9 +1591,10 @@ local function look_close(e, narrow)
     end
 end
 
--- `Sce_free1`'s scripted wall, once the zombie is against one.
+-- `Sce_free0`'s scripted wall, once the zombie is against one: its high
+-- byte (`+0x1D5`) holds the script's bits, its low twelve the way to face.
 local function wall_check(e)
-    if (e:sce_free(1) & 0xFFFF) >> 8 & 0xC0 ~= 0 and e:sca_info() & 1 ~= 0 then
+    if (e:sce_free(0) & 0xFFFF) >> 8 & 0xC0 ~= 0 and e:sca_info() & 1 ~= 0 then
         state(e, 0xA, 0)
     end
 end
@@ -2420,9 +2421,10 @@ local function mv_fall(e)
     end
 end
 
--- `FUN_00454f30`.
+-- `FUN_00454f30`: the reach comes in the lunge's last step, `Routine_2`
+-- (`+0x6`) of 3, not on a clip.
 local function look_lunge(e)
-    if e:move_no() == 3
+    if e:routine(2) == 3
         and e:distance() < 0x514
         and player_free(e)
         and e:move_cnt() < 0xB
