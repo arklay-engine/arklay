@@ -29,14 +29,16 @@ through `bot:room_meta()` on the next tick.
 ## Route
 
 The route starts a fresh Jill game. It continues through 117, 11A, the
-east-wing return and the 105/10F gold-emblem detour, and stops with a precise
-item/health report. The detour now reaches and picks the 10F gold emblem key,
-but the pick-up event moves the bar counter back across the only north-south
-gap and traps the player in the secret passage, so the route cannot return to
-105 to use it. The 10C/204/205 armor-room path remains implemented; it was
-verified in a run that skipped the 10F key attempt. The 10C greenhouse's six
-plant fountains stunlock the player in the only bed crossing, so that path uses
-the 118 herbicide at the pump, takes the armor key, and goes on to 205:
+east-wing return, the 105/10F shield-key detour, and the 10C/204/205 armor
+path, and stops with a precise item/health report. The 10F gold-key trap is
+resolved legally with the 105 wood emblem key: the pickup closes the bar, and
+using the wood key at the 10F hollow reopens it while keeping the gold key for
+the 105 fireplace. The shield key (0x35) is taken and the star crest is placed
+in 11A. 205's sun crest is then blocked by the room-init item deletion, and
+20D's Richard death scene blocks 20E/210 (the route has no serum), so the moon
+crest and the 11B lock remain unreached. The 10C greenhouse's six plant
+fountains stunlock the player in the only bed crossing, so that path uses the
+118 herbicide at the pump, takes the armor key, and goes on to 205:
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -141,23 +143,45 @@ the 118 herbicide at the pump, takes the armor key, and goes on to 205:
     SCE_USEITEM actions raise the item use flag (bank 9 bit 5) and F_ROOM_22
     (bank 4 bit 0x22).
 
-    The route wires the detour: 105 -> 104 -> 10F, push OBJ_01 (the bookshelf
-    at `17394,11190`) **east** with the normal forward+push input, use the green
+    The route first takes the wood emblem key (0x1F) from the 105 fireplace
+    while F_COMMON_AA is set by the 106 intro. Picking it clears AA, and the
+    105 main's AA-false branch re-arms the fireplace SCE_USEITEM probes with
+    `aot_delete(..., SCE_USEITEM, SAT_PLAYER)`; that is why the gold key can
+    still be used at the fireplace later. The wood key is not used in 105.
+
+    The detour then runs 105 -> 104 -> 10F: push OBJ_01 (the bookshelf at
+    `17394,11190`) **east** with the normal forward+push input, use the green
     herb if the pack is full, take the music score (0x23) at slot 5, play the
     piano at `(10200,7300,600,1500)`, wait for F_COMMON_A5, then walk north
     through the now-open `x8356..9720` gap and pick the gold key at
     `(8100,18800,1500,1000)`. The pick-up is real: the run logs
     `gold=1 held=true`.
 
-    It is a trap in this build. The gold-key pick-up raises
-    `testpickup(IT_20)` and runs `from_main_2_jill`, which sets OBJ_00 to about
-    `(13380,12596)` (half extents 16000/400). That covers
-    `x -2620..29380, z 12196..12996` and closes the only north-south gap, so
-    the player at `(8996,13447)` cannot reach 104 or 105. There is no other
-    walkable exit from the north half. The route logs the exact bar geometry
-    and finishes with the gold key held, shield=0; the 105 sideboard therefore
-    stays at `(18000,14300)` and the shield-key corner remains outside reach.
-    The blue jewel key (0x21) is also absent while scenario `0x0B` is clear.
+    The gold pick-up raises `testpickup(IT_20)` and runs `from_main_2_jill`,
+    which sets OBJ_00 to about `(13380,12596)` (half extents 16000/400). That
+    covers `x -2620..29380, z 12196..12996` and closes the only north-south
+    gap, trapping the player at `(8996,13447)`. The escape is the wood key:
+    with F_COMMON_A6 now set, the 10F main re-arms the wood use-item probes
+    AOT_06/AOT_07 (`aot_delete(..., SCE_USEITEM, SAT_PLAYER)`), so the route
+    walks back to the key hollow at `(9000,18500)`, faces north, waits for
+    bank 9 bit 4 and F_ROOM_22, and calls `bot:use_item(0x1F)`. The room's
+    wood branch runs `from_main_3`/`from_main_4`, which tween OBJ_00 west and
+    then to `0,0,0`, reopening the gap. The gold key stays in the inventory.
+
+    The route returns through 104 to 105, walks to the fireplace approach
+    `(4100,8100)`, waits for the gold use flag (bank 9 bit 5) and F_ROOM_22,
+    and calls `bot:use_item(0x20)`. The room's gold event sets F_COMMON_AB and
+    tweens OBJ_02 to `(16000,14300)`. The shield key is then approached around
+    the moved sideboard: `(14000,13000)` -> `(17100,13000)` ->
+    `(17100,14060)`, then the 600 reach lands at `(17492,14514)` inside the
+    key zone. The run logs `shield key held count=1`.
+
+    If the wood key is missing or the hollow use does not fire, the fallback
+    uses the gold key itself at the 10F hollow (the same from_main_3 escape).
+    That reopens the bar but spends the key, so the 105 sideboard stays at
+    `(18000,14300)` and the shield-key leg is forfeited; the route logs the
+    precise reason. The blue jewel key (0x21) is absent while scenario `0x0B`
+    is clear.
 14. **106 -> 203 -> 202.** The 203 stair door lands on the balcony landing,
     which is sealed by the room collision. The route recognises the in-room
     `check_door` zones, walks to the west side of the east flight at
@@ -191,22 +215,38 @@ the 118 herbicide at the pump, takes the armor key, and goes on to 205:
     unreliable in this build (the run logs the viewer closing with `count=0`),
     so the route relies on the first-aid spray and the 10B/202/101 herbs for
     health rather than the greenhouse bed.
-16. **Current stop: 10F north passage.** The checked-in run finishes in 10F
-    at `(8996,13447)` with the gold key held and health 96. `from_main_2_jill`
-    moved OBJ_00 back to ~`(13380,12596)` after the pickup and closed the
-    `x8356..9720` gap; the route logs the bar extents and stops rather than
-    forcing a wall. It never reaches 105/10C/205 on this branch, so shield=0,
-    armor=0, sun=0, moon=0 and 11B stays locked.
+16. **Current stop: 20D (moon route).** The checked-in run now takes the 10F
+    shield key, places the star crest in 11A, clears 10C and 204, and reaches
+    205 and 20D. Final report: shield=1, armor=4 (the 204 door spends one),
+    star hollow placed (1/4), sun=0, moon=0, 11B `lock17=false`, health 2.
+    The run does not die; it stops with the exact blockers.
 
-    The armor-room path was verified separately by skipping the 10F key
-    attempt: 10C's herbicide pump yields the armor key, the 204 armor door
-    opens, and the run reaches 205. There the sun-crest action is disabled at
-    room init: slot 9 is `kind=other` with handler 0 after
-    `aot_delete(AOT_09_ITEM, SCE_NONE, ...)`, while the room-item flag
-    `F_ITEM_24` is still present. The armor switch at `(9235,6736,1000,1000)`
-    is not pressed at 5 health because the route must not die. The 20D/20E/210
-    moon phases, the return to 11A and the 11B lock report remain implemented
-    but are not reached; 210 also needs the missing shield key.
+    205 sun crest: the live action slot 9 is `kind=other`/handler 0 at room
+    entry. The init `item_aot_set(AOT_09_ITEM, ...)` is immediately followed
+    by `aot_delete(AOT_09_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER)`; in this
+    port the delete op sets the handler to the passed SCE (0), while the
+    item model and `F_ITEM_24` remain. `item_action_slot(0x2E)` therefore
+    finds nothing, and the route detects that before walking into the poison
+    gas. The armor switch at `(9235,6736,1000,1000)` is still a live
+    `kind=event` action, but `F_ROOM_20`/`F_ROOM_21` read false at entry
+    (despite the room init setting them), so pressing it takes the room's
+    `from_main_2` branch and leaves `F_ROOM_1D`/`F_SCENARIO_3A` clear; the
+    camera-2 gas also drains health at collision flag 0x80. The route logs the
+    dead item action and continues instead of dying at the switch.
+
+    20D moon route: the room's Richard death entry scene sends the player back
+    to 204 (the scene's final move parks at `(2982,12660)`, beside the 204
+    door). The 20E door is armed for the story only by
+    `item_ck(IT_42_KEY_SERUM)`, which this route does not hold, so 20E/210 and
+    the moon crest are unreachable on this branch. The 20D travel phase and
+    the 210 moon phases remain implemented for a run that arrives with the
+    serum; the route now stops at 20D entry with the report rather than
+    looping through the scene.
+
+    The 11B store-room door stays locked (`F_LOCK_17` false) because only the
+    star hollow is filled; sun and moon are missing. The route's finish reason
+    carries the room path, health, shield/armor/sun/moon counts and the
+    hollow/lock state.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -231,6 +271,12 @@ reason always names the furthest room/item milestone reached, such as
 self-describing.
 
 ### Interaction skills
+
+`bot:inventory()` returns the live inventory as a read-only array of
+`{ slot, item, quantity }` rows, including the zero-quantity weapon slots. The
+route uses it to detect the full pack (the 106 Barry gift adds the acid
+rounds and the empty weapon stacks still count) before the 105 wood-key
+pickup, without guessing from item counts. It never writes the inventory.
 
 `action_nav(bot, slot, label, custom, opts)` is the generic ground-item skill.
 It finds the action by slot, treats a zone at the room origin as the scripted
@@ -305,19 +351,21 @@ state, so editing the policy mid-fight does not restart or reset the fight.
 Headless evidence from the checked-in route: the 104 ammunition pickup gives
 30 rounds of reserve, the 10A zombies are engaged and killed, and the
 202/201/103 fights are won with the handgun. The first-aid spray is used at 56
-health in 10A; later green herbs are used at 56 health in 10B and 202 and at 43
-in 101. The 10F detour uses a green herb at 76 health to free an inventory slot
-(health rises to 96), pushes the bookshelf east, takes the music score, plays
-the piano, and picks the gold key. The run path is
+health in 10A; later green herbs are used at 56 health in 10B and 202 and at
+43 in 101. The 10F detour uses a green herb to free the music-score slot,
+pushes the bookshelf east, takes the music score, plays the piano, picks the
+gold key, then uses the 105 wood key at the key hollow to reopen the bar. The
+run path is
 `106 -> 105 -> 104 -> 105 -> 106 -> 107 -> 108 -> 109 -> 10A -> 117 ->
 10A -> 11A -> 10A -> 10B -> 118 -> 10B -> 10A -> 109 -> 108 -> 107 -> 106 ->
-105 -> 104 -> 10F`, with **1 gold key**, 0 shield keys, 0 blue jewels,
-0 armor keys, 1 star crest and the 11B lock still closed. The pickup's bar
-event closes the only north-south gap, so the run finishes in 10F at
-`(8996,13447)`, health 96, no death and no max-ticks. The earlier separate run
-that skipped the 10F key reached 10C and 205 with **5 armor keys**, no shield,
-and the disabled sun-crest action. The 10C green-herb viewers still show
-`count=0`; the spray and the other-room herbs are the reliable heals.
+105 -> 104 -> 10F -> 104 -> 105 -> 106 -> 203 -> 202 -> 201 -> 101 -> 103 ->
+10C -> 103 -> 101 -> 201 -> 202 -> 203 -> 204 -> 205 -> 204 -> 20D`, with
+**shield=1**, blue jewel=0, **armor=4**, star crest placed (1/4 hollows),
+sun=0, moon=0 and `lock17=false`. The run finishes at 20D, health 2, no death
+and no max-ticks. The 205 sun-crest action is dead at room init; the 20D
+Richard death scene returns to 204 and the 20E serum branch is not armed. The
+10C green-herb viewers still show `count=0`; the spray and the other-room
+herbs are the reliable heals.
 
 ### Healing
 
@@ -336,10 +384,11 @@ never reach the healing step; an active fight is allowed to finish first, so a
 heal cannot interrupt a grab or a shooting sequence. The first-aid spray from
 the new-game inventory is used at 56 health in 10A. The checked-in 10F branch
 also uses a green herb at 76 health before the music-score pick-up: the pack is
-full, and the menu USE both heals to 96 and frees the slot. The separate
-10C/205 path used the 10B/202/101 herbs at 56/56/43. The 118 spray is a
-second-visit (`MANSION2`) item and is logged absent on this first-mansion
-route.
+full, and the menu USE both heals to 96 and frees the slot. The 10C/205/20D
+continuation uses the 10B/202/101 herbs at 56/56/43 and still arrives at 205
+with only 2 health; the armor-room gas cannot be tanked further. The 118
+spray is a second-visit (`MANSION2`) item and is logged absent on this
+first-mansion route.
 
 ### Failure handling
 
@@ -363,25 +412,28 @@ route.
 - The 108 ammo is a known geometry blocker: its zone is inside a solid table
   and the reach cannot enter from any side. The route logs it and continues to
   109 instead of treating the room as a failed run.
-- The 105 shield key action exists at `(17400,14500,1000,1000)` but every
-  standable point is outside the 600 reach: the north wall's grown edge is
-  `z=14064`, the sideboard's grown box starts at `x=16928`, and the
-  south-west corner's probe ends 23 units short in x and 38 in z. The
-  sideboard also cannot be pushed: its two-point floor probe uses its 300-unit
-  body radius and it sits 154 units from the north wall, so the counter parks
-  at 10.
-- The gold-emblem detour is wired and reaches the 10F key: push OBJ_01 east
-  from its west face at `(15700,10800)`, use a green herb if the pack is full,
-  take the music score at slot 5, play the piano at `(9700,8000)` facing the
-  zone at `(10500,8000)`, wait for F_COMMON_A5, then take the gold key at
-  `(8100,18800,1500,1000)` from `(8850,18500)`. The item is awarded
-  (`gold=1 held=true`). The pickup's `from_main_2_jill` then moves OBJ_00 to
-  about `(13380,12596)` with half extents 16000/400, covering
-  `x -2620..29380, z 12196..12996` and closing the only `x8356..9720` gap. The
-  player is trapped at `(8996,13447)`; the route logs the bar extents and
-  finishes with the key held instead of pressing a wall. The 105 sideboard
-  stays at `(18000,14300)`, so shield=0 and the blue jewel key (scenario
-  `0x0B` clear) remains absent.
+- The 105 shield key action at `(17400,14500,1000,1000)` is unreachable while
+  OBJ_02 is at `(18000,14300)`: the north wall's grown edge is `z=14064`, the
+  sideboard's grown box starts at `x=16928`, and the south-west corner's 600
+  probe ends 23 units short in x and 38 in z. The sideboard cannot be pushed
+  either: its two-point floor probe uses its 300-unit body radius and it sits
+  154 units from the north wall. The room's gold event is the only mover.
+  After the event moves it to `(16000,14300)`, the route walks south around it
+  and up its east side to `(17100,14060)`, where the reach lands inside the
+  key zone; the pickup is real (`shield key held count=1`).
+- The gold-emblem detour reaches and keeps the 10F key: take the 105 wood key
+  first, push OBJ_01 east from its west face at `(15700,10800)`, use a green
+  herb if the pack is full, take the music score at slot 5, play the piano at
+  `(9700,8000)` facing the zone at `(10500,8000)`, wait for F_COMMON_A5, then
+  take the gold key at `(8100,18800,1500,1000)` from `(8850,18500)`. The
+  pickup's `from_main_2_jill` moves OBJ_00 to about `(13380,12596)` with half
+  extents 16000/400, covering `x -2620..29380, z 12196..12996` and closing
+  the only `x8356..9720` gap. That is the trap. With F_COMMON_A6 set the room
+  re-arms the wood probes; the route returns to `(9000,18500)`, faces north,
+  and uses the wood key, whose `from_main_3` tweens OBJ_00 back to `0,0,0`.
+  The gold key survives for the 105 fireplace. Without the wood key the
+  fallback spends the gold key on the same escape and forfeits the shield.
+  The blue jewel key (scenario `0x0B` clear) remains absent in either case.
 - The 203 landing is sealed by room collision; the route uses the room's
   `check_door` stair zones through `bot:use_stair(slot)` instead of trying to
   walk through the wall. A stair that does not move the player is a precise
@@ -399,9 +451,15 @@ route.
   but the path to it crosses the stunlock without the herbicide.
 - The 205 sun-crest item action is disabled at room init: slot 9 is
   `kind=other`/handler 0 after `aot_delete(AOT_09_ITEM, SCE_NONE, ...)`, even
-  though `F_ITEM_24` is present. The route logs the action table and stops in
-  205 rather than pressing the armor switch at 5 health. The 20D/20E/210 moon
-  branch also needs the missing shield key.
+  though `F_ITEM_24` is present. The armor switch is still `kind=event`, but
+  `F_ROOM_20`/`F_ROOM_21` read false at entry, so pressing it runs
+  `from_main_2` and leaves `F_ROOM_1D`/`F_SCENARIO_3A` clear while camera-2
+  gas drains health. The route detects the dead item action before entering
+  the gas and continues.
+- The 20D Richard death entry scene returns the player to 204; the 20E door is
+  armed only by `item_ck(IT_42_KEY_SERUM)`, which this route never holds. The
+  route reports the 20D blocker and stops cleanly instead of looping through
+  the scene.
 - A locked 11B door is not a failed run: the route records the lock and stops
   in 11A with the lock, key, crest and inventory state in the finish reason.
 
@@ -423,6 +481,7 @@ route.
 | `bot:can_see(slot)` | Whether monster `slot` is in the current snapshot with a clear weapon sight line. |
 | `bot:flag(bank, bit)` | A flag bit, read-only. |
 | `bot:has_item(item)` / `bot:item_count(item)` | Inventory queries. |
+| `bot:inventory()` | Read-only array of the live inventory slots: `{slot, item, quantity}` rows, including zero-quantity weapon slots. |
 | `bot:memory()` | String map set by `remember`. |
 | `bot:visited(room)` | Whether a room id such as `"106"` (or packed `0x106`) was seen. |
 | `bot:remember(key, value)` | Store a string/number/boolean in memory; `nil` removes it. |
