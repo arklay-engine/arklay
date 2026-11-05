@@ -1,0 +1,24 @@
+# door_101_102.txt for arklay: 780 ticks earlier, from the start of room 100's door, with door_101_102.lua.
+0
+10 confirm
+12
+520 up
+550
+1700 down
+1702
+1710 left
+1760 up
+1900
+1905 right
+1910 up
+2115
+2120 left
+2124 up
+2200
+2205 right
+2211 up
+2256
+2258 left
+2269
+2272 action
+2274

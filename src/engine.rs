@@ -15442,6 +15442,9 @@ fn tick_room_timed(
             }
         }
     }
+    if context.game.is_re2_room {
+        crate::player2::follow_pushes(&mut context.game.re2.player, context.player.pos);
+    }
     // `update_player_anim` refreshes zoneFlags bit 0 from the camera switch
     // zone after the collision pass. The renderer reads the whole low byte as
     // its whole-entity gate, so a player the current camera's zone does not
