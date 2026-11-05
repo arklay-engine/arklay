@@ -23,8 +23,7 @@ VM from the pack, so route globals start fresh there.
 
 ## Route
 
-The route starts a fresh Jill game and stops when it enters the east-wing
-gallery (room 107):
+The route starts a fresh Jill game and stops when it enters room 10A:
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -47,14 +46,34 @@ gallery (room 107):
    camera 3/4 in the north hall (`(11000, 25000)`) and back to camera 2/5
    (`(11000, 23000)`). Those camera cuts play the rest of the hall scene and
    restore the east-wing door. The lockpick item is registered at the room
-   origin, outside the walkable floor; the route runs that item's room action
-   (`bot:use_action`) to open the got-item viewer, closes the viewer, and waits
-   until `has_item(0x31)` is true. If the first Barry scene never starts, the
-   route takes the 203 stairs and returns once before retrying the camera cuts.
+   origin, outside the walkable floor; `action_nav` recognises that scripted
+   handover, runs the item's room action (`bot:use_action`), closes the viewer,
+   and waits until `has_item(0x31)` is true. If the first Barry scene never
+   starts, the route takes the 203 stairs and returns once before retrying the
+   camera cuts.
 6. **107 gallery.** With the lockpick in the inventory and the east-wing door
    a normal door again, walk to `(31000, 12500)` just outside the door zone,
-   face east and press action. Entering 107 logs `east wing reached` and
-   finishes the run.
+   face east and press action. In 107, the ink ribbon (0x2F) zone is in the
+   south gallery. The port's default `jill_ink_ribbons = false` unregisters
+   that item (the action slot is inert); with the option on, the route goes
+   around the inner wall through `(14500, 11000)` and picks up three ribbons.
+   Then open the sword-key door (AOT_01) to 108. The door's key is
+   `ITEM_SWORD_KEY` (0x33), lock byte `0x89`; Jill's lockpick substitutes for
+   the sword key because the 106 scene raises scenario flag `0x7C`, and the
+   route logs `bot:flag(0, 0x7C)` plus the door's key/lock flag at navigation
+   start and on a press timeout.
+7. **108 L passage.** The handgun ammo (0x0B) zone `(20700, 13200, 1000, 1000)`
+   lies inside the solid table object at `(21605, 13970)` (half extents
+   `650, 544, 1400`). The table collision stops the player at `x = 22627`, so
+   the 600-unit action reach ends at `x = 22027`, 327 short of the zone; the
+   north and south sides are farther. Pushing the table from the north or
+   south moves the player into the table/cerberus and does not clear the zone,
+   so the route logs the block and takes the south door (AOT_01) to 109. It
+   does not wedge in the pocket north of the table or fail the whole run on a
+   geometry blocker.
+8. **109 L passage.** Take the green herb (0x44) at `(20406, 1524, 1800, 1800)`
+   from the east side, then cross the L passage to the west door (AOT_04) and
+   enter 10A. The route logs `10A reached` and finishes.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -73,22 +92,45 @@ door transition in the route is 11 ticks.
 The east-wing door is restored by the camera 3/4 -> 2/5 scenes. The lockpick
 item's zone is at the room origin, so the route uses `bot:use_action(slot)` on
 that item action (the same handler a normal action press runs) and closes the
-got-item viewer. The run finishes only after `has_item(0x31)` is true. If the
-viewer or the item never arrives, the route reports the lockpick state and
-fails instead of spinning.
+got-item viewer. It checks `has_item(0x31)` before leaving 106; the run's
+final finish is entering 10A. If the viewer or the item never arrives, the
+route reports the lockpick state and fails instead of spinning.
+
+### Interaction skills
+
+`action_nav(bot, slot, label, custom)` is the generic ground-item skill. It
+finds the action by slot, treats a zone at the room origin as the scripted
+lockpick handover (running `bot:use_action`), and otherwise computes four
+approach points 300 units outside the zone. It tries the nearest side first,
+walks to it with `walk_to`, faces the zone centre, presses action, and waits
+for `item_count` to rise or the got-item viewer to close. A side that does not
+fire is abandoned after 60 controllable ticks, and a bounded timeout logs the
+zone, count, position, health and collision flags. Optional `custom` points
+are tried before the generic sides; the 107 ribbon and 109 herb use them for
+the narrow gallery and the herb's wall corner.
+
+`door_nav` keeps its four-side approach. For a keyed door it logs the door
+slot, key byte, lock byte, the lock-bank bit and the scenario flag when the
+press times out; a key turn that only raises the lock flag makes the next
+press transition.
 
 ### Failure handling
 
 - Every phase has a tick deadline. A timeout logs the phase, room, position,
-  camera, `F_COMMON_02/03/05`, `F_STATUS_1A`, lockpick state and scene flags,
-  then calls `bot:finish` with a `failed: ...` reason.
+  camera, health, collision flags, `F_COMMON_02/03/05`, `F_COMMON_40/41`,
+  `F_STATUS_1A`, lockpick state, scenario `0x7C`, the ribbon/ammo/herb counts
+  and the scene flags, then calls `bot:finish` with a `failed: ...` reason.
 - A waypoint that reports `blocked` or `unreachable` is retried once with a
   tighter tolerance and then skipped, so one bad point cannot stall the run.
 - Doors use a point 300 units outside the zone (the action reach probe is 600
   units ahead), face the zone, and press for up to 110 ticks. If the room does
-  not change, the next side of the zone is tried.
+  not change, the next side of the zone is tried. A keyed door logs its key,
+  lock bank bit and the lockpick scenario flag.
 - A grab mashes action plus alternating directions; an unmarked locked state
   does the same after 150 ticks.
+- The 108 ammo is a known geometry blocker: its zone is inside a solid table
+  and the reach cannot enter from any side. The route logs it and continues to
+  109 instead of treating the room as a failed run.
 
 ## API
 
@@ -98,7 +140,7 @@ fails instead of spinning.
 | --- | --- |
 | `bot:tick()` | Monotonic app-update counter. |
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
-| `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped}`. |
+| `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). |
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, pickup, frozen, controls_locked, controllable, dead}`. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |

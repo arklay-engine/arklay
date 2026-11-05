@@ -18,7 +18,15 @@
 --       registered at the room origin, outside the walkable floor; the route
 --       runs that item action, closes the got-item viewer and waits until
 --       has_item(0x31) is true.
---   107 gallery: the east door (AOT_00) is a normal door again.
+--   107 gallery: take the ink ribbon (0x2F) from the south gallery when the
+--       build registers it (jill_ink_ribbons on), then open the sword-key door
+--       (AOT_01) to 108. Jill's lockpick substitutes for the sword key
+--       (scenario flag 0x7C).
+--   108 L passage: the handgun ammo (0x0B) zone is inside the solid table at
+--       (21605,13970); its collision leaves the 600-unit reach short on every
+--       side, so log the block and take the south door (AOT_01) to 109.
+--   109 L passage: take the green herb (0x44), then open the west door
+--       (AOT_04) to 10A and stop.
 --
 -- Every phase has a tick deadline. A blocked walk advances to the next
 -- waypoint or door approach; a phase that cannot make progress fails with a
@@ -49,9 +57,13 @@ BOT_STATE = BOT_STATE or {
     cam_visited_34 = false,
     west_wait = 0,
     barry_scene_logged = false,
-    lockpick_used = false,
     barry_done_ticks = 0,
+    saw_pickup = false,
 }
+
+-- Fields added after the first checked-in route. A --watch reload keeps the
+-- old table, so fill any field that the previous chunk did not define.
+BOT_STATE.saw_pickup = BOT_STATE.saw_pickup or false
 
 -- Flag banks: FG_COMMON is 1, FG_ROOM is 4, FG_STATUS is 5, FG_ITEM is 7.
 local BANK_COMMON = 1
@@ -70,6 +82,18 @@ local F_STATUS_1A = 0x1A
 local F_STATUS_1C = 0x1C
 local F_ITEM_LOCKPICK = 0x09
 local ITEM_LOCKPICK = 0x31
+local ITEM_SWORD_KEY = 0x33
+local ITEM_INK_RIBBON = 0x2F
+local ITEM_HANDGUN_AMMO = 0x0B
+local ITEM_GREEN_HERB = 0x44
+local SCENARIO_HAS_LOCKPICK = 0x7C
+
+-- A ground item pickup gets this many controllable ticks on one side before
+-- the route walks around to the next side. The item viewer itself runs while
+-- the scene is not controllable, so those ticks are not counted here.
+local ACTION_SIDE_TICKS = 60
+-- Overall budget for one action_nav call, in controllable ticks.
+local ACTION_TIMEOUT_TICKS = 1200
 
 local function log(bot, text)
     bot:log(text)
@@ -84,6 +108,16 @@ local function item_action_slot(bot, item)
     for i = 1, #actions do
         if actions[i].kind == "item" and actions[i].item == item then
             return actions[i].slot
+        end
+    end
+    return nil
+end
+
+local function action_by_slot(bot, slot)
+    local actions = bot:actions()
+    for i = 1, #actions do
+        if actions[i].slot == slot then
+            return actions[i]
         end
     end
     return nil
@@ -123,14 +157,23 @@ local function fail(bot, reason)
     local scene = bot:scene()
     log(bot, string.format(
         "FAIL phase=%s reason=%s room=%s pos=(%d,%d) camera=%d health=%d/%d "
-            .. "common02=%s common03=%s common05=%s status1a=%s lockpick=%s "
+            .. "collision=%d common02=%s common03=%s common05=%s "
+            .. "common64=%s common65=%s status1a=%s lockpick=%s "
+            .. "scenario7c=%s items(ribbon=%d ammo=%d herb=%d) "
             .. "scene(film=%s trans=%s skip=%s skippable=%s msg=%s ctrl=%s frozen=%s)",
         BOT_STATE.phase, reason, room.id, p.x, p.z, room.camera, p.health, p.max_health,
+        p.collision_flags,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
         tostring(flag_common(bot, F_COMMON_05)),
+        tostring(flag_common(bot, 0x40)),
+        tostring(flag_common(bot, 0x41)),
         tostring(bot:flag(BANK_STATUS, F_STATUS_1A)),
         tostring(bot:has_item(ITEM_LOCKPICK)),
+        tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+        bot:item_count(ITEM_INK_RIBBON),
+        bot:item_count(ITEM_HANDGUN_AMMO),
+        bot:item_count(ITEM_GREEN_HERB),
         tostring(scene.film), tostring(scene.transition), tostring(scene.cutscene_skip),
         tostring(scene.skippable), tostring(scene.message), tostring(scene.controllable),
         tostring(scene.frozen)
@@ -153,8 +196,8 @@ local function reset_phase_data()
     BOT_STATE.cam_visited_34 = false
     BOT_STATE.west_wait = 0
     BOT_STATE.barry_scene_logged = false
-    BOT_STATE.lockpick_used = false
     BOT_STATE.barry_done_ticks = 0
+    BOT_STATE.saw_pickup = false
 end
 
 local function set_phase(bot, phase, note)
@@ -222,6 +265,7 @@ local function handle_scene(bot, scene)
     if scene.pickup then
         -- The got-item viewer owns the frozen frame. It closes on the
         -- action/confirm edge and awards the armed room item.
+        BOT_STATE.saw_pickup = true
         if tick % 2 == 0 then
             bot:press_action()
         else
@@ -316,6 +360,27 @@ local function generic_door_points(door)
     }
 end
 
+-- A precise read of a door's lock state for the failure logs. Bank 2 is the
+-- lock bank; the low six bits of the door lock byte name its bit.
+local function door_diag(bot, target)
+    local door = door_by_target(bot, target)
+    if not door then
+        return string.format("%s door=missing scenario7c=%s lockpick=%s",
+            target, tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+            tostring(bot:has_item(ITEM_LOCKPICK)))
+    end
+    local lock = door.lock or 0
+    return string.format(
+        "%s door(slot=%d key=0x%02X lock=0x%02X lockbit=%d lockflag=%s next=%d) "
+            .. "scenario7c=%s lockpick=%s sword=%s",
+        target, door.slot, door.key or 0, lock, lock % 64,
+        tostring(bot:flag(2, lock % 64)), door.next_room or 0,
+        tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+        tostring(bot:has_item(ITEM_LOCKPICK)),
+        tostring(bot:has_item(ITEM_SWORD_KEY))
+    )
+end
+
 -- Walk to a point just outside a door zone, face the zone, and press action.
 -- `custom` lists phase-specific approaches first (the known-good side); the
 -- generic sides follow as retries. Returns false while working; the room
@@ -330,7 +395,8 @@ local function door_nav(bot, target, custom, label)
         end
         local kind = door_action_kind(bot, target)
         if kind ~= "door" then
-            log(bot, string.format("door to %s is %s, not a door", target, tostring(kind)))
+            log(bot, string.format("door to %s is %s, not a door; %s",
+                target, tostring(kind), door_diag(bot, target)))
             -- Remember the failed target so the message is logged once.
             BOT_STATE.nav = {
                 target = target,
@@ -338,6 +404,7 @@ local function door_nav(bot, target, custom, label)
                 index = 1,
                 pressing = false,
                 ticks = 0,
+                exhausted = true,
             }
             return false
         end
@@ -355,12 +422,19 @@ local function door_nav(bot, target, custom, label)
             index = 1,
             pressing = false,
             ticks = 0,
+            exhausted = false,
         }
         BOT_STATE.nav = nav
-        log(bot, string.format("door %s: navigating with %d approaches", target, #points))
+        log(bot, string.format("door %s: navigating with %d approaches; %s",
+            target, #points, door_diag(bot, target)))
     end
 
     if nav.index > #nav.points then
+        if not nav.exhausted then
+            nav.exhausted = true
+            log(bot, string.format("%s: every approach failed; %s",
+                label, door_diag(bot, target)))
+        end
         return false
     end
     local point = nav.points[nav.index]
@@ -400,10 +474,236 @@ local function door_nav(bot, target, custom, label)
         ))
     end
     if nav.ticks > 110 then
-        log(bot, string.format("%s: press timeout on approach %d; next side", label, nav.index))
+        log(bot, string.format("%s: press timeout on approach %d; %s; next side",
+            label, nav.index, door_diag(bot, target)))
         nav.index = nav.index + 1
         nav.pressing = false
         nav.ticks = 0
+    end
+    return false
+end
+
+-- Four approach points 300 units outside an action zone. The action reach
+-- probe is 600 units ahead, so the probe lands 300 units inside the zone.
+local function generic_action_points(action)
+    local x, z, w, h = action.x, action.z, action.width, action.depth
+    local cx, cz = x + w // 2, z + h // 2
+    return {
+        { x - 300, cz, cx, cz },
+        { x + w + 300, cz, cx, cz },
+        { cx, z - 300, cx, cz },
+        { cx, z + h + 300, cx, cz },
+    }
+end
+
+-- Try the closest approach first. A room may have a wall on one side (the
+-- 107 ribbon is behind the gallery's inner wall) or an enemy near another, so
+-- the fixed west/east/north/south order is only a fallback.
+local function sort_points_by_distance(bot, points)
+    for i = 2, #points do
+        local point = points[i]
+        local distance = bot:distance(point[1], point[2])
+        local j = i - 1
+        while j >= 1
+            and bot:distance(points[j][1], points[j][2]) > distance do
+            points[j + 1] = points[j]
+            j = j - 1
+        end
+        points[j + 1] = point
+    end
+    return points
+end
+
+-- Walk to reach of a ground item action, face it, and press action until the
+-- item count rises or the got-item viewer closes. The item viewer runs while
+-- the scene is not controllable, so the route's handle_scene closes it before
+-- this function runs again. If a side does not fire, walk to the next side.
+--
+-- A zone at the room origin is a scripted handover (the 106 lockpick): its
+-- zone is outside the walkable floor, so use the room item action directly.
+local function action_nav(bot, slot, label, custom)
+    local action = action_by_slot(bot, slot)
+    local nav = BOT_STATE.nav
+    if not nav or nav.kind ~= "action" or nav.slot ~= slot then
+        if not action or action.kind ~= "item" then
+            log(bot, string.format(
+                "%s: item action slot %s is not present (already taken?)",
+                label, tostring(slot)
+            ))
+            return true
+        end
+        local scripted = action.x == 0 and action.z == 0
+            and action.width <= 32 and action.depth <= 32
+        nav = {
+            kind = "action",
+            slot = slot,
+            item = action.item,
+            label = label,
+            before = bot:item_count(action.item),
+            scripted = scripted,
+            points = {},
+            index = 1,
+            pressing = false,
+            pressed = false,
+            used = false,
+            ticks = 0,
+            total = 0,
+        }
+        BOT_STATE.nav = nav
+        BOT_STATE.saw_pickup = false
+        if scripted then
+            log(bot, string.format(
+                "%s: scripted handover slot %d item=0x%02X count=%d",
+                label, slot, action.item, nav.before
+            ))
+        else
+            local points = {}
+            if custom then
+                for i = 1, #custom do
+                    points[#points + 1] = custom[i]
+                end
+            end
+            local generic = sort_points_by_distance(bot, generic_action_points(action))
+            for i = 1, #generic do
+                points[#points + 1] = generic[i]
+            end
+            nav.points = points
+            log(bot, string.format(
+                "%s: item=0x%02X slot=%d zone=(%d,%d,%d,%d) count=%d "
+                    .. "with %d approaches",
+                label, action.item, slot, action.x, action.z,
+                action.width, action.depth, nav.before, #nav.points
+            ))
+        end
+    end
+
+    nav.total = nav.total + 1
+    local count = bot:item_count(nav.item)
+    if count > nav.before then
+        log(bot, string.format(
+            "%s: item=0x%02X count %d -> %d",
+            label, nav.item, nav.before, count
+        ))
+        BOT_STATE.nav = nil
+        return true
+    end
+
+    action = action_by_slot(bot, slot)
+    if nav.pressed and (not action or action.kind ~= "item") then
+        log(bot, string.format(
+            "%s: action slot %d cleared after the press (count=%d)",
+            label, slot, count
+        ))
+        BOT_STATE.nav = nil
+        return true
+    end
+    if nav.pressed and BOT_STATE.saw_pickup then
+        log(bot, string.format(
+            "%s: got-item viewer closed (count=%d)", label, count
+        ))
+        BOT_STATE.nav = nil
+        return true
+    end
+
+    if nav.scripted then
+        if not nav.used then
+            nav.used = true
+            nav.pressed = true
+            log(bot, string.format(
+                "%s: using scripted item action slot %d", label, slot
+            ))
+            bot:use_action(slot)
+            return false
+        end
+        if nav.total > ACTION_TIMEOUT_TICKS then
+            fail(bot, string.format(
+                "%s: scripted handover slot %d did not award item 0x%02X "
+                    .. "(count=%d action=%s pickup=%s)",
+                label, slot, nav.item, count,
+                tostring(action and action.kind or "gone"),
+                tostring(BOT_STATE.saw_pickup)
+            ))
+        end
+        return false
+    end
+
+    if nav.index > #nav.points then
+        fail(bot, string.format(
+            "%s: every approach failed for item 0x%02X slot %d "
+                .. "(count=%d zone=(%d,%d,%d,%d) action=%s pickup=%s)",
+            label, nav.item, slot, count,
+            action and action.x or -1, action and action.z or -1,
+            action and action.width or -1, action and action.depth or -1,
+            tostring(action and action.kind or "gone"),
+            tostring(BOT_STATE.saw_pickup)
+        ))
+        return false
+    end
+    local point = nav.points[nav.index]
+
+    if not nav.pressing then
+        local result = bot:walk_to(point[1], point[2], {
+            run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
+            tolerance = 120,
+        })
+        if result.status == "arrived" then
+            nav.pressing = true
+            nav.ticks = 0
+            log(bot, string.format(
+                "%s: at approach %d/%d (%d,%d) d=%d",
+                label, nav.index, #nav.points, point[1], point[2], result.distance
+            ))
+        elseif result.status ~= "moving" then
+            local p = bot:player()
+            log(bot, string.format(
+                "%s: approach %d/%d %s d=%d pos=(%d,%d) health=%d collision=%d; next side",
+                label, nav.index, #nav.points, result.status, result.distance,
+                p.x, p.z, p.health, p.collision_flags
+            ))
+            nav.index = nav.index + 1
+            nav.pressing = false
+        end
+        if nav.total > ACTION_TIMEOUT_TICKS then
+            fail(bot, string.format(
+                "%s: timed out walking to item 0x%02X slot %d (count=%d)",
+                label, nav.item, slot, count
+            ))
+        end
+        return false
+    end
+
+    nav.ticks = nav.ticks + 1
+    local facing = bot:face_to(point[3], point[4])
+    if facing.status == "facing" then
+        nav.pressed = true
+        bot:press_action()
+    end
+    if nav.ticks % 30 == 0 then
+        local p = bot:player()
+        log(bot, string.format(
+            "%s: pressing %d ticks face=%s angle_error=%d count=%d "
+                .. "pos=(%d,%d) health=%d collision=%d attacked=%d",
+            label, nav.ticks, facing.status, facing.angle_error, count,
+            p.x, p.z, p.health, p.collision_flags, p.being_attacked
+        ))
+    end
+    if nav.ticks > ACTION_SIDE_TICKS then
+        log(bot, string.format(
+            "%s: no pickup on approach %d; next side (count=%d)",
+            label, nav.index, count
+        ))
+        nav.index = nav.index + 1
+        nav.pressing = false
+        nav.ticks = 0
+    end
+    if nav.total > ACTION_TIMEOUT_TICKS then
+        fail(bot, string.format(
+            "%s: timed out picking up item 0x%02X slot %d "
+                .. "(count=%d approach=%d/%d zone=(%d,%d,%d,%d))",
+            label, nav.item, slot, count, nav.index, #nav.points,
+            action and action.x or -1, action and action.z or -1,
+            action and action.width or -1, action and action.depth or -1
+        ))
     end
     return false
 end
@@ -412,12 +712,19 @@ local function enter_room(bot, room, tick)
     local p = bot:player()
     log(bot, string.format(
         "room %s at tick %d pos=(%d,%d) camera=%d health=%d/%d "
-            .. "common02=%s common03=%s common05=%s lockpick=%s",
+            .. "common02=%s common03=%s common05=%s common64=%s common65=%s "
+            .. "lockpick=%s scenario7c=%s items(ribbon=%d ammo=%d herb=%d)",
         room.id, tick, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
         tostring(flag_common(bot, F_COMMON_05)),
-        tostring(bot:has_item(ITEM_LOCKPICK))
+        tostring(flag_common(bot, 0x40)),
+        tostring(flag_common(bot, 0x41)),
+        tostring(bot:has_item(ITEM_LOCKPICK)),
+        tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+        bot:item_count(ITEM_INK_RIBBON),
+        bot:item_count(ITEM_HANDGUN_AMMO),
+        bot:item_count(ITEM_GREEN_HERB)
     ))
     BOT_STATE.room = room.id
     BOT_STATE.room_ticks = 0
@@ -425,12 +732,6 @@ local function enter_room(bot, room, tick)
     BOT_STATE.wp = 1
     BOT_STATE.wp_retry = false
     BOT_STATE.wp_tol = nil
-
-    if room.id == "107" then
-        log(bot, "east wing reached")
-        bot:finish("east wing reached")
-        return
-    end
 
     if room.id == "106" and has_lockpick_action(bot) then
         log(bot, "Barry lockpick item registered")
@@ -455,6 +756,24 @@ local function enter_room(bot, room, tick)
         set_phase(bot, "walk_104", "tea room")
     elseif room.id == "203" then
         set_phase(bot, "back_from_203", "stairs landing")
+    elseif room.id == "107" then
+        log(bot, "east wing reached")
+        set_phase(bot, "to_107_item", "gallery")
+    elseif room.id == "108" then
+        -- The handgun ammo zone (20700,13200,1000,1000) lies inside the solid
+        -- table object at (21605,13970) (half extents 650,544,1400). The table
+        -- collision stops the player at x=22627, so the 600-unit reach ends at
+        -- x=22027, 327 short of the zone; the north and south sides are
+        -- farther. A south push attempt moves the player into the table/dog
+        -- and does not clear the zone, so log the block and go on to 109.
+        log(bot, "108 handgun ammo blocked by the solid table: zone "
+            .. "(20700,13200,1000,1000) reach ends short on every side")
+        set_phase(bot, "to_109", "L passage")
+    elseif room.id == "109" then
+        set_phase(bot, "to_109_item", "L passage west")
+    elseif room.id == "10A" then
+        log(bot, "10A reached")
+        bot:finish("10A reached")
     else
         fail(bot, "unexpected room " .. room.id)
     end
@@ -709,12 +1028,13 @@ local function phase_barry_done(bot)
         end
         return
     end
-    if not BOT_STATE.lockpick_used then
+    if not has_lockpick then
         local slot = item_action_slot(bot, ITEM_LOCKPICK)
         if slot then
-            BOT_STATE.lockpick_used = true
-            log(bot, "using the lockpick item action in slot " .. tostring(slot))
-            bot:use_action(slot)
+            -- The lockpick zone is 0,0,16,16 at the room origin, outside the
+            -- walkable floor: action_nav recognises that scripted handover and
+            -- runs the room item action.
+            action_nav(bot, slot, "lockpick handover")
         else
             log(bot, "lockpick item action is not present")
         end
@@ -742,6 +1062,116 @@ local function phase_to_107(bot)
     end
 end
 
+local function phase_to_107_item(bot)
+    local slot = item_action_slot(bot, ITEM_INK_RIBBON)
+    if not slot then
+        local count = bot:item_count(ITEM_INK_RIBBON)
+        if count > 0 then
+            log(bot, string.format("107 ink ribbon already held count=%d", count))
+        else
+            local action = action_by_slot(bot, 3)
+            log(bot, string.format(
+                "107 ink ribbon action slot 3 is %s handler=%s; item skipped "
+                    .. "or already taken (jill_ink_ribbons option)",
+                tostring(action and action.kind or "missing"),
+                tostring(action and action.handler or "nil")
+            ))
+        end
+        set_phase(bot, "to_108", "no ink ribbon action")
+        return
+    end
+    -- The item zone is south of the gallery's inner wall (box 1) and west of
+    -- box 3; a direct A* goal wedges on that corner. Go around box 3 on its
+    -- east side first, then walk west along the south gallery.
+    local points = {
+        { 14500, 11000 },
+        { 14500, 13700 },
+    }
+    if walk_waypoints(bot, points, 150, "107 ink ribbon east") then
+        if action_nav(bot, slot, "107 ink ribbon", {
+            { 15000, 13700, 13780, 13730 },
+        }) then
+            log(bot, string.format("107 ink ribbon count=%d",
+                bot:item_count(ITEM_INK_RIBBON)))
+            set_phase(bot, "to_108", "ink ribbon taken")
+            return
+        end
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, "could not take the 107 ink ribbon")
+    end
+end
+
+local function phase_to_108(bot)
+    -- The gallery statue at (12500,4600) is not in the room collision, so a
+    -- straight goal to the east door wedges on it. Pass north of it first.
+    local points = {
+        { 9000, 3000 },
+        { 14000, 3000 },
+    }
+    if walk_waypoints(bot, points, 150, "107 gallery north") then
+        -- The door is on the east wall; the west approach is the nearest one.
+        local custom = { { 15100, 4200, 16650, 4200 } }
+        door_nav(bot, "108", custom, "door 107->108")
+    end
+    if BOT_STATE.phase_ticks > 1200 then
+        fail(bot, "could not open the 107 -> 108 sword-key door; "
+            .. door_diag(bot, "108"))
+    end
+end
+
+local function phase_to_109(bot)
+    -- Get back east of the ammo table, then run down the east corridor to the
+    -- south door. A straight door goal from the table's north side would walk
+    -- back into the table.
+    local points = {
+        { 23500, 12000 },
+        { 23500, 20000 },
+    }
+    if walk_waypoints(bot, points, 150, "108 east corridor") then
+        -- The door is on the south wall; approach from the north.
+        local custom = { { 24800, 25200, 24800, 26700 } }
+        door_nav(bot, "109", custom, "door 108->109")
+    end
+    if BOT_STATE.phase_ticks > 1200 then
+        fail(bot, "could not open the 108 -> 109 door; " .. door_diag(bot, "109"))
+    end
+end
+
+local function phase_to_109_item(bot)
+    local slot = item_action_slot(bot, ITEM_GREEN_HERB)
+    if not slot then
+        local count = bot:item_count(ITEM_GREEN_HERB)
+        if count > 0 then
+            log(bot, string.format("109 green herb count=%d", count))
+        else
+            log(bot, "109 green herb action not present; assuming already taken")
+        end
+        set_phase(bot, "to_10a", "no herb action")
+        return
+    end
+    if action_nav(bot, slot, "109 green herb", {
+        { 22700, 2600, 21306, 2424 },
+    }) then
+        log(bot, string.format("109 green herb count=%d",
+            bot:item_count(ITEM_GREEN_HERB)))
+        set_phase(bot, "to_10a", "green herb taken")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, "could not take the 109 green herb")
+    end
+end
+
+local function phase_to_10a(bot)
+    -- The door is on the west wall; approach from the east.
+    local custom = { { 2900, 8550, 1300, 8550 } }
+    door_nav(bot, "10A", custom, "door 109->10A")
+    if BOT_STATE.phase_ticks > 1200 then
+        fail(bot, "could not open the 109 -> 10A door; " .. door_diag(bot, "10A"))
+    end
+end
+
 function on_bot_tick(bot)
     local tick = bot:tick()
     local room = bot:room()
@@ -750,7 +1180,7 @@ function on_bot_tick(bot)
 
     if BOT_STATE.room ~= room.id then
         enter_room(bot, room, tick)
-        if room.id == "107" then
+        if room.id == "10A" then
             return
         end
     end
@@ -820,6 +1250,16 @@ function on_bot_tick(bot)
         phase_barry_done(bot)
     elseif phase == "to_107" then
         phase_to_107(bot)
+    elseif phase == "to_107_item" then
+        phase_to_107_item(bot)
+    elseif phase == "to_108" then
+        phase_to_108(bot)
+    elseif phase == "to_109" then
+        phase_to_109(bot)
+    elseif phase == "to_109_item" then
+        phase_to_109_item(bot)
+    elseif phase == "to_10a" then
+        phase_to_10a(bot)
     else
         fail(bot, "unknown phase " .. tostring(phase))
     end
