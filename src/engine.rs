@@ -39,7 +39,7 @@ mod debug_hud;
 mod debug_view;
 mod watch;
 
-pub use bot::{BotOptions, DEFAULT_MAX_TICKS};
+pub use bot::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -8732,11 +8732,11 @@ impl App {
     }
 
     /// Attach the pack's Lua bot to the running game session.
-    fn attach_bot(&mut self) -> Result<()> {
+    fn attach_bot(&mut self, risk: f64) -> Result<()> {
         if !matches!(self.mode, Mode::Play(_)) {
             bail!("--bot requires a game session (use `--ui game`)");
         }
-        self.bot = Some(bot::BotRuntime::load(&self.pack)?);
+        self.bot = Some(bot::BotRuntime::load(&self.pack)?.with_risk(risk));
         Ok(())
     }
 
@@ -10009,7 +10009,7 @@ fn run_ui_impl(
         app.player_options = player_options;
         app.boot(boot)?;
         app.enable_skips();
-        app.attach_bot()?;
+        app.attach_bot(bot.risk)?;
         // A headless run has no frame to stay responsive for: let one update
         // fast-forward a whole second of scene instead of a 12 ms burst.
         if let Mode::Play(session) = &mut app.mode {
@@ -10218,7 +10218,7 @@ fn run_ui_impl(
     }
     if bot.enabled {
         app.enable_skips();
-        app.attach_bot()?;
+        app.attach_bot(bot.risk)?;
     }
     let mut owned = None;
     let display = match shared {
@@ -24737,7 +24737,7 @@ mod tests {
                 enabled: true,
                 headless: true,
                 max_ticks: 20,
-                stats_path: None,
+                ..BotOptions::default()
             },
         )
         .unwrap();
@@ -30013,7 +30013,7 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot().unwrap();
+        app.attach_bot(bot::DEFAULT_RISK).unwrap();
         app.enable_skips();
         let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
         let Mode::Play(session) = &mut app.mode else {
