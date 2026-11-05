@@ -5157,7 +5157,16 @@ impl GameSession {
         // The menu task runs before the main loop's message update: a prompt
         // the viewer raises types its first glyph this frame, and one that
         // resolves this frame is only seen by the viewer on the next.
+        let had_view = self.pickup_view.is_some();
         self.step_pickup_view(pack, ui);
+        // The action press that dismissed the viewer belongs to the menu, not
+        // to the room-action probe: a reach-gated ground item would otherwise
+        // be re-armed from the player's standing position and reopen a fresh
+        // got-item viewer after every close. Swallow it until the key comes up,
+        // like the message window does.
+        if had_view && self.pickup_view.is_none() && action {
+            self.swallow_action = true;
+        }
         // The original's state 4 runs `menu_draw_health_bar` after the viewer
         // on every frame the viewer stays up, so the face and the EKG keep
         // sweeping (and drawing from the shared `rand()`) under the model.
@@ -9316,6 +9325,19 @@ impl App {
                 if let Some(item) = input.heal
                     && session.game.item_count(item) > 0
                     && session.game.item_defs.get(item).kind == crate::item_catalog::ItemKind::Heal
+                    && let game::UseResult::Used { .. } = session.game.use_item(item)
+                {
+                    session.game.select_item(Some(item));
+                    session.game.use_selected_item();
+                }
+                // A non-heal item use is the same menu USE path (the room's
+                // use-item zone raises the per-item flag; `use_item` refuses
+                // the item while that flag is clear). It is how the route uses
+                // the 10F gold emblem key at the 105 fireplace and the 118
+                // herbicide at the 10C pump.
+                if let Some(item) = input.use_item
+                    && session.game.item_count(item) > 0
+                    && session.game.item_defs.get(item).kind != crate::item_catalog::ItemKind::Heal
                     && let game::UseResult::Used { .. } = session.game.use_item(item)
                 {
                     session.game.select_item(Some(item));
