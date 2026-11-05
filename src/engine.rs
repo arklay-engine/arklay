@@ -2466,6 +2466,10 @@ struct GameSession {
     /// The slot the last typewriter save wrote, taken once by the app as
     /// the in-game menu's restart point.
     saved_slot: Option<usize>,
+    /// Saves this session's save screens wrote, and the slot of the last
+    /// one: the player bot's read-only view of a completed save.
+    saves_written: u32,
+    last_saved_slot: Option<usize>,
     /// A door loaded a room and its autosave has not been taken yet: the app
     /// takes it once the player has control ([`GameSession::take_autosave`]).
     autosave_pending: bool,
@@ -2973,6 +2977,8 @@ impl GameSession {
             system_menu_requested: false,
             load_from_system_menu: false,
             saved_slot: None,
+            saves_written: 0,
+            last_saved_slot: None,
             autosave_pending: false,
             autosave_settle: 0,
             autosave_events: 0,
@@ -6856,8 +6862,10 @@ impl GameSession {
                 }
                 self.game.increment_saves();
             }
+            self.saves_written = self.saves_written.saturating_add(1);
             if outcome.slot.is_some() {
                 self.saved_slot = outcome.slot;
+                self.last_saved_slot = outcome.slot;
             }
         }
         self.save_screen = None;
@@ -10857,7 +10865,9 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
-        let reset = self.bot.as_mut().map(|bot| bot.reset(&self.pack));
+        // A session the bot reached through the load screen is its reload
+        // and carries the run on; any other is a fresh run.
+        let reset = self.bot.as_mut().map(|bot| bot.start_session(&self.pack));
         if let Some(Err(err)) = reset {
             eprintln!("[bot] warning: could not reset the bot route: {err:#}");
             self.bot = None;
@@ -11362,6 +11372,12 @@ impl App {
         if matches!(self.mode, Mode::Movie(_)) {
             return self.tick_movie(ui, input);
         }
+        // A running bot owns the pad on the title and its load screen too,
+        // where it loads its latest save after a death.
+        let ui = match self.bot_screen_input()? {
+            Some(bot) => bot.ui,
+            None => ui,
+        };
         let result = self.screen_update(ui);
         if let ScreenResult::Done(action) = result {
             return self.apply(action);
@@ -11389,6 +11405,25 @@ impl App {
             None => (ui, input, action),
         };
         self.play_update(ui, input, action)
+    }
+
+    /// The running bot's input on the title or the title's load screen, read
+    /// from what the screen shows; `None` on any other screen or without a
+    /// running bot.
+    fn bot_screen_input(&mut self) -> Result<Option<bot::BotInput>> {
+        let Some(runtime) = self.bot.as_mut().filter(|runtime| !runtime.finished()) else {
+            return Ok(None);
+        };
+        let screen = match &self.mode {
+            Mode::Title(screen) => bot::BotScreen::Title {
+                stage: screen.state_str("stage").unwrap_or_default(),
+                selection: screen.state_int("selection").unwrap_or(0),
+                any_saves: screen.state_int("any_saves").unwrap_or(0) != 0,
+            },
+            Mode::Load(screen) => bot::BotScreen::Load(screen.bot_view()),
+            _ => return Ok(None),
+        };
+        runtime.tick_screen(screen).map(Some)
     }
 
     /// Advance the title/select/load screen; Play reports `Continue` here.
@@ -12609,14 +12644,23 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
 fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) -> Result<()> {
     let started = Instant::now();
     let mut outcome = "max_ticks";
+    // A bot with a save loads it after a death; one without gets a moment
+    // to see the death and finish with its own reason.
+    let mut dead_ticks = 0u32;
     for _ in 0..max_ticks {
         if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
             outcome = "finished";
             break;
         }
         if app.bot_player_dead() {
-            outcome = "death";
-            break;
+            dead_ticks += 1;
+            let reloading = app.bot.as_ref().is_some_and(bot::BotRuntime::has_save);
+            if !reloading && dead_ticks > 2 {
+                outcome = "death";
+                break;
+            }
+        } else {
+            dead_ticks = 0;
         }
         match app.update(UiInput::default(), player::Input::default(), false) {
             Ok(AppFlow::Quit) => {

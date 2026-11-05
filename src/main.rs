@@ -880,6 +880,17 @@ fn parse_hex_byte(text: &str) -> Result<u8, String> {
         .map_err(|err| format!("`{text}` is not a hex byte: {err}"))
 }
 
+/// A bot run's own empty save directory, `arklay-bot-saves-<pid>` under the
+/// system temp directory.
+fn bot_save_dir() -> Result<PathBuf> {
+    let dir = std::env::temp_dir().join(format!("arklay-bot-saves-{}", std::process::id()));
+    if dir.exists() {
+        fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
+    }
+    fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    Ok(dir)
+}
+
 /// `--bot-risk`: a number in `0.0..=1.0`.
 fn parse_bot_risk(text: &str) -> Result<f64, String> {
     let risk: f64 = text
@@ -1743,11 +1754,17 @@ fn main() -> Result<()> {
                     pos: cli.model_pos,
                 }),
             };
-            let save_dir = cli
-                .save_dir
-                .clone()
-                .or_else(|| config.save_dir.clone())
-                .unwrap_or_else(arklay::config::Config::default_save_dir);
+            // A bot run saves at typewriters through the game's save screen;
+            // without an explicit --save-dir it writes to a fresh directory of
+            // its own, never over the player's saves.
+            let save_dir = match &cli.save_dir {
+                Some(dir) => dir.clone(),
+                None if bot_enabled => bot_save_dir()?,
+                None => config
+                    .save_dir
+                    .clone()
+                    .unwrap_or_else(arklay::config::Config::default_save_dir),
+            };
             if let Some(id) = cli.ending {
                 return arklay::engine::run_ending(
                     &pack,

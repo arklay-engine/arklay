@@ -11,6 +11,11 @@
 //! - `turn_in_place_ticks` counts ticks with left/right held, neither up nor
 //!   down and no aim button.
 //!
+//! `saves` counts the saves the session's save screen reported writing,
+//! `reloads` the sessions the bot started by loading its latest save from
+//! the title's load screen, and `deaths_before_reload` the reloads that
+//! followed a death.
+//!
 //! The `menu` counters come from the engine's menu state between two
 //! consecutive snapshots, never from what the route pressed:
 //! - `opens`: the inventory panel appeared (START); `viewer_opens`: the
@@ -47,6 +52,12 @@ pub(super) struct BotStats {
     damage_taken: u64,
     deaths: u32,
     was_dead: bool,
+    /// Saves the typewriter screen wrote.
+    saves: u32,
+    /// Saves the bot loaded through the title's load screen.
+    reloads: u32,
+    /// Deaths the bot answered with a reload.
+    deaths_before_reload: u32,
     fire_presses: u64,
     fire_held_ticks: u64,
     shots_fired: u64,
@@ -150,6 +161,17 @@ impl MenuCounters {
 }
 
 impl BotStats {
+    /// A save the save screen completed.
+    pub(super) fn note_save(&mut self) {
+        self.saves += 1;
+    }
+
+    /// A reload of the latest save; `after_death` when the player had died.
+    pub(super) fn note_reload(&mut self, after_death: bool) {
+        self.reloads += 1;
+        self.deaths_before_reload += u32::from(after_death);
+    }
+
     /// Observe the snapshot taken at the start of bot tick `tick`.
     pub(super) fn observe_snapshot(&mut self, tick: u64, snapshot: &SessionSnapshot) {
         self.last_tick = tick;
@@ -303,6 +325,9 @@ impl BotStats {
                 "damage_taken": self.damage_taken,
             },
             "deaths": self.deaths,
+            "saves": self.saves,
+            "reloads": self.reloads,
+            "deaths_before_reload": self.deaths_before_reload,
             "combat": {
                 "fire_presses": self.fire_presses,
                 "fire_held_ticks": self.fire_held_ticks,
