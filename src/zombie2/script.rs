@@ -458,8 +458,28 @@ impl UserData for Api {
                 i32::from(rect.width),
                 i32::from(rect.depth),
                 rect.id,
+                rect.floor,
             ))
         });
+        // `Sca_ck_info` with no push: its answer, and its list as `sca_list`'s.
+        methods.add_method_mut(
+            "sca_ck_info",
+            |_, e, (x, z, floor, mask, radius): (i32, i32, i32, i64, i32)| {
+                let room = e.em().mover.tick.room;
+                Ok(room.sca.as_ref().map_or_else(
+                    || (0, Vec::new()),
+                    |sca| {
+                        let floor = (floor & 0x1F) as u8;
+                        let mask = mask as u16;
+                        let list = crate::sca::list_at(sca, mask, x, z, radius, floor);
+                        (
+                            crate::sca::info_flags(sca, mask, x, z, radius, floor),
+                            list.into_iter().map(|record| record + 1).collect(),
+                        )
+                    },
+                ))
+            },
+        );
         methods.add_method_mut("sca_side", |_, e, (record, x, z): (i64, i32, i32)| {
             Ok(crate::sca::side_of(sca_record(e, record)?, x, z))
         });
@@ -1170,6 +1190,12 @@ impl UserData for Api {
         );
         // The ivy a vine grew from (`pEnemy_ptr`), as it stood after its run.
         methods.add_method_mut("has_parent", |_, e, ()| Ok(e.em().world.parent.is_some()));
+        // Keep another work as this one's `parent_*`, from the next tick: the
+        // giant spider's partner (`+0x240`).
+        methods.add_method_mut("set_parent", |_, e, slot: Option<u8>| {
+            e.em().z.parent = slot;
+            Ok(())
+        });
         methods.add_method_mut("parent_var", |_, e, index: usize| {
             Ok(parent(e)?.vars.get(index).copied().unwrap_or(0))
         });
@@ -1305,6 +1331,32 @@ impl UserData for Api {
             e.em().z.tilt = [pitch as u16, roll as u16];
             Ok(())
         });
+        // `Cdir_x` and `Cdir_z`, which turn the body as it's posed as well as
+        // drawn.
+        methods.add_method_mut("cdir", |_, e, ()| {
+            let [x, z] = e.em().work().tilt;
+            Ok((i64::from(x), i64::from(z)))
+        });
+        methods.add_method_mut("set_cdir", |_, e, (x, z): (i64, i64)| {
+            let em = e.em();
+            em.work().tilt = [x as i16, z as i16];
+            em.z.tilt = [x as u16, z as u16];
+            Ok(())
+        });
+        // `RotMatrix(angle)` then `ApplyMatrixSV` on a point.
+        methods.add_method_mut(
+            "rot_apply",
+            |_, _, (ax, ay, az, x, y, z): (i64, i64, i64, i32, i32, i32)| {
+                let m = player2::rot_matrix([ax as i16, ay as i16, az as i16]);
+                let [x, y, z] = std::array::from_fn(|row| {
+                    let sum = i32::from(m[row][0]) * x
+                        + i32::from(m[row][1]) * y
+                        + i32::from(m[row][2]) * z;
+                    i32::from((sum >> 12) as i16)
+                });
+                Ok((x, y, z))
+            },
+        );
         methods.add_method_mut("set_shadow", |_, e, half: i32| {
             e.em().z.shadow_half = Some(half);
             Ok(())
@@ -1433,6 +1485,9 @@ mod tests {
     /// the player's angle, `TARGET`, or 0 within `rate` of it. `ROUTINES` and
     /// `VARS` start it past its init, `DAMAGE_NO` and `D_LIFE` are the last
     /// hit's, `WATER_LEVEL` is `Water_ck`'s, and a clip's end shows `SEQ_END`.
+    /// For the ceiling and the walls, `Sca_ck_info` with mask 0x400 gives
+    /// `SCA_FLAGS` and `SCA_LIST`, every record faces `SCA_SIDE` with its
+    /// sides' edges at `EDGES`, and nothing else is a spider. `POS` places it.
     const SPIDER_STUB: &str = "
         local draws, drawn = DRAWS, 0
         local dist, target, clip_len = DIST or 20000, TARGET or 0x800, CLIP_LEN or 1000
@@ -1441,7 +1496,8 @@ mod tests {
             be = 1, kind = KIND, angle = 0, spd = { 0, 0, 0 }, moved = 0,
             clips = {}, frame = 0, add_dir = -1, pl = { [0] = 1, 0, 0, 0 },
             pl_life = PL_LIFE or 200, pl_dc = 0, sounds = {}, effect = { -1, -1 },
-            rotated = { -1, -1 } }
+            rotated = { -1, -1 }, cdir = { 0, 0 }, pos = POS or { 0, 0, 0 }, room_enemy = 0 }
+        local edges = EDGES or { [0] = 0, 0, 0, 0 }
         local function way(rate)
             local d = (target - w.angle) & 0xFFF
             if d > 0x800 then d = d - 0x1000 end
@@ -1471,7 +1527,26 @@ mod tests {
         function e:set_speed_x(x) w.spd[1] = x end
         function e:add_speed_xz_at(dir) w.moved = w.moved + 1; w.add_dir = dir end
         function e:distance() return dist end
-        function e:pos() return 0, 0, 0 end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:add_pos(x, y, z)
+            w.pos = { w.pos[1] + x, w.pos[2] + y, w.pos[3] + z }
+        end
+        function e:rot_apply(ax, ay, az, x, y, z) return x, y, z end
+        function e:cdir() return w.cdir[1], w.cdir[2] end
+        function e:set_cdir(x, z) w.cdir = { x & 0xFFFF, z & 0xFFFF } end
+        function e:floor() return 0 end
+        function e:sca_ck_info(x, z, floor, mask)
+            if mask == 0x400 then return SCA_FLAGS or 0, SCA_LIST or {} end
+            return 0, {}
+        end
+        function e:sca_side() return SCA_SIDE or 0 end
+        function e:sca_edge(record, side) return edges[side] end
+        function e:sca_rect() return 0, 0, 0, 0, 0, 0 end
+        function e:other_of() return nil end
+        function e:has_parent() return false end
+        function e:room_enemy() return w.room_enemy end
+        function e:set_room_enemy(v) w.room_enemy = v end
+        function e:goto_ck_at(x, z, angle, px, pz, rate) return (way(rate)) end
         function e:player_pos() return 0, 0, 20000 end
         function e:goto_ck(x, z, rate) return (way(rate)) end
         function e:goto_point(x, z, rate)
@@ -1490,7 +1565,7 @@ mod tests {
         function e:call_effect() w.bloods = w.bloods + 1 end
         function e:blow_part() w.blown = w.blown + 1 end
         function e:set_died() w.died = 1 end
-        function e:set_pos_y(y) w.y = y end
+        function e:set_pos_y(y) w.y = y; w.pos[2] = y end
         function e:neck_flags() return 0 end
         function e:noise() return NOISE or 0 end
         function e:at_em_no() return 0xFF end
@@ -1506,7 +1581,8 @@ mod tests {
         function e:sound(n) w.sounds[#w.sounds + 1] = n end
         function e:effect(kind, row, size, dir) w.effect = { row, dir } end
         for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg',
-            'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'seq_sound' }) do
+            'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'seq_sound',
+            'set_parent' }) do
             e[name] = function() end
         end
     ";
@@ -1552,7 +1628,12 @@ mod tests {
                  effect_dir = w.effect[2], rot_dir = w.rotated[1],
                  rot_by = w.rotated[2], bloods = w.bloods, blown = w.blown,
                  died = w.died, y = w.y, lost = w.vars[12] or 0,
-                 revived = w.vars[16] or 0, timer2 = w.timers[2] }}"
+                 revived = w.vars[16] or 0, timer2 = w.timers[2],
+                 kind_var = w.vars[2] or 0, add_dir_var = w.vars[1] or 0,
+                 facing = w.vars[26] or 0, record = w.vars[24] or 0,
+                 between = w.vars[28] or 0, top = w.vars[25] or 0,
+                 t225 = w.vars[20] or 0, cdir_x = w.cdir[1], cdir_z = w.cdir[2],
+                 room_enemy = w.room_enemy, pos_y = w.pos[2] }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
@@ -1564,7 +1645,8 @@ mod tests {
                 .collect();
             let fields = "r0 r1 r2 life be angle spd moved timer drawn timer1 spd_y spd_z \
                 add_dir cooldown pl0 pl1 pl_life pl_dc sounds bite_sound effect_row \
-                effect_dir rot_dir rot_by bloods blown died y lost revived timer2"
+                effect_dir rot_dir rot_by bloods blown died y lost revived timer2 kind_var add_dir_var facing record between top t225 \
+                cdir_x cdir_z room_enemy pos_y"
                 .split_whitespace()
                 .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
                 .collect();
@@ -1720,13 +1802,75 @@ mod tests {
         assert_eq!(spider.get("r1"), 0);
     }
 
-    /// The ceiling and the walls get their kind and `Add_dir`, but no state
-    /// runs for them yet.
+    /// `FUN_0046f0c0` on the ceiling (`Type` 2 or 3): kind 1, `Add_dir` and
+    /// `Cdir_z` half a turn, `Be_flg`'s height bit 0x10000000 only, and the
+    /// floor's rest and walk.
     #[test]
-    fn a_wall_spider_waits() {
-        let spider = run_spider(9, &[0; 8], 5);
-        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 0));
+    fn a_ceiling_spider_rests_then_walks() {
+        // The fifth draw is the walk's `Timer0`.
+        let mut draws = [0; 32];
+        draws[4] = 0x2E;
+        let spider = run_spider(0x43, &draws, 1);
+        assert_eq!(
+            (spider.get("kind_var"), spider.get("add_dir_var")),
+            (1, 0x800)
+        );
+        assert_eq!((spider.get("cdir_x"), spider.get("cdir_z")), (0, 0x800));
+        assert_eq!(spider.get("be") & 0x1C00_0000, 0x1000_0000);
+        assert_eq!(spider.get("top"), 0x4E2);
+        let spider = run_spider(0x43, &draws, 12);
+        assert_eq!(spider.get("r1"), 1);
+        let spider = run_spider(0x43, &draws, 13);
+        assert_eq!((spider.get("r1"), spider.get("r2")), (1, 1));
+    }
+
+    /// `Routine_1` 1 on the ceiling: over a wall's record that faces its way,
+    /// with neither end of the wall within 2500 and the player within 3000 of
+    /// the wall, it takes the way down (10) and marks the room's 0x20.
+    #[test]
+    fn a_ceiling_spider_takes_the_way_down_a_wall() {
+        // The fifth draw is the walk's `Timer0`.
+        let mut draws = [0; 32];
+        draws[4] = 0x2E;
+        let wall = "SCA_FLAGS = 1 SCA_LIST = { 4 } EDGES = { [0] = 1000, -10000, 0, 10000 }";
+        let spider = run_spider_with(0x43, &draws, 13, wall);
+        assert_eq!(spider.get("r1"), 10);
+        assert_eq!((spider.get("record"), spider.get("facing")), (4, 0));
+        assert_eq!((spider.get("between"), spider.get("room_enemy")), (1, 0x20));
+        // With the player 3000 or more from the wall it walks on.
+        let far = "SCA_FLAGS = 1 SCA_LIST = { 4 } EDGES = { [0] = 3000, -10000, 0, 10000 }";
+        let spider = run_spider_with(0x43, &draws, 13, far);
+        assert_eq!((spider.get("r1"), spider.get("room_enemy")), (1, 0));
+        // So does one near an end of the wall.
+        let end = "SCA_FLAGS = 1 SCA_LIST = { 4 } EDGES = { [0] = 1000, -10000, 0, 2000 }";
+        let spider = run_spider_with(0x43, &draws, 13, end);
+        assert_eq!(spider.get("r1"), 1);
+    }
+
+    /// `FUN_0046f0c0` on a wall (`Type` 4 to 11): kind 3, the way it faces
+    /// from `Type`, the climb's top from its high nibble, then the watch (2)
+    /// until the player comes within 7200: the crawl (3), or within 3000 the
+    /// spit (7). Its height bits follow the player's height below it.
+    #[test]
+    fn a_wall_spider_watches_for_the_player() {
+        let draws = [0; 32];
+        let spider = run_spider(9, &draws, 1);
+        assert_eq!((spider.get("kind_var"), spider.get("facing")), (3, 2));
+        assert_eq!((spider.get("angle"), spider.get("t225")), (0x800, 1));
+        assert_eq!(spider.get("top"), -0xF78);
+        // `+0x230` keeps the whole byte; only its low two bits are a side.
+        let spider = run_spider(0x2B, &draws, 1);
+        assert_eq!((spider.get("facing"), spider.get("angle")), (0x13, 0x4C00));
+        assert_eq!(spider.get("top"), 2 * -0x708 + 0x4E2);
+        let spider = run_spider(9, &draws, 5);
+        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 2));
+        assert_eq!((spider.get("cdir_x"), spider.get("cdir_z")), (0, 0x400));
+        assert_eq!(spider.get("be") & 0x1C00_0000, 0x1C00_0000);
         assert_eq!(spider.get("drawn"), 2);
+        let spider = run_spider_with(9, &draws, 3, "DIST = 5000");
+        assert_eq!(spider.get("r1"), 3);
+        let spider = run_spider_with(9, &draws, 3, "DIST = 1200");
+        assert_eq!(spider.get("r1"), 7);
     }
 
     #[test]
@@ -1848,6 +1992,36 @@ mod tests {
         assert_eq!(spider.get("bloods"), 1);
     }
 
+    /// A handgun's hit on a wall: blood 400 out from the wall, then the climb
+    /// (`Routine_1` 4) with its quarter turn.
+    #[test]
+    fn a_wall_spider_hit_climbs_away() {
+        let spider = run_spider_with(
+            9,
+            &[],
+            1,
+            "ROUTINES = { [0] = 2, 2, 0, 0 }; VARS = { [2] = 3 }; CLIP_LEN = 3",
+        );
+        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 4));
+        assert_eq!((spider.get("bloods"), spider.get("rot_by")), (1, 400));
+    }
+
+    /// A handgun's death on the ceiling: 800 down, clip 12 with `Cdir_z`
+    /// cleared, then a fall that speeds up by 0x28 a tick until it lies on
+    /// `Ground` as a floor spider's body.
+    #[test]
+    fn a_ceiling_spider_falls_to_the_floor_when_killed() {
+        let setup = "ROUTINES = { [0] = 3, 2, 0, 0 }; VARS = { [2] = 1, [30] = 0 }; \
+                     POS = { 0, -7200, 0 }; CLIP_LEN = 1000";
+        let spider = run_spider_with(0x43, &[0; 8], 1, setup);
+        assert_eq!(spider.1, [0xC]);
+        assert_eq!((spider.get("r2"), spider.get("pos_y")), (1, -6400));
+        assert_eq!((spider.get("cdir_z"), spider.get("bloods")), (0, 1));
+        let spider = run_spider_with(0x43, &[0; 8], 40, setup);
+        assert_eq!((spider.get("kind_var"), spider.get("pos_y")), (0, 0));
+        assert_eq!(spider.get("be") & 0x0400_0042, 0x0400_0042);
+    }
+
     /// A handgun's death in water: it falls on its back, its body floats
     /// at the water's level, and it gets a life of 1 for one more shot.
     #[test]
@@ -1863,7 +2037,8 @@ mod tests {
         assert_eq!((spider.get("r0"), spider.get("life")), (7, 1));
         assert_eq!((spider.get("revived"), spider.get("died")), (1, 1));
         assert_eq!(spider.get("y"), 0x46 - 180);
-        assert_eq!(spider.get("be") & 0x1C00_0000, 0x400_0000);
+        // Floating at -110, the body is above the player's 0 too.
+        assert_eq!(spider.get("be") & 0x1C00_0000, 0xC00_0000);
         assert_eq!(
             (spider.get("r1"), spider.get("timer2")),
             (1, (0x25 & 0x1F) + 0x1E)

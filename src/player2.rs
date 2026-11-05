@@ -277,6 +277,9 @@ pub struct Work {
     pub water: i16,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
+    /// `Cdir_x` and `Cdir_z`, which only the giant spider on a wall or the
+    /// ceiling turns its body by.
+    pub(crate) tilt: [i16; 2],
     pub move_no: u8,
     pub move_cnt: u8,
     pub hokan: u8,
@@ -690,7 +693,8 @@ impl Work {
 impl Work {
     /// The root of `Joint_trans2`: `Cdir_y`, on the surface it walks on.
     pub(crate) fn body_rotation(&self, angle: u16) -> [[i16; 3]; 3] {
-        let turn = rot_matrix([0, angle as i16, 0]);
+        let [x, z] = self.tilt;
+        let turn = rot_matrix([x, angle as i16, z]);
         self.super_matrix
             .map_or(turn, |surface| mul_matrix(&surface, &turn))
     }
@@ -723,6 +727,7 @@ impl Default for Work {
             shot_ticks: 0,
             shot_line: None,
             super_matrix: None,
+            tilt: [0, 0],
             floor: 0,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
