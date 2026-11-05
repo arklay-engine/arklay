@@ -667,6 +667,16 @@ function BotPlanner.enter_room(bot, room)
     end
 end
 
+-- Give up the current goal without marking it, for a layer that takes the
+-- pad for a while (a save at a typewriter); it is chosen again afterwards.
+function BotPlanner.drop_goal(bot)
+    local p = plan()
+    if p.goal then
+        bot:log("goal paused: " .. p.goal.label)
+        p.goal = nil
+    end
+end
+
 -- One controllable planner tick.
 function BotPlanner.step(bot)
     local p = plan()
