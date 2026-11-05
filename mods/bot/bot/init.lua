@@ -63,6 +63,7 @@ BOT_STATE = BOT_STATE or {
     did_11a = false,
     puzzle_index = 1,
     puzzle_failed = false,
+    paint_steps_source = nil,
     milestone = nil,
 }
 
@@ -775,6 +776,8 @@ end
 -- The 117 gallery paintings, in the only order that satisfies the script's
 -- room-bit requires. Each entry walks to an approach on the reachable side of
 -- the wall (north for AOT_02/03, south for AOT_04..07) and presses action.
+-- These are the fallback when the room's authored `bot.xml` metadata is absent;
+-- `paint_steps` below prefers the same steps from `bot:room_meta()`.
 local PAINT_STEPS = {
     { slot = 3, bank = 4, bit = F_ROOM_1A,
       label = "117 painting 1/7 newborn",
@@ -801,6 +804,40 @@ local PAINT_STEPS = {
       label = "117 painting 7/7 people mourning",
       points = { { 2900, 4100 } }, face = { 1850, 4100 } },
 }
+
+-- Resolve the paintings puzzle from the room metadata, with the hardcoded
+-- table as a fallback. The Rust host parses `room/117/bot.xml`; the Lua route
+-- still owns execution and state. Returns the step list and a source label so
+-- the route can log which table it is using once.
+local function paint_steps(bot)
+    local meta = bot:room_meta()
+    if meta then
+        for _, puzzle in ipairs(meta.puzzles or {}) do
+            if puzzle.id == "paintings" then
+                local steps = {}
+                for _, step in ipairs(puzzle.steps or {}) do
+                    local points = {}
+                    for _, walk in ipairs(step.walks or {}) do
+                        points[#points + 1] = { walk.x, walk.z }
+                    end
+                    steps[#steps + 1] = {
+                        slot = step.slot,
+                        bank = step.bank,
+                        bit = step.bit,
+                        label = step.label,
+                        points = points,
+                        face = step.face and { step.face.x, step.face.z } or nil,
+                    }
+                end
+                if #steps > 0 then
+                    return steps, "room/117/bot.xml paintings puzzle"
+                end
+            end
+        end
+    end
+    return PAINT_STEPS,
+        "hardcoded PAINT_STEPS (no room/117/bot.xml paintings puzzle)"
+end
 
 -- Press one painting zone and wait for its room bit. A press starts the
 -- picture message and then the yes/no switch prompt; handle_scene closes both
@@ -835,9 +872,12 @@ local function press_flag_action(bot, step)
         BOT_STATE.nav = nil
         return false
     end
-    local facing = bot:face_to(step.face[1], step.face[2])
-    if facing.status ~= "facing" then
-        return false
+    local facing
+    if step.face then
+        facing = bot:face_to(step.face[1], step.face[2])
+        if facing.status ~= "facing" then
+            return false
+        end
     end
     nav.presses = nav.presses + 1
     nav.last_press = nav.ticks
@@ -848,11 +888,16 @@ local function press_flag_action(bot, step)
 end
 
 local function run_117_puzzle(bot)
+    local steps, source = paint_steps(bot)
+    if BOT_STATE.paint_steps_source ~= source then
+        BOT_STATE.paint_steps_source = source
+        log(bot, "117 paintings: using " .. source)
+    end
     local index = BOT_STATE.puzzle_index or 1
-    if index > #PAINT_STEPS then
+    if index > #steps then
         return true
     end
-    local step = PAINT_STEPS[index]
+    local step = steps[index]
     if bot:flag(step.bank, step.bit) then
         log(bot, string.format("%s: flag already set", step.label))
         BOT_STATE.puzzle_index = index + 1

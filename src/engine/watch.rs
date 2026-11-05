@@ -1,10 +1,11 @@
-//! Hot reload for Lua mod source directories.
+//! Hot reload for mod source directories.
 //!
 //! `--watch` polls the filesystem pack and every layered mod source directory
-//! for changed `.lua` files. The engine reloads the pack's `lua/**.lua` hooks
-//! and the restricted `bot/**.lua` route when one changes; room XML, room
-//! scripts, assets and `.akpak` layers are deliberately out of scope and need a
-//! room reload or a restart.
+//! for changed `.lua` files and `bot.xml` metadata. The engine reloads the
+//! pack's `lua/**.lua` hooks, the restricted `bot/**.lua` route, and invalidates
+//! the bot's room metadata when either kind changes; room XML, room scripts,
+//! assets and `.akpak` layers are deliberately out of scope and need a room
+//! reload or a restart.
 //!
 //! A directory pack's entries are read lazily from disk ([`Pack::read`]), so a
 //! changed file is visible to a fresh [`crate::lua::LuaVm`] or to the bot VM
@@ -58,7 +59,7 @@ impl Watch {
         }
         if dirs.is_empty() {
             eprintln!(
-                "[watch] no Lua mod source directories to watch; \
+                "[watch] no script/metadata source directories to watch; \
                  .akpak layers need a restart to change"
             );
             return None;
@@ -71,7 +72,7 @@ impl Watch {
         })
     }
 
-    /// Scan for changed, added or removed `.lua` files.
+    /// Scan for changed, added or removed `.lua` and `bot.xml` files.
     ///
     /// The first call establishes the baseline and returns nothing. Later calls
     /// return the paths whose modification time or length changed, plus files
@@ -102,7 +103,7 @@ impl Watch {
         }
         if first {
             eprintln!(
-                "[watch] watching {} Lua file(s) in {} source director{}",
+                "[watch] watching {} script/metadata file(s) in {} source director{}",
                 current.len(),
                 self.dirs.len(),
                 if self.dirs.len() == 1 { "y" } else { "ies" }
@@ -153,13 +154,21 @@ fn scan_dir(dir: &Path, files: &mut BTreeMap<PathBuf, Stamp>) {
         };
         if file_type.is_dir() {
             scan_dir(&path, files);
-        } else if file_type.is_file() && is_lua(&path) {
+        } else if file_type.is_file() && is_watched(&path) {
             let Ok(metadata) = entry.metadata() else {
                 continue;
             };
             files.insert(path, (metadata.modified().ok(), metadata.len()));
         }
     }
+}
+
+fn is_watched(path: &Path) -> bool {
+    is_lua(path)
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("bot.xml"))
 }
 
 fn is_lua(path: &Path) -> bool {
@@ -190,6 +199,30 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn poll_reports_changed_bot_xml_but_not_room_xml() {
+        let temp = TempDir::new("bot-meta");
+        let room = temp.path.join("room/117");
+        fs::create_dir_all(&room).unwrap();
+        let metadata = room.join("bot.xml");
+        let room_xml = room.join("room.xml");
+        let other_xml = room.join("not-bot.xml");
+        fs::write(&metadata, b"<bot format=\"1\"/>\n").unwrap();
+        fs::write(&room_xml, b"<room format=\"1\"/>\n").unwrap();
+        fs::write(&other_xml, b"<other/>\n").unwrap();
+
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut watch = Watch::new(true, &pack, &[]).expect("a directory source");
+        assert!(watch.poll().is_empty());
+
+        fs::write(&metadata, b"<bot format=\"1\"><puzzle id=\"p\"/></bot>\n").unwrap();
+        fs::write(&room_xml, b"<room format=\"1\"><lights/></room>\n").unwrap();
+        fs::write(&other_xml, b"<other changed=\"true\"/>\n").unwrap();
+
+        watch.interval = Duration::ZERO;
+        assert_eq!(watch.poll(), vec![metadata]);
     }
 
     #[test]

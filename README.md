@@ -279,7 +279,8 @@ cargo run -- re1.akpak --mod mods/demo --room 100 --ticks 40 --capture demo.bmp
 
 # Edit a mod source directory while the interactive game runs: --watch
 # reloads its lua/**.lua hooks and bot/**.lua route in place, keeping the
-# current room, session and bot memory. Room XML, room scripts, assets and
+# current room, session and bot memory. A changed room/<id>/bot.xml reloads
+# the bot's room metadata on the next tick. Room XML, room scripts, assets and
 # .akpak changes still need a room reload or a restart.
 cargo run -- re1.akpak --mod mods/bot --bot --watch
 
@@ -327,8 +328,10 @@ cargo run -- re1.akpak --room 106 --mansion2
 mod source directory, reloads changed `lua/**.lua` hooks into a fresh VM (hook
 globals reset; `on_init` and `on_room_load` run over the live room) and
 re-executes the `bot/**.lua` chunks in the same VM (route globals such as
-`BOT_STATE` survive). It is rejected with `--capture`, `--trace`, `--input` and
-`--bot-headless`.
+`BOT_STATE` survive). A changed `room/<id>/bot.xml` invalidates the cached
+room metadata, so `bot:room_meta()` returns the new puzzles on the next tick;
+room XML and assets are still not hot-reloaded. It is rejected with
+`--capture`, `--trace`, `--input` and `--bot-headless`.
 
 The documentation is an mdbook in `docs/` (`mdbook serve docs`), published at
 <https://arklay-engine.github.io/arklay/>. `docs/packs/` has a page per pack
