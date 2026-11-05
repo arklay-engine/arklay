@@ -56,9 +56,9 @@ Chunks run in path order, so the modules are global tables:
 | `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the enemy status (aim) bits, the tank turn step, the gun hold and reload behaviours, the item-use flag bank and selector base, and the AOT probe and action-key flag bits. |
 | `bot/init.lua` | | `on_bot_tick`: the priority order below, plus damage and room-entry logging. |
 | `bot/menu.lua` | `BotMenu` | Equip, heal and item use through the inventory menu ([Menu skills](#menu-skills)). |
-| `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press) and `visit_camera` (walk into a camera switch zone). |
+| `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press), `visit_camera` (walk into a camera switch zone) and `push_object` (push a room object onto a zone, one axis at a time). |
 | `bot/planner.lua` | `BotPlanner` | Goal choice, the pursued target, attempt marks, the loop rule, the door route and the finish. |
-| `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
+| `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>`/`<push>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
 | `bot/save.lua` | `BotSave` | Saving at typewriters, the latest-save tracking and the reload after a death ([Saving and reloading](#saving-and-reloading)). |
 | `bot/scene.lua` | `BotScene` | Films, transitions, messages, yes/no prompts, pick-up viewers and the document reader. |
 | `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule, the ammo reserve ([Ammunition](#ammunition)). |
@@ -83,8 +83,9 @@ Priorities, highest first:
    Then combat (`BotTactics.step`, [Combat](#combat)): each nearby monster
    is fought or run past; a run leaves the planner its goal and turns on
    `avoid_enemies` for its walks.
-3. The room puzzle: the next `<interact>`/`<camera>` fact in document order
-   (walk to the zone, press, wait for the done flag). The sequence position
+3. The room puzzle: the next `<interact>`/`<camera>`/`<push>` fact in
+   document order (walk to the zone, press, wait for the done flag; or push
+   the object onto its zone, below). The sequence position
    is the furthest fact whose flag was ever seen set, because a later step
    may clear an earlier step's flag. `<avoid>` slots are never used. Then
    the first `<use>` fact that applies: the item is held, its done flag is
@@ -358,6 +359,7 @@ leaves the game session.
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead, typewriter, save_screen}`. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. `typewriter` is the fade into or out of the typewriter's save screen; `save_screen` (only while it is up) is `{mode, stage, cursor, exit_row, slots}`: `mode` `"save"`, `stage` `idle`/`confirm_overwrite`/`save_anim`/`error`/`fade_out`, `cursor` the highlighted row (0-based; rows `0..7` are the slots), `slots` whether each slot holds a save. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
+| `bot:objects()` | The room's active objects (blocks, statues, shelves): `{slot, x, z, half_x, half_z, pushable}`, `x`/`z` the live centre and `half_*` the collision half-extents. `pushable` is solid and without the not-pushable flag. The walk and path planner treat every solid object as an obstacle, a box 128 units inside the object on each side, rebuilt when an object moves. |
 | `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |
 | `bot:weapon()` | `{equipped, weapon, clip, reserve, ammo, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, `ammo` is `bot:ammo_for(weapon)`, and `target` is the locked entity slot or nil. |
 | `bot:knowledge()` | The game's combat knowledge, read-only: `{source, enemies, weapons}`. `enemies[id]` is `{name, policy, stand, downed, up, reach, crawl_reach, grabs, outrun, speed, health, keep}` with `keep[weapon] = {min, max, damage}`; `weapons[id]` is `{name, near, side, cadence, headshot, weak, status_bit}`. An `unknown` value is `nil`. With no file, both tables are empty. See [Combat](#combat). |
@@ -412,6 +414,10 @@ room id, then slot, so iteration is deterministic.
 }
 ```
 
+- The model ignores the ticks of a door load between the player's
+  placement in the new room and the room's own load (`SessionSnapshot.booted`
+  false): on a stage change the engine shows the old room's doors and actions
+  under the new room id for those ticks.
 - `rooms` lists every room entered and every target of a seen door;
   `visited` is true once entered. `entries` counts room changes into it.
 - A door is `locked` when it was locked the first time the bot saw it
@@ -472,6 +478,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason` | The planner should not use AOT `slot`; `reason` is a non-empty note. |
+| `<push>` | `object`, `slot`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, then 400 units behind its face) and holding forward; an axis that stalls twice is given up for the other. |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done. |
 
 ```xml
@@ -485,7 +492,8 @@ walk paths, have no children, and are an error in a format-1 file:
 
 `bot:room_meta()` always has `interacts`, `uses`, `answers` and `avoids`
 arrays (empty for a format-1 file): `{kind = "press", slot, bank, bit,
-label}` or `{kind = "camera", cut, bank, bit, label}` in document order,
+label}`, `{kind = "camera", cut, bank, bit, label}` or `{kind = "push",
+object, slot, label}` in document order,
 `{slot, item, bank, bit, label}` in document order, `{choice, slot, bank,
 bit, label}` (absent fields are `nil`) and `{slot, reason}`.
 
@@ -518,6 +526,7 @@ files. The checked-in facts:
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
 | 116 | `<avoid slot="1">`: lifting the shotgun without the broken one springs the 115 ceiling trap. |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
+| 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
 
 `set_input` keys are literal: `up down left right` (player directions plus the
 UI edge/held flag), `held_up` etc. (UI held only), `up_pressed` etc. (UI edge

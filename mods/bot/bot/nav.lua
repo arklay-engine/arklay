@@ -322,3 +322,153 @@ function BotNav.visit_camera(bot, job)
     end
     return "busy"
 end
+
+-- Push skills. A <push> fact names a pushable object and the zone (an AOT
+-- slot, usually an object-position probe) its centre must reach. The push
+-- is cardinal: the engine starts it after forward is held into the object
+-- for nine frames and snaps the facing to the nearest axis, and the object
+-- creeps on while forward stays held. So the skill fixes one axis at a time:
+-- stand behind the object on that axis, face along it and hold forward until
+-- the centre is in the middle half of the zone on that axis. An axis whose
+-- push stalls twice (a wall, another object, an unreachable side) is given
+-- up for the other one.
+
+function BotNav.object_by_slot(bot, slot)
+    for _, object in ipairs(bot:objects()) do
+        if object.slot == slot then
+            return object
+        end
+    end
+    return nil
+end
+
+-- Signed distance from `value` to the middle half of [lo, lo + span]:
+-- positive means push towards +, 0 means inside.
+local function band_error(value, lo, span)
+    local a, b = lo + span // 4, lo + span - span // 4
+    if value < a then
+        return a - value
+    elseif value > b then
+        return b - value
+    end
+    return 0
+end
+
+-- How far `object`'s centre is from the middle half of `zone`, per axis.
+function BotNav.push_error(object, zone)
+    return band_error(object.x, zone.x, zone.width), band_error(object.z, zone.z, zone.depth)
+end
+
+-- A push that moves the object less than this in PUSH_STALL ticks stalled.
+local PUSH_MOVED = C.APPROACH // 6
+local PUSH_STALL = 4 * C.SECOND
+-- Stalls on one axis before the axis is given up.
+local PUSH_TRIES = 2
+-- How far behind the object's face to stand, nearest last: forward then
+-- walks the player into the face. A wall close behind the object leaves
+-- room only for the nearer points (the probe reaches 470 ahead).
+local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3 }
+
+-- One tick of a push job. `job` fields set by the caller: object (slot),
+-- zone, label, done(bot, job), timeout. Returns "done", "busy" or "failed"
+-- (with job.reason).
+function BotNav.push_object(bot, job)
+    job.total = (job.total or 0) + 1
+    if job.done and job.done(bot, job) then
+        return "done"
+    end
+    if job.total > (job.timeout or 3 * WALK_TICKS) then
+        job.reason = "timed out"
+        return "failed"
+    end
+    local object = BotNav.object_by_slot(bot, job.object)
+    if not object or not object.pushable then
+        job.reason = string.format("object %d is not a pushable object here", job.object)
+        job.permanent = true
+        return "failed"
+    end
+    local ex, ez = BotNav.push_error(object, job.zone)
+    job.tries = job.tries or { x = 0, z = 0 }
+    local function error_on(axis)
+        return axis == "x" and ex or ez
+    end
+    if not job.axis or error_on(job.axis) == 0 or job.tries[job.axis] >= PUSH_TRIES then
+        local order = BotNav.abs(ex) >= BotNav.abs(ez) and { "x", "z" } or { "z", "x" }
+        job.axis = nil
+        for _, axis in ipairs(order) do
+            if error_on(axis) ~= 0 and job.tries[axis] < PUSH_TRIES then
+                job.axis = axis
+                break
+            end
+        end
+        if not job.axis then
+            job.reason = string.format("object %d stalled short of the zone on every axis",
+                job.object)
+            return "failed"
+        end
+        job.phase = "approach"
+        job.walk_ticks = 0
+        bot:log(string.format("%s: object at (%d,%d), pushing along %s by %d",
+            job.label, object.x, object.z, job.axis, error_on(job.axis)))
+    end
+    local axis = job.axis
+    local sign = error_on(axis) > 0 and 1 or -1
+    local here = bot:player()
+    job.stand = job.stand or { x = 1, z = 1 }
+    local back = PUSH_STANDS[job.stand[axis]]
+    local sx, sz, fx, fz, along, across
+    if axis == "x" then
+        sx, sz = object.x - sign * (object.half_x + back), object.z
+        fx, fz = here.x + sign * C.REACH, here.z
+        along, across = object.x, BotNav.abs(here.z - object.z) > object.half_z // 2
+    else
+        sx, sz = object.x, object.z - sign * (object.half_z + back)
+        fx, fz = here.x, here.z + sign * C.REACH
+        along, across = object.z, BotNav.abs(here.x - object.x) > object.half_x // 2
+    end
+    local function stalled(why)
+        job.tries[axis] = job.tries[axis] + 1
+        bot:log(string.format("%s: %s along %s (try %d/%d)", job.label, why, axis,
+            job.tries[axis], PUSH_TRIES))
+        job.phase = "approach"
+        job.walk_ticks = 0
+    end
+    if job.phase == "approach" then
+        job.walk_ticks = job.walk_ticks + 1
+        local result = bot:walk_to(sx, sz, {
+            run = bot:distance(sx, sz) >= C.RUN_MIN_DISTANCE,
+            tolerance = C.APPROACH // 3,
+            face = { sx + (fx - here.x), sz + (fz - here.z) },
+            avoid_enemies = BotTactics.avoiding(),
+        })
+        if result.status == "arrived" then
+            job.phase = "push"
+            job.mark, job.mark_tick = along, bot:tick()
+        elseif result.status ~= "moving" or job.walk_ticks > WALK_TICKS then
+            if job.stand[axis] < #PUSH_STANDS then
+                job.stand[axis] = job.stand[axis] + 1
+                job.walk_ticks = 0
+            else
+                job.stand[axis] = 1
+                stalled("stand point " .. result.status)
+            end
+        end
+        return "busy"
+    end
+    -- Pushing: a player knocked off the line walks back behind the object.
+    if across then
+        job.phase = "approach"
+        job.walk_ticks = 0
+        return "busy"
+    end
+    if BotNav.abs(along - job.mark) >= PUSH_MOVED then
+        job.mark, job.mark_tick = along, bot:tick()
+    elseif bot:tick() - job.mark_tick > PUSH_STALL then
+        stalled("the object did not move")
+        return "busy"
+    end
+    if bot:face_to(fx, fz).status == "facing" then
+        bot:set_input({ up = true })
+    end
+    return "busy"
+end
