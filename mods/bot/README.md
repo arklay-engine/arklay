@@ -23,7 +23,9 @@ VM from the pack, so route globals start fresh there.
 
 ## Route
 
-The route starts a fresh Jill game and stops when it enters room 10A:
+The route starts a fresh Jill game. It used to stop when it entered room 10A;
+it now continues through 117 and 11A, and stops at the furthest milestone it
+can legally reach (11A when the 11B door is locked, 11B or 300 otherwise):
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -73,7 +75,37 @@ The route starts a fresh Jill game and stops when it enters room 10A:
    geometry blocker.
 8. **109 L passage.** Take the green herb (0x44) at `(20406, 1524, 1800, 1800)`
    from the east side, then cross the L passage to the west door (AOT_04) and
-   enter 10A. The route logs `10A reached` and finishes.
+   enter 10A. The route logs `10A reached` and keeps going.
+9. **10A back passage -> 117 large gallery.** Walk south of the 10A zombie at
+   `(8272, 2433)` and open the north-wall door (AOT_01) to 117. The gallery's
+   inner wall splits it into a north and a south half joined only at the east
+   end. The star crest (0x2D, AOT_09 at `(1300, 3300, 1100, 1600)`) is covered
+   by the `AOT_08` painting event until the seven painting switches are pushed.
+   They must run in picture order, because each push clears room bits
+   `0x18..0x1E` and the next painting requires the bit the previous one left:
+   newborn (AOT_03, north side), infant (AOT_05), lively boy (AOT_06), young
+   man (AOT_04), tired middle-aged man (AOT_02, north side), bold old man
+   (AOT_07), then people mourning (AOT_08, the crest zone). The last push sets
+   `F_SCENARIO_03`, opens the frame and moves Jill to `(2773, 4147)`; the east
+   approach at `(2900, 4100)` then picks up the crest. Walk back through the
+   east gap and the south-wall door (AOT_00) to 10A.
+10. **10A -> 11A roofed passage.** Walk down the west corridor past the zombie
+    at `(3023, 6864)` and open the west-wall door (AOT_04) to 11A. In the
+    first mansion 11A registers the four crest use-item hollows at
+    `(6500, 27200, 2000, 1000)`, not a radio key action, so `bot:actions()` by
+    item 0x4D finds nothing and the route logs that. If another flag set does
+    register the radio key (the second-visit Chris item, whose model sits at
+    `4785, 8990`), `action_nav` picks it up from its actual zone.
+11. **11A -> 11B store room.** The door (AOT_01 at `(8000, 24500, 1500, 2100)`)
+    is `DOOR_LOCKED | F_LOCK_17` (`0x97`) with key byte `0x00`. The room raises
+    the lock only after all four crest hollows are filled; one star crest in
+    the inventory is not enough and the radio key never matches. The route
+    presses the known-good west approach, logs the door slot/key/lock/lock bit,
+    the lock-bank flag, the four crest scenario bits, and stops in 11A rather
+    than forcing the lock. If 11B does open, the route takes the desk key
+    (0x3D, AOT_02 at `8100, 8500`) and crank key (0x1D, AOT_03 at
+    `5000, 1200`), then optionally opens the first-house door (AOT_01 at
+    `8800, 4300`) to 300.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -92,14 +124,15 @@ door transition in the route is 11 ticks.
 The east-wing door is restored by the camera 3/4 -> 2/5 scenes. The lockpick
 item's zone is at the room origin, so the route uses `bot:use_action(slot)` on
 that item action (the same handler a normal action press runs) and closes the
-got-item viewer. It checks `has_item(0x31)` before leaving 106; the run's
-final finish is entering 10A. If the viewer or the item never arrives, the
-route reports the lockpick state and fails instead of spinning.
+got-item viewer. It checks `has_item(0x31)` before leaving 106. The finish
+reason always names the furthest room/item milestone reached, such as
+`11A reached; 11B store room door locked (...)`, so a partial run is still
+self-describing.
 
 ### Interaction skills
 
-`action_nav(bot, slot, label, custom)` is the generic ground-item skill. It
-finds the action by slot, treats a zone at the room origin as the scripted
+`action_nav(bot, slot, label, custom, opts)` is the generic ground-item skill.
+It finds the action by slot, treats a zone at the room origin as the scripted
 lockpick handover (running `bot:use_action`), and otherwise computes four
 approach points 300 units outside the zone. It tries the nearest side first,
 walks to it with `walk_to`, faces the zone centre, presses action, and waits
@@ -107,21 +140,32 @@ for `item_count` to rise or the got-item viewer to close. A side that does not
 fire is abandoned after 60 controllable ticks, and a bounded timeout logs the
 zone, count, position, health and collision flags. Optional `custom` points
 are tried before the generic sides; the 107 ribbon and 109 herb use them for
-the narrow gallery and the herb's wall corner.
+the narrow gallery and the herb's wall corner. With `opts.optional = true` a
+missing/unreachable item logs the same diagnostics and returns `"failed"` to
+the phase instead of ending the run; the 117 star crest, 11A radio key and
+11B desk/crank keys use that so a blocked optional item does not hide the next
+milestone.
 
 `door_nav` keeps its four-side approach. For a keyed door it logs the door
 slot, key byte, lock byte, the lock-bank bit and the scenario flag when the
 press times out; a key turn that only raises the lock flag makes the next
-press transition.
+press transition. The 11A -> 11B test uses the known-good west approach and
+stops after its first timeout when the lock is `F_LOCK_17`, reporting the
+crest bits instead of trying wall-side approaches for a door that cannot open.
 
 ### Failure handling
 
 - Every phase has a tick deadline. A timeout logs the phase, room, position,
   camera, health, collision flags, `F_COMMON_02/03/05`, `F_COMMON_40/41`,
-  `F_STATUS_1A`, lockpick state, scenario `0x7C`, the ribbon/ammo/herb counts
-  and the scene flags, then calls `bot:finish` with a `failed: ...` reason.
+  `F_STATUS_1A`, lockpick state, scenario `0x7C`, scenario
+  `0x03/0x69/0x6A/0x6B/0x6C`, lock `0x17`, the ribbon/ammo/herb and
+  star/radio/desk/crank counts, and the scene flags, then calls `bot:finish`
+  with a `failed: ...` reason.
 - A waypoint that reports `blocked` or `unreachable` is retried once with a
   tighter tolerance and then skipped, so one bad point cannot stall the run.
+  The 117 painting approaches sit well clear of the inner wall's grown
+  rectangle: the 512-unit A* snap would otherwise put the goal node inside the
+  wall and report the point unreachable.
 - Doors use a point 300 units outside the zone (the action reach probe is 600
   units ahead), face the zone, and press for up to 110 ticks. If the room does
   not change, the next side of the zone is tried. A keyed door logs its key,
@@ -131,6 +175,8 @@ press transition.
 - The 108 ammo is a known geometry blocker: its zone is inside a solid table
   and the reach cannot enter from any side. The route logs it and continues to
   109 instead of treating the room as a failed run.
+- A locked 11B door is not a failed run: the route records the lock and stops
+  in 11A with the lock, key, crest and inventory state in the finish reason.
 
 ## API
 
