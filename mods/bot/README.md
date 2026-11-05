@@ -135,9 +135,11 @@ Priorities, highest first:
    taken here may be a second AOT of that pickup: it gets one approach, and
    a press there with no pickup marks it permanently.
 5. A passage check, when a door or item of this room has no planned
-   approach: a stair zone (`door_check`), or an action-key event zone
-   (flags `>= 0x80`) that no fact names, since a script may start the climb
-   from an event. One press per slot per room entry, nearest first.
+   approach: a stair zone (`door_check`), a ladder (`stairs_zone`, done
+   once the climb has carried the player a warp's distance from the
+   approach point), or an action-key event zone (flags `>= 0x80`) that no
+   fact names, since a script may start the climb from an event. One press
+   per slot per room entry, nearest first.
 6. The way out. A pursued target keeps its course: the bot takes the first
    door of the route to it until it is reached, real progress re-ranks, or
    the loop rule drops it (`pursuing ...`). Otherwise one ranking by
@@ -745,7 +747,8 @@ files. The checked-in facts:
 | 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
 | 11B | `<climb object="0" slot="3" bank="7" bit="35" done="clear">`: the square crank lies on a shelf over the crate's corner; room main keeps its pickup an item only while the player stands on the crate (`FG_STATUS` 24 clear). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
-| 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. |
+| 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. |
+| 302 | `<avoid slot="7">`: the elevator call on the platform the 301 door lands on; it rides straight back up to 301. |
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
 | 20D | Jill: `<deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62">`: poisoned Richard waits (`0x62`) for the serum; walking into camera 3 with it hands it over and sets `0x61` (so does his death after 420 seconds). Until then the door to 20E is a message. |
 | 100 | Jill: `<fetch slot="5" item="0x42" bank="1" bit="0x23">`: the serum on the shelf, offered once Richard's scene sets `0x23`. |

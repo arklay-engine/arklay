@@ -152,9 +152,12 @@ function BotScene.handle(bot, scene)
         -- committed-action byte, and a plant bite can leave it set, so
         -- mashing on every nonzero value would random-walk the room. Holds
         -- raise `grabbed` or use player states 5/6; vault/stair sequences
-        -- set the sequence bit, and their second press completes them.
+        -- set the sequence bit, and their second press completes them. A
+        -- finished ladder leaves the bit up, so it counts only while a
+        -- locked action runs.
         local held = player.grabbed or player.state == 5 or player.state == 6
-            or (player.being_attacked & C.ATTACK_SEQUENCE) ~= 0
+            or ((player.being_attacked & C.ATTACK_SEQUENCE) ~= 0
+                and player.locked ~= false)
         if held then
             local dirs = { "left", "right", "up", "down" }
             bot:press_action()

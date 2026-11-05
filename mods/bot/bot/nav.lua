@@ -206,6 +206,7 @@ function BotNav.press_zone(bot, job)
         job.points = BotNav.approach_points(bot, job.zone)
         job.index = 1
         job.pressing = false
+        job.arrived_at = nil
         job.ticks = 0
         job.total = 0
         job.side_presses = 0
@@ -238,6 +239,7 @@ function BotNav.press_zone(bot, job)
         job.points = BotNav.approach_points(bot, job.zone)
         job.index = 1
         job.pressing = false
+        job.arrived_at = nil
         job.walk_ticks = 0
     end
     job.last_pos = { here.x, here.z }
@@ -268,6 +270,7 @@ function BotNav.press_zone(bot, job)
         })
         if result.status == "arrived" then
             job.pressing = true
+            job.arrived_at = { here.x, here.z }
             job.lean = 0
             job.ticks = 0
             job.side_presses = 0
@@ -281,6 +284,7 @@ function BotNav.press_zone(bot, job)
             -- here, leaning in if the probe falls short (a side that gets
             -- nothing times out as usual).
             job.pressing = true
+            job.arrived_at = { here.x, here.z }
             job.lean = 0
             job.ticks = 0
             job.side_presses = 0
@@ -341,6 +345,7 @@ function BotNav.press_zone(bot, job)
             job.label, job.index))
         job.index = job.index + 1
         job.pressing = false
+        job.arrived_at = nil
         job.walk_ticks = 0
         job.last_press = -C.SECOND * C.SECOND
     end
