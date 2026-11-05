@@ -1,0 +1,68 @@
+# shots aimed up every 30 ticks from where play settles, for the spiders on ceilings (oracle/re2.md)
+346 aim up
+360 aim up fire
+365 aim up
+390 aim up fire
+395 aim up
+420 aim up fire
+425 aim up
+450 aim up fire
+455 aim up
+480 aim up fire
+485 aim up
+510 aim up fire
+515 aim up
+540 aim up fire
+545 aim up
+570 aim up fire
+575 aim up
+600 aim up fire
+605 aim up
+630 aim up fire
+635 aim up
+660 aim up fire
+665 aim up
+690 aim up fire
+695 aim up
+720 aim up fire
+725 aim up
+750 aim up fire
+755 aim up
+780 aim up fire
+785 aim up
+810 aim up fire
+815 aim up
+840 aim up fire
+845 aim up
+870 aim up fire
+875 aim up
+900 aim up fire
+905 aim up
+930 aim up fire
+935 aim up
+960 aim up fire
+965 aim up
+990 aim up fire
+995 aim up
+1020 aim up fire
+1025 aim up
+1050 aim up fire
+1055 aim up
+1080 aim up fire
+1085 aim up
+1110 aim up fire
+1115 aim up
+1140 aim up fire
+1145 aim up
+1170 aim up fire
+1175 aim up
+1200 aim up fire
+1205 aim up
+1230 aim up fire
+1235 aim up
+1260 aim up fire
+1265 aim up
+1290 aim up fire
+1295 aim up
+1320 aim up fire
+1325 aim up
