@@ -1504,49 +1504,29 @@ impl BotVm {
     /// Load every `bot/**.lua` entry in lowercased-path order and look up the
     /// required `on_bot_tick` global.
     fn load(pack: &Pack) -> Result<Self> {
-        let mut paths = pack
-            .entries()
-            .map(|entry| entry.path().to_string())
-            .filter(|path| {
-                path.get(..4)
-                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bot/"))
-                    && path.to_ascii_lowercase().ends_with(".lua")
-            })
-            .collect::<Vec<_>>();
-        paths.sort_by(|a, b| {
-            a.to_ascii_lowercase()
-                .cmp(&b.to_ascii_lowercase())
-                .then_with(|| a.cmp(b))
-        });
-        if paths.is_empty() {
-            bail!("no bot/**.lua entries in the pack (pass `--mod mods/bot`)");
-        }
-        budget::check_len(paths.len(), budget::MAX_LUA_CHUNKS, "bot chunk count")?;
+        let paths = chunk_paths(pack)?;
         let (lua, budget) = crate::lua::new_sandboxed_state()?;
-        for path in &paths {
-            let bytes = pack
-                .read(path)
-                .with_context(|| format!("cannot read bot chunk {path}"))?;
-            budget::check_len(
-                bytes.len(),
-                budget::MAX_LUA_CHUNK,
-                &format!("bot chunk {path} size"),
-            )?;
-            budget.begin();
-            lua.load(&*bytes)
-                .set_name(path.clone())
-                .exec()
-                .map_err(|err| anyhow!("failed to run bot chunk {path}: {err}"))?;
-        }
-        let globals = lua.globals();
-        let on_tick = globals
-            .get::<Function>("on_bot_tick")
-            .map_err(|err| anyhow!("bot chunk(s) must define `on_bot_tick(bot)`: {err}"))?;
+        run_chunks(&lua, &budget, &paths, pack)?;
+        let on_tick = find_on_tick(&lua)?;
         Ok(Self {
             lua,
             budget,
             on_tick,
         })
+    }
+
+    /// Re-execute the pack's bot chunks in this VM.
+    ///
+    /// The Lua state is kept, so globals a route stores outside `on_bot_tick`
+    /// survive (`BOT_STATE` in the checked-in route). The chunks re-run in the
+    /// same order and the new `on_bot_tick` replaces the old one only after
+    /// every chunk succeeds; a failing chunk returns the error and leaves the
+    /// previous function callable.
+    fn reload(&mut self, pack: &Pack) -> Result<()> {
+        let paths = chunk_paths(pack)?;
+        run_chunks(&self.lua, &self.budget, &paths, pack)?;
+        self.on_tick = find_on_tick(&self.lua)?;
+        Ok(())
     }
 
     fn call(&self, ctx: BotCtx) -> Result<()> {
@@ -1558,6 +1538,57 @@ impl BotVm {
             })
             .map_err(|err| anyhow!("{err}"))
     }
+}
+
+/// The `bot/**.lua` paths to run: lowercased-path order, with the exact-case
+/// path kept for reads and error messages.
+fn chunk_paths(pack: &Pack) -> Result<Vec<String>> {
+    let mut paths = pack
+        .entries()
+        .map(|entry| entry.path().to_string())
+        .filter(|path| {
+            path.get(..4)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bot/"))
+                && path.to_ascii_lowercase().ends_with(".lua")
+        })
+        .collect::<Vec<_>>();
+    paths.sort_by(|a, b| {
+        a.to_ascii_lowercase()
+            .cmp(&b.to_ascii_lowercase())
+            .then_with(|| a.cmp(b))
+    });
+    if paths.is_empty() {
+        bail!("no bot/**.lua entries in the pack (pass `--mod mods/bot`)");
+    }
+    budget::check_len(paths.len(), budget::MAX_LUA_CHUNKS, "bot chunk count")?;
+    Ok(paths)
+}
+
+/// Run every bot chunk in order, each under its own instruction budget.
+fn run_chunks(lua: &Lua, budget: &crate::lua::Budget, paths: &[String], pack: &Pack) -> Result<()> {
+    for path in paths {
+        let bytes = pack
+            .read(path)
+            .with_context(|| format!("cannot read bot chunk {path}"))?;
+        budget::check_len(
+            bytes.len(),
+            budget::MAX_LUA_CHUNK,
+            &format!("bot chunk {path} size"),
+        )?;
+        budget.begin();
+        lua.load(&*bytes)
+            .set_name(path.clone())
+            .exec()
+            .map_err(|err| anyhow!("failed to run bot chunk {path}: {err}"))?;
+    }
+    Ok(())
+}
+
+/// The required `on_bot_tick` global.
+fn find_on_tick(lua: &Lua) -> Result<Function> {
+    lua.globals()
+        .get::<Function>("on_bot_tick")
+        .map_err(|err| anyhow!("bot chunk(s) must define `on_bot_tick(bot)`: {err}"))
 }
 
 /// The live bot: its VM, remembered state and navigation cache.
@@ -1575,6 +1606,12 @@ impl BotRuntime {
             shares: BotShares::default(),
             tick: 0,
         })
+    }
+
+    /// Reload the pack's bot chunks in place, preserving the Lua globals, the
+    /// remembered memory/navigation and the tick counter.
+    pub fn reload(&mut self, pack: &Pack) -> Result<()> {
+        self.vm.reload(pack)
     }
 
     /// Run one `on_bot_tick`, returning the input it asked for.
@@ -1628,10 +1665,17 @@ impl BotRuntime {
         Ok(input)
     }
 
-    /// Clear the remembered state and tick count for a new game.
-    pub fn reset(&mut self) {
+    /// Clear the remembered state and tick count for a new game, and rebuild
+    /// the Lua VM from the pack so route globals (`BOT_STATE`) cannot leak
+    /// across a restart.
+    ///
+    /// A fresh load failure returns the error. The caller drops the runtime
+    /// rather than reusing the old VM's route state.
+    pub fn reset(&mut self, pack: &Pack) -> Result<()> {
         self.shares = BotShares::default();
         self.tick = 0;
+        self.vm = BotVm::load(pack)?;
+        Ok(())
     }
 
     pub fn finished(&self) -> bool {
@@ -1655,6 +1699,28 @@ impl BotRuntime {
 mod tests {
     use super::*;
     use crate::state::CollisionRect;
+    use std::fs;
+    use std::path::PathBuf;
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("arklay-bot-{}-{label}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     fn wall(x_min: u16, x_max: u16, z_min: u16, z_max: u16) -> CollisionRect {
         CollisionRect {
@@ -2108,5 +2174,46 @@ mod tests {
         let outcome = nav.walk_to(&player, 16200, 16100, WalkOptions::default());
         assert_eq!(outcome.status, "arrived");
         assert!(!outcome.forward);
+    }
+
+    #[test]
+    fn bot_runtime_reset_reloads_globals_and_clears_progress() {
+        let temp = TempDir::new("reset");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        let file = bot.join("init.lua");
+        fs::write(&file, b"VERSION = 1\nfunction on_bot_tick(bot) end\n").unwrap();
+
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut runtime = BotRuntime::load(&pack).unwrap();
+        // Simulate a finished route with progress in both the VM and shares.
+        runtime.tick = 42;
+        runtime.shares.finished.set(true);
+        runtime.vm.lua.globals().set("VERSION", 99).unwrap();
+
+        runtime.reset(&pack).unwrap();
+        assert_eq!(runtime.ticks(), 0);
+        assert!(!runtime.finished());
+        assert_eq!(runtime.vm.lua.globals().get::<i64>("VERSION").unwrap(), 1);
+    }
+
+    #[test]
+    fn bot_vm_reload_keeps_globals_and_refetches_on_tick() {
+        let temp = TempDir::new("reload");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        let file = bot.join("init.lua");
+        fs::write(&file, b"VERSION = 1\nfunction on_bot_tick(bot) end\n").unwrap();
+
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut vm = BotVm::load(&pack).unwrap();
+        assert_eq!(vm.lua.globals().get::<i64>("VERSION").unwrap(), 1);
+
+        // Re-executing the chunk in the same state replaces the function and
+        // keeps a route's global state (`BOT_STATE` in the checked-in route).
+        fs::write(&file, b"VERSION = 2\nfunction on_bot_tick(bot) end\n").unwrap();
+        vm.reload(&pack).unwrap();
+        assert_eq!(vm.lua.globals().get::<i64>("VERSION").unwrap(), 2);
+        assert!(vm.lua.globals().get::<Function>("on_bot_tick").is_ok());
     }
 }

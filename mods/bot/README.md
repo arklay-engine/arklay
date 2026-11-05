@@ -7,9 +7,19 @@ a human would use. It cannot set flags, items or positions.
 # Watch the bot in the normal window (bare --bot implies --ui game --character 1)
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot
 
+# Edit bot/**.lua while the route runs: --watch re-executes the chunks in the
+# same Lua state, so BOT_STATE and the engine's bot memory keep their progress.
+target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --watch
+
 # Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
 ```
+
+`--watch` reloads the route in place when `bot/**.lua` changes: the chunks
+re-run in the same Lua state, so `BOT_STATE` keeps its phase and the engine
+keeps its remembered memory, navigation and tick count. Editing a route file
+does not restart the room or the run. A new game or restart rebuilds the bot
+VM from the pack, so route globals start fresh there.
 
 ## Route
 

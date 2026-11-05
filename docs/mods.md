@@ -297,6 +297,41 @@ its own class (see [Replacement formats](#replacement-formats)) is an override, 
 and OGG sources are packed verbatim and stored raw, exactly like the formats
 that carry their own compression.
 
+### Watching a mod while it runs
+
+`--watch` keeps a running interactive game in sync with the applied source
+directories. Start it on an interactive boot (`--ui game`, `--ui title`,
+`--room` or a continue); it is rejected with `--capture`, `--trace`, `--input`,
+`--save-out` and `--bot-headless`, which have no interactive loop to reload
+into.
+
+```sh
+# Edit mods/bot/bot/init.lua (or a lua/**.lua hook) while the game runs.
+arklay re1.akpak --mod mods/bot --bot --watch
+```
+
+The watcher polls the base pack and every layered source directory. It scans
+every `.lua` file below them, but only two classes are reloaded:
+
+- **`lua/**.lua` hooks** load into a fresh VM. Hook globals reset, exactly as
+  when the session opened; `on_init` then `on_room_load` run over the live game
+  state and current room. The room's init script is not re-run, so the room,
+  session and inventory stay where they are. The app's cached save/load screen
+  registration is refreshed from the reloaded `on_init` too.
+- **`bot/**.lua` route** re-executes its chunks in the same Lua state. Globals
+  survive, and the runtime keeps its tick counter and remembered
+  memory/navigation. A route should keep its progress in a global, as the
+  checked-in `mods/bot` route does with `BOT_STATE = BOT_STATE or {...}`. A
+  chunk that fails to run leaves the previous `on_bot_tick` callable.
+
+Room XML, RDT/room scripts, room assets, screen scripts, enemy scripts and
+`.akpak` layers are not reloaded: they need a room reload or a restart. The
+pack's entry list is also built when the pack opens, so editing an existing
+file reloads, a newly added file is not seen until a restart, and deleting a
+`bot/` chunk is a reload error that leaves the previous route running. With
+`--watch` off, none of this runs and the game is byte-identical to a run
+without the flag.
+
 ## HD texture packs
 
 ### Names
