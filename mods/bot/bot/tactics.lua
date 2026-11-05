@@ -162,11 +162,16 @@ function BotTactics.decide(o)
     if o.health <= o.max_health * (0.45 - 0.3 * o.risk) then
         return "run", "low health"
     end
+    -- A cautious bot wants a margin of rounds: half again at risk 0.
+    local margin = 1 + 0.5 * (1 - o.risk)
+    -- One it can outrun but not bring down with a margin is outrun: a
+    -- fight that ends empty-handed costs the grabs it took on the way.
+    if closing and o.sourcing and o.rounds < o.needed * margin then
+        return "run", "closing in, too few rounds to finish it"
+    end
     if closing then
         return "fight", "closing in"
     end
-    -- A cautious bot wants a margin of rounds: half again at risk 0.
-    local margin = 1 + 0.5 * (1 - o.risk)
     if o.rounds < o.needed * margin then
         return "run", "too few rounds"
     end

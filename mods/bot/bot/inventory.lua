@@ -121,18 +121,30 @@ end
 -- Heal stacks a full inventory keeps when it must make room for a needed
 -- pickup; the rest may go in the box (the "none held" withdrawal brings one
 -- back).
-BotInventory.SOFT_HEALS = 2
+BotInventory.SOFT_HEALS = 1
 
 -- When nothing the keep rule lets go is held, the inventory is full and a
 -- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
 -- the ammunition a held gun lacks) has no slot, the softer keeps that may
--- go in, at most `needed` of them: first a key no remembered locked door
--- needs, then heal stacks past SOFT_HEALS (the smallest stacks first is not
--- known, so the last in slot order).
+-- go in, at most `needed` of them: first heal stacks past SOFT_HEALS (the
+-- last in slot order), then a key no remembered locked door needs.
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
     if not ctx.full or (needed or 0) == 0 then
         return out
+    end
+    -- Spare heals first: a key whose door is not seen yet costs a trip back.
+    local heals = {}
+    for _, row in ipairs(items) do
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == "heal" then
+            heals[#heals + 1] = row
+        end
+    end
+    for i = #heals, BotInventory.SOFT_HEALS + 1, -1 do
+        if #out >= needed then
+            return out
+        end
+        out[#out + 1] = heals[i]
     end
     for _, row in ipairs(items) do
         if #out >= needed then
@@ -142,18 +154,6 @@ function BotInventory.soft_deposits(items, ctx, needed)
             and not (ctx.keys and ctx.keys[row.item]) then
             out[#out + 1] = row
         end
-    end
-    local heals = {}
-    for _, row in ipairs(items) do
-        if row.item ~= 0 and BotInventory.keep(row, ctx) == "heal" then
-            heals[#heals + 1] = row
-        end
-    end
-    for i = #heals, BotInventory.SOFT_HEALS + 1, -1 do
-        if #out >= needed then
-            break
-        end
-        out[#out + 1] = heals[i]
     end
     return out
 end
