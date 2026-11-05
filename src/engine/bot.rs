@@ -978,7 +978,7 @@ impl SessionSnapshot {
             controllable,
             dead: !session.death.is_idle()
                 || game.flags[5].bit(game::MSF_PLAYER_DEAD)
-                || entity.health <= 0,
+                || entity.health < 0,
             typewriter: session.typewriter_arm.is_some()
                 || session.typewriter_fade.is_some()
                 || session.typewriter_open.is_some()
