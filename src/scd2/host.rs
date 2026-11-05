@@ -290,8 +290,9 @@ const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
 /// `Sce_em_set`'s flag of someone who can't die.
 pub const NO_ENEMY_FLAG: u8 = 0xFF;
-/// `splayer_work`'s place among the characters, after `enemy_work`'s 16.
-pub const SPLAYER_SLOT: usize = 16;
+/// `splayer_work`'s place among the characters, after `enemy_work`'s 32:
+/// `Set_enemy_work` looks through all 32, and rooms of young spiders place 27.
+pub const SPLAYER_SLOT: usize = 32;
 pub(crate) const CHARACTER_SLOTS: usize = SPLAYER_SLOT + 1;
 /// `sce_em_set`'s slot for `splayer_work`.
 const SPLAYER_OPERAND: i64 = 255;
@@ -1136,6 +1137,7 @@ impl GameHost<'_> {
             || licker
             || id == crate::zombie2::MRX_ID
             || id == crate::zombie2::SPIDER_ID
+            || id == crate::zombie2::YOUNG_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {

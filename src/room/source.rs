@@ -38,8 +38,9 @@ const MAX_MODEL_SLOTS: usize = u8::MAX as usize;
 const PLAYER_ANIMATION: usize = 0;
 /// RE2's enemy slots, whose room animations follow the player's.
 const CHARACTER_ANIMATIONS: usize = 1;
-const ENEMY_SLOTS: usize = 16;
-/// `splayer_work`'s, after the enemy slots' ([`crate::scd2::host::SPLAYER_SLOT`]).
+const ENEMY_SLOTS: usize = crate::rdt2::ANIM_SLOTS as usize;
+/// `splayer_work`'s, after the enemy slots', which it keeps as
+/// [`crate::scd2::host::SPLAYER_SLOT`].
 const SPLAYER_ANIMATION: usize = ENEMY_SLOTS;
 
 /// Free entry of the effect sprite index table.
@@ -589,7 +590,14 @@ impl RoomSource {
                     pack.contains(&format!("{stem}.emr"))
                         .then(|| build_anim(&stem, pack, self.dialect).ok())
                         .flatten()
-                        .map(|anim| (slot as u8, anim))
+                        .map(|anim| {
+                            let slot = if slot == SPLAYER_ANIMATION {
+                                crate::scd2::host::SPLAYER_SLOT
+                            } else {
+                                slot
+                            };
+                            (slot as u8, anim)
+                        })
                 })
                 .collect()
         } else {

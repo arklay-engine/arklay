@@ -149,9 +149,9 @@ pub fn room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
 }
 
 /// The room animations of enemy slot `slot`, which `Rbj_set` looks for two
-/// bits above the player's.
+/// bits above the player's. Its mask is 32 bits, so slots 30 and 31 have none.
 pub fn character_anim(data: &[u8], slot: u8) -> Option<(&[u8], &[u8])> {
-    room_anim_of(data, RBJ_PLAYER << (u32::from(slot) + 2))
+    room_anim_of(data, RBJ_PLAYER.checked_shl(u32::from(slot) + 2)?)
 }
 
 /// The room animations of `splayer_work`, the bit above the player's.
@@ -159,10 +159,14 @@ pub fn splayer_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
     room_anim_of(data, RBJ_PLAYER << 1)
 }
 
-/// The parsed room animations of the enemy slots and then `splayer_work`,
-/// as `RoomState::character_anims` holds them.
+/// The enemy slots a room's animations are kept for, as its `room.xml`'s
+/// `anim/` files number them.
+pub const ANIM_SLOTS: u8 = 16;
+
+/// The parsed room animations of the first [`ANIM_SLOTS`] enemy slots and
+/// then `splayer_work`, as `RoomState::character_anims` holds them.
 pub fn character_anims(data: &[u8]) -> Vec<(u8, crate::model::RoomAnim)> {
-    (0..crate::scd2::host::SPLAYER_SLOT as u8)
+    (0..ANIM_SLOTS)
         .map(|slot| (slot, character_anim(data, slot)))
         .chain([(crate::scd2::host::SPLAYER_SLOT as u8, splayer_anim(data))])
         .filter_map(|(slot, pair)| {

@@ -266,7 +266,8 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
-        SPIDER_ID => &SPIDER_DAMAGE,
+        // `Em_26` points at `Em_25`'s rows.
+        SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT_DAMAGE,
         _ => &DAMAGE,
     };
@@ -452,6 +453,7 @@ const PLANT_DAMAGE: [Damage; 7] = [
 ];
 
 const SPIDER_ID: u8 = crate::zombie2::SPIDER_ID;
+const YOUNG_ID: u8 = crate::zombie2::YOUNG_ID;
 const SPIDER_HEIGHTS: [i32; 6] = [-7000, -2000, -4200, 500, -500, 2000];
 /// The same rows for `Em_25` and `Em_26` (`0x535dd0`).
 const SPIDER_DAMAGE: [Damage; 7] = [

@@ -373,6 +373,14 @@ pub(crate) const SPIDER_FOOT: usize = 32;
 pub(crate) const SPIDER_GROUND: usize = 30;
 /// `Em_25`'s `Sca_ck_em` mask.
 const SPIDER_MASK: u16 = 0x600;
+/// The young spiders, `Em_26`, whose script is `enemy/26/enemy.lua`.
+pub const YOUNG_ID: u8 = 0x26;
+/// `Em_26`'s `Sca_ck_em` mask.
+const YOUNG_MASK: u16 = 0x400;
+/// `Water` (`+0x10c`), which `Set_enemy_work` copies with the work.
+pub(crate) const YOUNG_WATER: usize = 5;
+/// `Ground`, which `Game_loop`'s pass after the moves finds under it.
+pub(crate) const YOUNG_GROUND: usize = 30;
 /// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
 pub const IVY_ID: u8 = 0x2E;
 /// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
@@ -390,7 +398,7 @@ pub(crate) const PLANT_OBA: usize = 30;
 /// `+0x231`: which side of its clips the ivy is on, 0 or 1.
 pub(crate) const PLANT_SIDE: usize = 29;
 
-/// `Em_25`'s `nFloor`: its height over -1800, toward 0.
+/// `Em_25`'s and `Em_26`'s `nFloor`: the height over -1800, toward 0.
 fn spider_floor(y: i32) -> u8 {
     let high = ((i64::from(y) * 0x6E5D_4C3B) >> 32) as i32 - y;
     ((high >> 10) - (high >> 31)) as u8
@@ -671,6 +679,11 @@ pub struct Spawn {
     pub vars: Vec<(usize, i32)>,
     /// A dead work of the id taken back, rather than a copy of the last.
     pub reused: bool,
+    /// Where it goes and which way it faces, if the script said.
+    pub place: Option<([i32; 3], u16)>,
+    /// The id's routine runs on it at once, before the rest of the tick:
+    /// `FUN_004732a0`'s call of `Em_26` on each young spider it sends.
+    pub run_now: bool,
 }
 
 /// The rest of the game, as a zombie sees it.
@@ -738,6 +751,8 @@ pub struct World<'a> {
     pub works: Vec<(usize, Option<u8>, bool)>,
     /// What `Set_enemy_work` gave out this tick.
     pub spawns: Vec<Spawn>,
+    /// The script took its own work out of play (`Kill_enemy_work`).
+    pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
     pub water: Vec<WaterArea>,
 }
@@ -961,6 +976,31 @@ impl Em<'_, '_, '_> {
         self.sca_ck_masked(SPIDER_MASK);
     }
 
+    /// `Em_26`, which leaves the rest to its script, then finds `nFloor` from
+    /// its height and, unless the script took the work out of play
+    /// (`Kill_enemy_work`), checks the others and the room with `0x400`.
+    fn run_young(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.z.vars[YOUNG_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
+        // Part 0's `+0x5C` as `Game_loop`'s `Joint_trans` left it, which
+        // `FUN_00474110`'s effects start from.
+        self.z.parts = self.mover.posed_parts();
+        self.script();
+        self.z.floor = spider_floor(self.mover.player.pos[1]);
+        if *self.be_flg != 0 {
+            self.oba_ck_em();
+            self.sca_ck_masked(YOUNG_MASK);
+        }
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1080,6 +1120,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == SPIDER_ID {
             self.run_spider();
+            return;
+        }
+        if self.mover.tick.id == YOUNG_ID {
+            self.run_young();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

@@ -51,6 +51,8 @@ VOL_3D_PAN = 0x00689DE4
 # Addresses and offsets in bio2 1.10, named as in the IDA database and openre.
 PL = 0x00989EF0  # the player's work
 ENEMIES = 0x0098A114  # EnemyEntity*[16]
+# `enemy_work` holds 32 slots, and `Game_loop` runs those below this end.
+ENEMIES_END = 0x0098862C
 SPLAYER = 0x0098A110  # splayer_work
 FLG_ADDR = 0x0053B218  # the flag banks
 FG_SYSTEM = 0x00989E6C
@@ -448,8 +450,9 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 def zombie_trace(game: Game) -> str:
     """The zombies, lickers, Mr. X, the plants and the spiders in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
-    for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x25, 0x2A, 0x2E, 0x2F, 0x39)):
+    count = max(16, min(32, (game.u32(ENEMIES_END) - ENEMIES) // 4))
+    for slot, pointer in enumerate(struct.unpack(f"<{count}I", game.read(ENEMIES, count * 4))):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x25, 0x26, 0x2A, 0x2E, 0x2F, 0x39)):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)

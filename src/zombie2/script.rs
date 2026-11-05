@@ -1158,6 +1158,11 @@ impl UserData for Api {
             e.em().mover.player.pos = [x, y, z];
             Ok(())
         });
+        // `Old_x` to `Old_z`: where the body was when the tick began.
+        methods.add_method_mut("old_pos", |_, e, ()| {
+            let [x, y, z] = e.em().old_pos;
+            Ok((x, y, z))
+        });
         // `Water_ck`.
         methods.add_method_mut("water_ck", |_, e, (x, z): (i32, i32)| {
             Ok(super::water_ck(&e.em().world.water, x, z))
@@ -1253,8 +1258,53 @@ impl UserData for Api {
                 kind,
                 vars: fields,
                 reused,
+                place: None,
+                run_now: false,
             });
             Ok(Some(slot))
+        });
+        // The last `spawn`'s place and facing, and fields set as well: its
+        // routine then runs on it at once, as `FUN_004732a0` runs `Em_26`.
+        methods.add_method_mut(
+            "place_spawn",
+            |_, e, (x, y, z, angle, vars): (i32, i32, i32, i64, mlua::Table)| {
+                let world = &mut *e.em().world;
+                let Some(spawn) = world.spawns.last_mut() else {
+                    return Err(mlua::Error::RuntimeError("no spawn to place".into()));
+                };
+                for pair in vars.pairs::<usize, i32>() {
+                    let (index, value) = pair?;
+                    if index >= super::VARS {
+                        return Err(mlua::Error::RuntimeError(format!("no var {index}")));
+                    }
+                    spawn.vars.retain(|&(other, _)| other != index);
+                    spawn.vars.push((index, value));
+                }
+                spawn.vars.sort_unstable();
+                spawn.place = Some(([x, y, z], angle as u16));
+                spawn.run_now = true;
+                Ok(())
+            },
+        );
+        // `Ck_em_id(work, 0, id, 0)`: how many others in play have `id`.
+        methods.add_method_mut("count_of", |_, e, id: u8| {
+            let world = &*e.em().world;
+            Ok(world
+                .works
+                .iter()
+                .filter(|&&(other, other_id, in_play)| {
+                    other != world.slot && other_id == Some(id) && in_play
+                })
+                .count())
+        });
+        // `Kill_enemy_work`: `Be_flg` and the routines go to 0, and the room
+        // counts one enemy fewer.
+        methods.add_method_mut("kill", |_, e, ()| {
+            let em = e.em();
+            *em.be_flg = 0;
+            em.work().routine = [0; 4];
+            em.world.killed = true;
+            Ok(())
         });
         // `Rot_neck_em` on `Neck_no` `joint`, facing `angle`, from where the
         // joint was last tick toward the player's head.
@@ -1421,10 +1471,11 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 8] = [
+    const SCRIPTS: [&str; 9] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
+        include_str!("../../games/re2/enemy/26/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2f/enemy.lua"),
         include_str!("../../games/re2/lib/ivy.lua"),
@@ -1580,6 +1631,18 @@ mod tests {
         end
         function e:sound(n) w.sounds[#w.sounds + 1] = n end
         function e:effect(kind, row, size, dir) w.effect = { row, dir } end
+        w.spawns, w.free = {}, FREE or 0
+        function e:count_of() return IN_PLAY or 0 end
+        function e:spawn(id, kind)
+            if w.free == 0 then return nil end
+            w.free = w.free - 1
+            w.spawns[#w.spawns + 1] = { kind = kind }
+            return #w.spawns
+        end
+        function e:place_spawn(x, y, z, angle, vars)
+            local spawn = w.spawns[#w.spawns]
+            spawn.angle, spawn.drawn = angle, vars[6]
+        end
         for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg',
             'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'seq_sound',
             'set_parent' }) do
@@ -2043,5 +2106,187 @@ mod tests {
             (spider.get("r1"), spider.get("timer2")),
             (1, (0x25 & 0x1F) + 0x1E)
         );
+    }
+
+    /// What `FUN_004732a0` sent: each young spider's `Type`, facing and the
+    /// init's draw it was given.
+    fn sent_young(setup: &str, draws: &[u8]) -> (Vec<(i64, i64, i64)>, i64) {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        lua.load(setup).exec().unwrap();
+        let script = include_str!("../../games/re2/enemy/25/enemy.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.globals().set("KIND", 0).unwrap();
+        let table = lua
+            .load(format!(
+                "{SPIDER_STUB}
+                 {script}
+                 update(e)
+                 local sent = {{}}
+                 for _, spawn in ipairs(w.spawns) do
+                     sent[#sent + 1] = {{ spawn.kind, spawn.angle, spawn.drawn }}
+                 end
+                 return {{ sent = sent, drawn = drawn }}"
+            ))
+            .eval::<mlua::Table>()
+            .unwrap();
+        let sent = table
+            .get::<mlua::Table>("sent")
+            .unwrap()
+            .sequence_values::<Vec<i64>>()
+            .map(|spawn| {
+                let spawn = spawn.unwrap();
+                (spawn[0], spawn[1], spawn[2])
+            })
+            .collect();
+        (sent, table.get("drawn").unwrap())
+    }
+
+    /// A magnum's death on the floor sends `(Rnd & 3) + 6` young, each
+    /// facing `Rnd << 4` and with its init's draw made after that.
+    #[test]
+    fn a_spiders_blown_death_sends_young() {
+        let setup = "ROUTINES = { [0] = 3, 5, 0, 0 }; FREE = 32; IN_PLAY = 1";
+        let mut draws = vec![0x41, 0x12, 0x34, 0x56, 0x78];
+        draws.resize(64, 0);
+        let (sent, _) = sent_young(setup, &draws);
+        // `(0x41 & 3) + 6`.
+        assert_eq!(sent.len(), 7);
+        assert_eq!(sent[0], (0x2002, 0x12 << 4, 0x134));
+        assert_eq!(sent[1], (0x2002, 0x56 << 4, 0x178));
+        // Short of works, it sends what it can; with 17 in play, none.
+        let (sent, _) = sent_young(&format!("{setup}; FREE = 2"), &draws);
+        assert_eq!(sent.len(), 2);
+        let (sent, _) = sent_young(
+            "ROUTINES = { [0] = 3, 5, 0, 0 }; FREE = 32; IN_PLAY = 17",
+            &draws,
+        );
+        assert!(sent.is_empty());
+        // In water, bit 0 picks the swim.
+        let (sent, _) = sent_young(&format!("{setup}; VARS = {{ [14] = -180 }}"), &draws);
+        assert_eq!(sent[0].0, 0x2003);
+    }
+
+    const YOUNG_STUB: &str = "
+        w.old = { 0, 0, 0 }
+        w.dc = 0
+        function e:old_pos() return w.old[1], w.old[2], w.old[3] end
+        function e:set_pos(x, y, z) w.pos = { x, y, z } end
+        function e:set_kind(v) w.kind = v end
+        function e:damage_cnt() return w.dc end
+        function e:set_damage_cnt(v) w.dc = v end
+        function e:player_at_w() return 450 end
+        function e:player_floor() return 0 end
+        function e:pl_routine(i) return w.pl[i] end
+        function e:kill() w.be = 0; w.r = { [0] = 0, 0, 0, 0 }; w.died = 1 end
+        function e:pl_life_down(down)
+            w.pl_life = w.pl_life - down
+            return 0
+        end
+    ";
+
+    fn run_young(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Spider {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        lua.load(setup).exec().unwrap();
+        let script = include_str!("../../games/re2/enemy/26/enemy.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.globals().set("KIND", kind).unwrap();
+        lua.load(format!(
+            "{SPIDER_STUB}
+             {YOUNG_STUB}
+             {script}
+             for _ = 1, {ticks} do update(e) end
+             return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], r3 = w.r[3], life = w.life,
+                 be = w.be, kind = w.kind, angle = w.angle, spd = w.spd[1], spd_y = w.spd[2],
+                 timer = w.timers[0], drawn = drawn, t21c = w.vars[0] or 0,
+                 wobble = w.vars[1] or 0, rate = w.vars[4] or 0, pos_y = w.pos[2],
+                 effects = w.bloods, sounds = #w.sounds, died = w.died, pl0 = w.pl[0],
+                 pl_life = w.pl_life, pl_dc = w.pl_dc, bit = w.vars[2] or 0 }}"
+        ))
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let fields = "r0 r1 r2 r3 life be kind angle spd spd_y timer drawn t21c wobble \
+                rate pos_y effects sounds died pl0 pl_life pl_dc bit"
+                .split_whitespace()
+                .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+                .collect();
+            Spider(fields, Vec::new())
+        })
+        .unwrap()
+    }
+
+    /// `FUN_004736a0`: a life of 1, `Routine_1` by `Type`, and the wait
+    /// before a jump from `Rnd`, or from the draw the spider made for it.
+    #[test]
+    fn a_young_spiders_init() {
+        let young = run_young(0x2002, &[0x3F], 1, "");
+        assert_eq!((young.get("r0"), young.get("r1")), (1, 1));
+        assert_eq!((young.get("life"), young.get("t21c")), (1, 0x1F));
+        assert_eq!((young.get("wobble"), young.get("drawn")), (0x78, 1));
+        assert_eq!(young.get("be"), 0x4C0_0001);
+        let young = run_young(0x2002, &[0x3F], 1, "VARS = { [6] = 0x125 }");
+        assert_eq!((young.get("t21c"), young.get("drawn")), (5, 0));
+        // The room's template only poses.
+        let young = run_young(0x2000, &[0], 1, "");
+        assert_eq!((young.get("r1"), young.get("life")), (0, -1));
+        assert_eq!(young.get("kind"), 0x6000);
+        assert_eq!(young.get("be"), 0x4C8_044B);
+        // Sent from a wall or the ceiling, it falls; from water, it swims.
+        assert_eq!(run_young(0x2004, &[0], 1, "").get("r1"), 2);
+        assert_eq!(run_young(0x2003, &[0], 1, "").get("r1"), 4);
+    }
+
+    /// The walk's wait counts `(Rnd + 0x1E) & 0x3F`, then the run goes at
+    /// `(Rnd & 0x3F) + 0x5A` for `Rnd & 0x4E` ticks, swaying by 0x78.
+    #[test]
+    fn a_young_spider_waits_then_runs() {
+        // Init, then the wait: 2 ticks, and toward the player on draw 1.
+        let draws = [0, 0x24, 1, 0x10, 0x0E, 0, 0, 0, 0];
+        let young = run_young(0x2002, &draws, 2, "");
+        assert_eq!((young.get("r2"), young.get("timer")), (0, 1));
+        assert_eq!(young.get("rate"), 0x40);
+        let young = run_young(0x2002, &draws, 4, "");
+        assert_eq!((young.get("r2"), young.get("r3")), (1, 0));
+        let young = run_young(0x2002, &draws, 5, "");
+        assert_eq!((young.get("r3"), young.get("spd")), (1, 0x10 + 0x5A));
+        assert_eq!(young.get("timer"), 0x0E - 1);
+        assert_eq!(young.get("wobble"), -0x78);
+        // A draw of 0 for the way runs away, as `1 << 0` is in 0x1111.
+        let young = run_young(0x2002, &[0, 0x24, 0], 2, "");
+        assert_eq!(young.get("rate"), 0xC0);
+    }
+
+    /// With the player in reach and faced, the jump starts at -300 up and
+    /// bites once on the way.
+    #[test]
+    fn a_young_spider_jumps_and_bites() {
+        let setup = "DIST = 300; TARGET = 0; POS = { 0, 0, 0 }";
+        let young = run_young(0x2002, &[0; 16], 2, setup);
+        assert_eq!(young.get("r1"), 3);
+        let young = run_young(0x2002, &[0; 16], 3, setup);
+        assert_eq!(young.get("spd_y"), -300 + 0x28);
+        assert_eq!((young.get("pl0"), young.get("pl_dc")), (2, 0x80));
+        assert_eq!((young.get("pl_life"), young.get("bit")), (199, 1));
+        assert_eq!(young.get("angle"), 0x800);
+    }
+
+    /// Off the floor it falls at up to 800 a tick and lands on `Ground`.
+    #[test]
+    fn a_young_spider_falls_to_ground() {
+        let young = run_young(0x2004, &[0; 16], 2, "POS = { 0, -500, 0 }");
+        assert_eq!((young.get("r1"), young.get("spd_y")), (2, 0x50));
+        let young = run_young(0x2004, &[0; 16], 8, "POS = { 0, -500, 0 }");
+        assert_eq!((young.get("r1"), young.get("pos_y")), (1, 0));
+        assert_eq!(young.get("be") & 0x400_0002, 0x400_0000);
+    }
+
+    /// The death: sound 7 and an effect, and the work goes the tick after.
+    #[test]
+    fn a_young_spider_dies() {
+        let setup = "ROUTINES = { [0] = 3, 2, 0, 0 }";
+        let young = run_young(0x2002, &[], 1, setup);
+        assert_eq!((young.get("sounds"), young.get("effects")), (1, 1));
+        assert_eq!(young.get("died"), 0);
+        let young = run_young(0x2002, &[], 2, setup);
+        assert_eq!((young.get("died"), young.get("be")), (1, 0));
     }
 }

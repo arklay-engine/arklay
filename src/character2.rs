@@ -51,8 +51,9 @@ pub fn tick(
         }
         let model = npc_models.get(pack, character.model, scenario);
         if let Some(mut zombie) = character.zombie.take() {
+            let mut sent = Vec::new();
             if let Some(model) = model.filter(|_| moves(&character)) {
-                run_zombie(
+                sent = run_zombie(
                     game,
                     room,
                     pack,
@@ -66,6 +67,7 @@ pub fn tick(
             }
             character.zombie = Some(zombie);
             game.re2.characters.0[slot] = Some(character);
+            run_spawned(game, room, pack, npc_models, lua.as_deref_mut(), sent);
             continue;
         }
         if let Some(model) = model.filter(|_| moves(&character)) {
@@ -283,10 +285,13 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                     600
                 } else if matches!(
                     character.id,
-                    crate::zombie2::CROW_ID | crate::zombie2::MRX_ID | crate::zombie2::SPIDER_ID
+                    crate::zombie2::CROW_ID
+                        | crate::zombie2::MRX_ID
+                        | crate::zombie2::SPIDER_ID
+                        | crate::zombie2::YOUNG_ID
                 ) {
-                    // `Em_21`, `MrX_init` and `Em_25`'s init never give it an
-                    // `Atd[1]`.
+                    // `Em_21`, `MrX_init`, `Em_25`'s and `Em_26`'s inits never
+                    // give it an `Atd[1]`.
                     0
                 } else {
                     zombie
@@ -473,7 +478,10 @@ fn sce_blood(game: &mut GameState, character: &mut Character) {
 }
 
 /// `Game_loop`'s call of `Em_Zombie`, with its view of the rest of the game.
+/// It gives back the slots `Set_enemy_work` gave out whose routine runs at
+/// once (`Spawn::run_now`).
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 fn run_zombie(
     game: &mut GameState,
     room: &RoomState,
@@ -484,7 +492,7 @@ fn run_zombie(
     slot: usize,
     model: &Emd,
     loading: bool,
-) {
+) -> Vec<usize> {
     let tick = tick_of(room, game, character, slot, model, None);
     let player = game.entities[0].pos;
     let scene_target = body_of(game, character.work.dest[1]).unwrap_or(character.body.pos);
@@ -521,7 +529,10 @@ fn run_zombie(
         crate::scd2::host::STATUS_BANK,
         crate::scd2::host::STATUS_PLAYER,
     );
-    let water = if character.id == crate::zombie2::SPIDER_ID {
+    let water = if matches!(
+        character.id,
+        crate::zombie2::SPIDER_ID | crate::zombie2::YOUNG_ID
+    ) {
         water_areas(game)
     } else {
         Vec::new()
@@ -608,10 +619,12 @@ fn run_zombie(
         parent,
         works,
         spawns: Vec::new(),
+        killed: false,
         water,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
+    let killed = world.killed;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
     let knocks = std::mem::take(&mut world.knocks);
@@ -636,7 +649,14 @@ fn run_zombie(
             }
         }
     }
+    if killed {
+        re2.enemies = re2.enemies.wrapping_sub(1);
+    }
+    let mut run_now = Vec::new();
     for spawn in spawns {
+        if spawn.run_now {
+            run_now.push(spawn.slot);
+        }
         set_enemy_work(re2, character, slot, spawn, loading);
     }
     let pos = character.body.pos;
@@ -687,6 +707,43 @@ fn run_zombie(
                 .push(crate::scd2::host::SoundRequest { id, pos });
         }
     }
+    run_now
+}
+
+/// The routine's run on each work `Set_enemy_work` gave out that runs at once,
+/// in the order they were given.
+fn run_spawned(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
+    slots: Vec<usize>,
+) {
+    let scenario = game.id.player_flag & 1;
+    for slot in slots {
+        let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
+            continue;
+        };
+        if let Some(mut zombie) = character.zombie.take() {
+            if let Some(model) = npc_models.get(pack, character.model, scenario) {
+                // It sends nothing on itself.
+                let _ = run_zombie(
+                    game,
+                    room,
+                    pack,
+                    lua.as_deref_mut(),
+                    &mut character,
+                    &mut zombie,
+                    slot,
+                    &model,
+                    false,
+                );
+            }
+            character.zombie = Some(zombie);
+        }
+        game.re2.characters.0[slot] = Some(character);
+    }
 }
 
 /// What `Set_enemy_work` leaves in the work it gave `spawn`: a dead one of the
@@ -736,7 +793,15 @@ fn set_enemy_work(
         character.be_flg = 1;
         let floor = character.zombie.as_ref().map_or(0, |z| z.floor);
         let model_type = character.zombie.as_ref().map_or(0, |z| z.model_type);
+        let water = character
+            .zombie
+            .as_ref()
+            .map_or(0, |z| z.vars()[crate::zombie2::YOUNG_WATER]);
         let mut zombie = crate::zombie2::spawned(spawn.slot as u8, floor, model_type);
+        if spawn.id == crate::zombie2::YOUNG_ID {
+            // The copy keeps the template's `Water`.
+            zombie.set_var(crate::zombie2::YOUNG_WATER, water);
+        }
         zombie.set_sight_turn(re2.enemies & 7);
         character.zombie = Some(zombie);
         character
@@ -744,6 +809,11 @@ fn set_enemy_work(
     character.with_room = loading;
     character.work.kind = spawn.kind;
     character.kind = spawn.kind;
+    if let Some((pos, angle)) = spawn.place {
+        character.body.pos = pos;
+        character.body.angle = angle;
+        character.body.collision_mirror = [pos[0], pos[2]];
+    }
     if let Some(zombie) = character.zombie.as_mut() {
         zombie.parent = Some(parent_slot as u8);
         for (index, value) in spawn.vars {
@@ -802,7 +872,8 @@ pub fn init(
                 character.with_room = false;
                 let held = character.work.kind & player2::KIND_NOT_MOVED;
                 character.work.kind &= !player2::KIND_NOT_MOVED;
-                run_zombie(
+                // No shot lands in the load, so it sends nothing.
+                let _ = run_zombie(
                     game,
                     room,
                     pack,
@@ -816,7 +887,7 @@ pub fn init(
                 let (start, flags) = character.start;
                 if start != 0 {
                     player2::spl_start(&mut character.work, start, flags);
-                    run_zombie(
+                    let _ = run_zombie(
                         game,
                         room,
                         pack,
@@ -979,7 +1050,8 @@ fn run_load_stop(
             && let Some(mut zombie) = character.zombie.take()
         {
             if let Some(model) = npc_models.get(pack, character.model, scenario) {
-                run_zombie(
+                // A stopped enemy only does its `Root_ck`, and sends nothing.
+                let _ = run_zombie(
                     game,
                     room,
                     pack,
