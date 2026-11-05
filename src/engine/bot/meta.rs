@@ -5,6 +5,12 @@
 //! one has no metadata. The parser refuses unknown elements and attributes, so
 //! a typo fails loudly instead of silently dropping a puzzle step.
 //!
+//! Format 2 adds room facts (never coordinates or walk paths) a generic
+//! planner reads: `<interact>` (an AOT slot and the flag that shows it is
+//! done), `<answer>` (the choice to make at a yes/no prompt) and `<avoid>`
+//! (an AOT slot the planner should not use). A format-1 document may not use
+//! them.
+//!
 //! The merged pack resolves the file next to the room's other entries, so a
 //! mod's `room/117/bot.xml` overlays the base pack's copy (or adds one when the
 //! base has none).
@@ -17,17 +23,52 @@ use crate::game::FLAG_BANK_COUNT;
 use crate::pack::Pack;
 use crate::state::RoomId;
 
-/// The `<bot format="...">` version this parser reads.
-pub const FORMAT: u32 = 1;
+/// The newest `<bot format="...">` version this parser reads. Format 1 (the
+/// default when the attribute is absent) has only `<puzzle>`; format 2 adds
+/// the fact elements.
+pub const FORMAT: u32 = 2;
+
+/// The format a document without a `format` attribute is read as.
+const DEFAULT_FORMAT: u32 = 1;
 
 /// The largest metadata file accepted, matching the room XML budget.
 const MAX_BYTES: usize = 4 << 20;
 
-/// One room's bot metadata: a format version and its puzzles.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One room's bot metadata: a format version, its puzzles and its facts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RoomMeta {
     pub format: u32,
     pub puzzles: Vec<PuzzleMeta>,
+    pub interacts: Vec<Interact>,
+    pub answers: Vec<Answer>,
+    pub avoids: Vec<Avoid>,
+}
+
+/// `<interact>`: press the AOT `slot`; flag `bank`/`bit` set means done.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Interact {
+    pub slot: u8,
+    pub bank: u8,
+    pub bit: u8,
+    pub label: Option<String>,
+}
+
+/// `<answer>`: the choice to make at a yes/no prompt, identified by the AOT
+/// `slot` that opens it, the flag `bank`/`bit`, or both.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Answer {
+    /// `true` for yes, `false` for no.
+    pub yes: bool,
+    pub slot: Option<u8>,
+    pub flag: Option<(u8, u8)>,
+    pub label: Option<String>,
+}
+
+/// `<avoid>`: an AOT slot the planner should not use, and why.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Avoid {
+    pub slot: u8,
+    pub reason: String,
 }
 
 /// One named, ordered puzzle in a room.
@@ -84,31 +125,131 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
         );
     }
     check_attributes(root, &["format"])?;
-    let format: u32 = attr_or(root, "format", FORMAT)?;
-    if format != FORMAT {
+    let format: u32 = attr_or(root, "format", DEFAULT_FORMAT)?;
+    if !(1..=FORMAT).contains(&format) {
         bail!(
-            "{}: bot XML format {format} is not supported (expected {FORMAT})",
+            "{}: bot XML format {format} is not supported (expected 1..={FORMAT})",
             at(root)
         );
     }
 
-    let mut puzzles = Vec::new();
+    let mut meta = RoomMeta {
+        format,
+        ..RoomMeta::default()
+    };
+    budget::check_len(
+        elements(root).count(),
+        budget::MAX_RECORDS,
+        "bot XML element count",
+    )?;
     for child in elements(root) {
-        if child.tag_name().name() != "puzzle" {
-            bail!(
-                "{}: unknown <bot> element <{}>",
-                at(child),
-                child.tag_name().name()
-            );
+        let name = child.tag_name().name();
+        let fact = matches!(name, "interact" | "answer" | "avoid");
+        if fact && format < 2 {
+            bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
         }
-        let puzzle = parse_puzzle(child)?;
-        if puzzles.iter().any(|held: &PuzzleMeta| held.id == puzzle.id) {
-            bail!("{}: duplicate puzzle id `{}`", at(child), puzzle.id);
+        match name {
+            "puzzle" => {
+                let puzzle = parse_puzzle(child)?;
+                if meta.puzzles.iter().any(|held| held.id == puzzle.id) {
+                    bail!("{}: duplicate puzzle id `{}`", at(child), puzzle.id);
+                }
+                meta.puzzles.push(puzzle);
+            }
+            "interact" => meta.interacts.push(parse_interact(child)?),
+            "answer" => meta.answers.push(parse_answer(child)?),
+            "avoid" => meta.avoids.push(parse_avoid(child)?),
+            other => bail!("{}: unknown <bot> element <{other}>", at(child)),
         }
-        puzzles.push(puzzle);
     }
-    budget::check_len(puzzles.len(), budget::MAX_RECORDS, "bot XML puzzle count")?;
-    Ok(RoomMeta { format, puzzles })
+    Ok(meta)
+}
+
+/// A fact element has no children.
+fn check_leaf(node: Node<'_, '_>) -> Result<()> {
+    if let Some(child) = elements(node).next() {
+        bail!(
+            "{}: unknown <{}> element <{}>",
+            at(child),
+            node.tag_name().name(),
+            child.tag_name().name()
+        );
+    }
+    Ok(())
+}
+
+/// A `bank` attribute: below [`FLAG_BANK_COUNT`].
+fn bank_attr(node: Node<'_, '_>) -> Result<u8> {
+    let bank: u8 = attr(node, "bank")?;
+    if usize::from(bank) >= FLAG_BANK_COUNT {
+        bail!(
+            "{}: bank {bank} is out of range 0..={}",
+            at(node),
+            FLAG_BANK_COUNT - 1
+        );
+    }
+    Ok(bank)
+}
+
+fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(node, &["slot", "bank", "bit", "label"])?;
+    check_leaf(node)?;
+    Ok(Interact {
+        slot: attr(node, "slot")?,
+        bank: bank_attr(node)?,
+        bit: attr(node, "bit")?,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
+    check_attributes(node, &["choice", "slot", "bank", "bit", "label"])?;
+    check_leaf(node)?;
+    let yes = match attr_text(node, "choice")? {
+        "yes" => true,
+        "no" => false,
+        other => bail!(
+            "{}: <answer> `choice` value `{other}` is not `yes` or `no`",
+            at(node)
+        ),
+    };
+    let slot = match node.attribute("slot") {
+        Some(_) => Some(attr(node, "slot")?),
+        None => None,
+    };
+    let flag = match (node.attribute("bank"), node.attribute("bit")) {
+        (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
+        (None, None) => None,
+        _ => bail!(
+            "{}: <answer> needs both `bank` and `bit`, or neither",
+            at(node)
+        ),
+    };
+    if slot.is_none() && flag.is_none() {
+        bail!(
+            "{}: <answer> needs a `slot` or a `bank`/`bit` flag",
+            at(node)
+        );
+    }
+    Ok(Answer {
+        yes,
+        slot,
+        flag,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
+    check_attributes(node, &["slot", "reason"])?;
+    check_leaf(node)?;
+    let reason = attr_text(node, "reason")?.to_string();
+    if reason.trim().is_empty() {
+        bail!("{}: <avoid> reason must not be empty", at(node));
+    }
+    Ok(Avoid {
+        slot: attr(node, "slot")?,
+        reason,
+    })
 }
 
 fn parse_puzzle(node: Node<'_, '_>) -> Result<PuzzleMeta> {
@@ -137,14 +278,7 @@ fn parse_puzzle(node: Node<'_, '_>) -> Result<PuzzleMeta> {
 fn parse_step(node: Node<'_, '_>) -> Result<PuzzleStep> {
     check_attributes(node, &["slot", "bank", "bit", "label"])?;
     let slot: u8 = attr(node, "slot")?;
-    let bank: u8 = attr(node, "bank")?;
-    if usize::from(bank) >= FLAG_BANK_COUNT {
-        bail!(
-            "{}: bank {bank} is out of range 0..={}",
-            at(node),
-            FLAG_BANK_COUNT - 1
-        );
-    }
+    let bank = bank_attr(node)?;
     let bit: u8 = attr(node, "bit")?;
     let label = attr_text(node, "label")?.to_string();
     let count = elements(node).count();
@@ -396,6 +530,101 @@ mod tests {
         </bot>"#;
         let error = parse(bad_bit).unwrap_err().to_string();
         assert!(error.contains("is not a valid u8"), "{error}");
+    }
+
+    #[test]
+    fn format_2_reads_the_fact_elements() {
+        let text = r#"<bot format="2">
+            <puzzle id="p"><step slot="1" bank="0" bit="1" label="x"/></puzzle>
+            <interact slot="4" bank="1" bit="0x22" label="push the statue"/>
+            <interact slot="5" bank="0" bit="3"/>
+            <answer choice="no" slot="6" label="do not drink"/>
+            <answer choice="yes" bank="4" bit="0x10"/>
+            <avoid slot="7" reason="the plant stuns the player"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.format, 2);
+        assert_eq!(meta.puzzles.len(), 1);
+        assert_eq!(
+            meta.interacts,
+            vec![
+                Interact {
+                    slot: 4,
+                    bank: 1,
+                    bit: 0x22,
+                    label: Some("push the statue".to_string()),
+                },
+                Interact {
+                    slot: 5,
+                    bank: 0,
+                    bit: 3,
+                    label: None,
+                },
+            ]
+        );
+        assert_eq!(
+            meta.answers,
+            vec![
+                Answer {
+                    yes: false,
+                    slot: Some(6),
+                    flag: None,
+                    label: Some("do not drink".to_string()),
+                },
+                Answer {
+                    yes: true,
+                    slot: None,
+                    flag: Some((4, 0x10)),
+                    label: None,
+                },
+            ]
+        );
+        assert_eq!(
+            meta.avoids,
+            vec![Avoid {
+                slot: 7,
+                reason: "the plant stuns the player".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn format_2_facts_are_validated() {
+        let error = |text: &str| parse(text).unwrap_err().to_string();
+
+        let v1 = r#"<bot format="1"><avoid slot="1" reason="x"/></bot>"#;
+        assert!(error(v1).contains("<avoid> needs <bot format=\"2\">"));
+        let v1_default = r#"<bot><interact slot="1" bank="0" bit="1"/></bot>"#;
+        assert!(error(v1_default).contains("needs <bot format=\"2\">"));
+        assert!(error(r#"<bot format="3"/>"#).contains("format 3 is not supported"));
+
+        let unknown = r#"<bot format="2"><prompt slot="1"/></bot>"#;
+        assert!(error(unknown).contains("unknown <bot> element <prompt>"));
+        let child =
+            r#"<bot format="2"><avoid slot="1" reason="x"><walk x="1" z="2"/></avoid></bot>"#;
+        assert!(error(child).contains("unknown <avoid> element <walk>"));
+
+        let bad_attribute = r#"<bot format="2"><interact slot="1" bank="0" bit="1" x="5"/></bot>"#;
+        assert!(error(bad_attribute).contains("unknown attribute `x`"));
+        let bad_choice = r#"<bot format="2"><answer choice="maybe" slot="1"/></bot>"#;
+        assert!(error(bad_choice).contains("is not `yes` or `no`"));
+        let no_target = r#"<bot format="2"><answer choice="yes"/></bot>"#;
+        assert!(error(no_target).contains("needs a `slot` or a `bank`/`bit` flag"));
+        let half_flag = r#"<bot format="2"><answer choice="yes" bank="1"/></bot>"#;
+        assert!(error(half_flag).contains("both `bank` and `bit`"));
+        let no_reason = r#"<bot format="2"><avoid slot="1"/></bot>"#;
+        assert!(error(no_reason).contains("needs a `reason` attribute"));
+        let blank_reason = r#"<bot format="2"><avoid slot="1" reason=" "/></bot>"#;
+        assert!(error(blank_reason).contains("reason must not be empty"));
+
+        let bad_bit = r#"<bot format="2"><interact slot="1" bank="0" bit="256"/></bot>"#;
+        assert!(error(bad_bit).contains("`bit` value `256` is not a valid u8"));
+        let bad_bank = r#"<bot format="2"><interact slot="1" bank="10" bit="1"/></bot>"#;
+        assert!(error(bad_bank).contains("bank 10 is out of range"));
+        let bad_answer_bank = r#"<bot format="2"><answer choice="no" bank="12" bit="1"/></bot>"#;
+        assert!(error(bad_answer_bank).contains("bank 12 is out of range"));
+        let bad_slot = r#"<bot format="2"><avoid slot="-1" reason="x"/></bot>"#;
+        assert!(error(bad_slot).contains("`slot` value `-1` is not a valid u8"));
     }
 
     #[test]

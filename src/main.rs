@@ -205,6 +205,17 @@ struct Cli {
     #[arg(long, value_name = "PATH", requires = "bot_headless")]
     bot_stats: Option<PathBuf>,
 
+    /// How much danger the bot's planner may accept, from 0.0 (none) to 1.0
+    /// (any); the route reads it as `bot:risk()`. Example: `--bot-risk 0.5`
+    #[arg(
+        long,
+        value_name = "0.0..1.0",
+        default_value_t = arklay::engine::DEFAULT_RISK,
+        value_parser = parse_bot_risk,
+        requires = "bot"
+    )]
+    bot_risk: f64,
+
     /// Enable Classic REbirth's quick turn for this run: while walking
     /// backward, RUN turns the player 180 degrees in place over eight ticks.
     /// Overrides `[game] quick_turn` in arklay.toml
@@ -861,6 +872,18 @@ fn parse_region_pack(text: &str) -> Result<(arklay::scd::akscr::Region, PathBuf)
 fn parse_hex_byte(text: &str) -> Result<u8, String> {
     u8::from_str_radix(text.trim_start_matches("0x"), 16)
         .map_err(|err| format!("`{text}` is not a hex byte: {err}"))
+}
+
+/// `--bot-risk`: a number in `0.0..=1.0`.
+fn parse_bot_risk(text: &str) -> Result<f64, String> {
+    let risk: f64 = text
+        .trim()
+        .parse()
+        .map_err(|err| format!("`{text}` is not a number: {err}"))?;
+    if !(0.0..=1.0).contains(&risk) {
+        return Err(format!("`{text}` is outside 0.0..1.0"));
+    }
+    Ok(risk)
 }
 
 fn parse_position(text: &str) -> Result<[i32; 3], String> {
@@ -1661,6 +1684,7 @@ fn main() -> Result<()> {
                 headless: cli.bot_headless,
                 max_ticks: cli.bot_max_ticks,
                 stats_path: cli.bot_stats.clone(),
+                risk: cli.bot_risk,
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -1900,6 +1924,25 @@ mod tests {
             new_game_choice(cli.difficulty, cli.arrange),
             arklay::ui::NewGameChoice::default()
         );
+    }
+
+    #[test]
+    fn the_bot_risk_is_validated_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        let cli = parse(&["arklay", "game.akpak", "--bot"]).unwrap();
+        assert_eq!(cli.bot_risk, arklay::engine::DEFAULT_RISK);
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "0.8"]).unwrap();
+        assert_eq!(cli.bot_risk, 0.8);
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "1"]).unwrap();
+        assert_eq!(cli.bot_risk, 1.0);
+        for bad in ["1.5", "-0.1", "NaN", "high"] {
+            let flag = format!("--bot-risk={bad}");
+            let error = parse(&["arklay", "game.akpak", "--bot", &flag])
+                .err()
+                .unwrap_or_else(|| panic!("--bot-risk {bad} was accepted"));
+            assert!(error.to_string().contains(bad), "{error}");
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-risk", "0.5"]).is_err());
     }
 
     #[test]
