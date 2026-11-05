@@ -214,6 +214,9 @@ pub struct Character {
     pub with_room: bool,
     /// `+0x1F0`: how far it was from the player when it last ran.
     pub distance: u32,
+    /// `+0xB` (member 9): the last area `Sce_at_check`'s enemy pass found it
+    /// in, [`NO_AREA`] until it's been in one.
+    pub area: u8,
     /// `pSub1_kan_t_ptr` once a zombie has hold of it: that zombie's own.
     pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
     /// What it needs if `Em_Zombie` runs it.
@@ -918,6 +921,10 @@ const MEMBER_POS_X: usize = 0x0B;
 const MEMBER_ANGLE: u8 = 0x0F;
 /// `Id`.
 const MEMBER_ID: u8 = 6;
+/// `+0xB`, the enemy's last area ([`Character::area`]).
+const MEMBER_AREA: u8 = 9;
+/// [`Character::area`] before the enemy has been in an area: `sce_em_set`'s.
+pub const NO_AREA: u8 = 0xFF;
 /// `Type`.
 const MEMBER_TYPE: u8 = 7;
 /// The word at `+0x21a`, which on a zombie is [`crate::zombie2::Zombie::flags`].
@@ -1203,6 +1210,7 @@ impl GameHost<'_> {
             start: (at(13) as u16, at(14) as u16),
             sound_type,
             distance: 0,
+            area: NO_AREA,
             with_room: self.game.re2.room_loading,
             held_bank: None,
             kage: None,
@@ -2036,6 +2044,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
     match member {
         0 => Some(character.be_flg as i32),
         MEMBER_ID => Some(i32::from(character.id)),
+        MEMBER_AREA => Some(i32::from(character.area)),
         MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
         MEMBER_ZOMBIE_FLAGS => character
             .zombie
@@ -2072,6 +2081,7 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
     match member {
         0 => character.be_flg = value as u32,
         MEMBER_ID => character.id = value as u8,
+        MEMBER_AREA => character.area = value as u8,
         MEMBER_ANGLE => character.body.angle = value as u16,
         MEMBER_ZOMBIE_FLAGS => {
             if let Some(zombie) = character.zombie.as_mut() {
@@ -2512,6 +2522,37 @@ mod tests {
         restored.load_save_bytes(&bytes).unwrap();
         assert_eq!(restored, state);
         assert!(restored.load_save_bytes(&bytes[1..]).is_none());
+    }
+
+    /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
+    /// body probe): `Sce_at_check`'s enemy pass puts the area in the zombie's
+    /// `+0xB`, which the room's script reads as member 9, and in the script's
+    /// body-area variable. It keeps the area once the zombie has left.
+    #[test]
+    fn an_enemy_area_is_kept_as_the_enemys_member_nine() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 1, 31, 6, 16, 3, 2, 0, 255, -24137, -5400, -25367, 3061, 0, 0,
+            ],
+        );
+        exec(&mut game, "work_set", &[WK_ENEMY, 1]);
+        let area = |game: &mut GameState| GameHost { game }.member(0, MEMBER_AREA);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        let ops = [3, 3, 66, 3, 0, -26066, -23500, 2450, 1570, 0, 0, 0, 0, 0, 0];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &ops);
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-24330, -5400, -23367];
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(area(&mut game), Some(3));
+        assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
+        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(area(&mut game), Some(3));
     }
 
     /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives

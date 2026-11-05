@@ -1968,6 +1968,89 @@ mod tests {
         }
     }
 
+    /// `FUN_00454f30` reaches for the player in the lunge's last step,
+    /// `Routine_2` of 3, whatever clip is playing: in room 100 the lunge's
+    /// clip is 0x1B when the original's zombie takes hold.
+    #[test]
+    fn a_lunging_zombie_reaches_in_the_lunges_last_step() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        let reach = |step: u8| -> (Vec<u8>, i64) {
+            lua.globals().set("STEP", step).unwrap();
+            lua.load(format!(
+                "local w = {{ r = {{ [0] = 1, 0xC, STEP, 0 }}, pl_dc = 0 }}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                 function e:move_no() return 0x1B end
+                 function e:move_cnt() return 5 end
+                 function e:distance() return 1100 end
+                 function e:same_floor() return true end
+                 function e:player_id() return 0 end
+                 function e:player_within() return true end
+                 function e:joint_bank() return false end
+                 function e:pl_damage_cnt() return w.pl_dc end
+                 function e:pl_set_damage_cnt(v) w.pl_dc = v end
+                 function e:cdir_player() return false end
+                 function e:voice_free() return false end
+                 local zombie = (function() {library} end)()
+                 zombie.run(e, {{}})
+                 R = {{ w.r[0], w.r[1] }}
+                 PL_DC = w.pl_dc"
+            ))
+            .exec()
+            .unwrap();
+            let routines: Vec<u8> = lua.globals().get("R").unwrap();
+            (routines, lua.globals().get("PL_DC").unwrap())
+        };
+        let (routines, held) = reach(3);
+        assert_eq!(routines, [1, 3]);
+        assert_ne!(held & 0x80, 0);
+        let (routines, held) = reach(1);
+        assert_eq!(routines, [1, 0xC]);
+        assert_eq!(held & 0x80, 0);
+    }
+
+    /// `FUN_00453010`'s wall: a chasing zombie against a wall turns to it
+    /// (state 0xA) when the script has raised `Sce_free0`'s high bits
+    /// (`+0x1D5`), as room 103's does with `0x8C00`; `Sce_free1` doesn't.
+    #[test]
+    fn a_chasing_zombie_takes_the_scripts_wall_from_sce_free0() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        let chase = |free: [i32; 2]| -> Vec<u8> {
+            lua.globals().set("FREE", free.to_vec()).unwrap();
+            lua.load(format!(
+                "local w = {{ r = {{ [0] = 1, 2, 1, 0 }}, free = {{ [0] = FREE[1], FREE[2] }} }}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                 function e:sce_free(i) return w.free[i] end
+                 function e:set_sce_free(i, v) w.free[i] = v end
+                 function e:sca_info() return 1 end
+                 function e:distance() return 20000 end
+                 function e:turn_to_player() return 0x100 end
+                 function e:same_floor() return true end
+                 function e:player_id() return 0 end
+                 function e:player_within() return false end
+                 function e:joint_bank() return false end
+                 function e:pl_damage_cnt() return 0 end
+                 function e:player_life() return 200 end
+                 function e:voice_free() return false end
+                 local zombie = (function() {library} end)()
+                 zombie.run(e, {{}})
+                 R = {{ w.r[0], w.r[1] }}"
+            ))
+            .exec()
+            .unwrap();
+            lua.globals().get("R").unwrap()
+        };
+        assert_eq!(chase([0x8C00 - 0x10000, 0]), [1, 0xA]);
+        assert_ne!(chase([0, 0x8C00 - 0x10000])[1], 0xA);
+    }
+
     #[test]
     fn the_scripts_call_only_what_the_sandbox_has() {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();

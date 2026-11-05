@@ -2117,6 +2117,7 @@ mod tests {
             start: (0, 0),
             sound_type: 0,
             distance: 0,
+            area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
             zombie: None,
