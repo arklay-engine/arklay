@@ -662,6 +662,34 @@ pub fn floor_sound(zones: &[crate::state::FootstepZone], x: i32, z: i32, floor: 
         .map_or(0x1d, |zone| zone.sound_data as u8)
 }
 
+/// `Snd_se_walk`'s sound column for a footfall in water.
+const WATER_FOOTSTEP: u8 = 0x1A;
+
+/// `Snd_se_walk`'s sound for a footfall, the player's or a script
+/// character's: the room bank's slot of the floor's zone (or the water's),
+/// plus the walk's or run's 0 or 1, placed in 3D from where it fell.
+pub fn footstep_sound(
+    zones: &[crate::state::FootstepZone],
+    step: &crate::player::Footstep,
+) -> SoundId {
+    let zone = if step.water {
+        WATER_FOOTSTEP
+    } else {
+        floor_sound(
+            zones,
+            step.pos[0],
+            step.pos[2],
+            crate::sca::floor_of(step.pos[1]),
+        )
+    };
+    SoundId {
+        kind: Kind::Room,
+        slot: step.sound_type + (zone & 0x7f),
+        positional: true,
+        muffled: true,
+    }
+}
+
 /// The three footstep sets (`fs%02d`) a room bank loads, from `bio2.exe`'s
 /// `footstep_tbl` (`stage * 29 + room`, stage 0-based).
 pub fn footsteps(stage: u8, room: u8) -> [Option<u8>; 3] {
@@ -740,6 +768,26 @@ const FOOTSTEPS: [[i8; 3]; 7 * FOOTSTEP_ROOMS] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_footstep_plays_its_zones_slot_or_the_waters() {
+        let step = crate::player::Footstep {
+            pos: [0, 0, 0],
+            frame: 8,
+            sound_type: 1,
+            water: false,
+        };
+        let id = footstep_sound(&[], &step);
+        assert_eq!((id.kind, id.slot, id.positional), (Kind::Room, 0x1e, true));
+        let id = footstep_sound(
+            &[],
+            &crate::player::Footstep {
+                water: true,
+                ..step
+            },
+        );
+        assert_eq!(id.slot, 0x1b);
+    }
 
     #[test]
     fn enemy_bank_follows_the_pairs_in_either_order() {

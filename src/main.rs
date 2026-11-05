@@ -257,6 +257,13 @@ struct Cli {
     #[arg(long, requires = "trace")]
     sound: bool,
 
+    /// With `--sound`, also mix the run's audio as the game plays it and
+    /// write it to FILE as a 22050 Hz stereo WAV. Each traced tick mixes the
+    /// time it takes to play (1/30 s, or 16 ms while a transition or a menu
+    /// runs); a `.ticks` file beside it lists where each tick ends, in seconds
+    #[arg(long, value_name = "FILE", requires = "sound")]
+    sound_wav: Option<PathBuf>,
+
     /// Write a frame BMP every N traced ticks; requires `--capture-dir` and
     /// `--trace`
     #[arg(
@@ -1392,6 +1399,7 @@ fn main() -> Result<()> {
                 ticks: cli.ticks,
                 input: input_script.as_ref(),
                 sound: cli.sound,
+                sound_wav: cli.sound_wav.as_deref(),
             };
             let authoring = arklay::engine::Authoring {
                 load: cli.load.as_deref(),

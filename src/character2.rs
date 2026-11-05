@@ -78,6 +78,13 @@ pub fn tick(
                 game.re2.raise_room_flag(flag);
             }
             sce_blood(game, &mut character);
+            // `Snd_se_walk` from the character's own walk.
+            for step in character.body.take_footsteps() {
+                game.re2.sounds.push(crate::scd2::host::SoundRequest {
+                    id: crate::se2::footstep_sound(&room.footstep_zones, &step),
+                    pos: step.pos,
+                });
+            }
             // `_Spl`'s `Sca_ck_em`.
             if let Some(sca) = &room.sca {
                 let body = &mut character.body;

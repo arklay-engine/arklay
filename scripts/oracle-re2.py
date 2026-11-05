@@ -601,6 +601,7 @@ class Session:
         self.env = wine_env(work, self.display)
         self.sink_module = None
         self.sound_capture = None
+        self.capture_started = 0.0
         sound = sound_out is not None
         if sound:
             # A sink of its own: the game is heard by nothing but the recording.
@@ -612,6 +613,7 @@ class Session:
             self.sound_capture = subprocess.Popen(
                 ["parec", f"--device={SOUND_SINK}.monitor", "--file-format=wav", sound_out],
             )
+            self.capture_started = time.monotonic()
         prepare_prefix(work, self.env, sound)
         tree = prepare_game(game_dir, work, sound)
         self.launcher = subprocess.Popen(
@@ -650,6 +652,9 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
     # A prefix keeps the audio driver it was made with.
     session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
     music_log = open(trace_path.with_suffix(".music"), "w") if args.sound else None
+    # When each tick ended, in seconds from the capture's start, to place the
+    # ticks in the wall-clock `.wav`.
+    tick_log = open(trace_path.with_suffix(".ticks"), "w") if args.sound else None
     last_music = ""
     try:
         with open(trace_path, "w") as trace:
@@ -717,6 +722,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     # This stop is the end of the tick before it.
                     if tick > 0:
                         trace.write(trace_line(game, tick - 1, pad) + "\n")
+                        if tick_log:
+                            tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                         if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
                             screenshot(session.display, Path(args.shot_dir) / f"t{tick - 1:06d}.png")
                     while cursor < len(entries) and entries[cursor][0] <= tick:

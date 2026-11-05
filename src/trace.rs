@@ -105,6 +105,8 @@ pub struct TraceOptions<'a> {
     /// Run as the game does with a sound device (`--sound`), for the
     /// oracle's `--sound` recordings: an RE2 door holds for the music.
     pub sound: bool,
+    /// Mix the run's audio and write it here as a WAV (`--sound-wav`).
+    pub sound_wav: Option<&'a Path>,
 }
 
 /// The streaming oracle trace file.

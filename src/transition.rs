@@ -572,6 +572,11 @@ impl<S: DoorStepper> Transition<S> {
         self
     }
 
+    /// RE2: `Snd_bgm_ck`'s wait holds the load.
+    pub fn re2_held(&self) -> bool {
+        self.re2_hold > 0
+    }
+
     /// Advance one `main_loop` frame.
     ///
     /// `skip_pressed` is the engine's confirm/cancel press edge; the animation
