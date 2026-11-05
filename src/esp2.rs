@@ -424,6 +424,9 @@ pub struct Effects {
     /// The player, for what `Esp_20` hits: the caller sets it before a tick
     /// and takes back what the hits left.
     pub target: Option<Target>,
+    /// The room's water areas, for `Esp_05`'s `Water_ck`: the caller sets them
+    /// before a tick.
+    pub water: Vec<crate::zombie2::WaterArea>,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -722,9 +725,23 @@ impl Effects {
                 self.sounds.push((id, slot.pos));
                 self.next_block(index, false);
             }
-            // `Esp_05`, without `Water_ck`'s splash: what's falling reaches the
-            // ground, or something it was above.
+            // `Esp_05`: what's falling reaches the water, or the ground, or
+            // something it was above.
             5 => {
+                let level = crate::zombie2::water_ck(
+                    &self.water,
+                    i32::from(slot.pos[0]),
+                    i32::from(slot.pos[2]),
+                );
+                if level != 0 && level < slot.pos[1] {
+                    // Under the water's level it ends in a splash, `Esp_call3`'s.
+                    self.call(0x1A, 1, slot.size, 0, slot.pos, true);
+                    self.slots[index].kill();
+                    if slot.kind == 0x1D {
+                        self.behave(index, slot.start, sca);
+                    }
+                    return;
+                }
                 let ground = Self::ground(sca, slot.pos);
                 let y = i32::from(slot.pos[1]);
                 if ground.height < y {
@@ -1690,6 +1707,41 @@ mod tests {
             effects.tick(&mut Default::default(), None);
         }
         assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_05` in water: a case that falls below the water's level goes
+    /// there, in a splash (kind 0x1a, row 1, which this bank doesn't have),
+    /// without reaching the floor or bouncing.
+    #[test]
+    fn a_case_falling_into_water_goes_in_a_splash() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x0A;
+        block[1] = 0x10;
+        block[2] = 0x2C;
+        block[3] = 0x2D;
+        block[11] = 0x0D;
+        block[14..16].copy_from_slice(&40i16.to_le_bytes());
+        block[18..20].copy_from_slice(&0x0102u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        effects.water = vec![crate::zombie2::WaterArea {
+            zone: [-1000, -1000, 2000, 2000],
+            quad: None,
+            level: -50,
+        }];
+        let slot = effects.call(7, 0, 0x700, 0, [0, -100, 0], false).unwrap();
+        let mut ticks = 0;
+        while effects.slots[slot].live() {
+            effects.tick(&mut Default::default(), None);
+            ticks += 1;
+            assert!(ticks < 40, "still falling at {:?}", effects.slots[slot].pos);
+        }
+        assert!(effects.sounds.is_empty(), "it never bounced");
+        let y = effects.slots[slot].pos[1];
+        assert!(
+            -50 < y && y <= 0,
+            "gone at {y}, under the water but over the floor"
+        );
     }
 
     #[test]

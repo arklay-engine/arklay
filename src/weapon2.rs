@@ -266,6 +266,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
+        SPIDER_ID => &SPIDER_DAMAGE,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT_DAMAGE,
         _ => &DAMAGE,
     };
@@ -447,6 +448,47 @@ const PLANT_DAMAGE: [Damage; 7] = [
         damage: 0x03A0_EC3C,
         stun: 0x078F_1E0A,
         heights: PLANT_SHOTGUN,
+    },
+];
+
+const SPIDER_ID: u8 = crate::zombie2::SPIDER_ID;
+const SPIDER_HEIGHTS: [i32; 6] = [-7000, -2000, -4200, 500, -500, 2000];
+/// The same rows for `Em_25` and `Em_26` (`0x535dd0`).
+const SPIDER_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x0000_000A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0822_0882,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0962_5896,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0280_B437,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x05A1_9082,
+        stun: 0x078F_1E0A,
+        heights: SPIDER_HEIGHTS,
     },
 ];
 
@@ -845,6 +887,17 @@ mod tests {
             );
             assert_eq!(damage_table(id, 7).unwrap().heights[1], 500);
         }
+    }
+
+    #[test]
+    fn a_spider_takes_each_weapons_own_row() {
+        let row = |weapon| damage_table(SPIDER_ID, weapon).unwrap();
+        assert_eq!(
+            [2, 3, 4, 5, 6, 7, 8].map(|weapon| row(weapon).damage & 0x3FF),
+            [17, 17, 17, 130, 150, 55, 130]
+        );
+        assert_eq!(row(4).stun, 0xA);
+        assert_eq!(row(8).heights, [-7000, -2000, -4200, 500, -500, 2000]);
     }
 
     #[test]

@@ -283,9 +283,10 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                     600
                 } else if matches!(
                     character.id,
-                    crate::zombie2::CROW_ID | crate::zombie2::MRX_ID
+                    crate::zombie2::CROW_ID | crate::zombie2::MRX_ID | crate::zombie2::SPIDER_ID
                 ) {
-                    // `Em_21` and `MrX_init` never give it an `Atd[1]`.
+                    // `Em_21`, `MrX_init` and `Em_25`'s init never give it an
+                    // `Atd[1]`.
                     0
                 } else {
                     zombie
@@ -351,6 +352,22 @@ pub fn take_hit(game: &mut GameState) {
         crate::zombie2::take_hit(character, &mut zombie, &hit, from);
         character.zombie = Some(zombie);
     }
+}
+
+/// The water areas (`aot_set` kind 7) in `aot_table`'s order, for `Water_ck`.
+pub(crate) fn water_areas(game: &GameState) -> Vec<crate::zombie2::WaterArea> {
+    game.room_actions
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, action)| {
+            let action = action.as_ref()?;
+            (action.sce == crate::scd2::host::SCE_WATER).then(|| crate::zombie2::WaterArea {
+                zone: action.zone,
+                quad: game.re2.gates.get(slot).and_then(|gate| gate.quad),
+                level: i16::from_le_bytes([action.params[0], action.params[1]]),
+            })
+        })
+        .collect()
 }
 
 /// Where `player_work[index]` stands, for a script's `Sce_free3`.
@@ -504,6 +521,11 @@ fn run_zombie(
         crate::scd2::host::STATUS_BANK,
         crate::scd2::host::STATUS_PLAYER,
     );
+    let water = if character.id == crate::zombie2::SPIDER_ID {
+        water_areas(game)
+    } else {
+        Vec::new()
+    };
     let re2 = &mut game.re2;
     let gacha = re2.key_trg & 0x34F != 0;
     let same_id = re2
@@ -586,6 +608,7 @@ fn run_zombie(
         parent,
         works,
         spawns: Vec::new(),
+        water,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
@@ -822,6 +845,7 @@ pub fn init(
     // and little else.
     if std::mem::take(&mut game.re2.load_pass) {
         game.re2.tick_before();
+        game.re2.effects.water = water_areas(game);
         let player = game
             .entities
             .first_mut()
