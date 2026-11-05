@@ -5244,6 +5244,148 @@ mod tests {
     }
 
     #[test]
+    fn save_safety_refuses_a_save_the_reload_dies_in_again() {
+        let vm = route_vm();
+        let dead_end =
+            |o: &str| -> String { eval(&vm, &format!("return tostring(BotSave.dead_end({o}))")) };
+        // The critical floor at risk 0.25 is 0.1625 of max health: 14 of 96
+        // is under it, 16 is not.
+        let low = "health = 14, max_health = 96, risk = 0.25";
+        assert_eq!(
+            dead_end(&format!("{{ {low}, heals = 0, rounds = 30, shots = 9 }}")),
+            "critical health with no heal item"
+        );
+        assert_eq!(
+            dead_end(&format!("{{ {low}, heals = 1, rounds = 0, shots = 9 }}")),
+            "critical health without the rounds for one kill"
+        );
+        assert_eq!(
+            dead_end(&format!("{{ {low}, heals = 1, rounds = 8, shots = 9 }}")),
+            "critical health without the rounds for one kill"
+        );
+        // Critical health with a heal and a kill's worth of rounds is fine,
+        // and so is anything above the floor.
+        assert_eq!(
+            dead_end(&format!("{{ {low}, heals = 1, rounds = 9, shots = 9 }}")),
+            "nil"
+        );
+        assert_eq!(
+            dead_end("{ health = 16, max_health = 96, risk = 0.25, heals = 0, rounds = 0 }"),
+            "nil"
+        );
+        // No other choice: no save yet, or the latest one is no better.
+        let no_choice = |latest: &str| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    "return BotSave.no_choice({latest}, {{ health = 14, rounds = 0, heals = 0 }})"
+                ),
+            )
+        };
+        assert!(no_choice("nil"));
+        assert!(no_choice("{ health = 10, rounds = 0, heals = 0 }"));
+        assert!(!no_choice("{ health = 60, rounds = 0, heals = 0 }"));
+        assert!(!no_choice("{ health = 10, rounds = 15, heals = 0 }"));
+        // A save recorded before the condition was kept counts as better.
+        assert!(!no_choice("{ count = 1 }"));
+        // The decision: a dead end skips every save rule, critical health
+        // and the cautious bot's save-everywhere alike, unless it is the
+        // only choice.
+        vm.lua
+            .load(
+                r#"
+                function decide_safe(over)
+                    local o = { risk = 0.25, can_save = true, health = 14, max_health = 96,
+                        critical = true, risky = true, progress = 5, saved_progress = 4,
+                        dead_end = "critical health with no heal item", no_choice = false }
+                    for k, v in pairs(over or {}) do o[k] = v end
+                    local wants, why = BotSave.wants(o)
+                    return tostring(wants) .. ":" .. why
+                end
+            "#,
+            )
+            .exec()
+            .unwrap();
+        let decide = |over: &str| -> String { eval(&vm, &format!("return decide_safe({over})")) };
+        assert_eq!(
+            decide("{}"),
+            "false:a reload would start in the same death: critical health with no heal item"
+        );
+        assert_eq!(
+            decide("{ critical = false, risk = 0 }"),
+            "false:a reload would start in the same death: critical health with no heal item"
+        );
+        // The critical-health save stays where it helps.
+        assert_eq!(decide("{ no_choice = true }"), "true:critical health");
+        assert_eq!(decide("{ dead_end = false }"), "true:critical health");
+        // The ribbon and progress rules still come first.
+        assert_eq!(decide("{ can_save = false }"), "false:no ink ribbon");
+        assert_eq!(
+            decide("{ progress = 4 }"),
+            "false:nothing new since the last save"
+        );
+        // The condition is recorded with the save and read back.
+        let read: String = eval(
+            &vm,
+            r#"local e = BotSave.track({}, { count = 1, slot = 0, room = "R", tick = 50 }, 7,
+                   { health = 40, rounds = 12, heals = 1 })
+               local m = {}
+               for k, v in pairs(e) do m[k] = tostring(v) end
+               local l = BotSave.latest(m)
+               return string.format("%d|%d|%d", l.health, l.rounds, l.heals)"#,
+        );
+        assert_eq!(read, "40|12|1");
+    }
+
+    #[test]
+    fn ammo_sourcing_explores_and_fights_only_what_it_must() {
+        let vm = tactics_vm();
+        // Under the floor (an ammunition item is needed) with nothing known
+        // to reach: sourcing. Known ammunition, or rounds at the floor: not.
+        assert!(eval::<bool>(&vm, "return BotSurvival.sourcing(0x0B, 0)"));
+        assert!(eval::<bool>(&vm, "return BotSurvival.sourcing(0x0B, nil)"));
+        assert!(!eval::<bool>(&vm, "return BotSurvival.sourcing(0x0B, 1)"));
+        assert!(!eval::<bool>(&vm, "return BotSurvival.sourcing(nil, 0)"));
+        // While sourcing, a monster only in a room crossed again is run
+        // past; what closes in, or cannot be outrun, is still fought.
+        vm.lua
+            .load(
+                r#"
+                function verdict_src(over)
+                    local o = { policy = "fight", gun = true, rounds = 30, needed = 5,
+                        health = 96, max_health = 96, risk = 0.25, crossing = true,
+                        sourcing = true, distance = 5000, reach = 1500, outrun = true }
+                    for k, v in pairs(over or {}) do o[k] = v end
+                    local v, why = BotTactics.decide(o)
+                    return v .. ":" .. why
+                end
+            "#,
+            )
+            .exec()
+            .unwrap();
+        let verdict = |over: &str| -> String { eval(&vm, &format!("return verdict_src({over})")) };
+        assert_eq!(
+            verdict("{}"),
+            "run:sourcing ammunition: only what must be fought"
+        );
+        assert_eq!(
+            verdict("{ sourcing = false }"),
+            "fight:the room is crossed again"
+        );
+        assert_eq!(verdict("{ distance = 2900 }"), "fight:closing in");
+        assert_eq!(verdict("{ outrun = false }"), "fight:cannot outrun it");
+        // The item box: one look while sourcing, before any box was opened,
+        // and only with a slot free for what it may hold.
+        let look =
+            |args: &str| -> bool { eval(&vm, &format!("return BotInventory.look_in_box({args})")) };
+        assert!(look("{ used = 6, capacity = 8 }, nil, true"));
+        assert!(!look("{ used = 6, capacity = 8 }, '', true"));
+        assert!(!look("{ used = 6, capacity = 8 }, '0B', true"));
+        assert!(!look("{ used = 6, capacity = 8 }, nil, false"));
+        assert!(!look("{ used = 8, capacity = 8 }, nil, true"));
+    }
+
+    #[test]
     fn latest_save_tracking_and_slot_choice() {
         let vm = route_vm();
         // A new save is reported once; memory strings read back as numbers.

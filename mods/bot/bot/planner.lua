@@ -35,6 +35,12 @@
 --             - AMMO_BONUS when that item is the ammunition the equipped
 --               gun needs (BotSurvival.ammo_need), or KEY_BONUS when it
 --               is a key a remembered locked door needs
+--             - SOURCE_BONUS for a door into a room not yet entered, and
+--             + MONSTER_COST per live monster last seen in each room the
+--               route enters, both only while sourcing ammunition
+--               (BotSurvival.sourcing: under the floor and no ammunition
+--               the planner can reach, a pickup it has not given up on or
+--               the remembered box)
 --             - USE_BONUS for a route to a held item's <use> room
 --             - BOX_BONUS for a route to a remembered item box room when a
 --               box visit is due (BotInventory.box_reason)
@@ -110,6 +116,15 @@ local ITEM_BONUS = 10 * C.REACH
 -- other goal short of a long detour.
 local GOAL_BONUS = 10 * DOOR_COST
 local STAGE_BONUS = 6 * C.REACH
+-- Sourcing ammunition (BotSurvival.sourcing: under the floor, none known):
+-- a door into a room not yet entered is worth this much more, and each live
+-- monster last seen in a room the route enters costs MONSTER_COST (at most
+-- MONSTER_CAP of them a room).
+local SOURCE_BONUS = 60 * C.REACH
+local MONSTER_COST = DOOR_COST
+local MONSTER_CAP = 3
+-- How often the live monsters of this room are counted.
+local MONSTER_EVERY = C.SECOND // 2
 -- An action-key event pressed as a passage gets this long.
 local PASSAGE_TIMEOUT = 15 * C.SECOND
 
@@ -119,6 +134,7 @@ local function plan()
     BOT_STATE.plan.lens = BOT_STATE.plan.lens or {}
     BOT_STATE.plan.since = BOT_STATE.plan.since or {}
     BOT_STATE.plan.exits = BOT_STATE.plan.exits or {}
+    BOT_STATE.plan.monsters = BOT_STATE.plan.monsters or {}
     return BOT_STATE.plan
 end
 
@@ -877,6 +893,46 @@ local function choose(bot)
             and (not goal.locked or key_opens(bot, goal.key))
     end
 
+    -- The ammo sourcing rule (BotSurvival.sourcing): under the floor with
+    -- no ammunition the planner can reach. Turning it on re-ranks.
+    local ammo, rounds, floor = BotSurvival.ammo_need(bot)
+    local known = 0
+    if ammo then
+        for _, goal in ipairs(world.frontier) do
+            if goal.kind == "item" and goal.item == ammo
+                and not blocked(bot, "item", goal.room, goal.slot, true)
+                and (goal.room == room or route(bot, world, room, goal.room)) then
+                known = known + 1
+            end
+        end
+        if BotInventory.remembered(bot)[ammo] then
+            known = known + 1
+        end
+    end
+    BotSurvival.note_known_ammo(known)
+    local sourcing = BotSurvival.sourcing(ammo, known)
+    if ammo then
+        bot:log(string.format("ammo low: %d rounds under the floor %d; %d known ammo item(s)%s",
+            rounds, floor, known, sourcing and "; sourcing" or ""))
+    end
+    if sourcing and not p.sourcing and p.target then
+        bot:log("sourcing ammunition: target " .. p.target.label .. " re-ranked")
+        p.target = nil
+    end
+    p.sourcing = sourcing
+    -- While sourcing, the live monsters last seen along a route.
+    local function monsters_in(id)
+        local n = sourcing and p.monsters[id] or 0
+        return (n > MONSTER_CAP and MONSTER_CAP or n) * MONSTER_COST
+    end
+    local function route_monsters(steps)
+        local cost = 0
+        for _, step in ipairs(steps) do
+            cost = cost + monsters_in(step.target)
+        end
+        return cost
+    end
+
     -- 4a. A pursued remote target keeps its course until it is reached,
     -- real progress re-ranks, or the loop rule drops it.
     if p.target then
@@ -920,17 +976,6 @@ local function choose(bot)
             end
         end
     end
-    local ammo, rounds, floor = BotSurvival.ammo_need(bot)
-    if ammo then
-        local known = 0
-        for _, goal in ipairs(world.frontier) do
-            if goal.kind == "item" and goal.item == ammo then
-                known = known + 1
-            end
-        end
-        bot:log(string.format("ammo low: %d rounds under the floor %d; %d known ammo item(s)",
-            rounds, floor, known))
-    end
     local best_way = nil
     local function consider(way)
         if not best_way or way.cost < best_way.cost
@@ -942,8 +987,9 @@ local function choose(bot)
     for _, row in ipairs(doors_here) do
         order = order + 1
         local cost = door_len(row.door.slot) - toward_goal(row.door.target)
+            + monsters_in(row.door.target)
         if not row.visited then
-            cost = cost - UNVISITED_BONUS
+            cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0)
         end
         consider({
             cost = cost, order = order, door = row.door,
@@ -958,6 +1004,7 @@ local function choose(bot)
                 order = order + 1
                 local cost = door_len(first.slot) + #steps * DOOR_COST
                     + (p.lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
+                    + route_monsters(steps)
                 local why, label
                 if goal.kind == "item" then
                     cost = cost - ITEM_BONUS
@@ -972,7 +1019,7 @@ local function choose(bot)
                 else
                     cost = cost - toward_goal(goal.target)
                     if not goal.target_visited then
-                        cost = cost - UNVISITED_BONUS
+                        cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0)
                     end
                     label = string.format("the %s -> %s door", goal.room, tostring(goal.target))
                 end
@@ -996,7 +1043,8 @@ local function choose(bot)
                 local label = string.format("use 0x%02X in %s (%s)", fact.item, fact.room,
                     fact.label or "unnamed")
                 consider({
-                    cost = door_len(first.slot) + #steps * DOOR_COST - USE_BONUS,
+                    cost = door_len(first.slot) + #steps * DOOR_COST - USE_BONUS
+                        + route_monsters(steps),
                     order = order, door = first,
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,
@@ -1022,7 +1070,8 @@ local function choose(bot)
                 order = order + 1
                 local label = string.format("the item box in %s (%s)", r.id, box_why)
                 consider({
-                    cost = door_len(first.slot) + #steps * DOOR_COST - BOX_BONUS,
+                    cost = door_len(first.slot) + #steps * DOOR_COST - BOX_BONUS
+                        + route_monsters(steps),
                     order = order, door = first,
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "box", room = r.id, slot = box.slot,
@@ -1078,6 +1127,21 @@ function BotPlanner.finish(bot, reason)
                 door_passable(bot, r.id, door) and "" or " X")
         end
         bot:log(string.format("world %s: %s", r.id, table.concat(parts, ", ")))
+    end
+    -- The ammunition account: every ammunition pickup the world model saw,
+    -- and what became of it.
+    local marks = plan().marks
+    for _, r in ipairs(bot:world().rooms or {}) do
+        for _, item in ipairs(r.items or {}) do
+            if item.item_kind == "ammo" then
+                local m = marks[mark_key("item", r.id, item.slot)]
+                local fate = item.taken and "taken"
+                    or (item.present and "left" or "gone")
+                bot:log(string.format("ammo account: %s slot %d item 0x%02X x%d %s%s",
+                    r.id, item.slot, item.item, item.quantity or 0, fate,
+                    m and not item.taken and (" (" .. m.reason .. ")") or ""))
+            end
+        end
     end
     local p = bot:player()
     local text = string.format("%s (room %s health %d/%d) %s", reason, bot:room().id,
@@ -1185,6 +1249,10 @@ end
 function BotPlanner.step(bot)
     local p = plan()
     local room = bot:room().id
+    if not p.monster_tick or bot:tick() - p.monster_tick >= MONSTER_EVERY then
+        p.monster_tick = bot:tick()
+        p.monsters[room] = #bot:enemies()
+    end
     if bot:tick() - (p.progress or 0) > STUCK_TICKS then
         BotPlanner.finish(bot, string.format("stuck in room %s: no progress for %d ticks",
             room, STUCK_TICKS))

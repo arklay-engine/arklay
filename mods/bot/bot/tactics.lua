@@ -11,7 +11,9 @@
 --      target, holds aim in the pose that matches the enemy's live status
 --      bit (BotTactics.pose), and fires from the gun hold;
 --   4. for a run, the planner keeps its goal and walks with avoid_enemies
---      (BotTactics.avoiding), so its path passes behind the monster.
+--      (BotTactics.avoiding), so its path passes behind the monster. While
+--      the bot sources ammunition (BotSurvival.sourcing) every walk avoids
+--      the monsters and a monster only in a room crossed again is run past.
 -- The fight-or-run rule, the pose rule and the spacing rule are pure
 -- functions with unit tests (src/engine/bot.rs). No enemy id, weapon id or
 -- coordinate is written here; every per-enemy fact is in the knowledge file.
@@ -125,6 +127,10 @@ end
 --   crossing   this room still has frontier work (the bot comes back)
 --   distance, reach  the target's distance and attack reach (nil unknown)
 --   outrun     Jill's run beats its chase (nil unknown)
+--   sourcing   the bot is under its ammo floor with no ammunition it can
+--              reach (BotSurvival.sourcing): the rounds left are for what
+--              must be fought, so a monster only in a room crossed again
+--              is run past
 -- Returns "fight" or "run" and why. The rule: never fight what the file
 -- says to pass or avoid, or knows nothing about, or without a firearm;
 -- fight what is closing in (inside twice its reach) with whatever rounds
@@ -165,6 +171,9 @@ function BotTactics.decide(o)
     end
     if o.outrun == false then
         return "fight", "cannot outrun it"
+    end
+    if o.crossing and o.sourcing then
+        return "run", "sourcing ammunition: only what must be fought"
     end
     if o.crossing then
         return "fight", "the room is crossed again"
@@ -320,10 +329,10 @@ local function enemy_by_slot(enemies, slot)
 end
 
 -- Whether the planner's walks should plan around the monsters: a run
--- decision is in force.
+-- decision is in force, or the bot is sourcing ammunition.
 function BotTactics.avoiding()
     local s = state()
-    return (s.avoid_until or 0) > (s.now or 0)
+    return s.sourcing == true or (s.avoid_until or 0) > (s.now or 0)
 end
 
 function BotTactics.active()
@@ -375,6 +384,7 @@ local function choose(bot, s, k, enemies, player)
                 max_health = player.max_health,
                 risk = risk(bot),
                 crossing = cross,
+                sourcing = s.sourcing,
                 distance = enemy.distance,
                 reach = entry and entry.reach,
                 outrun = entry and entry.outrun,
@@ -403,6 +413,15 @@ end
 function BotTactics.step(bot, scene, player)
     local s = state()
     s.now = bot:tick()
+    if not s.sourcing_tick or s.now - s.sourcing_tick >= C.SECOND then
+        s.sourcing_tick = s.now
+        local was = s.sourcing
+        s.sourcing = BotSurvival.sourcing_now(bot)
+        if s.sourcing ~= (was or false) then
+            bot:log(s.sourcing and "sourcing ammunition: explore, avoid monsters, fight only what must be fought"
+                or "sourcing ammunition: over")
+        end
+    end
     if not scene.controllable or player.grabbed then
         return false
     end

@@ -17,7 +17,9 @@
 -- (0.2 of max at risk 0, 0.05 at risk 1), no heal item held and damage taken
 -- in the last 5 seconds. The rule for a critical tick (bot/init.lua):
 --   1. save if possible: a typewriter in this room and a save the
---      BotSave decision allows (critical health skips its cooldown);
+--      BotSave decision allows (critical health skips its cooldown, but
+--      the save-safety rule refuses a dead-end save while a better save
+--      exists);
 --   2. otherwise keep playing when a save exists: a death loads it;
 --   3. only with no save at all does the run stop, with
 --      "health critical with no heal item and no save while under attack".
@@ -146,6 +148,17 @@ function BotSurvival.heal(bot, player)
     return true
 end
 
+-- The critical-health floor as a fraction of max health: 0.2 at risk 0,
+-- 0.05 at risk 1.
+function BotSurvival.critical_fraction(r)
+    return 0.2 - 0.15 * r
+end
+
+-- The held heal stacks that restore health, counted.
+function BotSurvival.heal_count(bot)
+    return #heal_rows(bot)
+end
+
 -- Whether the run should stop rather than walk on: health is under a
 -- risk-scaled floor, no heal item is held and the player was hurt within the
 -- last few seconds. A bolder bot plays on lower.
@@ -155,7 +168,7 @@ function BotSurvival.critical(bot, player)
         s.hurt_tick = bot:tick()
     end
     s.player_health = player.health
-    if player.health >= player.max_health * (0.2 - 0.15 * risk(bot)) then
+    if player.health >= player.max_health * BotSurvival.critical_fraction(risk(bot)) then
         return false
     end
     if #heal_rows(bot) > 0 then
@@ -178,7 +191,8 @@ end
 -- inventory count of the ammunition the engine loads into it) for
 -- `1 + 2 * (1 - risk)` kills of the hardest `fight` monster of the knowledge
 -- file: three kills at risk 0, one at risk 1. Below that floor the planner
--- ranks a reachable frontier item of the gun's ammunition first. The item
+-- ranks a reachable frontier item of the gun's ammunition first; with none
+-- reachable it sources ammunition (BotSurvival.sourcing, below). The item
 -- kinds come from the engine (bot:weapon().ammo, the catalog), never ids.
 
 -- The most hits one kill of a `fight` monster takes with `weapon`, from the
@@ -225,4 +239,41 @@ function BotSurvival.ammo_need(bot)
         return nil
     end
     return weapon.ammo, rounds, floor
+end
+
+-- The equipped gun's rounds (clip plus its ammunition held) and the hits
+-- one kill of the hardest `fight` monster takes with it (nil unknown). A
+-- bot with no firearm has 0 rounds.
+function BotSurvival.rounds(bot)
+    local weapon = bot:weapon()
+    if not weapon.ammo then
+        return 0, nil
+    end
+    return (weapon.clip or 0) + bot:item_count(weapon.ammo),
+        BotSurvival.shots_per_kill(bot:knowledge(), weapon.weapon)
+end
+
+-- The ammo sourcing rule. `need` is BotSurvival.ammo_need's item (nil when
+-- the rounds are at the floor), `known` the ammunition of that kind the
+-- planner can still reach: frontier pickups it has not given up on and a
+-- remembered item box that holds it. Under the floor with none known, the
+-- bot is sourcing: the planner ranks the rooms not yet entered (and an item
+-- box never opened) first, every walk plans around the monsters, and
+-- combat fights only what it must (BotTactics.decide's `sourcing`).
+function BotSurvival.sourcing(need, known)
+    return need ~= nil and (known or 0) == 0
+end
+
+-- The planner's latest count of reachable known ammunition (set each time
+-- it ranks the ways out), and the live sourcing state from it.
+function BotSurvival.note_known_ammo(n)
+    state().known_ammo = n
+end
+
+function BotSurvival.sourcing_now(bot)
+    local known = state().known_ammo
+    if known == nil then
+        return false
+    end
+    return BotSurvival.sourcing(BotSurvival.ammo_need(bot), known)
 end

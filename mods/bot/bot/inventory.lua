@@ -18,6 +18,8 @@
 --   deposit:  only when the inventory is at its limit and a known pickup
 --             (a frontier item that merges into no held stack) needs room;
 --             then every item the keep rule does not hold goes in.
+--   look:     sourcing ammunition (BotSurvival.sourcing) before any box
+--             was opened: one visit to read what the shared box holds;
 --   withdraw: an item in the box that an open <use> fact needs, a key a
 --             remembered locked door needs, the equipped gun's ammunition
 --             below the reserve floor, or a heal item when none is held;
@@ -275,6 +277,14 @@ function BotInventory.pickups_needing_room(bot, skip)
     return n
 end
 
+-- Whether to open an item box only to see what it holds: the bot is
+-- sourcing ammunition (BotSurvival.sourcing), no box has ever been opened
+-- (`box_items`, the remembered contents, is nil) and a slot is free for
+-- what it may hold. Every box shares one store, so one look covers them all.
+function BotInventory.look_in_box(ctx, box_items, sourcing)
+    return sourcing == true and box_items == nil and ctx.used < ctx.capacity
+end
+
 -- Why the bot should visit an item box now, or nil: a deposit (full, a
 -- pickup needs room and something may go in) or a withdrawal (the box
 -- holds an item the bot needs and a slot is, or can be made, free).
@@ -284,6 +294,9 @@ function BotInventory.box_reason(bot, skip)
     local deposits = BotInventory.deposits(items, ctx)
     if ctx.full and #deposits > 0 and BotInventory.pickups_needing_room(bot, skip) > 0 then
         return "deposit: the inventory is full and a pickup needs room"
+    end
+    if BotInventory.look_in_box(ctx, bot:memory().box_items, BotSurvival.sourcing_now(bot)) then
+        return "look in the box: sourcing ammunition and the box was never opened"
     end
     if ctx.used < ctx.capacity or #deposits > 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do

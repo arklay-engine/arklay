@@ -83,11 +83,13 @@ Priorities, highest first:
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
    in the last 5 seconds (critical), the bot saves if a typewriter here
-   allows it, plays on if a save exists (a death loads it), and only with no
+   allows it (the save-safety rule refuses that save while a better one
+   exists), plays on if a save exists (a death loads it), and only with no
    save at all finishes with
    `health critical with no heal item and no save while under attack`.
    Then combat (`BotTactics.step`, [Combat](#combat)): each nearby monster
-   is fought or run past; a run leaves the planner its goal and turns on
+   is fought or run past; a run, or sourcing ammunition
+   ([Ammunition](#ammunition)), leaves the planner its goal and turns on
    `avoid_enemies` for its walks.
 3. The room puzzle: the next `<interact>`/`<camera>`/`<push>` fact in
    document order (walk to the zone, press, wait for the done flag; or push
@@ -130,7 +132,9 @@ Priorities, highest first:
    ammunition the gun needs ([Ammunition](#ammunition)) or for a seen key
    item that a remembered locked door needs, 60 for a held
    item's `<use>` room, and 200 reach for a door into the goal room or 6
-   for one into its stage. The lowest cost wins and a remote winner becomes
+   for one into its stage; while sourcing ammunition, 60 more for a room not
+   yet entered and one door step per monster seen on the route
+   ([Ammunition](#ammunition)). The lowest cost wins and a remote winner becomes
    the pursued target; the pick is logged as `way out: <why>, cost N`. An
    exit with no planned approach from where the bot stands (another level
    of the room) gets a passage check first. A `<use>` that failed in its
@@ -227,7 +231,8 @@ catalog's heal effects.
   left. Otherwise run below `max_health * (0.45 - 0.3 * risk)`, or with too
   few rounds for it (`health / damage * (1 + 0.5 * (1 - risk))`) or for the
   crowd; fight a monster that cannot be outrun or one in a room the
-  frontier crosses again; run past one that is only in the way.
+  frontier crosses again (not while sourcing ammunition); run past one that
+  is only in the way.
 - **Spacing** (`BotTactics.spacing`). Keep the `<keep>` band: back off to
   its middle when too close, to its far edge while reloading, and close in
   with a headshot weapon from just outside its headshot distance. A back-off
@@ -250,6 +255,27 @@ the planner logs `ammo low: R rounds under the floor F; N known ammo
 item(s)`. Ammunition seen in a room is taken there anyway (step 4), so the
 bonus matters for ammunition left behind (full inventory, a failed
 approach).
+
+The sourcing rule (`BotSurvival.sourcing`). Under the floor, with no
+ammunition of that kind the planner can still reach (a frontier pickup it
+has not given up on, with a route, or the remembered item box holding it),
+the bot is sourcing ammunition (`ammo low: ...; sourcing`):
+
+- the way-out ranking takes a door into a room not yet entered
+  `SOURCE_BONUS` (60 reach) cheaper, and adds `MONSTER_COST` (one door
+  step) for each live monster last seen in a room the route enters (at most
+  3 a room), so exploration comes first and quiet routes are preferred;
+  turning sourcing on drops the pursued target;
+- every walk plans around the monsters (`avoid_enemies`);
+- `BotTactics.decide` runs past a monster it would fight only because the
+  room is crossed again; one that closes in or cannot be outrun is still
+  fought;
+- with a free slot and no item box ever opened (`box_items` unset), a box
+  visit is due to look in the shared box (`look in the box: ...`). In the
+  vanilla re1 pack the first box holds two handgun clips.
+
+At finish the log lists every ammunition pickup the world model saw and
+its fate (`ammo account: ROOM slot N item 0x.. xQ taken|left|gone (mark)`).
 
 ### Lint
 
@@ -289,14 +315,23 @@ The decision (`BotSave.wants`), scaled by `bot:risk()`:
 - no save without a ribbon when one is needed;
 - no save when nothing new happened since the last save or since the run
   started (rooms entered, items taken, doors unlocked);
-- critical health saves at once (it skips only the cooldown);
+- save safety (`BotSave.dead_end`): no save the reload would turn straight
+  back into the same death, that is health under the critical floor
+  (`max_health * (0.2 - 0.15 * risk)`) with no heal item held or with fewer
+  rounds than one kill of the hardest `fight` monster takes. Such a save is
+  made only when there is no other choice (`BotSave.no_choice`): no save
+  exists yet, or the latest save is no better in health, rounds and heals
+  (recorded with each save as `save_health`, `save_rounds`, `save_heals`);
+- critical health saves at once (it skips only the cooldown), when save
+  safety allows it;
 - otherwise at most one save per `(20 + 100 * risk)` seconds;
 - risk up to `0.5` saves at every typewriter it passes;
 - a bolder bot saves only below half of max health, or in a risky room: a
   live monster in the room, or damage taken in the last 30 seconds.
 
 The latest save is kept in bot memory (`save_count`, `save_slot`,
-`save_room`, `save_tick`, `save_progress`). The engine also keeps a copy of
+`save_room`, `save_tick`, `save_progress`, `save_health`, `save_rounds`,
+`save_heals`). The engine also keeps a copy of
 the bot's memory and world model from the tick each save is written.
 
 After a death, with a save, the bot confirms through the DIED screen. The
@@ -364,6 +399,8 @@ drives the box screen with pad input only.
 - Deposit only when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory).
+- Look in the box once while sourcing ammunition when no box was ever
+  opened and a slot is free ([Ammunition](#ammunition)).
 - Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
   written whenever the box screen is up) when a `<use>` fact needs it, a
   remembered locked door needs it, it is the equipped gun's ammunition
