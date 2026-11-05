@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 11A roofed passage. The crest wall's SCE_USEITEM probes (AOT 3 to 6) arm
+     each crest's use flag while the reach point is in the wall zone. USE a
+     held crest there and the room plays its placement, setting its scenario
+     bit; all four open lock 0x17 to 11B. -->
+<bot format="2">
+  <use slot="5" item="0x2D" bank="0" bit="0x6A" label="star crest"/>
+  <use slot="3" item="0x2E" bank="0" bit="0x69" label="sun crest"/>
+  <use slot="4" item="0x2C" bank="0" bit="0x6B" label="moon crest"/>
+  <use slot="6" item="0x29" bank="0" bit="0x6C" label="wind crest"/>
+</bot>

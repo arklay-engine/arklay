@@ -7,7 +7,9 @@
 -- quarters of a reach outside the edge and a quarter reach inside it, at the
 -- middle of the side and (long sides) a quarter in from each end; the points
 -- the engine's path planner reaches come first, nearest path first. A side that does not fire is
--- abandoned for the next one. No room literals; only pad input.
+-- abandoned for the next one. A zone that probes the player's own position
+-- (`inside`) is entered instead: its centre and the quarter points inside.
+-- No room literals; only pad input.
 
 BotNav = BotNav or {}
 
@@ -79,6 +81,14 @@ function BotNav.approach_points(bot, zone)
     end
     local planned, rest = {}, {}
     local candidates = {}
+    if zone.inside then
+        offsets = {}
+        candidates = {
+            { cx, cz },
+            { zone.x + zone.width // 4, cz }, { zone.x + zone.width - zone.width // 4, cz },
+            { cx, zone.z + zone.depth // 4 }, { cx, zone.z + zone.depth - zone.depth // 4 },
+        }
+    end
     for _, d in ipairs(offsets) do
         for _, a in ipairs(along(zone.depth)) do
             candidates[#candidates + 1] = { zone.x - d, cz + a }
@@ -125,10 +135,15 @@ end
 --   zone      {x, z, width, depth}
 --   label     log label
 --   done      function(bot, job) -> true once the press worked
---   pattern   "door" (press two ticks, release two) or "edge" (one edge per
---             `gap` ticks, at most `presses` per side)
+--   pattern   "door" (press two ticks, release two), "edge" (one edge per
+--             `gap` ticks, at most `presses` per side) or "hold" (no press:
+--             stand still, facing the zone, and call `hold(bot, job)` each
+--             tick; a use-item probe needs only the reach point in the zone)
 --   side      ticks to spend pressing on one side
 --   timeout   overall budget in ticks
+--   check     optional function(bot, job) -> a failure reason, or nil; while
+--             it sets `job.settled`, the job stays put and spends no side or
+--             overall budget (a menu use whose room event is running)
 -- Returns "done", "busy" or "failed" (with job.reason).
 function BotNav.press_zone(bot, job)
     if not job.points then
@@ -146,6 +161,17 @@ function BotNav.press_zone(bot, job)
     job.total = job.total + 1
     if job.done and job.done(bot, job) then
         return "done"
+    end
+    if job.check then
+        local why = job.check(bot, job)
+        if why then
+            job.reason = why
+            return "failed"
+        end
+        if job.settled then
+            job.total = job.total - 1
+            return "busy"
+        end
     end
     -- A scripted move (a scene that places the player) makes the approach
     -- list stale: plan it again from the new position.
@@ -200,7 +226,15 @@ function BotNav.press_zone(bot, job)
         end
     end
     job.ticks = job.ticks + 1
-    local facing = bot:face_to(point[3], point[4])
+    if job.pattern == "hold" then
+        local facing = job.zone.inside and { status = "facing" }
+            or bot:face_to(point[3], point[4])
+        if facing.status == "facing" and job.hold then
+            job.hold(bot, job)
+        end
+    end
+    local facing = job.pattern ~= "hold" and bot:face_to(point[3], point[4])
+        or { status = "hold" }
     if facing.status == "facing" and BotScene.action_ready(bot) then
         if job.pattern == "door" then
             if bot:tick() % 4 < 2 then

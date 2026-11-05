@@ -44,6 +44,18 @@ BotConst.LOCKPICK = 0x31
 -- See SWORD_KEY: the scenario bank and bit has_lockpick tests.
 BotConst.LOCKPICK_FLAG = { bank = 0, bit = 0x7C }
 
+-- Bank 9 holds the per-item use flags: item `id` is armed at selector
+-- id - ITEM_USE_BASE, and the menu USE of a key, special or chemical item
+-- works only while its flag is set (GameState::use_item).
+BotConst.ITEM_USE_BANK = 9
+-- See ITEM_USE_BANK: the first item id with a use flag.
+BotConst.ITEM_USE_BASE = 0x1B
+-- Action flag 0x40: the zone probes the player's own position, not the
+-- reach point (probe_actions).
+BotConst.PROBE_BODY = 0x40
+-- Action flag 0x80: the zone fires only on the action-press edge.
+BotConst.ACTION_KEY = 0x80
+
 -- A message id with bit 0x80 reveals twice as fast while action is held.
 BotConst.MESSAGE_FAST = 0x80
 -- being_attacked bit 0x80: a vault/stair sequence that a second press ends.

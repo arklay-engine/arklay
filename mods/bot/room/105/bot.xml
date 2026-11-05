@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 105 dining room. Once the wood emblem is off the fireplace (common 0xAA
+     clear), the fireplace's SCE_USEITEM probe AOT 11 arms the gold emblem.
+     USE it there: the room sets common 0xAB and moves the sideboard off the
+     shield key. -->
+<bot format="2">
+  <use slot="11" item="0x20" bank="1" bit="0xAB" label="gold emblem in the fireplace"/>
+</bot>

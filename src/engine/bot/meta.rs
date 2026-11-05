@@ -8,8 +8,9 @@
 //! Format 2 adds room facts (never coordinates or walk paths) a generic
 //! planner reads: `<interact>` (an AOT slot and the flag that shows it is
 //! done), `<camera>` (a camera cut to enter, which starts a room scene),
-//! `<answer>` (the choice to make at a yes/no prompt) and `<avoid>` (an AOT
-//! slot the planner should not use). `<interact>` and `<camera>` share one
+//! `<use>` (an item to USE from the menu while standing in an AOT slot's
+//! use-item zone), `<answer>` (the choice to make at a yes/no prompt) and
+//! `<avoid>` (an AOT slot the planner should not use). `<interact>` and `<camera>` share one
 //! ordered step list. A format-1 document may not use them.
 //!
 //! The merged pack resolves the file next to the room's other entries, so a
@@ -41,6 +42,7 @@ pub struct RoomMeta {
     pub format: u32,
     pub puzzles: Vec<PuzzleMeta>,
     pub interacts: Vec<Interact>,
+    pub uses: Vec<Use>,
     pub answers: Vec<Answer>,
     pub avoids: Vec<Avoid>,
 }
@@ -62,6 +64,17 @@ pub enum Target {
     Slot(u8),
     /// Walk into a camera switch zone that leads to this cut.
     Camera(u8),
+}
+
+/// `<use>`: stand where the room's use-item probe in AOT `slot` (a
+/// `flag_bank_set` action) arms `item`, then USE `item` from the inventory
+/// menu; the flag `bank`/`bit` set means done.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Use {
+    pub slot: u8,
+    pub item: u8,
+    pub flag: (u8, u8),
+    pub label: Option<String>,
 }
 
 /// `<answer>`: the choice to make at a yes/no prompt, identified by the AOT
@@ -155,7 +168,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
     )?;
     for child in elements(root) {
         let name = child.tag_name().name();
-        let fact = matches!(name, "interact" | "camera" | "answer" | "avoid");
+        let fact = matches!(name, "interact" | "camera" | "use" | "answer" | "avoid");
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
         }
@@ -169,6 +182,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
             }
             "interact" => meta.interacts.push(parse_interact(child)?),
             "camera" => meta.interacts.push(parse_camera(child)?),
+            "use" => meta.uses.push(parse_use(child)?),
             "answer" => meta.answers.push(parse_answer(child)?),
             "avoid" => meta.avoids.push(parse_avoid(child)?),
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -209,6 +223,21 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
     Ok(Interact {
         target: Target::Slot(attr(node, "slot")?),
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_use(node: Node<'_, '_>) -> Result<Use> {
+    check_attributes(node, &["slot", "item", "bank", "bit", "label"])?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    if item == 0 {
+        bail!("{}: <use> `item` must not be 0 (no item)", at(node));
+    }
+    Ok(Use {
+        slot: attr(node, "slot")?,
+        item,
+        flag: (bank_attr(node)?, attr(node, "bit")?),
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -575,6 +604,72 @@ mod tests {
                 reason: "the plant stuns the player".to_string(),
             }]
         );
+    }
+
+    #[test]
+    fn format_2_reads_use_facts_in_order() {
+        let text = r#"<bot format="2">
+            <interact slot="4" bank="1" bit="0x22"/>
+            <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
+            <use slot="11" item="32" bank="0" bit="0x6A"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts.len(), 1, "a use is not an interact step");
+        assert_eq!(
+            meta.uses,
+            vec![
+                Use {
+                    slot: 2,
+                    item: 0x26,
+                    flag: (1, 0xA9),
+                    label: Some("herbicide at the pump".to_string()),
+                },
+                Use {
+                    slot: 11,
+                    item: 0x20,
+                    flag: (0, 0x6A),
+                    label: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn use_facts_are_validated() {
+        let error = |text: &str| parse(text).unwrap_err().to_string();
+        let v1 = r#"<bot format="1"><use slot="2" item="0x26" bank="1" bit="1"/></bot>"#;
+        assert!(error(v1).contains("<use> needs <bot format=\"2\">"));
+        let no_item = r#"<bot format="2"><use slot="2" bank="1" bit="1"/></bot>"#;
+        assert!(error(no_item).contains("<use> needs a `item` attribute"));
+        let zero_item = r#"<bot format="2"><use slot="2" item="0" bank="1" bit="1"/></bot>"#;
+        assert!(error(zero_item).contains("`item` must not be 0"));
+        let big_item = r#"<bot format="2"><use slot="2" item="0x100" bank="1" bit="1"/></bot>"#;
+        assert!(error(big_item).contains("`item` value `0x100` is not a valid u8"));
+        let no_flag = r#"<bot format="2"><use slot="2" item="0x26"/></bot>"#;
+        assert!(error(no_flag).contains("<use> needs a `bank` attribute"));
+        let half_flag = r#"<bot format="2"><use slot="2" item="0x26" bank="1"/></bot>"#;
+        assert!(error(half_flag).contains("<use> needs a `bit` attribute"));
+        let bad_bank = r#"<bot format="2"><use slot="2" item="0x26" bank="10" bit="1"/></bot>"#;
+        assert!(error(bad_bank).contains("bank 10 is out of range"));
+        let unknown = r#"<bot format="2"><use slot="2" item="0x26" bank="1" bit="1" x="1"/></bot>"#;
+        assert!(error(unknown).contains("unknown attribute `x`"));
+        let child = r#"<bot format="2"><use slot="2" item="0x26" bank="1" bit="1"><walk x="1" z="2"/></use></bot>"#;
+        assert!(error(child).contains("unknown <use> element <walk>"));
+    }
+
+    #[test]
+    fn checked_in_use_facts_parse() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot/room");
+        let mut seen = 0;
+        for entry in fs::read_dir(&root).unwrap() {
+            let path = entry.unwrap().path().join("bot.xml");
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let meta = parse(&text).unwrap_or_else(|err| panic!("{}: {err:#}", path.display()));
+            seen += meta.uses.len();
+        }
+        assert!(seen > 0, "no checked-in <use> facts were found");
     }
 
     #[test]

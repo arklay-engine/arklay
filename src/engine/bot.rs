@@ -967,6 +967,9 @@ struct BotNav {
     driving: bool,
     stuck: u32,
     replans: u32,
+    /// The narrow-passage fallback lattice of this room ([`find_path`]),
+    /// built on the first search the coarse lattice fails.
+    fine: RefCell<Option<FineGrid>>,
 }
 
 /// One collision query snapshot for a room, refreshed on a room change.
@@ -1055,31 +1058,6 @@ fn angle_error(current: u16, target: u16) -> i32 {
     if diff > 0x800 { diff - 0x1000 } else { diff }
 }
 
-fn grid_xy(index: usize) -> (i32, i32) {
-    (
-        GRID_MIN + (index % GRID_DIM) as i32 * GRID_STEP,
-        GRID_MIN + (index / GRID_DIM) as i32 * GRID_STEP,
-    )
-}
-
-fn grid_index(x: i32, z: i32) -> Option<usize> {
-    if !(GRID_MIN..=GRID_MAX).contains(&x) || !(GRID_MIN..=GRID_MAX).contains(&z) {
-        return None;
-    }
-    let ix = ((x - GRID_MIN) / GRID_STEP) as usize;
-    let iz = ((z - GRID_MIN) / GRID_STEP) as usize;
-    Some(iz * GRID_DIM + ix)
-}
-
-fn nearest_grid(x: i32, z: i32) -> (i32, i32) {
-    let snap = |value: i32| {
-        let snapped =
-            (value - GRID_MIN + GRID_STEP / 2).div_euclid(GRID_STEP) * GRID_STEP + GRID_MIN;
-        snapped.clamp(GRID_MIN, GRID_MAX)
-    };
-    (snap(x), snap(z))
-}
-
 /// Whether `(x, z)` is blocked for the player body.
 ///
 /// The engine's collision resolver grows every box by an 18-unit skin on top
@@ -1117,45 +1095,211 @@ fn line_clear(
     true
 }
 
-/// Find the nearest free grid node to `(x, z)`, searching a few rings.
-fn nearest_free(
-    room: &RoomState,
-    x: i32,
-    z: i32,
-    y: i32,
-    radius: i32,
-    flags: u8,
-) -> Option<(i32, i32)> {
-    let (cx, cz) = nearest_grid(x, z);
-    let index = grid_index(cx, cz)?;
-    let base = (index % GRID_DIM, index / GRID_DIM);
-    for ring in 0..=4i32 {
-        let mut best: Option<((i32, i32), i32)> = None;
-        for dz in -ring..=ring {
-            for dx in -ring..=ring {
-                if ring > 0 && dx.abs() != ring && dz.abs() != ring {
+/// A square planning lattice over `0..=GRID_MAX` with its blocked nodes.
+///
+/// The coarse lattice ([`GRID_STEP`]) is built for each search; the fine one
+/// ([`FINE_STEP`]) is the narrow-passage fallback, built once per room and
+/// body ([`FineGrid`]). Both test a node with the same [`blocked`] query (the
+/// player radius plus the resolver skin) and an edge with [`line_clear`], so
+/// a path on either never enters a solid record.
+struct Lattice<'a> {
+    step: i32,
+    dim: usize,
+    blocked: &'a [bool],
+}
+
+impl Lattice<'_> {
+    fn xy(&self, index: usize) -> (i32, i32) {
+        (
+            GRID_MIN + (index % self.dim) as i32 * self.step,
+            GRID_MIN + (index / self.dim) as i32 * self.step,
+        )
+    }
+
+    fn index(&self, x: i32, z: i32) -> Option<usize> {
+        if !(GRID_MIN..=GRID_MAX).contains(&x) || !(GRID_MIN..=GRID_MAX).contains(&z) {
+            return None;
+        }
+        let ix = ((x - GRID_MIN) / self.step) as usize;
+        let iz = ((z - GRID_MIN) / self.step) as usize;
+        Some(iz * self.dim + ix)
+    }
+
+    fn snap(&self, x: i32, z: i32) -> (i32, i32) {
+        let snap = |value: i32| {
+            let snapped =
+                (value - GRID_MIN + self.step / 2).div_euclid(self.step) * self.step + GRID_MIN;
+            snapped.clamp(GRID_MIN, GRID_MAX)
+        };
+        (snap(x), snap(z))
+    }
+
+    /// The nearest free node to `(x, z)` within `rings` rings of its snap,
+    /// whose straight line from `(x, z)` passes `accept`.
+    fn nearest_free(
+        &self,
+        x: i32,
+        z: i32,
+        rings: i32,
+        accept: impl Fn(usize) -> bool,
+    ) -> Option<usize> {
+        let (cx, cz) = self.snap(x, z);
+        let base = self.index(cx, cz)?;
+        let base = ((base % self.dim) as i32, (base / self.dim) as i32);
+        for ring in 0..=rings {
+            let mut best: Option<(usize, i64)> = None;
+            for dz in -ring..=ring {
+                for dx in -ring..=ring {
+                    if ring > 0 && dx.abs() != ring && dz.abs() != ring {
+                        continue;
+                    }
+                    let (ix, iz) = (base.0 + dx, base.1 + dz);
+                    if !(0..self.dim as i32).contains(&ix) || !(0..self.dim as i32).contains(&iz) {
+                        continue;
+                    }
+                    let index = iz as usize * self.dim + ix as usize;
+                    if self.blocked[index] || !accept(index) {
+                        continue;
+                    }
+                    let (nx, nz) = self.xy(index);
+                    let dist = i64::from(nx - x).pow(2) + i64::from(nz - z).pow(2);
+                    if best.is_none_or(|(_, best_dist)| dist < best_dist) {
+                        best = Some((index, dist));
+                    }
+                }
+            }
+            if let Some((index, _)) = best {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    /// A* from `start` to `goal` (node indices), eight neighbours, no
+    /// diagonal across a blocked corner, every edge sampled against the
+    /// room. Enemy zones add their cost per [`GRID_STEP`] of travel.
+    #[allow(clippy::too_many_arguments)]
+    fn search(
+        &self,
+        room: &RoomState,
+        start: usize,
+        goal: usize,
+        y: i32,
+        radius: i32,
+        flags: u8,
+        zones: &[steer::EnemyZone],
+    ) -> Option<Vec<(i32, i32)>> {
+        const DIRS: [(i32, i32, u32); 8] = [
+            (1, 0, 10),
+            (-1, 0, 10),
+            (0, 1, 10),
+            (0, -1, 10),
+            (1, 1, 14),
+            (1, -1, 14),
+            (-1, 1, 14),
+            (-1, -1, 14),
+        ];
+        let nodes = self.dim * self.dim;
+        let goal_xy = self.xy(goal);
+        let mut open: BinaryHeap<(Reverse<u32>, usize)> = BinaryHeap::new();
+        let mut cost = vec![u32::MAX; nodes];
+        let mut parent = vec![usize::MAX; nodes];
+        let mut closed = vec![false; nodes];
+        let heuristic = |index: usize| -> u32 {
+            let (x, z) = self.xy(index);
+            let dx = (x - goal_xy.0).unsigned_abs() / self.step as u32;
+            let dz = (z - goal_xy.1).unsigned_abs() / self.step as u32;
+            let diagonal = dx.min(dz);
+            (dx + dz - diagonal) * 10 + diagonal * 14
+        };
+        cost[start] = 0;
+        open.push((Reverse(heuristic(start)), start));
+        while let Some((Reverse(_), index)) = open.pop() {
+            if index == goal {
+                let mut path = vec![self.xy(index)];
+                let mut current = index;
+                while parent[current] != usize::MAX {
+                    current = parent[current];
+                    path.push(self.xy(current));
+                }
+                path.reverse();
+                return Some(path);
+            }
+            if closed[index] {
+                continue;
+            }
+            closed[index] = true;
+            let (x, z) = self.xy(index);
+            for (dx, dz, step_cost) in DIRS {
+                let nx = x + dx * self.step;
+                let nz = z + dz * self.step;
+                let Some(next) = self.index(nx, nz) else {
+                    continue;
+                };
+                if closed[next] || self.blocked[next] {
                     continue;
                 }
-                let ix = base.0 as i32 + dx;
-                let iz = base.1 as i32 + dz;
-                if !(0..GRID_DIM as i32).contains(&ix) || !(0..GRID_DIM as i32).contains(&iz) {
+                // A diagonal may not cut a blocked corner: both orthogonal
+                // neighbours must be walkable too.
+                if dx != 0 && dz != 0 {
+                    let side_x = self.index(nx, z).is_some_and(|side| !self.blocked[side]);
+                    let side_z = self.index(x, nz).is_some_and(|side| !self.blocked[side]);
+                    if !side_x || !side_z {
+                        continue;
+                    }
+                }
+                // The wall can be thinner than the grid step, so an
+                // endpoint-only test would jump it. Sample the edge itself.
+                if !line_clear(room, (x, z), (nx, nz), y, radius, flags) {
                     continue;
                 }
-                let (nx, nz) = grid_xy(iz as usize * GRID_DIM + ix as usize);
-                if blocked(room, nx, nz, y, radius, flags) {
-                    continue;
-                }
-                let dist = (nx - x).pow(2) + (nz - z).pow(2);
-                if best.is_none_or(|(_, best_dist)| dist < best_dist) {
-                    best = Some(((nx, nz), dist));
+                let penalty = u64::from(steer::zone_penalty(zones, nx, nz)) * self.step as u64
+                    / GRID_STEP as u64;
+                let next_cost = cost[index]
+                    .saturating_add(step_cost)
+                    .saturating_add(penalty.min(u64::from(u32::MAX)) as u32);
+                if next_cost < cost[next] {
+                    cost[next] = next_cost;
+                    parent[next] = index;
+                    open.push((Reverse(next_cost + heuristic(next)), next));
                 }
             }
         }
-        if let Some((point, _)) = best {
-            return Some(point);
-        }
+        None
     }
-    None
+}
+
+/// The coarse lattice's snap of `(x, z)`.
+#[cfg(test)]
+fn nearest_grid(x: i32, z: i32) -> (i32, i32) {
+    Lattice {
+        step: GRID_STEP,
+        dim: GRID_DIM,
+        blocked: &[],
+    }
+    .snap(x, z)
+}
+
+/// End a lattice path at the point the route actually named when the last
+/// leg is clear, so the bot does not run past the node snap and spin back.
+fn end_at_exact_goal(
+    room: &RoomState,
+    mut path: Vec<(i32, i32)>,
+    exact_goal: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+) -> Vec<(i32, i32)> {
+    let last = path.len() - 1;
+    if path[last] == exact_goal || blocked(room, exact_goal.0, exact_goal.1, y, radius, flags) {
+        return path;
+    }
+    if last > 0 && line_clear(room, path[last - 1], exact_goal, y, radius, flags) {
+        path[last] = exact_goal;
+    } else if line_clear(room, path[last], exact_goal, y, radius, flags) {
+        path.push(exact_goal);
+    }
+    path
 }
 
 /// A* over the 65x65 collision grid. Returns grid-cell centres from start to
@@ -1182,106 +1326,173 @@ fn find_grid_path_with(
     flags: u8,
     zones: &[steer::EnemyZone],
 ) -> Option<Vec<(i32, i32)>> {
-    const DIRS: [(i32, i32, u32); 8] = [
-        (1, 0, 10),
-        (-1, 0, 10),
-        (0, 1, 10),
-        (0, -1, 10),
-        (1, 1, 14),
-        (1, -1, 14),
-        (-1, 1, 14),
-        (-1, -1, 14),
-    ];
-    let exact_goal = goal;
-    let start = nearest_free(room, start.0, start.1, y, radius, flags)?;
+    let mut nodes = vec![false; GRID_NODES];
+    let probe = Lattice {
+        step: GRID_STEP,
+        dim: GRID_DIM,
+        blocked: &[],
+    };
+    for (index, node) in nodes.iter_mut().enumerate() {
+        let (x, z) = probe.xy(index);
+        *node = blocked(room, x, z, y, radius, flags);
+    }
+    let lattice = Lattice {
+        blocked: &nodes,
+        ..probe
+    };
+    let start_index = lattice.nearest_free(start.0, start.1, 4, |_| true)?;
     // The player may start wedged in a soft spot, but a goal the route names
     // must be walkable; silently snapping it to the far side of a wall would
     // make `arrived` lie about where the player is.
-    let goal = nearest_grid(goal.0, goal.1);
-    if blocked(room, goal.0, goal.1, y, radius, flags) {
+    let snapped = lattice.snap(goal.0, goal.1);
+    let goal_index = lattice.index(snapped.0, snapped.1)?;
+    if nodes[goal_index] {
         return None;
     }
-    let start_index = grid_index(start.0, start.1)?;
-    let goal_index = grid_index(goal.0, goal.1)?;
-    let mut blocked_nodes = vec![false; GRID_NODES];
-    for (index, node) in blocked_nodes.iter_mut().enumerate() {
-        let (x, z) = grid_xy(index);
-        *node = blocked(room, x, z, y, radius, flags);
+    let path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
+    Some(end_at_exact_goal(room, path, goal, y, radius, flags))
+}
+
+/// The narrow-passage fallback's lattice step. A corridor whose band of
+/// free player centres is narrower than [`GRID_STEP`] can fall between two
+/// coarse rows (the 10C bed passage's band is under 500 units); a 128-unit
+/// lattice puts several rows in any band a body can stand in.
+const FINE_STEP: i32 = 128;
+const FINE_DIM: usize = ((GRID_MAX - GRID_MIN) / FINE_STEP + 1) as usize;
+/// Rings the fine lattice searches for a free node next to the start or goal.
+const FINE_RINGS: i32 = 4;
+
+/// The fine lattice of one room and body: its blocked nodes and the
+/// four-connected component of each free node, so a goal in another part of
+/// the room fails without a search.
+#[derive(Debug)]
+struct FineGrid {
+    key: (i32, i32, u8),
+    blocked: Vec<bool>,
+    component: Vec<u32>,
+}
+
+impl FineGrid {
+    /// The cache key: the body, and its height only where the collision
+    /// reads it (an RE2 room's SCA records).
+    fn key(room: &RoomState, y: i32, radius: i32, flags: u8) -> (i32, i32, u8) {
+        (if room.sca.is_some() { y } else { 0 }, radius, flags)
     }
-    let mut open: BinaryHeap<(Reverse<u32>, usize)> = BinaryHeap::new();
-    let mut cost = vec![u32::MAX; GRID_NODES];
-    let mut parent = vec![usize::MAX; GRID_NODES];
-    let mut closed = vec![false; GRID_NODES];
-    let heuristic = |index: usize| -> u32 {
-        let (x, z) = grid_xy(index);
-        let dx = (x - goal.0).unsigned_abs() / GRID_STEP as u32;
-        let dz = (z - goal.1).unsigned_abs() / GRID_STEP as u32;
-        let diagonal = dx.min(dz);
-        (dx + dz - diagonal) * 10 + diagonal * 14
-    };
-    cost[start_index] = 0;
-    open.push((Reverse(heuristic(start_index)), start_index));
-    while let Some((Reverse(_), index)) = open.pop() {
-        if index == goal_index {
-            let mut path = vec![grid_xy(index)];
-            let mut current = index;
-            while parent[current] != usize::MAX {
-                current = parent[current];
-                path.push(grid_xy(current));
+
+    fn build(room: &RoomState, y: i32, radius: i32, flags: u8) -> Self {
+        let nodes = FINE_DIM * FINE_DIM;
+        let probe = Lattice {
+            step: FINE_STEP,
+            dim: FINE_DIM,
+            blocked: &[],
+        };
+        let blocked_nodes: Vec<bool> = (0..nodes)
+            .map(|index| {
+                let (x, z) = probe.xy(index);
+                blocked(room, x, z, y, radius, flags)
+            })
+            .collect();
+        let mut component = vec![u32::MAX; nodes];
+        let mut label = 0;
+        let mut queue = Vec::new();
+        for seed in 0..nodes {
+            if blocked_nodes[seed] || component[seed] != u32::MAX {
+                continue;
             }
-            path.reverse();
-            // The search snaps the goal to a 512-unit node. End the path at
-            // the point the route actually named when the last leg is clear,
-            // so the bot does not run past it and spin back.
-            if exact_goal != goal && !blocked(room, exact_goal.0, exact_goal.1, y, radius, flags) {
-                let last = path.len() - 1;
-                if last > 0 && line_clear(room, path[last - 1], exact_goal, y, radius, flags) {
-                    path[last] = exact_goal;
-                } else if line_clear(room, path[last], exact_goal, y, radius, flags) {
-                    path.push(exact_goal);
+            component[seed] = label;
+            queue.push(seed);
+            while let Some(index) = queue.pop() {
+                let (x, z) = probe.xy(index);
+                for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let (nx, nz) = (x + dx * FINE_STEP, z + dz * FINE_STEP);
+                    let Some(next) = probe.index(nx, nz) else {
+                        continue;
+                    };
+                    if blocked_nodes[next]
+                        || component[next] != u32::MAX
+                        || !line_clear(room, (x, z), (nx, nz), y, radius, flags)
+                    {
+                        continue;
+                    }
+                    component[next] = label;
+                    queue.push(next);
                 }
             }
-            return Some(path);
+            label += 1;
         }
-        if closed[index] {
-            continue;
-        }
-        closed[index] = true;
-        let (x, z) = grid_xy(index);
-        for (dx, dz, step_cost) in DIRS {
-            let nx = x + dx * GRID_STEP;
-            let nz = z + dz * GRID_STEP;
-            let Some(next) = grid_index(nx, nz) else {
-                continue;
-            };
-            if closed[next] || blocked_nodes[next] {
-                continue;
-            }
-            // A diagonal may not cut a blocked corner: both orthogonal
-            // neighbours must be walkable too.
-            if dx != 0 && dz != 0 {
-                let side_x = grid_index(nx, z).is_some_and(|side| !blocked_nodes[side]);
-                let side_z = grid_index(x, nz).is_some_and(|side| !blocked_nodes[side]);
-                if !side_x || !side_z {
-                    continue;
-                }
-            }
-            // The wall can be thinner than the 512-unit grid step, so an
-            // endpoint-only test would jump it. Sample the edge itself.
-            if !line_clear(room, (x, z), (nx, nz), y, radius, flags) {
-                continue;
-            }
-            let next_cost = cost[index]
-                .saturating_add(step_cost)
-                .saturating_add(steer::zone_penalty(zones, nx, nz));
-            if next_cost < cost[next] {
-                cost[next] = next_cost;
-                parent[next] = index;
-                open.push((Reverse(next_cost + heuristic(next)), next));
-            }
+        Self {
+            key: Self::key(room, y, radius, flags),
+            blocked: blocked_nodes,
+            component,
         }
     }
-    None
+
+    fn lattice(&self) -> Lattice<'_> {
+        Lattice {
+            step: FINE_STEP,
+            dim: FINE_DIM,
+            blocked: &self.blocked,
+        }
+    }
+
+    /// A fine-lattice path from `start` to `goal`, or `None` when the goal
+    /// is blocked, or no free node next to it shares the start's component.
+    #[allow(clippy::too_many_arguments)]
+    fn path(
+        &self,
+        room: &RoomState,
+        start: (i32, i32),
+        goal: (i32, i32),
+        y: i32,
+        radius: i32,
+        flags: u8,
+        zones: &[steer::EnemyZone],
+    ) -> Option<Vec<(i32, i32)>> {
+        if blocked(room, goal.0, goal.1, y, radius, flags) {
+            return None;
+        }
+        let lattice = self.lattice();
+        // The goal node must see the exact goal, so the tail cannot hop a
+        // wall thinner than the step.
+        let goal_index = lattice.nearest_free(goal.0, goal.1, FINE_RINGS, |index| {
+            line_clear(room, lattice.xy(index), goal, y, radius, flags)
+        })?;
+        let part = self.component[goal_index];
+        let start_index = lattice.nearest_free(start.0, start.1, FINE_RINGS, |index| {
+            self.component[index] == part
+        })?;
+        let path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
+        Some(end_at_exact_goal(room, path, goal, y, radius, flags))
+    }
+}
+
+/// The path search behind `walk_to` and `bot:path`: the coarse lattice
+/// first, then, only when it finds nothing, the fine lattice of `fine`
+/// (built on first use for this room and body). Both lattices test nodes and
+/// edges with the same body and skin, so the fallback finds narrow passages
+/// without ever routing through collision.
+#[allow(clippy::too_many_arguments)]
+fn find_path(
+    room: &RoomState,
+    fine: &RefCell<Option<FineGrid>>,
+    start: (i32, i32),
+    goal: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+    zones: &[steer::EnemyZone],
+) -> Option<Vec<(i32, i32)>> {
+    if let Some(path) = find_grid_path_with(room, start, goal, y, radius, flags, zones) {
+        return Some(path);
+    }
+    let key = FineGrid::key(room, y, radius, flags);
+    let mut cache = fine.borrow_mut();
+    if cache.as_ref().is_none_or(|grid| grid.key != key) {
+        *cache = Some(FineGrid::build(room, y, radius, flags));
+    }
+    cache
+        .as_ref()
+        .and_then(|grid| grid.path(room, start, goal, y, radius, flags, zones))
 }
 
 /// Greedily drop waypoints whose straight segment is clear (and, with enemy
@@ -1308,8 +1519,13 @@ fn smooth_path(
                 break;
             }
         }
-        let Some(best) = best else {
-            break;
+        // A start inside the body margin (a scripted move such as a stair
+        // can leave the player overlapping the conservative skin) sees
+        // nothing: step to the search's first node, the nearest free one.
+        let best = match best {
+            Some(best) => best,
+            None if out.is_empty() && blocked(room, start.0, start.1, y, radius, flags) => 0,
+            None => break,
         };
         out.push(path[best]);
         anchor = path[best];
@@ -1325,6 +1541,7 @@ impl BotNav {
         }
         self.room_id = Some(id);
         self.collision = collision_room(room);
+        self.fine = RefCell::new(None);
         self.goal = None;
         self.path.clear();
         self.index = 0;
@@ -1381,7 +1598,7 @@ impl BotNav {
                     && distance_xz(pos, goal) > FACE_LEAD / 2
             });
         if let Some(point) = approach
-            && let Some(path) = find_grid_path_with(room, pos, point, y, radius, flags, zones)
+            && let Some(path) = find_path(room, &self.fine, pos, point, y, radius, flags, zones)
         {
             let mut path = smooth_path(room, pos, path, y, radius, flags, zones);
             if path.last() == Some(&point) {
@@ -1390,8 +1607,9 @@ impl BotNav {
                 return Some((path, Some(pin)));
             }
         }
-        let path = find_grid_path_with(room, pos, goal, y, radius, flags, zones)?;
-        Some((smooth_path(room, pos, path, y, radius, flags, zones), None))
+        let path = find_path(room, &self.fine, pos, goal, y, radius, flags, zones)?;
+        let path = smooth_path(room, pos, path, y, radius, flags, zones);
+        (!path.is_empty()).then_some((path, None))
     }
 
     /// Whether the bot can steer straight from `from` to `to`: clear of the
@@ -1976,6 +2194,17 @@ impl UserData for BotCtx {
                 interacts.push(row)?;
             }
             table.set("interacts", interacts)?;
+            let uses = lua.create_table()?;
+            for fact in &meta.uses {
+                let row = lua.create_table()?;
+                row.set("slot", fact.slot)?;
+                row.set("item", fact.item)?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("label", fact.label.as_deref())?;
+                uses.push(row)?;
+            }
+            table.set("uses", uses)?;
             let answers = lua.create_table()?;
             for fact in &meta.answers {
                 let row = lua.create_table()?;
@@ -2919,6 +3148,93 @@ mod tests {
         assert!(find_grid_path(&room, (4000, 4000), (16000, 16000), 0, 100, 0).is_none());
     }
 
+    /// Two walls leaving an east-west corridor whose free band of body
+    /// centres (100 radius plus the 18-unit skin) is `z_lo + 118 ..
+    /// z_hi - 118`: the only way from the west half to the east half.
+    fn corridor_room(z_lo: u16, z_hi: u16) -> RoomState {
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(wall(8000, 12000, 0, z_lo));
+        room.collision.quadrants[0].push(wall(8000, 12000, z_hi, 32768));
+        room
+    }
+
+    fn assert_path_clear(room: &RoomState, start: (i32, i32), path: &[(i32, i32)]) {
+        let mut from = start;
+        for &point in path {
+            assert!(
+                !blocked(room, point.0, point.1, 0, 100, 0),
+                "path point {point:?} is inside the collision: {path:?}"
+            );
+            assert!(
+                line_clear(room, from, point, 0, 100, 0),
+                "path leg {from:?} -> {point:?} crosses the collision: {path:?}"
+            );
+            from = point;
+        }
+    }
+
+    #[test]
+    fn fine_fallback_finds_a_corridor_between_coarse_rows() {
+        // Free centres z 3218..3432: no 512-unit row (3072, 3584) lies in
+        // the band, so the coarse lattice sees the halves as separate.
+        let room = corridor_room(3100, 3550);
+        let (start, goal) = ((4000, 16000), (16000, 16000));
+        assert!(find_grid_path(&room, start, goal, 0, 100, 0).is_none());
+        let fine = RefCell::new(None);
+        let path = find_path(&room, &fine, start, goal, 0, 100, 0, &[])
+            .expect("the fine lattice finds the corridor");
+        assert_eq!(path.last().copied(), Some(goal));
+        assert!(
+            path.iter()
+                .any(|&(x, z)| (8000..=12000).contains(&x) && (3218..=3432).contains(&z)),
+            "the path must run through the corridor: {path:?}"
+        );
+        assert_path_clear(&room, start, &path);
+        // The smoothed walk path stays clear too.
+        let smooth = smooth_path(&room, start, path, 0, 100, 0, &[]);
+        assert_path_clear(&room, start, &smooth);
+        assert!(fine.borrow().is_some(), "the fine lattice is cached");
+    }
+
+    #[test]
+    fn fine_fallback_never_squeezes_through_a_gap_narrower_than_the_body() {
+        // A 200-unit gap: narrower than the 236-unit body plus skin.
+        let room = corridor_room(3100, 3300);
+        let fine = RefCell::new(None);
+        assert!(find_path(&room, &fine, (4000, 16000), (16000, 16000), 0, 100, 0, &[]).is_none());
+        // The same gap is open to a body that fits it (radius 60).
+        assert!(find_path(&room, &fine, (4000, 16000), (16000, 16000), 0, 60, 0, &[]).is_some());
+    }
+
+    #[test]
+    fn smoothing_steps_out_of_a_start_inside_the_body_margin() {
+        // A scripted move (a stair) can leave the player overlapping the
+        // conservative body margin: nothing is in sight from there, so the
+        // smoothed path starts at the search's nearest free node.
+        let room = corridor_room(3100, 3550);
+        let start = (7950, 16000);
+        let goal = (4000, 16000);
+        assert!(blocked(&room, start.0, start.1, 0, 100, 0));
+        let raw = find_path(&room, &RefCell::new(None), start, goal, 0, 100, 0, &[])
+            .expect("the search starts from the nearest free node");
+        let path = smooth_path(&room, start, raw, 0, 100, 0, &[]);
+        assert_eq!(path.last().copied(), Some(goal));
+        assert_path_clear(&room, path[0], &path[1..]);
+        assert!(!blocked(&room, path[0].0, path[0].1, 0, 100, 0));
+    }
+
+    #[test]
+    fn fine_fallback_rejects_a_blocked_goal_and_another_part() {
+        let room = corridor_room(3100, 3300);
+        let fine = RefCell::new(None);
+        // Inside the wall itself.
+        assert!(find_path(&room, &fine, (4000, 16000), (10000, 16000), 0, 100, 0, &[]).is_none());
+        // A free goal in the sealed east half.
+        assert!(find_path(&room, &fine, (4000, 16000), (16000, 9000), 0, 100, 0, &[]).is_none());
+        // A free goal in the start's own half still plans.
+        assert!(find_path(&room, &fine, (4000, 16000), (4000, 9000), 0, 100, 0, &[]).is_some());
+    }
+
     #[test]
     fn walk_turns_before_stepping_forward() {
         let room = RoomState::default();
@@ -3360,11 +3676,13 @@ mod tests {
             br#"function on_bot_tick(bot)
                 local m = bot:room_meta()
                 local i, a, v = m.interacts[1], m.answers[1], m.avoids[1]
+                local u = m.uses[1]
                 local w = bot:world()
-                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g|%s",
+                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g|%s|%d:%d:%d:%d:%s",
                     m.format, #m.puzzles, i.slot, i.bank, i.bit, i.label,
                     a.choice, tostring(a.slot), tostring(a.bank), v.slot, v.reason,
-                    w.room, #w.frontier, bot:risk(), tostring(bot:goal_room()))
+                    w.room, #w.frontier, bot:risk(), tostring(bot:goal_room()),
+                    u.slot, u.item, u.bank, u.bit, u.label)
             end
 "#,
         )
@@ -3374,6 +3692,7 @@ mod tests {
         let meta = meta::parse(
             r#"<bot format="2">
                 <interact slot="4" bank="1" bit="0x22" label="statue"/>
+                <use slot="2" item="0x26" bank="1" bit="0xA9" label="pump"/>
                 <answer choice="no" slot="6"/>
                 <avoid slot="7" reason="plant"/>
             </bot>"#,
@@ -3404,7 +3723,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             vm.lua.globals().get::<String>("RESULT").unwrap(),
-            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D"
+            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D|2:38:1:169:pump"
         );
     }
 
