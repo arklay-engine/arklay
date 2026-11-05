@@ -859,9 +859,22 @@ impl UserData for Api {
         );
         methods.add_method_mut(
             "blow_part",
-            |_, e, (part, dir, speed, up): (usize, i32, Option<i16>, Option<i16>)| {
-                e.em()
-                    .blow_part(part, dir as u16, speed.unwrap_or(800), up.unwrap_or(0));
+            |_,
+             e,
+             (part, dir, speed, up, gravity): (
+                usize,
+                i32,
+                Option<i16>,
+                Option<i16>,
+                Option<i16>,
+            )| {
+                e.em().blow_part(
+                    part,
+                    dir as u16,
+                    speed.unwrap_or(800),
+                    up.unwrap_or(0),
+                    gravity.unwrap_or(10),
+                );
                 Ok(())
             },
         );
@@ -1124,6 +1137,10 @@ impl UserData for Api {
         methods.add_method_mut("set_pos", |_, e, (x, y, z): (i32, i32, i32)| {
             e.em().mover.player.pos = [x, y, z];
             Ok(())
+        });
+        // `Water_ck`.
+        methods.add_method_mut("water_ck", |_, e, (x, z): (i32, i32)| {
+            Ok(super::water_ck(&e.em().world.water, x, z))
         });
         // A part's `Workm.t` as this work's last `FUN_004886f0` left it.
         methods.add_method_mut("own_part", |_, e, part: usize| {
@@ -1413,11 +1430,14 @@ mod tests {
     /// floor states: `Rnd` gives `DRAWS` in turn. By default the player is
     /// far away, half a turn round, and no clip ends; `DIST`, `TARGET`,
     /// `CLIP_LEN` and `NOISE` change that. `Goto00_ck` gives `rate` the way to
-    /// the player's angle, `TARGET`, or 0 within `rate` of it.
+    /// the player's angle, `TARGET`, or 0 within `rate` of it. `ROUTINES` and
+    /// `VARS` start it past its init, `DAMAGE_NO` and `D_LIFE` are the last
+    /// hit's, `WATER_LEVEL` is `Water_ck`'s, and a clip's end shows `SEQ_END`.
     const SPIDER_STUB: &str = "
         local draws, drawn = DRAWS, 0
         local dist, target, clip_len = DIST or 20000, TARGET or 0x800, CLIP_LEN or 1000
-        local w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, timers = { [0] = 0, 0 },
+        local w = { r = ROUTINES or { [0] = 0, 0, 0, 0 }, vars = VARS or {},
+            timers = { [0] = 0, 0, 0 }, bloods = 0, blown = 0, died = 0, y = 0, life = 0,
             be = 1, kind = KIND, angle = 0, spd = { 0, 0, 0 }, moved = 0,
             clips = {}, frame = 0, add_dir = -1, pl = { [0] = 1, 0, 0, 0 },
             pl_life = PL_LIFE or 200, pl_dc = 0, sounds = {}, effect = { -1, -1 },
@@ -1462,7 +1482,16 @@ mod tests {
         function e:rotate(dir, x, z) w.rotated = { dir, x }; return 11, 22 end
         function e:part_point() return 30, 0, 40 end
         function e:hypot(x, z) return math_hypot(x, z) end
-        function e:now_seq() return 0 end
+        function e:now_seq() return w.frame >= clip_len and (SEQ_END or 0) or 0 end
+        function e:damage_no() return DAMAGE_NO or 0 end
+        function e:d_life() return D_LIFE or 6 end
+        function e:water_ck() return WATER_LEVEL or 0 end
+        function e:own_part(part) return part, 0, 0 end
+        function e:call_effect() w.bloods = w.bloods + 1 end
+        function e:blow_part() w.blown = w.blown + 1 end
+        function e:set_died() w.died = 1 end
+        function e:set_pos_y(y) w.y = y end
+        function e:neck_flags() return 0 end
         function e:noise() return NOISE or 0 end
         function e:at_em_no() return 0xFF end
         function e:sca_info() return 0 end
@@ -1521,7 +1550,9 @@ mod tests {
                  pl_life = w.pl_life, pl_dc = w.pl_dc, sounds = #w.sounds,
                  bite_sound = w.sounds[#w.sounds] or -1, effect_row = w.effect[1],
                  effect_dir = w.effect[2], rot_dir = w.rotated[1],
-                 rot_by = w.rotated[2] }}"
+                 rot_by = w.rotated[2], bloods = w.bloods, blown = w.blown,
+                 died = w.died, y = w.y, lost = w.vars[12] or 0,
+                 revived = w.vars[16] or 0, timer2 = w.timers[2] }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
@@ -1533,7 +1564,7 @@ mod tests {
                 .collect();
             let fields = "r0 r1 r2 life be angle spd moved timer drawn timer1 spd_y spd_z \
                 add_dir cooldown pl0 pl1 pl_life pl_dc sounds bite_sound effect_row \
-                effect_dir rot_dir rot_by"
+                effect_dir rot_dir rot_by bloods blown died y lost revived timer2"
                 .split_whitespace()
                 .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
                 .collect();
@@ -1768,5 +1799,74 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    /// A handgun's hit in the first band: the flinch and its blood, then the
+    /// leap aside once the clip ends, with no draw.
+    #[test]
+    fn a_spider_hit_in_the_first_band_leaps_aside() {
+        let spider = run_spider_with(0, &[], 4, "ROUTINES = { [0] = 2, 2, 0, 0 }; CLIP_LEN = 3");
+        assert_eq!(spider.1, [1]);
+        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 9));
+        assert_eq!((spider.get("bloods"), spider.get("drawn")), (1, 0));
+    }
+
+    /// Past the first band, `BYTE_005286f4` picks the walk, the leap or the
+    /// turn.
+    #[test]
+    fn a_spider_hit_lower_down_picks_its_way_by_rnd() {
+        for (draw, routine) in [(0, 1), (1, 9), (5, 5), (7, 5)] {
+            let spider = run_spider_with(
+                0,
+                &[draw],
+                4,
+                "ROUTINES = { [0] = 2, 2, 0, 0 }; CLIP_LEN = 3; DAMAGE_NO = 4",
+            );
+            assert_eq!((spider.get("r1"), spider.get("drawn")), (routine, 1));
+        }
+    }
+
+    /// A magnum's hit takes off the leg `Rnd` picks, its two parts thrown,
+    /// while more than two are left, and then it leaps aside.
+    #[test]
+    fn a_spiders_magnum_hit_takes_a_leg_off() {
+        let spider = run_spider_with(
+            0,
+            &[2],
+            4,
+            "ROUTINES = { [0] = 2, 5, 0, 0 }; VARS = { [13] = 8 }; CLIP_LEN = 3",
+        );
+        assert_eq!((spider.get("lost"), spider.get("blown")), (1 << 2, 2));
+        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 9));
+        let spider = run_spider_with(
+            0,
+            &[2],
+            1,
+            "ROUTINES = { [0] = 2, 5, 0, 0 }; VARS = { [13] = 2 }; CLIP_LEN = 3",
+        );
+        assert_eq!((spider.get("lost"), spider.get("blown")), (0, 0));
+        assert_eq!(spider.get("bloods"), 1);
+    }
+
+    /// A handgun's death in water: it falls on its back, its body floats
+    /// at the water's level, and it gets a life of 1 for one more shot.
+    #[test]
+    fn a_spiders_handgun_death_leaves_a_body_floating() {
+        let spider = run_spider_with(
+            0,
+            &[0x25],
+            4,
+            "ROUTINES = { [0] = 3, 2, 0, 0 }; CLIP_LEN = 3; SEQ_END = 0x80000; \
+             WATER_LEVEL = -180",
+        );
+        assert_eq!(spider.1, [0xC]);
+        assert_eq!((spider.get("r0"), spider.get("life")), (7, 1));
+        assert_eq!((spider.get("revived"), spider.get("died")), (1, 1));
+        assert_eq!(spider.get("y"), 0x46 - 180);
+        assert_eq!(spider.get("be") & 0x1C00_0000, 0x400_0000);
+        assert_eq!(
+            (spider.get("r1"), spider.get("timer2")),
+            (1, (0x25 & 0x1F) + 0x1E)
+        );
     }
 }

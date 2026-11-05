@@ -3692,8 +3692,10 @@ impl GameSession {
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         if self.game.is_re2_room {
             self.tick_re2_weapon(pack);
+            let water = crate::character2::water_areas(&self.game);
             let re2 = &mut self.game.re2;
             re2.tick_before();
+            re2.effects.water = water;
             let player = self
                 .game
                 .entities
@@ -14870,6 +14872,8 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     } else {
         crate::player2::player_move(&mut context.game.re2.player, context.player, &tick)
     };
+    let re2 = &mut context.game.re2;
+    re2.player.water_draws(&mut re2.rnd);
     if !tick.stopped {
         crate::character2::mag_down(context.game, context.player);
     }

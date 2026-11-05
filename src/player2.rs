@@ -381,6 +381,9 @@ pub struct Work {
     pub noise: u8,
     /// `Esp_call`s this tick made, in order.
     pub effects: Vec<EffectCall>,
+    /// The `Rnd` draws the aim's splashes (`Pl_water` and the hands') still
+    /// owe their `effects`, made by [`Work::water_draws`] after the move.
+    water_draws: Vec<WaterDraw>,
     /// `Be_flg`'s level of the shot, and a bit for each tick left of it that
     /// looks for a body.
     shot_level: usize,
@@ -428,6 +431,14 @@ pub struct EffectCall {
     pub size: u16,
     pub dir: i16,
     pub at: [i16; 3],
+}
+
+/// A splash in [`Work::effects`] whose `Rnd` draws are still to be made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WaterDraw {
+    effect: usize,
+    /// `Pl_water`'s ring, 0 to 3, or `None` for a hand's splash.
+    ring: Option<u16>,
 }
 
 /// `pl_mv05_w1_t0`'s `Goto00` to who it's aiming at.
@@ -626,6 +637,27 @@ impl Work {
         self.magazine = None;
     }
 
+    /// The aim's splashes' `Rnd`, in the order the original draws it: two for
+    /// each of `Pl_water`'s rings (its turn, then its size) and one for each
+    /// hand's splash (its size). Nothing else in the move draws, so drawing
+    /// after it keeps the order.
+    pub(crate) fn water_draws(&mut self, rnd: &mut crate::zombie2::Rnd) {
+        for draw in std::mem::take(&mut self.water_draws) {
+            let Some(effect) = self.effects.get_mut(draw.effect) else {
+                continue;
+            };
+            match draw.ring {
+                Some(ring) => {
+                    let turn = u16::from(rnd.draw()) * 4;
+                    effect.dir = (effect.dir as u16).wrapping_sub(turn) as i16;
+                    let base = if ring < 2 { 0x818 } else { 0xC00 };
+                    effect.size = u16::from(rnd.draw()) * 4 + base;
+                }
+                None => effect.size = u16::from(rnd.draw()) * 4 + 0x60C,
+            }
+        }
+    }
+
     /// `Mag_down`, and where the magazine bounced this tick, for its sound.
     pub(crate) fn mag_down(&mut self, rnd: &mut crate::zombie2::Rnd) -> Option<[i32; 3]> {
         let magazine = self.magazine.as_mut()?;
@@ -722,6 +754,7 @@ impl Default for Work {
             hit: None,
             noise: 0,
             effects: Vec::new(),
+            water_draws: Vec::new(),
             water: 0,
             d_life_u: 0,
             spd: [0; 3],
@@ -2345,6 +2378,7 @@ impl Mover<'_, '_> {
             }
             _ => return,
         }
+        self.aim_splashes(300);
         if let Some(target) = self
             .work
             .aim_target
@@ -2495,22 +2529,83 @@ impl Mover<'_, '_> {
             self.work.spd = [0; 3];
             return;
         }
+        let shot_from = self.work.effects.len();
         self.shot_effects();
         let kicks = matches!(self.tick.weapon.id, 6 | 8) && self.tick.id != 0xB;
         if kicks {
             self.spd_get();
         }
         let ended = self.joint_move();
-        if self.tick.weapon.id == 7 && self.work.now_seq & FRAME_SOUND != 0 {
-            self.player
-                .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
-        }
         if ended {
             self.aim_stage(1);
             self.work.spd = [0; 3];
         }
+        // The splashes come before `pl_wp02_tbl`'s calls in the original,
+        // which takes the effects' draws in the order they were called.
+        let splash_from = self.work.effects.len();
+        let draws_from = self.work.water_draws.len();
+        self.aim_splashes(200);
+        let splashes = self.work.effects.split_off(splash_from);
+        self.work.effects.splice(shot_from..shot_from, splashes);
+        for draw in &mut self.work.water_draws[draws_from..] {
+            draw.effect = draw.effect - splash_from + shot_from;
+        }
+        if self.tick.weapon.id == 7 && self.work.now_seq & FRAME_SOUND != 0 {
+            self.player
+                .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
+        }
         if kicks {
             self.add_speed_xz();
+        }
+    }
+
+    /// The aim's splashes in water: `Pl_water`'s four rings on Move_cnt 1, 3
+    /// and 5 while the water is above `Ground`, then one off each hand
+    /// (parts 11 and 14) the water reaches, within 300 of part 11 and
+    /// `hand14` of part 14. Their `Rnd` waits for [`Work::water_draws`].
+    fn aim_splashes(&mut self, hand14: i32) {
+        let water = self.work.water;
+        if water == 0 {
+            return;
+        }
+        let dir = self.player.angle as i16;
+        if i32::from(water) < self.ground() && self.work.move_cnt < 6 && self.work.move_cnt & 1 != 0
+        {
+            // `Pl_water`: on part 0's `Workm`, at the water's level.
+            let root = self.part_matrix(0).map_or(self.player.pos, |part| part.t);
+            let at = [root[0] as i16, water, root[2] as i16];
+            for ring in 0..4u16 {
+                self.work.water_draws.push(WaterDraw {
+                    effect: self.work.effects.len(),
+                    ring: Some(ring),
+                });
+                self.work.effects.push(EffectCall {
+                    kind: 0x1A,
+                    row: 0,
+                    size: 0,
+                    dir: dir.wrapping_add((ring * 0x400) as i16),
+                    at,
+                });
+            }
+        }
+        for (part, reach) in [(SHOT_PART, 300), (HAND_PART, hand14)] {
+            let Some(hand) = self.part_matrix(part) else {
+                continue;
+            };
+            if i32::from(water) < hand.t[1] + reach {
+                let at = self.part_point(part, [0, 300, 0]).unwrap_or(hand.t);
+                self.work.water_draws.push(WaterDraw {
+                    effect: self.work.effects.len(),
+                    ring: None,
+                });
+                self.work.effects.push(EffectCall {
+                    kind: 0x1A,
+                    row: 0,
+                    size: 0,
+                    dir,
+                    at: at.map(|axis| axis as i16),
+                });
+            }
         }
     }
 
@@ -4651,6 +4746,75 @@ mod tests {
         mover.footstep(0);
         assert!(mover.work.effects.is_empty());
         assert!(!mover.player.take_footsteps()[0].water);
+    }
+
+    /// `Pl_water` in the aim: on odd frames up to 5, while the water is above
+    /// the ground, four rings at the water's level, each drawing `Rnd` for
+    /// its turn and its size.
+    #[test]
+    fn the_aim_splashes_four_rings_on_odd_frames_in_water() {
+        let mut setup = Setup::new(0);
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0x100;
+        setup.work.water = -180;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.move_cnt = 2;
+        mover.aim_splashes(300);
+        assert!(
+            mover.work.effects.is_empty(),
+            "an even frame splashes nothing"
+        );
+        mover.work.move_cnt = 3;
+        mover.aim_splashes(300);
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut expected = rnd;
+        let draws: Vec<u16> = (0..8).map(|_| u16::from(expected.draw())).collect();
+        mover.work.water_draws(&mut rnd);
+        assert_eq!(rnd, expected);
+        let calls: Vec<_> = mover
+            .work
+            .effects
+            .iter()
+            .map(|call| (call.kind, call.row, call.size, call.dir as u16, call.at[1]))
+            .collect();
+        let ring = |n: usize, base: u16| {
+            let dir = (0x100 + n as u16 * 0x400).wrapping_sub(draws[n * 2] * 4);
+            (0x1A, 0, draws[n * 2 + 1] * 4 + base, dir, -180)
+        };
+        assert_eq!(
+            calls,
+            [
+                ring(0, 0x818),
+                ring(1, 0x818),
+                ring(2, 0xC00),
+                ring(3, 0xC00)
+            ]
+        );
+        mover.work.move_cnt = 7;
+        mover.work.effects.clear();
+        mover.aim_splashes(300);
+        assert!(mover.work.effects.is_empty(), "nor does a frame past 5");
     }
 
     #[test]

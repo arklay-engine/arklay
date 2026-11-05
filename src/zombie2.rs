@@ -736,6 +736,42 @@ pub struct World<'a> {
     pub works: Vec<(usize, Option<u8>, bool)>,
     /// What `Set_enemy_work` gave out this tick.
     pub spawns: Vec<Spawn>,
+    /// The room's water areas, for `Water_ck`. Only a spider's world has them.
+    pub water: Vec<WaterArea>,
+}
+
+/// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaterArea {
+    /// The box: `x`, `z`, `width`, `depth`.
+    pub zone: [i16; 4],
+    /// A four-point area's corners, which replace the box.
+    pub quad: Option<[[i16; 2]; 4]>,
+    /// The water's level, the area's first word.
+    pub level: i16,
+}
+
+/// `Water_ck`: the level of the first water area over `(x, z)`, or 0. A box
+/// is `Hit_ck_box`'s unsigned test, a four-point area `Hit_ck_point4`'s.
+pub fn water_ck(areas: &[WaterArea], x: i32, z: i32) -> i16 {
+    for area in areas {
+        let inside = match area.quad {
+            Some(corners) => crate::state::Zone {
+                corners,
+                ..crate::state::Zone::default()
+            }
+            .contains_signed(x, z),
+            None => {
+                let [left, near, width, depth] = area.zone;
+                (x.wrapping_sub(i32::from(left)) as u32) <= u32::from(width as u16)
+                    && (z.wrapping_sub(i32::from(near)) as u32) <= u32::from(depth as u16)
+            }
+        };
+        if inside {
+            return area.level;
+        }
+    }
+    0
 }
 
 impl World<'_> {
@@ -909,6 +945,11 @@ impl Em<'_, '_, '_> {
         if let Some([x, _, z]) = self.mover.part_point(12, [0, 0, 0]) {
             self.z.vars[SPIDER_FOOT] = x;
             self.z.vars[SPIDER_FOOT + 1] = z;
+        }
+        // The parts' `+0x5C` that `Game_loop`'s `Joint_trans` left, which a
+        // hit's and a death's blood (`FUN_00472df0`) start from.
+        if self.work().routine[0] >= 2 {
+            self.z.parts = self.mover.posed_parts();
         }
         self.script();
         self.z.floor = spider_floor(self.mover.player.pos[1]);
@@ -1191,9 +1232,12 @@ impl Em<'_, '_, '_> {
 
     /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
     /// at 300 and up at 150.
-    fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16) {
+    /// `Em_25`'s `FUN_00472450` lets its body fall at `0xF`.
+    fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16, gravity: i16) {
         if let Some(matrix) = self.mover.part_matrix(part) {
-            self.push_thrown(ThrownPart::blown(part as u8, matrix, dir, speed, up));
+            let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
+            thrown.gravity = gravity;
+            self.push_thrown(thrown);
         }
     }
 

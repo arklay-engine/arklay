@@ -10,9 +10,10 @@
 -- Ported: the init, and on the floor the rest (`Routine_1` 0), the walks
 -- (1 to 3), the turn on the spot (4), the turns toward the player (5 and 6),
 -- the lunge and its bite (7), the spit (8) and the leap aside from a noise
--- (9). The ceiling and the wall, damage and death (`Routine_0` 2 to 7),
--- `FUN_004727e0`'s water and `FUN_00473530`'s blood aren't ported: a spider
--- that reaches them stands still.
+-- (9); and on the floor a hit (`Routine_0` 2), the death (3) and the body
+-- (7), for weapons 2 to 8. The ceiling and the wall, the young spiders
+-- (`Em_26`) a death sends out, `FUN_004727e0`'s water and `FUN_00473530`'s
+-- blood aren't ported: a spider that reaches them stands still.
 
 local COOLDOWN <const> = 0 -- `+0x218`: the rest waits for it before an attack.
 local ADD_DIR <const> = 1 -- `+0x21a`: the turn `Add_speedXZ` adds.
@@ -25,7 +26,15 @@ local T21E <const> = 7 -- `+0x21e`.
 local LAST <const> = 8 -- `+0x233` to `+0x235`: `Routine_1` to `Routine_3` while `+0x21c` is 0.
 local T23D <const> = 11 -- `+0x23d`.
 local LOST_LEGS <const> = 12 -- `+0x220`: a bit for each leg lost.
-local T221 <const> = 13 -- `+0x221`.
+local T221 <const> = 13 -- `+0x221`: legs left to lose, from 8.
+local WATER <const> = 14 -- `Water` (`+0x10c`): the level a hit or a death found it in.
+local HIT_BY <const> = 15 -- `+0x23c`: the weapon (`Routine_1`) of the last hit or death.
+local REVIVED <const> = 16 -- `+0x224`: it has died once, and its body takes a last shot.
+local FLOAT <const> = 17 -- `+0x23a`: below 0 once its body lies in water.
+local BOB <const> = 18 -- `+0x23e`: how the body in water moves (`FUN_004728b0`).
+local F23F <const> = 19 -- `+0x23f`.
+local T225 <const> = 20 -- `+0x225`: `FUN_004727e0`'s state.
+local T239 <const> = 21 -- `+0x239`: no body to shoot again; nothing on the floor sets it.
 local FOOT <const> = 32 -- x and z of part 12 (leg 1's foot) as the last tick ended.
 
 -- `PTR_DAT_005284ac` and, with `fg_system`'s `0x20`, `PTR_DAT_005284cc`.
@@ -71,8 +80,8 @@ local function footstep(e)
     if e:now_seq() & 0x100000 == 0 then
         return
     end
-    -- `Water` (`+0x10c`) is taken as 0: arklay has no water yet.
-    e:sound(STEPS[e:var(STEP)])
+    -- `Water` (`+0x10c`) is only found by a hit or a death.
+    e:sound(e:var(WATER) ~= 0 and 10 or STEPS[e:var(STEP)])
     e:set_var(STEP, (e:var(STEP) + 1) % 3)
 end
 
@@ -106,8 +115,11 @@ local function init(e)
     e:set_d_life(6)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
-    for index = 0, 13 do
-        e:set_var(index, 0)
+    -- `+0x218` to `+0x247`.
+    for index = 0, 21 do
+        if index ~= WATER then
+            e:set_var(index, 0)
+        end
     end
     e:clip(1, 0, 0)
     e:joint(0x100)
@@ -522,6 +534,326 @@ local function move(e)
     end
 end
 
+-- `DAT_00528800`'s rows that the floor's hits and deaths use: `Esp_call`'s
+-- kind, row and size. None of them has the top bit, which would place it on
+-- the part's matrix instead.
+local BLOOD_ROWS <const> = {
+    [0] = { 0, 0x19, 0x2000 },
+    { 0, 0x19, 0x2800 },
+    { 9, 0x0A, 0x0800 },
+    { 0, 0x09, 0x1000 },
+}
+
+-- `FUN_00472df0`: blood at a part, where `Joint_trans` left it. The way is
+-- `Direction_ck` from the body to itself. On the floor nothing is added to
+-- the part's place.
+local function blood(e, part, row)
+    local effect = BLOOD_ROWS[row]
+    if effect == nil then
+        return
+    end
+    local x, _, z = e:pos()
+    local dir = e:direction(x, z, x, z)
+    local px, py, pz = e:own_part(part)
+    e:call_effect(effect[1], effect[2], effect[3], dir, px, py, pz)
+end
+
+-- `Water_ck` under the body, kept once found.
+local function find_water(e)
+    if e:var(WATER) == 0 then
+        local x, _, z = e:pos()
+        e:set_var(WATER, e:water_ck(x, z))
+    end
+end
+
+-- `FUN_004731a0`: a leg comes off, two parts thrown with `Parts_bomb`, while
+-- more than two are left; otherwise blood on the body.
+local function lose_leg(e)
+    if e:var(HIT_BY) == 0xE then
+        return
+    end
+    local leg = e:rnd() & 7
+    if e:var(T221) > 2 and e:var(LOST_LEGS) & (1 << leg) == 0 then
+        local first = leg * 2 + 3
+        e:set_var(T221, e:var(T221) - 1)
+        e:set_var(LOST_LEGS, e:var(LOST_LEGS) | (1 << leg))
+        for part = first, first + 1 do
+            e:blow_part(part, (e:angle() + 0x800) & 0xFFFF, 600, -120, 10)
+        end
+        blood(e, first, 1)
+        return
+    end
+    blood(e, 0x13, 1)
+end
+
+-- `FUN_00472450`: the body, part 19, falls away, with blood.
+local function lose_body(e)
+    e:set_neck_flags(e:neck_flags() | 1)
+    e:blow_part(0x13, (e:angle() + 0x800) & 0xFFFF, 0, -240, 0xF)
+    blood(e, 0x13, 1)
+    for _ = 1, 4 do
+        blood(e, 0x13, 2)
+    end
+end
+
+-- `FUN_004732a0`: the young spiders (`Em_26`) a death sends out. `Em_26`
+-- isn't ported, so only the draw before the call, for how many, is made.
+local function send_young(e)
+    e:rnd()
+end
+
+-- `BYTE_005286f4`: where a handgun's hit sends it, by `Rnd & 7`.
+local REACTIONS <const> = { [0] = 1, 9, 1, 9, 1, 5, 1, 5 }
+
+-- `FUN_00471170` on the floor (`0x471190`): the flinch (clip 1), then the
+-- leap aside (9) for a knife or a hit in the first band, and otherwise a
+-- walk, a leap or a turn by `Rnd`.
+local function flinch(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        e:clip(1, 0, 3)
+        if e:var(HIT_BY) ~= 1 then
+            blood(e, 0, 0)
+        end
+    elseif sub == 2 then
+        if e:routine(1) == 1 or e:damage_no() // 3 == 0 then
+            e:routines(1, 9, 0, 0)
+            return
+        end
+        e:routines(1, REACTIONS[e:rnd() & 7], 0, 0)
+        return
+    elseif sub ~= 1 then
+        return
+    end
+    e:set_routine(2, e:routine(2) + joint_step(e))
+end
+
+-- `FUN_00471840`: weapon 4's hit bleeds from the body and a leg, and takes
+-- a leg off once a region's `D_life` has run out.
+local LEG_ROWS <const> = { [0] = 0, 1, 2, 0x13 }
+local function flinch_bleeding(e)
+    if e:routine(2) == 0 then
+        blood(e, LEG_ROWS[e:rnd() & 3], 3)
+        local leg = e:rnd() & 7
+        if e:var(LOST_LEGS) & (1 << leg) == 0 then
+            blood(e, leg * 2 + 3, 3)
+        end
+        if e:d_life(0) >= 0x80 or e:d_life(1) >= 0x80 or e:d_life(2) >= 0x80 then
+            lose_leg(e)
+            e:set_d_life(6)
+        end
+    end
+    flinch(e)
+end
+
+-- `FUN_00471340` on the floor (`0x471360`): the magnums' and shotguns' hits
+-- take a leg off, then it leaps aside.
+local function flinch_hard(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        e:clip(1, 0, 3)
+        lose_leg(e)
+    elseif sub == 2 then
+        e:routines(1, 9, 0, 0)
+        return
+    elseif sub ~= 1 then
+        return
+    end
+    e:set_routine(2, e:routine(2) + joint_step(e))
+end
+
+-- `DWORD_00528694`, by weapon: only the weapons arklay fires, and only the
+-- floor's half of each.
+local HURTS <const> = {
+    [2] = flinch,
+    [3] = flinch,
+    [4] = flinch_bleeding,
+    [5] = flinch_hard,
+    [6] = flinch_hard,
+    [7] = flinch_hard,
+    [8] = flinch_hard,
+}
+
+-- `FUN_00471110`: `Routine_0` 2.
+local function hurt(e)
+    if e:routine(2) == 0 then
+        e:set_var(HIT_BY, e:routine(1))
+    end
+    find_water(e)
+    local entry = e:var(KIND) == 0 and HURTS[e:routine(1)]
+    if entry then
+        entry(e)
+    end
+end
+
+-- The end of a fall into water: the body floats (`FUN_004728b0`'s 3).
+local function lands_in_water(e)
+    if e:var(WATER) == 0 then
+        return
+    end
+    -- Weapons 9, 10 and 16 splash here (row 7); arklay doesn't fire them.
+    e:set_var(FLOAT, 0xFF)
+    if e:var(BOB) == 0 then
+        e:set_var(BOB, 3)
+        e:set_var(F23F, 1)
+    end
+end
+
+-- `FUN_00472130`: a body shot again by a handgun throws the last of it.
+local function die_again(e)
+    e:clip(0xD, 0, 7)
+    e:joint(0x200)
+    send_young(e)
+    blood(e, 0, 0)
+    e:routines(7, 0, 0, 0)
+    e:set_be_flg(e:be_flg() | 0x42)
+    if e:var(FLOAT) >= 0x80 then
+        e:set_pos_y(i16(e:var(WATER)) + 0x46)
+    end
+end
+
+-- `FUN_00471c10`: the handguns' death. On the floor (`0x471c40`) it falls on
+-- its back (clip 12), and its body takes one more shot with a life of 1.
+local function die_plain(e)
+    if e:var(REVIVED) ~= 0 then
+        die_again(e)
+        return
+    end
+    if e:var(KIND) ~= 0 then
+        return
+    end
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:clip(0xC, 0, 7)
+        if e:var(HIT_BY) ~= 1 then
+            blood(e, 0, 0)
+        end
+        e:set_be_flg(e:be_flg() | 0x42)
+    end
+    e:joint(0x200)
+    if e:now_seq() & 0x80000 == 0 then
+        return
+    end
+    e:set_be_flg(e:be_flg() & 0xE3FFFFFF)
+    lands_in_water(e)
+    e:routines(7, 0, 0, 0)
+    if e:var(T239) == 0 then
+        e:set_life(1)
+        e:set_var(REVIVED, 1)
+    end
+end
+
+-- `FUN_004721a0`: the magnums' and shotguns' death throws its body off.
+local function die_blown(e)
+    if e:var(REVIVED) ~= 0 then
+        e:clip(0xD, 0, 7)
+        e:joint(0x200)
+        send_young(e)
+        blood(e, 0x13, 1)
+        lose_body(e)
+        e:set_be_flg(e:be_flg() | 0x42)
+        e:routines(7, 0, 0, 0)
+        if e:var(FLOAT) >= 0x80 then
+            e:set_pos_y(i16(e:var(WATER)) + 0x46)
+        end
+        return
+    end
+    if e:var(KIND) ~= 0 then
+        return
+    end
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:set_be_flg(e:be_flg() | 2)
+        e:set_var(FLOAT, 1)
+        e:clip(0xC, 0, 7)
+        blood(e, 0x13, 1)
+        lose_body(e)
+        send_young(e)
+    end
+    e:joint(0x200)
+    if e:now_seq() & 0x40000 == 0 then
+        return
+    end
+    lands_in_water(e)
+    e:routines(7, 0, 0, 0)
+end
+
+-- `DWORD_00528724`, by weapon: only the weapons arklay fires.
+local DIES <const> = {
+    [2] = die_plain,
+    [3] = die_plain,
+    [4] = die_plain,
+    [5] = die_blown,
+    [6] = die_blown,
+    [7] = die_blown,
+    [8] = die_blown,
+}
+
+-- `BYTE_005287f8`: the body's bob in the water, by `Timer1 >> 3 & 7`.
+local BOBS <const> = { [0] = 0, 8, 16, 32, 32, 16, 8, 0 }
+
+-- `FUN_004728b0`: a body in water bobs there (`+0x23e`'s 3). Its rise to
+-- the water (1 and 2) and its rest on `Ground` out of water follow
+-- `FUN_00471e50`, the ceiling's fall, and aren't ported.
+local function bob(e)
+    local water = i16(e:var(WATER))
+    if e:var(BOB) ~= 3 or water == 0 then
+        return
+    end
+    local timer = e:timer(1)
+    e:set_timer(1, (timer + 1) & 0xFFFF)
+    e:set_pos_y(BOBS[(timer >> 3) & 7] + 0x46 + water)
+end
+
+-- `FUN_00471bb0`: `Routine_0` 3.
+local function die(e)
+    if e:routine(2) == 0 then
+        e:set_var(HIT_BY, e:routine(1))
+    end
+    find_water(e)
+    local entry = DIES[e:routine(1)]
+    if entry then
+        entry(e)
+    end
+    bob(e)
+    e:set_died()
+end
+
+-- `0x472730`: `Routine_0` 7, the body. It twitches (clip 13) every 30 to 61
+-- ticks, floats when in water, and can be shot at low, and high too when
+-- it's above the player.
+local function dead(e)
+    if e:routine(1) == 0 then
+        if e:joint(0x200) then
+            e:set_routine(1, 1)
+            e:set_timer(2, (e:rnd() & 0x1F) + 0x1E)
+        end
+    else
+        local left = (e:timer(2) - 1) & 0xFF
+        e:set_timer(2, left)
+        if left == 0 then
+            e:clip(0xD, 0, 7)
+            e:set_routine(1, 0)
+        end
+    end
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:set_var(T225, 2)
+        e:set_timer(1, 0)
+    end
+    if e:var(FLOAT) >= 0x80 then
+        bob(e)
+    end
+    e:set_be_flg(e:be_flg() | 0x4000000)
+    local _, y = e:pos()
+    local _, player_y = e:player_pos()
+    if y < player_y then
+        e:set_be_flg(e:be_flg() | 0x8000000)
+    end
+end
+
 function update(e)
     if e:var(T23D) ~= 0 then
         e:set_var(T23D, e:var(T23D) - 1)
@@ -531,5 +863,12 @@ function update(e)
         init(e)
     elseif routine == 1 then
         move(e)
+    elseif routine == 2 then
+        hurt(e)
+    elseif routine == 3 then
+        die(e)
+    elseif routine == 7 then
+        dead(e)
     end
+    -- 4 is `nullsub_1`; 5 and 6 are empty.
 end
