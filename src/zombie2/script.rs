@@ -1410,12 +1410,24 @@ mod tests {
     }
 
     /// A stand-in for the work, enough for `enemy/25/enemy.lua`'s init and
-    /// floor states: `Rnd` gives `DRAWS` in turn, and the player is far away.
+    /// floor states: `Rnd` gives `DRAWS` in turn. By default the player is
+    /// far away, half a turn round, and no clip ends; `DIST`, `TARGET`,
+    /// `CLIP_LEN` and `NOISE` change that. `Goto00_ck` gives `rate` the way to
+    /// the player's angle, `TARGET`, or 0 within `rate` of it.
     const SPIDER_STUB: &str = "
         local draws, drawn = DRAWS, 0
+        local dist, target, clip_len = DIST or 20000, TARGET or 0x800, CLIP_LEN or 1000
         local w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, timers = { [0] = 0, 0 },
             be = 1, kind = KIND, angle = 0, spd = { 0, 0, 0 }, moved = 0,
-            clips = {} }
+            clips = {}, frame = 0, add_dir = -1, pl = { [0] = 1, 0, 0, 0 },
+            pl_life = PL_LIFE or 200, pl_dc = 0, sounds = {}, effect = { -1, -1 },
+            rotated = { -1, -1 } }
+        local function way(rate)
+            local d = (target - w.angle) & 0xFFF
+            if d > 0x800 then d = d - 0x1000 end
+            if d >= -rate and d <= rate then return 0, d end
+            return d < 0 and -rate or rate, d
+        end
         local e = {}
         function e:routine(i) return w.r[i] end
         function e:set_routine(i, v) w.r[i] = v end
@@ -1430,21 +1442,42 @@ mod tests {
         function e:kind() return w.kind end
         function e:easy() return false end
         function e:set_life(v) w.life = v end
-        function e:clip(n) w.clips[#w.clips + 1] = n end
+        function e:clip(n) w.clips[#w.clips + 1] = n; w.frame = 0 end
+        function e:joint() w.frame = w.frame + 1; return w.frame >= clip_len end
         function e:angle() return w.angle end
         function e:set_angle(v) w.angle = v end
         function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
         function e:set_speed(x, y, z) w.spd = { x, y, z } end
-        function e:add_speed_xz_at() w.moved = w.moved + 1 end
-        function e:distance() return 20000 end
+        function e:set_speed_x(x) w.spd[1] = x end
+        function e:add_speed_xz_at(dir) w.moved = w.moved + 1; w.add_dir = dir end
+        function e:distance() return dist end
+        function e:pos() return 0, 0, 0 end
         function e:player_pos() return 0, 0, 20000 end
-        function e:goto_ck() return 0x30 end
+        function e:goto_ck(x, z, rate) return (way(rate)) end
+        function e:goto_point(x, z, rate)
+            local turn, d = way(rate)
+            w.angle = (w.angle + (turn == 0 and d or turn)) & 0xFFFF
+        end
+        function e:direction() return 0x400 end
+        function e:rotate(dir, x, z) w.rotated = { dir, x }; return 11, 22 end
         function e:part_point() return 30, 0, 40 end
         function e:hypot(x, z) return math_hypot(x, z) end
         function e:now_seq() return 0 end
-        function e:noise() return 0 end
-        for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg', 'joint',
-            'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'sound' }) do
+        function e:noise() return NOISE or 0 end
+        function e:at_em_no() return 0xFF end
+        function e:sca_info() return 0 end
+        function e:cdir_player() return false end
+        function e:pl_damage_cnt() return w.pl_dc end
+        function e:pl_set_damage_cnt(v) w.pl_dc = v end
+        function e:pl_set_routine(a, b, c, d) w.pl = { [0] = a, b, c, d } end
+        function e:pl_life_down(down)
+            w.pl_life = w.pl_life - down
+            return w.pl_life < 0 and 2 or 0
+        end
+        function e:sound(n) w.sounds[#w.sounds + 1] = n end
+        function e:effect(kind, row, size, dir) w.effect = { row, dir } end
+        for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg',
+            'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'seq_sound' }) do
             e[name] = function() end
         end
     ";
@@ -1459,7 +1492,13 @@ mod tests {
     }
 
     fn run_spider(kind: u16, draws: &[u8], ticks: usize) -> Spider {
+        run_spider_with(kind, draws, ticks, "")
+    }
+
+    /// `run_spider` with `setup`'s globals set before the stub.
+    fn run_spider_with(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Spider {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        lua.load(setup).exec().unwrap();
         let script = include_str!("../../games/re2/enemy/25/enemy.lua");
         lua.globals().set("DRAWS", draws.to_vec()).unwrap();
         lua.globals().set("KIND", kind).unwrap();
@@ -1476,7 +1515,13 @@ mod tests {
              for _ = 1, {ticks} do update(e) end
              return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], life = w.life, be = w.be,
                  clips = w.clips, angle = w.angle, spd = w.spd[1], moved = w.moved,
-                 timer = w.timers[0], drawn = drawn }}"
+                 timer = w.timers[0], timer1 = w.timers[1], drawn = drawn,
+                 spd_y = w.spd[2], spd_z = w.spd[3], add_dir = w.add_dir,
+                 cooldown = w.vars[0] or 0, pl0 = w.pl[0], pl1 = w.pl[1],
+                 pl_life = w.pl_life, pl_dc = w.pl_dc, sounds = #w.sounds,
+                 bite_sound = w.sounds[#w.sounds] or -1, effect_row = w.effect[1],
+                 effect_dir = w.effect[2], rot_dir = w.rotated[1],
+                 rot_by = w.rotated[2] }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
@@ -1488,6 +1533,9 @@ mod tests {
                 .collect();
             let fields = [
                 "r0", "r1", "r2", "life", "be", "angle", "spd", "moved", "timer", "drawn",
+                "timer1", "spd_y", "spd_z", "add_dir", "cooldown", "pl0", "pl1", "pl_life",
+                "pl_dc", "sounds", "bite_sound", "effect_row", "effect_dir", "rot_dir",
+                "rot_by",
             ]
             .into_iter()
             .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
@@ -1539,6 +1587,105 @@ mod tests {
         let spider = run_spider(0, &draws, 27);
         assert_eq!(spider.get("r1"), 4);
         let spider = run_spider(0, &draws, 28);
+        assert_eq!(spider.get("r1"), 0);
+    }
+
+    /// Within 8000 units and facing more than 0x400 away, the rest turns it
+    /// toward the player (`Routine_1` 5): clip 2, 0x80 a tick until it's
+    /// within 0x80, then back to the rest, which, facing the player 5000
+    /// away with no cooldown, lunges (7).
+    #[test]
+    fn a_near_floor_spider_turns_to_face_the_player() {
+        let near = "DIST = 5000";
+        let draws = [0; 32];
+        let spider = run_spider_with(0, &draws, 2, near);
+        assert_eq!((spider.get("r1"), spider.get("r2")), (5, 0));
+        let spider = run_spider_with(0, &draws, 3, near);
+        assert_eq!(spider.1, [1, 0, 2]);
+        assert_eq!(spider.get("timer1"), 0x3B);
+        assert_eq!(spider.get("angle"), 0x80);
+        // Fifteen turns of 0x80 leave it 0x80 short, which faces it.
+        let spider = run_spider_with(0, &draws, 18, near);
+        assert_eq!((spider.get("r1"), spider.get("r2")), (5, 2));
+        assert_eq!(spider.get("angle"), 0x780);
+        let spider = run_spider_with(0, &draws, 19, near);
+        assert_eq!(spider.get("r1"), 0);
+        let spider = run_spider_with(0, &draws, 20, near);
+        assert_eq!(spider.get("r1"), 7);
+    }
+
+    /// `Routine_1` 7: a step (clip 4) at 100, a turn (clip 5) to within 0x40,
+    /// the lunge at 300 that bites a player within 1500 for 20 and sets their
+    /// hit reaction, the landing (clip 7), then the rest with `+0x218` at 15.
+    #[test]
+    fn a_floor_spider_lunges_and_bites() {
+        let near = "DIST = 1200 TARGET = 0 CLIP_LEN = 4";
+        let draws = [0; 32];
+        let spider = run_spider_with(0, &draws, 2, near);
+        assert_eq!(spider.get("r1"), 7);
+        let spider = run_spider_with(0, &draws, 6, near);
+        assert_eq!((spider.get("r2"), spider.get("spd")), (2, 100));
+        assert_eq!(spider.get("add_dir"), 0);
+        let spider = run_spider_with(0, &draws, 7, near);
+        assert_eq!((spider.get("r2"), spider.get("timer")), (4, 0x13));
+        let spider = run_spider_with(0, &draws, 8, near);
+        assert_eq!(spider.1, [1, 0, 4, 5, 5]);
+        assert_eq!((spider.get("r2"), spider.get("spd")), (6, 300));
+        assert_eq!((spider.get("pl0"), spider.get("pl1")), (2, 2));
+        assert_eq!((spider.get("pl_life"), spider.get("pl_dc")), (180, 0x80));
+        assert_eq!((spider.get("sounds"), spider.get("bite_sound")), (1, 1));
+        let spider = run_spider_with(0, &draws, 12, near);
+        assert_eq!(spider.1, [1, 0, 4, 5, 5, 7]);
+        assert_eq!(spider.get("r2"), 8);
+        let spider = run_spider_with(0, &draws, 13, near);
+        assert_eq!((spider.get("r1"), spider.get("cooldown")), (0, 14));
+        // The bite waits for the hit reaction to clear: one lunge, one bite.
+        assert_eq!(spider.get("pl_life"), 180);
+        // A bite that kills sets the player's `Routine` 3.
+        let spider = run_spider_with(0, &draws, 8, &format!("{near} PL_LIFE = 10"));
+        assert_eq!((spider.get("pl0"), spider.get("pl1")), (3, 0));
+    }
+
+    /// A draw of 6, 8 or 9 at the rest picks the spit (`Routine_1` 8):
+    /// `Esp_call` 0x1d with the floor's row 8, along the way it faces, then
+    /// the rest with `+0x218` at 15 once clip 0xb ends.
+    #[test]
+    fn a_floor_spider_spits() {
+        let near = "DIST = 1200 TARGET = 0 CLIP_LEN = 4";
+        let mut draws = vec![0, 0, 0, 6];
+        draws.resize(32, 0);
+        let spider = run_spider_with(0, &draws, 2, near);
+        assert_eq!(spider.get("r1"), 8);
+        let spider = run_spider_with(0, &draws, 3, near);
+        assert_eq!(spider.1, [1, 0, 0xB]);
+        assert_eq!((spider.get("effect_row"), spider.get("effect_dir")), (8, 0));
+        let spider = run_spider_with(0, &draws, 6, near);
+        assert_eq!(spider.get("r2"), 2);
+        let spider = run_spider_with(0, &draws, 7, near);
+        assert_eq!((spider.get("r1"), spider.get("cooldown")), (0, 14));
+    }
+
+    /// A noise sends it to the leap (`Routine_1` 9) on an even draw: 0x380
+    /// plus a draw off the way to the player, with half a turn on an odd
+    /// draw, at 400 plus a draw's low six bits, which `Timer0` keeps and
+    /// `Add_speedXZ` adds to `Add_dir`.
+    #[test]
+    fn a_floor_spider_leaps_aside_from_a_noise() {
+        let noise = "NOISE = 1 CLIP_LEN = 4";
+        let mut draws = vec![0, 0, 0, 0, 1, 0x10, 5];
+        draws.resize(32, 0);
+        let spider = run_spider_with(0, &draws, 2, noise);
+        assert_eq!(spider.get("r1"), 9);
+        let spider = run_spider_with(0, &draws, 3, noise);
+        assert_eq!(spider.1, [1, 0, 8]);
+        let dir = 0x400 + 0x800 + 0x380 + 0x10;
+        assert_eq!(spider.get("timer"), dir);
+        assert_eq!((spider.get("rot_dir"), spider.get("rot_by")), (dir, 405));
+        assert_eq!((spider.get("spd"), spider.get("spd_y"), spider.get("spd_z")), (11, 0, 22));
+        assert_eq!(spider.get("add_dir"), dir);
+        let spider = run_spider_with(0, &draws, 6, noise);
+        assert_eq!(spider.get("r2"), 2);
+        let spider = run_spider_with(0, &draws, 7, noise);
         assert_eq!(spider.get("r1"), 0);
     }
 
