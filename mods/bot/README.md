@@ -278,17 +278,25 @@ catalog's heal effects.
   to a fight the handgun cannot finish.
 - **Fight or run** (`BotTactics.decide`). Run when the monster has no entry,
   its policy is not `fight`, or there is no gun. A monster closing in
-  (within twice its reach) that cannot be outrun is fought with any rounds
-  left. Otherwise run below `max_health * (0.45 - 0.3 * risk)`, or with too
-  few rounds for it (`health / damage * (1 + 0.5 * (1 - risk))`) or for the
+  (within twice its reach, or within the far edge of the gun's `<keep>`
+  band) that cannot be outrun is fought with any rounds left: a zombie
+  closes about as fast as the handgun brings it down, so the fight has to
+  open at the band's edge to end before its grab. Otherwise run below
+  `max_health * (0.45 - 0.3 * risk)`, or with too few rounds for it
+  (`(health // damage + 1) * (1 + 0.5 * (1 - risk))`: a monster dies below
+  zero health, so a hit that leaves it at exactly 0 does not kill) or for the
   crowd; fight a monster that cannot be outrun or one in a room the
   frontier crosses again (not while sourcing ammunition); run past one that
   is only in the way.
-- **Spacing** (`BotTactics.spacing`). Keep the `<keep>` band: back off to
-  its middle when too close, to its far edge while reloading, and close in
-  with a headshot weapon from just outside its headshot distance. A back-off
-  that the monster's `speed` would close during the turn around, or one
-  inside its reach, holds and shoots instead. The walks use
+- **Spacing** (`BotTactics.spacing`). Hold and shoot inside the `<keep>`
+  band and inside its near edge too: lowering the aim plays the holster,
+  which drifts the player a few hundred units toward the monster, and
+  re-raising it costs about 14 ticks, so a back-off from a close zombie
+  handed it the grab. Back off to the band's far edge only while reloading
+  (the aim is down anyway), and close in with a headshot weapon from just
+  outside its headshot distance. A reload back-off that the monster's
+  `speed` would close during the turn around, or one inside its reach,
+  holds instead. The walks use
   `bot:spacing_point` and `walk_to` with `avoid_enemies`.
 
 ### Ammunition
@@ -299,7 +307,7 @@ engine's `weapon + 9` when the item catalog lists the weapon as a weapon and
 that item as ammunition). The floor is `shots * (1 + 2 * (1 - risk))`,
 rounded up: three kills at risk 0, two and a half at the default 0.25, one
 at risk 1, where `shots` is the most hits one kill of a `fight` monster
-takes with the weapon in the knowledge file (`health / damage`, rounded up:
+takes with the weapon in the knowledge file (`health // damage + 1`:
 9 for the re1 handgun, 4 for the shotgun). Below it, the way-out ranking
 takes a reachable frontier item of that ammunition 60 reach cheaper, and
 the planner logs `ammo low: R rounds under the floor F; N known ammo
