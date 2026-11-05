@@ -1309,6 +1309,7 @@ impl UserData for BotCtx {
             table.set("state", p.state)?;
             table.set("being_attacked", p.being_attacked)?;
             table.set("equipped", p.equipped)?;
+            table.set("collision_flags", p.collision_flags)?;
             Ok(table)
         });
 
