@@ -13,7 +13,17 @@
 --   - no save when nothing new happened since the last one, or since the run
 --     started (progress: rooms entered, items taken, doors unlocked;
 --     BotSave.progress), so the new game's first room is no save;
---   - critical health (BotSurvival's floor, no heal item) saves at once;
+--   - save safety: no save that a reload would turn straight back into the
+--     same death. Health under BotSurvival's critical floor with no heal
+--     item held, or with too few rounds for one kill of the hardest `fight`
+--     monster (BotSave.dead_end), is a dead end: the reload starts there
+--     with nothing to fight or heal with, and a death since such a save
+--     repeats until the run gives up. A dead end is saved only when there
+--     is no other choice (BotSave.no_choice): no save exists yet, or the
+--     latest save is no better (no more health, rounds or heals; recorded
+--     as save_health, save_rounds and save_heals when it is written);
+--   - critical health (BotSurvival's floor, no heal item, hurt just now)
+--     saves at once, once the save-safety rule allows it;
 --   - otherwise at most one save per cooldown, 20 s at risk 0 to 120 s at
 --     risk 1 (BotSave.cooldown);
 --   - risk up to BOLD_RISK saves at every typewriter it passes;
@@ -21,7 +31,8 @@
 --     room: a live monster in the room, or damage taken in the last
 --     RISKY_DAMAGE ticks.
 -- The latest save is tracked in bot memory (save_count, save_slot,
--- save_room, save_tick, save_progress) the tick the engine reports it.
+-- save_room, save_tick, save_progress, save_health, save_rounds,
+-- save_heals) the tick the engine reports it.
 --
 -- After a death: with a save, skip the DIED screen with confirm; the game
 -- returns to the title, where on_bot_screen picks LOAD GAME, moves the load
@@ -82,6 +93,9 @@ function BotSave.wants(o)
     if o.saved_progress and o.progress <= o.saved_progress then
         return false, "nothing new since the last save"
     end
+    if o.dead_end and not o.no_choice then
+        return false, "a reload would start in the same death: " .. tostring(o.dead_end)
+    end
     if o.critical then
         return true, "critical health"
     end
@@ -98,6 +112,52 @@ function BotSave.wants(o)
         return true, "risky room"
     end
     return false, "a bold bot skips a save while healthy in a calm room"
+end
+
+-- The save-safety test (see the header), from plain values: health,
+-- max_health, risk, heals (heal stacks held), rounds (the equipped gun's
+-- clip plus its ammunition) and shots (hits for one kill of the hardest
+-- `fight` monster, nil unknown). Returns why a save here is a dead end, or
+-- nil.
+function BotSave.dead_end(o)
+    if o.health >= o.max_health * BotSurvival.critical_fraction(o.risk) then
+        return nil
+    end
+    if (o.heals or 0) == 0 then
+        return "critical health with no heal item"
+    end
+    if (o.rounds or 0) < (o.shots or 1) then
+        return "critical health without the rounds for one kill"
+    end
+    return nil
+end
+
+-- Whether a dead-end save is still the best there is: no save exists, or
+-- the latest one (BotSave.latest) is no better than `now` ({health, rounds,
+-- heals}) in health, rounds and heals. A save from before these were
+-- recorded counts as better.
+function BotSave.no_choice(latest, now)
+    if not latest then
+        return true
+    end
+    if not (latest.health and latest.rounds and latest.heals) then
+        return false
+    end
+    return latest.health <= now.health and latest.rounds <= now.rounds
+        and latest.heals <= now.heals
+end
+
+-- What the save-safety rule reads from the live state.
+local function condition(bot, player)
+    local rounds, shots = BotSurvival.rounds(bot)
+    return {
+        health = player.health,
+        max_health = player.max_health,
+        risk = bot:risk() or 0.25,
+        heals = BotSurvival.heal_count(bot),
+        rounds = rounds,
+        shots = shots,
+    }
 end
 
 -- Progress for the "nothing new" test: rooms entered, items taken and doors
@@ -123,8 +183,9 @@ function BotSave.progress(world)
 end
 
 -- The latest-save tracking: given bot:memory() and bot:saves(), the memory
--- entries to remember for a save not yet recorded, or nil.
-function BotSave.track(memory, saves, progress)
+-- entries to remember for a save not yet recorded, or nil. `now` (optional)
+-- is the save-safety condition when it was written: {health, rounds, heals}.
+function BotSave.track(memory, saves, progress, now)
     local seen = tonumber(memory.save_count or "0") or 0
     if (saves.count or 0) <= seen then
         return nil
@@ -135,6 +196,9 @@ function BotSave.track(memory, saves, progress)
         save_room = saves.room,
         save_tick = saves.tick,
         save_progress = progress,
+        save_health = now and now.health,
+        save_rounds = now and now.rounds,
+        save_heals = now and now.heals,
     }
 end
 
@@ -150,6 +214,9 @@ function BotSave.latest(memory)
         room = memory.save_room,
         tick = tonumber(memory.save_tick or ""),
         progress = tonumber(memory.save_progress or ""),
+        health = tonumber(memory.save_health or ""),
+        rounds = tonumber(memory.save_rounds or ""),
+        heals = tonumber(memory.save_heals or ""),
     }
 end
 
@@ -180,7 +247,8 @@ function BotSave.observe(bot)
     if (saves.count or 0) <= (tonumber(memory.save_count or "0") or 0) then
         return
     end
-    local entries = BotSave.track(memory, saves, BotSave.progress(bot:world()))
+    local entries = BotSave.track(memory, saves, BotSave.progress(bot:world()),
+        condition(bot, bot:player()))
     for key, value in pairs(entries) do
         bot:remember(key, value)
     end
@@ -311,7 +379,10 @@ function BotSave.step(bot, player, critical)
     end
     local saves = bot:saves()
     local latest = BotSave.latest(bot:memory())
+    local now = condition(bot, player)
     local wants, why = BotSave.wants({
+        dead_end = BotSave.dead_end(now),
+        no_choice = BotSave.no_choice(latest, now),
         risk = bot:risk() or 0.25,
         can_save = BotSave.can_save(saves),
         health = player.health,
