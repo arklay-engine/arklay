@@ -72,6 +72,12 @@ pub struct BotInput {
     /// menu USE does, and consumes one unit through `select_item` +
     /// `use_selected_item`, before the gameplay tick.
     pub heal: Option<u8>,
+    /// A non-heal item (a key, chemical or document) the script asked to use
+    /// this tick. This is the same menu USE path as [`BotInput::heal`]: the
+    /// host validates the unit, runs `use_item` (which requires the room's
+    /// use-item zone to have raised the item's use flag), and consumes it
+    /// through `select_item` + `use_selected_item`.
+    pub use_item: Option<u8>,
 }
 
 impl BotInput {
@@ -160,6 +166,11 @@ impl BotInput {
     /// Ask the host to use the heal `item` this tick.
     fn use_heal(&mut self, item: u8) {
         self.heal = Some(item);
+    }
+
+    /// Ask the host to use a non-heal `item` this tick (the menu USE path).
+    fn use_item(&mut self, item: u8) {
+        self.use_item = Some(item);
     }
 }
 
@@ -1786,6 +1797,24 @@ impl UserData for BotCtx {
             Ok(true)
         });
 
+        methods.add_method("use_item", |_lua, bot, item: u8| {
+            if !bot.snapshot.has_item(item) {
+                bot.log(&format!(
+                    "use_item refused: item {item:#04X} is not in the inventory"
+                ));
+                return Ok(false);
+            }
+            if bot.snapshot.held_heals.contains(&item) {
+                // Heals keep their own skill and its explicit threshold policy.
+                bot.log(&format!(
+                    "use_item refused: item {item:#04X} is a heal item; use use_heal"
+                ));
+                return Ok(false);
+            }
+            bot.input().use_item(item);
+            Ok(true)
+        });
+
         methods.add_method(
             "walk_to",
             |lua, bot, (x, z, options): (i32, i32, Option<Table>)| {
@@ -2146,6 +2175,16 @@ mod tests {
         assert_eq!(input.equip, None);
         input.reset();
         assert_eq!(input.heal, None);
+    }
+
+    #[test]
+    fn use_item_is_a_one_tick_request() {
+        let mut input = BotInput::default();
+        input.use_item(0x26);
+        assert_eq!(input.use_item, Some(0x26));
+        assert_eq!(input.heal, None);
+        input.reset();
+        assert_eq!(input.use_item, None);
     }
 
     #[test]

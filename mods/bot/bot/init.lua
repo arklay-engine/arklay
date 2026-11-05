@@ -91,6 +91,11 @@ BOT_STATE.crest.stair_nudge = BOT_STATE.crest.stair_nudge or 0
 BOT_STATE.crest.clear_202_positioned = BOT_STATE.crest.clear_202_positioned or false
 BOT_STATE.last_health = BOT_STATE.last_health or nil
 BOT_STATE.stale_attack_logged = BOT_STATE.stale_attack_logged or false
+BOT_STATE.pickup_cooldown = BOT_STATE.pickup_cooldown or 0
+BOT_STATE.action_release_until = BOT_STATE.action_release_until or 0
+BOT_STATE.last_pickup_tick = BOT_STATE.last_pickup_tick or 0
+BOT_STATE.pickup_prompt_right = BOT_STATE.pickup_prompt_right or false
+BOT_STATE.pickup_prompt_right_tick = BOT_STATE.pickup_prompt_right_tick or 0
 
 -- 10C greenhouse progress. `herb_slots` is built from the room actions the
 -- first time the phase runs; `herb_index` walks that list across ticks.
@@ -100,6 +105,38 @@ BOT_STATE.tenc.herb_slots = BOT_STATE.tenc.herb_slots or nil
 BOT_STATE.tenc.herb_index = BOT_STATE.tenc.herb_index or 1
 BOT_STATE.tenc.key_line_stage = BOT_STATE.tenc.key_line_stage or 1
 BOT_STATE.tenc.retreat_reason = BOT_STATE.tenc.retreat_reason or nil
+BOT_STATE.tenc.herbicide_stage = BOT_STATE.tenc.herbicide_stage or 1
+BOT_STATE.tenc.herbicide_ticks = BOT_STATE.tenc.herbicide_ticks or 0
+
+-- The 10B storeroom/118 herbicide detour. `picked` is the item in hand,
+-- `done` means the 10C pump event ran, `failed` means the route must fall back
+-- to the risky key lane. `stage` tracks the door legs.
+BOT_STATE.herb = BOT_STATE.herb or {}
+BOT_STATE.herb.stage = BOT_STATE.herb.stage or 1
+BOT_STATE.herb.picked = BOT_STATE.herb.picked or false
+BOT_STATE.herb.done = BOT_STATE.herb.done or false
+BOT_STATE.herb.failed = BOT_STATE.herb.failed or false
+BOT_STATE.herb.spray_done = BOT_STATE.herb.spray_done or false
+
+-- The 105 shield-key detour through the 10F bar. The room starts the shield
+-- key behind OBJ_02 at (18000,14300); using the 10F gold emblem key at the
+-- fireplace moves it to (16000,14300). The stage survives a --watch reload:
+-- the room id and the two key counts are enough to resume any leg.
+BOT_STATE.emblem = BOT_STATE.emblem or {}
+BOT_STATE.emblem.stage = BOT_STATE.emblem.stage or "start"
+BOT_STATE.emblem.ticks = BOT_STATE.emblem.ticks or 0
+BOT_STATE.emblem.used = BOT_STATE.emblem.used or false
+BOT_STATE.emblem.done = BOT_STATE.emblem.done or false
+BOT_STATE.emblem.failed = BOT_STATE.emblem.failed or false
+BOT_STATE.emblem.tenf_stage = BOT_STATE.emblem.tenf_stage or "push"
+BOT_STATE.emblem.tenf_ticks = BOT_STATE.emblem.tenf_ticks or 0
+BOT_STATE.emblem.push_x = BOT_STATE.emblem.push_x or nil
+BOT_STATE.emblem.tenf_cleared = BOT_STATE.emblem.tenf_cleared or false
+
+-- 205 armor-room switch. `F_ROOM_1D` is the room's own "wall moved" flag.
+BOT_STATE.sun = BOT_STATE.sun or {}
+BOT_STATE.sun.stage = BOT_STATE.sun.stage or "switch"
+BOT_STATE.sun.ticks = BOT_STATE.sun.ticks or 0
 
 -- Combat is a conservative layer over the route: it only stops to shoot the
 -- common zombies with the handgun, and stands down for bosses, crowds, low
@@ -122,10 +159,12 @@ BOT_STATE.combat.start_health = BOT_STATE.combat.start_health or nil
 BOT_STATE.combat.start_clip = BOT_STATE.combat.start_clip or nil
 BOT_STATE.combat.start_reserve = BOT_STATE.combat.start_reserve or nil
 
--- Flag banks: FG_COMMON is 1, FG_ROOM is 4, FG_STATUS is 5, FG_ITEM is 7.
+-- Flag banks: FG_COMMON is 1, FG_ROOM is 4, FG_STATUS is 5, FG_ITEM is 7,
+-- and the per-item USE flags (item - 0x1B) live in bank 9.
 local BANK_COMMON = 1
 local BANK_STATUS = 5
 local BANK_ITEM = 7
+local BANK_ITEM_USE = 9
 
 -- Short final approaches walk: running into a waypoint or door overshoots and
 -- forces a turn-back. The Rust walk_to walks the last 400 units anyway; keep
@@ -135,6 +174,9 @@ local RUN_MIN_DISTANCE = 600
 local F_COMMON_02 = 0x02 -- 104 FMV seen
 local F_COMMON_03 = 0x03 -- first 106 Barry scene started
 local F_COMMON_05 = 0x05 -- 106 camera scenes done
+local F_COMMON_A9 = 0xA9 -- 10C pump event ran; the fountains wither
+local F_COMMON_A5 = 0xA5 -- 10F piano played; the bar counter moved to 0,0
+local F_COMMON_AB = 0xAB -- 105 gold-emblem event ran; OBJ_02 moved west
 local F_STATUS_1A = 0x1A
 local F_STATUS_1C = 0x1C
 local F_ITEM_LOCKPICK = 0x09
@@ -148,6 +190,10 @@ local ITEM_STAR_CREST = 0x2D
 local ITEM_DESK_KEY = 0x3D
 local ITEM_RADIO_KEY = 0x4D
 local ITEM_HANDGUN = 0x02
+local ITEM_FIRST_AID_SPRAY = 0x41
+local ITEM_HERBICIDE = 0x26
+local ITEM_MUSIC_SCORE = 0x23
+local ITEM_GOLD_EMBLEM = 0x20
 local ITEM_SHIELD_KEY = 0x35
 local ITEM_BLUE_JEWEL_KEY = 0x21
 local ITEM_ARMOR_KEY = 0x34
@@ -178,9 +224,10 @@ local COMBAT_RETREAT_START = 1800
 local COMBAT_RETREAT_DONE = 2600
 local COMBAT_RETREAT_WAIT = 150
 
--- Healing: between fights, one green herb below 60 health, at most once per
--- 60 controllable ticks. The host applies the menu's USE rule and consumes a
--- unit, so this cannot set health or inventory directly.
+-- Healing: between fights, one first-aid spray (full heal) below 60 health,
+-- else a green herb, at most once per 60 controllable ticks. The host applies
+-- the menu's USE rule and consumes a unit, so this cannot set health or
+-- inventory directly.
 local HEAL_THRESHOLD = 60
 local HEAL_COOLDOWN = 60
 
@@ -396,6 +443,37 @@ local function handle_scene(bot, scene)
         end
         return true
     end
+    if scene.pickup then
+        -- The got-item viewer owns the frozen frame. It closes on the
+        -- action/confirm edge and awards the armed room item. Remember the
+        -- close window: pressing action again during the menu's exit fade is
+        -- buffered into the room tick and re-arms a reach-gated ground item.
+        if not BOT_STATE.saw_pickup then
+            BOT_STATE.pickup_prompt_right = false
+        end
+        BOT_STATE.saw_pickup = true
+        BOT_STATE.pickup_cooldown = tick + 45
+        BOT_STATE.action_release_until = tick + 4
+        BOT_STATE.last_pickup_tick = tick
+        if scene.message_takes_input then
+            -- The ground-item prompt is the message window's Yes/No phase.
+            -- The cursor can be sticky on No (the gold-key prompt after the
+            -- piano scene); press RIGHT once to select Yes before confirming.
+            if not BOT_STATE.pickup_prompt_right then
+                BOT_STATE.pickup_prompt_right = true
+                BOT_STATE.pickup_prompt_right_tick = tick
+                bot:set_input({ right = true })
+            elseif tick >= (BOT_STATE.pickup_prompt_right_tick or 0) + 4
+                and tick % 2 == 0 then
+                bot:press_action()
+            end
+        elseif tick % 2 == 0 then
+            bot:press_action()
+        else
+            bot:pulse_confirm()
+        end
+        return true
+    end
     if scene.message_takes_input then
         -- A page wait or a yes/no prompt needs a fresh press edge; holding
         -- the button every tick can leave the window waiting forever.
@@ -404,19 +482,13 @@ local function handle_scene(bot, scene)
         end
         return true
     end
-    if scene.pickup then
-        -- The got-item viewer owns the frozen frame. It closes on the
-        -- action/confirm edge and awards the armed room item.
-        BOT_STATE.saw_pickup = true
-        if tick % 2 == 0 then
-            bot:press_action()
-        else
-            bot:pulse_confirm()
-        end
-        return true
-    end
     if scene.frozen then
         -- Item viewers and other full-screen UI close on action/confirm.
+        -- Do not press during the pickup viewer's exit fade: the press is
+        -- buffered and re-arms a reach-gated ground item.
+        if tick < (BOT_STATE.pickup_cooldown or 0) then
+            return true
+        end
         if tick % 2 == 0 then
             bot:press_action()
         else
@@ -745,10 +817,15 @@ local function action_nav(bot, slot, label, custom, opts)
             scripted = scripted,
             optional = opts and opts.optional or false,
             walk_tolerance = opts and opts.walk_tolerance or 120,
+            side_ticks = opts and opts.side_ticks or ACTION_SIDE_TICKS,
+            require_count = opts and opts.require_count or false,
             points = {},
             index = 1,
             pressing = false,
             pressed = false,
+            press_armed = false,
+            press_delay = 3,
+            single_press = opts and opts.single_press or false,
             used = false,
             ticks = 0,
             total = 0,
@@ -782,6 +859,9 @@ local function action_nav(bot, slot, label, custom, opts)
     end
 
     nav.total = nav.total + 1
+    if (nav.press_delay or 0) > 0 then
+        nav.press_delay = nav.press_delay - 1
+    end
     local count = bot:item_count(nav.item)
     if count > nav.before then
         log(bot, string.format(
@@ -801,7 +881,7 @@ local function action_nav(bot, slot, label, custom, opts)
         BOT_STATE.nav = nil
         return true
     end
-    if nav.pressed and BOT_STATE.saw_pickup then
+    if nav.pressed and BOT_STATE.saw_pickup and not nav.require_count then
         log(bot, string.format(
             "%s: got-item viewer closed (count=%d)", label, count
         ))
@@ -867,8 +947,13 @@ local function action_nav(bot, slot, label, custom, opts)
             -- turning/standing: a room hazard can knock us out of reach
             -- between the two ticks.
             local facing = bot:face_to(point[3], point[4])
-            if facing.status == "facing" then
+            if facing.status == "facing"
+                and (nav.press_delay or 0) == 0
+                and bot:tick() >= (BOT_STATE.action_release_until or 0) then
                 nav.pressed = true
+                if nav.single_press then
+                    nav.press_armed = true
+                end
                 bot:press_action()
             end
         elseif result.status ~= "moving" then
@@ -880,6 +965,7 @@ local function action_nav(bot, slot, label, custom, opts)
             ))
             nav.index = nav.index + 1
             nav.pressing = false
+            nav.press_armed = false
         end
         if nav.total > ACTION_TIMEOUT_TICKS then
             local message = string.format(
@@ -898,8 +984,13 @@ local function action_nav(bot, slot, label, custom, opts)
 
     nav.ticks = nav.ticks + 1
     local facing = bot:face_to(point[3], point[4])
-    if facing.status == "facing" then
+    if facing.status == "facing" and (not nav.single_press or not nav.press_armed)
+        and (nav.press_delay or 0) == 0
+        and bot:tick() >= (BOT_STATE.action_release_until or 0) then
         nav.pressed = true
+        if nav.single_press then
+            nav.press_armed = true
+        end
         bot:press_action()
     end
     if nav.ticks % 30 == 0 then
@@ -911,7 +1002,7 @@ local function action_nav(bot, slot, label, custom, opts)
             p.x, p.z, p.health, p.collision_flags, p.being_attacked
         ))
     end
-    if nav.ticks > ACTION_SIDE_TICKS then
+    if nav.ticks > (nav.side_ticks or ACTION_SIDE_TICKS) then
         log(bot, string.format(
             "%s: no pickup on approach %d; next side (count=%d)",
             label, nav.index, count
@@ -919,6 +1010,7 @@ local function action_nav(bot, slot, label, custom, opts)
         nav.index = nav.index + 1
         nav.pressing = false
         nav.ticks = 0
+        nav.press_armed = false
     end
     if nav.total > ACTION_TIMEOUT_TICKS then
         local message = string.format(
@@ -946,7 +1038,7 @@ end
 -- room-id defaults (which only describe the outward opening route).
 local TRAVEL_PHASES = {
     to_10a_from_11a = {
-        target = "10A", next_phase = "to_109_from_10a",
+        target = "10A", next_phase = "herbicide_from_10a",
         label = "door 11A->10A", deadline = 1200,
         custom = { { 4400, 3850, 5600, 3850 } },
     },
@@ -1062,7 +1154,10 @@ local TRAVEL_PHASES = {
         target = "205", next_phase = "to_205_item",
         label = "door 204->205 (armor key)", deadline = 2400,
         -- 204's corridor is open only east of the big block (x >= 18126);
-        -- the door zone reaches x 18800, so approach from the east.
+        -- the door zone reaches x 18800, so approach from the east. Stay on
+        -- the south side of the west corridor so the 204 zombie at
+        -- (17006,3645) cannot grab the low-health route on the way past.
+        points = { { 19000, 2500 } },
         custom = { { 19300, 12100, 17600, 12100 } },
     },
     to_204_from_205 = {
@@ -1601,6 +1696,670 @@ local function phase_place_crests_11a(bot)
     end
 end
 
+-- The 10F gold-key pickup runs from_main_2_jill, which sets OBJ_00 back to
+-- ~(13380,12596); its half extents 16000/400 then cover the only north-south
+-- gap (x8356..9720, z12348..12810) and trap the player in the secret passage.
+-- There is no door or walkable exit from the north half in this build.
+local function finish_10f_trapped(bot, reason)
+    local p = bot:player()
+    local gold = bot:item_count(ITEM_GOLD_EMBLEM)
+    local hasgold = bot:has_item(ITEM_GOLD_EMBLEM)
+    log(bot, string.format(
+        "10F north passage trapped: %s pos=(%d,%d) gold=%d has=%s "
+            .. "OBJ_00 half extents 16000/400 at ~13380,12596 covers "
+            .. "x -2620..29380 z12196..12996; gap x8356..9720 closed",
+        reason, p.x, p.z, gold, tostring(hasgold)))
+    BOT_STATE.milestone = hasgold and "10F gold key" or "10F passage"
+    bot:finish(string.format(
+        "10F gold-key detour: %s; gold=%d held=%s, shield=0, armor=%d "
+            .. "(bar OBJ_00 closed the north gap)",
+        reason, gold, tostring(hasgold), bot:item_count(ITEM_ARMOR_KEY)))
+end
+
+-- Finish (or abandon) the 105 shield-key detour and hand back to the normal
+-- 105 item phase. A failed detour is not fatal: the blue jewel key and the
+-- rest of the route still run, and the later 210 leg reports the missing key.
+local function finish_emblem_detour(bot, reason)
+    if BOT_STATE.emblem.failed and not BOT_STATE.emblem.done then
+        -- The detour aborted away from 105: walk back through 104/10F first.
+        set_phase(bot, "emblem_return", reason)
+        return
+    end
+    BOT_STATE.crest.index = 2
+    set_phase(bot, "to_105_items", reason)
+end
+
+-- Abort leg for the gold-emblem detour: return from 10F or 104 to 105, then
+-- let the normal 105 item phase continue. The failed detour is not fatal; it
+-- only leaves the shield key (and the later 210 moon crest) missing.
+local function phase_emblem_return(bot)
+    local room = bot:room().id
+    if room == "10F" then
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        local points
+        if bot:player().z > 13000 then
+            -- The failed gold-key leg leaves the player in the north half;
+            -- use the x9000 gap south before turning east.
+            points = {
+                { 9000, 12000 },
+                { 8800, 3000 },
+                { 12000, 3000 },
+                { 14500, 2300 },
+            }
+            if walk_waypoints(bot, points, 150, "10F emblem return") then
+                BOT_STATE.next_phase = "emblem_return"
+                door_nav(bot, "104", { { 14550, 2300, 14550, 1000 } },
+                    "door 10F->104 emblem return")
+            end
+        else
+            points = {
+                { 19300, 10800 },
+                { 19300, 10000 },
+                { 12000, 3000 },
+                { 9000, 3000 },
+                { 14500, 2300 },
+            }
+            if walk_waypoints(bot, points, 150, "10F emblem return") then
+                BOT_STATE.next_phase = "emblem_return"
+                door_nav(bot, "104", { { 14550, 2300, 14550, 1000 } },
+                    "door 10F->104 emblem return")
+            end
+        end
+        if BOT_STATE.phase_ticks > 3600 then
+            finish_10f_trapped(bot, "north return still blocked")
+            return
+        end
+        return
+    end
+    if room == "104" then
+        if walk_waypoints(bot, {
+            { 27000, 2700 },
+            { 12000, 2700 },
+        }, 150, "104 emblem return") then
+            BOT_STATE.next_phase = "emblem_return"
+            door_nav(bot, "105", { { 12000, 2700, 12000, 0 } },
+                "door 104->105 emblem return")
+        end
+        if BOT_STATE.phase_ticks > 1800 then
+            log(bot, "104->105 emblem return timed out; " .. door_diag(bot, "105"))
+            fail(bot, "emblem return: 104->105 blocked")
+        end
+        return
+    end
+    if room == "105" then
+        BOT_STATE.crest.index = 2
+        set_phase(bot, "to_105_items", "emblem detour failed; continuing 105 items")
+        return
+    end
+    fail(bot, "emblem return: unexpected room " .. tostring(room))
+end
+
+-- 105 shield key via the 10F gold emblem key. The room's own fireplace
+-- SCE_USEITEM actions raise the item's per-frame use flag (bank 9 bit 5) and
+-- F_ROOM_22; the menu USE then lets the 105 main script run its gold-emblem
+-- event, which tweens OBJ_02 from (18000,14300) to (16000,14300). Nothing here
+-- writes a flag, item or position: every leg is door_nav/action_nav and the
+-- one menu USE is bot:use_item.
+local function phase_emblem_detour(bot)
+    local e = BOT_STATE.emblem
+    local room = bot:room().id
+    local gold = bot:item_count(ITEM_GOLD_EMBLEM)
+    local gold_held = gold > 0 or bot:has_item(ITEM_GOLD_EMBLEM)
+    local shield = bot:item_count(ITEM_SHIELD_KEY)
+    if shield > 0 then
+        log(bot, string.format(
+            "105 gold-emblem detour: shield key held count=%d pos=(%d,%d)",
+            shield, bot:player().x, bot:player().z))
+        e.done = true
+        finish_emblem_detour(bot, "shield key taken via gold emblem")
+        return
+    end
+
+    if room == "105" then
+        if not gold_held then
+            -- Leg 1: 105 -> 104. The dining-room walk keeps south of the
+            -- sideboard and uses the known 105->104 door approach.
+            if walk_waypoints(bot, {
+                { 14000, 13000 },
+                { 6700, 13700 },
+            }, 150, "105 gold-emblem door") then
+                BOT_STATE.next_phase = "emblem_detour"
+                door_nav(bot, "104", { { 6700, 13700, 6700, 16000 } },
+                    "door 105->104 emblem")
+            end
+            if BOT_STATE.phase_ticks > 2400 then
+                log(bot, "105->104 emblem door timed out; "
+                    .. door_diag(bot, "104"))
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: 105->104 blocked")
+            end
+            return
+        end
+
+        -- Leg 6: use the gold key at the fireplace zone (2000,7200,1800,1800).
+        -- The reach point from (3800,8100) facing west is (3200,8100), inside
+        -- the zone. Wait for both the item-use flag and F_ROOM_22 before the
+        -- menu USE, exactly like the 10C pump.
+        if e.stage == "start" or e.stage == "walk" then
+            if e.stage == "start" then
+                BOT_STATE.wp = 1
+                BOT_STATE.wp_retry = false
+                BOT_STATE.wp_tol = nil
+            end
+            e.stage = "walk"
+            if walk_waypoints(bot, {
+                { 14000, 13000 },
+                { 7000, 11500 },
+                { 3800, 8100 },
+            }, 150, "105 fireplace") then
+                e.stage = "zone"
+                e.ticks = 0
+                log(bot, "105 fireplace: at the use-item zone approach")
+            end
+            if BOT_STATE.phase_ticks > 2400 then
+                log(bot, "105 fireplace walk timed out")
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: fireplace unreachable")
+            end
+            return
+        end
+        if e.stage == "zone" then
+            local facing = bot:face_to(2000, 8100)
+            e.ticks = e.ticks + 1
+            local item_use = bot:flag(BANK_ITEM_USE, 5)
+            local room22 = bot:flag(4, 0x22)
+            if e.ticks % 60 == 0 then
+                log(bot, string.format(
+                    "105 fireplace wait ticks=%d face=%s item_use=%s room22=%s "
+                        .. "gold=%d pos=(%d,%d)",
+                    e.ticks, facing.status, tostring(item_use),
+                    tostring(room22), gold, bot:player().x, bot:player().z))
+            end
+            if item_use and room22 and facing.status == "facing" then
+                local accepted = bot:use_item(ITEM_GOLD_EMBLEM)
+                e.used = accepted
+                e.stage = "use"
+                e.ticks = 0
+                log(bot, string.format(
+                    "105 fireplace: use gold emblem accepted=%s count=%d has=%s",
+                    tostring(accepted), bot:item_count(ITEM_GOLD_EMBLEM),
+                    tostring(bot:has_item(ITEM_GOLD_EMBLEM))))
+            elseif e.ticks > 300 then
+                log(bot, string.format(
+                    "105 fireplace flags did not set (item_use=%s room22=%s "
+                        .. "pos=(%d,%d)); no gold emblem use",
+                    tostring(item_use), tostring(room22),
+                    bot:player().x, bot:player().z))
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: fireplace flags absent")
+            end
+            return
+        end
+        if e.stage == "use" then
+            e.ticks = e.ticks + 1
+            if bot:flag(BANK_COMMON, F_COMMON_AB) then
+                log(bot, "105 gold-emblem event ran (F_COMMON_AB); "
+                    .. "waiting for the OBJ_02 sideboard tween")
+                e.stage = "move"
+                e.ticks = 0
+            elseif e.ticks > 120 then
+                log(bot, "105 gold-emblem use did not set F_COMMON_AB; "
+                    .. "continuing without the shield key")
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: use did not fire")
+            end
+            return
+        end
+        if e.stage == "move" then
+            -- The event sleeps ~180 frames, then tweens the sideboard 100
+            -- frames. Wait on controllable ticks; the cutscene owns the rest.
+            e.ticks = e.ticks + 1
+            if e.ticks >= 360 then
+                e.stage = "shield"
+                BOT_STATE.wp = 1
+                BOT_STATE.wp_retry = false
+                BOT_STATE.wp_tol = nil
+                log(bot, "105 sideboard move complete; taking the shield key")
+            end
+            return
+        end
+        if e.stage == "shield" then
+            local slot = item_action_slot(bot, ITEM_SHIELD_KEY)
+            if not slot then
+                log(bot, string.format(
+                    "105 shield key action not present after the emblem event; "
+                        .. "count=%d pos=(%d,%d)",
+                    shield, bot:player().x, bot:player().z))
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: no shield key action")
+                return
+            end
+            -- With OBJ_02 at (16000,14300) its grown east edge is x=17072.
+            -- Standing east of it at (17100,14060) (the north wall's grown
+            -- edge is z=14064) and facing (18000,15100) puts the 600 reach
+            -- point at (17492,14514), inside the key zone (17400,14500).
+            local result = action_nav(bot, slot, "105 shield key (emblem)", {
+                { 17100, 14060, 18000, 15100 },
+            }, { optional = true, require_count = true, side_ticks = 300 })
+            if result == true then
+                local count = bot:item_count(ITEM_SHIELD_KEY)
+                log(bot, string.format(
+                    "105 shield key count=%d after the OBJ_02 move at "
+                        .. "pos=(%d,%d) health=%d",
+                    count, bot:player().x, bot:player().z, bot:player().health))
+                e.done = true
+                finish_emblem_detour(bot, "shield key taken via gold emblem")
+                return
+            end
+            if result == "failed" then
+                local p = bot:player()
+                log(bot, string.format(
+                    "105 shield key unreachable after the OBJ_02 move "
+                        .. "(count=%d pos=(%d,%d) health=%d collision=%d "
+                        .. "zone=17400,14500,1000,1000)",
+                    bot:item_count(ITEM_SHIELD_KEY), p.x, p.z, p.health,
+                    p.collision_flags))
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: shield key unreachable")
+                return
+            end
+            if BOT_STATE.phase_ticks > 2400 then
+                log(bot, "105 shield key after the emblem event timed out")
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: shield key timeout")
+            end
+            return
+        end
+        return
+    end
+
+    if room == "104" then
+        if not gold_held then
+            -- Leg 2: 104 -> 10F. The bar door is the east-wall sword-key lock;
+            -- Jill's lockpick substitutes for the sword key. Walk the south
+            -- corridor east, then approach the door from the south.
+            if walk_waypoints(bot, {
+                { 12000, 2700 },
+                { 27000, 2700 },
+                { 30000, 3400 },
+            }, 150, "104 bar door") then
+                BOT_STATE.next_phase = "emblem_detour"
+                door_nav(bot, "10F", { { 30000, 3600, 30000, 5500 } },
+                    "door 104->10F emblem")
+            end
+            if BOT_STATE.phase_ticks > 2400 then
+                log(bot, "104->10F bar door timed out; " .. door_diag(bot, "10F"))
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: 104->10F blocked")
+            end
+            return
+        end
+        -- Leg 5: 104 -> 105 with the gold key.
+        if walk_waypoints(bot, {
+            { 27000, 2700 },
+            { 12000, 2700 },
+        }, 150, "104 return") then
+            BOT_STATE.next_phase = "emblem_detour"
+            door_nav(bot, "105", { { 12000, 2700, 12000, 0 } },
+                "door 104->105 emblem")
+        end
+        if BOT_STATE.phase_ticks > 1800 then
+            log(bot, "104->105 emblem return timed out; " .. door_diag(bot, "105"))
+            e.failed = true
+            finish_emblem_detour(bot, "gold emblem detour: 104->105 blocked")
+        end
+        return
+    end
+
+    if room == "10F" then
+        -- Before the piano is played, OBJ_00 is the solid bar counter at
+        -- (9100,12576) with half extents 16000/400: it seals the room's north
+        -- half. The room's own solution is the music score (0x23) used at the
+        -- piano use-item zone (10200,7300,600,1500); the Jill event then moves
+        -- OBJ_00 to (0,0,0) and sets F_COMMON_A5, opening the gap at x~9000.
+        if not bot:flag(BANK_COMMON, F_COMMON_A5) then
+            local stage = e.tenf_stage or "push"
+            if stage == "push" then
+                -- The music score sits behind the moveable bookshelf
+                -- (OBJ_01 at 17394,11190, half extents 1300/550). It is not
+                -- push-blocked (flag 0x01 only), so walk to its east side and
+                -- shove it west with the normal forward+push behaviour until
+                -- its east edge clears x~16728. Then the score zone
+                -- (17000,11500,800,1000) is reachable from the strip between
+                -- the shelf and the bar (bar grown south edge z=11804).
+                if not e.push_x then
+                    -- Stay south of the wall band (z11538 grown to 11166) and
+                    -- west of the bookshelf (west edge 16094), then walk into
+                    -- its west face at z~10800. Pushing it east toward the
+                    -- room's east wall clears the score zone's x17000..17800.
+                    if walk_waypoints(bot, {
+                        { 12000, 3000 },
+                        { 15000, 10000 },
+                        { 15700, 10800 },
+                    }, 100, "10F bookshelf approach") then
+                        local px = bot:player().x
+                        if px > 16000 then
+                            log(bot, string.format(
+                                "10F bookshelf approach stopped east of the "
+                                    .. "shelf at pos=(%d,%d); cannot push east",
+                                px, bot:player().z))
+                            e.failed = true
+                            finish_emblem_detour(bot,
+                                "gold emblem detour: bookshelf west side unreachable")
+                            return
+                        end
+                        e.push_x = px
+                        e.tenf_ticks = 0
+                        log(bot, string.format(
+                            "10F bookshelf: pushing east from pos=(%d,%d)",
+                            px, bot:player().z))
+                    end
+                    if BOT_STATE.phase_ticks > 3000 then
+                        log(bot, "10F bookshelf approach timed out")
+                        e.failed = true
+                        finish_emblem_detour(bot, "gold emblem detour: bookshelf unreachable")
+                    end
+                    return
+                end
+                local p = bot:player()
+                e.tenf_ticks = e.tenf_ticks + 1
+                -- Face due east at the current z. A northward component makes
+                -- dz the shallower push axis and parks the shelf against the
+                -- z11538 wall band; a straight east push keeps its rotated
+                -- floor probes on z~10800.
+                local facing = bot:face_to(18000, p.z)
+                if facing.status == "facing" then
+                    bot:set_input({ up = true })
+                end
+                if e.tenf_ticks % 60 == 0 then
+                    log(bot, string.format(
+                        "10F bookshelf push ticks=%d pos=(%d,%d) face=%s "
+                            .. "state=%d attacked=%d collision=%d",
+                        e.tenf_ticks, p.x, p.z, facing.status, p.state,
+                        p.being_attacked, p.collision_flags))
+                end
+                -- Pushing east moves the player with the shelf. x~17400 puts
+                -- the shelf's west edge near 17772 (grown edge 17400), leaving
+                -- x17000..17400 of the score zone open.
+                if p.x >= 17400 or e.tenf_ticks > 1800 then
+                    log(bot, string.format(
+                        "10F bookshelf push stop ticks=%d pos=(%d,%d); "
+                            .. "trying the score zone from its west strip",
+                        e.tenf_ticks, p.x, p.z))
+                    e.tenf_stage = "score"
+                    e.tenf_ticks = 0
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                end
+                return
+            end
+
+            if stage == "score" then
+                if not e.tenf_cleared then
+                    -- Jill's pack is full in this route (knife, handgun,
+                    -- ammo, herb, lockpick, star crest); the music-score
+                    -- take prompt is 0xC2 until a slot frees. Use the green
+                    -- herb now: health is below max, so the menu USE heals and
+                    -- consumes it legally.
+                    local pp = bot:player()
+                    if bot:item_count(ITEM_GREEN_HERB) > 0
+                        and pp.health < pp.max_health then
+                        local used = bot:use_heal(ITEM_GREEN_HERB)
+                        e.tenf_cleared = true
+                        log(bot, string.format(
+                            "10F music score: using a green herb to free an "
+                                .. "inventory slot accepted=%s health=%d",
+                            tostring(used), pp.health))
+                        return
+                    end
+                    e.tenf_cleared = true
+                end
+                if bot:has_item(ITEM_MUSIC_SCORE) then
+                    log(bot, "10F music score already held; going to the piano")
+                    e.tenf_stage = "piano"
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                    return
+                end
+                -- The score zone is (17000,11500,800,1000) behind the room
+                -- collision band (z11538, grown south to 11166). Stay south
+                -- of that band at z~10950 and face nearly due north so the
+                -- 600 reach lands inside the zone at ~17160,11550.
+                if walk_waypoints(bot, {
+                    { 17100, 10950 },
+                }, 100, "10F music score strip") then
+                    local slot = item_action_slot(bot, ITEM_MUSIC_SCORE)
+                    if not slot then
+                        log(bot, "10F music score action not present; "
+                            .. "cannot open the bar passage")
+                        e.failed = true
+                        finish_emblem_detour(bot, "gold emblem detour: no music score action")
+                        return
+                    end
+                    local result = action_nav(bot, slot, "10F music score", {
+                        { 17100, 10950, 17100, 12000 },
+                    }, { optional = true, require_count = true, side_ticks = 300 })
+                    if result == true then
+                        log(bot, string.format(
+                            "10F music score count=%d; going to the piano",
+                            bot:item_count(ITEM_MUSIC_SCORE)))
+                        e.tenf_stage = "piano"
+                        BOT_STATE.wp = 1
+                        BOT_STATE.wp_retry = false
+                        BOT_STATE.wp_tol = nil
+                        return
+                    end
+                    if result == "failed" then
+                        local pp = bot:player()
+                        log(bot, string.format(
+                            "10F music score unreachable (count=%d has=%s "
+                                .. "item07=%s pos=(%d,%d) health=%d collision=%d "
+                                .. "zone=17000,11500,800,1000; shelf OBJ_01 half "
+                                .. "extents 1300/550 at 17394,11190, bar OBJ_00 "
+                                .. "z 12176..12976)",
+                            bot:item_count(ITEM_MUSIC_SCORE),
+                            tostring(bot:has_item(ITEM_MUSIC_SCORE)),
+                            tostring(bot:flag(BANK_ITEM, 0x07)), pp.x, pp.z,
+                            pp.health, pp.collision_flags))
+                        e.failed = true
+                        finish_emblem_detour(bot, "gold emblem detour: music score unreachable")
+                        return
+                    end
+                end
+                if bot:has_item(ITEM_MUSIC_SCORE) then
+                    log(bot, "10F music score is held; continuing to the piano")
+                    e.tenf_stage = "piano"
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                    return
+                end
+                if BOT_STATE.phase_ticks > 3000 then
+                    log(bot, string.format(
+                        "10F music score walk timed out (has=%s item07=%s)",
+                        tostring(bot:has_item(ITEM_MUSIC_SCORE)),
+                        tostring(bot:flag(BANK_ITEM, 0x07))))
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: music score timeout")
+                end
+                return
+            end
+
+            if stage == "piano" then
+                -- The piano's use-item zone is (10200,7300,600,1500). Its
+                -- SCE_USEITEM probes raise the music score's use flag (bank 9
+                -- bit 8) and F_ROOM_23 (bank 4 bit 0x23).
+                if not bot:has_item(ITEM_MUSIC_SCORE) then
+                    e.tenf_stage = "score"
+                    return
+                end
+                if walk_waypoints(bot, {
+                    { 9500, 3000 },
+                    { 9500, 8000 },
+                    { 9700, 8000 },
+                }, 150, "10F piano") then
+                    local facing = bot:face_to(10500, 8000)
+                    local item_use = bot:flag(BANK_ITEM_USE, 8)
+                    local room23 = bot:flag(4, 0x23)
+                    e.tenf_ticks = e.tenf_ticks + 1
+                    if e.tenf_ticks % 60 == 0 then
+                        log(bot, string.format(
+                            "10F piano wait ticks=%d face=%s item_use=%s room23=%s "
+                                .. "pos=(%d,%d)",
+                            e.tenf_ticks, facing.status, tostring(item_use),
+                            tostring(room23), bot:player().x, bot:player().z))
+                    end
+                    if item_use and room23 and facing.status == "facing" then
+                        local accepted = bot:use_item(ITEM_MUSIC_SCORE)
+                        log(bot, string.format(
+                            "10F piano: use music score accepted=%s count=%d",
+                            tostring(accepted),
+                            bot:item_count(ITEM_MUSIC_SCORE)))
+                        e.tenf_stage = "scene"
+                        e.tenf_ticks = 0
+                    elseif e.tenf_ticks > 300 then
+                        log(bot, string.format(
+                            "10F piano flags did not set (item_use=%s room23=%s "
+                                .. "pos=(%d,%d)); cannot play the piano",
+                            tostring(item_use), tostring(room23),
+                            bot:player().x, bot:player().z))
+                        e.failed = true
+                        finish_emblem_detour(bot, "gold emblem detour: piano flags absent")
+                    end
+                end
+                if BOT_STATE.phase_ticks > 2400 then
+                    log(bot, "10F piano walk timed out")
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: piano unreachable")
+                end
+                return
+            end
+
+            if stage == "scene" then
+                e.tenf_ticks = e.tenf_ticks + 1
+                if bot:flag(BANK_COMMON, F_COMMON_A5) then
+                    log(bot, "10F piano scene done (F_COMMON_A5); "
+                        .. "the bar counter moved off the north gap")
+                    e.tenf_stage = "bar"
+                    e.tenf_ticks = 0
+                elseif e.tenf_ticks > 4000 then
+                    log(bot, "10F piano scene did not set F_COMMON_A5")
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: piano scene timeout")
+                end
+                return
+            end
+
+            if stage == "bar" then
+                -- on_enter_jill / the scene tween OBJ_00 to (0,0,0). Give the
+                -- tween a short settle window, then go north through the gap.
+                e.tenf_ticks = e.tenf_ticks + 1
+                if e.tenf_ticks >= 180 then
+                    e.tenf_stage = "key"
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                end
+                return
+            end
+        end
+
+        if not gold_held then
+            -- Leg 3: take the 10F gold emblem key (8100,18800,1500,1000).
+            -- Approach from the south: the north wall's grown edge is
+            -- z=18798, and the corridor between the west/east walls is
+            -- x~8076..10446. The key walk runs the south hall, then the middle
+            -- gap at z~12500, then north.
+            if walk_waypoints(bot, {
+                { 12000, 3000 },
+                { 8800, 3000 },
+                { 9000, 12000 },
+                { 9000, 18200 },
+            }, 150, "10F gold key corridor") then
+                local slot = item_action_slot(bot, ITEM_GOLD_EMBLEM)
+                if not slot then
+                    log(bot, "10F gold emblem key action not present; "
+                        .. "continuing without the shield key")
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: no 10F key action")
+                    return
+                end
+                local result = action_nav(bot, slot, "10F gold emblem key", {
+                    { 9000, 18200, 9000, 19200 },
+                }, { optional = true, require_count = true, side_ticks = 300 })
+                if bot:has_item(ITEM_GOLD_EMBLEM) then
+                    log(bot, string.format(
+                        "10F gold emblem key is held (count=%d); continuing",
+                        bot:item_count(ITEM_GOLD_EMBLEM)))
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                    return
+                end
+                if result == true then
+                    log(bot, string.format("10F gold emblem key count=%d",
+                        bot:item_count(ITEM_GOLD_EMBLEM)))
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                elseif result == "failed" then
+                    local p = bot:player()
+                    log(bot, string.format(
+                        "10F gold emblem key unreachable (count=%d music=%d "
+                            .. "herb=%d pos=(%d,%d) health=%d collision=%d "
+                            .. "zone=8100,18800,1500,1000)",
+                        bot:item_count(ITEM_GOLD_EMBLEM),
+                        bot:item_count(ITEM_MUSIC_SCORE),
+                        bot:item_count(ITEM_GREEN_HERB),
+                        p.x, p.z, p.health, p.collision_flags))
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: 10F key unreachable")
+                elseif BOT_STATE.phase_ticks > 3000 then
+                    log(bot, "10F gold emblem key timed out")
+                    e.failed = true
+                    finish_emblem_detour(bot, "gold emblem detour: 10F key timeout")
+                end
+            end
+            if BOT_STATE.phase_ticks > 3600 then
+                log(bot, "10F gold key corridor timed out; "
+                    .. "pos=(" .. bot:player().x .. "," .. bot:player().z .. ")")
+                e.failed = true
+                finish_emblem_detour(bot, "gold emblem detour: 10F corridor blocked")
+            end
+            return
+        end
+        -- Leg 4: 10F -> 104. The return door is the north-wall door at
+        -- (13700,960,1700,1900); approach from the south. The key corridor
+        -- left the shared waypoint index past its list, so reset it first.
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        if walk_waypoints(bot, {
+            { 9000, 12000 },
+            { 8800, 3000 },
+            { 12000, 3000 },
+            { 14500, 2300 },
+        }, 150, "10F return") then
+            BOT_STATE.next_phase = "emblem_detour"
+            door_nav(bot, "104", { { 14550, 2300, 14550, 1000 } },
+                "door 10F->104 emblem")
+        end
+        if BOT_STATE.phase_ticks > 3600 then
+            finish_10f_trapped(bot, "gold key picked but 10F->104 is unreachable")
+            return
+        end
+        return
+    end
+
+    log(bot, "gold emblem detour in unexpected room " .. tostring(room))
+    e.failed = true
+    finish_emblem_detour(bot, "gold emblem detour: unexpected room")
+end
+
 local function phase_to_105_items(bot)
     local crest = BOT_STATE.crest
     if crest.index == 1 then
@@ -1610,43 +2369,22 @@ local function phase_to_105_items(bot)
             crest.index = 2
             return
         end
-        local slot = item_action_slot(bot, ITEM_SHIELD_KEY)
-        if not slot then
-            log(bot, "105 shield key action not present; count=0")
+        if BOT_STATE.emblem.done then
+            log(bot, "105 gold-emblem detour already done; shield key count="
+                .. count)
             crest.index = 2
             return
         end
-        local result = false
-        if walk_waypoints(bot, { { 14000, 13000 } }, 150, "105 dining room") then
-            -- Exact geometry: the north wall (x414..35604, z14454..16632)
-            -- grown by Jill's 372 radius plus the 18-unit nav skin leaves
-            -- z <= 14064. The sideboard (18000,14300, half extents 700/600)
-            -- grown by the same radius covers x 16928..19072, z 13328..15272.
-            -- The only corner left is (16928,14064); its 600 reach ends at
-            -- (17377,14462), 23 short in x and 38 short in z of the zone's
-            -- south-west corner (17400,14500). Every other side is farther,
-            -- so this logs the block and continues without forcing the item.
-            result = action_nav(bot, slot, "105 shield key", {
-                { 16900, 14060, 17900, 14600 },
-            }, { optional = true })
-        end
-        if result == true then
-            log(bot, string.format("105 shield key count=%d",
-                bot:item_count(ITEM_SHIELD_KEY)))
-            crest.index = 2
+        if not BOT_STATE.emblem.failed then
+            -- Take the gold emblem key from the 10F bar and use it at the 105
+            -- fireplace. The detour owns 105/104/10F until it returns here.
+            set_phase(bot, "emblem_detour", "105 shield key needs the gold emblem")
             return
         end
-        if result == "failed" then
-            log(bot, string.format(
-                "105 shield key unreachable; count=%d",
-                bot:item_count(ITEM_SHIELD_KEY)))
-            crest.index = 2
-            return
-        end
-        if BOT_STATE.phase_ticks > 2400 then
-            fail(bot, "105 shield key timed out; count="
-                .. bot:item_count(ITEM_SHIELD_KEY))
-        end
+        log(bot, string.format(
+            "105 shield key skipped after the failed gold-emblem detour; count=%d",
+            count))
+        crest.index = 2
         return
     end
     if crest.index == 2 then
@@ -1701,10 +2439,12 @@ local function finish_10c_retreat(bot, reason)
         bot:item_count(ITEM_BLUE_JEWEL_KEY), bot:item_count(ITEM_SUN_CREST),
         bot:item_count(ITEM_MOON_CREST), hollows))
     BOT_STATE.milestone = "103"
+    local key = bot:item_count(ITEM_ARMOR_KEY)
+    local blocker = key > 0 and "sun crest blocked" or "10C armor key blocked"
     bot:finish(string.format(
-        "103 retreat; 10C armor key blocked: %s (health=%d, armor=%d, "
+        "103 retreat; %s: %s (health=%d, armor=%d, "
             .. "shield=%d, blue=%d, sun=%d, moon=%d, hollows=%d/4)",
-        reason, p.health, bot:item_count(ITEM_ARMOR_KEY),
+        blocker, reason, p.health, key,
         bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_BLUE_JEWEL_KEY),
         bot:item_count(ITEM_SUN_CREST), bot:item_count(ITEM_MOON_CREST),
         hollows))
@@ -1754,39 +2494,125 @@ local function greenhouse_herb_actions(bot)
 end
 
 local function greenhouse_herb_approach(action)
-    -- Stand east of the zone, outside the fountain's actual lunge reach. The
-    -- 600 probe from (9300,3280) points at the zone centre and lands at
-    -- (8596,2836), inside the 8100 zone. Walking further west is what gets
-    -- bitten and knocked back before the reach can arm.
-    local east = action.x + action.width + 400
-    return { east, 3280, action.x + action.width // 2, 2000 + action.depth // 2 }
+    -- Stand in the bed band (z 3072..3570) due north of the zone centre and
+    -- face south. The 600 reach lands at z ~2600, inside both the h=1000 and
+    -- h=700 actions. The old east-side diagonal approach stopped 100 units
+    -- short of the exact point, and the diagonal then put the reach point
+    -- outside the 8100 zone's east edge.
+    local cx = action.x + action.width // 2
+    return { cx, 3200, cx, 2400 }
 end
 
 local function phase_to_10c_item(bot)
     local p = bot:player()
-    if p.health <= 26 then
+    if p.health <= 10 then
         log(bot, string.format(
             "10C health=%d at pos=(%d,%d); retreating to 103", p.health, p.x, p.z))
         BOT_STATE.tenc.retreat_reason = string.format(
-            "green herbs unreachable; health=%d below the 26 key-lane floor",
+            "green herbs unreachable; health=%d at the survival floor",
             p.health)
         set_phase(bot, "retreat_10c", "health too low for the plants")
         return
     end
     local count = bot:item_count(ITEM_ARMOR_KEY)
-    if count > 0 then
-        log(bot, string.format("10C armor key already held count=%d", count))
-        set_phase(bot, "to_103_from_10c", "armor key already held")
-        return
-    end
-    local slot = item_action_slot(bot, ITEM_ARMOR_KEY)
-    if not slot then
-        log(bot, "10C armor key action not present; count=0")
-        set_phase(bot, "to_103_from_10c", "no armor key action")
-        return
+    local tenc = BOT_STATE.tenc
+    local slot = nil
+    if not (count > 0 and tenc.key_first and not tenc.herbs_after_key_done) then
+        if count > 0 then
+            log(bot, string.format("10C armor key already held count=%d", count))
+            if p.health < 40 then
+                BOT_STATE.tenc.retreat_reason = string.format(
+                    "armor key held (count=%d); health=%d too low for the 101/202 return",
+                    count, p.health)
+                set_phase(bot, "retreat_10c", "armor key held; low health")
+                return
+            end
+            set_phase(bot, "to_103_from_10c", "armor key already held")
+            return
+        end
+        slot = item_action_slot(bot, ITEM_ARMOR_KEY)
+        if not slot then
+            log(bot, "10C armor key action not present; count=0")
+            set_phase(bot, "to_103_from_10c", "no armor key action")
+            return
+        end
+    else
+        -- The got-item viewer awarded the key on an earlier tick; run the
+        -- herb pickups now that the key is safely in the inventory. Do this
+        -- only on the transition: the stage's herb list must survive ticks.
+        if not tenc.key_taken then
+            tenc.key_taken = true
+            tenc.stage = 2
+            tenc.herb_slots = nil
+            tenc.herb_index = 1
+            BOT_STATE.phase_ticks = 0
+        end
     end
 
-    local tenc = BOT_STATE.tenc
+    -- The intended room solution: use the 118 herbicide at the pump. The
+    -- pump's SCE_USEITEM actions are `flag_bank_set` probes, so standing with
+    -- the 600-unit reach point inside (15300,5100,1800,600) raises the
+    -- herbicide's use flag (bank 9 bit 11) and F_ROOM_20 (bank 4 bit 0x20).
+    -- Using the item from the menu then plays the room's from_main withering
+    -- event, which sets F_COMMON_A9 and parks all six fountains in their die
+    -- behaviour. No flag, item or health is written by the bot.
+    if tenc.herbicide_stage < 4 and bot:item_count(ITEM_HERBICIDE) > 0
+        and not bot:flag(BANK_COMMON, F_COMMON_A9) then
+        if tenc.herbicide_stage == 1 then
+            if walk_waypoints(bot, { { 14500, 4700 }, { 16200, 4700 } }, 150,
+                "10C pump approach") then
+                tenc.herbicide_stage = 2
+                tenc.herbicide_ticks = 0
+                log(bot, "10C pump: standing south of the use-item zone")
+            end
+            if BOT_STATE.phase_ticks > 1200 then
+                tenc.herbicide_stage = 4
+                log(bot, "10C pump approach timed out; no herbicide use")
+            end
+            return
+        end
+        if tenc.herbicide_stage == 2 then
+            local facing = bot:face_to(16200, 5500)
+            tenc.herbicide_ticks = tenc.herbicide_ticks + 1
+            if tenc.herbicide_ticks % 30 == 0 then
+                log(bot, string.format(
+                    "10C pump wait ticks=%d face=%s herb_use=%s room20=%s",
+                    tenc.herbicide_ticks, facing.status,
+                    tostring(bot:flag(BANK_ITEM_USE, 11)),
+                    tostring(bot:flag(4, 0x20))))
+            end
+            if bot:flag(BANK_ITEM_USE, 11) and bot:flag(4, 0x20) then
+                local accepted = bot:use_item(ITEM_HERBICIDE)
+                log(bot, string.format(
+                    "10C pump: use herbicide accepted=%s count=%d",
+                    tostring(accepted), bot:item_count(ITEM_HERBICIDE)))
+                tenc.herbicide_stage = 3
+                tenc.herbicide_ticks = 0
+            elseif tenc.herbicide_ticks > 300 then
+                tenc.herbicide_stage = 4
+                log(bot, "10C pump flags did not set; no herbicide use")
+            end
+            return
+        end
+        if tenc.herbicide_stage == 3 then
+            tenc.herbicide_ticks = tenc.herbicide_ticks + 1
+            if bot:flag(BANK_COMMON, F_COMMON_A9) then
+                log(bot, "10C plant fountains withered (F_COMMON_A9)")
+                tenc.herbicide_stage = 4
+                tenc.herbicide_done = true
+                BOT_STATE.wp = 1
+                BOT_STATE.wp_retry = false
+                BOT_STATE.wp_tol = nil
+            elseif tenc.herbicide_ticks > 900 then
+                log(bot, "10C withering event timed out; continuing")
+                tenc.herbicide_stage = 4
+            end
+            return
+        end
+    elseif bot:item_count(ITEM_HERBICIDE) <= 0
+        and not bot:flag(BANK_COMMON, F_COMMON_A9) then
+        tenc.herbicide_stage = 4
+    end
     -- The 10C collision splits the room into a north corridor, the east gap
     -- between the two central beds, and the narrow band z 3054..3588 south of
     -- the big bed. The only legal crossing from the 103 door to the west half
@@ -1800,7 +2626,13 @@ local function phase_to_10c_item(bot)
             { 10200, 3600 },
         }
         if walk_waypoints(bot, points, 150, "10C south bed") then
-            tenc.stage = 2
+            -- Take the key first: the herb actions are reach-gated and their
+            -- got-item viewers can re-arm each other, so the herbs run after
+            -- the key is safely in the inventory.
+            tenc.stage = 3
+            tenc.key_line_stage = 1
+            tenc.key_first = true
+            BOT_STATE.phase_ticks = 0
         end
         if BOT_STATE.phase_ticks > 900 then
             fail(bot, "10C south-bed approach timed out")
@@ -1808,51 +2640,75 @@ local function phase_to_10c_item(bot)
         return
     end
 
-    -- Pick every green herb on the south bed before the armor-key run. An
-    -- herb the room refuses is left behind; the key is still the priority.
+    -- Pick every green herb on the south bed before the armor-key run. With
+    -- the fountains withered these are safe, and the herbs are the health the
+    -- 101/201 return legs need. An herb the room refuses is left behind; the
+    -- key is still the priority.
     if tenc.stage == 2 then
+        local function next_herb()
+            tenc.herb_index = tenc.herb_index + 1
+            tenc.herb_deadline = BOT_STATE.phase_ticks + 600
+        end
+        local function to_key()
+            if tenc.key_taken then
+                tenc.herbs_after_key_done = true
+                local p = bot:player()
+                if p.health < 40 then
+                    BOT_STATE.tenc.retreat_reason = string.format(
+                        "armor key held; health=%d too low for the 101/202 return",
+                        p.health)
+                    set_phase(bot, "retreat_10c", "armor key held; low health")
+                else
+                    set_phase(bot, "to_103_from_10c", "armor key and herbs done")
+                end
+                return
+            end
+            tenc.stage = 3
+            tenc.key_line_stage = 1
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            -- The key lane has its own tick budget; do not let the herb
+            -- stage's elapsed ticks trip its deadline immediately.
+            BOT_STATE.phase_ticks = 0
+        end
         if not tenc.herb_slots then
             tenc.herb_slots = greenhouse_herb_actions(bot)
             tenc.herb_index = 1
-            tenc.herb_deadline = BOT_STATE.phase_ticks + 60
+            tenc.herb_deadline = BOT_STATE.phase_ticks + 600
             log(bot, string.format("10C green herbs: %d actions on the south bed",
                 #tenc.herb_slots))
         end
         if BOT_STATE.phase_ticks > (tenc.herb_deadline or 0) then
             local pl = bot:player()
             log(bot, string.format(
-                "10C green herbs still unreachable pos=(%d,%d) health=%d; "
-                    .. "leaving them for the key run",
-                pl.x, pl.z, pl.health))
-            tenc.stage = 3
-            tenc.key_line_stage = 1
-            BOT_STATE.wp = 1
-            BOT_STATE.wp_retry = false
-            BOT_STATE.wp_tol = nil
+                "10C green herb index=%d timed out pos=(%d,%d) health=%d; next",
+                tenc.herb_index, pl.x, pl.z, pl.health))
+            if tenc.herb_index >= #tenc.herb_slots then
+                to_key()
+                return
+            end
+            next_herb()
             return
         end
         local herb = tenc.herb_slots[tenc.herb_index]
         if not herb then
-            tenc.stage = 3
-            tenc.key_line_stage = 1
-            BOT_STATE.wp = 1
-            BOT_STATE.wp_retry = false
-            BOT_STATE.wp_tol = nil
+            to_key()
             return
         end
         local now = action_by_slot(bot, herb.slot)
         if not now or now.kind ~= "item" or now.item ~= ITEM_GREEN_HERB then
-            tenc.herb_index = tenc.herb_index + 1
+            next_herb()
             return
         end
         local approach = greenhouse_herb_approach(now)
         local active = BOT_STATE.nav and BOT_STATE.nav.kind == "action"
             and BOT_STATE.nav.slot == herb.slot
         if not active
-            and bot:distance(approach[1], approach[2]) > 520 then
+            and bot:distance(approach[1], approach[2]) > 60 then
             -- The bed band is narrower than the nav grid; walk it straight
             -- instead of asking A* for a row that does not exist.
-            local line = walk_line(bot, approach[1], approach[2], 100,
+            local line = walk_line(bot, approach[1], approach[2], 60,
                 "10C herb bed")
             if BOT_STATE.phase_ticks % 30 == 0 then
                 local pl = bot:player()
@@ -1863,7 +2719,12 @@ local function phase_to_10c_item(bot)
                     bot:distance(approach[1], approach[2])))
             end
             if line ~= "arrived" then
-                if BOT_STATE.phase_ticks > 1800 then
+                if BOT_STATE.phase_ticks > 3600 then
+                    if tenc.key_taken then
+                        log(bot, "10C herb-bed walk timed out after the key; continuing")
+                        to_key()
+                        return
+                    end
                     fail(bot, "10C herb-bed walk timed out")
                 end
                 return
@@ -1871,20 +2732,26 @@ local function phase_to_10c_item(bot)
         end
         local result = action_nav(bot, herb.slot, "10C green herb", {
             approach,
-        }, { optional = true, walk_tolerance = 500 })
+        }, { optional = true, walk_tolerance = 60, single_press = true,
+            side_ticks = 360 })
         if result == true then
             log(bot, string.format("10C green herbs picked slot=%d count=%d",
                 herb.slot, bot:item_count(ITEM_GREEN_HERB)))
-            tenc.herb_index = tenc.herb_index + 1
+            next_herb()
             return
         end
         if result == "failed" then
             log(bot, string.format(
                 "10C green herb slot=%d unreachable; continuing", herb.slot))
-            tenc.herb_index = tenc.herb_index + 1
+            next_herb()
             return
         end
-        if BOT_STATE.phase_ticks > 1800 then
+        if BOT_STATE.phase_ticks > 3600 then
+            if tenc.key_taken then
+                log(bot, "10C green herb pickup timed out after the key; continuing")
+                to_key()
+                return
+            end
             fail(bot, "10C green herb pickup timed out")
         end
         return
@@ -1896,6 +2763,11 @@ local function phase_to_10c_item(bot)
     -- action zone. This is also the closest standable point to the safe west
     -- wall and keeps the press short.
     if tenc.stage == 3 then
+        if bot:tick() - (BOT_STATE.last_pickup_tick or 0) < 120 then
+            -- Wait for the overlapping 10C herb actions to finish their
+            -- got-item viewers before pressing the key action.
+            return
+        end
         if tenc.key_line_stage == 1 then
             -- Get south of the planters first. The lane point stays east of
             -- the fountains' 3000-unit Manhattan trigger, then the west leg
@@ -1932,11 +2804,19 @@ local function phase_to_10c_item(bot)
 
     local result = action_nav(bot, slot, "10C armor key", {
         { 6100, 6300, 5500, 6300 },
-    }, { optional = true })
+    }, { optional = true, require_count = true, side_ticks = 600 })
     if result == true then
         log(bot, string.format("10C armor key count=%d",
             bot:item_count(ITEM_ARMOR_KEY)))
-        set_phase(bot, "to_103_from_10c", "armor key taken")
+        tenc.key_taken = true
+        tenc.stage = 2
+        tenc.herb_slots = nil
+        tenc.herb_index = 1
+        tenc.herbs_after_key_done = false
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        BOT_STATE.nav = nil
         return
     end
     if result == "failed" then
@@ -1952,6 +2832,28 @@ local function phase_to_10c_item(bot)
     end
 end
 
+local function finish_205_blocked(bot, reason)
+    local p = bot:player()
+    if not BOT_STATE.emblem.done then
+        reason = reason .. "; 10F gold emblem blocked by the music-score/"
+            .. "bookshelf geometry"
+    end
+    log(bot, string.format(
+        "205 armor room reached; sun crest blocked: %s "
+            .. "(pos=(%d,%d) health=%d armor=%d shield=%d star=%d sun=%d moon=%d)",
+        reason, p.x, p.z, p.health, bot:item_count(ITEM_ARMOR_KEY),
+        bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_STAR_CREST),
+        bot:item_count(ITEM_SUN_CREST), bot:item_count(ITEM_MOON_CREST)))
+    BOT_STATE.milestone = "205"
+    bot:finish(string.format(
+        "205 armor room; sun crest blocked: %s "
+            .. "(health=%d, armor=%d, shield=%d, gold=%d, star=%d, sun=%d, moon=%d)",
+        reason, p.health, bot:item_count(ITEM_ARMOR_KEY),
+        bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_GOLD_EMBLEM),
+        bot:item_count(ITEM_STAR_CREST), bot:item_count(ITEM_SUN_CREST),
+        bot:item_count(ITEM_MOON_CREST)))
+end
+
 local function phase_to_205_item(bot)
     local count = bot:item_count(ITEM_SUN_CREST)
     if count > 0 then
@@ -1959,10 +2861,66 @@ local function phase_to_205_item(bot)
         set_phase(bot, "to_204_from_205", "sun crest already held")
         return
     end
+    local sun = BOT_STATE.sun
+    if sun.stage == "switch" and not bot:flag(4, 0x1D) then
+        if bot:player().health <= 10 then
+            finish_205_blocked(bot,
+                "health too low to press the armor switch safely")
+            return
+        end
+        if walk_waypoints(bot, { { 10000, 7000 } }, 150,
+            "205 armor switch") then
+            local facing = bot:face_to(9735, 7236)
+            sun.ticks = sun.ticks + 1
+            if facing.status == "facing" then
+                bot:press_action()
+            end
+            if sun.ticks % 60 == 0 then
+                local p = bot:player()
+                log(bot, string.format(
+                    "205 armor switch ticks=%d face=%s room1c=%s room1d=%s "
+                        .. "pos=(%d,%d) health=%d",
+                    sun.ticks, facing.status, tostring(bot:flag(4, 0x1C)),
+                    tostring(bot:flag(4, 0x1D)), p.x, p.z, p.health))
+            end
+            if bot:flag(4, 0x1D) then
+                log(bot, "205 armor switch done; the armor wall moved (room1d)")
+                sun.stage = "item"
+                BOT_STATE.wp = 1
+                BOT_STATE.wp_retry = false
+                BOT_STATE.wp_tol = nil
+            elseif sun.ticks > 2400 then
+                log(bot, "205 armor switch did not set room1d; giving up on the puzzle")
+                sun.stage = "item"
+            end
+        end
+        if BOT_STATE.phase_ticks > 2400 then
+            log(bot, "205 armor switch walk timed out")
+            sun.stage = "item"
+        end
+        return
+    end
+
     local slot = item_action_slot(bot, ITEM_SUN_CREST)
     if not slot then
-        log(bot, "205 sun crest action not present; count=0")
-        set_phase(bot, "to_204_from_205", "no sun crest action")
+        local actions = bot:actions()
+        local parts = {}
+        for i = 1, #actions do
+            local a = actions[i]
+            parts[#parts + 1] = string.format(
+                "%d:%s:item=%s:zone=%d,%d,%d,%d", a.slot, tostring(a.kind),
+                tostring(a.item), a.x, a.z, a.width, a.depth)
+        end
+        log(bot, string.format(
+            "205 sun crest action not present; count=%d flags(item24=%s "
+                .. "room1b=%s room1c=%s room1d=%s) actions=[%s]",
+            bot:item_count(ITEM_SUN_CREST),
+            tostring(bot:flag(BANK_ITEM, 0x24)),
+            tostring(bot:flag(4, 0x1B)), tostring(bot:flag(4, 0x1C)),
+            tostring(bot:flag(4, 0x1D)), table.concat(parts, " ")))
+        finish_205_blocked(bot,
+            "item action slot 9 is kind=other/handler 0 at entry; the room "
+                .. "init aot_delete disabled AOT_09_ITEM")
         return
     end
     -- The two armor-room pillars are object collision, which the A* grid does
@@ -1987,6 +2945,179 @@ local function phase_to_205_item(bot)
     if BOT_STATE.phase_ticks > 2400 then
         fail(bot, "205 sun crest timed out; count="
             .. bot:item_count(ITEM_SUN_CREST))
+    end
+end
+
+-- 10B/118 herbicide detour. The 10C armor key sits behind six plant
+-- fountains whose Manhattan trigger covers the only bed crossing. The room's
+-- own solution is the herbicide (0x26) from the 118 storeroom: using it at
+-- the 10C pump raises F_ROOM_20 and the item's use flag (the SCE_USEITEM
+-- actions are `flag_bank_set`), and the room's `from_main` event withers all
+-- six fountains. This is ordinary walking, door opening and a menu USE.
+local function herbicide_abort(bot, reason)
+    local herb = BOT_STATE.herb
+    herb.failed = true
+    log(bot, "herbicide detour failed: " .. reason
+        .. "; " .. door_diag(bot, "10B"))
+    set_phase(bot, "to_109_from_10a", "herbicide detour failed")
+end
+
+local function phase_herbicide_from_10a(bot)
+    local herb = BOT_STATE.herb
+    if herb.done or herb.failed or herb.picked
+        or bot:item_count(ITEM_HERBICIDE) > 0 then
+        set_phase(bot, "to_109_from_10a", "herbicide already handled")
+        return
+    end
+    if walk_waypoints(bot, {
+        { 2500, 4500 },
+        { 11600, 4700 },
+    }, 150, "10A 10B door") then
+        BOT_STATE.next_phase = "to_118_from_10b"
+        door_nav(bot, "10B", { { 11600, 4700, 11600, 5600 } }, "door 10A->10B")
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        herbicide_abort(bot, "10A->10B door did not open")
+    end
+end
+
+local function phase_to_118_from_10b(bot)
+    if walk_waypoints(bot, { { 6000, 14500 }, { 9500, 14200 } }, 150,
+        "10B 118 door") then
+        BOT_STATE.next_phase = "to_118_item"
+        door_nav(bot, "118", { { 9500, 14200, 9500, 13100 } }, "door 10B->118")
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        log(bot, "10B->118 door did not open; " .. door_diag(bot, "118"))
+        BOT_STATE.herb.failed = true
+        set_phase(bot, "to_10a_from_10b", "118 door unreachable")
+    end
+end
+
+local function phase_to_118_spray(bot)
+    BOT_STATE.herb.picked = true
+    if BOT_STATE.herb.spray_done then
+        set_phase(bot, "to_10b_from_118", "herbicide and spray handled")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_FIRST_AID_SPRAY)
+    if not slot then
+        log(bot, "118 first aid spray action not present; continuing")
+        BOT_STATE.herb.spray_done = true
+        set_phase(bot, "to_10b_from_118", "no spray action")
+        return
+    end
+    local result = action_nav(bot, slot, "118 first aid spray", {
+        { 5544, 6378, 5544, 5000 },
+    }, { optional = true, require_count = true, side_ticks = 240 })
+    if result == true then
+        log(bot, string.format("118 first aid spray count=%d",
+            bot:item_count(ITEM_FIRST_AID_SPRAY)))
+        BOT_STATE.herb.spray_done = true
+        set_phase(bot, "to_10b_from_118", "spray taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, string.format(
+            "118 first aid spray unreachable; count=%d",
+            bot:item_count(ITEM_FIRST_AID_SPRAY)))
+        BOT_STATE.herb.spray_done = true
+        set_phase(bot, "to_10b_from_118", "spray unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        log(bot, "118 first aid spray timed out; continuing")
+        BOT_STATE.herb.spray_done = true
+        set_phase(bot, "to_10b_from_118", "spray timeout")
+    end
+end
+
+local function phase_to_118_item(bot)
+    if bot:item_count(ITEM_HERBICIDE) > 0 then
+        BOT_STATE.herb.picked = true
+        log(bot, string.format("118 herbicide count=%d",
+            bot:item_count(ITEM_HERBICIDE)))
+        set_phase(bot, "to_118_spray", "herbicide taken; looking for a spray")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_HERBICIDE)
+    if not slot then
+        log(bot, "118 herbicide action not present")
+        BOT_STATE.herb.failed = true
+        set_phase(bot, "to_118_spray", "no herbicide action")
+        return
+    end
+    local result = action_nav(bot, slot, "118 herbicide", {
+        { 4560, 3369, 3160, 3369 },
+    }, { optional = true })
+    if result == true then
+        BOT_STATE.herb.picked = true
+        log(bot, string.format("118 herbicide count=%d",
+            bot:item_count(ITEM_HERBICIDE)))
+        set_phase(bot, "to_118_spray", "herbicide taken")
+        return
+    end
+    if result == "failed" then
+        BOT_STATE.herb.failed = true
+        log(bot, "118 herbicide unreachable")
+        set_phase(bot, "to_118_spray", "herbicide unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        BOT_STATE.herb.failed = true
+        log(bot, "118 herbicide timed out")
+        set_phase(bot, "to_118_spray", "herbicide timeout")
+    end
+end
+
+local function phase_to_10b_from_118(bot)
+    if walk_waypoints(bot, { { 6200, 7900 } }, 120, "118 return") then
+        BOT_STATE.next_phase = "to_10a_from_10b"
+        door_nav(bot, "10B", { { 6200, 7900, 6200, 9500 } }, "door 118->10B")
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        fail(bot, "118->10B return door timed out; " .. door_diag(bot, "10B"))
+    end
+end
+
+local function phase_to_10a_from_10b(bot)
+    local herb = BOT_STATE.herb
+    if herb.stage < 2 then
+        -- The storeroom's green herb sits north of the central block, on the
+        -- return path. Take it before the bypass: it replaces the health the
+        -- restored stair zombie takes on the way past.
+        if walk_waypoints(bot, { { 7662, 15000 } }, 150, "10B herb") then
+            local slot = item_action_slot(bot, ITEM_GREEN_HERB)
+            if not slot then
+                log(bot, "10B green herb action not present")
+                herb.stage = 2
+            else
+                local result = action_nav(bot, slot, "10B green herb", {
+                    { 7662, 15000, 7662, 16400 },
+                }, { optional = true })
+                if result == true then
+                    log(bot, string.format("10B green herb count=%d",
+                        bot:item_count(ITEM_GREEN_HERB)))
+                    herb.stage = 2
+                elseif result == "failed" then
+                    log(bot, "10B green herb unreachable; continuing")
+                    herb.stage = 2
+                end
+            end
+        end
+        if BOT_STATE.phase_ticks > 1800 then
+            log(bot, "10B green herb timed out; continuing")
+            herb.stage = 2
+        end
+        return
+    end
+    if walk_waypoints(bot, { { 3300, 15000 }, { 3150, 6900 } }, 150,
+        "10B return") then
+        BOT_STATE.next_phase = "to_109_from_10a"
+        door_nav(bot, "10A", { { 3150, 6900, 3150, 6000 } }, "door 10B->10A")
+    end
+    if BOT_STATE.phase_ticks > 3600 then
+        fail(bot, "10B->10A return door timed out; " .. door_diag(bot, "10A"))
     end
 end
 
@@ -2035,8 +3166,8 @@ local function enter_room(bot, room, tick)
             .. "common02=%s common03=%s common05=%s common64=%s common65=%s "
             .. "lockpick=%s scenario7c=%s scenario03=%s scenario69=%s "
             .. "scenario6a=%s scenario6b=%s scenario6c=%s lock17=%s "
-            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d "
-            .. "shield=%d blue=%d armor=%d sun=%d moon=%d)",
+            .. "items(ribbon=%d ammo=%d herb=%d spray=%d gold=%d music=%d star=%d "
+            .. "radio=%d desk=%d crank=%d shield=%d blue=%d armor=%d sun=%d moon=%d)",
         room.id, tick, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
@@ -2054,6 +3185,9 @@ local function enter_room(bot, room, tick)
         bot:item_count(ITEM_INK_RIBBON),
         bot:item_count(ITEM_HANDGUN_AMMO),
         bot:item_count(ITEM_GREEN_HERB),
+        bot:item_count(ITEM_FIRST_AID_SPRAY),
+        bot:item_count(ITEM_GOLD_EMBLEM),
+        bot:item_count(ITEM_MUSIC_SCORE),
         bot:item_count(ITEM_STAR_CREST),
         bot:item_count(ITEM_RADIO_KEY),
         bot:item_count(ITEM_DESK_KEY),
@@ -2982,10 +4116,11 @@ local function combat_start(bot, combat, enemy, player, weapon)
     ))
 end
 
--- Between fights: one green herb below 60 health. The host validates the item
--- again and applies the menu USE rule, so this only queues a legal action.
--- The cooldown is in controllable ticks; a grab, scene or menu never reaches
--- this function, and an active fight is allowed to finish first.
+-- Between fights: one heal item below 60 health. The first-aid spray (0x41)
+-- heals fully and is preferred; the green herb (0x44) is the fallback. The
+-- host validates the item again and applies the menu USE rule, so this only
+-- queues a legal action. The cooldown is in controllable ticks; a grab, scene
+-- or menu never reaches this function, and an active fight may finish first.
 local function step_healing(bot, player)
     local heal = BOT_STATE.heal
     if heal.cooldown > 0 then
@@ -2997,11 +4132,23 @@ local function step_healing(bot, player)
     if BOT_STATE.combat and BOT_STATE.combat.active then
         return false
     end
-    if heal.cooldown > 0 or bot:item_count(ITEM_GREEN_HERB) <= 0 then
+    if heal.cooldown > 0 then
+        return false
+    end
+    local item = nil
+    local name = nil
+    if bot:item_count(ITEM_FIRST_AID_SPRAY) > 0 then
+        item = ITEM_FIRST_AID_SPRAY
+        name = "first aid spray"
+    elseif bot:item_count(ITEM_GREEN_HERB) > 0 then
+        item = ITEM_GREEN_HERB
+        name = "green herb"
+    end
+    if not item then
         return false
     end
     local health = player.health
-    if not bot:use_heal(ITEM_GREEN_HERB) then
+    if not bot:use_heal(item) then
         heal.cooldown = HEAL_COOLDOWN
         return false
     end
@@ -3009,8 +4156,8 @@ local function step_healing(bot, player)
     heal.uses = heal.uses + 1
     heal.last_health = health
     log(bot, string.format(
-        "heal green herb health=%d uses=%d cooldown=%d",
-        health, heal.uses, heal.cooldown))
+        "heal %s item=0x%02X health=%d uses=%d cooldown=%d",
+        name, item, health, heal.uses, heal.cooldown))
     return true
 end
 
@@ -3032,6 +4179,23 @@ local function combat_step(bot, scene, player)
     -- can pass it on the west side and save the health for the 10C plants.
     if room.id == "101" then
         log(bot, "combat: bypassing the 101 corridor zombie to save health")
+        combat.disarmed = true
+        return false
+    end
+    -- The 204 corridor zombie can be run past on the east side; the armor
+    -- room's 205 switch and any later return need that health.
+    if room.id == "204" then
+        log(bot, "combat: bypassing the 204 corridor zombie to keep health")
+        combat.disarmed = true
+        return false
+    end
+    -- The 10B storeroom detour only passes through for the 118 herbicide. The
+    -- first encounter is fought normally; on the way back the picked herbicide
+    -- flag marks the return leg, where the route runs past the restored stair
+    -- zombie and uses the room's green herb to recover instead of spending
+    -- the reserve the later 202/201 fights need.
+    if room.id == "10B" and BOT_STATE.herb and BOT_STATE.herb.picked then
+        log(bot, "combat: bypassing the 10B stair zombie on the return leg")
         combat.disarmed = true
         return false
     end
@@ -3372,6 +4536,22 @@ function on_bot_tick(bot)
     end
     if phase == "to_105_items" then
         phase_to_105_items(bot)
+    elseif phase == "emblem_detour" then
+        phase_emblem_detour(bot)
+    elseif phase == "emblem_return" then
+        phase_emblem_return(bot)
+    elseif phase == "herbicide_from_10a" then
+        phase_herbicide_from_10a(bot)
+    elseif phase == "to_118_from_10b" then
+        phase_to_118_from_10b(bot)
+    elseif phase == "to_118_item" then
+        phase_to_118_item(bot)
+    elseif phase == "to_118_spray" then
+        phase_to_118_spray(bot)
+    elseif phase == "to_10b_from_118" then
+        phase_to_10b_from_118(bot)
+    elseif phase == "to_10a_from_10b" then
+        phase_to_10a_from_10b(bot)
     elseif phase == "to_10c_item" then
         phase_to_10c_item(bot)
     elseif phase == "retreat_10c" then
