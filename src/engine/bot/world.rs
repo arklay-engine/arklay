@@ -523,6 +523,7 @@ pub(super) mod tests {
                 max_health: 100,
                 state: 0,
                 being_attacked: 0,
+                locked: false,
                 equipped: None,
                 radius: 400,
                 collision_flags: 0,

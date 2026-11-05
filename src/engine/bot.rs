@@ -417,6 +417,10 @@ struct PlayerSnapshot {
     max_health: i16,
     state: u8,
     being_attacked: u8,
+    /// Whether a locked player action (a vault, stairs, a ladder, a reach)
+    /// is running. A finished ladder leaves `being_attacked`'s sequence bit
+    /// up, so the bit alone does not mean a sequence is in progress.
+    locked: bool,
     equipped: Option<u8>,
     radius: i32,
     collision_flags: u8,
@@ -995,6 +999,7 @@ impl SessionSnapshot {
             max_health: game.max_health,
             state: entity.state(),
             being_attacked: entity.is_being_attacked,
+            locked: session.player.locked != player::LockedAction::None || session.player.vault_bit,
             equipped: game.equipped,
             radius: session.player.radius,
             collision_flags: session.player.collision_flags,
@@ -2817,6 +2822,7 @@ impl UserData for BotCtx {
             table.set("max_health", p.max_health)?;
             table.set("state", p.state)?;
             table.set("being_attacked", p.being_attacked)?;
+            table.set("locked", p.locked)?;
             table.set("equipped", p.equipped)?;
             table.set("collision_flags", p.collision_flags)?;
             table.set("grabbed", p.grabbed)?;
@@ -4327,6 +4333,7 @@ mod tests {
             max_health: 96,
             state: 1,
             being_attacked: 0,
+            locked: false,
             equipped: None,
             radius: 100,
             collision_flags: 0,
@@ -4360,6 +4367,7 @@ mod tests {
             max_health: 96,
             state: 1,
             being_attacked: 0,
+            locked: false,
             equipped: None,
             radius: 100,
             collision_flags: 0,
@@ -4527,6 +4535,7 @@ mod tests {
             max_health: 96,
             state: 1,
             being_attacked: 0,
+            locked: false,
             equipped: None,
             radius: 100,
             collision_flags: 0,
