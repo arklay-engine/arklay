@@ -362,6 +362,7 @@ impl World {
                 let item_row = lua.create_table()?;
                 item_row.set("slot", *slot)?;
                 item_row.set("item", item.item)?;
+                item_row.set("item_kind", snapshot.item_kind(item.item))?;
                 item_row.set("quantity", item.quantity)?;
                 item_row.set("present", item.present)?;
                 item_row.set("taken", item.taken.is_some())?;
@@ -375,6 +376,7 @@ impl World {
                     goal.set("room", id)?;
                     goal.set("slot", *slot)?;
                     goal.set("item", item.item)?;
+                    goal.set("item_kind", snapshot.item_kind(item.item))?;
                     goal.set("quantity", item.quantity)?;
                     goal.set("x", item.x)?;
                     goal.set("z", item.z)?;
@@ -523,6 +525,7 @@ pub(super) mod tests {
             cameras: Vec::new(),
             save_screen: None,
             saves: SaveSnapshot::default(),
+            item_defs: crate::item_catalog::ItemCatalog::embedded(),
         }
     }
 
@@ -882,6 +885,9 @@ pub(super) mod tests {
         assert_eq!(item_goal.get::<i32>("x").unwrap(), 12000);
         assert_eq!(item_goal.get::<i32>("z").unwrap(), 14000);
         assert_eq!(item_goal.get::<u8>("item").unwrap(), 0x30);
+        // The catalog kind rides along (0x30 is the lighter, a special item).
+        assert_eq!(item_goal.get::<String>("item_kind").unwrap(), "special");
+        assert_eq!(item_goal.get::<String>("kind").unwrap(), "item");
     }
 
     #[test]

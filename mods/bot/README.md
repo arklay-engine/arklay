@@ -57,11 +57,11 @@ Chunks run in path order, so the modules are global tables:
 | `bot/init.lua` | | `on_bot_tick`: the priority order below, plus damage and room-entry logging. |
 | `bot/menu.lua` | `BotMenu` | Equip, heal and item use through the inventory menu ([Menu skills](#menu-skills)). |
 | `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press) and `visit_camera` (walk into a camera switch zone). |
-| `bot/planner.lua` | `BotPlanner` | Goal choice, attempt marks, the door route and the finish. |
+| `bot/planner.lua` | `BotPlanner` | Goal choice, the pursued target, attempt marks, the loop rule, the door route and the finish. |
 | `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
 | `bot/save.lua` | `BotSave` | Saving at typewriters, the latest-save tracking and the reload after a death ([Saving and reloading](#saving-and-reloading)). |
 | `bot/scene.lua` | `BotScene` | Films, transitions, messages, yes/no prompts, pick-up viewers and the document reader. |
-| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule. |
+| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule, the ammo reserve ([Ammunition](#ammunition)). |
 | `bot/tactics.lua` | `BotTactics` | Combat from the knowledge file: fight or run, the aim pose, spacing and firing ([Combat](#combat)). |
 
 Priorities, highest first:
@@ -94,27 +94,65 @@ Priorities, highest first:
    item's use flag (bank 9, selector `item - 0x1B`), uses the item from the
    menu and waits up to 20 seconds for the done flag. A menu failure or a
    flag that never rises marks the fact.
-4. Ground items here, nearest planned path first. A visible item here is
-   always taken before the bot moves on. A zone at the room origin is a
-   scripted handover and is marked permanently.
+4. Ground items here, keys (catalog kind `key`) first, then the nearest
+   planned path. A visible item here is taken before the bot moves on,
+   unless every inventory slot is full and the item does not merge into a
+   held stack (`inventory full`, retried once the inventory changes). A
+   zone at the room origin is a scripted handover and is marked
+   permanently. A zone that holds the centre of a zone of the same item
+   taken here may be a second AOT of that pickup: it gets one approach, and
+   a press there with no pickup marks it permanently.
 5. A passage check, when a door or item of this room has no planned
    approach: a stair zone (`door_check`), or an action-key event zone
    (flags `>= 0x80`) that no fact names, since a script may start the climb
    from an event. One press per slot per room entry, nearest first.
-6. The way out, one ranking by distance cost over the doors here and the
-   first door of the route (breadth-first over the remembered doors) to each
-   remote frontier item or door. The cost is the path length to the door's
-   approach, plus 20 reach per door step of the route, plus, for a remote
-   goal, its path length in its own room from where the bot last stood
-   there (`REACH^3` when the planner found none), minus 15 reach for an
-   unvisited room, 10 reach for a remote item, and 30 reach for a door into
-   the goal room or 6 for one into its stage. The lowest cost wins; the
-   pick is logged as `way out: <why>, cost N`. `planner.lua`'s header has
+6. The way out. A pursued target keeps its course: the bot takes the first
+   door of the route to it until it is reached, real progress re-ranks, or
+   the loop rule drops it (`pursuing ...`). Otherwise one ranking by
+   distance cost over the doors here and the first door of the route
+   (breadth-first over the remembered doors) to each remote frontier item or
+   door, and to each room whose `<use>` fact (`bot:use_facts()`) needs a
+   held item with its done flag clear. The cost is the path length to the
+   door's approach, plus 20 reach per door step of the route, plus, for a
+   remote goal, its path length in its own room from where the bot last
+   stood there (`REACH^3` when the planner found none), minus 15 reach for
+   an unvisited room, 10 reach for a remote item, 60 more for the
+   ammunition the gun needs ([Ammunition](#ammunition)) or for a seen key
+   item that a remembered locked door needs, 60 for a held
+   item's `<use>` room, and 200 reach for a door into the goal room or 6
+   for one into its stage. The lowest cost wins and a remote winner becomes
+   the pursued target; the pick is logged as `way out: <why>, cost N`. An
+   exit with no planned approach from where the bot stands (another level
+   of the room) gets a passage check first. A `<use>` that failed in its
+   room is retried there, never travelled to. `planner.lua`'s header has
    the formula.
-7. Nothing left: `frontier empty: nothing reachable is left`. Entering the
-   `--bot-goal-room` finishes with `goal room X reached`, and more than 40
-   entries into one room finishes with `looping`. Every finish lists the
-   locked doors (`needs key 0x..`) and the blocked goals with their reason.
+7. Nothing left: every approach or time-out mark under 3 attempts gets one
+   more try (the bot may now stand elsewhere); then
+   `frontier empty: nothing reachable is left` (with the count of goals
+   marked looping). Entering the `--bot-goal-room` finishes with
+   `goal room X reached`. Every finish lists the locked doors
+   (`needs key 0x..`) and the blocked goals with their reason.
+
+The loop rule (`BotPlanner.pursue`, `BotPlanner.repeat_check`). Real
+progress is a change in the rooms entered, the items taken, the doors
+unlocked or the inventory, or a puzzle or `<use>` step done; it re-ranks the
+pursued target and resets the counts. Without it:
+
+- a room entered more than 6 times marks the pursued target looping (with
+  no target, the last exit the planner took from that room), and more than
+  12 times finishes the run with `looping: entered X N times without
+  progress`;
+- a pursued target whose route from a newly entered room is no shorter
+  (in doors) than the shortest seen counts a stall, and the third stall
+  marks it looping.
+
+A looping mark holds for 3 minutes of game time or until the inventory
+changes, and counts as an attempt. The limits are three times what the
+re1 bench run to 20D needs: at most 2 entries of one room between progress
+events and 1 stall. Before the rule, that run entered 204 41 times in a
+204/206/207 cycle between two targets whose remote costs disagreed room to
+room; the 207 exit toward 10B has no planned approach from the level the
+bot enters on, which the passage-first rule above now handles.
 
 Doors follow the engine's `try_door` rules. A door is locked when its lock
 byte has bit `0x80` and the bank-2 flag `lock & 0x3F` is clear. The key
@@ -182,6 +220,22 @@ weapon. Every entry has a comment saying how it was measured.
   that the monster's `speed` would close during the turn around, or one
   inside its reach, holds and shoots instead. The walks use
   `bot:spacing_point` and `walk_to` with `avoid_enemies`.
+
+### Ammunition
+
+`BotSurvival.ammo_need(bot)`: the equipped gun's rounds are its clip plus
+the inventory count of its ammunition item (`bot:weapon().ammo`, the
+engine's `weapon + 9` when the item catalog lists the weapon as a weapon and
+that item as ammunition). The floor is `shots * (1 + 2 * (1 - risk))`,
+rounded up: three kills at risk 0, two and a half at the default 0.25, one
+at risk 1, where `shots` is the most hits one kill of a `fight` monster
+takes with the weapon in the knowledge file (`health / damage`, rounded up:
+9 for the re1 handgun, 4 for the shotgun). Below it, the way-out ranking
+takes a reachable frontier item of that ammunition 60 reach cheaper, and
+the planner logs `ammo low: R rounds under the floor F; N known ammo
+item(s)`. Ammunition seen in a room is taken there anyway (step 4), so the
+bonus matters for ammunition left behind (full inventory, a failed
+approach).
 
 ### Lint
 
@@ -305,13 +359,16 @@ leaves the game session.
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
 | `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |
-| `bot:weapon()` | `{equipped, weapon, clip, reserve, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, and `target` is the locked entity slot or nil. |
+| `bot:weapon()` | `{equipped, weapon, clip, reserve, ammo, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, `ammo` is `bot:ammo_for(weapon)`, and `target` is the locked entity slot or nil. |
 | `bot:knowledge()` | The game's combat knowledge, read-only: `{source, enemies, weapons}`. `enemies[id]` is `{name, policy, stand, downed, up, reach, crawl_reach, grabs, outrun, speed, health, keep}` with `keep[weapon] = {min, max, damage}`; `weapons[id]` is `{name, near, side, cadence, headshot, weak, status_bit}`. An `unknown` value is `nil`. With no file, both tables are empty. See [Combat](#combat). |
 | `bot:spacing_point(slot, want)` | A point `want` from monster `slot` that is free of collision, at least `want` from every other monster, in a clear line from the player and not reached by walking past the monster: `{x, z}` (the nearest such point) or `nil`. |
 | `bot:can_see(slot)` | Whether monster `slot` is in the current snapshot with a clear weapon sight line. |
 | `bot:flag(bank, bit)` | A flag bit, read-only. |
 | `bot:has_item(item)` / `bot:item_count(item)` | Inventory queries. |
-| `bot:inventory()` | Read-only array of the live inventory slots: `{slot, item, quantity}` rows, including zero-quantity weapon slots. |
+| `bot:inventory()` | Read-only array of the live inventory slots: `{slot, item, quantity, kind}` rows, including zero-quantity weapon slots. `kind` is the catalog kind. |
+| `bot:item_kind(item)` | The item catalog's kind (`"weapon"`, `"ammo"`, `"key"`, `"heal"`, ...) and whether a pickup merges into a held stack (two values). |
+| `bot:ammo_for(weapon)` | The ammunition item `weapon` fires, or `nil` when the catalog does not list it as a weapon with an ammunition item. |
+| `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack. |
 | `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind}` with the menu's 0-based `slot`. |
 | `bot:memory()` | String map set by `remember`. |
 | `bot:visited(room)` | Whether a room id such as `"106"` (or packed `0x106`) was seen. |
@@ -340,7 +397,7 @@ room id, then slot, so iteration is deterministic.
       doors = { { slot = 1, target = "107", target_visited = true, key = 0,
                   locked = false, unlocked = false, traversed = true,
                   present = true, x = 9000, z = 9000 } },
-      items = { { slot = 4, item = 0x30, quantity = 1, present = false,
+      items = { { slot = 4, item = 0x30, item_kind = "special", quantity = 1, present = false,
                   taken = true, taken_tick = 640, x = 12000, z = 14000 } },
       actions = { { slot = 3, kind = "event", presses = 1, last_press = 700,
                     message = 0x21, flags = { { bank = 4, bit = 0x1A } } } } },
@@ -349,7 +406,8 @@ room id, then slot, so iteration is deterministic.
   frontier = {
     { kind = "door", room = "106", slot = 2, target = "108", target_visited = false,
       key = 0x30, locked = true, x = 3000, z = 3000 },
-    { kind = "item", room = "107", slot = 3, item = 0x40, quantity = 1, x = 1000, z = 1000 },
+    { kind = "item", room = "107", slot = 3, item = 0x40, item_kind = "special",
+      quantity = 1, x = 1000, z = 1000 },
   },
 }
 ```
@@ -374,7 +432,8 @@ room id, then slot, so iteration is deterministic.
   the bot pressed the slot within 120 ticks. An item that vanished otherwise
   (a script, or absent on re-entry) is only `present = false`.
 - `frontier` is every present, untraversed door and every present item not
-  taken; `locked` there is the door's current state.
+  taken; `locked` there is the door's current state. Item rows (in `items`
+  and the frontier) carry `item_kind`, the catalog kind.
 
 ### Room metadata
 

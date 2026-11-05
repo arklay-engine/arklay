@@ -131,6 +131,47 @@ pub fn load(pack: &Pack, id: RoomId) -> Result<Option<RoomMeta>> {
     parse(text).map(Some).with_context(|| path)
 }
 
+/// One room's `<use>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomUse {
+    /// The room id as `bot:room().id` spells it (`"10C"`).
+    pub room: String,
+    pub fact: Use,
+}
+
+/// Every room's `<use>` facts, by room id then document order: the
+/// planner's index of where a held item has a use (`bot:use_facts()`).
+/// A file that does not parse is an error, as for [`load`].
+pub fn load_uses(pack: &Pack) -> Result<Vec<RoomUse>> {
+    let mut rooms: Vec<String> = pack
+        .paths()
+        .filter_map(|path| {
+            let lower = path.to_ascii_lowercase();
+            let room = lower.strip_prefix("room/")?.strip_suffix("/bot.xml")?;
+            (room.len() == 3 && room.bytes().all(|b| b.is_ascii_hexdigit()))
+                .then(|| room.to_string())
+        })
+        .collect();
+    rooms.sort();
+    rooms.dedup();
+    let mut uses = Vec::new();
+    for room in rooms {
+        let path = format!("room/{room}/bot.xml");
+        let bytes = pack
+            .read(&path)
+            .with_context(|| format!("cannot read {path}"))?;
+        let text =
+            std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
+        let meta = parse(text).with_context(|| path.clone())?;
+        let id = room.to_ascii_uppercase();
+        uses.extend(meta.uses.into_iter().map(|fact| RoomUse {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(uses)
+}
+
 /// Parse one `bot.xml` document.
 pub fn parse(text: &str) -> Result<RoomMeta> {
     budget::check_len(text.len(), MAX_BYTES, "bot XML size")?;
@@ -672,6 +713,30 @@ mod tests {
             seen += meta.uses.len();
         }
         assert!(seen > 0, "no checked-in <use> facts were found");
+    }
+
+    #[test]
+    fn the_use_index_lists_every_rooms_use_facts_by_room() {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        let uses = load_uses(&pack).unwrap();
+        let rows: Vec<(&str, u8, u8)> = uses
+            .iter()
+            .map(|entry| (entry.room.as_str(), entry.fact.slot, entry.fact.item))
+            .collect();
+        // Sorted by room id, document order inside a room.
+        assert_eq!(
+            rows,
+            vec![
+                ("105", 11, 0x20),
+                ("10C", 2, 0x26),
+                ("10F", 6, 0x1F),
+                ("11A", 5, 0x2D),
+                ("11A", 3, 0x2E),
+                ("11A", 4, 0x2C),
+                ("11A", 6, 0x29),
+            ]
+        );
+        assert_eq!(uses[1].fact.flag, (1, 0xA9));
     }
 
     #[test]
