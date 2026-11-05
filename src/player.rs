@@ -83,7 +83,7 @@ const INTERACT_CLIP: usize = 4;
 const IDLE_SETTLE_TICKS: u32 = 100;
 
 /// Walk speed before the per-character footfall modulation.
-const WALK_SPEED: i32 = 0x5D;
+pub(crate) const WALK_SPEED: i32 = 0x5D;
 /// Backward walk speed with no enemy in view.
 const BACK_SPEED: i32 = 0x40;
 /// Backward walk speed with an enemy in view.
@@ -93,14 +93,14 @@ const BACK_VIEW_HALF_ANGLE: i16 = 0x200;
 /// The range of the backward walk's enemy scan.
 const BACK_VIEW_RANGE: i16 = 8000;
 /// Run speed.
-const RUN_SPEED: i32 = 0xD2;
+pub(crate) const RUN_SPEED: i32 = 0xD2;
 
 /// Turn added per tick when walking or backing with a direction held.
-const DIAGONAL_TURN: u16 = 0x28;
+pub(crate) const DIAGONAL_TURN: u16 = 0x28;
 /// Turn added per tick when turning in place.
-const TURN_STEP: u16 = 0x60;
+pub(crate) const TURN_STEP: u16 = 0x60;
 /// Turn added per tick when steering a run.
-const RUN_TURN: u16 = 0x30;
+pub(crate) const RUN_TURN: u16 = 0x30;
 /// Yaw offset that makes the backward walk face away from the movement.
 const BACK_OFFSET: u16 = 0x800;
 
@@ -140,7 +140,7 @@ const BEHAVIOR_ENTRY: u8 = 0xFF;
 const BEHAVIOR_RUN_ENTRY: u8 = 0xFE;
 
 /// Ticks of the run's decelerating stop segment.
-const RUN_STOP_TICKS: u8 = 4;
+pub(crate) const RUN_STOP_TICKS: u8 = 4;
 /// Speed shed by each tick of the run's stop segment.
 const RUN_STOP_DECEL: u16 = 0x1e;
 /// Frame the run clip starts on when there is no walk stride to continue.

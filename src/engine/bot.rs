@@ -17,6 +17,7 @@
 
 mod meta;
 mod stats;
+mod steer;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
@@ -791,19 +792,30 @@ const GRID_NODES: usize = GRID_DIM * GRID_DIM;
 
 /// Default `walk_to` arrival radius.
 const DEFAULT_TOLERANCE: i32 = 300;
-/// The heading error at or below which the walk starts moving.
+/// The heading error at or below which `face_to` reports `facing`, and the
+/// in-place fallback walks on.
 const FORWARD_DEADBAND: i32 = 0x40;
-/// The heading error at or below which the run may start.
-const RUN_START_DEADBAND: i32 = 0x60;
-/// The heading error at or below which a running bot steers while moving
-/// (the engine's run turn is 0x30 a tick) instead of stopping to turn.
-const RUN_TURN_DEADBAND: i32 = 0x100;
-/// The heading error above which the run latch drops at a sharp corner.
-const RUN_STOP_DEADBAND: i32 = 0x1C0;
 /// Remaining distance above which a run may start.
 const RUN_START_DISTANCE: i32 = 800;
 /// Remaining distance at or below which a run walks the final approach.
 const RUN_STOP_DISTANCE: i32 = 400;
+/// With a `face` option, the path is planned through a point this far behind
+/// the goal on the line toward the face point, so the last stretch already
+/// heads at the zone.
+const FACE_LEAD: i32 = 800;
+/// Within this distance of a `face` goal the walk steers onto the approach
+/// line (see [`steer::face_carrot`]).
+const FACE_APPROACH: i32 = 1400;
+/// With a `next` waypoint, the walk starts turning toward it this far from
+/// the goal.
+const CORNER_RADIUS: i32 = 800;
+/// With a `next` waypoint, a goal the bot is past (on the next waypoint's
+/// side) counts as reached within this distance, so the corner is cut instead
+/// of overshot and turned back on.
+const CORNER_ARRIVE: i32 = 400;
+/// An enemy-avoiding walk replans this often, so the path follows the
+/// monsters as they move.
+const AVOID_REPLAN_TICKS: u32 = 20;
 /// Advance to the next waypoint within this distance of the current one.
 const WAYPOINT_RADIUS: i32 = 256;
 /// Pure-pursuit lookahead: aim at the farthest path point within this distance
@@ -834,10 +846,29 @@ struct BotNav {
     blocked_goal: Option<(i32, i32)>,
     last_pos: Option<(i32, i32)>,
     last_forward: bool,
-    /// Whether the run is latched: once picked up it survives moderate
-    /// heading errors as a run-turn, and drops at sharp corners and on the
-    /// final approach.
+    /// Whether the last walk tick ran. The run gait carries a cost to drop
+    /// and to pick up again ([`steer::steer`]), so it holds through corners
+    /// it can steer.
     running: bool,
+    /// The `face` point of the current goal.
+    face: Option<(i32, i32)>,
+    /// The path index of the face approach point: the look-ahead does not
+    /// skip past it until the bot is on the approach line.
+    face_pin: Option<usize>,
+    /// Whether the current goal routes around enemies.
+    avoid: bool,
+    /// The enemy zones the current path was planned with.
+    zones: Vec<steer::EnemyZone>,
+    /// Walk ticks since the enemy-avoiding path was planned.
+    avoid_ticks: u32,
+    /// The heading change the engine applies if this tick's turn press is
+    /// released next tick ([`steer::release_delta`]).
+    release_now: i32,
+    /// The same for the previous tick: what releasing now still turns.
+    release_prev: i32,
+    /// Whether the previous tick's pad held aim: `face_to` then steers the
+    /// aim, whose turn the release model does not describe.
+    aiming: bool,
     /// Whether `walk_to` ran this tick. A tick without it (a scene, a door
     /// press, a `face_to`) drops the run latch.
     driving: bool,
@@ -861,6 +892,19 @@ enum Turn {
     Right,
 }
 
+/// A planned path and the index of its face approach point, if it has one.
+type PlannedPath = (Vec<(i32, i32)>, Option<usize>);
+
+/// The result of the read-only `bot:path` query.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PathQuery {
+    points: Vec<(i32, i32)>,
+    length: i32,
+    /// The enemy zones' summed cost along the path (always measured, whether
+    /// or not the plan avoided them).
+    enemy_cost: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct NavOutcome {
     forward: bool,
@@ -871,58 +915,19 @@ struct NavOutcome {
     angle_error: i32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Movement {
-    forward: bool,
-    run: bool,
-    turn: Turn,
-    /// The run latch after this tick.
-    running: bool,
-}
-
-/// Decide the pad for one navigation tick.
-///
-/// The run is latched: it starts only on a small heading error at a worthwhile
-/// distance, then survives moderate errors as a run-turn. A sharp corner drops
-/// the latch and stops for an in-place turn; the final approach always walks.
-fn movement_for(error: i32, distance: i32, allow_run: bool, running: bool) -> Movement {
-    let abs = error.abs();
-    let running = running && allow_run && distance > RUN_STOP_DISTANCE && abs <= RUN_STOP_DEADBAND;
-    let running =
-        running || (allow_run && distance > RUN_START_DISTANCE && abs <= RUN_START_DEADBAND);
-    if running {
-        let turn = turn_for(error, FORWARD_DEADBAND);
-        if abs <= RUN_TURN_DEADBAND {
-            return Movement {
-                forward: true,
-                run: true,
-                turn,
-                running: true,
-            };
-        }
-        // Stop for the sharp part of the turn but keep the latch: the run
-        // resumes as soon as the heading is back inside the run arc.
-        return Movement {
-            forward: false,
-            run: false,
-            turn,
-            running: true,
-        };
-    }
-    let turn = turn_for(error, FORWARD_DEADBAND);
-    Movement {
-        forward: turn == Turn::None,
-        run: false,
-        turn,
-        running: false,
-    }
-}
-
 /// The options `bot:walk_to(x, z, opts)` accepts.
 #[derive(Clone, Copy, Debug)]
 struct WalkOptions {
     run: bool,
     tolerance: i32,
+    /// The interaction zone point the walk should arrive facing.
+    face: Option<(i32, i32)>,
+    /// Plan around the enemies' avoidance zones.
+    avoid_enemies: bool,
+    /// The waypoint after this one: the walk turns toward it on the last
+    /// stretch, and a goal it has passed on the way there counts as reached
+    /// within [`CORNER_ARRIVE`].
+    next: Option<(i32, i32)>,
 }
 
 impl Default for WalkOptions {
@@ -930,8 +935,18 @@ impl Default for WalkOptions {
         Self {
             run: false,
             tolerance: DEFAULT_TOLERANCE,
+            face: None,
+            avoid_enemies: false,
+            next: None,
         }
     }
+}
+
+/// Whether `pos` is past `corner` on the way to `next`.
+fn passed(pos: (i32, i32), corner: (i32, i32), next: (i32, i32)) -> bool {
+    let along = i64::from(pos.0 - corner.0) * i64::from(next.0 - corner.0)
+        + i64::from(pos.1 - corner.1) * i64::from(next.1 - corner.1);
+    along >= 0
 }
 
 fn distance_xz(from: (i32, i32), to: (i32, i32)) -> i32 {
@@ -945,16 +960,6 @@ fn distance_xz(from: (i32, i32), to: (i32, i32)) -> i32 {
 fn angle_error(current: u16, target: u16) -> i32 {
     let diff = i32::from(target.wrapping_sub(current) & 0x0FFF);
     if diff > 0x800 { diff - 0x1000 } else { diff }
-}
-
-fn turn_for(error: i32, deadband: i32) -> Turn {
-    if error > deadband {
-        Turn::Right
-    } else if error < -deadband {
-        Turn::Left
-    } else {
-        Turn::None
-    }
 }
 
 fn grid_xy(index: usize) -> (i32, i32) {
@@ -1062,6 +1067,7 @@ fn nearest_free(
 
 /// A* over the 65x65 collision grid. Returns grid-cell centres from start to
 /// goal, or `None` when the goal is enclosed.
+#[cfg(test)]
 fn find_grid_path(
     room: &RoomState,
     start: (i32, i32),
@@ -1069,6 +1075,19 @@ fn find_grid_path(
     y: i32,
     radius: i32,
     flags: u8,
+) -> Option<Vec<(i32, i32)>> {
+    find_grid_path_with(room, start, goal, y, radius, flags, &[])
+}
+
+/// [`find_grid_path`] with each node also paying the enemy zones' cost.
+fn find_grid_path_with(
+    room: &RoomState,
+    start: (i32, i32),
+    goal: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+    zones: &[steer::EnemyZone],
 ) -> Option<Vec<(i32, i32)>> {
     const DIRS: [(i32, i32, u32); 8] = [
         (1, 0, 10),
@@ -1159,7 +1178,9 @@ fn find_grid_path(
             if !line_clear(room, (x, z), (nx, nz), y, radius, flags) {
                 continue;
             }
-            let next_cost = cost[index].saturating_add(step_cost);
+            let next_cost = cost[index]
+                .saturating_add(step_cost)
+                .saturating_add(steer::zone_penalty(zones, nx, nz));
             if next_cost < cost[next] {
                 cost[next] = next_cost;
                 parent[next] = index;
@@ -1170,7 +1191,8 @@ fn find_grid_path(
     None
 }
 
-/// Greedily drop waypoints whose straight segment is clear.
+/// Greedily drop waypoints whose straight segment is clear (and, with enemy
+/// zones, does not cut back into a zone the grid path went around).
 fn smooth_path(
     room: &RoomState,
     start: (i32, i32),
@@ -1178,6 +1200,7 @@ fn smooth_path(
     y: i32,
     radius: i32,
     flags: u8,
+    zones: &[steer::EnemyZone],
 ) -> Vec<(i32, i32)> {
     let mut out = Vec::new();
     let mut anchor = start;
@@ -1185,7 +1208,9 @@ fn smooth_path(
     while index < path.len() {
         let mut best = None;
         for candidate in (index..path.len()).rev() {
-            if line_clear(room, anchor, path[candidate], y, radius, flags) {
+            if line_clear(room, anchor, path[candidate], y, radius, flags)
+                && steer::segment_avoids(zones, anchor, path[candidate])
+            {
                 best = Some(candidate);
                 break;
             }
@@ -1218,6 +1243,11 @@ impl BotNav {
         self.driving = false;
         self.stuck = 0;
         self.replans = 0;
+        self.face = None;
+        self.face_pin = None;
+        self.avoid = false;
+        self.zones.clear();
+        self.avoid_ticks = 0;
     }
 
     fn clear_goal(&mut self) {
@@ -1227,6 +1257,78 @@ impl BotNav {
         self.unreachable_goal = None;
         self.blocked_goal = None;
         self.running = false;
+        self.face_pin = None;
+    }
+
+    /// Drop the cached path so the next walk tick replans.
+    fn drop_path(&mut self) {
+        self.path.clear();
+        self.index = 0;
+        self.face_pin = None;
+    }
+
+    /// Plan a smoothed path from `pos` to `goal`, through the face approach
+    /// point when one is walkable. Returns the path and the approach point's
+    /// index in it.
+    fn plan(
+        &self,
+        pos: (i32, i32),
+        goal: (i32, i32),
+        face: Option<(i32, i32)>,
+        body: steer::Body,
+        zones: &[steer::EnemyZone],
+    ) -> Option<PlannedPath> {
+        let room = &self.collision;
+        let (y, radius, flags) = (body.y, body.radius, body.flags);
+        let approach = face
+            .and_then(|face| steer::approach_point(goal, face, FACE_LEAD))
+            .filter(|&point| {
+                !blocked(room, point.0, point.1, y, radius, flags)
+                    && line_clear(room, point, goal, y, radius, flags)
+                    && distance_xz(pos, goal) > FACE_LEAD / 2
+            });
+        if let Some(point) = approach
+            && let Some(path) = find_grid_path_with(room, pos, point, y, radius, flags, zones)
+        {
+            let mut path = smooth_path(room, pos, path, y, radius, flags, zones);
+            if path.last() == Some(&point) {
+                path.push(goal);
+                let pin = path.len() - 2;
+                return Some((path, Some(pin)));
+            }
+        }
+        let path = find_grid_path_with(room, pos, goal, y, radius, flags, zones)?;
+        Some((smooth_path(room, pos, path, y, radius, flags, zones), None))
+    }
+
+    /// Whether the bot can steer straight from `from` to `to`: clear of the
+    /// room, and with enemy zones, not deeper into one than its endpoints.
+    fn visible(&self, from: (i32, i32), to: (i32, i32), body: steer::Body) -> bool {
+        line_clear(&self.collision, from, to, body.y, body.radius, body.flags)
+            && steer::segment_avoids(&self.zones, from, to)
+    }
+
+    /// Start a bot tick: last tick's press becomes the pending release.
+    fn begin_tick(&mut self) {
+        self.release_prev = self.release_now;
+        self.release_now = 0;
+        self.driving = false;
+    }
+
+    /// End a bot tick with the pad the script left. A turn combined with
+    /// aim, a backward walk or a forward walk the nav did not choose is not
+    /// an in-place turn, so it leaves no in-place release to plan around.
+    fn end_tick(&mut self, input: &BotInput) {
+        let pad = input.input;
+        if pad.aim || pad.down || (pad.up && !self.driving) {
+            self.release_now = 0;
+        }
+        self.aiming = pad.aim;
+        if !self.driving {
+            // The script did not drive movement this tick (a scene, a door
+            // press, a `face_to`): do not resume a stale run next tick.
+            self.clear_run();
+        }
     }
 
     /// Drop the run latch without touching the path. The runtime calls this
@@ -1236,6 +1338,7 @@ impl BotNav {
     }
 
     /// The `walk_to` skill: collision-aware movement toward `(x, z)`.
+    #[cfg(test)]
     fn walk_to(
         &mut self,
         player: &PlayerSnapshot,
@@ -1243,26 +1346,57 @@ impl BotNav {
         z: i32,
         opts: WalkOptions,
     ) -> NavOutcome {
+        self.walk_to_with(player, x, z, opts, &[])
+    }
+
+    /// [`Self::walk_to`] with the live enemies, which an `avoid_enemies` walk
+    /// plans around.
+    fn walk_to_with(
+        &mut self,
+        player: &PlayerSnapshot,
+        x: i32,
+        z: i32,
+        opts: WalkOptions,
+        enemies: &[EnemySnapshot],
+    ) -> NavOutcome {
         self.driving = true;
         let pos = (player.x, player.z);
         let goal = (x, z);
+        let body = steer::Body {
+            y: player.y,
+            radius: player.radius,
+            flags: player.collision_flags,
+        };
         let distance = distance_xz(pos, goal);
-        if distance <= opts.tolerance {
+        let stop = |status: &'static str| NavOutcome {
+            forward: false,
+            run: false,
+            turn: Turn::None,
+            status,
+            distance,
+            angle_error: 0,
+        };
+        // A short next leg is walked exactly: cutting into it would skip it.
+        let corner_arrive = |next: (i32, i32)| CORNER_ARRIVE.min(distance_xz(goal, next) / 2);
+        let cut_corner = opts.next.is_some_and(|next| {
+            distance <= opts.tolerance.max(corner_arrive(next))
+                && passed(pos, goal, next)
+                && line_clear(&self.collision, pos, next, body.y, body.radius, body.flags)
+        });
+        if distance <= opts.tolerance || cut_corner {
             self.clear_goal();
-            return NavOutcome {
-                forward: false,
-                run: false,
-                turn: Turn::None,
-                status: "arrived",
-                distance,
-                angle_error: 0,
-            };
+            return stop("arrived");
         }
-        if self.goal != Some(goal) || self.tolerance != opts.tolerance {
+        if self.goal != Some(goal)
+            || self.tolerance != opts.tolerance
+            || self.face != opts.face
+            || self.avoid != opts.avoid_enemies
+        {
             self.goal = Some(goal);
             self.tolerance = opts.tolerance;
-            self.path.clear();
-            self.index = 0;
+            self.face = opts.face;
+            self.avoid = opts.avoid_enemies;
+            self.drop_path();
             self.unreachable_goal = None;
             self.blocked_goal = None;
             self.running = false;
@@ -1277,8 +1411,7 @@ impl BotNav {
             .last_pos
             .is_some_and(|last| (pos.0 - last.0).abs() + (pos.1 - last.1).abs() > TELEPORT_STEP);
         if jumped {
-            self.path.clear();
-            self.index = 0;
+            self.drop_path();
             self.stuck = 0;
             self.replans = 0;
             self.unreachable_goal = None;
@@ -1286,25 +1419,11 @@ impl BotNav {
         }
         if self.blocked_goal == Some(goal) {
             self.running = false;
-            return NavOutcome {
-                forward: false,
-                run: false,
-                turn: Turn::None,
-                status: "blocked",
-                distance,
-                angle_error: 0,
-            };
+            return stop("blocked");
         }
         if self.unreachable_goal == Some(goal) {
             self.running = false;
-            return NavOutcome {
-                forward: false,
-                run: false,
-                turn: Turn::None,
-                status: "unreachable",
-                distance,
-                angle_error: 0,
-            };
+            return stop("unreachable");
         }
         // Track forward progress: turning in place is not a stall.
         if let Some(last) = self.last_pos {
@@ -1319,58 +1438,71 @@ impl BotNav {
         if self.stuck >= STUCK_TICKS {
             self.stuck = 0;
             self.replans += 1;
-            self.path.clear();
-            self.index = 0;
+            self.drop_path();
             self.running = false;
             if self.replans > MAX_REPLANS {
                 self.blocked_goal = Some(goal);
-                return NavOutcome {
-                    forward: false,
-                    run: false,
-                    turn: Turn::None,
-                    status: "blocked",
-                    distance,
-                    angle_error: 0,
-                };
+                return stop("blocked");
+            }
+        }
+        if self.avoid && !enemies.is_empty() {
+            self.avoid_ticks += 1;
+            if self.avoid_ticks >= AVOID_REPLAN_TICKS {
+                self.drop_path();
             }
         }
         if self.path.is_empty() || self.index >= self.path.len() {
-            let found = find_grid_path(
-                &self.collision,
-                pos,
-                goal,
-                player.y,
-                player.radius,
-                player.collision_flags,
-            );
-            let Some(path) = found else {
-                self.unreachable_goal = Some(goal);
-                self.path.clear();
-                self.index = 0;
-                self.running = false;
-                return NavOutcome {
-                    forward: false,
-                    run: false,
-                    turn: Turn::None,
-                    status: "unreachable",
-                    distance,
-                    angle_error: 0,
-                };
+            self.zones = if self.avoid {
+                enemies
+                    .iter()
+                    .map(steer::EnemyZone::from_snapshot)
+                    .collect()
+            } else {
+                Vec::new()
             };
-            self.path = smooth_path(
-                &self.collision,
-                pos,
-                path,
-                player.y,
-                player.radius,
-                player.collision_flags,
-            );
+            self.avoid_ticks = 0;
+            let Some((path, pin)) = self.plan(pos, goal, opts.face, body, &self.zones) else {
+                self.unreachable_goal = Some(goal);
+                self.drop_path();
+                self.running = false;
+                return stop("unreachable");
+            };
+            self.path = path;
+            self.face_pin = pin;
             self.index = 0;
         }
-        while self.index < self.path.len()
-            && distance_xz(pos, self.path[self.index]) <= WAYPOINT_RADIUS
+        // On the face approach line the pinned point has done its job.
+        let carrot = opts
+            .face
+            .and_then(|face| steer::face_carrot(pos, goal, face, FACE_APPROACH))
+            .filter(|&carrot| self.visible(pos, carrot, body) && self.visible(pos, goal, body));
+        if carrot.is_some() {
+            self.face_pin = None;
+        }
+        // The goal itself is never skipped by the waypoint radius: it ends
+        // within `tolerance`, and stepping past it would re-append it every
+        // tick. A path that ends short of the goal may step past its end.
+        let skip_limit = if self.path.last() == Some(&goal) {
+            self.path.len() - 1
+        } else {
+            self.path.len()
+        };
+        while self.index < skip_limit && distance_xz(pos, self.path[self.index]) <= WAYPOINT_RADIUS
         {
             self.index += 1;
+        }
+        // The arc toward the look-ahead point cuts the corner, so it may
+        // never come within the waypoint radius: a corner the bot is already
+        // past, with the next point in sight, is done.
+        while self.index + 1 < self.path.len()
+            && self.face_pin.is_none_or(|pin| self.index < pin)
+            && passed(pos, self.path[self.index], self.path[self.index + 1])
+            && self.visible(pos, self.path[self.index + 1], body)
+        {
+            self.index += 1;
+        }
+        if self.face_pin.is_some_and(|pin| self.index > pin) {
+            self.face_pin = None;
         }
         // Pure pursuit: of the path points already inside the lookahead,
         // steer at the farthest one the player can see. The smoothed path's
@@ -1379,21 +1511,13 @@ impl BotNav {
         if self.index < self.path.len() {
             let mut best = self.index;
             let mut best_distance = distance_xz(pos, self.path[self.index]);
-            for candidate in self.index + 1..self.path.len() {
+            let last = self.face_pin.unwrap_or(self.path.len() - 1);
+            for candidate in self.index + 1..=last {
                 let distance = distance_xz(pos, self.path[candidate]);
                 if distance > LOOKAHEAD_DISTANCE {
                     break;
                 }
-                if distance >= best_distance
-                    && line_clear(
-                        &self.collision,
-                        pos,
-                        self.path[candidate],
-                        player.y,
-                        player.radius,
-                        player.collision_flags,
-                    )
-                {
+                if distance >= best_distance && self.visible(pos, self.path[candidate], body) {
                     best = candidate;
                     best_distance = distance;
                 }
@@ -1417,56 +1541,162 @@ impl BotNav {
                 // named is inside geometry; report it rather than spinning on
                 // a path that can never end there.
                 self.unreachable_goal = Some(goal);
-                self.path.clear();
-                self.index = 0;
+                self.drop_path();
                 self.running = false;
-                return NavOutcome {
-                    forward: false,
-                    run: false,
-                    turn: Turn::None,
-                    status: "unreachable",
-                    distance,
-                    angle_error: 0,
-                };
+                return stop("unreachable");
             }
         }
-        let target = self.path[self.index];
+        let final_leg = self.index + 1 == self.path.len();
+        // Turning into the next leg: steer at a point that slides from the
+        // goal toward the next waypoint as the goal comes near.
+        let corner = opts
+            .next
+            .filter(|&next| {
+                final_leg && distance <= CORNER_RADIUS && corner_arrive(next) > opts.tolerance
+            })
+            .filter(|&next| self.visible(goal, next, body))
+            .and_then(|next| {
+                let length = distance_xz(goal, next).max(1);
+                let slide = (CORNER_RADIUS - distance).min(length);
+                let point = (
+                    goal.0 + (next.0 - goal.0) * slide / length,
+                    goal.1 + (next.1 - goal.1) * slide / length,
+                );
+                self.visible(pos, point, body).then_some(point)
+            });
+        let (target, arrive) = if let Some(carrot) = carrot {
+            (carrot, opts.tolerance.min(WAYPOINT_RADIUS))
+        } else if let Some(point) = corner {
+            (point, WAYPOINT_RADIUS)
+        } else if final_leg {
+            (self.path[self.index], opts.tolerance)
+        } else {
+            (self.lookahead_point(pos, body), WAYPOINT_RADIUS)
+        };
+        let allow_run = opts.run
+            && if self.running {
+                distance > RUN_STOP_DISTANCE
+            } else {
+                distance > RUN_START_DISTANCE
+            };
+        let query = steer::SteerQuery {
+            pos,
+            angle: player.angle,
+            target,
+            arrive,
+            allow_run,
+            running: self.running,
+        };
+        let choice = steer::steer(&self.collision, body, &query);
         let target_angle = crate::sfx::angle_between_xz(pos.0, pos.1, target.0, target.1);
-        let error = angle_error(player.angle, target_angle);
-        let movement = movement_for(error, distance, opts.run, self.running);
-        self.running = movement.running;
-        self.last_forward = movement.forward;
+        self.running = choice.run;
+        self.last_forward = choice.forward;
+        self.release_now = steer::release_delta(&choice);
         NavOutcome {
-            forward: movement.forward,
-            run: movement.run,
-            turn: movement.turn,
+            forward: choice.forward,
+            run: choice.run,
+            turn: choice.turn,
             status: "moving",
             distance,
-            angle_error: error,
+            angle_error: angle_error(player.angle, target_angle),
         }
+    }
+
+    /// The steering point past the current waypoint: the farthest point on
+    /// the next segment, within the lookahead, that is still in sight. The
+    /// bot then starts its arc before the corner instead of on it.
+    fn lookahead_point(&self, pos: (i32, i32), body: steer::Body) -> (i32, i32) {
+        let corner = self.path[self.index];
+        let next_index = self.index + 1;
+        if next_index >= self.path.len()
+            || self.face_pin.is_some_and(|pin| self.index >= pin)
+            || !self.visible(pos, corner, body)
+        {
+            return corner;
+        }
+        let next = self.path[next_index];
+        let length = distance_xz(corner, next);
+        let steps = (length / 256).max(1);
+        let mut best = corner;
+        for step in 1..=steps {
+            let point = (
+                corner.0 + (next.0 - corner.0) * step / steps,
+                corner.1 + (next.1 - corner.1) * step / steps,
+            );
+            if distance_xz(pos, point) > LOOKAHEAD_DISTANCE || !self.visible(pos, point, body) {
+                break;
+            }
+            best = point;
+        }
+        best
+    }
+
+    /// The read-only path query behind `bot:path`: the smoothed path from
+    /// the player to `(x, z)`, optionally around the enemies, with its
+    /// length and enemy-zone exposure. It plans afresh and leaves the walk's
+    /// own path alone.
+    fn query_path(
+        &self,
+        player: &PlayerSnapshot,
+        goal: (i32, i32),
+        avoid_enemies: bool,
+        enemies: &[EnemySnapshot],
+    ) -> Option<PathQuery> {
+        let pos = (player.x, player.z);
+        let body = steer::Body {
+            y: player.y,
+            radius: player.radius,
+            flags: player.collision_flags,
+        };
+        let all: Vec<steer::EnemyZone> = enemies
+            .iter()
+            .map(steer::EnemyZone::from_snapshot)
+            .collect();
+        let zones: &[steer::EnemyZone] = if avoid_enemies { &all } else { &[] };
+        let (path, _) = self.plan(pos, goal, None, body, zones)?;
+        let mut length = 0;
+        let mut from = pos;
+        for &point in &path {
+            length += distance_xz(from, point);
+            from = point;
+        }
+        Some(PathQuery {
+            enemy_cost: steer::path_exposure(&all, pos, &path),
+            length,
+            points: path,
+        })
     }
 
     fn face_to(&mut self, player: &PlayerSnapshot, x: i32, z: i32) -> NavOutcome {
         let pos = (player.x, player.z);
         let target = crate::sfx::angle_between_xz(pos.0, pos.1, x, z);
         let error = angle_error(player.angle, target);
-        // The in-place turn step is 0x60, so a deadband below 0x30 would
-        // oscillate on a heading that lands half a step away.
-        let turn = turn_for(error, FORWARD_DEADBAND);
+        // A released turn still rotates once more, so plan the presses
+        // around that instead of letting go inside the band and overshooting.
+        let (turn, settled) = if self.aiming {
+            let turn = match error {
+                e if e > FORWARD_DEADBAND => Turn::Right,
+                e if e < -FORWARD_DEADBAND => Turn::Left,
+                _ => Turn::None,
+            };
+            (turn, turn == Turn::None)
+        } else {
+            steer::plan_turn(error, self.release_prev, FORWARD_DEADBAND)
+        };
+        self.release_now = match turn {
+            Turn::Right => i32::from(player::TURN_STEP),
+            Turn::Left => -i32::from(player::TURN_STEP),
+            Turn::None => 0,
+        };
         self.goal = None;
-        self.path.clear();
-        self.index = 0;
+        self.drop_path();
         self.last_forward = false;
         self.running = false;
         NavOutcome {
             forward: false,
             run: false,
             turn,
-            status: if turn == Turn::None {
-                "facing"
-            } else {
-                "turning"
-            },
+            status: if settled { "facing" } else { "turning" },
             distance: distance_xz(pos, (x, z)),
             angle_error: error,
         }
@@ -1550,6 +1780,19 @@ impl BotCtx {
             self.log(&format!("finished: {reason}"));
         }
     }
+}
+
+/// A point argument: `{ x = .., z = .. }` or `{ x, z }`.
+fn point_arg(table: &Table) -> mlua::Result<(i32, i32)> {
+    let x = match table.get::<Option<f64>>("x")? {
+        Some(x) => x,
+        None => table.get::<f64>(1)?,
+    };
+    let z = match table.get::<Option<f64>>("z")? {
+        Some(z) => z,
+        None => table.get::<f64>(2)?,
+    };
+    Ok((x as i32, z as i32))
 }
 
 fn outcome_table(lua: &Lua, outcome: NavOutcome) -> mlua::Result<Table> {
@@ -1877,8 +2120,22 @@ impl UserData for BotCtx {
                     if let Some(tolerance) = options.get::<Option<f64>>("tolerance")? {
                         walk.tolerance = tolerance.max(0.0) as i32;
                     }
+                    if let Some(face) = options.get::<Option<Table>>("face")? {
+                        walk.face = Some(point_arg(&face)?);
+                    }
+                    if let Some(next) = options.get::<Option<Table>>("next")? {
+                        walk.next = Some(point_arg(&next)?);
+                    }
+                    if options
+                        .get::<Option<bool>>("avoid_enemies")?
+                        .unwrap_or(false)
+                    {
+                        walk.avoid_enemies = true;
+                    }
                 }
-                let outcome = bot.nav().walk_to(&bot.snapshot.player, x, z, walk);
+                let outcome =
+                    bot.nav()
+                        .walk_to_with(&bot.snapshot.player, x, z, walk, &bot.snapshot.enemies);
                 outcome.apply(&mut bot.input());
                 outcome_table(lua, outcome)
             },
@@ -1889,6 +2146,41 @@ impl UserData for BotCtx {
             outcome.apply(&mut bot.input());
             outcome_table(lua, outcome)
         });
+
+        methods.add_method(
+            "path",
+            |lua, bot, (x, z, options): (i32, i32, Option<Table>)| {
+                let avoid = match options {
+                    Some(options) => options
+                        .get::<Option<bool>>("avoid_enemies")?
+                        .unwrap_or(false),
+                    None => false,
+                };
+                let table = lua.create_table()?;
+                let found = bot.shares.nav.borrow().query_path(
+                    &bot.snapshot.player,
+                    (x, z),
+                    avoid,
+                    &bot.snapshot.enemies,
+                );
+                let Some(found) = found else {
+                    table.set("status", "unreachable")?;
+                    return Ok(table);
+                };
+                table.set("status", "ok")?;
+                table.set("length", found.length)?;
+                table.set("enemy_cost", found.enemy_cost)?;
+                let points = lua.create_table()?;
+                for (index, (px, pz)) in found.points.iter().enumerate() {
+                    let point = lua.create_table()?;
+                    point.set("x", *px)?;
+                    point.set("z", *pz)?;
+                    points.set(index + 1, point)?;
+                }
+                table.set("points", points)?;
+                Ok(table)
+            },
+        );
 
         methods.add_method("distance", |_lua, bot, (x, z): (i32, i32)| {
             let p = &bot.snapshot.player;
@@ -2056,7 +2348,7 @@ impl BotRuntime {
             input.reset();
             let mut nav = self.shares.nav.borrow_mut();
             nav.sync_room(session.loaded.id, &session.loaded.room);
-            nav.driving = false;
+            nav.begin_tick();
             let mut memory = self.shares.memory.borrow_mut();
             memory.observe(&snapshot);
         }
@@ -2087,13 +2379,7 @@ impl BotRuntime {
         }
         let input = *self.shares.input.borrow();
         self.stats.observe_input(&input);
-        let mut nav = self.shares.nav.borrow_mut();
-        if !nav.driving {
-            // The script did not drive movement this tick (a scene, a door
-            // press, a `face_to`): do not resume a stale run next tick.
-            nav.clear_run();
-        }
-        drop(nav);
+        self.shares.nav.borrow_mut().end_tick(&input);
         Ok(input)
     }
 
@@ -2240,6 +2526,7 @@ mod tests {
             "memory",
             "visited",
             "distance",
+            "path",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -2471,170 +2758,6 @@ mod tests {
         assert!(outcome.angle_error < 0);
     }
 
-    #[test]
-    fn run_latch_starts_only_on_a_small_error_at_distance() {
-        assert_eq!(
-            movement_for(0, 2000, true, false),
-            Movement {
-                forward: true,
-                run: true,
-                turn: Turn::None,
-                running: true,
-            }
-        );
-        // A moderate error is a run-turn, not a stop.
-        assert_eq!(
-            movement_for(0x60, 2000, true, false),
-            Movement {
-                forward: true,
-                run: true,
-                turn: Turn::Right,
-                running: true,
-            }
-        );
-        // Too sharp to start, and too near to be worthwhile: walk.
-        assert_eq!(
-            movement_for(0x80, 2000, true, false),
-            Movement {
-                forward: false,
-                run: false,
-                turn: Turn::Right,
-                running: false,
-            }
-        );
-        assert_eq!(
-            movement_for(0x100, 2000, true, false),
-            Movement {
-                forward: false,
-                run: false,
-                turn: Turn::Right,
-                running: false,
-            }
-        );
-        assert_eq!(
-            movement_for(0, 800, true, false),
-            Movement {
-                forward: true,
-                run: false,
-                turn: Turn::None,
-                running: false,
-            }
-        );
-        assert_eq!(
-            movement_for(0, 2000, false, true),
-            Movement {
-                forward: true,
-                run: false,
-                turn: Turn::None,
-                running: false,
-            }
-        );
-    }
-
-    #[test]
-    fn run_latch_survives_moderate_errors_and_drops_at_sharp_ones() {
-        assert_eq!(
-            movement_for(0x100, 2000, true, true),
-            Movement {
-                forward: true,
-                run: true,
-                turn: Turn::Right,
-                running: true,
-            }
-        );
-        // Too sharp to steer while running, but not sharp enough to drop the
-        // latch: stop and turn in place, then resume the run.
-        assert_eq!(
-            movement_for(0x140, 2000, true, true),
-            Movement {
-                forward: false,
-                run: false,
-                turn: Turn::Right,
-                running: true,
-            }
-        );
-        assert_eq!(
-            movement_for(0x1D0, 2000, true, true),
-            Movement {
-                forward: false,
-                run: false,
-                turn: Turn::Right,
-                running: false,
-            }
-        );
-        // Inside the final-approach distance the run walks even with a clear
-        // heading, and drops the latch.
-        assert_eq!(
-            movement_for(0, 300, true, true),
-            Movement {
-                forward: true,
-                run: false,
-                turn: Turn::None,
-                running: false,
-            }
-        );
-    }
-
-    #[test]
-    fn walk_keeps_the_run_latch_through_an_in_place_turn() {
-        let room = RoomState::default();
-        let mut player = PlayerSnapshot {
-            x: 16000,
-            y: 0,
-            z: 16000,
-            angle: 0,
-            health: 96,
-            max_health: 96,
-            state: 1,
-            being_attacked: 0,
-            equipped: None,
-            radius: 100,
-            collision_flags: 0,
-            grabbed: false,
-        };
-        let mut nav = BotNav::default();
-        nav.sync_room(
-            RoomId {
-                stage: 1,
-                room: 0x06,
-                player_flag: 1,
-                mansion2: false,
-            },
-            &room,
-        );
-        let first = nav.walk_to(
-            &player,
-            20000,
-            16000,
-            WalkOptions {
-                run: true,
-                tolerance: DEFAULT_TOLERANCE,
-            },
-        );
-        assert!(
-            first.forward && first.run,
-            "the first tick picks up the run"
-        );
-        assert!(nav.running);
-        // A sharp heading error stops for an in-place turn without dropping
-        // the latch; the run resumes when the heading comes back inside the
-        // run arc.
-        player.angle = 0xEC0;
-        let turn = nav.walk_to(
-            &player,
-            20000,
-            16000,
-            WalkOptions {
-                run: true,
-                tolerance: DEFAULT_TOLERANCE,
-            },
-        );
-        assert!(!turn.forward);
-        assert!(!turn.run);
-        assert_eq!(turn.turn, Turn::Right);
-        assert!(nav.running, "the latch survives the in-place turn");
-    }
-
     fn player_at(x: i32, z: i32, angle: u16) -> PlayerSnapshot {
         PlayerSnapshot {
             x,
@@ -2706,6 +2829,7 @@ mod tests {
             WalkOptions {
                 run: true,
                 tolerance: DEFAULT_TOLERANCE,
+                ..WalkOptions::default()
             },
         );
         assert_eq!(outcome.status, "moving");
@@ -2737,6 +2861,7 @@ mod tests {
             WalkOptions {
                 run: true,
                 tolerance: DEFAULT_TOLERANCE,
+                ..WalkOptions::default()
             },
         );
         nav.path = vec![(4400, 4000), (5000, 4000), (5500, 4000), goal];
@@ -2748,6 +2873,7 @@ mod tests {
             WalkOptions {
                 run: true,
                 tolerance: DEFAULT_TOLERANCE,
+                ..WalkOptions::default()
             },
         );
         assert_eq!(nav.index, 2, "target the farthest point inside 1600 units");
@@ -2783,6 +2909,228 @@ mod tests {
         let outcome = nav.walk_to(&player, 16200, 16100, WalkOptions::default());
         assert_eq!(outcome.status, "arrived");
         assert!(!outcome.forward);
+    }
+
+    fn test_nav(room: &RoomState) -> BotNav {
+        let mut nav = BotNav::default();
+        nav.sync_room(
+            RoomId {
+                stage: 1,
+                room: 0x06,
+                player_flag: 1,
+                mansion2: false,
+            },
+            room,
+        );
+        nav
+    }
+
+    /// What one drive of [`drive`] did.
+    #[derive(Debug)]
+    struct Drive {
+        status: &'static str,
+        turn_in_place: u32,
+    }
+
+    /// Feed `walk_to` outcomes into a kinematic model of the player's tank
+    /// controls (`player.rs`: the walk steers 0x28 a tick at 0x5D, the run
+    /// 0x30 at 0xD2, an in-place turn is 0x60 and does not move) until the
+    /// walk stops reporting `moving`. The room must be open: the model does
+    /// not resolve collision.
+    fn drive(
+        nav: &mut BotNav,
+        player: &mut PlayerSnapshot,
+        goal: (i32, i32),
+        opts: WalkOptions,
+        enemies: &[EnemySnapshot],
+    ) -> Drive {
+        let mut turn_in_place = 0;
+        for _ in 0..2000 {
+            let outcome = nav.walk_to_with(player, goal.0, goal.1, opts, enemies);
+            if outcome.status != "moving" {
+                return Drive {
+                    status: outcome.status,
+                    turn_in_place,
+                };
+            }
+            let sign = match outcome.turn {
+                Turn::Right => 1i32,
+                Turn::Left => -1,
+                Turn::None => 0,
+            };
+            let (speed, step) = if !outcome.forward {
+                turn_in_place += u32::from(sign != 0);
+                (0, player::TURN_STEP)
+            } else if outcome.run {
+                (player::RUN_SPEED, player::RUN_TURN)
+            } else {
+                (player::WALK_SPEED, player::DIAGONAL_TURN)
+            };
+            player.angle =
+                (i32::from(player.angle) + sign * i32::from(step)).rem_euclid(0x1000) as u16;
+            let (dx, dz) = steer::heading_dir(player.angle);
+            player.x += (dx * f64::from(speed)).round() as i32;
+            player.z += (dz * f64::from(speed)).round() as i32;
+        }
+        panic!("the walk to {goal:?} never finished: {player:?}");
+    }
+
+    #[test]
+    fn walk_steers_through_a_turn_instead_of_stopping() {
+        let room = RoomState::default();
+        let mut nav = test_nav(&room);
+        // Facing +X; the goal is 60 degrees off to the +Z side, 6000 away.
+        let mut player = player_at(8000, 8000, 0);
+        let result = drive(
+            &mut nav,
+            &mut player,
+            (11000, 13196),
+            WalkOptions::default(),
+            &[],
+        );
+        assert_eq!(result.status, "arrived");
+        assert_eq!(result.turn_in_place, 0, "{result:?}");
+        // A reversal still turns in place first.
+        let mut nav = test_nav(&room);
+        let mut player = player_at(8000, 8000, 0);
+        let result = drive(
+            &mut nav,
+            &mut player,
+            (3000, 8000),
+            WalkOptions::default(),
+            &[],
+        );
+        assert_eq!(result.status, "arrived");
+        assert!(result.turn_in_place > 0, "{result:?}");
+    }
+
+    #[test]
+    fn walk_with_a_face_point_arrives_facing_the_zone() {
+        let room = RoomState::default();
+        // Approach a zone north (+Z) of the goal from the south-west.
+        let goal = (12000, 12000);
+        let face = (12000, 14000);
+        let face_error = |player: &PlayerSnapshot| {
+            let angle = crate::sfx::angle_between_xz(player.x, player.z, face.0, face.1);
+            angle_error(player.angle, angle).abs()
+        };
+        let opts = WalkOptions {
+            run: true,
+            tolerance: 120,
+            ..WalkOptions::default()
+        };
+
+        let mut nav = test_nav(&room);
+        let mut plain = player_at(6000, 7000, 0);
+        let result = drive(&mut nav, &mut plain, goal, opts, &[]);
+        assert_eq!(result.status, "arrived");
+        assert!(
+            face_error(&plain) > FORWARD_DEADBAND,
+            "without the option the walk arrives off the face: {plain:?}"
+        );
+
+        let mut nav = test_nav(&room);
+        let mut faced = player_at(6000, 7000, 0);
+        let opts = WalkOptions {
+            face: Some(face),
+            ..opts
+        };
+        let result = drive(&mut nav, &mut faced, goal, opts, &[]);
+        assert_eq!(result.status, "arrived");
+        assert!(
+            face_error(&faced) <= FORWARD_DEADBAND,
+            "the face option arrives facing the zone, so face_to needs no turn: {faced:?}"
+        );
+        assert!(distance_xz((faced.x, faced.z), goal) <= 120);
+        assert_eq!(nav.face_to(&faced, face.0, face.1).status, "facing");
+    }
+
+    fn enemy_at(x: i32, z: i32, angle: u16) -> EnemySnapshot {
+        EnemySnapshot {
+            slot: 1,
+            id: 1,
+            x,
+            y: 0,
+            z,
+            angle,
+            bearing: 0,
+            health: 100,
+            state: 1,
+            status_flags: 0,
+            action_behavior: 0,
+            action_state: 0,
+            hit_state: 0,
+            distance: 0,
+            visible: true,
+        }
+    }
+
+    #[test]
+    fn avoid_enemies_path_passes_behind_a_monster() {
+        let room = RoomState::default();
+        let nav = test_nav(&room);
+        let player = player_at(6000, 16000, 0);
+        let goal = (26000, 16000);
+        // A monster on the straight line, facing +Z.
+        let enemies = [enemy_at(16000, 16000, 0xC00)];
+        let straight = nav
+            .query_path(&player, goal, false, &enemies)
+            .expect("a straight path");
+        assert_eq!(straight.points, vec![goal]);
+        let around = nav
+            .query_path(&player, goal, true, &enemies)
+            .expect("a path around the monster");
+        assert!(
+            around.enemy_cost < straight.enemy_cost,
+            "{around:?} vs {straight:?}"
+        );
+        assert!(around.length > straight.length);
+        // It passes behind the monster (-Z), and every sample is outside
+        // the core reach.
+        let mut from = (player.x, player.z);
+        let mut min_z = i32::MAX;
+        let mut max_z = i32::MIN;
+        for &to in &around.points {
+            for step in 0..=32 {
+                let x = from.0 + (to.0 - from.0) * step / 32;
+                let z = from.1 + (to.1 - from.1) * step / 32;
+                assert!(
+                    distance_xz((x, z), (16000, 16000)) as f64 > steer::AVOID_CORE,
+                    "the path enters the core at {x},{z}: {around:?}"
+                );
+                min_z = min_z.min(z);
+                max_z = max_z.max(z);
+            }
+            from = to;
+        }
+        assert!(
+            16000 - min_z > max_z - 16000,
+            "the detour goes behind: {around:?}"
+        );
+        // Facing -Z instead, the same query goes around the +Z side.
+        let flipped = nav
+            .query_path(&player, goal, true, &[enemy_at(16000, 16000, 0x400)])
+            .expect("a path around the flipped monster");
+        let max_z = flipped.points.iter().map(|p| p.1).max().unwrap();
+        let min_z = flipped.points.iter().map(|p| p.1).min().unwrap();
+        assert!(max_z - 16000 > 16000 - min_z, "{flipped:?}");
+    }
+
+    #[test]
+    fn walk_avoids_enemies_only_when_asked() {
+        let room = RoomState::default();
+        let enemies = [enemy_at(16000, 16000, 0xC00)];
+        let goal = (26000, 16000);
+        let mut nav = test_nav(&room);
+        let mut player = player_at(6000, 16000, 0);
+        nav.walk_to_with(&player, goal.0, goal.1, WalkOptions::default(), &enemies);
+        assert_eq!(nav.path, vec![goal], "the default walk ignores the monster");
+        let opts = WalkOptions {
+            avoid_enemies: true,
+            ..WalkOptions::default()
+        };
+        let result = drive(&mut nav, &mut player, goal, opts, &enemies);
+        assert_eq!(result.status, "arrived");
     }
 
     #[test]
