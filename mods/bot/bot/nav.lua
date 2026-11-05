@@ -208,6 +208,7 @@ function BotNav.press_zone(bot, job)
             run = bot:distance(point[1], point[2]) >= C.RUN_MIN_DISTANCE,
             tolerance = C.APPROACH // 2 - 30,
             face = { point[3], point[4] },
+            avoid_enemies = BotTactics.avoiding(),
         })
         if result.status == "arrived" then
             job.pressing = true
@@ -311,6 +312,7 @@ function BotNav.visit_camera(bot, job)
     local result = bot:walk_to(point[1], point[2], {
         run = bot:distance(point[1], point[2]) >= C.RUN_MIN_DISTANCE,
         tolerance = C.APPROACH // 2,
+        avoid_enemies = BotTactics.avoiding(),
     })
     if result.status ~= "moving" or job.walk_ticks > WALK_TICKS then
         bot:log(string.format("%s: switch zone %d/%d %s; camera %d",

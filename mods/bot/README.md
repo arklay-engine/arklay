@@ -53,7 +53,7 @@ Chunks run in path order, so the modules are global tables:
 
 | File | Table | Role |
 | --- | --- | --- |
-| `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the common zombie ids, the item-use flag bank and selector base, and the AOT probe and action-key flag bits. |
+| `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the enemy status (aim) bits, the tank turn step, the gun hold and reload behaviours, the item-use flag bank and selector base, and the AOT probe and action-key flag bits. |
 | `bot/init.lua` | | `on_bot_tick`: the priority order below, plus damage and room-entry logging. |
 | `bot/menu.lua` | `BotMenu` | Equip, heal and item use through the inventory menu ([Menu skills](#menu-skills)). |
 | `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press) and `visit_camera` (walk into a camera switch zone). |
@@ -61,7 +61,8 @@ Chunks run in path order, so the modules are global tables:
 | `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
 | `bot/save.lua` | `BotSave` | Saving at typewriters, the latest-save tracking and the reload after a death ([Saving and reloading](#saving-and-reloading)). |
 | `bot/scene.lua` | `BotScene` | Films, transitions, messages, yes/no prompts, pick-up viewers and the document reader. |
-| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule and the common-zombie fight. |
+| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule. |
+| `bot/tactics.lua` | `BotTactics` | Combat from the knowledge file: fight or run, the aim pose, spacing and firing ([Combat](#combat)). |
 
 Priorities, highest first:
 
@@ -79,10 +80,9 @@ Priorities, highest first:
    allows it, plays on if a save exists (a death loads it), and only with no
    save at all finishes with
    `health critical with no heal item and no save while under attack`.
-   The fight takes only a common zombie that is visible and in front. A
-   crowd (more than one monster within range) stands the fight down. The
-   gun is the equipped weapon with rounds, or the menu weapon with the most.
-   The fight's threshold is `0.45 - 0.3 * risk` of max health.
+   Then combat (`BotTactics.step`, [Combat](#combat)): each nearby monster
+   is fought or run past; a run leaves the planner its goal and turns on
+   `avoid_enemies` for its walks.
 3. The room puzzle: the next `<interact>`/`<camera>` fact in document order
    (walk to the zone, press, wait for the done flag). The sequence position
    is the furthest fact whose flag was ever seen set, because a later step
@@ -151,6 +151,37 @@ can leave the player there) steps to the nearest free node first.
 `--bot-goal-room ROOM` (three hex digits, needs `--bot`) is read as
 `bot:goal_room()`. `scripts/bot-bench.sh` passes `20D` for the `re1`
 scenario.
+
+### Combat
+
+`bot/tactics.lua` fights from `knowledge/<game>.xml`, found by the pack's
+base game (the BioRand packs read `knowledge/re1.xml`). The file is strict
+XML: an unknown attribute is an error, and `unknown` or `none` is `nil`.
+Each `<weapon>` gives the cone (`near`, `side`), `cadence`, the shotgun's
+`headshot` and `weak` distances; each `<enemy>` gives `policy`
+(`fight`/`pass`/`avoid`), the poses (`stand`, `downed`, `up`), `reach`,
+`crawl_reach`, `grabs`, `outrun`, `speed`, `health` and one `<keep>` band per
+weapon. Every entry has a comment saying how it was measured.
+
+- **Pose** (`BotTactics.pose`). The engine hits a monster only when its
+  status bits share a bit with the aim (`src/combat.rs`,
+  `apply_weapon_damage_with`): up `0x80`, neutral `0x40`, down `0x20`. Inside
+  the weapon's headshot distance, with `up` allowed, the bot aims up; a
+  monster showing only `0x20` (downed or crawling) takes the `downed` pose;
+  otherwise `stand`, then whichever bit is set.
+- **Fight or run** (`BotTactics.decide`). Run when the monster has no entry,
+  its policy is not `fight`, or there is no gun. A monster closing in
+  (within twice its reach) that cannot be outrun is fought with any rounds
+  left. Otherwise run below `max_health * (0.45 - 0.3 * risk)`, or with too
+  few rounds for it (`health / damage * (1 + 0.5 * (1 - risk))`) or for the
+  crowd; fight a monster that cannot be outrun or one in a room the
+  frontier crosses again; run past one that is only in the way.
+- **Spacing** (`BotTactics.spacing`). Keep the `<keep>` band: back off to
+  its middle when too close, to its far edge while reloading, and close in
+  with a headshot weapon from just outside its headshot distance. A back-off
+  that the monster's `speed` would close during the turn around, or one
+  inside its reach, holds and shoots instead. The walks use
+  `bot:spacing_point` and `walk_to` with `avoid_enemies`.
 
 ### Lint
 
@@ -265,7 +296,7 @@ leaves the game session.
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
 | `bot:world()` | The observed world model: rooms, doors, items, action presses and the frontier. Read-only; see [World model](#world-model). |
-| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight, save and critical-health thresholds. |
+| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight-or-run, save and critical-health thresholds. |
 | `bot:saves()` | The run's saves, read-only: `{count, slot, room, tick, reloads, deaths, deaths_since_save, needs_ribbon, ribbons}`. `slot` (0-based), `room` and `tick` describe the latest save the engine's save screen wrote and are `nil` before the first. `needs_ribbon` is the character's ink ribbon rule and `ribbons` the held count. |
 | `bot:goal_room()` | The `--bot-goal-room` id (uppercase, such as `"20D"`), or `nil`. |
 | `bot:cameras()` | The current room's camera switch zones: `{from, to, x, z}` rows, `x`/`z` the zone's corner mean. Each cut group's header record is skipped. |
@@ -275,6 +306,8 @@ leaves the game session.
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
 | `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |
 | `bot:weapon()` | `{equipped, weapon, clip, reserve, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, and `target` is the locked entity slot or nil. |
+| `bot:knowledge()` | The game's combat knowledge, read-only: `{source, enemies, weapons}`. `enemies[id]` is `{name, policy, stand, downed, up, reach, crawl_reach, grabs, outrun, speed, health, keep}` with `keep[weapon] = {min, max, damage}`; `weapons[id]` is `{name, near, side, cadence, headshot, weak, status_bit}`. An `unknown` value is `nil`. With no file, both tables are empty. See [Combat](#combat). |
+| `bot:spacing_point(slot, want)` | A point `want` from monster `slot` that is free of collision, at least `want` from every other monster, in a clear line from the player and not reached by walking past the monster: `{x, z}` (the nearest such point) or `nil`. |
 | `bot:can_see(slot)` | Whether monster `slot` is in the current snapshot with a clear weapon sight line. |
 | `bot:flag(bank, bit)` | A flag bit, read-only. |
 | `bot:has_item(item)` / `bot:item_count(item)` | Inventory queries. |

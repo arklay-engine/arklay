@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Combat knowledge for the RE1 base game (and every pack generated from it,
+  such as the BioRand packs). The bot reads it through bot:knowledge().
+
+  Each value is read from the engine or the enemy scripts, or measured by
+  a test; the comment on each entry says which. A value nobody measured is
+  `unknown` and reaches the Lua as nil.
+
+  The hit rule the poses follow (src/combat.rs, apply_weapon_damage_with):
+  a candidate is skipped unless (status_flags & aim_flags & 0xE0) != 0 and
+  hit_state == 0. The pad picks aim_flags (src/weapons.rs, gun_hold_input):
+  up held = 0x80 ("up"), down held = 0x20 ("down"), neither = 0x40
+  ("torso"). detect_gun also refuses aim 0x80 on the zombie ids 0x00, 0x01
+  and 0x11 unless the weapon is the shotgun.
+
+  Attributes:
+    weapon: near = the cone starts this far ahead of the player; side = the
+      cone's half width past the enemy radius; cadence = ticks between shots;
+      headshot = inside this distance a torso/up shotgun hit pops a zombie's
+      head; weak = past this distance the shotgun hit may do less damage;
+      status_bit = the aim direction must match the enemy's status bit.
+    enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
+      downed = the pose for a downed or crawling enemy; up = which weapons an
+      aim-up shot can hit it with; reach = the distance its attack starts at;
+      crawl_reach = the same for a crawler; grabs = it holds the player;
+      outrun = Jill's run (210 a tick) beats its chase; speed = its chase
+      speed in units a tick; health = its largest
+      starting health. <keep> is the distance band to hold with one weapon
+      (outside the reach, inside the hit range) and the health one hit takes:
+      DEFAULT_FIRST_RUN's damage column (record weapon_adj + id * 10), plus
+      what zombie_reaction takes off for Jill's handgun (3, or 7 on 0x02).
+-->
+<knowledge format="1" game="re1">
+  <!-- Handgun. near/side measured by combat.rs
+       gun_cone_is_a_forward_strip_from_650_as_wide_as_the_range (Jill's
+       DEFAULT_RANGES slot 1 = 1300); the cone has no far limit. Cadence
+       measured in the re1 bench: 23 ticks from a fire press to the weapon's
+       return to the hold behaviour 0x13 (the bot's "cadence" log line, the
+       same in every room). -->
+  <weapon id="0x02" name="handgun" near="650" side="1300" cadence="23"
+          headshot="none" weak="none" status_bit="yes"/>
+  <!-- Shotgun. near/side from the same test (slot 2 = 2600). headshot:
+       zombie_reaction pops the head when displacement < 3000 with aim 0xC0
+       (torso or up). weak: the shotgun post-hit gives 10 health back past
+       9000. Cadence not measured (the bench never fired it). -->
+  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="unknown"
+          headshot="3000" weak="9000" status_bit="yes"/>
+
+  <!-- Zombie. lib/zombie.lua state_check: 0x40 while standing, 0x80 inside
+       3000, 0x20 inside 4500; a crawler (behavior_flags & 2) or a spent
+       poise has 0x20 only. chase_player attacks at angular distance 1500,
+       pushed_back (crawler) at 2200; attack() holds the player
+       (player_state 5). HEALTH table max 99. Chase walk 45 a tick against
+       Jill's run 210, so it can be outrun. -->
+  <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+  </enemy>
+  <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
+  <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+  </enemy>
+  <!-- Green zombie: the same driver as 0x00. -->
+  <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+  </enemy>
+
+  <!-- Cerberus. enemy/02 behavior_run: 0x40 always, 0x20 inside 5000 until
+       it crouches to leap, never 0x80. consider_attack leaps from under 5000
+       when facing the player; leap_airborne bites at reach 1000. It mauls
+       (a hold) only below 13 player health. Chase run caps at 240, above
+       Jill's 210: it cannot be outrun, so it is fought. HEALTH max 122;
+       handgun 20 a hit plus the 7 zombie_reaction takes off a dog for
+       Jill's handgun (its reaction is the zombie one). -->
+  <enemy id="0x02" name="cerberus" policy="fight" stand="torso" downed="none"
+         up="no" reach="1000" grabs="yes" outrun="no" speed="240" health="122">
+    <keep weapon="0x02" min="1500" max="5000" damage="27"/>
+    <keep weapon="0x03" min="1500" max="2800" damage="40"/>
+  </enemy>
+
+  <!-- Web spinner. enemy/03 run: 0x40 always, 0x20 inside 4000, never 0x80;
+       a ceiling spawn has no aim bit until its drop lands. Its lunge touch
+       hurts but does not hold. Lunge start distance (7000/7500 pickers) is
+       the lunge, not a reach: reach unknown. HEALTH max 119. -->
+  <enemy id="0x03" name="web spinner" policy="fight" stand="torso" downed="none"
+         up="no" reach="unknown" grabs="no" outrun="unknown" speed="unknown" health="119">
+    <keep weapon="0x02" min="2500" max="5000" damage="20"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="40"/>
+  </enemy>
+
+  <!-- Crow. enemy/05 rebuilds the bits from its height every frame: above
+       4500 only 0x80 (inside 5000), 2000..4500 0x40, below 1500 0x20 only;
+       its flight script states clear them all (untargetable). So the pose
+       comes from the live bits: stand unknown. The peck starts inside 1500
+       and rides the player (behaviour 0xB). Health max 52, handgun 26. It is
+       not worth stopping for: pass. -->
+  <enemy id="0x05" name="crow" policy="pass" stand="unknown" downed="none"
+         up="yes" reach="1500" grabs="yes" outrun="unknown" speed="unknown" health="52">
+    <keep weapon="0x02" min="1500" max="5000" damage="26"/>
+  </enemy>
+
+  <!-- Hunter. enemy/06 state_run: 0x40, 0x20 inside 4000, 0x80 only with
+       the player lower; ledge jump and back step clear the bits. The swipe
+       starts under 3000 (reach test 800); the pounce from 6400 holds the
+       player. HEALTH max 111; handgun 14, shotgun 32 a hit. Run speed not
+       settled (0x28 chase, 0xF0 approach). -->
+  <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
+         up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111">
+    <keep weapon="0x02" min="3200" max="6000" damage="14"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="32"/>
+  </enemy>
+</knowledge>

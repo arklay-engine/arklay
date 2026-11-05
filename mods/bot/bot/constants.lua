@@ -60,21 +60,20 @@ BotConst.ACTION_KEY = 0x80
 BotConst.MESSAGE_FAST = 0x80
 -- being_attacked bit 0x80: a vault/stair sequence that a second press ends.
 BotConst.ATTACK_SEQUENCE = 0x80
--- The damage pipeline needs aim down for monster status bit 0x20 ...
+-- The damage pipeline (apply_weapon_damage_with) hits a monster only when
+-- its status bits share one with the aim: down held aims 0x20 ...
 BotConst.STATUS_LOW = 0x20
--- ... and aim up for status bit 0x80.
+-- ... no direction aims 0x40 (the torso) ...
+BotConst.STATUS_TORSO = 0x40
+-- ... and up held aims 0x80.
 BotConst.STATUS_HIGH = 0x80
--- Weapon behaviour 0x18 is the tactical reload running.
+-- player::TURN_STEP: an in-place turn rotates 0x60 a tick, so turning
+-- around takes FULL_TURN / 2 / TURN_STEP ticks.
+BotConst.TURN_STEP = 0x60
+-- Weapon behaviour 0x13 is the gun hold: a fire press is taken only here.
+BotConst.HOLD_BEHAVIOR = 0x13
+-- Weapon behaviour 0x18 is the reload running.
 BotConst.RELOAD_BEHAVIOR = 0x18
--- Enemy ids of the common zombie classes, the only ones the bot fights.
-BotConst.COMMON_ZOMBIES = { [0x00] = true, [0x01] = true, [0x11] = true }
--- The handgun's near cone excludes bodies within their radius plus 200, so
--- back off inside this distance ...
-BotConst.COMBAT_RETREAT_START = 1800
--- ... until the target is this far away.
-BotConst.COMBAT_RETREAT_DONE = 2600
--- Monsters beyond this distance are outside the handgun's lock range.
-BotConst.COMBAT_RANGE = 4500
 -- The save/load screen lists eight numbered slots (rows 0..7), then the
 -- load mode's autosave rows, then the exit row (ui/save_load.lua).
 BotConst.SAVE_SLOTS = 8
