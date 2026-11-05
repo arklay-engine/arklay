@@ -28,10 +28,12 @@ use mlua::{Function, Lua, Table, UserData, UserDataMethods, Value};
 use super::GameSession;
 use crate::budget;
 use crate::game::{self, FlagBank, InventoryItem, RoomActionKind};
+use crate::item_catalog::ItemKind;
 use crate::pack::Pack;
 use crate::player;
 use crate::state::{RoomId, RoomState};
 use crate::ui::UiInput;
+use crate::weapons::WeaponState;
 
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
@@ -61,6 +63,10 @@ pub struct BotInput {
     /// used for scripted handovers whose zone is not reachable (the 106
     /// lockpick item sits at the room origin).
     pub room_action: Option<(u8, u8)>,
+    /// An item the script asked to equip this tick. The host validates that
+    /// the player holds it and applies the same `set_equipped` the menu does,
+    /// before the gameplay tick.
+    pub equip: Option<u8>,
 }
 
 impl BotInput {
@@ -139,6 +145,11 @@ impl BotInput {
     /// Ask the host to run the item action in `slot` this tick.
     fn use_action(&mut self, slot: u8, handler: u8) {
         self.room_action = Some((slot, handler));
+    }
+
+    /// Ask the host to equip `item` this tick.
+    fn equip(&mut self, item: u8) {
+        self.equip = Some(item);
     }
 }
 
@@ -294,6 +305,11 @@ struct SessionSnapshot {
     scene: SceneSnapshot,
     actions: Vec<ActionSnapshot>,
     doors: Vec<DoorSnapshot>,
+    enemies: Vec<EnemySnapshot>,
+    weapon: WeaponSnapshot,
+    /// The weapon items in the inventory, so `bot:equip` can refuse a
+    /// non-weapon the menu would not equip.
+    held_weapons: BTreeSet<u8>,
     flags: [FlagBank; game::FLAG_BANK_COUNT],
     inventory: Vec<InventoryItem>,
 }
@@ -311,6 +327,49 @@ struct PlayerSnapshot {
     equipped: Option<u8>,
     radius: i32,
     collision_flags: u8,
+    /// The entity's grabbed zone flag (`0x80`). Combat stands down while a
+    /// grab owns the player.
+    grabbed: bool,
+}
+
+/// One active monster. Rows are sorted by `distance`, nearest first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EnemySnapshot {
+    slot: u8,
+    id: u8,
+    x: i32,
+    y: i32,
+    z: i32,
+    angle: u16,
+    /// Absolute 12-bit bearing from the player to the enemy.
+    bearing: u16,
+    health: i16,
+    state: u8,
+    status_flags: u8,
+    action_behavior: u8,
+    action_state: u8,
+    hit_state: u8,
+    /// Horizontal distance from the player.
+    distance: i32,
+    /// Whether the player's sight line to the enemy is clear.
+    visible: bool,
+}
+
+/// The player's weapon sub-machine and inventory counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WeaponSnapshot {
+    /// The equipped inventory item, or `None`.
+    equipped: Option<u8>,
+    /// The `g_playerEntity.equippedWeaponId` the aim/fire machine uses.
+    weapon: u8,
+    /// Rounds left in the equipped weapon's inventory stack.
+    clip: u32,
+    /// Ammunition item count (`weapon + 9`) in the inventory.
+    reserve: u32,
+    behavior: u8,
+    state: u8,
+    aim_state: u8,
+    target: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -378,6 +437,79 @@ fn action_kind_name(kind: RoomActionKind) -> &'static str {
     }
 }
 
+/// The active monsters a combat policy can see: entity ids below `0x20` (the
+/// scripted characters `0x20..=0x2E` are excluded), active, and alive. Bosses
+/// keep their normal ids and are included; the policy decides whether to fight
+/// them. Sorted nearest first.
+fn enemy_snapshots(
+    game: &game::GameState,
+    player_pos: [i32; 3],
+    room: &RoomState,
+) -> Vec<EnemySnapshot> {
+    let mut enemies = Vec::new();
+    for (slot, entity) in game.entities.iter().enumerate().skip(1) {
+        if !entity.active() || entity.id >= 0x20 || entity.health <= 0 {
+            continue;
+        }
+        let dx = entity.pos[0] - player_pos[0];
+        let dz = entity.pos[2] - player_pos[2];
+        let distance =
+            ((i64::from(dx) * i64::from(dx) + i64::from(dz) * i64::from(dz)) as f64).sqrt() as i32;
+        let visible = crate::combat::check_weapon_line_of_sight(game, room, entity.pos) == 0;
+        enemies.push(EnemySnapshot {
+            slot: slot as u8,
+            id: entity.id,
+            x: entity.pos[0],
+            y: entity.pos[1],
+            z: entity.pos[2],
+            angle: entity.angle,
+            bearing: crate::sfx::angle_between_xz(
+                player_pos[0],
+                player_pos[2],
+                entity.pos[0],
+                entity.pos[2],
+            ),
+            health: entity.health,
+            state: entity.state(),
+            status_flags: entity.status_flags,
+            action_behavior: entity.action_behavior,
+            action_state: entity.action_state,
+            hit_state: entity.hit_state,
+            distance,
+            visible,
+        });
+    }
+    enemies.sort_by_key(|enemy| (enemy.distance, enemy.slot));
+    enemies
+}
+
+/// The weapon and inventory state the aim/fire machine reads.
+fn weapon_snapshot(game: &game::GameState, state: &WeaponState) -> WeaponSnapshot {
+    let weapon = game.equipped_weapon_id;
+    let clip = game
+        .inventory
+        .iter()
+        .find(|stack| stack.id == weapon)
+        .map_or(0, |stack| {
+            u32::from(crate::weapons::clip_rounds(weapon, stack.quantity))
+        });
+    let reserve = if weapon == 0 {
+        0
+    } else {
+        game.item_count(crate::weapons::weapon_ammo_item_id(weapon))
+    };
+    WeaponSnapshot {
+        equipped: game.equipped,
+        weapon,
+        clip,
+        reserve,
+        behavior: state.behavior,
+        state: state.state,
+        aim_state: state.aim_state,
+        target: state.target,
+    }
+}
+
 impl SessionSnapshot {
     fn build(session: &GameSession) -> Self {
         let game = &session.game;
@@ -433,6 +565,7 @@ impl SessionSnapshot {
             equipped: game.equipped,
             radius: session.player.radius,
             collision_flags: session.player.collision_flags,
+            grabbed: entity.zone_flags & 0x80 != 0,
         };
         let actions = game
             .room_actions
@@ -479,6 +612,14 @@ impl SessionSnapshot {
                 depth: i32::from(door.zone[3]),
             })
             .collect();
+        let enemies = enemy_snapshots(game, session.player.pos, &session.loaded.room);
+        let weapon = weapon_snapshot(game, &session.player.weapon);
+        let held_weapons = game
+            .inventory
+            .iter()
+            .filter(|stack| game.item_defs.get(stack.id).kind == ItemKind::Weapon)
+            .map(|stack| stack.id)
+            .collect();
         Self {
             room: id,
             camera: session.loaded.room.current_cut,
@@ -486,6 +627,9 @@ impl SessionSnapshot {
             scene,
             actions,
             doors,
+            enemies,
+            weapon,
+            held_weapons,
             flags: game.flags,
             inventory: game.inventory.clone(),
         }
@@ -1361,6 +1505,45 @@ impl UserData for BotCtx {
             table.set("being_attacked", p.being_attacked)?;
             table.set("equipped", p.equipped)?;
             table.set("collision_flags", p.collision_flags)?;
+            table.set("grabbed", p.grabbed)?;
+            Ok(table)
+        });
+
+        methods.add_method("enemies", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (index, enemy) in bot.snapshot.enemies.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("slot", enemy.slot)?;
+                row.set("id", enemy.id)?;
+                row.set("x", enemy.x)?;
+                row.set("y", enemy.y)?;
+                row.set("z", enemy.z)?;
+                row.set("angle", enemy.angle)?;
+                row.set("bearing", enemy.bearing)?;
+                row.set("health", enemy.health)?;
+                row.set("state", enemy.state)?;
+                row.set("status_flags", enemy.status_flags)?;
+                row.set("action_behavior", enemy.action_behavior)?;
+                row.set("action_state", enemy.action_state)?;
+                row.set("hit_state", enemy.hit_state)?;
+                row.set("distance", enemy.distance)?;
+                row.set("visible", enemy.visible)?;
+                table.set(index + 1, row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("weapon", |lua, bot, ()| {
+            let weapon = bot.snapshot.weapon;
+            let table = lua.create_table()?;
+            table.set("equipped", weapon.equipped)?;
+            table.set("weapon", weapon.weapon)?;
+            table.set("clip", weapon.clip)?;
+            table.set("reserve", weapon.reserve)?;
+            table.set("behavior", weapon.behavior)?;
+            table.set("state", weapon.state)?;
+            table.set("aim_state", weapon.aim_state)?;
+            table.set("target", weapon.target)?;
             Ok(table)
         });
 
@@ -1432,6 +1615,15 @@ impl UserData for BotCtx {
 
         methods.add_method("item_count", |_lua, bot, item: u8| {
             Ok(bot.snapshot.item_count(item))
+        });
+
+        methods.add_method("can_see", |_lua, bot, slot: u8| {
+            Ok(bot
+                .snapshot
+                .enemies
+                .iter()
+                .find(|enemy| enemy.slot == slot)
+                .is_some_and(|enemy| enemy.visible))
         });
 
         methods.add_method("memory", |lua, bot, ()| {
@@ -1509,6 +1701,21 @@ impl UserData for BotCtx {
         methods.add_method("pulse_confirm", |_lua, bot, ()| {
             bot.input().pulse_confirm();
             Ok(())
+        });
+
+        methods.add_method("equip", |_lua, bot, item: u8| {
+            if !bot.snapshot.has_item(item) {
+                bot.log(&format!(
+                    "equip refused: item {item:#04X} is not in the inventory"
+                ));
+                return Ok(false);
+            }
+            if !bot.snapshot.held_weapons.contains(&item) {
+                bot.log(&format!("equip refused: item {item:#04X} is not a weapon"));
+                return Ok(false);
+            }
+            bot.input().equip(item);
+            Ok(true)
         });
 
         methods.add_method(
@@ -1855,6 +2062,88 @@ mod tests {
     }
 
     #[test]
+    fn equip_is_a_one_tick_request() {
+        let mut input = BotInput::default();
+        input.equip(0x02);
+        assert_eq!(input.equip, Some(0x02));
+        input.reset();
+        assert_eq!(input.equip, None);
+    }
+
+    #[test]
+    fn enemy_snapshot_filters_dead_and_scripted_entities() {
+        let mut game = game::GameState::default();
+        let room = RoomState::default();
+        let mut spawn = |slot: usize, id: u8, health: i16, x: i32, active: bool| {
+            let entity = &mut game.entities[slot];
+            entity.id = id;
+            entity.health = health;
+            entity.pos = [x, 0, 0];
+            entity.angle = 0x200;
+            entity.set_active(active);
+            entity.status_flags |= 0x40;
+            entity.state_field = 4;
+            entity.action_behavior = 0x12;
+            entity.action_state = 3;
+            entity.hit_state = 1;
+        };
+        // Far zombie, near boss, a dead monster, and a scripted character.
+        spawn(1, 0x00, 100, 3000, true);
+        spawn(2, 0x0C, 400, 1000, true);
+        spawn(3, 0x00, 0, 500, true);
+        spawn(4, 0x20, 100, 200, true);
+        spawn(5, 0x00, 100, 2000, false);
+
+        let enemies = enemy_snapshots(&game, [0, 0, 0], &room);
+        assert_eq!(
+            enemies.iter().map(|enemy| enemy.slot).collect::<Vec<_>>(),
+            [2, 1],
+            "nearest living monster first; scripted characters, corpses and \
+             inactive slots are excluded"
+        );
+        assert_eq!(enemies[0].id, 0x0C);
+        assert_eq!(enemies[0].distance, 1000);
+        assert_eq!(enemies[0].state, 4);
+        assert_eq!(enemies[0].status_flags, 0x41);
+        assert_eq!(enemies[0].action_behavior, 0x12);
+        assert_eq!(enemies[0].action_state, 3);
+        assert_eq!(enemies[0].hit_state, 1);
+        assert!(enemies[0].visible);
+        assert_eq!(enemies[1].health, 100);
+    }
+
+    #[test]
+    fn weapon_snapshot_reads_the_clip_reserve_and_lock() {
+        let mut game = game::GameState::default();
+        game.equipped = Some(0x02);
+        game.equipped_weapon_id = 0x02;
+        game.inventory.push(InventoryItem {
+            id: 0x02,
+            quantity: 12,
+        });
+        game.inventory.push(InventoryItem {
+            id: 0x0B,
+            quantity: 30,
+        });
+        let state = WeaponState {
+            behavior: 0x13,
+            state: 2,
+            aim_state: 3,
+            target: Some(7),
+            ..WeaponState::default()
+        };
+        let weapon = weapon_snapshot(&game, &state);
+        assert_eq!(weapon.equipped, Some(0x02));
+        assert_eq!(weapon.weapon, 0x02);
+        assert_eq!(weapon.clip, 12);
+        assert_eq!(weapon.reserve, 30);
+        assert_eq!(weapon.behavior, 0x13);
+        assert_eq!(weapon.state, 2);
+        assert_eq!(weapon.aim_state, 3);
+        assert_eq!(weapon.target, Some(7));
+    }
+
+    #[test]
     fn memory_remembers_values_and_visited_rooms() {
         let mut memory = BotMemory::default();
         memory.remember("door".to_string(), Some("open".to_string()));
@@ -1923,6 +2212,7 @@ mod tests {
             equipped: None,
             radius: 100,
             collision_flags: 0,
+            grabbed: false,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
@@ -2060,6 +2350,7 @@ mod tests {
             equipped: None,
             radius: 100,
             collision_flags: 0,
+            grabbed: false,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
@@ -2117,6 +2408,7 @@ mod tests {
             equipped: None,
             radius: 100,
             collision_flags: 0,
+            grabbed: false,
         }
     }
 
@@ -2236,6 +2528,7 @@ mod tests {
             equipped: None,
             radius: 100,
             collision_flags: 0,
+            grabbed: false,
         };
         let mut nav = BotNav::default();
         nav.sync_room(

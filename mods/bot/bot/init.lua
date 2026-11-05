@@ -65,6 +65,7 @@ BOT_STATE = BOT_STATE or {
     puzzle_failed = false,
     paint_steps_source = nil,
     milestone = nil,
+    combat = {},
 }
 
 -- Fields added after the first checked-in route. A --watch reload keeps the
@@ -75,6 +76,28 @@ BOT_STATE.did_11a = BOT_STATE.did_11a or false
 BOT_STATE.puzzle_index = BOT_STATE.puzzle_index or 1
 BOT_STATE.puzzle_failed = BOT_STATE.puzzle_failed or false
 BOT_STATE.milestone = BOT_STATE.milestone or nil
+BOT_STATE.combat = BOT_STATE.combat or {}
+
+-- Combat is a conservative layer over the route: it only stops to shoot the
+-- common zombies with the handgun, and stands down for bosses, crowds, low
+-- health or an empty clip it cannot reload. The route's normal walk still owns
+-- every other tick, and scenes/doors/messages are handled before this runs.
+BOT_STATE.combat.active = BOT_STATE.combat.active or false
+BOT_STATE.combat.target = BOT_STATE.combat.target or nil
+BOT_STATE.combat.ticks = BOT_STATE.combat.ticks or 0
+BOT_STATE.combat.cooldown = BOT_STATE.combat.cooldown or 0
+BOT_STATE.combat.aim_ticks = BOT_STATE.combat.aim_ticks or 0
+BOT_STATE.combat.reload_ticks = BOT_STATE.combat.reload_ticks or 0
+BOT_STATE.combat.reload_started = BOT_STATE.combat.reload_started or false
+BOT_STATE.combat.retreating = BOT_STATE.combat.retreating or false
+BOT_STATE.combat.retreat_ticks = BOT_STATE.combat.retreat_ticks or 0
+BOT_STATE.combat.shots = BOT_STATE.combat.shots or 0
+BOT_STATE.combat.room = BOT_STATE.combat.room or nil
+BOT_STATE.combat.disarmed = BOT_STATE.combat.disarmed or false
+BOT_STATE.combat.last_health = BOT_STATE.combat.last_health or nil
+BOT_STATE.combat.start_health = BOT_STATE.combat.start_health or nil
+BOT_STATE.combat.start_clip = BOT_STATE.combat.start_clip or nil
+BOT_STATE.combat.start_reserve = BOT_STATE.combat.start_reserve or nil
 
 -- Flag banks: FG_COMMON is 1, FG_ROOM is 4, FG_STATUS is 5, FG_ITEM is 7.
 local BANK_COMMON = 1
@@ -101,7 +124,30 @@ local ITEM_CRANK_KEY = 0x1D
 local ITEM_STAR_CREST = 0x2D
 local ITEM_DESK_KEY = 0x3D
 local ITEM_RADIO_KEY = 0x4D
+local ITEM_HANDGUN = 0x02
 local SCENARIO_HAS_LOCKPICK = 0x7C
+
+-- Combat thresholds. The route only needs the 10A/109 zombies, so it engages
+-- one or two plain zombies with the starting handgun and runs past everything
+-- else (bosses, crowds, low health, no ammunition).
+local COMBAT_RANGE = 4500
+local COMBAT_ARC = 0x400
+local COMBAT_MIN_HEALTH = 40
+local COMBAT_MAX_TICKS = 420
+local COMBAT_MAX_THREATS = 1
+local COMBAT_FIRE_CADENCE = 14
+local COMBAT_LOCK_WAIT = 90
+local COMBAT_RELOAD_WAIT = 45
+-- Without spare ammunition, keep enough rounds for a full zombie plus the
+-- misses a reaction window causes: a handgun hit does 12, and the 10A/109
+-- zombies have about 70 health.
+local COMBAT_MIN_CLIP = 9
+-- The handgun's aim cone excludes bodies closer than their collision radius
+-- plus 200 units, so a zombie that walks right up to the player is unshootable.
+-- Back away before that happens, then resume firing.
+local COMBAT_RETREAT_START = 1800
+local COMBAT_RETREAT_DONE = 2600
+local COMBAT_RETREAT_WAIT = 150
 
 -- 117 large gallery: the seven painting switches must be pushed in the order
 -- below. Each painting clears the room bits 0x18..0x1E and leaves only its own
@@ -1732,6 +1778,357 @@ local function phase_to_300(bot)
     end
 end
 
+-- Combat policy -------------------------------------------------------------
+-- The nearest visible monster in front of the player is a threat. The route
+-- fights only common zombies with the handgun; bosses, crowds, low health and
+-- an empty clip it cannot reload all make it stand down for the rest of the
+-- room, so the normal route can run past instead.
+
+local function angle_delta(a, b)
+    local delta = (a - b) % 4096
+    if delta > 2048 then
+        delta = delta - 4096
+    end
+    return delta
+end
+
+local function abs(value)
+    if value < 0 then
+        return -value
+    end
+    return value
+end
+
+local function is_common_zombie(enemy)
+    return enemy.id == 0x00 or enemy.id == 0x01 or enemy.id == 0x11
+end
+
+-- The damage pipeline only accepts a shot when the monster's vertical status
+-- bit matches the player's aim direction. Follow the target's own 0x20/0x80
+-- bit so shots at a zombie on a step or in a bend-down reaction can connect.
+local function combat_aim_input(target)
+    local input = { aim = true }
+    if target.status_flags & 0x20 ~= 0 then
+        input.down = true
+    elseif target.status_flags & 0x80 ~= 0 then
+        input.up = true
+    end
+    return input
+end
+
+local function combat_enter_room(combat, room_id)
+    if combat.room == room_id then
+        return
+    end
+    combat.room = room_id
+    combat.active = false
+    combat.target = nil
+    combat.ticks = 0
+    combat.cooldown = 0
+    combat.aim_ticks = 0
+    combat.reload_ticks = 0
+    combat.reload_started = false
+    combat.shots = 0
+    combat.disarmed = false
+    combat.last_health = nil
+    combat.retreating = false
+    combat.retreat_ticks = 0
+end
+
+local function combat_end(bot, combat, reason, disarm)
+    if not combat.active then
+        if disarm then
+            combat.disarmed = true
+        end
+        return
+    end
+    local player = bot:player()
+    local weapon = bot:weapon()
+    log(bot, string.format(
+        "combat end: %s slot=%s shots=%d ticks=%d health=%d clip=%d reserve=%d",
+        reason, tostring(combat.target), combat.shots, combat.ticks,
+        player.health, weapon.clip, weapon.reserve
+    ))
+    combat.active = false
+    combat.target = nil
+    combat.ticks = 0
+    combat.cooldown = 0
+    combat.aim_ticks = 0
+    combat.reload_ticks = 0
+    combat.reload_started = false
+    combat.last_health = nil
+    combat.retreating = false
+    combat.retreat_ticks = 0
+    -- One fight per room is enough: once the target is lost (killed, out of
+    -- range or out of sight), let the route run past anything else here.
+    combat.disarmed = true
+end
+
+local function combat_start(bot, combat, enemy, player, weapon)
+    combat.active = true
+    combat.target = enemy.slot
+    combat.ticks = 0
+    combat.cooldown = 0
+    combat.aim_ticks = 0
+    combat.reload_ticks = 0
+    combat.reload_started = false
+    combat.shots = 0
+    combat.last_health = enemy.health
+    combat.retreating = false
+    combat.retreat_ticks = 0
+    combat.start_health = player.health
+    combat.start_clip = weapon.clip
+    combat.start_reserve = weapon.reserve
+    log(bot, string.format(
+        "combat start slot=%d id=%#04x dist=%d health=%d state=%d "
+            .. "player_health=%d clip=%d reserve=%d",
+        enemy.slot, enemy.id, enemy.distance, enemy.health, enemy.state,
+        player.health, weapon.clip, weapon.reserve
+    ))
+end
+
+local function combat_step(bot, scene, player)
+    if not scene.controllable or player.grabbed then
+        return false
+    end
+    local room = bot:room()
+    local combat = BOT_STATE.combat
+    if not combat then
+        combat = {}
+        BOT_STATE.combat = combat
+    end
+    combat_enter_room(combat, room.id)
+    if combat.disarmed then
+        return false
+    end
+
+    local enemies = bot:enemies()
+    local threats = {}
+    local nearby = 0
+    for i = 1, #enemies do
+        local enemy = enemies[i]
+        if enemy.distance <= COMBAT_RANGE then
+            nearby = nearby + 1
+            if enemy.visible
+                and abs(angle_delta(enemy.bearing, player.angle)) <= COMBAT_ARC then
+                threats[#threats + 1] = enemy
+            end
+        end
+    end
+    local nearest = threats[1]
+    if combat.active and combat.target then
+        local exists = false
+        for i = 1, #enemies do
+            if enemies[i].slot == combat.target then
+                exists = true
+            end
+        end
+        if not exists then
+            local health = combat.last_health
+            combat_end(bot, combat, string.format(
+                "target down health=%s", tostring(health)), false)
+            return false
+        end
+    end
+    if not nearest then
+        combat_end(bot, combat, "no visible threat in front", false)
+        return false
+    end
+
+    -- Keep the current target while it lives and stays in range and sight.
+    local target = nil
+    if combat.active and combat.target then
+        for i = 1, #enemies do
+            if enemies[i].slot == combat.target then
+                target = enemies[i]
+            end
+        end
+        if not target
+            or target.distance > COMBAT_RANGE
+            or not target.visible
+            or abs(angle_delta(target.bearing, player.angle)) > COMBAT_ARC then
+            local health = combat.last_health
+            combat_end(bot, combat, string.format(
+                "target lost health=%s", tostring(health)), false)
+            return false
+        end
+    end
+
+    if player.health <= COMBAT_MIN_HEALTH then
+        combat_end(bot, combat, "low health", true)
+        return false
+    end
+    if nearby > COMBAT_MAX_THREATS then
+        combat_end(bot, combat, "too many enemies nearby", true)
+        return false
+    end
+    if not is_common_zombie(nearest) then
+        combat_end(bot, combat, string.format(
+            "boss or hard enemy id=%#04x", nearest.id), true)
+        return false
+    end
+    if not bot:has_item(ITEM_HANDGUN) then
+        combat_end(bot, combat, "no handgun", true)
+        return false
+    end
+
+    if not combat.active then
+        local weapon_now = bot:weapon()
+        local needed = (nearest.health + 11) // 12
+        local finishing = nearest.health <= 24 and weapon_now.clip >= needed
+        if weapon_now.reserve <= 0 and weapon_now.clip < COMBAT_MIN_CLIP and not finishing then
+            -- No spare ammunition for a fresh zombie: skip it entirely rather
+            -- than starting a fight that will only anger it.
+            combat.disarmed = true
+            return false
+        end
+    end
+
+    if not combat.active then
+        combat_start(bot, combat, nearest, player, bot:weapon())
+        target = nearest
+    end
+    target = target or nearest
+    combat.ticks = combat.ticks + 1
+    if combat.ticks > COMBAT_MAX_TICKS then
+        combat_end(bot, combat, "timeout", true)
+        return false
+    end
+
+    if combat.last_health ~= nil and target.health < combat.last_health then
+        log(bot, string.format(
+            "combat hit slot=%d health=%d->%d clip=%d reserve=%d",
+            target.slot, combat.last_health, target.health,
+            bot:weapon().clip, bot:weapon().reserve
+        ))
+    end
+    combat.last_health = target.health
+
+    local weapon = bot:weapon()
+    if weapon.equipped ~= ITEM_HANDGUN or weapon.weapon ~= ITEM_HANDGUN then
+        if not bot:equip(ITEM_HANDGUN) then
+            combat_end(bot, combat, "cannot equip the handgun", true)
+        end
+        return true
+    end
+
+    if weapon.clip <= 0 then
+        if weapon.reserve <= 0 then
+            combat_end(bot, combat, "out of ammunition", true)
+            return false
+        end
+        if not combat.reload_started then
+            -- The Classic REbirth tactical reload: AIM + RUN with a partly
+            -- filled clip and matching ammunition. If the build does not run
+            -- it, stand down rather than standing in front of the zombie.
+            combat.reload_ticks = combat.reload_ticks + 1
+            bot:set_input({ aim = true, run = true })
+            if weapon.behavior == 0x18 then
+                combat.reload_started = true
+                combat.reload_ticks = 0
+                combat.aim_ticks = 0
+                log(bot, string.format(
+                    "combat reload start clip=%d reserve=%d",
+                    weapon.clip, weapon.reserve))
+            elseif combat.reload_ticks > COMBAT_RELOAD_WAIT then
+                combat_end(bot, combat, "tactical reload unavailable", true)
+                return false
+            end
+            return true
+        end
+        bot:set_input({ aim = true })
+        combat.reload_ticks = combat.reload_ticks + 1
+        if combat.reload_ticks > COMBAT_RELOAD_WAIT * 4 then
+            combat_end(bot, combat, "reload did not finish", true)
+            return false
+        end
+        return true
+    end
+    combat.reload_started = false
+    combat.reload_ticks = 0
+
+    if weapon.reserve <= 0 then
+        -- A nearly dead target is worth finishing even with a low clip; a
+        -- fresh one is not, because a reaction window can eat a miss or two.
+        local needed = (target.health + 11) // 12
+        local finishing = target.health <= 24 and weapon.clip >= needed
+        if weapon.clip < COMBAT_MIN_CLIP and not finishing then
+            combat_end(bot, combat, "low clip without reserve", true)
+            return false
+        end
+    end
+
+    -- Back out of the handgun's near blind spot, then resume the fight.
+    if combat.retreating then
+        if target.distance >= COMBAT_RETREAT_DONE then
+            combat.retreating = false
+            combat.retreat_ticks = 0
+            log(bot, string.format(
+                "combat retreat done dist=%d", target.distance))
+        else
+            combat.retreat_ticks = combat.retreat_ticks + 1
+            if combat.retreat_ticks > COMBAT_RETREAT_WAIT then
+                combat_end(bot, combat, "cannot open distance", true)
+                return false
+            end
+            bot:face_to(target.x, target.z)
+            bot:set_input({ down = true })
+            return true
+        end
+    elseif target.distance < COMBAT_RETREAT_START then
+        combat.retreating = true
+        combat.retreat_ticks = 0
+        combat.aim_ticks = 0
+        log(bot, string.format(
+            "combat retreat start dist=%d", target.distance))
+        bot:face_to(target.x, target.z)
+        bot:set_input({ down = true })
+        return true
+    end
+
+    -- Face the target before raising the gun; once aligned, hold aim until
+    -- the reticle locks, then fire one pulse per cadence window.
+    local face = bot:face_to(target.x, target.z)
+    if abs(face.angle_error) > 0x180 then
+        combat.aim_ticks = 0
+        return true
+    end
+    bot:set_input(combat_aim_input(target))
+    combat.aim_ticks = combat.aim_ticks + 1
+
+    local locked = weapon.target ~= nil or (weapon.aim_state % 4) == 3
+    if not locked then
+        if combat.aim_ticks > COMBAT_LOCK_WAIT then
+            combat_end(bot, combat, "no weapon lock", true)
+            return false
+        end
+        return true
+    end
+    -- A hit puts the monster into its reaction; more bullets during that
+    -- window are discarded by the damage pipeline, so wait for it to clear.
+    if target.hit_state ~= 0 then
+        return true
+    end
+    if combat.cooldown > 0 then
+        combat.cooldown = combat.cooldown - 1
+        return true
+    end
+    local shot = combat_aim_input(target)
+    shot.fire = true
+    shot.fire_pressed = true
+    bot:set_input(shot)
+    combat.cooldown = COMBAT_FIRE_CADENCE
+    combat.shots = combat.shots + 1
+    log(bot, string.format(
+        "combat shot=%d slot=%d health=%d dist=%d clip=%d reserve=%d "
+            .. "state=%d status=%#04x action_behavior=%d action_state=%d hit_state=%d",
+        combat.shots, target.slot, target.health, target.distance,
+        weapon.clip, weapon.reserve, target.state, target.status_flags,
+        target.action_behavior, target.action_state, target.hit_state
+    ))
+    return true
+end
+
 function on_bot_tick(bot)
     local tick = bot:tick()
     local room = bot:room()
@@ -1784,6 +2181,10 @@ function on_bot_tick(bot)
     end
     BOT_STATE.controllable_ticks = BOT_STATE.controllable_ticks + 1
     BOT_STATE.locked_ticks = 0
+
+    if combat_step(bot, scene, player) then
+        return
+    end
 
     local phase = BOT_STATE.phase
     if phase == "opening" then
