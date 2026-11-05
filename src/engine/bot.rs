@@ -58,15 +58,20 @@ pub struct BotInput {
     pub input: player::Input,
     /// The action/confirm held level the message window reads.
     pub action: bool,
-    /// A room item action the script asked the host to run this tick. This is
-    /// the same handler a normal action press on that item would run; it is
-    /// used for scripted handovers whose zone is not reachable (the 106
-    /// lockpick item sits at the room origin).
+    /// A room action the script asked the host to run this tick. This is the
+    /// same handler a normal action press on that zone would run; it is used
+    /// for scripted handovers whose zone is not reachable (the 106 lockpick
+    /// item sits at the room origin) and for the in-room 203 stair check.
     pub room_action: Option<(u8, u8)>,
     /// An item the script asked to equip this tick. The host validates that
     /// the player holds it and applies the same `set_equipped` the menu does,
     /// before the gameplay tick.
     pub equip: Option<u8>,
+    /// A heal item the script asked to use this tick. The host validates the
+    /// inventory and catalog kind again, runs the same `use_item` rule the
+    /// menu USE does, and consumes one unit through `select_item` +
+    /// `use_selected_item`, before the gameplay tick.
+    pub heal: Option<u8>,
 }
 
 impl BotInput {
@@ -150,6 +155,11 @@ impl BotInput {
     /// Ask the host to equip `item` this tick.
     fn equip(&mut self, item: u8) {
         self.equip = Some(item);
+    }
+
+    /// Ask the host to use the heal `item` this tick.
+    fn use_heal(&mut self, item: u8) {
+        self.heal = Some(item);
     }
 }
 
@@ -310,6 +320,9 @@ struct SessionSnapshot {
     /// The weapon items in the inventory, so `bot:equip` can refuse a
     /// non-weapon the menu would not equip.
     held_weapons: BTreeSet<u8>,
+    /// The heal items in the inventory, so `bot:use_heal` can refuse a
+    /// non-heal before it reaches the host.
+    held_heals: BTreeSet<u8>,
     flags: [FlagBank; game::FLAG_BANK_COUNT],
     inventory: Vec<InventoryItem>,
 }
@@ -416,6 +429,31 @@ struct DoorSnapshot {
     z: i32,
     width: i32,
     depth: i32,
+}
+
+/// The item ids in `inventory` whose catalog kind is `kind`.
+fn held_items(
+    inventory: &[InventoryItem],
+    item_defs: &crate::item_catalog::ItemCatalog,
+    kind: ItemKind,
+) -> BTreeSet<u8> {
+    inventory
+        .iter()
+        .filter(|stack| item_defs.get(stack.id).kind == kind)
+        .map(|stack| stack.id)
+        .collect()
+}
+
+/// The heal items with at least one unit, so a depleted stack cannot be used.
+fn heal_items(
+    inventory: &[InventoryItem],
+    item_defs: &crate::item_catalog::ItemCatalog,
+) -> BTreeSet<u8> {
+    inventory
+        .iter()
+        .filter(|stack| stack.quantity > 0 && item_defs.get(stack.id).kind == ItemKind::Heal)
+        .map(|stack| stack.id)
+        .collect()
 }
 
 /// The display name of a room action kind.
@@ -614,12 +652,8 @@ impl SessionSnapshot {
             .collect();
         let enemies = enemy_snapshots(game, session.player.pos, &session.loaded.room);
         let weapon = weapon_snapshot(game, &session.player.weapon);
-        let held_weapons = game
-            .inventory
-            .iter()
-            .filter(|stack| game.item_defs.get(stack.id).kind == ItemKind::Weapon)
-            .map(|stack| stack.id)
-            .collect();
+        let held_weapons = held_items(&game.inventory, &game.item_defs, ItemKind::Weapon);
+        let held_heals = heal_items(&game.inventory, &game.item_defs);
         Self {
             room: id,
             camera: session.loaded.room.current_cut,
@@ -630,6 +664,7 @@ impl SessionSnapshot {
             enemies,
             weapon,
             held_weapons,
+            held_heals,
             flags: game.flags,
             inventory: game.inventory.clone(),
         }
@@ -1698,6 +1733,22 @@ impl UserData for BotCtx {
             Ok(())
         });
 
+        methods.add_method("use_stair", |_lua, bot, slot: u8| {
+            let Some(action) = bot.snapshot.actions.iter().find(|a| a.slot == slot) else {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "no room action in slot {slot}"
+                )));
+            };
+            if action.kind != "door_check" {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "room action slot {slot} is `{}`, not a stair check",
+                    action.kind
+                )));
+            }
+            bot.input().use_action(slot, action.handler);
+            Ok(())
+        });
+
         methods.add_method("pulse_confirm", |_lua, bot, ()| {
             bot.input().pulse_confirm();
             Ok(())
@@ -1715,6 +1766,23 @@ impl UserData for BotCtx {
                 return Ok(false);
             }
             bot.input().equip(item);
+            Ok(true)
+        });
+
+        methods.add_method("use_heal", |_lua, bot, item: u8| {
+            if !bot.snapshot.has_item(item) {
+                bot.log(&format!(
+                    "use_heal refused: item {item:#04X} is not in the inventory"
+                ));
+                return Ok(false);
+            }
+            if !bot.snapshot.held_heals.contains(&item) {
+                bot.log(&format!(
+                    "use_heal refused: item {item:#04X} is not a heal item"
+                ));
+                return Ok(false);
+            }
+            bot.input().use_heal(item);
             Ok(true)
         });
 
@@ -2068,6 +2136,42 @@ mod tests {
         assert_eq!(input.equip, Some(0x02));
         input.reset();
         assert_eq!(input.equip, None);
+    }
+
+    #[test]
+    fn use_heal_is_a_one_tick_request() {
+        let mut input = BotInput::default();
+        input.use_heal(0x44);
+        assert_eq!(input.heal, Some(0x44));
+        assert_eq!(input.equip, None);
+        input.reset();
+        assert_eq!(input.heal, None);
+    }
+
+    #[test]
+    fn heal_items_follow_the_catalog_kind_and_need_a_unit() {
+        let defs = crate::item_catalog::ItemCatalog::embedded();
+        let inventory = vec![
+            InventoryItem {
+                id: 0x44,
+                quantity: 2,
+            },
+            InventoryItem {
+                id: 0x02,
+                quantity: 15,
+            },
+            InventoryItem {
+                id: 0x41,
+                quantity: 0,
+            },
+        ];
+        let heals = heal_items(&inventory, &defs);
+        assert!(heals.contains(&0x44), "green herb is a heal");
+        assert!(!heals.contains(&0x02), "the handgun is not a heal");
+        assert!(
+            !heals.contains(&0x41),
+            "an empty spray stack cannot be used"
+        );
     }
 
     #[test]
