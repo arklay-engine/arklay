@@ -1,6 +1,8 @@
 -- Room puzzle facts for the planner, read from the current room's bot.xml
 -- (format 2) through bot:room_meta():
 --   <interact slot bank bit label>  press AOT `slot`; its flag set = done
+--   <use slot item bank bit label>  stand in AOT `slot`'s use-item zone and
+--                                   USE `item` from the menu; flag = done
 --   <answer choice slot|bank+bit>   the yes/no prompt answer
 --   <avoid slot reason>             never press AOT `slot`
 -- The facts carry every room number; this module holds none.
@@ -8,7 +10,35 @@
 BotPuzzle = BotPuzzle or {}
 
 local function meta(bot)
-    return bot:room_meta() or { interacts = {}, answers = {}, avoids = {} }
+    return bot:room_meta() or { interacts = {}, uses = {}, answers = {}, avoids = {} }
+end
+
+-- The <use> facts that apply now, in document order: the item is held, the
+-- done flag is clear, and the slot is a live use-item probe (a room deletes
+-- the probe until its step applies, as 10F does before the gold pickup).
+function BotPuzzle.uses(bot)
+    local out = {}
+    for _, fact in ipairs(meta(bot).uses or {}) do
+        local action = BotNav.action_by_slot(bot, fact.slot)
+        if bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
+            and action and action.kind == "flag_bank_set" then
+            out[#out + 1] = { fact = fact, action = action }
+        end
+    end
+    return out
+end
+
+-- Whether AOT `slot` is named by any fact of this room.
+function BotPuzzle.is_fact_slot(bot, slot)
+    local m = meta(bot)
+    for _, list in ipairs({ m.interacts, m.uses, m.answers, m.avoids }) do
+        for _, fact in ipairs(list or {}) do
+            if fact.slot == slot then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- The avoid reason for `slot` in this room, or nil.

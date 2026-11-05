@@ -49,12 +49,12 @@ Chunks run in path order, so the modules are global tables:
 
 | File | Table | Role |
 | --- | --- | --- |
-| `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the common zombie ids. |
+| `bot/constants.lua` | `BotConst` | Engine rules: tick rate, action reach, the door lock encoding, the special key values, the message fast bit, the common zombie ids, the item-use flag bank and selector base, and the AOT probe and action-key flag bits. |
 | `bot/init.lua` | | `on_bot_tick`: the priority order below, plus damage and room-entry logging. |
 | `bot/menu.lua` | `BotMenu` | Equip, heal and item use through the inventory menu ([Menu skills](#menu-skills)). |
 | `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press) and `visit_camera` (walk into a camera switch zone). |
 | `bot/planner.lua` | `BotPlanner` | Goal choice, attempt marks, the door route and the finish. |
-| `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<answer>` and `<avoid>` facts. |
+| `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
 | `bot/scene.lua` | `BotScene` | Films, transitions, messages, yes/no prompts, pick-up viewers and the document reader. |
 | `bot/survival.lua` | `BotSurvival` | Healing, the critical-health stop and the common-zombie fight. |
 
@@ -76,15 +76,31 @@ Priorities, highest first:
 3. The room puzzle: the next `<interact>`/`<camera>` fact in document order
    (walk to the zone, press, wait for the done flag). The sequence position
    is the furthest fact whose flag was ever seen set, because a later step
-   may clear an earlier step's flag. `<avoid>` slots are never used.
-4. Ground items here, nearest planned path first. A zone at the room origin
-   is a scripted handover and is marked permanently.
-5. A stair check (`door_check` zone): one press per slot per room entry,
-   when part of this room failed on its approach.
-6. The frontier item elsewhere with the fewest door steps (a breadth-first
-   route over the remembered doors), then an unvisited door here, then a
-   remote untraversed door to an unvisited room, then any untraversed door
-   here or elsewhere.
+   may clear an earlier step's flag. `<avoid>` slots are never used. Then
+   the first `<use>` fact that applies: the item is held, its done flag is
+   clear and its slot is a live use-item probe (`flag_bank_set`). The bot
+   walks into the zone (inside it when the probe tests the player's
+   position, bit `0x40`, else facing it), waits until the probe arms the
+   item's use flag (bank 9, selector `item - 0x1B`), uses the item from the
+   menu and waits up to 20 seconds for the done flag. A menu failure or a
+   flag that never rises marks the fact.
+4. Ground items here, nearest planned path first. A visible item here is
+   always taken before the bot moves on. A zone at the room origin is a
+   scripted handover and is marked permanently.
+5. A passage check, when a door or item of this room has no planned
+   approach: a stair zone (`door_check`), or an action-key event zone
+   (flags `>= 0x80`) that no fact names, since a script may start the climb
+   from an event. One press per slot per room entry, nearest first.
+6. The way out, one ranking by distance cost over the doors here and the
+   first door of the route (breadth-first over the remembered doors) to each
+   remote frontier item or door. The cost is the path length to the door's
+   approach, plus 20 reach per door step of the route, plus, for a remote
+   goal, its path length in its own room from where the bot last stood
+   there (`REACH^3` when the planner found none), minus 15 reach for an
+   unvisited room, 10 reach for a remote item, and 30 reach for a door into
+   the goal room or 6 for one into its stage. The lowest cost wins; the
+   pick is logged as `way out: <why>, cost N`. `planner.lua`'s header has
+   the formula.
 7. Nothing left: `frontier empty: nothing reachable is left`. Entering the
    `--bot-goal-room` finishes with `goal room X reached`, and more than 40
    entries into one room finishes with `looping`. Every finish lists the
@@ -112,6 +128,15 @@ three quarters of the action reach, and a quarter reach inside the edge. On
 a long side there are also points a quarter of the way in from each end.
 Points the path planner reaches come first, by path length; then up to 6
 unplanned points by distance, each with a short walk budget.
+
+The path planner searches a 512-unit lattice first. When that finds no path
+(a corridor narrower than the lattice rows, like the 10C bed passage), it
+falls back to a 128-unit lattice whose blocked cells and connected parts
+are cached per room and body. Both test every node and every edge against
+the room collision with the player's radius, so neither cuts through a wall
+thinner than its step; the fallback rejects a goal inside the collision or
+in another part of the room. A start inside the body margin (a stair warp
+can leave the player there) steps to the nearest free node first.
 
 `--bot-goal-room ROOM` (three hex digits, needs `--bot`) is read as
 `bot:goal_room()`. `scripts/bot-bench.sh` passes `20D` for the `re1`
@@ -288,20 +313,22 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason` | The planner should not use AOT `slot`; `reason` is a non-empty note. |
+| `<use>` | `slot`, `item`, `bank`, `bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done. |
 
 ```xml
 <bot format="2">
   <interact slot="4" bank="1" bit="0x22" label="push the statue"/>
   <answer choice="no" slot="6" label="do not drink"/>
   <avoid slot="7" reason="the plant stuns the player"/>
+  <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
 </bot>
 ```
 
-`bot:room_meta()` always has `interacts`, `answers` and `avoids` arrays
-(empty for a format-1 file): `{kind = "press", slot, bank, bit, label}` or
-`{kind = "camera", cut, bank, bit, label}` in document order,
-`{choice, slot, bank, bit, label}` (absent fields are `nil`) and
-`{slot, reason}`.
+`bot:room_meta()` always has `interacts`, `uses`, `answers` and `avoids`
+arrays (empty for a format-1 file): `{kind = "press", slot, bank, bit,
+label}` or `{kind = "camera", cut, bank, bit, label}` in document order,
+`{slot, item, bank, bit, label}` in document order, `{choice, slot, bank,
+bit, label}` (absent fields are `nil`) and `{slot, reason}`.
 
 `bot:room_meta()` returns a fresh Lua table; it is a read-only view in the
 sense that it cannot write game state:
@@ -325,6 +352,10 @@ files. The checked-in facts:
 
 | Room | Facts |
 | --- | --- |
+| 105 | `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. |
+| 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. |
+| 10F | `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
+| 11A | Four `<use>` crests at slots 5, 3, 4 and 6 (star `0x2D`, sun `0x2E`, moon `0x2C`, wind `0x29`); done flags bank 0 `0x6A`, `0x69`, `0x6B`, `0x6C`. |
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
 | 116 | `<avoid slot="1">`: lifting the shotgun without the broken one springs the 115 ceiling trap. |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
