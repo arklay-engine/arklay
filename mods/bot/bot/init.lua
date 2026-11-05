@@ -503,9 +503,18 @@ local function handle_scene(bot, scene)
                 BOT_STATE.pickup_prompt_right = true
                 BOT_STATE.pickup_prompt_right_tick = tick
                 bot:set_input({ right = true })
-            elseif tick >= (BOT_STATE.pickup_prompt_right_tick or 0) + 4
-                and tick % 2 == 0 then
-                bot:press_action()
+            elseif tick >= (BOT_STATE.pickup_prompt_right_tick or 0) + 4 then
+                -- Same hold/release pattern as the message window below.
+                local held_last = BOT_STATE.msg_press_tick == tick - 1
+                if scene.message_waiting then
+                    if not held_last then
+                        BOT_STATE.msg_press_tick = tick
+                        bot:press_action()
+                    end
+                elseif scene.message and (scene.message & 0x80) ~= 0 then
+                    BOT_STATE.msg_press_tick = tick
+                    bot:press_action()
+                end
             end
         elseif tick % 2 == 0 then
             bot:press_action()
@@ -531,7 +540,19 @@ local function handle_scene(bot, scene)
             end
             return true
         end
-        if tick % 2 == 0 then
+        -- The window consumes a fresh edge (held now, not held last tick) in
+        -- a page wait, a finished-text wait or a prompt. A message id with
+        -- bit 0x80 also reveals twice as fast while the button is held, so
+        -- hold it through the reveal, release for the one tick that makes the
+        -- edge, and press on the next.
+        local held_last = BOT_STATE.msg_press_tick == tick - 1
+        if scene.message_waiting then
+            if not held_last then
+                BOT_STATE.msg_press_tick = tick
+                bot:press_action()
+            end
+        elseif scene.message and (scene.message & 0x80) ~= 0 then
+            BOT_STATE.msg_press_tick = tick
             bot:press_action()
         end
         return true
@@ -792,7 +813,11 @@ local function door_nav(bot, target, custom, label)
 
     nav.ticks = nav.ticks + 1
     local facing = bot:face_to(point[3], point[4])
-    if facing.status == "facing" then
+    -- Press two ticks, release two. A press held every tick never opens a
+    -- door the bot just unlocked (the 107 door sat 100 ticks, then opened on
+    -- the first press after the walk to the next approach); a lone one-tick
+    -- press does not open it either.
+    if facing.status == "facing" and bot:tick() % 4 < 2 then
         bot:press_action()
     end
     if nav.ticks % 30 == 0 then
