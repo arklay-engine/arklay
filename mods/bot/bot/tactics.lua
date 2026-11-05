@@ -36,6 +36,10 @@ local SPACE_TICKS = C.SECOND + C.SECOND // 2
 local SPACE_REST = 2 * C.SECOND
 -- A walk this close to the spacing point is there.
 local SPACE_TOLERANCE = C.APPROACH
+-- A backward-walk retreat that has not reached its distance by now shoots.
+local RETREAT_TICKS = 2 * C.SECOND
+-- A monster showing no aim bit this long is not fought until it shows one.
+local DORMANT_TICKS = C.SECOND // 2
 -- The facing error accepted before raising the aim: 1/32 turn.
 local FACE_BAND = C.FULL_TURN // 32
 -- After a target is lost, walk on this long before engaging again.
@@ -190,15 +194,21 @@ end
 -- middle; a shotgun target just past the band steps in to the middle, where
 -- a torso or up shot pops the head; otherwise hold and shoot. A back-off
 -- starts with turning around (tank controls), so it is taken only when the
--- enemy cannot close the gap to its reach in that time; otherwise the bot
--- holds and shoots, since a hit makes it flinch.
+-- enemy cannot close the gap to its reach in that time. Before that, an
+-- enemy whose chase speed is known and slower than the backward walk
+-- (o.back_speed) is backpedalled from: "retreat" walks backwards to the
+-- same distance while the bot keeps facing it, no turn needed. Otherwise
+-- the bot holds and shoots, since a hit makes it flinch.
 function BotTactics.spacing(o)
     local turn_ticks = C.FULL_TURN // 2 // C.TURN_STEP
     local room_to_turn = not o.speed
         or o.distance - (o.reach or 0) > o.speed * turn_ticks
-    -- Inside its reach a back-off only shows it the bot's back: shoot.
+    local outpaced = o.back_speed ~= nil and o.speed ~= nil and o.speed < o.back_speed
+    -- Inside its reach a back-off only shows it the bot's back (or is
+    -- caught mid-step): shoot.
     if o.reach and o.distance < o.reach then
         room_to_turn = false
+        outpaced = false
     end
     local min = o.min
     if o.crawl_reach and o.crawl_reach + C.APPROACH > min then
@@ -209,12 +219,18 @@ function BotTactics.spacing(o)
         middle = min
     end
     if o.reloading then
+        if o.distance < o.max and outpaced then
+            return "retreat", o.max
+        end
         if o.distance < o.max and room_to_turn then
             return "back", o.max
         end
         return "hold", o.distance
     end
     if o.distance < min then
+        if outpaced then
+            return "retreat", middle
+        end
         if room_to_turn then
             return "back", middle
         end
@@ -229,34 +245,91 @@ function BotTactics.spacing(o)
     return "hold", o.distance
 end
 
-local function menu_weapons(bot)
-    local rows = {}
-    for _, row in ipairs(bot:menu().items or {}) do
-        if row.kind == "weapon" and row.quantity > 0 then
-            rows[#rows + 1] = row
-        end
-    end
-    return rows
+-- Whether the spot (gx, gz) lies behind the player at (px, pz) as seen from
+-- the target at (tx, tz): within 1/8 turn of straight away from it, so a
+-- backward walk facing the target reaches it. A sideways spot (a wall
+-- straight behind) needs a turn, which a retreat does not take.
+function BotTactics.behind(px, pz, tx, tz, gx, gz)
+    -- Floats: the squared products overflow integers across a room.
+    local ax, az = (gx - px) * 1.0, (gz - pz) * 1.0
+    local bx, bz = (tx - px) * 1.0, (tz - pz) * 1.0
+    local dot = ax * bx + az * bz
+    -- cos(angle) <= -cos(1/8 turn), squared: dot^2 >= |a|^2 |b|^2 / 2.
+    return dot < 0 and 2 * dot * dot >= (ax * ax + az * az) * (bx * bx + bz * bz)
 end
 
--- The firearm to fight with and its rounds: the equipped one if it has
--- rounds, else the held weapon stack (with knowledge) with the most.
-local function firearm(bot, k)
-    local weapon = bot:weapon()
-    if weapon.equipped and k.weapons[weapon.equipped]
-        and weapon.clip + weapon.reserve > 0 then
-        return weapon.equipped, weapon.clip + weapon.reserve
+-- A held weapon's rounds: its loaded quantity plus the matching ammunition
+-- held, the same count the equipped gun's clip plus reserve gives.
+local function held_rounds(bot, row)
+    local ammo = bot:ammo_for(row.item)
+    return row.quantity + (ammo and bot:item_count(ammo) or 0)
+end
+
+-- The gun to fight `entry` (a knowledge enemy, or nil) with `health` left
+-- (nil: the knowledge maximum), from `guns`: rows {item, rounds, equipped}
+-- with rounds > 0. The plain pick is the equipped gun, else the one with the
+-- most rounds. It stands unless its rounds fall short of the kill (its keep
+-- band's damage against that health) while another gun's cover it: then
+-- the gun that covers it in the fewest shots. So a stronger gun (the
+-- shotgun) is spent only on a fight the plain pick cannot finish, and a
+-- fight with no kill data keeps the plain pick. Returns the row or nil.
+function BotTactics.pick_gun(guns, entry, health)
+    health = health or (entry and entry.health)
+    local function shots(row)
+        local band = entry and entry.keep and entry.keep[row.item]
+        local damage = band and band.damage
+        if not damage or damage <= 0 or not health or health <= 0 then
+            return nil
+        end
+        return (health + damage - 1) // damage
     end
-    local best = nil
-    for _, row in ipairs(menu_weapons(bot)) do
-        if k.weapons[row.item] and (not best or row.quantity > best.quantity) then
-            best = row
+    local plain
+    for _, row in ipairs(guns) do
+        if not plain or (row.equipped and not plain.equipped)
+            or (row.equipped == plain.equipped and row.rounds > plain.rounds) then
+            plain = row
         end
     end
+    local need = plain and shots(plain)
+    if not need or need <= plain.rounds then
+        return plain
+    end
+    local best, best_shots = plain, nil
+    for _, row in ipairs(guns) do
+        local n = shots(row)
+        if n and n <= row.rounds and (not best_shots or n < best_shots) then
+            best, best_shots = row, n
+        end
+    end
+    return best
+end
+
+-- The firearm to fight `enemy` (the nearest fightable monster, or nil)
+-- with and its rounds, counting the ammunition held for each held weapon
+-- with knowledge, so an emptied gun with reserve still counts; see
+-- BotTactics.pick_gun.
+local function firearm(bot, k, enemy)
+    local weapon = bot:weapon()
+    local guns = {}
+    if weapon.equipped and k.weapons[weapon.equipped]
+        and weapon.clip + weapon.reserve > 0 then
+        guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
+            equipped = true }
+    end
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.kind == "weapon" and k.weapons[row.item] and row.item ~= weapon.equipped then
+            local rounds = held_rounds(bot, row)
+            if rounds > 0 then
+                guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false }
+            end
+        end
+    end
+    local best = BotTactics.pick_gun(guns, enemy and k.enemies[enemy.id],
+        enemy and enemy.health)
     if not best then
         return nil, 0
     end
-    return best.item, best.quantity
+    return best.item, best.rounds
 end
 
 local function rounds_for(enemy, entry, gun)
@@ -302,6 +375,8 @@ local function reset(s)
     s.space_ticks = 0
     s.space_rest = 0
     s.fired_tick = nil
+    s.retreat_ticks = 0
+    s.retreat_shots = nil
 end
 
 local function stop(bot, s, reason, calm)
@@ -339,9 +414,37 @@ function BotTactics.active()
     return state().active == true
 end
 
+-- Ticks in a row `enemy` has shown no aim bit any pose can hit, counted
+-- across choose and step, while it has not shown one since the bot entered
+-- the room: a monster not woken yet. Once it has (`shootable`), a later
+-- gap (a dog in mid-leap) is not dormancy and counts 0. A look away longer
+-- than a second (it may have woken meanwhile) restarts the count.
+function BotTactics.no_aim_ticks(s, enemy, shootable)
+    s.no_aim = s.no_aim or {}
+    local row = s.no_aim[enemy.slot]
+    if shootable or (row and row.woke) then
+        s.no_aim[enemy.slot] = { woke = true }
+        return 0
+    end
+    if not row or s.now - row.last > C.SECOND then
+        row = { since = s.now }
+        s.no_aim[enemy.slot] = row
+    end
+    row.last = s.now
+    return s.now - row.since
+end
+
 -- Decide every monster near the bot; returns the fight target or nil.
 local function choose(bot, s, k, enemies, player)
-    local gun, rounds = firearm(bot, k)
+    local nearest
+    for i = 1, #enemies do
+        local entry = k.enemies[enemies[i].id]
+        if entry and entry.policy == "fight"
+            and (not nearest or enemies[i].distance < nearest.distance) then
+            nearest = enemies[i]
+        end
+    end
+    local gun, rounds = firearm(bot, k, nearest)
     local near, fightable = {}, {}
     for i = 1, #enemies do
         local enemy = enemies[i]
@@ -397,6 +500,19 @@ local function choose(bot, s, k, enemies, player)
                     bot:log(string.format("run past slot=%d id=%#04x dist=%d: %s",
                         enemy.slot, enemy.id, enemy.distance, why))
                 end
+            elseif BotTactics.no_aim_ticks(s, enemy, BotTactics.pose(entry, gun and k.weapons[gun],
+                    enemy.status_flags, enemy.distance) ~= nil) >= DORMANT_TICKS then
+                -- No aim bit for a while: a monster the room has not woken
+                -- yet (a zombie still feeding shows only 0x01) or one out of
+                -- every aim's line. No shot can hit it, so do not stand
+                -- aiming. The wait lets a waking monster's first tick pass.
+                s.run_logs = s.run_logs or {}
+                local note = string.format("no aim bit (status=0x%02X)", enemy.status_flags)
+                if s.run_logs[enemy.slot] ~= note then
+                    s.run_logs[enemy.slot] = note
+                    bot:log(string.format("hold fire slot=%d id=%#04x dist=%d: %s",
+                        enemy.slot, enemy.id, enemy.distance, note))
+                end
             elseif enemy.visible
                 and (abs(angle_delta(enemy.bearing, player.angle)) <= arc
                     or enemy.distance <= 2 * (entry.reach or C.REACH)) then
@@ -431,6 +547,7 @@ function BotTactics.step(bot, scene, player)
         s.room = room
         s.cross_tick = nil
         s.run_logs = {}
+        s.no_aim = {}
         s.avoid_until = nil
     end
     if bot:tick() < (s.calm_until or 0) and not s.active then
@@ -497,6 +614,13 @@ function BotTactics.step(bot, scene, player)
         stop(bot, s, "out of ammunition", LOST_CALM)
         return false
     end
+    -- A target no aim can hit (not woken yet) is let go; choose skips it
+    -- until it shows an aim bit.
+    if BotTactics.no_aim_ticks(s, target, BotTactics.pose(entry, wrow, target.status_flags,
+            target.distance) ~= nil) >= DORMANT_TICKS then
+        stop(bot, s, string.format("no aim bit (status=0x%02X)", target.status_flags))
+        return false
+    end
     -- The cadence the engine shows: ticks from a fire press to the hold.
     if s.fired_tick and weapon.behavior == C.HOLD_BEHAVIOR and s.fired_left then
         bot:log(string.format("cadence %d ticks", bot:tick() - s.fired_tick))
@@ -519,7 +643,52 @@ function BotTactics.step(bot, scene, player)
             and entry.crawl_reach or nil,
         reach = entry and entry.reach,
         speed = entry and entry.speed,
+        back_speed = C.BACK_SPEED,
     })
+    -- A retreat walks backwards, still facing the target, to the distance
+    -- spacing asked for, then the bot shoots again: a new retreat waits for
+    -- a shot after the last one. It needs the engine's spacing spot (clear
+    -- of the room and the other monsters, a straight walk away) to lie
+    -- behind the bot; otherwise the bot holds and shoots.
+    if move == "retreat" and not s.retreat_want and not s.reload_started
+        and (not s.retreat_shots or s.shots > s.retreat_shots) then
+        s.retreat_want = want
+        s.retreat_ticks = 0
+        s.space = nil
+        bot:log(string.format("combat retreat to %d from slot=%d (dist=%d)",
+            want, target.slot, target.distance))
+    end
+    if s.retreat_want then
+        local ended = nil
+        local point = nil
+        if target.distance >= s.retreat_want - SPACE_TOLERANCE then
+            ended = "at range"
+        elseif s.retreat_ticks >= RETREAT_TICKS then
+            ended = "timeout"
+        elseif s.reload_started or (entry and entry.reach and target.distance < entry.reach) then
+            ended = "inside its reach"
+        else
+            point = bot:spacing_point(target.slot, s.retreat_want)
+            if not point or not BotTactics.behind(player.x, player.z, target.x, target.z,
+                    point.x, point.z) then
+                ended = "nothing clear behind"
+            end
+        end
+        if not ended then
+            s.retreat_ticks = s.retreat_ticks + 1
+            bot:face_to(target.x, target.z)
+            bot:set_input({ down = true })
+            s.aim_ticks = 0
+            return true
+        end
+        bot:log(string.format("combat retreat end: %s dist=%d ticks=%d",
+            ended, target.distance, s.retreat_ticks))
+        s.retreat_want = nil
+        s.retreat_shots = s.shots
+    end
+    if move == "retreat" then
+        move = "hold"
+    end
     if s.space_rest > 0 then
         s.space_rest = s.space_rest - 1
         move = "hold"

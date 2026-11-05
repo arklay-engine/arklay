@@ -7,13 +7,26 @@
 //!
 //! Format 2 adds room facts (never coordinates or walk paths) a generic
 //! planner reads: `<interact>` (an AOT slot and the flag that shows it is
-//! done), `<camera>` (a camera cut to enter, which starts a room scene),
+//! done; `done="clear"` when the flag clearing shows it, as bank 7's item
+//! bits do), `<camera>` (a camera cut to enter, which starts a room scene),
 //! `<use>` (an item to USE from the menu while standing in an AOT slot's
 //! use-item zone), `<answer>` (the choice to make at a yes/no prompt) and
-//! `<avoid>` (an AOT slot the planner should not use) and `<push>` (push a
+//! `<avoid>` (an AOT slot the planner should not use; with `bank`/`bit` and
+//! `while="set"|"clear"`, only while that flag is in that state; with
+//! `unless_held`, never while that item is held) and `<push>` (push a
 //! room object until it stands in an AOT slot's zone, or, with a compass
 //! `direction`, push it that way until it clears the zone). `<interact>`,
-//! `<camera>` and `<push>` share one ordered step list. A format-1 document may not use them.
+//! `<camera>` and `<push>` share one ordered step list. `<watch>` names a
+//! scene the bot lets play instead of skipping: while its `bank`/`bit` flag
+//! is clear and, with `after_bank`/`after_bit`, that flag is set. `<holds>`
+//! says what the room holds (an item and a label): a location fact the
+//! planner reads from every room (`bot:item_facts()`), so it can value a
+//! room it has not entered. A format-1 document may not use them.
+//!
+//! Every fact element takes an optional `character="jill"|"chris"`: the fact
+//! holds only for that character (player flag bit 0: 1 Jill, 0 Chris), as
+//! when the two characters' variants of a room number their AOT slots
+//! differently. [`load`] drops the other character's facts.
 //!
 //! The merged pack resolves the file next to the room's other entries, so a
 //! mod's `room/117/bot.xml` overlays the base pack's copy (or adds one when the
@@ -47,6 +60,25 @@ pub struct RoomMeta {
     pub uses: Vec<Use>,
     pub answers: Vec<Answer>,
     pub avoids: Vec<Avoid>,
+    pub watches: Vec<Watch>,
+    pub holds: Vec<Holds>,
+}
+
+/// `<holds>`: the room holds `item` (a location fact; it names no slot,
+/// order or route).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Holds {
+    pub item: u8,
+    pub label: Option<String>,
+}
+
+/// `<watch>`: a scene to let play rather than skip, while the done flag
+/// `bank`/`bit` is clear and, if given, the `after` flag is set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Watch {
+    pub flag: (u8, u8),
+    pub after: Option<(u8, u8)>,
+    pub label: Option<String>,
 }
 
 /// One step of the room's ordered sequence: `<interact>` (press the AOT
@@ -56,6 +88,10 @@ pub struct RoomMeta {
 pub struct Interact {
     pub target: Target,
     pub flag: Option<(u8, u8)>,
+    /// `<interact done="clear">`: the step is done once its flag is clear,
+    /// not set. Bank 7 runs this way: a set bit means the room's item is
+    /// still there, and taking it clears the bit.
+    pub done_clear: bool,
     pub label: Option<String>,
 }
 
@@ -130,11 +166,25 @@ pub struct Answer {
     pub label: Option<String>,
 }
 
-/// `<avoid>`: an AOT slot the planner should not use, and why.
+/// `<avoid>`: an AOT slot the planner should not use, and why. With a
+/// [`Gate`], only while the gate's flag is in its state (a slot blocked by
+/// a scene, like Barry standing at 105's fireplace until a flag is set).
+/// With `unless_held`, not while that item is held (116's shotgun rack is
+/// safe to lift while the broken shotgun to hang in its place is held).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Avoid {
     pub slot: u8,
     pub reason: String,
+    pub gate: Option<Gate>,
+    pub unless_held: Option<u8>,
+}
+
+/// The flag condition an `<avoid>` holds under: `bank`/`bit` and whether it
+/// applies while that flag is set (`while="set"`) or clear (`while="clear"`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gate {
+    pub flag: (u8, u8),
+    pub set: bool,
 }
 
 /// One named, ordered puzzle in a room.
@@ -162,6 +212,17 @@ pub struct PuzzleStep {
 /// An absent file is `Ok(None)`. A present file that is not UTF-8, not
 /// well-formed XML, or does not match the schema is an error naming the path.
 pub fn load(pack: &Pack, id: RoomId) -> Result<Option<RoomMeta>> {
+    load_for(pack, id, Some(jill(id.player_flag)))
+}
+
+/// Whether a player flag is Jill's (bit 0 set), the value a fact's
+/// `character` attribute is matched against.
+pub fn jill(player_flag: u8) -> bool {
+    player_flag & 1 == 1
+}
+
+/// [`load`] keeping only the facts for `jill` (`None`: every fact).
+fn load_for(pack: &Pack, id: RoomId, jill: Option<bool>) -> Result<Option<RoomMeta>> {
     let path = format!("{}/bot.xml", id.dir());
     if !pack.contains(&path) {
         return Ok(None);
@@ -170,7 +231,7 @@ pub fn load(pack: &Pack, id: RoomId) -> Result<Option<RoomMeta>> {
         .read(&path)
         .with_context(|| format!("cannot read {path}"))?;
     let text = std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
-    parse(text).map(Some).with_context(|| path)
+    parse_for(text, jill).map(Some).with_context(|| path)
 }
 
 /// One room's `<use>` fact, with the room it belongs to.
@@ -183,8 +244,42 @@ pub struct RoomUse {
 
 /// Every room's `<use>` facts, by room id then document order: the
 /// planner's index of where a held item has a use (`bot:use_facts()`).
-/// A file that does not parse is an error, as for [`load`].
-pub fn load_uses(pack: &Pack) -> Result<Vec<RoomUse>> {
+/// A file that does not parse is an error, as for [`load`]. With `jill`,
+/// only that character's facts (see [`parse_for`]).
+pub fn load_uses(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomUse>> {
+    let mut uses = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        uses.extend(meta.uses.into_iter().map(|fact| RoomUse {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(uses)
+}
+
+/// One room's `<holds>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomHolds {
+    /// The room id as `bot:room().id` spells it (`"102"`).
+    pub room: String,
+    pub fact: Holds,
+}
+
+/// Every room's `<holds>` facts, by room id then document order: the
+/// planner's index of where an item lies (`bot:item_facts()`).
+pub fn load_holds(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomHolds>> {
+    let mut holds = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        holds.extend(meta.holds.into_iter().map(|fact| RoomHolds {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(holds)
+}
+
+/// Every room's parsed `bot.xml`, by room id (upper case).
+fn load_all(pack: &Pack, jill: Option<bool>) -> Result<Vec<(String, RoomMeta)>> {
     let mut rooms: Vec<String> = pack
         .paths()
         .filter_map(|path| {
@@ -196,7 +291,7 @@ pub fn load_uses(pack: &Pack) -> Result<Vec<RoomUse>> {
         .collect();
     rooms.sort();
     rooms.dedup();
-    let mut uses = Vec::new();
+    let mut all = Vec::new();
     for room in rooms {
         let path = format!("room/{room}/bot.xml");
         let bytes = pack
@@ -204,18 +299,21 @@ pub fn load_uses(pack: &Pack) -> Result<Vec<RoomUse>> {
             .with_context(|| format!("cannot read {path}"))?;
         let text =
             std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
-        let meta = parse(text).with_context(|| path.clone())?;
-        let id = room.to_ascii_uppercase();
-        uses.extend(meta.uses.into_iter().map(|fact| RoomUse {
-            room: id.clone(),
-            fact,
-        }));
+        let meta = parse_for(text, jill).with_context(|| path.clone())?;
+        all.push((room.to_ascii_uppercase(), meta));
     }
-    Ok(uses)
+    Ok(all)
 }
 
-/// Parse one `bot.xml` document.
+/// Parse one `bot.xml` document, keeping every fact.
+#[cfg(test)]
 pub fn parse(text: &str) -> Result<RoomMeta> {
+    parse_for(text, None)
+}
+
+/// Parse one `bot.xml` document. With `jill`, a fact whose `character`
+/// names the other character is checked and then dropped.
+pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
     budget::check_len(text.len(), MAX_BYTES, "bot XML size")?;
     let document = Document::parse(text).map_err(|err| {
         anyhow::anyhow!(
@@ -253,11 +351,27 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
         let name = child.tag_name().name();
         let fact = matches!(
             name,
-            "interact" | "camera" | "push" | "use" | "answer" | "avoid"
+            "interact" | "camera" | "push" | "use" | "answer" | "avoid" | "watch" | "holds"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
         }
+        let character = match child.attribute("character") {
+            None => None,
+            Some("jill") => Some(true),
+            Some("chris") => Some(false),
+            Some(other) => bail!(
+                "{}: `character` value `{other}` is not `jill` or `chris`",
+                at(child)
+            ),
+        };
+        if character.is_some() && !fact {
+            bail!("{}: unknown attribute `character`", at(child));
+        }
+        let keep = match (character, jill) {
+            (Some(only), Some(jill)) => only == jill,
+            _ => true,
+        };
         match name {
             "puzzle" => {
                 let puzzle = parse_puzzle(child)?;
@@ -266,12 +380,46 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
                 }
                 meta.puzzles.push(puzzle);
             }
-            "interact" => meta.interacts.push(parse_interact(child)?),
-            "camera" => meta.interacts.push(parse_camera(child)?),
-            "push" => meta.interacts.push(parse_push(child)?),
-            "use" => meta.uses.push(parse_use(child)?),
-            "answer" => meta.answers.push(parse_answer(child)?),
-            "avoid" => meta.avoids.push(parse_avoid(child)?),
+            "interact" | "camera" | "push" => {
+                let fact = match name {
+                    "interact" => parse_interact(child)?,
+                    "camera" => parse_camera(child)?,
+                    _ => parse_push(child)?,
+                };
+                if keep {
+                    meta.interacts.push(fact);
+                }
+            }
+            "use" => {
+                let fact = parse_use(child)?;
+                if keep {
+                    meta.uses.push(fact);
+                }
+            }
+            "answer" => {
+                let fact = parse_answer(child)?;
+                if keep {
+                    meta.answers.push(fact);
+                }
+            }
+            "avoid" => {
+                let fact = parse_avoid(child)?;
+                if keep {
+                    meta.avoids.push(fact);
+                }
+            }
+            "watch" => {
+                let fact = parse_watch(child)?;
+                if keep {
+                    meta.watches.push(fact);
+                }
+            }
+            "holds" => {
+                let fact = parse_holds(child)?;
+                if keep {
+                    meta.holds.push(fact);
+                }
+            }
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
         }
     }
@@ -305,17 +453,26 @@ fn bank_attr(node: Node<'_, '_>) -> Result<u8> {
 }
 
 fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["slot", "bank", "bit", "label"])?;
+    check_attributes(node, &["slot", "bank", "bit", "done", "label", "character"])?;
     check_leaf(node)?;
+    let done_clear = match node.attribute("done") {
+        None | Some("set") => false,
+        Some("clear") => true,
+        Some(other) => bail!(
+            "{}: <interact> `done` value `{other}` is not `set` or `clear`",
+            at(node)
+        ),
+    };
     Ok(Interact {
         target: Target::Slot(attr(node, "slot")?),
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        done_clear,
         label: node.attribute("label").map(str::to_string),
     })
 }
 
 fn parse_use(node: Node<'_, '_>) -> Result<Use> {
-    check_attributes(node, &["slot", "item", "bank", "bit", "label"])?;
+    check_attributes(node, &["slot", "item", "bank", "bit", "label", "character"])?;
     check_leaf(node)?;
     let item: u8 = attr(node, "item")?;
     if item == 0 {
@@ -329,10 +486,31 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
     })
 }
 
+fn parse_holds(node: Node<'_, '_>) -> Result<Holds> {
+    check_attributes(node, &["item", "label", "character"])?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    if item == 0 {
+        bail!("{}: <holds> `item` must not be 0 (no item)", at(node));
+    }
+    Ok(Holds {
+        item,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
 fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
     check_attributes(
         node,
-        &["object", "slot", "direction", "bank", "bit", "label"],
+        &[
+            "object",
+            "slot",
+            "direction",
+            "bank",
+            "bit",
+            "label",
+            "character",
+        ],
     )?;
     check_leaf(node)?;
     let flag = match (node.attribute("bank"), node.attribute("bit")) {
@@ -361,12 +539,13 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             direction,
         },
         flag,
+        done_clear: false,
         label: node.attribute("label").map(str::to_string),
     })
 }
 
 fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["cut", "bank", "bit", "label"])?;
+    check_attributes(node, &["cut", "bank", "bit", "label", "character"])?;
     check_leaf(node)?;
     let flag = match (node.attribute("bank"), node.attribute("bit")) {
         (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
@@ -379,12 +558,16 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
     Ok(Interact {
         target: Target::Camera(attr(node, "cut")?),
         flag,
+        done_clear: false,
         label: node.attribute("label").map(str::to_string),
     })
 }
 
 fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
-    check_attributes(node, &["choice", "slot", "bank", "bit", "label"])?;
+    check_attributes(
+        node,
+        &["choice", "slot", "bank", "bit", "label", "character"],
+    )?;
     check_leaf(node)?;
     let yes = match attr_text(node, "choice")? {
         "yes" => true,
@@ -421,15 +604,92 @@ fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
 }
 
 fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
-    check_attributes(node, &["slot", "reason"])?;
+    check_attributes(
+        node,
+        &[
+            "slot",
+            "reason",
+            "bank",
+            "bit",
+            "while",
+            "unless_held",
+            "character",
+        ],
+    )?;
     check_leaf(node)?;
     let reason = attr_text(node, "reason")?.to_string();
     if reason.trim().is_empty() {
         bail!("{}: <avoid> reason must not be empty", at(node));
     }
+    let gate = match (
+        node.attribute("bank"),
+        node.attribute("bit"),
+        node.attribute("while"),
+    ) {
+        (None, None, None) => None,
+        (Some(_), Some(_), Some(state)) => Some(Gate {
+            flag: (bank_attr(node)?, attr(node, "bit")?),
+            set: match state {
+                "set" => true,
+                "clear" => false,
+                other => bail!(
+                    "{}: <avoid> `while` value `{other}` is not `set` or `clear`",
+                    at(node)
+                ),
+            },
+        }),
+        _ => bail!(
+            "{}: <avoid> needs all of `bank`, `bit` and `while`, or none",
+            at(node)
+        ),
+    };
+    let unless_held = match node.attribute("unless_held") {
+        None => None,
+        Some(_) => Some(attr(node, "unless_held")?),
+    };
     Ok(Avoid {
         slot: attr(node, "slot")?,
         reason,
+        gate,
+        unless_held,
+    })
+}
+
+fn parse_watch(node: Node<'_, '_>) -> Result<Watch> {
+    check_attributes(
+        node,
+        &[
+            "bank",
+            "bit",
+            "after_bank",
+            "after_bit",
+            "label",
+            "character",
+        ],
+    )?;
+    check_leaf(node)?;
+    let after = match (node.attribute("after_bank"), node.attribute("after_bit")) {
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, "after_bank")?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: after_bank {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Some((bank, attr(node, "after_bit")?))
+        }
+        (None, None) => None,
+        _ => bail!(
+            "{}: <watch> needs both `after_bank` and `after_bit`, or neither",
+            at(node)
+        ),
+    };
+    Ok(Watch {
+        flag: (bank_attr(node)?, attr(node, "bit")?),
+        after,
+        label: node.attribute("label").map(str::to_string),
     })
 }
 
@@ -616,6 +876,7 @@ mod tests {
         let interact = |slot, bank, bit, label: &str| Interact {
             target: Target::Slot(slot),
             flag: Some((bank, bit)),
+            done_clear: false,
             label: Some(label.to_string()),
         };
         let expected = vec![
@@ -678,6 +939,8 @@ mod tests {
             <answer choice="no" slot="6" label="do not drink"/>
             <answer choice="yes" bank="4" bit="0x10"/>
             <avoid slot="7" reason="the plant stuns the player"/>
+            <avoid slot="8" bank="1" bit="0xA1" while="clear" reason="Barry stands there"/>
+            <avoid slot="1" unless_held="0x1C" reason="the rack springs the trap"/>
         </bot>"#;
         let meta = parse(text).unwrap();
         assert_eq!(meta.format, 2);
@@ -688,21 +951,25 @@ mod tests {
                 Interact {
                     target: Target::Slot(4),
                     flag: Some((1, 0x22)),
+                    done_clear: false,
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
                     target: Target::Slot(5),
                     flag: Some((0, 3)),
+                    done_clear: false,
                     label: None,
                 },
                 Interact {
                     target: Target::Camera(3),
                     flag: None,
+                    done_clear: false,
                     label: Some("north hall".to_string()),
                 },
                 Interact {
                     target: Target::Camera(2),
                     flag: Some((1, 0x05)),
+                    done_clear: false,
                     label: None,
                 },
                 Interact {
@@ -712,6 +979,7 @@ mod tests {
                         direction: None,
                     },
                     flag: None,
+                    done_clear: false,
                     label: Some("armor onto the vent".to_string()),
                 },
                 Interact {
@@ -721,6 +989,7 @@ mod tests {
                         direction: Some(Direction::East),
                     },
                     flag: None,
+                    done_clear: false,
                     label: Some("shelf off the score".to_string()),
                 },
             ]
@@ -744,10 +1013,29 @@ mod tests {
         );
         assert_eq!(
             meta.avoids,
-            vec![Avoid {
-                slot: 7,
-                reason: "the plant stuns the player".to_string(),
-            }]
+            vec![
+                Avoid {
+                    slot: 7,
+                    reason: "the plant stuns the player".to_string(),
+                    gate: None,
+                    unless_held: None,
+                },
+                Avoid {
+                    slot: 8,
+                    reason: "Barry stands there".to_string(),
+                    gate: Some(Gate {
+                        flag: (1, 0xA1),
+                        set: false,
+                    }),
+                    unless_held: None,
+                },
+                Avoid {
+                    slot: 1,
+                    reason: "the rack springs the trap".to_string(),
+                    gate: None,
+                    unless_held: Some(0x1C),
+                },
+            ]
         );
     }
 
@@ -766,12 +1054,32 @@ mod tests {
                     direction: None,
                 },
                 flag: Some((0, 0x0B)),
+                done_clear: false,
                 label: Some("statue off the balcony".to_string()),
             }]
         );
         let half = r#"<bot format="2"><push object="0" slot="3" bank="0"/></bot>"#;
         let error = parse(half).unwrap_err().to_string();
         assert!(error.contains("both `bank` and `bit`"), "{error}");
+    }
+
+    #[test]
+    fn interact_done_may_be_the_flag_clearing() {
+        let text = r#"<bot format="2">
+            <interact slot="4" bank="7" bit="0x39" done="clear" label="battery"/>
+            <interact slot="5" bank="1" bit="2" done="set"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert!(meta.interacts[0].done_clear);
+        assert_eq!(meta.interacts[0].flag, Some((7, 0x39)));
+        assert!(!meta.interacts[1].done_clear);
+        let bad = r#"<bot format="2"><interact slot="4" bank="7" bit="1" done="maybe"/></bot>"#;
+        let error = parse(bad).unwrap_err().to_string();
+        assert!(error.contains("is not `set` or `clear`"), "{error}");
+        // Only <interact> takes it.
+        let camera = r#"<bot format="2"><camera cut="1" bank="1" bit="2" done="clear"/></bot>"#;
+        let error = parse(camera).unwrap_err().to_string();
+        assert!(error.contains("unknown attribute `done`"), "{error}");
     }
 
     #[test]
@@ -853,7 +1161,7 @@ mod tests {
     #[test]
     fn the_use_index_lists_every_rooms_use_facts_by_room() {
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let uses = load_uses(&pack).unwrap();
+        let uses = load_uses(&pack, Some(true)).unwrap();
         let rows: Vec<(&str, u8, u8)> = uses
             .iter()
             .map(|entry| (entry.room.as_str(), entry.fact.slot, entry.fact.item))
@@ -868,6 +1176,7 @@ mod tests {
                 ("10D", 2, 0x22),
                 ("10F", 13, 0x23),
                 ("10F", 6, 0x1F),
+                ("116", 5, 0x1C),
                 ("11A", 5, 0x2D),
                 ("11A", 3, 0x2E),
                 ("11A", 4, 0x2C),
@@ -875,6 +1184,133 @@ mod tests {
             ]
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));
+        // Chris's 105 numbers the fireplace's gold-emblem zone 8, not 11.
+        let chris = load_uses(&pack, Some(false)).unwrap();
+        let chris_105: Vec<(u8, u8, (u8, u8))> = chris
+            .iter()
+            .filter(|entry| entry.room == "105")
+            .map(|entry| (entry.fact.slot, entry.fact.item, entry.fact.flag))
+            .collect();
+        assert_eq!(chris_105, vec![(8, 0x20, (1, 0xA8))]);
+        assert_eq!(load_uses(&pack, None).unwrap().len(), uses.len() + 1);
+    }
+
+    #[test]
+    fn holds_names_an_item_a_room_holds() {
+        let meta = parse(
+            r#"<bot format="2"><holds item="0x1C" label="broken shotgun"/><holds item="3"/></bot>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            meta.holds,
+            vec![
+                Holds {
+                    item: 0x1C,
+                    label: Some("broken shotgun".to_string()),
+                },
+                Holds {
+                    item: 3,
+                    label: None,
+                },
+            ]
+        );
+        for bad in [
+            r#"<bot format="2"><holds item="0"/></bot>"#,
+            r#"<bot format="2"><holds item="5" slot="1"/></bot>"#,
+            r#"<bot format="2"><holds/></bot>"#,
+            r#"<bot><holds item="5"/></bot>"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad} was accepted");
+        }
+        // The index over the checked-in files: 102's broken shotgun.
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        let holds = load_holds(&pack, Some(true)).unwrap();
+        assert!(
+            holds
+                .iter()
+                .any(|entry| entry.room == "102" && entry.fact.item == 0x1C),
+            "{holds:?}"
+        );
+    }
+
+    #[test]
+    fn character_keeps_a_fact_for_one_character() {
+        let text = r#"<bot format="2">
+            <interact slot="3" bank="1" bit="0xA2" character="jill"/>
+            <use slot="11" item="0x20" bank="1" bit="0xAB" character="jill"/>
+            <use slot="8" item="0x20" bank="1" bit="0xA8" character="chris"/>
+            <avoid slot="7" reason="x" character="jill"/>
+            <answer choice="yes" slot="2" character="chris"/>
+            <camera cut="1"/>
+        </bot>"#;
+        let all = parse(text).unwrap();
+        assert_eq!((all.interacts.len(), all.uses.len()), (2, 2));
+        let jills = parse_for(text, Some(true)).unwrap();
+        assert_eq!(jills.interacts.len(), 2);
+        assert_eq!(
+            jills.uses.iter().map(|u| u.slot).collect::<Vec<_>>(),
+            vec![11]
+        );
+        assert_eq!((jills.avoids.len(), jills.answers.len()), (1, 0));
+        let chris = parse_for(text, Some(false)).unwrap();
+        // The unconditioned camera step holds for both.
+        assert_eq!(chris.interacts.len(), 1);
+        assert_eq!(
+            chris.uses.iter().map(|u| u.slot).collect::<Vec<_>>(),
+            vec![8]
+        );
+        assert_eq!((chris.avoids.len(), chris.answers.len()), (0, 1));
+        assert!(jill(1) && jill(3) && !jill(0) && !jill(2));
+
+        let error = |text: &str| parse(text).unwrap_err().to_string();
+        let bad = r#"<bot format="2"><avoid slot="1" reason="x" character="barry"/></bot>"#;
+        assert!(
+            error(bad).contains("`character` value `barry`"),
+            "{}",
+            error(bad)
+        );
+        let puzzle = r#"<bot><puzzle id="p" character="jill"/></bot>"#;
+        assert!(
+            error(puzzle).contains("unknown attribute `character`"),
+            "{}",
+            error(puzzle)
+        );
+        // A dropped fact is still checked.
+        let typo =
+            r#"<bot format="2"><use slot="1" item="0" bank="1" bit="1" character="chris"/></bot>"#;
+        assert!(parse_for(typo, Some(true)).is_err());
+    }
+
+    #[test]
+    fn watch_names_a_scene_to_let_play() {
+        let text = r#"<bot format="2">
+            <watch bank="1" bit="0xAD" after_bank="1" after_bit="0xAC" label="zombie"/>
+            <watch bank="0" bit="3"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.watches,
+            vec![
+                Watch {
+                    flag: (1, 0xAD),
+                    after: Some((1, 0xAC)),
+                    label: Some("zombie".to_string()),
+                },
+                Watch {
+                    flag: (0, 3),
+                    after: None,
+                    label: None,
+                },
+            ]
+        );
+        let error = |text: &str| parse(text).unwrap_err().to_string();
+        let half = r#"<bot format="2"><watch bank="1" bit="1" after_bank="1"/></bot>"#;
+        assert!(error(half).contains("both `after_bank` and `after_bit`"));
+        let v1 = r#"<bot><watch bank="1" bit="1"/></bot>"#;
+        assert!(error(v1).contains("needs <bot format=\"2\">"));
+        let bad_bank =
+            r#"<bot format="2"><watch bank="1" bit="1" after_bank="99" after_bit="1"/></bot>"#;
+        assert!(error(bad_bank).contains("after_bank 99 is out of range"));
     }
 
     #[test]
@@ -912,6 +1348,16 @@ mod tests {
         assert!(error(bad_bank).contains("bank 10 is out of range"));
         let bad_answer_bank = r#"<bot format="2"><answer choice="no" bank="12" bit="1"/></bot>"#;
         assert!(error(bad_answer_bank).contains("bank 12 is out of range"));
+        let half_gate = r#"<bot format="2"><avoid slot="1" bank="1" bit="2" reason="x"/></bot>"#;
+        assert!(error(half_gate).contains("all of `bank`, `bit` and `while`"));
+        let bad_while =
+            r#"<bot format="2"><avoid slot="1" bank="1" bit="2" while="on" reason="x"/></bot>"#;
+        assert!(error(bad_while).contains("`while` value `on` is not `set` or `clear`"));
+        let bad_gate_bank =
+            r#"<bot format="2"><avoid slot="1" bank="10" bit="2" while="set" reason="x"/></bot>"#;
+        assert!(error(bad_gate_bank).contains("bank 10 is out of range"));
+        let bad_held = r#"<bot format="2"><avoid slot="1" unless_held="300" reason="x"/></bot>"#;
+        assert!(error(bad_held).contains("`unless_held` value `300` is not a valid u8"));
         let bad_slot = r#"<bot format="2"><avoid slot="-1" reason="x"/></bot>"#;
         assert!(error(bad_slot).contains("`slot` value `-1` is not a valid u8"));
     }

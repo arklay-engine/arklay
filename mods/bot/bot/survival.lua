@@ -3,7 +3,7 @@
 --
 -- BotSurvival.heal(bot, player): below a health threshold that scales with
 -- bot:risk() (0.0 heals early, 1.0 heals late), use a held heal item through
--- the inventory menu. Never in a grab, a scene or a fight.
+-- the inventory menu. Never in a grab or a scene; a fight is paused for it.
 --
 -- BotSurvival.cure(bot, player): poisoned (the engine's health status,
 -- bot:player().poisoned / seriously_poisoned), use a held item the
@@ -24,8 +24,8 @@
 --   3. only with no save at all does the run stop, with
 --      "health critical with no heal item and no save while under attack".
 --
--- The fight itself lives in bot/tactics.lua (BotTactics); healing waits
--- while it runs.
+-- The fight itself lives in bot/tactics.lua (BotTactics); a heal under the
+-- threshold goes first even while it runs.
 --
 -- Heal items are chosen by their catalog kind from bot:menu(), never by
 -- item id. No room literals.
@@ -120,7 +120,10 @@ end
 function BotSurvival.heal(bot, player)
     local s = state()
     s.heal_cooldown = (s.heal_cooldown or 0) - 1
-    if player.grabbed or BotTactics.active() or s.heal_cooldown > 0 then
+    -- A fight does not hold off a heal: the menu pauses the game, and a
+    -- fight played on under the threshold ends at the low-health floor,
+    -- one grab lower (two bites).
+    if player.grabbed or s.heal_cooldown > 0 then
         return false
     end
     if player.health >= player.max_health * heal_fraction(bot) then

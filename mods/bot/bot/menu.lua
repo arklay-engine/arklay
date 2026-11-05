@@ -387,6 +387,18 @@ function BotMenu.step(bot)
     job.stage_ticks = job.stage_ticks + 1
     local tick = bot:tick()
 
+    -- A pick-up viewer (or item box) came up instead of the bare panel: a
+    -- zone press landed as the job pressed START. The job cannot drive that
+    -- screen; give the tick back to the scene handler and fail the job, so
+    -- the route asks again once the viewer is gone.
+    if menu.screen == "pickup" or menu.screen == "item_box" then
+        if job.ok == nil then
+            conclude(bot, job, false, "a " .. menu.screen .. " screen opened over the menu")
+        end
+        finish(bot, job)
+        return false
+    end
+
     if job.ticks > JOB_TIMEOUT and job.stage ~= "settle" then
         if job.ok == nil then
             conclude(bot, job, false, "job timed out; " .. describe(menu))

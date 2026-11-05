@@ -84,6 +84,16 @@ function BotScene.handle(bot, scene)
         return true
     end
     if scene.skippable then
+        -- A room's <watch> fact lets the scene play out: hands off the pad
+        -- until the scene ends (or a message asks for a press).
+        local watch = BotPuzzle and BotPuzzle.watching and BotPuzzle.watching(bot)
+        if watch then
+            if s.watch_logged ~= tick - 1 then
+                bot:log("scene: watching, not skipping (" .. tostring(watch.label) .. ")")
+            end
+            s.watch_logged = tick
+            return true
+        end
         if tick % 2 == 0 then
             bot:press_action()
         end

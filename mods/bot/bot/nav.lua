@@ -21,6 +21,10 @@ local WALK_TICKS = 15 * C.SECOND
 -- nearest few of them are tried.
 local UNPLANNED_WALK_TICKS = 5 * C.SECOND
 local UNPLANNED_TRIES = 6
+-- Leaning into a zone: hold forward, facing it, at most this long while the
+-- action probe falls short of it (the walk keeps a skin off furniture that
+-- the collision resolver lets the player press into).
+local LEAN_TICKS = C.SECOND
 
 function BotNav.abs(value)
     if value < 0 then
@@ -59,6 +63,66 @@ function BotNav.centre(zone)
     return zone.x + zone.width // 2, zone.z + zone.depth // 2
 end
 
+-- Whether the action probe point (rx, rz) is inside `zone`: both edges
+-- count, as in the engine's box test.
+function BotNav.reach_in(zone, rx, rz)
+    return rx >= zone.x and rx <= zone.x + zone.width
+        and rz >= zone.z and rz <= zone.z + zone.depth
+end
+
+local function clamp(value, lo, hi)
+    if value < lo then
+        return lo
+    end
+    if value > hi then
+        return hi
+    end
+    return value
+end
+
+-- Whether a step forward would carry the action probe (rx, rz) of a player
+-- at (px, pz) into `zone`: the probe is outside it, at most C.APPROACH
+-- short on each axis, and the zone point nearest the probe lies ahead of it
+-- along the facing (an overshoot lies behind and walking makes it worse).
+function BotNav.reach_short(zone, px, pz, rx, rz)
+    if BotNav.reach_in(zone, rx, rz) then
+        return false
+    end
+    local nx = clamp(rx, zone.x, zone.x + zone.width)
+    local nz = clamp(rz, zone.z, zone.z + zone.depth)
+    if BotNav.abs(nx - rx) > C.APPROACH or BotNav.abs(nz - rz) > C.APPROACH then
+        return false
+    end
+    return (nx - rx) * (rx - px) + (nz - rz) * (rz - pz) > 0
+end
+
+-- Whether a player at (px, pz) stands within a reach and an approach of
+-- `zone` on both axes together: close enough that facing it and leaning in
+-- may bring the action probe inside, though no approach point is walkable.
+function BotNav.within_reach(zone, px, pz)
+    local gx = BotNav.abs(px - clamp(px, zone.x, zone.x + zone.width))
+    local gz = BotNav.abs(pz - clamp(pz, zone.z, zone.z + zone.depth))
+    return gx + gz <= C.REACH + C.APPROACH
+end
+
+-- Offsets from a side's middle to stand at along it, for a side `span`
+-- long. A long side also gets a quarter of the way in from each end: a wall
+-- or a prop can block the middle of a side. A short side gets points a
+-- quarter approach in from each end instead, still in front of the zone: a
+-- narrow zone in a corner has its middle inside the wall's grown box, and
+-- only its open end can be stood at (102's item beside the east wall).
+function BotNav.side_offsets(span)
+    local q = span // 4
+    if q >= C.APPROACH // 2 then
+        return { 0, -q, q }
+    end
+    local e = span // 2 - C.APPROACH // 4
+    if e > 0 then
+        return { 0, -e, e }
+    end
+    return { 0 }
+end
+
 -- Candidate standing points around `zone`, sorted: the ones the engine's
 -- path planner reaches first, by path length, then the rest by straight
 -- distance (the 512-unit planning grid can miss a point next to a wall that
@@ -70,15 +134,7 @@ function BotNav.approach_points(bot, zone)
     -- entry point): the forward reach still lands inside the zone.
     local offsets = { C.APPROACH, C.APPROACH // 2, C.APPROACH + C.APPROACH // 2,
         -(C.APPROACH // 2) }
-    -- Along a long side, also try a quarter of the way in from each end: a
-    -- wall or a prop can block the middle of a side.
-    local function along(span)
-        local q = span // 4
-        if q >= C.APPROACH // 2 then
-            return { 0, -q, q }
-        end
-        return { 0 }
-    end
+    local along = BotNav.side_offsets
     local planned, rest = {}, {}
     local candidates = {}
     if zone.inside then
@@ -212,16 +268,20 @@ function BotNav.press_zone(bot, job)
         })
         if result.status == "arrived" then
             job.pressing = true
+            job.lean = 0
             job.ticks = 0
             job.side_presses = 0
             bot:log(string.format("%s: at approach %d/%d (%d,%d)",
                 job.label, job.index, #job.points, point[1], point[2]))
         elseif result.status == "unreachable"
-            and bot:distance(point[1], point[2]) <= C.APPROACH then
+            and (bot:distance(point[1], point[2]) <= C.APPROACH
+                or (not job.zone.inside and BotNav.within_reach(job.zone, here.x, here.z))) then
             -- The exact point is inside grown geometry, but the player is
-            -- already beside it: press from here (the probe reaches past the
-            -- point; a side that gets nothing times out as usual).
+            -- already beside it or within a reach of the zone: press from
+            -- here, leaning in if the probe falls short (a side that gets
+            -- nothing times out as usual).
             job.pressing = true
+            job.lean = 0
             job.ticks = 0
             job.side_presses = 0
             bot:log(string.format("%s: near approach %d/%d (%d,%d) from (%d,%d)",
@@ -247,6 +307,20 @@ function BotNav.press_zone(bot, job)
     end
     local facing = job.pattern ~= "hold" and bot:face_to(point[3], point[4])
         or { status = "hold" }
+    -- The probe falls short (the walk stopped a skin off the furniture in
+    -- front of the zone): hold forward into it, as a player would, before
+    -- pressing.
+    if facing.status == "facing" and not job.zone.inside
+        and (job.lean or 0) < LEAN_TICKS
+        and BotNav.reach_short(job.zone, here.x, here.z, here.reach_x, here.reach_z) then
+        if job.lean == 0 then
+            bot:log(string.format("%s: leaning in from (%d,%d), probe (%d,%d)", job.label,
+                here.x, here.z, here.reach_x, here.reach_z))
+        end
+        job.lean = (job.lean or 0) + 1
+        bot:set_input({ up = true })
+        facing = { status = "leaning" }
+    end
     if facing.status == "facing" and BotScene.action_ready(bot) then
         if job.pattern == "door" then
             if bot:tick() % 4 < 2 then

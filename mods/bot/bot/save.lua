@@ -22,11 +22,20 @@
 --     is no other choice (BotSave.no_choice): no save exists yet, or the
 --     latest save is no better (no more health, rounds or heals; recorded
 --     as save_health, save_rounds and save_heals when it is written);
+--   - no save while inventory work is due in this room (a combine, or a
+--     visit to an item box here: BotPlanner.inventory_due_here), so the
+--     save holds the inventory after it;
 --   - critical health (BotSurvival's floor, no heal item, hurt just now)
 --     saves at once, once the save-safety rule allows it;
 --   - otherwise at most one save per cooldown, 20 s at risk 0 to 120 s at
 --     risk 1 (BotSave.cooldown);
---   - risk up to BOLD_RISK saves at every typewriter it passes;
+--   - risk up to BOLD_RISK saves below LOW_HEALTH of max health, below
+--     RISKY_HEALTH when the room the pursued target's route enters next had
+--     a live monster (BotPlanner.risky_next), or when a milestone (a key item taken, a
+--     door unlocked, a <use> fact done: BotSave.milestones) is new since
+--     the last save and the last save is at least BotSave.milestone_gap
+--     old (2 minutes at risk 0, 3 at the default 0.25); with no save yet,
+--     at the first milestone;
 --   - a bolder bot saves only below LOW_HEALTH of max health, or in a risky
 --     room: a live monster in the room, or damage taken in the last
 --     RISKY_DAMAGE ticks.
@@ -47,6 +56,8 @@ local C = BotConst
 -- Risk above this saves only when health is low or the room is risky.
 local BOLD_RISK = 0.5
 local LOW_HEALTH = 0.5
+-- A cautious bot saves before a room with a live monster only under this.
+local RISKY_HEALTH = 0.75
 -- Damage this recent makes a room risky.
 local RISKY_DAMAGE = 30 * C.SECOND
 -- The walk to the typewriter and the press, and the save screen itself.
@@ -75,6 +86,12 @@ function BotSave.cooldown(risk)
     return (2 + 10 * risk) * 10 * C.SECOND
 end
 
+-- The least age of the last save (or the run start) for a milestone save:
+-- 2 minutes at risk 0, 6 at risk 1.
+function BotSave.milestone_gap(risk)
+    return (2 + 4 * risk) * 60 * C.SECOND
+end
+
 -- Whether a typewriter save is possible now: a ribbon is held, or the
 -- character needs none.
 function BotSave.can_save(saves)
@@ -96,6 +113,9 @@ function BotSave.wants(o)
     if o.dead_end and not o.no_choice then
         return false, "a reload would start in the same death: " .. tostring(o.dead_end)
     end
+    if o.inventory_due then
+        return false, "inventory work first: " .. tostring(o.inventory_due)
+    end
     if o.critical then
         return true, "critical health"
     end
@@ -103,7 +123,22 @@ function BotSave.wants(o)
         return false, "saved recently"
     end
     if o.risk <= BOLD_RISK then
-        return true, "a cautious bot saves at every typewriter"
+        if o.health < o.max_health * LOW_HEALTH then
+            return true, "low health"
+        end
+        if o.risky_next and o.health < o.max_health * RISKY_HEALTH then
+            return true, "a risky room is next: " .. tostring(o.risky_next)
+        end
+        if o.milestone and not o.since_save then
+            return true, "the first milestone of the run (no save yet)"
+        end
+        if o.milestone and o.since_save >= BotSave.milestone_gap(o.risk) then
+            return true, "a milestone since the last save"
+        end
+        if o.milestone then
+            return false, "a milestone, but the last save is recent"
+        end
+        return false, "no milestone since the last save"
     end
     if o.health < o.max_health * LOW_HEALTH then
         return true, "low health"
@@ -182,6 +217,37 @@ function BotSave.progress(world)
     return n
 end
 
+-- Milestones for the cautious save rule: key items taken, doors unlocked,
+-- <use> facts done and `steps` (the puzzle goals the planner finished).
+-- `kind(item)` is bot:item_kind, `done(fact)` reads a fact's done flag.
+function BotSave.milestones(world, kind, facts, done, steps)
+    local n = steps or 0
+    for _, r in ipairs(world.rooms or {}) do
+        for _, item in ipairs(r.items or {}) do
+            if item.taken and kind(item.item) == "key" then
+                n = n + 1
+            end
+        end
+        for _, door in ipairs(r.doors or {}) do
+            if door.unlocked then
+                n = n + 1
+            end
+        end
+    end
+    for _, fact in ipairs(facts or {}) do
+        if done(fact) then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+local function milestones(bot)
+    return BotSave.milestones(bot:world(), function(item) return (bot:item_kind(item)) end,
+        bot:use_facts(), function(fact) return bot:flag(fact.bank, fact.bit) end,
+        BotPlanner.steps_done())
+end
+
 -- The latest-save tracking: given bot:memory() and bot:saves(), the memory
 -- entries to remember for a save not yet recorded, or nil. `now` (optional)
 -- is the save-safety condition when it was written: {health, rounds, heals}.
@@ -199,6 +265,7 @@ function BotSave.track(memory, saves, progress, now)
         save_health = now and now.health,
         save_rounds = now and now.rounds,
         save_heals = now and now.heals,
+        save_milestones = now and now.milestones,
     }
 end
 
@@ -217,6 +284,7 @@ function BotSave.latest(memory)
         health = tonumber(memory.save_health or ""),
         rounds = tonumber(memory.save_rounds or ""),
         heals = tonumber(memory.save_heals or ""),
+        milestones = tonumber(memory.save_milestones or ""),
     }
 end
 
@@ -241,14 +309,16 @@ function BotSave.observe(bot)
     local s = state()
     if not s.start_progress then
         s.start_progress = BotSave.progress(bot:world())
+        s.start_milestones = milestones(bot)
     end
     local saves = bot:saves()
     local memory = bot:memory()
     if (saves.count or 0) <= (tonumber(memory.save_count or "0") or 0) then
         return
     end
-    local entries = BotSave.track(memory, saves, BotSave.progress(bot:world()),
-        condition(bot, bot:player()))
+    local now = condition(bot, bot:player())
+    now.milestones = milestones(bot)
+    local entries = BotSave.track(memory, saves, BotSave.progress(bot:world()), now)
     for key, value in pairs(entries) do
         bot:remember(key, value)
     end
@@ -284,6 +354,20 @@ local function risky(bot)
     return hurt ~= nil and bot:tick() - hurt <= RISKY_DAMAGE
 end
 
+-- The row a save screen shows `slot` on: the slot itself where the rows are
+-- the slots in order, else the row `view.rows` maps to it (nil for none).
+local function slot_row(view, slot)
+    if not view.rows then
+        return slot
+    end
+    for i, row_slot in ipairs(view.rows) do
+        if row_slot == slot then
+            return i - 1
+        end
+    end
+    return nil
+end
+
 -- Drive the typewriter's save screen: move to the target slot, confirm,
 -- accept the overwrite question, and wait for the write and the fade.
 local function drive_save_screen(bot, view)
@@ -303,17 +387,28 @@ local function drive_save_screen(bot, view)
     if tick % PRESS_GAP ~= 0 then
         return
     end
+    local row = slot_row(view, s.target)
+    if row == nil then
+        bot:log(string.format("save screen: no row writes slot %d; leaving", s.target))
+        s.screen_error = true
+        return
+    end
     if view.stage == "idle" then
-        if view.cursor < s.target then
+        if view.cursor < row then
             bot:set_input({ down_pressed = true })
-        elseif view.cursor > s.target then
+        elseif view.cursor > row then
             bot:set_input({ up_pressed = true })
         else
             bot:pulse_confirm()
         end
     elseif view.stage == "confirm_overwrite" then
-        -- The dialog opens on YES.
-        bot:pulse_confirm()
+        -- The classic dialog opens on YES; a screen that says otherwise
+        -- reports the highlighted answer.
+        if view.answer == "no" then
+            bot:set_input({ left_pressed = true })
+        else
+            bot:pulse_confirm()
+        end
     elseif view.stage == "error" then
         bot:log("save screen: the write failed; leaving")
         s.screen_error = true
@@ -380,7 +475,11 @@ function BotSave.step(bot, player, critical)
     local saves = bot:saves()
     local latest = BotSave.latest(bot:memory())
     local now = condition(bot, player)
+    local saved_milestones = latest and latest.milestones or s.start_milestones or 0
     local wants, why = BotSave.wants({
+        inventory_due = BotPlanner.inventory_due_here(bot),
+        risky_next = BotPlanner.risky_next(bot),
+        milestone = milestones(bot) > saved_milestones,
         dead_end = BotSave.dead_end(now),
         no_choice = BotSave.no_choice(latest, now),
         risk = bot:risk() or 0.25,
@@ -496,11 +595,12 @@ function BotSave.app_screen(bot)
         if screen.stage ~= "idle" then
             return
         end
-        if not screen.slots[saves.slot + 1] then
+        local row = slot_row(screen, saves.slot)
+        if not screen.slots[saves.slot + 1] or row == nil then
             bot:finish(string.format("dead: the save in slot %d is gone", saves.slot))
-        elseif screen.cursor < saves.slot then
+        elseif screen.cursor < row then
             bot:set_input({ down_pressed = true })
-        elseif screen.cursor > saves.slot then
+        elseif screen.cursor > row then
             bot:set_input({ up_pressed = true })
         else
             bot:pulse_confirm()

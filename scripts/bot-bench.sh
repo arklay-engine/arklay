@@ -4,6 +4,8 @@
 #
 #   ./scripts/bot-bench.sh                     run all, compare with baselines
 #   ./scripts/bot-bench.sh --only re1          run one scenario
+#   ./scripts/bot-bench.sh --only re1-full     run re1 to the mansion's end
+#                                              (room 300); not in the default set
 #   ./scripts/bot-bench.sh --record-baseline   save this run as the baseline
 #   BOT_BENCH_MAX_TICKS=60000 ./scripts/bot-bench.sh
 #
@@ -18,15 +20,24 @@ OUT=target/bot-bench
 BIN=target/test-release/arklay
 declare -A PACKS=(
   [re1]="$CACHE/re1.akpak"
+  [re1-full]="$CACHE/re1.akpak"
   [rando-123456]="$CACHE/games/biorand-123456.akpak"
   [rando-777777]="$CACHE/games/biorand-777777.akpak"
 )
 # The room whose entry ends a scenario's run (--bot-goal-room); none for the
 # randomised packs, which run until the planner finishes or the tick budget.
+# re1-full ends at the completion point: 300, the courtyard behind 11B, whose
+# door opens only once all four crests are in the 11A wall (lock 0x17).
 declare -A GOALS=(
   [re1]=20D
+  [re1-full]=300
+)
+# re1-full needs a longer budget than the 20D run.
+declare -A BUDGETS=(
+  [re1-full]=120000
 )
 LABELS=(re1 rando-123456 rando-777777)
+# re1-full is run on its own: --only re1-full.
 record=0
 only=""
 while [ $# -gt 0 ]; do
@@ -60,7 +71,7 @@ for label in "${LABELS[@]}"; do
   [ -n "${GOALS[$label]:-}" ] && goal=(--bot-goal-room "${GOALS[$label]}")
   start=$EPOCHREALTIME
   "$BIN" "$pack" --mod mods/bot --bot --bot-headless "${goal[@]}" \
-    --bot-max-ticks "$MAX_TICKS" --bot-stats "$json" >"$log" 2>&1 || \
+    --bot-max-ticks "${BOT_BENCH_MAX_TICKS:-${BUDGETS[$label]:-$MAX_TICKS}}" --bot-stats "$json" >"$log" 2>&1 || \
     echo "warning: $label exited non-zero (see $log)" >&2
   wall=$(python3 -I -c "import sys;print(float(sys.argv[1])-float(sys.argv[2]))" "$EPOCHREALTIME" "$start")
   if [ ! -s "$json" ]; then
@@ -112,6 +123,11 @@ for item in items:
         shutil.copyfile(path, base_path)
         print(f"  baseline recorded: {base_path}")
 PY
+
+for item in "${results[@]}"; do
+  echo "${item%%:*}:"
+  python3 -I scripts/bot-bench-summary.py "${item#*:}" || true
+done
 
 if [ ${#failed[@]} -gt 0 ]; then
   echo "FAIL: no stats for: ${failed[*]}" >&2

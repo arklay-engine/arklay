@@ -78,7 +78,9 @@ Priorities, highest first:
    item at once, a herb mix that also heals only below the heal threshold;
    with none held, log it once per poisoning. Then heal below
    `max_health * (0.6 - 0.35 * risk)` with the largest held stack whose menu
-   row `heals`, never in a grab, a fight or a scene. Then a save at a
+   row `heals`, never in a grab or a scene; a fight is paused for it (the
+   menu stops the game), so a fight under the threshold does not play on
+   to the fight's low-health floor. Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
@@ -102,7 +104,14 @@ Priorities, highest first:
    position, bit `0x40`, else facing it), waits until the probe arms the
    item's use flag (bank 9, selector `item - 0x1B`), uses the item from the
    menu and waits up to 20 seconds for the done flag. A menu failure or a
-   flag that never rises marks the fact.
+   flag that never rises marks the fact. For 3 seconds after a goal is done
+   here, no next goal is chosen while a `<use>` fact here has its item held
+   and its done flag clear, and its slot, not yet a live probe, overlaps
+   the zone that goal acted on (`BotPuzzle.use_pending`). The step's room
+   event may still be arming the probe: 116's rack turns AOT 5 into one
+   only after the lift that the shotgun pickup starts, and 10F's hollow
+   arms after the gold emblem pickup. The log line is `waiting for the use
+   probe`.
 4. Inventory room ([Inventory room](#inventory-room)): with every slot
    full and a known pickup needing one, a MOVE that empties a slot; then an
    item box here when a deposit or a withdrawal is due.
@@ -110,8 +119,13 @@ Priorities, highest first:
    planned path. A visible item here is taken before the bot moves on,
    unless every inventory slot is full and the item does not merge into a
    held stack (`inventory full`, retried once the inventory changes). A
-   zone at the room origin is a scripted handover and is marked
-   permanently. A zone that holds the centre of a zone of the same item
+   drawer (a `desk` action, `check_desk`) counts as the item it holds
+   (`item_slot`): the bot presses the drawer and answers Yes to the key and
+   take prompts until the item is held or the drawer reads empty (`full`
+   false). A drawer whose bank-2 lock bit (`lock_bank`, `lock_bit`) is
+   clear is marked `drawer locked` until the desk key or the lockpick is
+   held; an empty drawer is skipped. Any other item zone at the room
+   origin is a scripted handover and is marked permanently. A zone that holds the centre of a zone of the same item
    taken here may be a second AOT of that pickup: it gets one approach, and
    a press there with no pickup marks it permanently.
 5. A passage check, when a door or item of this room has no planned
@@ -128,11 +142,16 @@ Priorities, highest first:
    door's approach, plus 20 reach per door step of the route, plus, for a
    remote goal, its path length in its own room from where the bot last
    stood there (`REACH^3` when the planner found none), minus 15 reach for
-   an unvisited room, 10 reach for a remote item, 60 more for the
-   ammunition the gun needs ([Ammunition](#ammunition)) or for a seen key
-   item that a remembered locked door needs, 60 for a held
-   item's `<use>` room, and 200 reach for a door into the goal room or 6
-   for one into its stage; while sourcing ammunition, 60 more for a room not
+   an unvisited room, 10 reach for a remote item, 70 more for a seen key
+   item that a remembered locked door needs or else 60 more for the
+   ammunition the gun needs ([Ammunition](#ammunition)), so a needed key
+   comes before ammunition and herbs (`BotPlanner.item_bonus`), 60 for a held
+   item's `<use>` room, the same item and `<use>` bonuses (70 reach) for a
+   door into a room not yet entered whose `<holds>` fact names an item the
+   bot lacks and a pending `<use>` needs, or the remote item bonus for a
+   needed key or ammunition there (`BotPlanner.holds_bonus`, logged as
+   `(holds 0xNN for ...)`), and
+   200 reach for a door into the goal room or 6 for one into its stage; while sourcing ammunition, 60 more for a room not
    yet entered and one door step per monster seen on the route
    ([Ammunition](#ammunition)). The lowest cost wins and a remote winner becomes
    the pursued target; the pick is logged as `way out: <why>, cost N`. An
@@ -182,12 +201,25 @@ values:
 
 A failed goal is marked with its reason. It is retried when the inventory
 changes, and an approach failure is also retried on the next entry into the
-room (the bot may stand in another part of it). After 3 attempts the mark
-holds.
+room (the bot may stand in another part of it). Remote planning never
+heads back to an item whose approach failed, even after the inventory
+changed. An `<avoid>` item is marked as avoided before the free-slot check,
+so a full inventory does not turn it into a goal that lifts on the next
+inventory change. After 3 attempts the mark holds.
+
+An item goal that costs a quarter of the maximum health while the planner
+is trying it (`HURT_SHARE`) is dropped and marked `hurt while trying`:
+like an approach failure, remote planning does not head back for it, and
+the room's other pickups wait until the inventory changes, so the bot does
+not walk back into what hurt it.
 
 Approach points sit outside each side of a zone, at a quarter, a half and
 three quarters of the action reach, and a quarter reach inside the edge. On
-a long side there are also points a quarter of the way in from each end.
+a long side there are also points a quarter of the way in from each end. On
+a short side (`BotNav.side_offsets`, under two approaches long) they sit a
+quarter approach in from each end. A narrow zone beside a wall has its
+middle inside the wall's grown box, so only its open end can be stood at:
+102's broken shotgun (x 6500..7000) is taken from x 6575.
 Points the path planner reaches come first, by path length; then up to 6
 unplanned points by distance, each with a short walk budget.
 
@@ -202,7 +234,9 @@ can leave the player there) steps to the nearest free node first.
 
 `--bot-goal-room ROOM` (three hex digits, needs `--bot`) is read as
 `bot:goal_room()`. `scripts/bot-bench.sh` passes `20D` for the `re1`
-scenario.
+scenario and `300` for `re1-full` (run it with `--only re1-full`): the
+courtyard behind 11B, whose door opens once all four crests are in the 11A
+wall (lock `0x17`), so entering 300 is the mansion's completion.
 
 ### Combat
 
@@ -225,6 +259,13 @@ catalog's heal effects.
   the weapon's headshot distance, with `up` allowed, the bot aims up; a
   monster showing only `0x20` (downed or crawling) takes the `downed` pose;
   otherwise `stand`, then whichever bit is set.
+- **Gun** (`BotTactics.pick_gun`). The plain pick is the equipped firearm
+  with rounds, else the held one with the most (clip plus the ammunition
+  held for it). Against the nearest monster the knowledge file fights, it
+  stands unless its rounds fall short of the kill (`<keep>` damage against
+  the monster's health) while another gun's cover it. The gun that covers
+  the kill in the fewest shots is then equipped, so the shotgun's shells go
+  to a fight the handgun cannot finish.
 - **Fight or run** (`BotTactics.decide`). Run when the monster has no entry,
   its policy is not `fight`, or there is no gun. A monster closing in
   (within twice its reach) that cannot be outrun is fought with any rounds
@@ -301,7 +342,11 @@ presses action, answers the save prompt Yes, waits through the fade
 (`scene.typewriter`), then drives the save screen (`scene.save_screen`):
 d-pad to the first empty slot (or, with all eight full, the slots in turn),
 confirm, accept the overwrite question, and wait for the write and the fade
-back. `bot:saves()` reports only what the engine's save screen wrote.
+back. `bot:saves()` reports only what the engine's save screen wrote. The
+modern save/load screen (the Save Screen option) publishes the same table:
+its rows are listed newest first, so it adds `rows`, the slot each row
+writes or loads, and its question opens on No, so it adds `answer`. The
+bot's presses reach it as the keys a player's would.
 
 The ink ribbon: the save prompt needs one only when the character's ink
 ribbon option is on (`bot:saves().needs_ribbon`), and then the save spends
@@ -322,16 +367,27 @@ The decision (`BotSave.wants`), scaled by `bot:risk()`:
   made only when there is no other choice (`BotSave.no_choice`): no save
   exists yet, or the latest save is no better in health, rounds and heals
   (recorded with each save as `save_health`, `save_rounds`, `save_heals`);
+- no save while inventory work is due in this room
+  (`BotPlanner.inventory_due_here`: a combine, or a visit to an item box
+  here), so the box or the mix comes first and the save holds its result
+  (`inventory work first: ...`);
 - critical health saves at once (it skips only the cooldown), when save
   safety allows it;
 - otherwise at most one save per `(20 + 100 * risk)` seconds;
-- risk up to `0.5` saves at every typewriter it passes;
+- risk up to `0.5` saves only for a reason: below half of max health (`low
+  health`); below three quarters when the room the pursued target's route
+  enters next had a live monster (`a risky room is next: ROOM`); or when a
+  milestone is new since the last save (a key item taken, a door unlocked,
+  a `<use>` fact done, or a puzzle goal the planner finished:
+  `BotSave.milestones`) and the last save is at least
+  `(2 + 4 * risk)` minutes old (`a milestone since the last save`), or at
+  once while no save exists (`the first milestone of the run`);
 - a bolder bot saves only below half of max health, or in a risky room: a
   live monster in the room, or damage taken in the last 30 seconds.
 
 The latest save is kept in bot memory (`save_count`, `save_slot`,
 `save_room`, `save_tick`, `save_progress`, `save_health`, `save_rounds`,
-`save_heals`). The engine also keeps a copy of
+`save_heals`, `save_milestones`). The engine also keeps a copy of
 the bot's memory and world model from the tick each save is written.
 
 After a death, with a save, the bot confirms through the DIED screen. The
@@ -385,7 +441,21 @@ pick-up viewer or item box), `open_ticks`, `cursor_moves`, `option_moves`,
 `item_uses`, `heal_uses`, `equips`, `combines` (a MOVE that changed the
 stacks), `box_deposits` and `box_withdrawals` (box slots that filled or
 emptied; a swap counts one of each). Box swaps and combines are not item
-uses.
+uses. A menu job whose START landed as a zone press opened a pick-up viewer
+or the item box instead fails at once and gives the pad back to the scene
+handler, rather than waiting out its timeout over that screen.
+
+The stats JSON's `activity` block puts every tick in one bucket, the first
+that applies: `saving` (typewriter or save screen), `item_box`,
+`pickup_viewer`, `examine`, `menu` (the bare inventory panel), `doors` (a
+room transition), `scenes` (films, skippable scenes, messages), `pickup`,
+`combat` (aim or fire held, or grabbed), `walking` (up or down held),
+`turning` (left or right only), `uncontrolled` and `waiting` (in control,
+no input). `room_activity` has the same buckets per room.
+`scripts/bot-bench.sh` prints them with `scripts/bot-bench-summary.py`,
+which also lists the time per goal kind, the saves with their reasons, the
+box visits, the inventory-full marks and the quick bounces (A to B and
+back with under 300 or 900 ticks in B).
 
 ### Inventory room
 
@@ -396,31 +466,49 @@ drives the box screen with pad input only.
 - Keep (never deposit): keys, an item an open `<use>` fact needs, the
   equipped weapon, a firearm the knowledge file lists, the ammunition of
   those guns (the reserve), and heal items. Everything else may go in.
-- Deposit only when every slot is used and a known frontier pickup needs a
+- Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
-  up on it for a reason other than the full inventory).
-- Look in the box once while sourcing ammunition when no box was ever
-  opened and a slot is free ([Ammunition](#ammunition)).
+  up on it for a reason other than the full inventory). At a box in this
+  room, also when no more than one slot (`BotInventory.RESERVE`) is free,
+  counted after the visit's withdrawals, and more known pickups than that
+  need one (`deposit: keep a slot free for pickups`); a trip to a remote
+  box is made only for the full inventory.
+- Look in the box when no box was ever opened and a slot is free: at a box
+  in this room on the way (`look in the box on the way: never opened`), or
+  from anywhere while sourcing ammunition ([Ammunition](#ammunition)).
 - Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
   written whenever the box screen is up) when a `<use>` fact needs it, a
   remembered locked door needs it, it is the equipped gun's ammunition
   under the reserve floor, or it is a heal and none is held (one stack).
-  At most the free slots, after the deposits.
+  At most the free slots, after the deposits. At a box in this room, also
+  every stack of the equipped gun's ammunition while its rounds are under
+  twice the reserve floor, as long as one slot stays free (the top-up; no
+  trip is made for it).
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
   ammo rank 2), never an item a `<use>` fact needs. Mixing herbs keeps the
   healing; a full herb stack stays reachable.
 
-A box visit is a planner goal: press the live `item_box` zone here, or
-route to a remembered one (`BOX_BONUS`). The screen driver waits out the
+A box visit is a planner goal: press the nearest live `item_box` zone here
+(by planned approach length, `BotPlanner.nearest`), or route to a
+remembered one (`BOX_BONUS`). A remote box is priced by walking distance
+over the bot's mental map (`BotPlanner.pick_remote_box`, a shortest-path
+tree from `BotPlanner.map_tree`): the path length from here to each exit,
+then inside each room from the point the bot arrived at through that door
+(`bot:world()` keeps each door's and box's zone centre) to the next door
+or the box, plus `MAP_DOOR` (15 reach) per door load. A leg inside a room
+is the path length the bot measured from that arrival point when it last
+chose a goal near it, else the straight line. The price comes from the
+map, never from which box the bot chose before. The screen driver waits out the
 lid, then per operation: in browse mode d-pad the inventory cursor to the
 slot and confirm; in armed mode page the box cursor with up/down to the
 target slot (nearest way round) and confirm (the engine swaps). A
 deposit is done when the item's count drops, a withdrawal when it rises.
 Then cancel closes the box and the menu, and the visit ends once the
 player has been controllable for a second. A visit that moved nothing is
-marked and not chosen again until the inventory changes.
+marked and not chosen again until the inventory changes, except a first
+look (the contents are now remembered).
 
 
 ## API
@@ -433,7 +521,7 @@ has `tick`, `risk`, `saves`, `memory`, `log`, `finish`, `set_input`,
 `pulse_confirm` and `screen()`: `{kind = "title", stage, selection,
 any_saves}` (`stage` `press`/`menu`/`fade_out`/`attract_fade`, `selection`
 1 NEW GAME or 2 LOAD GAME) or `{kind = "load", readable, mode, stage,
-cursor, exit_row, slots}`. A route without it finishes the run when it
+cursor, exit_row, slots, rows, answer}`. A route without it finishes the run when it
 leaves the game session.
 
 | Call | Result |
@@ -446,8 +534,8 @@ leaves the game session.
 | `bot:saves()` | The run's saves, read-only: `{count, slot, room, tick, reloads, deaths, deaths_since_save, needs_ribbon, ribbons}`. `slot` (0-based), `room` and `tick` describe the latest save the engine's save screen wrote and are `nil` before the first. `needs_ribbon` is the character's ink ribbon rule and `ribbons` the held count. |
 | `bot:goal_room()` | The `--bot-goal-room` id (uppercase, such as `"20D"`), or `nil`. |
 | `bot:cameras()` | The current room's camera switch zones: `{from, to, x, z}` rows, `x`/`z` the zone's corner mean. Each cut group's header record is skipped. |
-| `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags, grabbed, poisoned, seriously_poisoned}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `poisoned` and `seriously_poisoned` are the engine's health-status poison bits (`0x02`, cured by a blue herb; `0x20`, cured by the serum). `grabbed` is the entity's grab zone flag. |
-| `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead, typewriter, save_screen}`. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. `typewriter` is the fade into or out of the typewriter's save screen; `save_screen` (only while it is up) is `{mode, stage, cursor, exit_row, slots}`: `mode` `"save"`, `stage` `idle`/`confirm_overwrite`/`save_anim`/`error`/`fade_out`, `cursor` the highlighted row (0-based; rows `0..7` are the slots), `slots` whether each slot holds a save. |
+| `bot:player()` | `{x, y, z, angle, reach_x, reach_z, health, max_health, state, being_attacked, equipped, collision_flags, grabbed, poisoned, seriously_poisoned}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `poisoned` and `seriously_poisoned` are the engine's health-status poison bits (`0x02`, cured by a blue herb; `0x20`, cured by the serum). `grabbed` is the entity's grab zone flag. `reach_x`/`reach_z` is the forward action probe (`probe_actions`, a reach ahead of the player): a zone press fires only when it is inside the zone, and `press_zone` holds forward into furniture while it falls short. |
+| `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead, typewriter, save_screen}`. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. `typewriter` is the fade into or out of the typewriter's save screen; `save_screen` (only while it is up) is `{mode, stage, cursor, exit_row, slots, rows, answer}`: `mode` `"save"`, `stage` `idle`/`confirm_overwrite`/`save_anim`/`error`/`fade_out`, `cursor` the highlighted row (0-based; rows `0..7` are the slots), `slots` whether each slot holds a save. The modern screen also sets `rows`, the 0-based slot each row writes or loads (`-1` for none; save mode's first row is the new save, writing the first free slot), and `answer`, the open question's highlighted answer (`"yes"`/`"no"`; left selects Yes); `cursor` is `-1` while no row is highlighted. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. An item AOT whose flags lack the player bit (`0x01`) cannot be picked up yet (a pickup a room event arms later): its `kind` is `item_dormant` and `item`/`quantity` are `nil`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
 | `bot:objects()` | The room's active objects (blocks, statues, shelves): `{slot, x, z, half_x, half_z, pushable}`, `x`/`z` the live centre and `half_*` the collision half-extents. `pushable` is solid and without the not-pushable flag. The walk and path planner treat every solid object as an obstacle, a box 128 units inside the object on each side, rebuilt when an object moves. |
@@ -462,6 +550,7 @@ leaves the game session.
 | `bot:item_kind(item)` | The item catalog's kind (`"weapon"`, `"ammo"`, `"key"`, `"heal"`, ...) and whether a pickup merges into a held stack (two values). |
 | `bot:ammo_for(weapon)` | The ammunition item `weapon` fires, or `nil` when the catalog does not list it as a weapon with an ammunition item. |
 | `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack. |
+| `bot:item_facts()` | Every room's `<holds>` facts, the same way: `{room, item, label}`. |
 | `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind, heals}` with the menu's 0-based `slot`; `heals` is the catalog's word that a USE restores health (false for a blue herb, the serum or a red herb alone). `move_cursor` is the MOVE cursor byte while `mode == "move"`. While the item box screen is up, `box = {mode, box_cursor, cursor, sliding, items}`: `mode` is `browse` or `armed`, `box_cursor` the box slot (0..47), `cursor` the inventory cursor byte, `sliding` true while a page slides (no input is read), and `items` the box rows `{slot, item, quantity, kind}`. |
 | `bot:combine_result(slot, target)` | Read-only: what a MOVE of menu slot `slot` onto `target` would do, from the engine's recipe: `{result, cursor_item, cursor_quantity, target_item, target_quantity, frees}`. `result` is `applied`, `herb` (a herb mix; the menu asks first), `no_recipe`, `herb_no_recipe` or `drug_store`; `frees` is true when the combine empties a slot. Nothing is changed. |
 | `bot:memory()` | String map set by `remember`. |
@@ -519,7 +608,9 @@ room id, then slot, so iteration is deterministic.
   lock) is no longer `locked`, and one that gains the bit while its flag is
   clear is `locked` again. It is `traversed` when the room changes to its target
   right after an action press on it, or when it is the old room's only door
-  to the new room. `x`/`z` are the zone centre.
+  to the new room. On arrival, the new room's door back to the old room (the
+  one nearest the player, if several) is `traversed` too: the bot came through
+  its far side, so it is not a door to explore. `x`/`z` are the zone centre.
 - A *press* is an action edge while the room is controllable, credited to
   the first action-key entry whose zone holds the reach point (as the engine
   picks it). `message` is the first message opened and `flags` the flags
@@ -566,12 +657,20 @@ walk paths, have no children, and are an error in a format-1 file:
 
 | Element | Attributes | Meaning |
 | --- | --- | --- |
-| `<interact>` | `slot`, `bank`, `bit`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. |
+| `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
-| `<avoid>` | `slot`, `reason` | The planner should not use AOT `slot`; `reason` is a non-empty note. |
+| `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
 | `<push>` | `object`, `slot`, optional `direction`, optional `bank` + `bit`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, then 400 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter. Such a step is also done once the zone is gone or the item it names was taken. With `bank` and `bit` (both or neither) the step is also done once that flag is set: a zone event that takes the object away (a statue that falls). A push the bot stops for a fight or a heal walks back behind the object before it measures a stall. |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done. |
+| `<watch>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Let a skippable scene play instead of skipping it while flag `bank`/`bit` is clear and, if given, the `after` flag is set: a scene a skip breaks. |
+| `<holds>` | `item` (non-zero), optional `label` | The room holds `item`: what is where, never when to go. Read by `bot:item_facts()` for every room. |
+
+Every fact element also takes `character="jill"` or `character="chris"`: the
+fact then holds for that character only (player flag bit 0: 1 Jill, 0 Chris).
+The engine drops the other character's facts before `bot:room_meta()` and
+`bot:use_facts()` see them, so a room whose two variants number their AOT
+slots differently lists each character's facts side by side.
 
 ```xml
 <bot format="2">
@@ -582,12 +681,13 @@ walk paths, have no children, and are an error in a format-1 file:
 </bot>
 ```
 
-`bot:room_meta()` always has `interacts`, `uses`, `answers` and `avoids`
-arrays (empty for a format-1 file): `{kind = "press", slot, bank, bit,
+`bot:room_meta()` always has `interacts`, `uses`, `answers`, `avoids` and
+`watches` arrays (empty for a format-1 file): `{kind = "press", slot, bank, bit,
 label}`, `{kind = "camera", cut, bank, bit, label}` or `{kind = "push",
 object, slot, label}` in document order,
 `{slot, item, bank, bit, label}` in document order, `{choice, slot, bank,
-bit, label}` (absent fields are `nil`) and `{slot, reason}`.
+bit, label}` (absent fields are `nil`), `{slot, reason, bank, bit,
+while, unless_held}` and `{bank, bit, after_bank, after_bit, label}`.
 
 `bot:room_meta()` returns a fresh Lua table; it is a read-only view in the
 sense that it cannot write game state:
@@ -611,16 +711,19 @@ files. The checked-in facts:
 
 | Room | Facts |
 | --- | --- |
-| 105 | `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. |
-| 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. |
+| 105 | Jill: `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. Chris: the same at slot 8; done flag `0xA8`. `<watch>` Barry shooting the zombie (common `0xAC` set, `0xAD` clear). The fireplace hollow's message (Jill slot 13, Chris slot 10) is avoided. |
+| 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. `<avoid slot="4" bank="1" bit="0xA9" while="clear">`: the plant fountains stand across the way to the armor key until the herbicide. |
+| 102 | `<holds item="0x1C">`: the broken shotgun lies here (the room's door from 101 takes the armor key). |
+| 210 | `<interact slot="4" bank="7" bit="0x81" done="clear">`: the moon crest has no player bit; the nest event (AOT 4) hands it over. |
 | 202 | `<push object="0" slot="3" bank="0" bit="0x0B">`: the statue along the balcony until it falls; the fall sets scenario `0x0B` and puts the blue jewel (`0x21`) in 105. |
 | 10D | `<use>` the blue jewel (`0x21`) at slot 2, the tiger's eye; done flag bank 0 `0x0F` (the wind crest pickup arms). `<use>` the red jewel (`0x22`) at slot 2; done flag bank 0 `0x0E` (the magnum). |
 | 10F | `<push object="1" slot="5" direction="east">`: the bookshelf off the music score's pickup. `<use>` the music score (`0x23`) at slot 13, the piano; done flag bank 1 `0xA5` (the bar counter moves off the gold emblem). `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
 | 11A | Four `<use>` crests at slots 5, 3, 4 and 6 (star `0x2D`, sun `0x2E`, moon `0x2C`, wind `0x29`); done flags bank 0 `0x6A`, `0x69`, `0x6B`, `0x6C`. |
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
-| 116 | `<avoid slot="1">`: lifting the shotgun without the broken one springs the 115 ceiling trap. |
+| 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
+| 219 | `<interact slot="4" bank="7" bit="0x39" done="clear">`: the shelf event hands over the battery, whose own pickup zone sits at the room origin. |
 
 `set_input` keys are literal: `up down left right` (player directions plus the
 UI edge/held flag), `held_up` etc. (UI held only), `up_pressed` etc. (UI edge

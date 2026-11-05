@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 116 shotgun rack. Lifting the shotgun without hanging the broken one in
-     its place springs the ceiling trap next door in 115: the door to 109
-     locks and the ceiling comes down. The planner has no swap skill, so it
-     leaves the rack alone. -->
+<!-- 116 shotgun rack. Item AOT 1 is the shotgun on the rack (item flag
+     0x00, set while it hangs there). Lifting it plays the rack's lift and
+     turns AOT 5 into an SCE_USEITEM probe that arms the broken shotgun's
+     (0x1C) use flag (bank 9, selector 1) while the player stands in it.
+     USE the broken shotgun there: room main sets item flag 0x01 (the broken
+     one hangs on the rack), clears common 0x20 and gives the door back.
+     With both item flags clear (the rack left empty), entering 115 springs
+     its ceiling trap. So the rack is lifted only while the broken shotgun is
+     held, and the swap follows at once. -->
 <bot format="2">
-  <avoid slot="1" reason="the shotgun rack springs the 115 ceiling trap"/>
+  <use slot="5" item="0x1C" bank="7" bit="0x01" label="broken shotgun on the rack"/>
+  <avoid slot="1" unless_held="0x1C"
+         reason="the shotgun rack springs the 115 ceiling trap"/>
 </bot>

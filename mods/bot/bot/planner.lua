@@ -9,12 +9,17 @@
 --      clear and the use-item probe live): stand where the probe arms the
 --      item, USE it through the menu, wait for the done flag;
 --      then inventory room (BotInventory): with the inventory at its limit
---      and a known pickup needing a slot, a MOVE that empties one; then an
---      item box here when a deposit or a withdrawal is due;
+--      and a known pickup needing a slot, a MOVE that empties one; then the
+--      nearest item box here (BotPlanner.nearest) when a deposit, the slot
+--      reserve, a first look or a withdrawal is due (BotInventory.box_reason
+--      with `here`);
 --   2. ground items in this room, keys first, then the nearest approach:
 --      a visible item here is taken before the bot moves on, unless the
 --      inventory is full and it merges into no held stack. A second zone
---      of an item just taken here gets one approach;
+--      of an item just taken here gets one approach. A drawer (a desk zone)
+--      counts as its item: pressed and answered Yes until the item is
+--      taken; a drawer whose lock bit is clear waits, marked, until the
+--      desk key or the lockpick is held, and an empty one is skipped;
 --   3. a passage check when a goal of this room has no reachable approach
 --      from here: a `door_check` stair zone, or an action-key event zone no
 --      fact names (a script may start the climb from an event), each once
@@ -32,9 +37,11 @@
 --               the bot stood there last (UNPLANNED_COST if none was found)
 --             - UNVISITED_BONUS for a door into a room not yet entered
 --             - ITEM_BONUS for a route to a remote frontier item
---             - AMMO_BONUS when that item is the ammunition the equipped
---               gun needs (BotSurvival.ammo_need), or KEY_BONUS when it
---               is a key a remembered locked door needs
+--             - KEY_BONUS when that item is a key a remembered locked
+--               door needs, or AMMO_BONUS when it is the ammunition the
+--               equipped gun needs (BotSurvival.ammo_need); KEY_BONUS is
+--               the larger, so a needed key comes before ammunition and
+--               herbs (BotPlanner.item_bonus)
 --             - SOURCE_BONUS for a door into a room not yet entered, and
 --             + MONSTER_COST per live monster last seen in each room the
 --               route enters, both only while sourcing ammunition
@@ -42,8 +49,14 @@
 --               the planner can reach, a pickup it has not given up on or
 --               the remembered box)
 --             - USE_BONUS for a route to a held item's <use> room
---             - BOX_BONUS for a route to a remembered item box room when a
---               box visit is due (BotInventory.box_reason)
+--             - BOX_BONUS for a route to a remembered item box when a box
+--               visit is due (BotInventory.box_reason); a remote box's whole
+--               cost is its walking distance over the mental map instead
+--               (BotPlanner.pick_remote_box: exit path, then each room's leg
+--               from the arrival point, MAP_DOOR per door load)
+--             - for a door into a room not yet entered, the bonus of an item
+--               a <holds> fact places there that the bot lacks and needs
+--               (BotPlanner.holds_bonus)
 --             - GOAL_BONUS for a door into the --bot-goal-room, or
 --               STAGE_BONUS for one into the goal room's stage;
 --      ties go to the doors here, then frontier order. A locked door counts
@@ -75,6 +88,11 @@ local C = BotConst
 
 local MAX_ATTEMPTS = 3
 local GOAL_TIMEOUT = 40 * C.SECOND
+-- After a goal is done here, a <use> fact of this room whose item is held
+-- but whose probe is not live yet holds the next goal choice (and so the way
+-- out and the finish) this long: the step's room event may still be arming
+-- the probe.
+local USE_ARM_TICKS = 3 * C.SECOND
 -- A run with no new progress (a room, an item, a flag fact) for this long
 -- is stuck.
 local STUCK_TICKS = 5 * 60 * C.SECOND
@@ -93,8 +111,9 @@ local LOOP_HOLD = 3 * 60 * C.SECOND
 local AMMO_BONUS = 60 * C.REACH
 -- A route to a room whose <use> fact needs a held item (bot:use_facts()).
 local USE_BONUS = 60 * C.REACH
--- A route to a seen key item that a remembered locked door needs.
-local KEY_BONUS = 60 * C.REACH
+-- A route to a seen key item that a remembered locked door needs: more
+-- than the ammunition bonus, so a needed key comes first.
+local KEY_BONUS = 70 * C.REACH
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
@@ -107,6 +126,11 @@ local UNPLANNED_BASE = C.REACH * C.REACH
 local UNPLANNED_COST = C.REACH * C.REACH * C.REACH
 -- Each door step of a remote route: about one room crossing.
 local DOOR_COST = 20 * C.REACH
+-- The mental map's price of one door load, in walking units: the door film
+-- and its fades take about 1.5 seconds (the bench's `doors` and `trans`
+-- ticks over its room entries), which the run (about 200 units a tick)
+-- would cover in this much distance.
+local MAP_DOOR = 15 * C.REACH
 -- A door to a room never entered.
 local UNVISITED_BONUS = 15 * C.REACH
 -- A route to a remote frontier item.
@@ -123,6 +147,11 @@ local STAGE_BONUS = 6 * C.REACH
 local SOURCE_BONUS = 60 * C.REACH
 local MONSTER_COST = DOOR_COST
 local MONSTER_CAP = 3
+-- The hurt rule: a pickup goal (an item or a drawer) that loses this share of the
+-- maximum health, on ticks the planner drives (not a fight's), is dropped
+-- and marked `hurt while trying`; the room's other pickups wait until the
+-- inventory changes, and remote planning does not head back for it.
+local HURT_SHARE = 0.25
 -- How often the live monsters of this room are counted.
 local MONSTER_EVERY = C.SECOND // 2
 -- An action-key event pressed as a passage gets this long.
@@ -132,6 +161,17 @@ local function plan()
     BOT_STATE.plan = BOT_STATE.plan
         or { marks = {}, stairs = {}, locked = {}, entries = {}, lens = {}, progress = 0 }
     BOT_STATE.plan.lens = BOT_STATE.plan.lens or {}
+    -- The mental map's arrival points: arrivals[room][from] = {x, z}, where
+    -- the bot stood on entering `room` from `from`.
+    BOT_STATE.plan.arrivals = BOT_STATE.plan.arrivals or {}
+    -- The mental map's measured legs: legs[room][from][slot] is the planned
+    -- path length to that door from where the bot arrived in `room` from
+    -- `from` (UNPLANNED_COST when the path planner reached no approach, as
+    -- on another level of the room), so remote routes price it as the bot
+    -- would there.
+    BOT_STATE.plan.legs = BOT_STATE.plan.legs or {}
+    -- The hurt rule: room -> the inventory signature it hurt the bot with.
+    BOT_STATE.plan.hurt = BOT_STATE.plan.hurt or {}
     BOT_STATE.plan.since = BOT_STATE.plan.since or {}
     BOT_STATE.plan.exits = BOT_STATE.plan.exits or {}
     BOT_STATE.plan.monsters = BOT_STATE.plan.monsters or {}
@@ -179,20 +219,50 @@ local function blocked(bot, kind, room, slot, remote)
     if not m then
         return false
     end
+    if m.desk then
+        -- A locked drawer: off limits, from this room or any other, until
+        -- its lock bit is set or the desk key or the lockpick is held.
+        if BotPlanner.desk_blocker(bot, m.desk) then
+            return true
+        end
+        plan().marks[mark_key(kind, room, slot)] = nil
+        return false
+    end
+    if m.gate then
+        -- A gated <avoid>: off limits exactly while its flag says so, from
+        -- this room or any other.
+        if BotPuzzle.gate_holds(bot, m.gate) then
+            return true
+        end
+        plan().marks[mark_key(kind, room, slot)] = nil
+        return false
+    end
     if m.permanent or m.attempts >= MAX_ATTEMPTS then
         return true
     end
     if m.hold and bot:tick() >= m.hold then
         return false
     end
-    if m.sig ~= inventory_sig(bot) then
+    return BotPlanner.mark_holds(m, inventory_sig(bot), (plan().entries or {})[room], remote)
+end
+
+-- Whether a plain mark `m` (no desk, gate, permanent flag or hold) still
+-- holds, given the inventory signature `sig` and this entry count of its
+-- room. A mark lifts once the inventory changes; a failed approach also
+-- lifts on a later entry into its room. Remote planning never heads back
+-- for an item whose approach failed, even after the inventory changed: a
+-- new item does not make an unreachable zone reachable. (A door keeps the
+-- inventory rule: route() reads door marks too.)
+function BotPlanner.mark_holds(m, sig, entry, remote)
+    local approach = m.reason:find("approach", 1, true) ~= nil
+    local hurt = m.reason:find("hurt while trying", 1, true) ~= nil
+    if remote and (approach or hurt) and m.kind == "item" then
+        return true
+    end
+    if m.sig ~= sig then
         return false
     end
-    local entry = (plan().entries or {})[room]
-    if not remote and m.reason:find("approach", 1, true) and m.entry ~= entry then
-        return false
-    end
-    return true
+    return remote or not approach or m.entry == entry
 end
 
 -- Whether the planner has given up on the frontier item `goal` for a
@@ -202,6 +272,11 @@ local function gave_up(goal)
     local m = plan().marks[mark_key("item", goal.room, goal.slot)]
     if not m or m.reason:find("inventory full", 1, true) then
         return false
+    end
+    -- A locked drawer needs no slot until a key or lockpick lifts its
+    -- mark (blocked() drops it then).
+    if m.desk then
+        return true
     end
     return m.permanent or m.attempts >= MAX_ATTEMPTS
 end
@@ -294,6 +369,35 @@ local function has_lockpick(bot)
     return bot:has_item(C.LOCKPICK) or bot:flag(flag.bank, flag.bit)
 end
 
+-- Why the drawer `desk` (a bot:actions() desk row) cannot be opened now, or
+-- nil when a press opens it. check_desk opens a drawer whose bank-2 lock
+-- bit is set; a clear one needs the desk key or the lockpick (the press
+-- then asks to use it, and a second press opens the drawer). An empty
+-- drawer refuses the press, so it is no goal.
+function BotPlanner.desk_blocker(bot, desk)
+    if desk.full == false then
+        return "the drawer is empty"
+    end
+    if bot:flag(desk.lock_bank, desk.lock_bit) then
+        return nil
+    end
+    if bot:has_item(C.DESK_KEY) or has_lockpick(bot) then
+        return nil
+    end
+    return string.format("drawer locked: no desk key 0x%02X or lockpick", C.DESK_KEY)
+end
+
+-- The drawers of the action list, by the slot of the item each holds.
+function BotPlanner.drawers(actions)
+    local by_item = {}
+    for _, action in ipairs(actions) do
+        if action.kind == "desk" and action.item_slot ~= nil then
+            by_item[action.item_slot] = action
+        end
+    end
+    return by_item
+end
+
 -- Whether a door with key byte `key` can be opened now when it is locked,
 -- and why not. Special keys (see the README's door rules): KEY_FAR_SIDE
 -- opens on a press, KEY_NEVER never, KEY_NONE only by a room event.
@@ -348,6 +452,170 @@ local function door_passable(bot, room_id, door)
         return (key_opens(bot, door.key))
     end
     return true
+end
+
+-- The remembered zone centre {x, z} of action `slot` in room `id`, or nil.
+function BotPlanner.action_point(world, id, slot)
+    for _, row in ipairs(world.rooms or {}) do
+        if row.id == id then
+            for _, action in ipairs(row.actions or {}) do
+                if action.slot == slot and action.x then
+                    return { x = action.x, z = action.z }
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- The mental map. Every room the bot has seen is remembered with its doors
+-- (zone centre x, z and target) and its actions (item boxes with their zone
+-- centre), in bot:world(). A route is priced by walking distance through
+-- it: from the bot to a door here (`opts.exit_len(slot)`, the planned path
+-- length), MAP_DOOR for each door load, then in each room from where the bot
+-- arrives to the next door, and last to the goal's point. The arrival point
+-- in room T from room R is where the bot last stood on entering T from R
+-- (`opts.arrivals[T][R]`), else T's door back to R. Remote legs are straight
+-- lines; nothing is learned from earlier choices.
+
+local function map_dist(ax, az, bx, bz)
+    local dx, dz = ax - bx, az - bz
+    return (dx * dx + dz * dz) ^ 0.5 // 1
+end
+
+-- The point where the bot arrives in room row `row` from room `from_id`, or
+-- nil when the map holds none.
+function BotPlanner.entry_point(row, from_id, arrivals)
+    local seen = arrivals and arrivals[row.id] and arrivals[row.id][from_id]
+    if seen then
+        return seen.x, seen.z
+    end
+    for _, door in ipairs(row.doors or {}) do
+        if door.target == from_id and door.present ~= false then
+            return door.x, door.z
+        end
+    end
+    return nil
+end
+
+-- Dijkstra from the bot in room `from` over the map. A node is a room
+-- entered from a given room (its arrival point). Returns the tree that
+-- BotPlanner.tree_route reads. `opts.passable(room_id, door)` filters the
+-- doors; `opts.exit_len(slot)` prices the doors of `from`.
+function BotPlanner.map_tree(world, from, opts)
+    local rows = {}
+    for _, row in ipairs(world.rooms or {}) do
+        rows[row.id] = row
+    end
+    local nodes = { { room = from, cost = 0 } }
+    local best = { [from .. "|"] = 1 }
+    local done = {}
+    while true do
+        local pick = nil
+        for i, node in ipairs(nodes) do
+            if not done[i] and (not pick or node.cost < nodes[pick].cost) then
+                pick = i
+            end
+        end
+        if not pick then
+            break
+        end
+        done[pick] = true
+        local node = nodes[pick]
+        local row = rows[node.room]
+        for _, door in ipairs(row and row.doors or {}) do
+            local target = door.target
+            if target and target ~= node.room and door.x and opts.passable(node.room, door) then
+                local leg
+                local from_room = node.step and node.step.room
+                local legs = opts.legs and from_room and opts.legs[node.room]
+                    and opts.legs[node.room][from_room]
+                if node.prev == nil then
+                    leg = opts.exit_len(door.slot)
+                elseif legs and legs[door.slot] then
+                    leg = legs[door.slot]
+                elseif node.x then
+                    leg = map_dist(node.x, node.z, door.x, door.z)
+                else
+                    leg = 0
+                end
+                local cost = node.cost + leg + MAP_DOOR
+                local key = target .. "|" .. node.room
+                local seen = best[key]
+                if not seen or (not done[seen] and cost < nodes[seen].cost) then
+                    local x, z = nil, nil
+                    if rows[target] then
+                        x, z = BotPlanner.entry_point(rows[target], node.room, opts.arrivals)
+                    end
+                    local next_node = { room = target, cost = cost, x = x, z = z, prev = pick,
+                        step = { room = node.room, slot = door.slot, target = target } }
+                    if seen then
+                        nodes[seen] = next_node
+                    else
+                        nodes[#nodes + 1] = next_node
+                        best[key] = #nodes
+                    end
+                end
+            end
+        end
+    end
+    return { nodes = nodes, from = from }
+end
+
+-- The cheapest route in `tree` into room `to`, ending at `point` ({x, z},
+-- or nil for the arrival): its cost and its {room, slot, target} steps, or
+-- nil when the map reaches no entry of `to`.
+function BotPlanner.tree_route(tree, to, point)
+    local best, best_cost = nil, nil
+    for i, node in ipairs(tree.nodes) do
+        if node.room == to and node.prev ~= nil then
+            local cost = node.cost
+            if point and point.x and node.x then
+                cost = cost + map_dist(node.x, node.z, point.x, point.z)
+            end
+            if not best_cost or cost < best_cost then
+                best, best_cost = i, cost
+            end
+        end
+    end
+    if not best then
+        return nil
+    end
+    local steps = {}
+    local i = best
+    while tree.nodes[i].prev ~= nil do
+        table.insert(steps, 1, tree.nodes[i].step)
+        i = tree.nodes[i].prev
+    end
+    return best_cost, steps
+end
+
+-- map_tree's options for the bot: the doors it may walk through, the
+-- arrival points it remembers, and `exit_len(slot)` for the doors here
+-- (default: the straight line from where it stands).
+local function map_opts(bot, exit_len)
+    return {
+        passable = function(id, door) return door_passable(bot, id, door) end,
+        exit_len = exit_len or function(slot)
+            local door = BotNav.door_by_slot(bot, slot)
+            return door and bot:distance(BotNav.centre(door)) or UNPLANNED_COST
+        end,
+        arrivals = plan().arrivals,
+        legs = plan().legs,
+    }
+end
+
+-- The route through the mental map from room `from` (the bot's room) into
+-- room `to`, ending at `point` (a {x, z} row, or nil): the list of
+-- {room, slot, target} steps and its walking cost, or nil. `tree` is a
+-- map_tree from `from` to reuse.
+local function map_route(bot, world, from, to, tree, point)
+    if from == to then
+        return {}, 0
+    end
+    tree = tree or BotPlanner.map_tree(world, from, map_opts(bot))
+    local cost, steps = BotPlanner.tree_route(tree, to, point)
+    return steps, cost
 end
 
 -- Breadth-first route over the remembered doors: the list of
@@ -436,7 +704,7 @@ local function interact_goal(bot, fact, index, count)
         job = {
             zone = zone_of(action), label = label, pattern = "edge",
             presses = 2, gap = 20, side = 4 * C.SECOND,
-            done = function(b) return b:flag(fact.bank, fact.bit) end,
+            done = function(b) return BotPuzzle.flag_done(b, fact) end,
         },
     }
 end
@@ -490,9 +758,10 @@ end
 -- the press opens, and the goal is done once that visit has ended.
 local function box_goal(bot, action, why)
     local label = string.format("item box slot %d (%s)", action.slot, why)
+    local look = bot:memory().box_items == nil
     local since = bot:tick()
     return {
-        kind = "box", slot = action.slot, label = label, sig = inventory_sig(bot),
+        kind = "box", slot = action.slot, label = label, sig = inventory_sig(bot), look = look,
         job = {
             zone = zone_of(action), label = label, pattern = "edge",
             presses = 2, gap = 20, side = 4 * C.SECOND, timeout = GOAL_TIMEOUT,
@@ -561,6 +830,40 @@ local function item_goal(bot, action, twin)
                 local now = BotNav.action_by_slot(b, action.slot)
                 return job.pressed and (not now or now.kind ~= "item"
                     or now.item ~= action.item)
+            end,
+        },
+    }
+end
+
+-- A drawer: press its zone, answer Yes to the key prompt (a locked drawer)
+-- and to the take prompt (the scene handler answers both), until the item
+-- is in the inventory or the drawer reads empty. Marks go on the item's
+-- slot, so remote planning sees the same goal as the world model's item.
+local function desk_goal(bot, desk)
+    local item = desk.desk_item
+    local before = bot:item_count(item)
+    local label = string.format("drawer slot %d item 0x%02X slot %d", desk.slot, item,
+        desk.item_slot)
+    return {
+        kind = "item", slot = desk.item_slot, press_slot = desk.slot, label = label,
+        item = item,
+        job = {
+            -- The lid opens after a camera pan of about a second; a locked
+            -- drawer needs one press for the key and one to open.
+            zone = zone_of(desk), label = label, pattern = "edge",
+            presses = 3, gap = 2 * C.SECOND, side = 8 * C.SECOND, timeout = GOAL_TIMEOUT,
+            done = function(b, job)
+                if b:item_count(item) > before then
+                    b:log(string.format("%s: opened, took item 0x%02X (%d -> %d)", label, item,
+                        before, b:item_count(item)))
+                    return true
+                end
+                local now = BotNav.action_by_slot(b, desk.slot)
+                if job.pressed and (not now or now.full == false) then
+                    b:log(string.format("%s: opened, the drawer reads empty", label))
+                    return true
+                end
+                return false
             end,
         },
     }
@@ -702,6 +1005,139 @@ local function untraversed(world_here, slot)
     return true, nil
 end
 
+-- The way-out bonus of a route to the remote frontier item `item` (catalog
+-- kind `kind`): ITEM_BONUS, plus KEY_BONUS for a key that a remembered
+-- locked door needs (`needed[item]` names the door), else AMMO_BONUS for
+-- the ammunition the equipped gun needs (`ammo`). Returns the bonus and a
+-- label tag (nil for a plain item). A heal item gets the plain bonus.
+function BotPlanner.item_bonus(item, kind, ammo, needed)
+    if kind == "key" and needed and needed[item] then
+        return ITEM_BONUS + KEY_BONUS, "key for " .. needed[item]
+    end
+    if ammo and item == ammo then
+        return ITEM_BONUS + AMMO_BONUS, "ammunition"
+    end
+    return ITEM_BONUS, nil
+end
+
+-- The way-out bonus of a door into the unvisited room `id` for what its
+-- <holds> facts (`holds`, bot:item_facts()) place there: the largest bonus
+-- of an item the bot does not hold and still needs, one a <use> fact
+-- (`uses`, bot:use_facts()) with its done flag clear needs
+-- (ITEM_BONUS + USE_BONUS), or a needed key or the gun's ammunition
+-- (BotPlanner.item_bonus). `held(item)` and `done(fact)` read the game.
+-- Returns 0 and nil when nothing there is needed.
+function BotPlanner.holds_bonus(id, holds, uses, held, done, kind_of, ammo, needed)
+    local best, best_tag = 0, nil
+    for _, fact in ipairs(holds) do
+        if fact.room == id and not held(fact.item) then
+            local bonus, tag = 0, nil
+            for _, use in ipairs(uses) do
+                if use.item == fact.item and not done(use) then
+                    bonus, tag = ITEM_BONUS + USE_BONUS, "for " .. (use.label or "a use")
+                end
+            end
+            if bonus == 0 then
+                local extra, why = BotPlanner.item_bonus(fact.item, kind_of(fact.item), ammo, needed)
+                if why then
+                    bonus, tag = extra, why
+                end
+            end
+            if bonus > best then
+                best, best_tag = bonus, string.format("holds 0x%02X %s", fact.item, tag)
+            end
+        end
+    end
+    return best, best_tag
+end
+
+-- The row of `rows` with the shortest `len(row)` (nil: unplanned, after
+-- every planned one), first in order on a tie, and its length.
+function BotPlanner.nearest(rows, len)
+    local best, best_len, best_sort = nil, nil, nil
+    for _, row in ipairs(rows) do
+        local n = len(row)
+        local sort = n or UNPLANNED
+        if not best or sort < best_sort then
+            best, best_len, best_sort = row, n, sort
+        end
+    end
+    return best, best_len
+end
+
+-- The remembered item box to head for from room `from`, over every other
+-- room of `world`, by walking distance through the map
+-- (BotPlanner.map_tree): returns {room, slot, cost, steps} or nil.
+-- `opts` is map_tree's, plus `usable_box(room, action)`; `opts.tree`, when
+-- given, is a map_tree already built from `from`.
+function BotPlanner.pick_remote_box(world, from, opts)
+    local tree = opts.tree or BotPlanner.map_tree(world, from, opts)
+    local best = nil
+    for _, r in ipairs(world.rooms) do
+        for _, action in ipairs(r.id ~= from and r.actions or {}) do
+            if action.kind == "item_box" and action.x and not (action.x == 0 and action.z == 0)
+                and opts.usable_box(r.id, action) then
+                local cost, steps = BotPlanner.tree_route(tree, r.id, action)
+                if steps and steps[1] and (not best or cost < best.cost) then
+                    best = { room = r.id, slot = action.slot, cost = cost, steps = steps }
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- The live item boxes of this room the planner may press.
+function BotPlanner.boxes_here(bot)
+    local room = bot:room().id
+    local out = {}
+    for _, action in ipairs(bot:actions()) do
+        if action.kind == "item_box" and not BotNav.is_origin_zone(action)
+            and not BotPuzzle.avoided(bot, action.slot)
+            and not blocked(bot, "box", room, action.slot) then
+            out[#out + 1] = action
+        end
+    end
+    return out
+end
+
+-- Inventory work due in this room before a save: a MOVE that empties a
+-- slot, or a box visit here. Returns why, or nil.
+function BotPlanner.inventory_due_here(bot)
+    if not blocked(bot, "combine", "inventory", "mix", true)
+        and BotInventory.combine_now(bot, gave_up) then
+        return "a combine is due"
+    end
+    if #BotPlanner.boxes_here(bot) > 0 then
+        return BotInventory.box_reason(bot, gave_up, true)
+    end
+    return nil
+end
+
+-- Puzzle steps (<interact> and <use> goals) done this run.
+function BotPlanner.steps_done()
+    return plan().steps_done or 0
+end
+
+-- The room the pursued target's route enters next when a live monster was
+-- last seen there, or nil (the cautious save rule's "risky room next").
+function BotPlanner.risky_next(bot)
+    local p = plan()
+    local t = p.target
+    if not t then
+        return nil
+    end
+    local world = bot:world()
+    local room = bot:room().id
+    local goal = target_goal(bot, world, t)
+    local steps = goal and goal.room ~= room and route(bot, world, room, goal.room)
+    local next_room = steps and steps[1] and steps[1].target
+    if next_room and (p.monsters[next_room] or 0) > 0 then
+        return next_room
+    end
+    return nil
+end
+
 -- Pick the next goal, or nil plus the reason nothing is left.
 local function choose(bot)
     local room = bot:room().id
@@ -738,32 +1174,73 @@ local function choose(bot)
             return combine_goal(bot, pick)
         end
     end
-    local box_why = BotInventory.box_reason(bot, gave_up)
-    if box_why then
-        for _, action in ipairs(bot:actions()) do
-            if action.kind == "item_box" and not BotNav.is_origin_zone(action)
-                and not BotPuzzle.avoided(bot, action.slot)
-                and not blocked(bot, "box", room, action.slot) then
-                return box_goal(bot, action, box_why)
-            end
-        end
+    local boxes = BotPlanner.boxes_here(bot)
+    local box_here = #boxes > 0 and BotInventory.box_reason(bot, gave_up, true)
+    if box_here then
+        -- The nearest box by its planned approach (every box shares one
+        -- store).
+        local box = BotPlanner.nearest(boxes, function(action)
+            return BotNav.reach_length(bot, action)
+        end)
+        return box_goal(bot, box, box_here)
     end
+    local box_why = BotInventory.box_reason(bot, gave_up)
 
     -- 2. Ground items here, keys first (a key opens a door; nothing else
     -- in the room is worth more), then the nearest planned path.
-    local best, best_len, best_key = nil, nil, false
+    local best, best_len, best_key, best_desk = nil, nil, false, nil
     local unreachable_here = false
     local full = inventory_full(bot)
-    for _, action in ipairs(bot:actions()) do
-        if action.kind == "item" and not blocked(bot, "item", room, action.slot) then
-            local avoid = BotPuzzle.avoided(bot, action.slot)
-            if not pickup_fits(bot, action.item, full) then
+    local actions = bot:actions()
+    local drawers = BotPlanner.drawers(actions)
+    if plan().hurt[room] == inventory_sig(bot) then
+        -- The hurt rule: this room hurt a goal with this inventory; its
+        -- pickups wait until the inventory changes.
+        actions = {}
+    elseif plan().hurt[room] then
+        plan().hurt[room] = nil
+    end
+    for _, action in ipairs(actions) do
+        local desk = drawers[action.slot]
+        if desk and (action.kind == "item" or action.kind == "item_dormant") then
+            -- A drawer's item: the drawer below is the goal.
+        elseif action.kind == "desk" and action.desk_item
+            and not blocked(bot, "item", room, action.item_slot) then
+            local why = BotPlanner.desk_blocker(bot, action)
+            if why == "the drawer is empty" then
+                -- Nothing to take; check_desk refuses the press.
+            elseif not pickup_fits(bot, action.desk_item, full) then
+                mark(bot, "item", room, action.item_slot,
+                    "inventory full: " .. inventory_sig(bot))
+            elseif why then
+                mark(bot, "item", room, action.item_slot, why)
+                plan().marks[mark_key("item", room, action.item_slot)].desk = {
+                    lock_bank = action.lock_bank, lock_bit = action.lock_bit,
+                }
+            elseif not BotPuzzle.avoided(bot, action.slot)
+                and not BotPuzzle.avoided(bot, action.item_slot) then
+                local len = BotNav.reach_length(bot, action) or UNPLANNED
+                plan().lens[mark_key("item", room, action.item_slot)] =
+                    len == UNPLANNED and UNPLANNED_COST or len
+                local key = bot:item_kind(action.desk_item) == "key"
+                if not best_len or (key and not best_key)
+                    or (key == best_key and len < best_len) then
+                    best, best_len, best_key, best_desk = action, len, key, action
+                end
+            end
+        elseif action.kind == "item" and not blocked(bot, "item", room, action.slot) then
+            local avoid, gate = BotPuzzle.avoided(bot, action.slot)
+            if avoid then
+                -- Marked so remote planning stops heading back for it.
+                -- A gated avoid is lifted once its flag changes. Checked
+                -- before the free slot: an inventory-full mark lifts on
+                -- any inventory change and would send the bot back.
+                mark(bot, "item", room, action.slot, "avoid: " .. avoid, gate == nil)
+                plan().marks[mark_key("item", room, action.slot)].gate = gate
+            elseif not pickup_fits(bot, action.item, full) then
                 -- No slot for it and no stack to merge into: retried once
                 -- the inventory changes.
                 mark(bot, "item", room, action.slot, "inventory full: " .. inventory_sig(bot))
-            elseif avoid then
-                -- Marked so remote planning stops heading back for it.
-                mark(bot, "item", room, action.slot, "avoid: " .. avoid, true)
             elseif BotNav.is_origin_zone(action) then
                 mark(bot, "item", room, action.slot,
                     "zone at the room origin: a scripted handover", true)
@@ -774,10 +1251,13 @@ local function choose(bot)
                 local key = bot:item_kind(action.item) == "key"
                 if not best_len or (key and not best_key)
                     or (key == best_key and len < best_len) then
-                    best, best_len, best_key = action, len, key
+                    best, best_len, best_key, best_desk = action, len, key, nil
                 end
             end
         end
+    end
+    if best_desk then
+        return desk_goal(bot, best_desk)
     end
     if best then
         return item_goal(bot, best, taken_twin(here, best))
@@ -851,6 +1331,24 @@ local function choose(bot)
     end
     for _, row in ipairs(doors_here) do
         lengths[row.door.slot] = row.len ~= UNPLANNED and row.len or false
+    end
+    -- The mental map: which doors here the bot can reach from the part of
+    -- the room it entered by.
+    local mind = plan()
+    local arrived = mind.last_from and mind.arrivals[room] and mind.arrivals[room][mind.last_from]
+    if arrived and bot:distance(arrived.x, arrived.z) <= 2 * C.REACH then
+        local legs = {}
+        for _, door in ipairs(bot:doors()) do
+            legs[door.slot] = door_len(door.slot)
+        end
+        mind.legs[room] = mind.legs[room] or {}
+        mind.legs[room][mind.last_from] = legs
+    end
+    -- The mental map from where the bot stands, built once per choice.
+    local tree = nil
+    local function map()
+        tree = tree or BotPlanner.map_tree(world, room, map_opts(bot, door_len))
+        return tree
     end
     local goal_room = bot:goal_room()
     local function toward_goal(target)
@@ -954,9 +1452,16 @@ local function choose(bot)
                 end
             end
         end
-        local steps = goal and goal.room ~= room
-            and (goal.kind == "use" or goal.kind == "box" or usable(goal))
-            and route(bot, world, room, goal.room)
+        local steps
+        if goal and goal.room ~= room and goal.kind == "box" then
+            -- A box was chosen by walking distance: keep the map's route.
+            steps = map_route(bot, world, room, goal.room, map(),
+                BotPlanner.action_point(world, goal.room, goal.slot))
+        else
+            steps = goal and goal.room ~= room
+                and (goal.kind == "use" or usable(goal))
+                and route(bot, world, room, goal.room)
+        end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
         if first then
             return leave({ cost = door_len(first.slot), door = first,
@@ -976,6 +1481,15 @@ local function choose(bot)
             end
         end
     end
+    -- A door into an unvisited room that holds a needed item (<holds>).
+    local holds = bot:item_facts()
+    local use_list = bot:use_facts()
+    local function holds_bonus(id)
+        return BotPlanner.holds_bonus(id, holds, use_list,
+            function(item) return bot:has_item(item) end,
+            function(fact) return bot:flag(fact.bank, fact.bit) end,
+            function(item) return bot:item_kind(item) end, ammo, needed)
+    end
     local best_way = nil
     local function consider(way)
         if not best_way or way.cost < best_way.cost
@@ -988,12 +1502,14 @@ local function choose(bot)
         order = order + 1
         local cost = door_len(row.door.slot) - toward_goal(row.door.target)
             + monsters_in(row.door.target)
+        local why = row.visited and "untraversed" or "unvisited room"
         if not row.visited then
-            cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0)
+            local bonus, tag = holds_bonus(row.door.target)
+            cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0) - bonus
+            why = tag and (why .. " (" .. tag .. ")") or why
         end
         consider({
-            cost = cost, order = order, door = row.door,
-            why = row.visited and "untraversed" or "unvisited room",
+            cost = cost, order = order, door = row.door, why = why,
         })
     end
     for _, goal in ipairs(world.frontier) do
@@ -1007,21 +1523,25 @@ local function choose(bot)
                     + route_monsters(steps)
                 local why, label
                 if goal.kind == "item" then
-                    cost = cost - ITEM_BONUS
+                    local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
+                        needed)
+                    cost = cost - bonus
                     label = string.format("item 0x%02X in %s", goal.item, goal.room)
-                    if ammo and goal.item == ammo then
-                        cost = cost - AMMO_BONUS
-                        label = label .. " (ammunition)"
-                    elseif goal.item_kind == "key" and needed[goal.item] then
-                        cost = cost - KEY_BONUS
-                        label = label .. " (key for " .. needed[goal.item] .. ")"
+                    if tag then
+                        label = label .. " (" .. tag .. ")"
                     end
                 else
                     cost = cost - toward_goal(goal.target)
+                    local tag = nil
                     if not goal.target_visited then
-                        cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0)
+                        local bonus
+                        bonus, tag = holds_bonus(goal.target)
+                        cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0) - bonus
                     end
                     label = string.format("the %s -> %s door", goal.room, tostring(goal.target))
+                    if tag then
+                        label = label .. " (" .. tag .. ")"
+                    end
                 end
                 why = string.format("toward %s, %d door(s)", label, #steps)
                 consider({
@@ -1054,30 +1574,26 @@ local function choose(bot)
             end
         end
     end
-    -- A box visit is due and no box is here: go to a remembered one.
+    -- A box visit is due and no box is here: go to the remembered box
+    -- nearest by walking distance through the mental map.
     if box_why then
-        for _, r in ipairs(world.rooms) do
-            local box = nil
-            for _, action in ipairs(r.id ~= room and r.actions or {}) do
-                if not box and action.kind == "item_box"
-                    and not blocked(bot, "box", r.id, action.slot, true) then
-                    box = action
-                end
-            end
-            local steps = box and route(bot, world, room, r.id)
-            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
-            if first then
-                order = order + 1
-                local label = string.format("the item box in %s (%s)", r.id, box_why)
-                consider({
-                    cost = door_len(first.slot) + #steps * DOOR_COST - BOX_BONUS
-                        + route_monsters(steps),
-                    order = order, door = first,
-                    why = string.format("toward %s, %d door(s)", label, #steps),
-                    target = { kind = "box", room = r.id, slot = box.slot,
-                        label = label, best = #steps, stalls = 0 },
-                })
-            end
+        local opts = map_opts(bot, door_len)
+        opts.tree = map()
+        opts.usable_box = function(id, action)
+            return not blocked(bot, "box", id, action.slot, true)
+        end
+        local box = BotPlanner.pick_remote_box(world, room, opts)
+        local first = box and BotNav.door_by_slot(bot, box.steps[1].slot)
+        if first then
+            order = order + 1
+            local label = string.format("the item box in %s (%s)", box.room, box_why)
+            consider({
+                cost = box.cost - BOX_BONUS + route_monsters(box.steps),
+                order = order, door = first,
+                why = string.format("toward %s, %d door(s)", label, #box.steps),
+                target = { kind = "box", room = box.room, slot = box.slot,
+                    label = label, best = #box.steps, stalls = 0 },
+            })
         end
     end
     if best_way then
@@ -1178,6 +1694,14 @@ function BotPlanner.enter_room(bot, room)
     end
     p.goal = nil
     p.entries[room.id] = (p.entries[room.id] or 0) + 1
+    -- The mental map: where the bot arrives in this room from the last one.
+    if p.last_room and p.last_room ~= room.id then
+        local me = bot:player()
+        p.arrivals[room.id] = p.arrivals[room.id] or {}
+        p.arrivals[room.id][p.last_room] = { x = me.x, z = me.z }
+    end
+    p.last_from = p.last_room ~= room.id and p.last_room or nil
+    p.last_room = room.id
     BotPuzzle.enter_room()
     progress(bot, "entered " .. room.id)
     p.stairs[room.id] = nil
@@ -1245,6 +1769,18 @@ function BotPlanner.drop_goal(bot)
     end
 end
 
+-- Whether the next goal waits for a use probe: within `window` ticks of
+-- the last goal done in this room (`last_done` {room, tick, zone}), a <use>
+-- fact here has its item held and its done flag clear but no live probe
+-- yet, at a zone overlapping the one that goal acted on.
+function BotPlanner.awaiting_use(bot, last_done, window)
+    if not last_done or last_done.room ~= bot:room().id
+        or bot:tick() - last_done.tick > window then
+        return nil
+    end
+    return BotPuzzle.use_pending(bot, last_done.zone)
+end
+
 -- One controllable planner tick.
 function BotPlanner.step(bot)
     local p = plan()
@@ -1259,6 +1795,15 @@ function BotPlanner.step(bot)
         return
     end
     if not p.goal then
+        local fact = BotPlanner.awaiting_use(bot, p.last_done, USE_ARM_TICKS)
+        if fact then
+            if not p.awaiting then
+                bot:log("waiting for the use probe: " .. (fact.label or "use"))
+            end
+            p.awaiting = true
+            return
+        end
+        p.awaiting = nil
         p.goal = choose(bot)
         if not p.goal and forgive_approaches(bot) > 0 then
             p.goal = choose(bot)
@@ -1276,10 +1821,23 @@ function BotPlanner.step(bot)
             return
         end
         p.goal.started = bot:tick()
+        p.goal.health = bot:player().health
+        p.goal.hurt = 0
         bot:log("goal: " .. p.goal.label)
         BotScene.clear_pickup()
     end
     local goal = p.goal
+    local me = bot:player()
+    if me.health < (goal.health or me.health) then
+        goal.hurt = (goal.hurt or 0) + goal.health - me.health
+    end
+    goal.health = me.health
+    if goal.kind == "item" and goal.hurt >= me.max_health * HURT_SHARE then
+        mark(bot, "item", room, goal.slot, string.format("hurt while trying: %d health", goal.hurt))
+        p.hurt[room] = inventory_sig(bot)
+        p.goal = nil
+        return
+    end
     local status
     if goal.job.camera then
         status = BotNav.visit_camera(bot, goal.job)
@@ -1291,7 +1849,7 @@ function BotPlanner.step(bot)
         status = BotNav.press_zone(bot, goal.job)
     end
     if goal.job.press_tick == bot:tick() then
-        BotPuzzle.pressed(bot, goal.slot)
+        BotPuzzle.pressed(bot, goal.press_slot or goal.slot)
         if goal.kind == "box" then
             BotInventory.expect_box(bot)
         end
@@ -1300,7 +1858,8 @@ function BotPlanner.step(bot)
         status = "failed"
         goal.job.reason = "goal timed out"
     end
-    if status == "done" and goal.kind == "box" and goal.sig == inventory_sig(bot) then
+    if status == "done" and goal.kind == "box" and goal.sig == inventory_sig(bot)
+        and not (goal.look and bot:memory().box_items ~= nil) then
         -- A visit that moved nothing must not be chosen again until the
         -- inventory changes.
         status = "failed"
@@ -1308,8 +1867,12 @@ function BotPlanner.step(bot)
     end
     if status == "done" then
         bot:log("goal done: " .. goal.label)
+        p.last_done = { room = room, tick = bot:tick(), zone = goal.job.zone }
         progress(bot)
         if goal.kind == "interact" or goal.kind == "use" or goal.kind == "camera" then
+            if goal.kind ~= "camera" then
+                p.steps_done = (p.steps_done or 0) + 1
+            end
             real_progress(bot, goal.label)
             -- A room event (an object moved off an item) may open what
             -- was unreachable here.

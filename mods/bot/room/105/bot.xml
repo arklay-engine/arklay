@@ -1,8 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 105 dining room. Once the wood emblem is off the fireplace (common 0xAA
-     clear), the fireplace's SCE_USEITEM probe AOT 11 arms the gold emblem.
-     USE it there: the room sets common 0xAB and moves the sideboard off the
-     shield key. -->
+<!-- 105 dining room. The Jill and Chris variants number their AOT slots
+     differently (the room script sets each branch's own table), so every
+     fact here names its character.
+
+     Jill. Once the wood emblem is off the fireplace (common 0xAA clear), the
+     fireplace's SCE_USEITEM probe AOT 11 arms the gold emblem. USE it there:
+     the room sets common 0xAB and moves the sideboard off the shield key.
+
+     Until common 0xA1 is set, every entry spawns Barry at (4300,8000), the
+     fireplace's front, where he stands over the blood (and skipping his
+     first scene leaves him there at once). The wood emblem pickup (AOT 7)
+     cannot be reached past him. Room init sets 0xA1 on the first entry after
+     common 0x02 (Barry has left the dining room), and Barry no longer spawns;
+     the gate then lifts and the planner takes the emblem.
+
+     The story waits on Barry's conversation at the fireplace: once he
+     stands there, the room arms walk-in zones AOT 2 (south of the table)
+     and AOT 3, and walking into either plays it; it ends by setting common
+     0xA2. Skipping his first scene sets 0xA2 as well. Until then the east
+     door stays shut, so the conversation is a step, not a side effect of
+     walking to the emblem.
+
+     Back from 104 (common 0xAC set, 0xAD clear), Barry shoots the zombie
+     (event on_enter_2, which sets 0xAD at its end). Let it play: a skipped
+     run of it left Barry's legs in the floor while his upper body moved (a
+     player report; headless, the skipped and the watched scene end with the
+     same actor state). Watching it costs about 900 ticks once.
+
+     AOT 13 (Jill) and AOT 10 (Chris) are the fireplace hollow's "an emblem
+     was in" message, not a passage: a passage check there only reads it.
+
+     Chris. No Barry: commons 0xA0-0xA2 are never read here. 106 sets common
+     0xA7 on Chris's first entry (the wood emblem is on the fireplace, AOT 4;
+     taking it clears 0xA7). The east door is shut while common 0x01 is set
+     and 0x02 clear (AOT 2 shows "There may be more here"); 104's zombie
+     film sets 0x02. With the wood emblem off, the fireplace's USEITEM AOT 8
+     takes the gold emblem and the room sets common 0xA8 and moves the
+     sideboard off the shield key (AOT 3). -->
 <bot format="2">
-  <use slot="11" item="0x20" bank="1" bit="0xAB" label="gold emblem in the fireplace"/>
+  <interact slot="3" bank="1" bit="0xA2" character="jill" label="walk up to Barry at the fireplace"/>
+  <use slot="11" item="0x20" bank="1" bit="0xAB" character="jill" label="gold emblem in the fireplace"/>
+  <use slot="8" item="0x20" bank="1" bit="0xA8" character="chris" label="gold emblem in the fireplace"/>
+  <avoid slot="7" bank="1" bit="0xA1" while="clear" character="jill"
+         reason="Barry stands in front of the fireplace until common 0xA1 is set"/>
+  <avoid slot="13" character="jill" reason="the fireplace hollow's message, not a passage"/>
+  <avoid slot="10" character="chris" reason="the fireplace hollow's message, not a passage"/>
+  <watch bank="1" bit="0xAD" after_bank="1" after_bit="0xAC" character="jill"
+         label="Barry shoots the zombie"/>
 </bot>
