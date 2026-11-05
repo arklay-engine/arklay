@@ -90,6 +90,16 @@ BOT_STATE.crest.stair_203_done = BOT_STATE.crest.stair_203_done or false
 BOT_STATE.crest.stair_nudge = BOT_STATE.crest.stair_nudge or 0
 BOT_STATE.crest.clear_202_positioned = BOT_STATE.crest.clear_202_positioned or false
 BOT_STATE.last_health = BOT_STATE.last_health or nil
+BOT_STATE.stale_attack_logged = BOT_STATE.stale_attack_logged or false
+
+-- 10C greenhouse progress. `herb_slots` is built from the room actions the
+-- first time the phase runs; `herb_index` walks that list across ticks.
+BOT_STATE.tenc = BOT_STATE.tenc or {}
+BOT_STATE.tenc.stage = BOT_STATE.tenc.stage or 1
+BOT_STATE.tenc.herb_slots = BOT_STATE.tenc.herb_slots or nil
+BOT_STATE.tenc.herb_index = BOT_STATE.tenc.herb_index or 1
+BOT_STATE.tenc.key_line_stage = BOT_STATE.tenc.key_line_stage or 1
+BOT_STATE.tenc.retreat_reason = BOT_STATE.tenc.retreat_reason or nil
 
 -- Combat is a conservative layer over the route: it only stops to shoot the
 -- common zombies with the handgun, and stands down for bosses, crowds, low
@@ -328,6 +338,8 @@ local function reset_phase_data()
     BOT_STATE.barry_scene_logged = false
     BOT_STATE.barry_done_ticks = 0
     BOT_STATE.saw_pickup = false
+    BOT_STATE.stale_attack_logged = false
+    BOT_STATE.travel_line = false
 end
 
 local function set_phase(bot, phase, note)
@@ -414,10 +426,29 @@ local function handle_scene(bot, scene)
     end
     local player = bot:player()
     if player.being_attacked and player.being_attacked > 0 then
-        local dirs = { "left", "right", "up", "down" }
-        bot:press_action()
-        bot:set_input({ [dirs[tick % 4 + 1]] = true })
-        return true
+        -- Mashes only for a real hold. The engine's attacked byte is also the
+        -- shared committed-action byte, and a plant bite leaves it set (the
+        -- 10C fountains never clear it), so mashing on every nonzero value
+        -- would turn the rest of the room into a random-walk stunlock. The
+        -- Plant 42/Yawn holds raise `grabbed`; the wasp and vine holds use
+        -- player states 5/6. The vault/stair sequences use the same attacked
+        -- byte with the 0x80 bit, and their second press is what completes the
+        -- climb, so keep mashing for those too.
+        local held = player.grabbed or player.state == 5 or player.state == 6
+            or (player.being_attacked & 0x80) ~= 0
+        if held then
+            local dirs = { "left", "right", "up", "down" }
+            bot:press_action()
+            bot:set_input({ [dirs[tick % 4 + 1]] = true })
+            return true
+        end
+        if not BOT_STATE.stale_attack_logged then
+            BOT_STATE.stale_attack_logged = true
+            log(bot, string.format(
+                "ignore stale attacked=%d state=%d grabbed=%s health=%d",
+                player.being_attacked, player.state, tostring(player.grabbed),
+                player.health))
+        end
     end
     return false
 end
@@ -475,6 +506,47 @@ local function walk_waypoints(bot, points, tolerance, label)
     BOT_STATE.wp_retry = false
     BOT_STATE.wp_tol = nil
     return BOT_STATE.wp > #points
+end
+
+-- A straight pad walk for a corridor narrower than the 512-unit A* grid.
+-- The 10C south bed's free band (z 3072..3570) has no free grid row, so the
+-- generic planner cannot cross it even though a body fits. This stays a
+-- normal pad input: face the point, then hold forward until the tolerance.
+local function walk_line(bot, x, z, tolerance, label)
+    local distance = bot:distance(x, z)
+    if distance <= tolerance then
+        return "arrived"
+    end
+    local facing = bot:face_to(x, z)
+    if facing.status == "facing" then
+        local input = { up = true }
+        if distance > RUN_MIN_DISTANCE then
+            input.run = true
+        end
+        bot:set_input(input)
+    end
+    return "moving"
+end
+
+-- Straight-line waypoints for a long corridor the A* grid handles poorly or
+-- where the route needs to outrun a chaser. Uses the same shared waypoint
+-- index as walk_waypoints.
+local function line_waypoints(bot, points, tolerance, label)
+    local index = BOT_STATE.wp or 1
+    if index > #points then
+        return true
+    end
+    local point = points[index]
+    local result = walk_line(bot, point[1], point[2], tolerance or 150, label)
+    if result == "arrived" then
+        log(bot, string.format(
+            "%s: line waypoint %d/%d arrived at (%d,%d) d=%d",
+            label, index, #points, point[1], point[2],
+            bot:distance(point[1], point[2])))
+        BOT_STATE.wp = index + 1
+        return BOT_STATE.wp > #points
+    end
+    return false
 end
 
 -- A generic fallback approach from each side of a door zone. The reach probe
@@ -672,6 +744,7 @@ local function action_nav(bot, slot, label, custom, opts)
             before = bot:item_count(action.item),
             scripted = scripted,
             optional = opts and opts.optional or false,
+            walk_tolerance = opts and opts.walk_tolerance or 120,
             points = {},
             index = 1,
             pressing = false,
@@ -781,7 +854,7 @@ local function action_nav(bot, slot, label, custom, opts)
     if not nav.pressing then
         local result = bot:walk_to(point[1], point[2], {
             run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
-            tolerance = 120,
+            tolerance = nav.walk_tolerance or 120,
         })
         if result.status == "arrived" then
             nav.pressing = true
@@ -790,6 +863,14 @@ local function action_nav(bot, slot, label, custom, opts)
                 "%s: at approach %d/%d (%d,%d) d=%d",
                 label, nav.index, #nav.points, point[1], point[2], result.distance
             ))
+            -- Arm on the arrival tick instead of spending one more frame
+            -- turning/standing: a room hazard can knock us out of reach
+            -- between the two ticks.
+            local facing = bot:face_to(point[3], point[4])
+            if facing.status == "facing" then
+                nav.pressed = true
+                bot:press_action()
+            end
         elseif result.status ~= "moving" then
             local p = bot:player()
             log(bot, string.format(
@@ -912,7 +993,7 @@ local TRAVEL_PHASES = {
         target = "201", next_phase = "to_101_from_201",
         label = "door 202->201", deadline = 4200,
         points = {
-            { 16000, 3500 }, { 4608, 3500 }, { 3072, 5120 },
+            { 16000, 3000 }, { 4608, 3000 }, { 3072, 5120 },
             { 3072, 11776 }, { 4096, 12800 }, { 4608, 13824 },
             { 6144, 13824 },
         },
@@ -932,9 +1013,13 @@ local TRAVEL_PHASES = {
         target = "103", next_phase = "to_10c_from_103",
         label = "door 101->103", deadline = 4200,
         points = {
-            { 3600, 4500 }, { 5600, 6700 }, { 5600, 18000 },
-            { 6200, 19500 }, { 7000, 21000 }, { 18000, 21000 },
-            { 19000, 20400 },
+            { 3600, 4500 }, { 3000, 6700 },
+        },
+        -- The corridor zombie chases this leg. A straight run at the west
+        -- edge outruns it; the generic A* leg walked and was grabbed twice.
+        line_points = {
+            { 2800, 18000 }, { 6200, 19500 }, { 7000, 21000 },
+            { 18000, 21000 }, { 19000, 20400 },
         },
         custom = { { 19100, 20350, 20400, 20350 } },
     },
@@ -976,7 +1061,9 @@ local TRAVEL_PHASES = {
     to_205_from_204 = {
         target = "205", next_phase = "to_205_item",
         label = "door 204->205 (armor key)", deadline = 2400,
-        custom = { { 16300, 12100, 17700, 12100 } },
+        -- 204's corridor is open only east of the big block (x >= 18126);
+        -- the door zone reaches x 18800, so approach from the east.
+        custom = { { 19300, 12100, 17600, 12100 } },
     },
     to_204_from_205 = {
         target = "204", next_phase = "to_20d_from_204",
@@ -1077,10 +1164,27 @@ local function locked_door_blocker(bot, target)
 end
 
 local function phase_travel(bot, spec)
-    if spec.points then
+    if spec.points and not BOT_STATE.travel_line then
         if not walk_waypoints(bot, spec.points, spec.tolerance or 150, spec.label) then
             if BOT_STATE.phase_ticks > spec.deadline then
                 fail(bot, spec.label .. " waypoint timed out; "
+                    .. door_diag(bot, spec.target))
+            end
+            return
+        end
+        if spec.line_points then
+            BOT_STATE.travel_line = true
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            return
+        end
+    end
+    if spec.line_points then
+        if not line_waypoints(bot, spec.line_points, spec.tolerance or 150,
+            spec.label) then
+            if BOT_STATE.phase_ticks > spec.deadline then
+                fail(bot, spec.label .. " line waypoint timed out; "
                     .. door_diag(bot, spec.target))
             end
             return
@@ -1089,6 +1193,24 @@ local function phase_travel(bot, spec)
     local blocker = locked_door_blocker(bot, spec.target)
     if blocker then
         log(bot, blocker)
+        if spec.target == "210" then
+            -- The sun-crest route reaches 20E before the shield-key door.
+            -- Stop here with the crest in hand instead of forcing the lock or
+            -- looping back through the east wing for a key that is not held.
+            local p = bot:player()
+            log(bot, string.format(
+                "205 sun crest reached; moon crest blocked at 20E pos=(%d,%d) "
+                    .. "health=%d sun=%d shield=%d armor=%d",
+                p.x, p.z, p.health, bot:item_count(ITEM_SUN_CREST),
+                bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_ARMOR_KEY)))
+            BOT_STATE.milestone = "205 sun crest"
+            bot:finish(string.format(
+                "205 sun crest taken; moon crest blocked: %s "
+                    .. "(sun=%d shield=%d armor=%d)",
+                blocker, bot:item_count(ITEM_SUN_CREST),
+                bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_ARMOR_KEY)))
+            return
+        end
         fail(bot, blocker)
         return
     end
@@ -1182,7 +1304,7 @@ end
 
 local function phase_clear_202(bot)
     if not BOT_STATE.crest.clear_202_positioned then
-        if not walk_waypoints(bot, { { 20000, 3500 } }, 150, "202 south approach") then
+        if not walk_waypoints(bot, { { 20000, 3000 } }, 150, "202 south approach") then
             if BOT_STATE.phase_ticks > 1200 then
                 fail(bot, "202 south approach timed out")
             end
@@ -1204,6 +1326,9 @@ local function phase_clear_202(bot)
     if not target then
         set_phase(bot, "to_201_from_202", "202 south zombie cleared")
         return
+    end
+    if BOT_STATE.combat.disarmed then
+        BOT_STATE.combat.disarmed = false
     end
     local p = bot:player()
     bot:face_to(target.x, target.z)
@@ -1493,8 +1618,16 @@ local function phase_to_105_items(bot)
         end
         local result = false
         if walk_waypoints(bot, { { 14000, 13000 } }, 150, "105 dining room") then
+            -- Exact geometry: the north wall (x414..35604, z14454..16632)
+            -- grown by Jill's 372 radius plus the 18-unit nav skin leaves
+            -- z <= 14064. The sideboard (18000,14300, half extents 700/600)
+            -- grown by the same radius covers x 16928..19072, z 13328..15272.
+            -- The only corner left is (16928,14064); its 600 reach ends at
+            -- (17377,14462), 23 short in x and 38 short in z of the zone's
+            -- south-west corner (17400,14500). Every other side is farther,
+            -- so this logs the block and continues without forcing the item.
             result = action_nav(bot, slot, "105 shield key", {
-                { 17100, 14000, 18400, 15300 },
+                { 16900, 14060, 17900, 14600 },
             }, { optional = true })
         end
         if result == true then
@@ -1557,31 +1690,87 @@ local function phase_to_105_items(bot)
     set_phase(bot, "to_106_from_105", "105 items done")
 end
 
-local function finish_10c_blocked(bot, reason)
+local function finish_10c_retreat(bot, reason)
     local p = bot:player()
     local hollows = crest_hollows(bot)
     log(bot, string.format(
-        "10C armor key blocked: %s pos=(%d,%d) health=%d/%d "
-            .. "shield=%d blue=%d armor=%d sun=%d moon=%d hollows=%d/4",
-        reason, p.x, p.z, p.health, p.max_health,
-        bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_BLUE_JEWEL_KEY),
-        bot:item_count(ITEM_ARMOR_KEY), bot:item_count(ITEM_SUN_CREST),
+        "10C retreat: %s room=%s pos=(%d,%d) health=%d/%d armor=%d "
+            .. "shield=%d blue=%d sun=%d moon=%d hollows=%d/4",
+        reason, bot:room().id, p.x, p.z, p.health, p.max_health,
+        bot:item_count(ITEM_ARMOR_KEY), bot:item_count(ITEM_SHIELD_KEY),
+        bot:item_count(ITEM_BLUE_JEWEL_KEY), bot:item_count(ITEM_SUN_CREST),
         bot:item_count(ITEM_MOON_CREST), hollows))
-    BOT_STATE.milestone = "10C"
+    BOT_STATE.milestone = "103"
     bot:finish(string.format(
-        "10C reached; armor key blocked: %s (pos=(%d,%d), health=%d, "
-            .. "shield=%d, blue=%d, armor=%d, sun=%d, moon=%d, hollows=%d/4)",
-        reason, p.x, p.z, p.health,
+        "103 retreat; 10C armor key blocked: %s (health=%d, armor=%d, "
+            .. "shield=%d, blue=%d, sun=%d, moon=%d, hollows=%d/4)",
+        reason, p.health, bot:item_count(ITEM_ARMOR_KEY),
         bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_BLUE_JEWEL_KEY),
-        bot:item_count(ITEM_ARMOR_KEY), bot:item_count(ITEM_SUN_CREST),
-        bot:item_count(ITEM_MOON_CREST), hollows))
+        bot:item_count(ITEM_SUN_CREST), bot:item_count(ITEM_MOON_CREST),
+        hollows))
+end
+
+local function phase_retreat_10c(bot)
+    local custom = { { 13900, 8300, 15100, 8300 } }
+    BOT_STATE.next_phase = "report_10c_retreat"
+    door_nav(bot, "103", custom, "door 10C->103 retreat")
+    if BOT_STATE.phase_ticks > 2400 then
+        finish_10c_retreat(bot, "10C->103 retreat door timed out")
+    end
+end
+
+local function phase_report_10c_retreat(bot)
+    finish_10c_retreat(bot, BOT_STATE.tenc.retreat_reason
+        or "reached 103 without the armor key")
+end
+
+local function greenhouse_herb_actions(bot)
+    local actions = bot:actions()
+    local herbs = {}
+    for i = 1, #actions do
+        local action = actions[i]
+        if action.kind == "item" and action.item == ITEM_GREEN_HERB then
+            herbs[#herbs + 1] = action
+        end
+    end
+    -- Take the 8100 pair first: the player's knockback from (8200,4800)
+    -- lands around x 9000..9500, and the 8500 press point is still inside the
+    -- zone's x range, so action_nav can fire from the knocked-back band
+    -- without walking further west. The 7000 pair is behind that fountain's
+    -- barricade and is tried only after the first heal.
+    -- Insertion sort by x descending, then z descending.
+    for i = 2, #herbs do
+        local action = herbs[i]
+        local j = i - 1
+        while j >= 1
+            and (herbs[j].x < action.x
+                or (herbs[j].x == action.x and herbs[j].z < action.z)) do
+            herbs[j + 1] = herbs[j]
+            j = j - 1
+        end
+        herbs[j + 1] = action
+    end
+    return herbs
+end
+
+local function greenhouse_herb_approach(action)
+    -- Stand east of the zone, outside the fountain's actual lunge reach. The
+    -- 600 probe from (9300,3280) points at the zone centre and lands at
+    -- (8596,2836), inside the 8100 zone. Walking further west is what gets
+    -- bitten and knocked back before the reach can arm.
+    local east = action.x + action.width + 400
+    return { east, 3280, action.x + action.width // 2, 2000 + action.depth // 2 }
 end
 
 local function phase_to_10c_item(bot)
     local p = bot:player()
-    if p.health <= 10 then
-        finish_10c_blocked(bot,
-            "plant-fountain acid damage and the blocked north-bed corridor")
+    if p.health <= 26 then
+        log(bot, string.format(
+            "10C health=%d at pos=(%d,%d); retreating to 103", p.health, p.x, p.z))
+        BOT_STATE.tenc.retreat_reason = string.format(
+            "green herbs unreachable; health=%d below the 26 key-lane floor",
+            p.health)
+        set_phase(bot, "retreat_10c", "health too low for the plants")
         return
     end
     local count = bot:item_count(ITEM_ARMOR_KEY)
@@ -1596,19 +1785,154 @@ local function phase_to_10c_item(bot)
         set_phase(bot, "to_103_from_10c", "no armor key action")
         return
     end
-    -- Stay north of the garden beds until the narrow west corridor, then
-    -- walk south to the key. The direct goal threads the plant-fountain bed.
-    -- Go north of the plant bed, then down the west service corridor. The
-    -- direct line runs inside the fountains' acid range.
-    local result = false
-    if walk_waypoints(bot, {
-        { 13824, 8192 }, { 7800, 7500 }, { 6144, 7500 },
-        { 6144, 3584 },
-    }, 150, "10C west corridor") then
-        result = action_nav(bot, slot, "10C armor key", {
-            { 6144, 5500, 5400, 5500 },
-        }, { optional = true })
+
+    local tenc = BOT_STATE.tenc
+    -- The 10C collision splits the room into a north corridor, the east gap
+    -- between the two central beds, and the narrow band z 3054..3588 south of
+    -- the big bed. The only legal crossing from the 103 door to the west half
+    -- is the north corridor, then down between the beds. Do not walk the
+    -- direct line through the north bed: the A* grid sees the bed, but the
+    -- old route still lingered in the fountains' Manhattan trigger radius.
+    if tenc.stage == 1 then
+        local points = {
+            { 13000, 7800 },
+            { 10200, 7800 },
+            { 10200, 3600 },
+        }
+        if walk_waypoints(bot, points, 150, "10C south bed") then
+            tenc.stage = 2
+        end
+        if BOT_STATE.phase_ticks > 900 then
+            fail(bot, "10C south-bed approach timed out")
+        end
+        return
     end
+
+    -- Pick every green herb on the south bed before the armor-key run. An
+    -- herb the room refuses is left behind; the key is still the priority.
+    if tenc.stage == 2 then
+        if not tenc.herb_slots then
+            tenc.herb_slots = greenhouse_herb_actions(bot)
+            tenc.herb_index = 1
+            tenc.herb_deadline = BOT_STATE.phase_ticks + 60
+            log(bot, string.format("10C green herbs: %d actions on the south bed",
+                #tenc.herb_slots))
+        end
+        if BOT_STATE.phase_ticks > (tenc.herb_deadline or 0) then
+            local pl = bot:player()
+            log(bot, string.format(
+                "10C green herbs still unreachable pos=(%d,%d) health=%d; "
+                    .. "leaving them for the key run",
+                pl.x, pl.z, pl.health))
+            tenc.stage = 3
+            tenc.key_line_stage = 1
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            return
+        end
+        local herb = tenc.herb_slots[tenc.herb_index]
+        if not herb then
+            tenc.stage = 3
+            tenc.key_line_stage = 1
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            return
+        end
+        local now = action_by_slot(bot, herb.slot)
+        if not now or now.kind ~= "item" or now.item ~= ITEM_GREEN_HERB then
+            tenc.herb_index = tenc.herb_index + 1
+            return
+        end
+        local approach = greenhouse_herb_approach(now)
+        local active = BOT_STATE.nav and BOT_STATE.nav.kind == "action"
+            and BOT_STATE.nav.slot == herb.slot
+        if not active
+            and bot:distance(approach[1], approach[2]) > 520 then
+            -- The bed band is narrower than the nav grid; walk it straight
+            -- instead of asking A* for a row that does not exist.
+            local line = walk_line(bot, approach[1], approach[2], 100,
+                "10C herb bed")
+            if BOT_STATE.phase_ticks % 30 == 0 then
+                local pl = bot:player()
+                log(bot, string.format(
+                    "10C herb bed walk pos=(%d,%d) angle=%d state=%d attacked=%d "
+                        .. "line=%s d=%d",
+                    pl.x, pl.z, pl.angle, pl.state, pl.being_attacked, line,
+                    bot:distance(approach[1], approach[2])))
+            end
+            if line ~= "arrived" then
+                if BOT_STATE.phase_ticks > 1800 then
+                    fail(bot, "10C herb-bed walk timed out")
+                end
+                return
+            end
+        end
+        local result = action_nav(bot, herb.slot, "10C green herb", {
+            approach,
+        }, { optional = true, walk_tolerance = 500 })
+        if result == true then
+            log(bot, string.format("10C green herbs picked slot=%d count=%d",
+                herb.slot, bot:item_count(ITEM_GREEN_HERB)))
+            tenc.herb_index = tenc.herb_index + 1
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format(
+                "10C green herb slot=%d unreachable; continuing", herb.slot))
+            tenc.herb_index = tenc.herb_index + 1
+            return
+        end
+        if BOT_STATE.phase_ticks > 1800 then
+            fail(bot, "10C green herb pickup timed out")
+        end
+        return
+    end
+
+    -- The key can only be reached from the east: the west wall's grown edge
+    -- is x=5634. Stand at (6100,6300) (south of the north bed, outside its
+    -- collision) and face west; the reach point (5500,6300) is inside the
+    -- action zone. This is also the closest standable point to the safe west
+    -- wall and keeps the press short.
+    if tenc.stage == 3 then
+        if tenc.key_line_stage == 1 then
+            -- Get south of the planters first. The lane point stays east of
+            -- the fountains' 3000-unit Manhattan trigger, then the west leg
+            -- runs straight along the narrow band.
+            if walk_line(bot, 10200, 3300, 100, "10C key lane east") ~= "arrived" then
+                if BOT_STATE.phase_ticks > 1200 then
+                    set_phase(bot, "retreat_10c", "key-lane east walk timed out")
+                end
+                return
+            end
+            tenc.key_line_stage = 2
+        end
+        if tenc.key_line_stage == 2 then
+            if walk_line(bot, 6100, 3280, 100, "10C key line") ~= "arrived" then
+                if BOT_STATE.phase_ticks > 1200 then
+                    set_phase(bot, "retreat_10c", "key-line walk timed out")
+                end
+                return
+            end
+            tenc.key_line_stage = 3
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+        end
+        if walk_waypoints(bot, { { 6100, 6300 } }, 150,
+            "10C key corridor") then
+            tenc.stage = 4
+        end
+        if BOT_STATE.phase_ticks > 1200 then
+            set_phase(bot, "retreat_10c", "key corridor timed out")
+        end
+        return
+    end
+
+    local result = action_nav(bot, slot, "10C armor key", {
+        { 6100, 6300, 5500, 6300 },
+    }, { optional = true })
     if result == true then
         log(bot, string.format("10C armor key count=%d",
             bot:item_count(ITEM_ARMOR_KEY)))
@@ -1618,12 +1942,13 @@ local function phase_to_10c_item(bot)
     if result == "failed" then
         log(bot, string.format("10C armor key unreachable; count=%d",
             bot:item_count(ITEM_ARMOR_KEY)))
-        set_phase(bot, "to_103_from_10c", "armor key unreachable")
+        BOT_STATE.tenc.retreat_reason = "armor key action unreachable from the bed band"
+        set_phase(bot, "retreat_10c", "armor key unreachable")
         return
     end
     if BOT_STATE.phase_ticks > 1800 then
-        fail(bot, "10C armor key timed out; count="
-            .. bot:item_count(ITEM_ARMOR_KEY))
+        BOT_STATE.tenc.retreat_reason = "armor key pickup timed out"
+        set_phase(bot, "retreat_10c", "armor key pickup timed out")
     end
 end
 
@@ -2703,8 +3028,16 @@ local function combat_step(bot, scene, player)
     if combat.disarmed then
         return false
     end
+    -- 101's corridor zombie is not on the route's critical path: the route
+    -- can pass it on the west side and save the health for the 10C plants.
+    if room.id == "101" then
+        log(bot, "combat: bypassing the 101 corridor zombie to save health")
+        combat.disarmed = true
+        return false
+    end
 
     local enemies = bot:enemies()
+    local wide_arc = room.id == "202"
     local threats = {}
     local nearby = 0
     for i = 1, #enemies do
@@ -2712,7 +3045,8 @@ local function combat_step(bot, scene, player)
         if enemy.distance <= COMBAT_RANGE then
             nearby = nearby + 1
             if enemy.visible
-                and abs(angle_delta(enemy.bearing, player.angle)) <= COMBAT_ARC then
+                and (wide_arc
+                    or abs(angle_delta(enemy.bearing, player.angle)) <= COMBAT_ARC) then
                 threats[#threats + 1] = enemy
             end
         end
@@ -2729,6 +3063,12 @@ local function combat_step(bot, scene, player)
             local health = combat.last_health
             combat_end(bot, combat, string.format(
                 "target down health=%s", tostring(health)), false)
+            if room.id == "202" then
+                -- The dining room has a second corridor zombie; keep the
+                -- policy armed so it cannot hit the route while it is
+                -- disarmed and crossing the south approach.
+                combat.disarmed = false
+            end
             return false
         end
     end
@@ -2748,10 +3088,14 @@ local function combat_step(bot, scene, player)
         if not target
             or target.distance > COMBAT_RANGE
             or not target.visible
-            or abs(angle_delta(target.bearing, player.angle)) > COMBAT_ARC then
+            or (not wide_arc
+                and abs(angle_delta(target.bearing, player.angle)) > COMBAT_ARC) then
             local health = combat.last_health
             combat_end(bot, combat, string.format(
                 "target lost health=%s", tostring(health)), false)
+            if room.id == "202" then
+                combat.disarmed = false
+            end
             return false
         end
     end
@@ -2946,9 +3290,11 @@ function on_bot_tick(bot)
             end
         end
         log(bot, string.format(
-            "damage health %d -> %d pos=(%d,%d) attacked=%d nearest=%s",
+            "damage health %d -> %d pos=(%d,%d) attacked=%d state=%d "
+                .. "collision=%d grabbed=%s nearest=%s",
             BOT_STATE.last_health, player.health, player.x, player.z,
-            player.being_attacked,
+            player.being_attacked, player.state, player.collision_flags,
+            tostring(player.grabbed),
             nearest and string.format("slot=%d id=%#04x dist=%d pos=(%d,%d)",
                 nearest.slot, nearest.id, nearest.distance,
                 nearest.x, nearest.z) or "none"))
@@ -3028,6 +3374,10 @@ function on_bot_tick(bot)
         phase_to_105_items(bot)
     elseif phase == "to_10c_item" then
         phase_to_10c_item(bot)
+    elseif phase == "retreat_10c" then
+        phase_retreat_10c(bot)
+    elseif phase == "report_10c_retreat" then
+        phase_report_10c_retreat(bot)
     elseif phase == "to_205_item" then
         phase_to_205_item(bot)
     elseif phase == "to_210_item" then

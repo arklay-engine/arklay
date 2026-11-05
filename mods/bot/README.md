@@ -30,8 +30,10 @@ through `bot:room_meta()` on the next tick.
 
 The route starts a fresh Jill game. It used to stop when it entered room 10A;
 it now continues through 117, 11A, the east-wing return, the 203 stair landing
-and 10C. It stops at the furthest milestone it can legally reach; the current
-blocker is the 10C armor key behind the greenhouse plant bed:
+and 10C. The 10C greenhouse's six plant fountains stunlock the player in the
+only bed crossing, so the route attempts the reachable green herbs, tries the
+armor-key corridor, and then retreats to 103 with a precise item/health report
+instead of dying:
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -120,12 +122,17 @@ blocker is the 10C armor key behind the greenhouse plant bed:
     `door_nav`; `enter_room` hands the arrival to the next named travel phase,
     so the outward room defaults cannot restart the opening route.
 13. **105 shield key and blue jewel key.** The shield key (0x35) action exists
-    at `(17400, 14500, 1000, 1000)`, but the sideboard object at
-    `(18000, 14300)` and the north wall leave no standable point inside the
-    action reach. The route tries the south side at `(17100, 14000)`, reports
-    the exact count and continues to 106. The blue jewel key (0x21) is only
-    registered when scenario flag `0x0B` is set; in the checked-in Jill route it
-    is absent and is logged as such.
+    at `(17400, 14500, 1000, 1000)`, but the north wall and the sideboard leave
+    no standable point inside the 600 reach. The north wall
+    (`z 14454..16632`) grown by Jill's 372 radius plus the 18-unit nav skin
+    leaves `z <= 14064`; the sideboard (`18000, 14300`, half extents
+    `700, 600`) grown by the same radius covers `x 16928..19072,
+    z 13328..15272`. The only corner left is `(16928, 14064)`; its reach ends
+    at `(17377, 14462)`, 23 short in x and 38 short in z of the zone's
+    south-west corner `(17400, 14500)`. The route walks to `(16900, 14060)`,
+    presses for 60 ticks, logs the count, and continues to 106. The blue jewel
+    key (0x21) is only registered when scenario flag `0x0B` is set; in the
+    checked-in Jill route it is absent and is logged as such.
 14. **106 -> 203 -> 202.** The 203 stair door lands on the balcony landing,
     which is sealed by the room collision. The route recognises the in-room
     `check_door` zones, walks to the west side of the east flight at
@@ -134,18 +141,27 @@ blocker is the 10C armor key behind the greenhouse plant bed:
     202 door. This uses `bot:use_stair(slot)`, the same room handler a normal
     action press runs.
 15. **202 -> 201 -> 101 -> 103 -> 10C.** The route takes the long south
-    corridor around 202's central block, clears the groundskeeper with the
-    handgun when it has enough ammunition, and follows safe-edge waypoints
-    through 201 and 101. In 10C the armor key (0x34, AOT_04 at
-    `5000, 4500, 800, 2000`) is the current blocker: the north-bed corridor
-    around `(8000, 7600)` does not accept normal movement, and the plant
-    fountain at `(8200, 6200)` deals 2 acid damage about every 28 ticks from
-    more than 2300 units. The route stops with a self-describing finish reason
-    before the player dies, rather than forcing the key or the crest route.
+    corridor at `z 3000` around 202's central block and re-arms the handgun
+    after each kill, so the second corridor zombie cannot grab the route while
+    it is disarmed. The 201 groundskeeper is fought normally. The 101 corridor
+    zombie is bypassed instead of fought: the route runs the long north leg in
+    a straight line at `x 2800`, but the zombie can still catch and grab it
+    (about 20 health); the room policy logs the bypass and does not stop to
+    shoot it. In 10C the armor key (0x34, AOT_04 at
+    `5000, 4500, 800, 2000`) is behind six plant fountains
+    (`0x0F` at `8400/8300/8200, 5800/6100/6200` and `7900/8400/8200,
+    4700/4900/4800`). Their Manhattan trigger is 3000, and a hit knocks the
+    player out of the 498-unit-wide bed band (`z 3072..3570`) before the item
+    reach animation can finish. The route takes the 8100 green-herb action from
+    `(9300, 3280)` first (a 60-tick attempt budget), then either crosses the
+    band west to the key from `(6100, 3280)` or retreats to 103 at 26 health
+    with a report. It does not force the key or the crest route.
 16. **Unreached crest/key phases.** The 205 sun crest, 20D/20E/210 moon crest,
     the return to 11A and the final crest-hollow report are implemented as
     normal travel/item phases, but cannot run until the 10C armor key is
-    obtainable. The finish reason names the exact blocker and the held items.
+    obtainable. The shield-key door to 210 is also blocked because the 105
+    shield key is geometrically out of reach. The finish reason names the exact
+    blocker and the held items.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -225,9 +241,12 @@ replacement for the route:
   policy disengages instead of standing in front of the monster.
 - A kill, a target that leaves range/sight, a timeout (420 combat ticks), low
   health or an empty gun ends the fight and disarms combat for the rest of
-  that room. A room change re-arms it. This keeps one bad fight from stalling
-  a door approach or a scripted scene; `handle_scene` still owns every
-  transition, message and film.
+  that room. A room change re-arms it. The 202 dining room re-arms after each
+  kill because it has two corridor zombies, and uses a full-circle threat arc
+  so the second one cannot grab from behind. The 101 corridor zombie is
+  explicitly bypassed: fighting a 97-health zombie with the 7-round clip costs
+  more health than running the long west-edge line. `handle_scene` still owns
+  every transition, message and film.
 
 The `--watch` reload keeps `BOT_STATE.combat` with the rest of the route
 state, so editing the policy mid-fight does not restart or reset the fight.
@@ -235,15 +254,19 @@ state, so editing the policy mid-fight does not restart or reset the fight.
 Headless evidence from the checked-in route: the 104 ammunition pickup gives
 30 rounds of reserve, the 10A zombies are engaged and killed, the one 109 green
 herb is used at 56 health, and the 202/201 groundskeeper fights are won with the
-handgun. The run reaches 10C at 36 health after the 202 and 201 fights, then the
-plant-fountain acid and the blocked north-bed corridor stop it at health 10;
-the guard finishes with `10C reached; armor key blocked: ...` instead of dying.
-The room path is
+handgun. The 101 corridor zombie is bypassed and the 202 corridor is crossed at
+`z 3000`; the checked-in run still takes one grab in 101 and reaches 10C with
+31 health. The 8100 green-herb press is knocked out of reach by the nearest
+fountain before the reach animation finishes; after the 60-tick attempt health
+is 27, below the 26 key-lane floor, so the route retreats through the
+10C -> 103 door and finishes with `103 retreat; 10C armor key blocked: ...` at
+about 15 health. The room path is
 `106 -> 105 -> 104 -> 105 -> 106 -> 107 -> 108 -> 109 -> 10A -> 117 ->
 10A -> 11A -> 10A -> 109 -> 108 -> 107 -> 106 -> 105 -> 106 -> 203 -> 202 ->
-201 -> 101 -> 103 -> 10C`, with 0 shield keys, 0 blue jewels, 0 armor keys,
-1 star crest, and the 11B lock still closed. This is the current blocker, not a
-finish of the crest collection.
+201 -> 101 -> 103 -> 10C -> 103`, with 0 shield keys, 0 blue jewels, 0 armor
+keys, 1 star crest, and the 11B lock still closed. The 105 shield key is
+pressed from `(16900,14060)` and logs the 23/38-unit reach shortfall. This is
+the current blocker, not a finish of the crest collection.
 
 ### Healing
 
@@ -284,19 +307,24 @@ zombie fights are supplied by the 104 handgun ammunition pickup.
 - The 108 ammo is a known geometry blocker: its zone is inside a solid table
   and the reach cannot enter from any side. The route logs it and continues to
   109 instead of treating the room as a failed run.
-- The 105 shield key action exists but is out of reach behind the sideboard
-  object and the north wall; the route logs the approach and item count and
-  continues. The blue jewel key action is absent while scenario `0x0B` is
-  clear.
+- The 105 shield key action exists at `(17400,14500,1000,1000)` but every
+  standable point is outside the 600 reach: the north wall's grown edge is
+  `z=14064`, the sideboard's grown box starts at `x=16928`, and the
+  south-west corner's probe ends 23 units short in x and 38 in z. The route
+  walks to `(16900,14060)`, presses, logs the count, and continues. The blue
+  jewel key action is absent while scenario `0x0B` is clear.
 - The 203 landing is sealed by room collision; the route uses the room's
   `check_door` stair zones through `bot:use_stair(slot)` instead of trying to
   walk through the wall. A stair that does not move the player is a precise
   `fail`, not an endless press.
-- The 10C north-bed corridor rejects normal movement around `(8000, 7600)` and
-  the plant fountain at `(8200, 6200)` deals repeated acid damage from beyond
-  2300 units. When health falls to 10 the route logs the armor-key block with
-  the position, held keys/crests and hollow count and finishes, so a headless
-  run reports the blocker instead of a death.
+- The 10C bed band is `z 3072..3570` (498 units after the 372 radius and
+  18-unit nav skin). The plant fountains' 3000 Manhattan trigger covers the
+  whole crossing, and each hit knocks the player out of the band before the
+  herb reach finishes. The route spends at most 60 ticks on the 8100 green
+  herb, then tries the key lane; at 26 health it retreats to 103 and reports
+  the position, health, held keys/crests and hollow count instead of dying.
+  The armor key's action zone itself is standable at `(6100,6300)` (west wall
+  grown edge `x=5634`), but the path to it crosses the stunlock.
 - A locked 11B door is not a failed run: the route records the lock and stops
   in 11A with the lock, key, crest and inventory state in the finish reason.
 
