@@ -5,13 +5,30 @@
 -- first:
 --   1. room puzzle: the next <interact> of the room's bot.xml whose done
 --      flag is clear (walk to its AOT zone, press, wait for the flag);
---   2. ground items in this room, nearest approach first;
---   3. a stair check (an in-room `door_check` zone) when a door or item of
---      this room has no reachable approach from here;
---   4. the nearest frontier item in another room (travel there);
---   5. the nearest untraversed door the bot can open, preferring doors to
---      rooms not yet visited; a locked door only with the key it needs;
---   6. nothing left: finish with the reason.
+--      then a <use> fact that applies now (the item is held, the done flag
+--      clear and the use-item probe live): stand where the probe arms the
+--      item, USE it through the menu, wait for the done flag;
+--   2. ground items in this room, nearest approach first: a visible item
+--      here is always taken before the bot moves on;
+--   3. a passage check when a goal of this room has no reachable approach
+--      from here: a `door_check` stair zone, or an action-key event zone no
+--      fact names (a script may start the climb from an event), each once
+--      per room entry, done when the player warps;
+--   4. the way out, ranked by distance cost (lowest first) over the doors
+--      here and the first door of the route to every remote frontier goal:
+--        cost = path length to the door's approach (UNPLANNED_COST when the
+--               path planner reaches none)
+--             + DOOR_COST per door step of the route (0 for a door here)
+--             + for a remote goal, its path length in its own room from where
+--               the bot stood there last (UNPLANNED_COST if none was found)
+--             - UNVISITED_BONUS for a door into a room not yet entered
+--             - ITEM_BONUS for a route to a remote frontier item
+--             - GOAL_BONUS for a door into the --bot-goal-room, or
+--               STAGE_BONUS for one into the goal room's stage;
+--      ties go to the doors here, then frontier order. A locked door counts
+--      only with the key it needs. So an unvisited door here beats an item
+--      two rooms back, while an item one door away beats a far door;
+--   5. nothing left: finish with the reason.
 -- A goal that fails is marked with the inventory it failed with; it is tried
 -- again (at most MAX_ATTEMPTS times) once the inventory changes. The goal
 -- room, if any, comes from --bot-goal-room. Every room fact comes from the
@@ -32,10 +49,26 @@ local MAX_ENTRIES = 40
 local UNPLANNED = 1 / 0
 -- Ranks an unplanned stair check after every planned one, by distance.
 local UNPLANNED_BASE = C.REACH * C.REACH
+-- Way-out ranking (see the header), in path units. A door the path planner
+-- reaches no approach to costs this much, so it ranks after every planned
+-- one but still counts.
+local UNPLANNED_COST = C.REACH * C.REACH * C.REACH
+-- Each door step of a remote route: about one room crossing.
+local DOOR_COST = 20 * C.REACH
+-- A door to a room never entered.
+local UNVISITED_BONUS = 15 * C.REACH
+-- A route to a remote frontier item.
+local ITEM_BONUS = 10 * C.REACH
+-- A door into the --bot-goal-room, and one into the goal's stage.
+local GOAL_BONUS = 30 * C.REACH
+local STAGE_BONUS = 6 * C.REACH
+-- An action-key event pressed as a passage gets this long.
+local PASSAGE_TIMEOUT = 15 * C.SECOND
 
 local function plan()
     BOT_STATE.plan = BOT_STATE.plan
-        or { marks = {}, stairs = {}, locked = {}, entries = {}, progress = 0 }
+        or { marks = {}, stairs = {}, locked = {}, entries = {}, lens = {}, progress = 0 }
+    BOT_STATE.plan.lens = BOT_STATE.plan.lens or {}
     return BOT_STATE.plan
 end
 
@@ -245,6 +278,51 @@ local function interact_goal(bot, fact, index, count)
     }
 end
 
+-- How long a used item may take to show its done flag once the menu closed:
+-- the room event (a scene) runs in between.
+local USE_SETTLE = 20 * C.SECOND
+
+-- A <use> fact: stand where the room's use-item probe in `action` arms the
+-- item (the reach point in the zone, or the player inside it for a body
+-- probe), wait for the item's use flag, USE it through the menu, then wait
+-- for the done flag while the room event plays.
+local function use_goal(bot, fact, action)
+    local label = string.format("use 0x%02X at slot %d (%s)", fact.item, fact.slot,
+        fact.label or "unnamed")
+    local zone = zone_of(action)
+    zone.inside = (action.flags // C.PROBE_BODY) % 2 == 1
+    local armed = fact.item - C.ITEM_USE_BASE
+    return {
+        kind = "use", slot = fact.slot, label = label,
+        job = {
+            zone = zone, label = label, pattern = "hold",
+            side = 3 * C.SECOND, timeout = GOAL_TIMEOUT,
+            done = function(b) return b:flag(fact.bank, fact.bit) end,
+            hold = function(b, job)
+                if not job.used and b:flag(C.ITEM_USE_BANK, armed)
+                    and BotMenu.use_item(b, fact.item, label) then
+                    job.used = b:tick()
+                    job.settled = true
+                end
+            end,
+            check = function(b, job)
+                if not job.used or BotMenu.busy() then
+                    return nil
+                end
+                local last = BotMenu.last()
+                if last and last.item == fact.item and last.tick >= job.used and not last.ok then
+                    return "menu use failed: " .. tostring(last.reason)
+                end
+                job.waited = (job.waited or 0) + 1
+                if job.waited > USE_SETTLE then
+                    return "used; the done flag stayed clear"
+                end
+                return nil
+            end,
+        },
+    }
+end
+
 local function item_goal(bot, action)
     local before = bot:item_count(action.item)
     local label = string.format("item 0x%02X slot %d", action.item, action.slot)
@@ -278,12 +356,14 @@ local function door_goal(bot, door, why)
 end
 
 local function stair_goal(bot, action)
-    local label = string.format("stair check slot %d", action.slot)
+    local label = string.format("%s check slot %d",
+        action.kind == "event" and "passage" or "stair", action.slot)
     return {
         kind = "stair", slot = action.slot, label = label,
         job = {
             zone = zone_of(action), label = label, pattern = "edge",
             presses = 2, gap = 40, side = 10 * C.SECOND,
+            timeout = action.kind == "event" and PASSAGE_TIMEOUT or nil,
             -- The climb is a warp: one tick's jump after the press.
             done = function(b, job)
                 local q = b:player()
@@ -326,6 +406,14 @@ local function choose(bot)
         end
     end
 
+    -- 1b. A held item to use at a zone (<use> facts that apply now).
+    for _, row in ipairs(BotPuzzle.uses(bot)) do
+        local fact = row.fact
+        if not blocked(bot, "use", room, fact.slot) then
+            return use_goal(bot, fact, row.action)
+        end
+    end
+
     -- 2. Ground items here.
     local best, best_len = nil, nil
     local unreachable_here = false
@@ -340,6 +428,8 @@ local function choose(bot)
                     "zone at the room origin: a scripted handover", true)
             else
                 local len = BotNav.reach_length(bot, action) or UNPLANNED
+                plan().lens[mark_key("item", room, action.slot)] =
+                    len == UNPLANNED and UNPLANNED_COST or len
                 if not best_len or len < best_len then
                     best, best_len = action, len
                 end
@@ -373,6 +463,14 @@ local function choose(bot)
             else
                 local len = BotNav.reach_length(bot, door) or UNPLANNED
                 local visited = row and row.target_visited or bot:visited(door.target)
+                -- The length from where the bot stood, for remote ranking;
+                -- a door with no planned approach costs UNPLANNED_COST
+                -- there, and this room gets a passage check.
+                plan().lens[mark_key("door", room, door.slot)] =
+                    len == UNPLANNED and UNPLANNED_COST or len
+                if len == UNPLANNED and not visited then
+                    unreachable_here = true
+                end
                 doors_here[#doors_here + 1] = {
                     door = door, len = len, visited = visited,
                 }
@@ -380,7 +478,10 @@ local function choose(bot)
         end
     end
 
-    -- 3. A stair check when part of this room is out of reach.
+    -- 3. A passage check when part of this room is out of reach: a stair
+    -- zone (`door_check`), or an action-key event zone no fact names (a
+    -- room may start its stair climb from an event, as when a script turns
+    -- the stair zone on from the event). One try per slot per entry.
     for _, m in pairs(plan().marks) do
         if m.room == room and m.reason:find("approach", 1, true) then
             unreachable_here = true
@@ -391,7 +492,10 @@ local function choose(bot)
         p.stairs[room] = p.stairs[room] or {}
         local stair, stair_len = nil, nil
         for _, action in ipairs(bot:actions()) do
-            if action.kind == "door_check" and not p.stairs[room][action.slot]
+            local passage = action.kind == "door_check"
+                or (action.kind == "event" and action.flags >= C.ACTION_KEY
+                    and not BotPuzzle.is_fact_slot(bot, action.slot))
+            if passage and not p.stairs[room][action.slot]
                 and not BotPuzzle.avoided(bot, action.slot) then
                 local len = BotNav.reach_length(bot, action)
                     or UNPLANNED_BASE + bot:distance(BotNav.centre(action))
@@ -406,80 +510,88 @@ local function choose(bot)
         end
     end
 
-    -- 4. The nearest frontier item in another room.
-    local best_route, best_item = nil, nil
+    -- 4. Leave the room: rank every way out by its distance cost (see the
+    -- header), the doors of this room and the first door of the route to a
+    -- remote frontier item or door alike.
+    local lengths = {}
+    local function door_len(slot)
+        if lengths[slot] == nil then
+            local door = BotNav.door_by_slot(bot, slot)
+            lengths[slot] = door and BotNav.reach_length(bot, door) or false
+        end
+        return lengths[slot] or UNPLANNED_COST
+    end
+    for _, row in ipairs(doors_here) do
+        lengths[row.door.slot] = row.len ~= UNPLANNED and row.len or false
+    end
+    local goal_room = bot:goal_room()
+    local function toward_goal(target)
+        if not goal_room or not target then
+            return 0
+        end
+        if target == goal_room then
+            return GOAL_BONUS
+        end
+        if target:sub(1, 1) == goal_room:sub(1, 1) then
+            return STAGE_BONUS
+        end
+        return 0
+    end
+    local best_way = nil
+    local function consider(way)
+        if not best_way or way.cost < best_way.cost
+            or (way.cost == best_way.cost and way.order < best_way.order) then
+            best_way = way
+        end
+    end
+    local order = 0
+    for _, row in ipairs(doors_here) do
+        order = order + 1
+        local cost = door_len(row.door.slot) - toward_goal(row.door.target)
+        if not row.visited then
+            cost = cost - UNVISITED_BONUS
+        end
+        consider({
+            cost = cost, order = order, door = row.door,
+            why = row.visited and "untraversed" or "unvisited room",
+        })
+    end
     for _, goal in ipairs(world.frontier) do
-        if goal.kind == "item" and goal.room ~= room
-            and not blocked(bot, "item", goal.room, goal.slot, true) then
-            local steps = route(bot, world, room, goal.room)
-            if steps and #steps > 0 and (not best_route or #steps < #best_route) then
-                best_route, best_item = steps, goal
+        if goal.room ~= room then
+            local usable
+            if goal.kind == "item" then
+                usable = not blocked(bot, "item", goal.room, goal.slot, true)
+            else
+                usable = not blocked(bot, "door", goal.room, goal.slot, true)
+                    and (not goal.locked or key_opens(bot, goal.key))
+            end
+            local steps = usable and route(bot, world, room, goal.room)
+            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+            if first then
+                order = order + 1
+                local cost = door_len(first.slot) + #steps * DOOR_COST
+                    + (plan().lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
+                local why
+                if goal.kind == "item" then
+                    cost = cost - ITEM_BONUS
+                    why = string.format("toward item 0x%02X in %s, %d door(s)",
+                        goal.item, goal.room, #steps)
+                else
+                    cost = cost - toward_goal(goal.target)
+                    if not goal.target_visited then
+                        cost = cost - UNVISITED_BONUS
+                    end
+                    why = string.format("toward the %s -> %s door, %d door(s)",
+                        goal.room, tostring(goal.target), #steps)
+                end
+                consider({ cost = cost, order = order, door = first, why = why })
             end
         end
     end
-    if best_route then
-        local door = BotNav.door_by_slot(bot, best_route[1].slot)
-        if door then
-            return door_goal(bot, door, string.format(
-                "toward item 0x%02X in %s, %d door(s)", best_item.item,
-                best_item.room, #best_route))
-        end
-    end
-
-    -- 5. Doors: here first by (unvisited target, path length), then the
-    -- nearest frontier door elsewhere by route length.
-    table.sort(doors_here, function(a, b)
-        if a.visited ~= b.visited then
-            return not a.visited
-        end
-        if a.len ~= b.len then
-            return a.len < b.len
-        end
-        return a.door.slot < b.door.slot
-    end)
-    local first = doors_here[1]
-    if first and not first.visited then
-        return door_goal(bot, first.door, "unvisited room")
-    end
-    local remote, remote_door = nil, nil
-    for _, goal in ipairs(world.frontier) do
-        if goal.kind == "door" and goal.room ~= room and not goal.target_visited
-            and not blocked(bot, "door", goal.room, goal.slot, true)
-            and (not goal.locked or key_opens(bot, goal.key)) then
-            local steps = route(bot, world, room, goal.room)
-            if steps and #steps > 0 and (not remote or #steps < #remote) then
-                remote, remote_door = steps, goal
-            end
-        end
-    end
-    if remote then
-        local door = BotNav.door_by_slot(bot, remote[1].slot)
-        if door then
-            return door_goal(bot, door, string.format(
-                "toward the %s -> %s door, %d door(s)", remote_door.room,
-                tostring(remote_door.target), #remote))
-        end
-    end
-    if first then
-        return door_goal(bot, first.door, "untraversed")
-    end
-    for _, goal in ipairs(world.frontier) do
-        if goal.kind == "door" and goal.room ~= room
-            and not blocked(bot, "door", goal.room, goal.slot, true)
-            and (not goal.locked or key_opens(bot, goal.key)) then
-            local steps = route(bot, world, room, goal.room)
-            if steps and #steps > 0 and (not remote or #steps < #remote) then
-                remote, remote_door = steps, goal
-            end
-        end
-    end
-    if remote then
-        local door = BotNav.door_by_slot(bot, remote[1].slot)
-        if door then
-            return door_goal(bot, door, string.format(
-                "toward the untraversed %s -> %s door", remote_door.room,
-                tostring(remote_door.target)))
-        end
+    if best_way then
+        local goal = door_goal(bot, best_way.door, best_way.why)
+        bot:log(string.format("way out: %s, cost %d", best_way.why, best_way.cost))
+        return goal
     end
     return nil
 end

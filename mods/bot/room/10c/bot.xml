@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 10C greenhouse. The pump's SCE_USEITEM probes (AOT 2 arms the herbicide's
+     use flag, AOT 3 room bit 0x20) fire while the reach point is in the pump
+     zone. USE the herbicide there and the room's withering event sets common
+     0xA9 and parks the six plant fountains. -->
+<bot format="2">
+  <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
+</bot>
