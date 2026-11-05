@@ -108,3 +108,56 @@ end
 function BotSurvival.active()
     return BotTactics.active()
 end
+
+-- The ammo reserve rule. A gun keeps enough rounds (its clip plus the
+-- inventory count of the ammunition the engine loads into it) for
+-- `1 + 2 * (1 - risk)` kills of the hardest `fight` monster of the knowledge
+-- file: three kills at risk 0, one at risk 1. Below that floor the planner
+-- ranks a reachable frontier item of the gun's ammunition first. The item
+-- kinds come from the engine (bot:weapon().ammo, the catalog), never ids.
+
+-- The most hits one kill of a `fight` monster takes with `weapon`, from the
+-- knowledge file's health and <keep> damage, or nil when nothing is known.
+function BotSurvival.shots_per_kill(knowledge, weapon)
+    local most = nil
+    for _, enemy in pairs(knowledge and knowledge.enemies or {}) do
+        local keep = enemy.keep and enemy.keep[weapon]
+        local damage = keep and keep.damage
+        if enemy.policy == "fight" and enemy.health and damage and damage > 0 then
+            local shots = (enemy.health + damage - 1) // damage
+            if not most or shots > most then
+                most = shots
+            end
+        end
+    end
+    return most
+end
+
+-- The rounds to keep for a gun whose kill takes `shots` hits, at `risk`.
+function BotSurvival.ammo_floor(shots, risk)
+    if not shots then
+        return 0
+    end
+    local want = shots * (1 + 2 * (1 - risk))
+    local floor = want // 1
+    if floor < want then
+        floor = floor + 1
+    end
+    return floor
+end
+
+-- The ammunition the equipped gun needs now: the item id, the rounds held
+-- and the floor, or nil when the gun has no ammunition item or enough.
+function BotSurvival.ammo_need(bot)
+    local weapon = bot:weapon()
+    if not weapon.ammo then
+        return nil
+    end
+    local rounds = (weapon.clip or 0) + bot:item_count(weapon.ammo)
+    local floor = BotSurvival.ammo_floor(
+        BotSurvival.shots_per_kill(bot:knowledge(), weapon.weapon), risk(bot))
+    if rounds >= floor then
+        return nil
+    end
+    return weapon.ammo, rounds, floor
+end
