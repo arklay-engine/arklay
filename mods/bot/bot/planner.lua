@@ -8,6 +8,9 @@
 --      then a <use> fact that applies now (the item is held, the done flag
 --      clear and the use-item probe live): stand where the probe arms the
 --      item, USE it through the menu, wait for the done flag;
+--      then inventory room (BotInventory): with the inventory at its limit
+--      and a known pickup needing a slot, a MOVE that empties one; then an
+--      item box here when a deposit or a withdrawal is due;
 --   2. ground items in this room, keys first, then the nearest approach:
 --      a visible item here is taken before the bot moves on, unless the
 --      inventory is full and it merges into no held stack. A second zone
@@ -33,6 +36,8 @@
 --               gun needs (BotSurvival.ammo_need), or KEY_BONUS when it
 --               is a key a remembered locked door needs
 --             - USE_BONUS for a route to a held item's <use> room
+--             - BOX_BONUS for a route to a remembered item box room when a
+--               box visit is due (BotInventory.box_reason)
 --             - GOAL_BONUS for a door into the --bot-goal-room, or
 --               STAGE_BONUS for one into the goal room's stage;
 --      ties go to the doors here, then frontier order. A locked door counts
@@ -84,6 +89,8 @@ local AMMO_BONUS = 60 * C.REACH
 local USE_BONUS = 60 * C.REACH
 -- A route to a seen key item that a remembered locked door needs.
 local KEY_BONUS = 60 * C.REACH
+-- A route to a remembered item box room when a box visit is due.
+local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
 local UNPLANNED = 1 / 0
 -- Ranks an unplanned stair check after every planned one, by distance.
@@ -170,6 +177,17 @@ local function blocked(bot, kind, room, slot, remote)
         return false
     end
     return true
+end
+
+-- Whether the planner has given up on the frontier item `goal` for a
+-- reason other than a full inventory (the inventory rules ask which pickups
+-- still need a free slot).
+local function gave_up(goal)
+    local m = plan().marks[mark_key("item", goal.room, goal.slot)]
+    if not m or m.reason:find("inventory full", 1, true) then
+        return false
+    end
+    return m.permanent or m.attempts >= MAX_ATTEMPTS
 end
 
 -- Unreachable marks of this room are stale after a warp (a stair climb).
@@ -302,6 +320,11 @@ local function door_passable(bot, room_id, door)
     if not door.present or not door.target then
         return false
     end
+    -- A door zone parked at the room origin is a scripted transfer (a
+    -- cutscene's exit), not a door to walk through.
+    if door.x == 0 and door.z == 0 then
+        return false
+    end
     if blocked(bot, "door", room_id, door.slot, true) then
         return false
     end
@@ -385,6 +408,7 @@ local function interact_goal(bot, fact, index, count)
             kind = "interact", slot = fact.slot, label = label,
             job = {
                 push = true, object = fact.object, zone = zone_of(action), label = label,
+                dir = BotPuzzle.push_dir(fact),
                 done = function(b) return BotPuzzle.push_done(b, fact) end,
             },
         }
@@ -444,6 +468,56 @@ local function use_goal(bot, fact, action)
             end,
         },
     }
+end
+
+-- An item box visit: press its zone; BotInventory drives the box screen
+-- the press opens, and the goal is done once that visit has ended.
+local function box_goal(bot, action, why)
+    local label = string.format("item box slot %d (%s)", action.slot, why)
+    local since = bot:tick()
+    return {
+        kind = "box", slot = action.slot, label = label, sig = inventory_sig(bot),
+        job = {
+            zone = zone_of(action), label = label, pattern = "edge",
+            presses = 2, gap = 20, side = 4 * C.SECOND, timeout = GOAL_TIMEOUT,
+            done = function() return BotInventory.visited_since(since) end,
+        },
+    }
+end
+
+-- A MOVE through the menu that empties a slot (BotInventory.combine_now).
+local function combine_goal(bot, pick)
+    local label = string.format("combine 0x%02X onto 0x%02X (menu slots %d, %d)",
+        pick.item, pick.other, pick.slot, pick.target)
+    return {
+        kind = "combine", slot = "mix", label = label,
+        job = { menu = true, label = label, pick = pick },
+    }
+end
+
+-- One tick of a combine goal: start the menu job, then read its outcome.
+local function combine_step(bot, job)
+    if not job.started then
+        if not BotMenu.combine(bot, job.pick.slot, job.pick.target, job.label) then
+            job.reason = "the menu job did not start"
+            return "failed"
+        end
+        job.started = bot:tick()
+        return "busy"
+    end
+    if BotMenu.busy() then
+        return "busy"
+    end
+    local last = BotMenu.last()
+    if last and last.kind == "combine" and last.tick >= job.started then
+        if last.ok then
+            return "done"
+        end
+        job.reason = "combine failed: " .. tostring(last.reason)
+        return "failed"
+    end
+    job.reason = "the combine job left no result"
+    return "failed"
 end
 
 -- `twin`: the slot of a taken item of the same id whose zone centre this
@@ -551,6 +625,13 @@ end
 -- frontier door or item, or a <use> fact whose item is held and whose done
 -- flag is clear.
 local function target_goal(bot, world, t)
+    if t.kind == "box" then
+        if BotInventory.box_reason(bot, gave_up)
+            and not blocked(bot, "box", t.room, t.slot, true) then
+            return { kind = "box", room = t.room, slot = t.slot }
+        end
+        return nil
+    end
     if t.kind == "use" then
         if bot:has_item(t.item) and not bot:flag(t.bank, t.bit)
             and not blocked(bot, "use", t.room, t.slot, true) then
@@ -633,6 +714,25 @@ local function choose(bot)
         end
     end
 
+    -- 1c. Inventory room: a MOVE that empties a slot, then an item box
+    -- here when a deposit or a withdrawal is due.
+    if not blocked(bot, "combine", "inventory", "mix", true) then
+        local pick = BotInventory.combine_now(bot, gave_up)
+        if pick then
+            return combine_goal(bot, pick)
+        end
+    end
+    local box_why = BotInventory.box_reason(bot, gave_up)
+    if box_why then
+        for _, action in ipairs(bot:actions()) do
+            if action.kind == "item_box" and not BotNav.is_origin_zone(action)
+                and not BotPuzzle.avoided(bot, action.slot)
+                and not blocked(bot, "box", room, action.slot) then
+                return box_goal(bot, action, box_why)
+            end
+        end
+    end
+
     -- 2. Ground items here, keys first (a key opens a door; nothing else
     -- in the room is worth more), then the nearest planned path.
     local best, best_len, best_key = nil, nil, false
@@ -672,6 +772,7 @@ local function choose(bot)
     for _, door in ipairs(bot:doors()) do
         local fresh, row = untraversed(here, door.slot)
         if fresh and door.target and door.target ~= room
+            and not BotNav.is_origin_zone(door)
             and not BotPuzzle.avoided(bot, door.slot)
             and not blocked(bot, "door", room, door.slot) then
             local ok, why, permanent = true, nil, false
@@ -769,7 +870,10 @@ local function choose(bot)
         if goal.kind == "item" then
             return not blocked(bot, "item", goal.room, goal.slot, true)
         end
-        return not blocked(bot, "door", goal.room, goal.slot, true)
+        -- A door parked at the origin is a scripted transfer (see
+        -- door_passable).
+        return not (goal.x == 0 and goal.z == 0)
+            and not blocked(bot, "door", goal.room, goal.slot, true)
             and (not goal.locked or key_opens(bot, goal.key))
     end
 
@@ -778,9 +882,10 @@ local function choose(bot)
     if p.target then
         local t = p.target
         local goal = target_goal(bot, world, t)
-        if goal and goal.kind == "use" and goal.room == room then
-            -- Here, and step 1b did not take it: its probe is not live.
-            mark(bot, "use", room, t.slot, "use probe not live on arrival")
+        if goal and (goal.kind == "use" or goal.kind == "box") and goal.room == room then
+            -- Here, and step 1b/1c did not take it: its probe is not live,
+            -- or the box is not.
+            mark(bot, goal.kind, room, t.slot, goal.kind .. " not live on arrival")
             p.target = nil
             goal = nil
         end
@@ -794,7 +899,7 @@ local function choose(bot)
             end
         end
         local steps = goal and goal.room ~= room
-            and (goal.kind == "use" or usable(goal))
+            and (goal.kind == "use" or goal.kind == "box" or usable(goal))
             and route(bot, world, room, goal.room)
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
         if first then
@@ -896,6 +1001,31 @@ local function choose(bot)
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,
                         item = fact.item, bank = fact.bank, bit = fact.bit,
+                        label = label, best = #steps, stalls = 0 },
+                })
+            end
+        end
+    end
+    -- A box visit is due and no box is here: go to a remembered one.
+    if box_why then
+        for _, r in ipairs(world.rooms) do
+            local box = nil
+            for _, action in ipairs(r.id ~= room and r.actions or {}) do
+                if not box and action.kind == "item_box"
+                    and not blocked(bot, "box", r.id, action.slot, true) then
+                    box = action
+                end
+            end
+            local steps = box and route(bot, world, room, r.id)
+            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+            if first then
+                order = order + 1
+                local label = string.format("the item box in %s (%s)", r.id, box_why)
+                consider({
+                    cost = door_len(first.slot) + #steps * DOOR_COST - BOX_BONUS,
+                    order = order, door = first,
+                    why = string.format("toward %s, %d door(s)", label, #steps),
+                    target = { kind = "box", room = r.id, slot = box.slot,
                         label = label, best = #steps, stalls = 0 },
                 })
             end
@@ -1085,6 +1215,8 @@ function BotPlanner.step(bot)
     local status
     if goal.job.camera then
         status = BotNav.visit_camera(bot, goal.job)
+    elseif goal.job.menu then
+        status = combine_step(bot, goal.job)
     elseif goal.job.push then
         status = BotNav.push_object(bot, goal.job)
     else
@@ -1092,16 +1224,30 @@ function BotPlanner.step(bot)
     end
     if goal.job.press_tick == bot:tick() then
         BotPuzzle.pressed(bot, goal.slot)
+        if goal.kind == "box" then
+            BotInventory.expect_box(bot)
+        end
     end
     if status == "busy" and bot:tick() - goal.started > GOAL_TIMEOUT * 2 then
         status = "failed"
         goal.job.reason = "goal timed out"
+    end
+    if status == "done" and goal.kind == "box" and goal.sig == inventory_sig(bot) then
+        -- A visit that moved nothing must not be chosen again until the
+        -- inventory changes.
+        status = "failed"
+        goal.job.reason = "the box visit changed nothing"
     end
     if status == "done" then
         bot:log("goal done: " .. goal.label)
         progress(bot)
         if goal.kind == "interact" or goal.kind == "use" or goal.kind == "camera" then
             real_progress(bot, goal.label)
+            -- A room event (an object moved off an item) may open what
+            -- was unreachable here.
+            if goal.kind ~= "camera" then
+                clear_unreachable(bot, room)
+            end
         else
             BotPlanner.observe_progress(bot, goal.label)
         end
@@ -1111,7 +1257,9 @@ function BotPlanner.step(bot)
         p.goal = nil
     elseif status == "failed" then
         local kind = (goal.kind == "camera") and "interact" or goal.kind
-        mark(bot, kind, room, goal.slot, goal.job.reason or "failed", goal.job.permanent)
+        -- A combine is about the inventory, not the room it was tried in.
+        local where = goal.kind == "combine" and "inventory" or room
+        mark(bot, kind, where, goal.slot, goal.job.reason or "failed", goal.job.permanent)
         p.goal = nil
     end
 end
