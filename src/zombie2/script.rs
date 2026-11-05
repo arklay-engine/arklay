@@ -1352,9 +1352,10 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 7] = [
+    const SCRIPTS: [&str; 8] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
+        include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2f/enemy.lua"),
         include_str!("../../games/re2/lib/ivy.lua"),
@@ -1406,6 +1407,148 @@ mod tests {
                 .unwrap();
             assert!(ok);
         }
+    }
+
+    /// A stand-in for the work, enough for `enemy/25/enemy.lua`'s init and
+    /// floor states: `Rnd` gives `DRAWS` in turn, and the player is far away.
+    const SPIDER_STUB: &str = "
+        local draws, drawn = DRAWS, 0
+        local w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, timers = { [0] = 0, 0 },
+            be = 1, kind = KIND, angle = 0, spd = { 0, 0, 0 }, moved = 0,
+            clips = {} }
+        local e = {}
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:timer(i) return w.timers[i] end
+        function e:set_timer(i, v) w.timers[i] = v & 0xFFFF end
+        function e:rnd() drawn = drawn + 1; return draws[drawn] end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:kind() return w.kind end
+        function e:easy() return false end
+        function e:set_life(v) w.life = v end
+        function e:clip(n) w.clips[#w.clips + 1] = n end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v end
+        function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+        function e:set_speed(x, y, z) w.spd = { x, y, z } end
+        function e:add_speed_xz_at() w.moved = w.moved + 1 end
+        function e:distance() return 20000 end
+        function e:player_pos() return 0, 0, 20000 end
+        function e:goto_ck() return 0x30 end
+        function e:part_point() return 30, 0, 40 end
+        function e:hypot(x, z) return math_hypot(x, z) end
+        function e:now_seq() return 0 end
+        function e:noise() return 0 end
+        for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg', 'joint',
+            'set_neck_flags', 'set_shadow', 'set_body_ofs_x', 'set_body_box', 'sound' }) do
+            e[name] = function() end
+        end
+    ";
+
+    /// What `run_spider` leaves: its fields by name, and its clips.
+    struct Spider(std::collections::HashMap<String, i64>, Vec<u8>);
+
+    impl Spider {
+        fn get(&self, name: &str) -> i64 {
+            self.0[name]
+        }
+    }
+
+    fn run_spider(kind: u16, draws: &[u8], ticks: usize) -> Spider {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let script = include_str!("../../games/re2/enemy/25/enemy.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.globals().set("KIND", kind).unwrap();
+        lua.globals()
+            .set(
+                "math_hypot",
+                lua.create_function(|_, (x, z): (i32, i32)| Ok(square_root0(x * x + z * z)))
+                    .unwrap(),
+            )
+            .unwrap();
+        lua.load(format!(
+            "{SPIDER_STUB}
+             {script}
+             for _ = 1, {ticks} do update(e) end
+             return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], life = w.life, be = w.be,
+                 clips = w.clips, angle = w.angle, spd = w.spd[1], moved = w.moved,
+                 timer = w.timers[0], drawn = drawn }}"
+        ))
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let clips = table
+                .get::<mlua::Table>("clips")
+                .unwrap()
+                .sequence_values()
+                .map(Result::unwrap)
+                .collect();
+            let fields = [
+                "r0", "r1", "r2", "life", "be", "angle", "spd", "moved", "timer", "drawn",
+            ]
+            .into_iter()
+            .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+            .collect();
+            Spider(fields, clips)
+        })
+        .unwrap()
+    }
+
+    /// `FUN_0046f0c0`: life from the table and `Rnd & 3`, the floor's
+    /// `Be_flg`, then the rest until its count runs out.
+    #[test]
+    fn a_floor_spider_rests_then_walks() {
+        // Life row 4 (0x77) plus 2; the rest counts (0 + 10) & 0x1f = 10 ticks;
+        // then an even draw picks the walk, whose count is 0x2e & 0x2e.
+        let mut draws = vec![4, 2, 0, 0, 0x2E];
+        draws.resize(32, 0);
+        let spider = run_spider(0, &draws, 1);
+        assert_eq!(spider.get("life"), 0x79);
+        assert_eq!(spider.get("be"), 0xCC0_0001);
+        assert_eq!(spider.get("r1"), 0);
+        let spider = run_spider(0, &draws, 11);
+        assert_eq!(spider.get("r1"), 0);
+        let spider = run_spider(0, &draws, 12);
+        assert_eq!(spider.get("r1"), 1);
+        let spider = run_spider(0, &draws, 13);
+        assert_eq!(spider.get("r2"), 1);
+        assert_eq!(spider.get("timer"), 0x2D);
+        // Walk 1: clip 2, turned 0x30 toward the player, and stepped by
+        // `SquareRoot0` of the foot's move, (30, 40), plus 100.
+        assert_eq!(spider.1, [1, 0, 2]);
+        assert_eq!(spider.get("angle"), 0x30);
+        assert_eq!(spider.get("spd"), i64::from(square_root0(2500)) + 100);
+        assert_eq!(spider.get("moved"), 1);
+    }
+
+    /// An odd draw as the rest ends turns it on the spot instead, for
+    /// `(Rnd + 10) & 0x3f` ticks of 0x18, the other way with another odd draw.
+    #[test]
+    fn a_floor_spider_turns_on_the_spot() {
+        let mut draws = vec![0, 0, 0, 1, 5, 1];
+        draws.resize(32, 0);
+        let spider = run_spider(0, &draws, 12);
+        assert_eq!(spider.get("r1"), 4);
+        let spider = run_spider(0, &draws, 13);
+        assert_eq!(spider.get("timer"), 14);
+        assert_eq!(spider.get("angle"), 0xFFE8);
+        assert_eq!(spider.get("moved"), 0);
+        let spider = run_spider(0, &draws, 27);
+        assert_eq!(spider.get("r1"), 4);
+        let spider = run_spider(0, &draws, 28);
+        assert_eq!(spider.get("r1"), 0);
+    }
+
+    /// The ceiling and the walls get their kind and `Add_dir`, but no state
+    /// runs for them yet.
+    #[test]
+    fn a_wall_spider_waits() {
+        let spider = run_spider(9, &[0; 8], 5);
+        assert_eq!((spider.get("r0"), spider.get("r1")), (1, 0));
+        assert_eq!(spider.get("drawn"), 2);
     }
 
     #[test]

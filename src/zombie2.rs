@@ -364,6 +364,13 @@ const DOG_STUCK: usize = 18;
 pub(crate) const DOG_GROUND: usize = 20;
 /// Part 4's place, which `Game_loop`'s `Joint_trans2` left there between ticks.
 pub(crate) const DOG_JAW: usize = 21;
+/// The giant spider, `Em_25`, whose script is `enemy/25/enemy.lua`.
+pub const SPIDER_ID: u8 = 0x25;
+/// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
+/// that `Game_loop`'s `Joint_trans` left there, x and z.
+pub(crate) const SPIDER_FOOT: usize = 32;
+/// `Em_25`'s `Sca_ck_em` mask.
+const SPIDER_MASK: u16 = 0x600;
 /// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
 pub const IVY_ID: u8 = 0x2E;
 /// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
@@ -380,6 +387,12 @@ pub(crate) const PLANT_OBA: usize = 30;
 
 /// `+0x231`: which side of its clips the ivy is on, 0 or 1.
 pub(crate) const PLANT_SIDE: usize = 29;
+
+/// `Em_25`'s `nFloor`: its height over -1800, toward 0.
+fn spider_floor(y: i32) -> u8 {
+    let high = ((i64::from(y) * 0x6E5D_4C3B) >> 32) as i32 - y;
+    ((high >> 10) - (high >> 31)) as u8
+}
 
 /// The ivy and the vines.
 pub fn is_plant(id: u8) -> bool {
@@ -883,6 +896,26 @@ impl Em<'_, '_, '_> {
         self.sca_ck_em();
     }
 
+    /// `Em_25`, which leaves the rest to its script, then finds `nFloor` from
+    /// its height and checks the others and the room with `0x600`.
+    fn run_spider(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        if let Some([x, _, z]) = self.mover.part_point(12, [0, 0, 0]) {
+            self.z.vars[SPIDER_FOOT] = x;
+            self.z.vars[SPIDER_FOOT + 1] = z;
+        }
+        self.script();
+        self.z.floor = spider_floor(self.mover.player.pos[1]);
+        self.oba_ck_em();
+        self.sca_ck_masked(SPIDER_MASK);
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -998,6 +1031,10 @@ impl Em<'_, '_, '_> {
         }
         if is_plant(self.mover.tick.id) {
             self.run_plant();
+            return;
+        }
+        if self.mover.tick.id == SPIDER_ID {
+            self.run_spider();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from
@@ -1245,6 +1282,11 @@ impl Em<'_, '_, '_> {
 
     /// `Sca_ck_em`, with the zombies' `0x400`. It checks `Atd`, not `Pos`.
     fn sca_ck_em(&mut self) {
+        self.sca_ck_masked(MASK);
+    }
+
+    /// `Sca_ck_em` with the records of `mask`.
+    fn sca_ck_masked(&mut self, mask: u16) {
         self.z.sca_info = 0;
         let radius = i32::from(self.z.atd.w);
         let [ahead_x, ahead_z] = self.atd_ahead();
@@ -1261,7 +1303,7 @@ impl Em<'_, '_, '_> {
             let floor = self.z.floor;
             if keeps_hit {
                 self.z.sca_hit =
-                    crate::sca::first_hit(sca, MASK, at, radius, floor).map(|record| {
+                    crate::sca::first_hit(sca, mask, at, radius, floor).map(|record| {
                         [
                             i32::from(record.x),
                             i32::from(record.z),
@@ -1272,7 +1314,7 @@ impl Em<'_, '_, '_> {
             }
             let resolved = crate::sca::resolve_with_offset(
                 sca,
-                MASK,
+                mask,
                 prev,
                 at,
                 radius,
@@ -1896,6 +1938,23 @@ mod tests {
     }
 
     /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
+    /// `Em_25`'s `nFloor`: a floor for each 1800 units up, from where it
+    /// stands.
+    #[test]
+    fn a_spiders_floor_is_its_height_over_1800() {
+        for (y, floor) in [
+            (0, 0),
+            (100, 0),
+            (-100, 0),
+            (-1799, 0),
+            (-1800, 1),
+            (-3600, 2),
+            (-7200, 4),
+        ] {
+            assert_eq!(spider_floor(y), floor, "{y}");
+        }
+    }
+
     #[test]
     fn an_ivys_blown_part_starts_slow_and_rises() {
         let matrix = player2::Matrix {
