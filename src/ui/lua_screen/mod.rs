@@ -310,6 +310,22 @@ impl LuaScreen {
         self.host.values.get(key).copied().unwrap_or(0)
     }
 
+    /// A number or boolean field of the script's own `M.state` table (the
+    /// pause menu exposes its cursor state there), read without running any
+    /// script code; `None` when the script keeps no such field. A boolean
+    /// reads as `0`/`1`.
+    pub fn state_int(&self, key: &str) -> Option<i64> {
+        let Ok(Value::Table(state)) = self.vm.module.raw_get::<Value>("state") else {
+            return None;
+        };
+        match state.raw_get::<Value>(key).ok()? {
+            Value::Integer(value) => Some(value),
+            Value::Number(value) => Some(value as i64),
+            Value::Boolean(value) => Some(i64::from(value)),
+            _ => None,
+        }
+    }
+
     /// Overwrite a published value, as the script's `api:set` would.
     #[cfg(test)]
     pub fn set_value(&mut self, key: &str, value: i64) {

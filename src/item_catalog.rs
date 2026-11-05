@@ -130,6 +130,14 @@ impl ItemKind {
             .map(|(_, kind)| *kind)
     }
 
+    /// The catalog's name for this kind (`"weapon"`, `"heal"`, ...).
+    pub fn name(self) -> &'static str {
+        Self::NAMES
+            .iter()
+            .find(|(_, kind)| *kind == self)
+            .map_or("other", |(name, _)| name)
+    }
+
     /// The original use-category dispatch index (weapons through
     /// unusable); files and other items share the unusable slot.
     pub fn dispatch_index(self) -> u8 {

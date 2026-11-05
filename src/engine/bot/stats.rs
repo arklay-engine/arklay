@@ -10,8 +10,18 @@
 //!   previous tick) lost health; it includes the knife and any other damage.
 //! - `turn_in_place_ticks` counts ticks with left/right held, neither up nor
 //!   down and no aim button.
+//!
+//! The `menu` counters come from the engine's menu state between two
+//! consecutive snapshots, never from what the route pressed:
+//! - `opens`: the inventory panel appeared (START); `viewer_opens`: the
+//!   menu slot appeared under a pick-up viewer or item box instead;
+//! - `cursor_moves` / `option_moves`: the menu's cursor byte or the
+//!   submenu's highlighted option changed while the menu stayed open;
+//! - `item_uses`: an item in the inventory lost quantity while the menu was
+//!   open on the previous tick (`heal_uses` counts the heal-kind ones);
+//! - `equips`: the equipped item changed while the menu was open.
 
-use super::{BotInput, EnemySnapshot, SessionSnapshot};
+use super::{BotInput, EnemySnapshot, MenuSnapshot, SessionSnapshot};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -54,6 +64,89 @@ pub(super) struct BotStats {
     /// Doors of the current room that are locked, by slot, with the bank-2 bit.
     locked_doors: BTreeMap<u8, u8>,
     unlocks: Vec<UnlockRecord>,
+    menu: MenuCounters,
+    /// The previous tick's menu state and equipped item.
+    prev_menu: Option<(MenuSnapshot, Option<u8>)>,
+}
+
+/// Counted menu transitions (see the module docs).
+#[derive(Debug, Default)]
+struct MenuCounters {
+    opens: u64,
+    viewer_opens: u64,
+    open_ticks: u64,
+    cursor_moves: u64,
+    option_moves: u64,
+    item_uses: u64,
+    heal_uses: u64,
+    equips: u64,
+}
+
+impl MenuCounters {
+    fn observe(
+        &mut self,
+        prev: Option<&(MenuSnapshot, Option<u8>)>,
+        now: &MenuSnapshot,
+        equipped: Option<u8>,
+    ) {
+        self.open_ticks += u64::from(now.open);
+        let Some((before, was_equipped)) = prev else {
+            return;
+        };
+        if now.open && !before.open {
+            // A pick-up viewer or item box opens the same menu slot with its
+            // own screen already over it; START opens the bare panel.
+            if now.screen.is_none() {
+                self.opens += 1;
+            } else {
+                self.viewer_opens += 1;
+            }
+        }
+        if !before.open {
+            return;
+        }
+        if now.open {
+            if now.cursor != before.cursor {
+                self.cursor_moves += 1;
+            }
+            if now.option != before.option && now.mode == Some("actions") {
+                self.option_moves += 1;
+            }
+        }
+        let held = |menu: &MenuSnapshot| {
+            let mut counts: BTreeMap<u8, (u32, &'static str)> = BTreeMap::new();
+            for item in menu.items.iter().filter(|item| item.id != 0) {
+                let entry = counts.entry(item.id).or_insert((0, item.kind));
+                entry.0 += u32::from(item.quantity);
+            }
+            counts
+        };
+        let after = held(now);
+        for (id, (quantity, kind)) in held(before) {
+            if after.get(&id).map_or(0, |entry| entry.0) < quantity {
+                self.item_uses += 1;
+                if kind == "heal" {
+                    self.heal_uses += 1;
+                }
+            }
+        }
+        if equipped != *was_equipped {
+            self.equips += 1;
+        }
+    }
+
+    fn to_json(&self) -> Value {
+        json!({
+            "opens": self.opens,
+            "viewer_opens": self.viewer_opens,
+            "open_ticks": self.open_ticks,
+            "cursor_moves": self.cursor_moves,
+            "option_moves": self.option_moves,
+            "item_uses": self.item_uses,
+            "heal_uses": self.heal_uses,
+            "equips": self.equips,
+        })
+    }
 }
 
 impl BotStats {
@@ -144,6 +237,11 @@ impl BotStats {
             now.insert((*slot, *id), *health);
         }
         self.prev_enemies = now;
+
+        let equipped = snapshot.player.equipped;
+        self.menu
+            .observe(self.prev_menu.as_ref(), &snapshot.menu, equipped);
+        self.prev_menu = Some((snapshot.menu.clone(), equipped));
     }
 
     /// Observe the pad input the route produced this tick.
@@ -223,8 +321,69 @@ impl BotStats {
                 "pickup_ticks": self.pickup_ticks,
                 "uncontrollable_ticks": self.uncontrollable_ticks,
             },
+            "menu": self.menu.to_json(),
             "door_unlocks": unlocks,
             "unlock_to_room_change_ticks_total": known.iter().sum::<u64>(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::MenuItem;
+    use super::*;
+
+    fn menu(open: bool, screen: Option<&'static str>, cursor: i64, herbs: u8) -> MenuSnapshot {
+        MenuSnapshot {
+            open,
+            phase: if open { "input" } else { "closed" },
+            accepts_input: open,
+            screen,
+            cursor: open.then_some(cursor),
+            capacity: 2,
+            items: vec![
+                MenuItem {
+                    slot: 0,
+                    id: 0x02,
+                    quantity: 15,
+                    kind: "weapon",
+                },
+                MenuItem {
+                    slot: 1,
+                    id: 0x44,
+                    quantity: herbs,
+                    kind: "heal",
+                },
+            ],
+            ..MenuSnapshot::default()
+        }
+    }
+
+    #[test]
+    fn menu_counters_follow_the_engine_menu_state() {
+        let mut counters = MenuCounters::default();
+        let mut prev: Option<(MenuSnapshot, Option<u8>)> = None;
+        let steps = [
+            (menu(false, None, 0, 1), None),
+            (menu(true, None, 8, 1), None),
+            (menu(true, None, 10, 1), None),
+            (menu(true, None, 10, 0), None),
+            (menu(true, None, 8, 0), Some(0x02)),
+            (menu(false, None, 0, 0), Some(0x02)),
+            (menu(true, Some("pickup"), 8, 0), Some(0x02)),
+        ];
+        for (now, equipped) in steps {
+            counters.observe(prev.as_ref(), &now, equipped);
+            prev = Some((now, equipped));
+        }
+        assert_eq!(counters.opens, 1, "START opens");
+        assert_eq!(
+            counters.viewer_opens, 1,
+            "the pick-up viewer is not an inventory open"
+        );
+        assert_eq!(counters.cursor_moves, 2);
+        assert_eq!(counters.item_uses, 1);
+        assert_eq!(counters.heal_uses, 1);
+        assert_eq!(counters.equips, 1);
     }
 }
