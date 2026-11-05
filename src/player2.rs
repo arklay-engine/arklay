@@ -277,6 +277,9 @@ pub struct Work {
     pub water: i16,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
+    /// `Cdir_x` and `Cdir_z`, which only the giant spider on a wall or the
+    /// ceiling turns its body by.
+    pub(crate) tilt: [i16; 2],
     pub move_no: u8,
     pub move_cnt: u8,
     pub hokan: u8,
@@ -447,6 +450,8 @@ const AIM_ENEMY_TURN: i32 = 0xD8;
 const HAND_PART: usize = 14;
 /// The part `pl_w02_t2_move` works from.
 const SHOT_PART: usize = 11;
+/// [`Mover::drawn_parts`]: parts 0, 11 and 14.
+type DrawnParts = [Option<Matrix>; 3];
 
 /// `Neck_no`: the head's joint, the same for every player.
 pub const NECK_JOINT: usize = 8;
@@ -690,7 +695,8 @@ impl Work {
 impl Work {
     /// The root of `Joint_trans2`: `Cdir_y`, on the surface it walks on.
     pub(crate) fn body_rotation(&self, angle: u16) -> [[i16; 3]; 3] {
-        let turn = rot_matrix([0, angle as i16, 0]);
+        let [x, z] = self.tilt;
+        let turn = rot_matrix([x, angle as i16, z]);
         self.super_matrix
             .map_or(turn, |surface| mul_matrix(&surface, &turn))
     }
@@ -723,6 +729,7 @@ impl Default for Work {
             shot_ticks: 0,
             shot_line: None,
             super_matrix: None,
+            tilt: [0, 0],
             floor: 0,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -1843,10 +1850,11 @@ impl Mover<'_, '_> {
         // `Foot_set_pl` reads last tick's world matrix from the parts.
         let chain = self.tick.weapon.foot_chain(self.tick.id);
         let planted = self.chain_position(chain);
+        let drawn = self.drawn_parts();
         match self.work.routine[2] {
-            0 => self.aim_raise(key),
+            0 => self.aim_raise(key, &drawn),
             1 => self.aim_hold(key),
-            2 => self.aim_fire(key),
+            2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
             5 => {
@@ -2361,7 +2369,7 @@ impl Mover<'_, '_> {
     }
 
     /// `pl_mv05_w1_t0`.
-    fn aim_raise(&mut self, key: u16) {
+    fn aim_raise(&mut self, key: u16, drawn: &DrawnParts) {
         match self.work.routine[3] {
             0 => {
                 self.aim_clip(AIM_RAISE_CLIP);
@@ -2378,7 +2386,7 @@ impl Mover<'_, '_> {
             }
             _ => return,
         }
-        self.aim_splashes(300);
+        self.aim_splashes(300, drawn);
         if let Some(target) = self
             .work
             .aim_target
@@ -2487,7 +2495,7 @@ impl Mover<'_, '_> {
     }
 
     /// `pl_mv05_w1_t2`.
-    fn aim_fire(&mut self, key: u16) {
+    fn aim_fire(&mut self, key: u16, drawn: &DrawnParts) {
         if self.work.routine[3] == 0 {
             // The matrix `Shoot_camera` reads is the last tick's, so the new
             // clip mustn't be set yet.
@@ -2544,7 +2552,7 @@ impl Mover<'_, '_> {
         // which takes the effects' draws in the order they were called.
         let splash_from = self.work.effects.len();
         let draws_from = self.work.water_draws.len();
-        self.aim_splashes(200);
+        self.aim_splashes(200, drawn);
         let splashes = self.work.effects.split_off(splash_from);
         self.work.effects.splice(shot_from..shot_from, splashes);
         for draw in &mut self.work.water_draws[draws_from..] {
@@ -2559,11 +2567,20 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// The parts' `Workm` as the last `Joint_trans2` left them: the pose,
+    /// place and turn from before this tick's move.
+    fn drawn_parts(&self) -> DrawnParts {
+        [0, SHOT_PART, HAND_PART].map(|part| self.part_matrix(part))
+    }
+
     /// The aim's splashes in water: `Pl_water`'s four rings on Move_cnt 1, 3
     /// and 5 while the water is above `Ground`, then one off each hand
     /// (parts 11 and 14) the water reaches, within 300 of part 11 and
     /// `hand14` of part 14. Their `Rnd` waits for [`Work::water_draws`].
-    fn aim_splashes(&mut self, hand14: i32) {
+    /// The original reads the parts' `Workm`, which is last tick's pose even
+    /// where `Joint_move` has already run (`pl_mv05_w1_t2`), so `drawn` is
+    /// [`Mover::drawn_parts`] from before the move.
+    fn aim_splashes(&mut self, hand14: i32, drawn: &DrawnParts) {
         let water = self.work.water;
         if water == 0 {
             return;
@@ -2572,7 +2589,7 @@ impl Mover<'_, '_> {
         if i32::from(water) < self.ground() && self.work.move_cnt < 6 && self.work.move_cnt & 1 != 0
         {
             // `Pl_water`: on part 0's `Workm`, at the water's level.
-            let root = self.part_matrix(0).map_or(self.player.pos, |part| part.t);
+            let root = drawn[0].map_or(self.player.pos, |part| part.t);
             let at = [root[0] as i16, water, root[2] as i16];
             for ring in 0..4u16 {
                 self.work.water_draws.push(WaterDraw {
@@ -2588,12 +2605,17 @@ impl Mover<'_, '_> {
                 });
             }
         }
-        for (part, reach) in [(SHOT_PART, 300), (HAND_PART, hand14)] {
-            let Some(hand) = self.part_matrix(part) else {
+        for (hand, reach) in [(drawn[1], 300), (drawn[2], hand14)] {
+            let Some(hand) = hand else {
                 continue;
             };
             if i32::from(water) < hand.t[1] + reach {
-                let at = self.part_point(part, [0, 300, 0]).unwrap_or(hand.t);
+                let at = hand
+                    .comp(&Matrix {
+                        m: rot_matrix([0; 3]),
+                        t: [0, 300, 0],
+                    })
+                    .t;
                 self.work.water_draws.push(WaterDraw {
                     effect: self.work.effects.len(),
                     ring: None,
@@ -2955,6 +2977,12 @@ impl Mover<'_, '_> {
         if clip.frames.is_empty() {
             return true;
         }
+        if !reverse
+            && let Some((next, frame)) =
+                frame_past_end(clips, usize::from(self.work.move_no), self.work.move_cnt)
+        {
+            return self.joint_move_past_end(next, frame, late);
+        }
         let count = usize::from(self.work.move_cnt) % clip.frames.len();
         let index = if reverse {
             clip.frames.len() - 1 - count
@@ -2984,6 +3012,29 @@ impl Mover<'_, '_> {
         self.work.move_cnt = anim.frame as u8;
         self.work.hokan = anim.blend_counter as u8;
         ended
+    }
+
+    /// `Joint_move` with `Move_cnt` at or past its clip's end: `pSeq_ptr` reads
+    /// on into the clips after it (`frame` of clip `next`), and `J_seq` ends
+    /// the clip there, leaving `Move_cnt` 0.
+    fn joint_move_past_end(&mut self, next: usize, frame: usize, late: u16) -> bool {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        self.work.now_seq = clips[next].frames[frame].flags;
+        let anim = &mut self.player.anim;
+        anim.clip = next;
+        anim.frame = frame;
+        anim.blend_counter = u16::from(self.work.hokan);
+        anim.blend_step = late;
+        anim.re2_blend = true;
+        anim.reverse = false;
+        anim.timing = 0;
+        anim.update(clips);
+        anim.pose_keyframe(clips, keyframes);
+        anim.clip = usize::from(self.work.move_no);
+        anim.frame = 0;
+        self.work.move_cnt = 0;
+        self.work.hokan = anim.blend_counter as u8;
+        true
     }
 
     /// `Set_base_pos`: where this body's clip must start for it to be here now.
@@ -4212,6 +4263,20 @@ pub(crate) fn blend_matrix(from: &[[i16; 3]; 3], to: &[[i16; 3]; 3], weight: i32
 
 /// `RotMatrix(0, angle, 0)` then `ApplyMatrixSV`: its products floor rather
 /// than truncate, and the result is narrowed to a `short`.
+/// The clip and frame `Joint_move` reads for frame `count` of clip `clip`
+/// when that is past the clip's end: the clips' frames lie one after another,
+/// so it is a frame of a later clip. `None` within the clip, or past the last.
+fn frame_past_end(clips: &[Clip], clip: usize, count: u8) -> Option<(usize, usize)> {
+    let mut left = usize::from(count).checked_sub(clips.get(clip)?.frames.len())?;
+    for (next, after) in clips.iter().enumerate().skip(clip + 1) {
+        if left < after.frames.len() {
+            return Some((next, left));
+        }
+        left -= after.frames.len();
+    }
+    None
+}
+
 pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
     let (cos, sin) = (rcos(i32::from(angle)), rsin(i32::from(angle)));
     (
@@ -4780,13 +4845,15 @@ mod tests {
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.move_cnt = 2;
-        mover.aim_splashes(300);
+        let drawn = mover.drawn_parts();
+        mover.aim_splashes(300, &drawn);
         assert!(
             mover.work.effects.is_empty(),
             "an even frame splashes nothing"
         );
         mover.work.move_cnt = 3;
-        mover.aim_splashes(300);
+        let drawn = mover.drawn_parts();
+        mover.aim_splashes(300, &drawn);
         let mut rnd = crate::zombie2::Rnd::default();
         let mut expected = rnd;
         let draws: Vec<u16> = (0..8).map(|_| u16::from(expected.draw())).collect();
@@ -4813,7 +4880,8 @@ mod tests {
         );
         mover.work.move_cnt = 7;
         mover.work.effects.clear();
-        mover.aim_splashes(300);
+        let drawn = mover.drawn_parts();
+        mover.aim_splashes(300, &drawn);
         assert!(mover.work.effects.is_empty(), "nor does a frame past 5");
     }
 
@@ -5582,6 +5650,74 @@ mod tests {
         assert_eq!(work.sce_free[0], 60);
         plc_dest(&mut work, KENDO, 8, 33, 0, 0);
         assert_eq!(work.sce_free[0], 40);
+    }
+
+    /// Clips of 8, 16 and 4 frames, each frame's flags its clip and index.
+    fn uneven_clips() -> Vec<Clip> {
+        [8u32, 16, 4]
+            .iter()
+            .enumerate()
+            .map(|(clip, &len)| Clip {
+                frames: (0..len)
+                    .map(|index| ClipFrame {
+                        keyframe: index as u16,
+                        timing: 0,
+                        flags: (clip as u32) << 20 | index << 8,
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_frame_past_a_clips_end_is_in_the_clips_after_it() {
+        let clips = uneven_clips();
+        assert_eq!(frame_past_end(&clips, 0, 7), None);
+        assert_eq!(frame_past_end(&clips, 0, 8), Some((1, 0)));
+        assert_eq!(frame_past_end(&clips, 0, 9), Some((1, 1)));
+        assert_eq!(frame_past_end(&clips, 0, 24), Some((2, 0)));
+        assert_eq!(frame_past_end(&clips, 0, 28), None, "past the last clip");
+        assert_eq!(frame_past_end(&clips, 2, 4), None);
+    }
+
+    /// `Em_25`'s death on a wall starts its 8-frame clip 1 at `Move_cnt` 9:
+    /// `Joint_move` reads clip 2's frame 1, and `J_seq` ends the clip.
+    #[test]
+    fn joint_move_past_a_clips_end_reads_the_next_clip_and_ends() {
+        let mut setup = Setup::new(0);
+        setup.clips = uneven_clips();
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &[],
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.bank = Bank::Pld;
+        mover.work.move_no = 0;
+        mover.work.move_cnt = 9;
+        assert!(mover.joint_move_late_reversed(0x400, false));
+        assert_eq!(mover.work.move_cnt, 0);
+        assert_eq!(mover.work.now_seq, 1 << 20 | 1 << 8);
+        assert_eq!(mover.player.anim.clip, 0);
+        assert!(!mover.joint_move_late_reversed(0x400, false));
+        assert_eq!(mover.work.move_cnt, 1);
+        assert_eq!(mover.work.now_seq, 0, "then the clip from its start");
     }
 
     #[test]

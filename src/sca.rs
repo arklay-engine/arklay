@@ -823,6 +823,28 @@ pub fn list_at(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> 
         .collect()
 }
 
+/// What `Sca_ck_info` returns for [`list_at`]'s records when it pushes
+/// nothing: 1 for a box or a rounded box, and for a triangle, a diamond or a
+/// circle that holds the point once grown by `radius`, 3 for a climb, 4 for a
+/// drop, and 8 and 0x10 for shapes 11 and 12, all or-ed together.
+pub fn info_flags(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> u16 {
+    list_at(sca, mask, x, z, radius, floor)
+        .into_iter()
+        .fold(0, |flags, record| {
+            let record = &sca.records[record];
+            flags
+                | match record.shape() {
+                    0 | 7 | 8 => 1,
+                    1..=6 => u16::from(inside_shape(record, x, z, radius)),
+                    9 => 3,
+                    10 => INFO_DOWN,
+                    11 => 8,
+                    12 => 0x10,
+                    _ => 0,
+                }
+        })
+}
+
 /// `FUN_004e3960`: the first records of the room, wherever they are, for `areas`
 /// and `mask`.
 pub fn list_all(sca: &Sca, areas: u16, mask: u16) -> Vec<usize> {
@@ -1060,6 +1082,19 @@ mod tests {
             kind: 0xF,
             floor: 1,
         }
+    }
+
+    #[test]
+    fn sca_ck_info_ors_the_flags_of_the_records_in_reach() {
+        let at = |records: Vec<ScaRect>, x: i32| {
+            info_flags(&room(records), PLAYER_MASK, x, 1500, 800, 0)
+        };
+        assert_eq!(at(vec![record(0)], 1500), 1);
+        assert_eq!(at(vec![record(9)], 1500), 3);
+        assert_eq!(at(vec![record(11)], 1500), 8);
+        assert_eq!(at(vec![record(0), record(12)], 1500), 0x11);
+        // Out of reach of the body's radius, nothing answers.
+        assert_eq!(at(vec![record(0)], -1000), 0);
     }
 
     #[test]

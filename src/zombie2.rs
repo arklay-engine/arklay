@@ -369,6 +369,8 @@ pub const SPIDER_ID: u8 = 0x25;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
 /// that `Game_loop`'s `Joint_trans` left there, x and z.
 pub(crate) const SPIDER_FOOT: usize = 32;
+/// `Ground`, which `Game_loop` finds under the spider between ticks.
+pub(crate) const SPIDER_GROUND: usize = 30;
 /// `Em_25`'s `Sca_ck_em` mask.
 const SPIDER_MASK: u16 = 0x600;
 /// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
@@ -946,11 +948,13 @@ impl Em<'_, '_, '_> {
             self.z.vars[SPIDER_FOOT] = x;
             self.z.vars[SPIDER_FOOT + 1] = z;
         }
+        self.z.vars[SPIDER_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
         // The parts' `+0x5C` that `Game_loop`'s `Joint_trans` left, which a
-        // hit's and a death's blood (`FUN_00472df0`) start from.
-        if self.work().routine[0] >= 2 {
-            self.z.parts = self.mover.posed_parts();
-        }
+        // hit's and a death's blood (`FUN_00472df0`) and the ceiling's spit
+        // (`FUN_00472f70`) start from.
+        self.z.parts = self.mover.posed_parts();
         self.script();
         self.z.floor = spider_floor(self.mover.player.pos[1]);
         self.oba_ck_em();

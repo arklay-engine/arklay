@@ -3,21 +3,28 @@
 -- `Em_25` runs `Routine_0` from `funcs_46F049`: 0 is the init
 -- (`FUN_0046f0c0`) and 1 the move (`FUN_0046f370`), which runs the state
 -- table of the spider's kind, `+0x222`: 0 on the floor, 1 on the ceiling and
--- 3 on a wall, from `Type`'s low nibble. The engine runs `Oba_ck_em`,
+-- 3 on a wall, from `Type`'s low nibble, and 2 between a wall and the
+-- ceiling. The engine runs `Oba_ck_em`,
 -- `Sca_ck_em` (with `0x600`) and `nFloor` after `update`, and leaves the
 -- place part 12 had at the end of the last tick in `FOOT`.
 --
 -- Ported: the init, and on the floor the rest (`Routine_1` 0), the walks
 -- (1 to 3), the turn on the spot (4), the turns toward the player (5 and 6),
 -- the lunge and its bite (7), the spit (8) and the leap aside from a noise
--- (9); and on the floor a hit (`Routine_0` 2), the death (3) and the body
--- (7), for weapons 2 to 8. The ceiling and the wall, the young spiders
--- (`Em_26`) a death sends out, `FUN_004727e0`'s water and `FUN_00473530`'s
--- blood aren't ported: a spider that reaches them stands still.
+-- (9). On the ceiling (kind 1) the rest, the walks and the way onto a wall
+-- (10), the way round another spider (11), the lunge (7) and the floor's
+-- others; on a wall (kinds 2 and 3) the way down (1), the wait (2), the
+-- crawl (3), the climb (4), the way onto the ceiling (5), the lunge (6) and
+-- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
+-- weapons 2 to 8, on each kind. Another spider in play is its partner
+-- (`Ck_em_id`, `+0x240`). The young spiders (`Em_26`) a death sends out,
+-- `FUN_004727e0`'s water, `FUN_00473530`'s blood, the player's partner
+-- (`splayer_work`) as a target and the spit's `Routine_2` 3
+-- (`FUN_0046fbb0`) aren't ported.
 
 local COOLDOWN <const> = 0 -- `+0x218`: the rest waits for it before an attack.
 local ADD_DIR <const> = 1 -- `+0x21a`: the turn `Add_speedXZ` adds.
-local KIND <const> = 2 -- `+0x222`: 0 floor, 1 ceiling, 3 wall.
+local KIND <const> = 2 -- `+0x222`: 0 floor, 1 ceiling, 2 between, 3 wall.
 local TO_PARTNER <const> = 3 -- `+0x237`: it aims at `splayer_work`.
 local STEP <const> = 4 -- `+0x238`: which footstep sound is next.
 local T232 <const> = 5 -- `+0x232`.
@@ -35,6 +42,15 @@ local BOB <const> = 18 -- `+0x23e`: how the body in water moves (`FUN_004728b0`)
 local F23F <const> = 19 -- `+0x23f`.
 local T225 <const> = 20 -- `+0x225`: `FUN_004727e0`'s state.
 local T239 <const> = 21 -- `+0x239`: no body to shoot again; nothing on the floor sets it.
+local SCE <const> = 22 -- `+0x223`: a fall from a wall or the ceiling is under way.
+local WALL_DIR <const> = 23 -- `+0x226`: the side of the wall's record it's on, then its turn there.
+local RECORD <const> = 24 -- `+0x228`: the wall's record, from 1, or 0.
+local TOP <const> = 25 -- `+0x22c`: the height a climb stops at.
+local FACING <const> = 26 -- `+0x230`: which way the wall faces, by quarters.
+local NEXT <const> = 27 -- `+0x231`: the state after the way down, and a hit's climb.
+local BETWEEN <const> = 28 -- `+0x236`: between a wall and the ceiling, with `fg_room_enemy`'s 0x20.
+local RISE <const> = 29 -- `+0x244`: how far a body has sunk into water.
+local GROUND <const> = 30 -- `Ground`, which the engine finds under it before the tick.
 local FOOT <const> = 32 -- x and z of part 12 (leg 1's foot) as the last tick ended.
 
 -- `PTR_DAT_005284ac` and, with `fg_system`'s `0x20`, `PTR_DAT_005284cc`.
@@ -63,16 +79,144 @@ local function i16(value)
     return value >= 0x8000 and value - 0x10000 or value
 end
 
+local function abs(value)
+    return value < 0 and -value or value
+end
+
+-- C's division, which truncates toward zero.
+local function tdiv(a, b)
+    local q = a // b
+    if q < 0 and q * b ~= a then
+        q = q + 1
+    end
+    return q
+end
+
+-- `FUN_00472be0`: `Spd`, turned by `Cdir` and the angles given, added to the
+-- place.
+local function move_by(e, ax, ay, az)
+    local cx, cz = e:cdir()
+    local sx, sy, sz = e:speed()
+    e:add_pos(e:rot_apply(cx + ax, e:angle() + ay, cz + az, sx, sy, sz))
+end
+
+-- `Add_speedXYZ`: `Spd`, turned by `Cdir_y` and `Cdir_z` and the angles
+-- given, added to the place.
+local function add_speed_xyz(e, ay, az)
+    local _, cz = e:cdir()
+    local sx, sy, sz = e:speed()
+    e:add_pos(e:rot_apply(0, e:angle() + ay, cz + az, sx, sy, sz))
+end
+
 -- `L_pl`, or `L_spl` & 0x3fffffff when it aims at the partner. Only the
 -- player is ported.
 local function distance(e)
     return e:distance()
 end
 
--- `FUN_00472aa0`: `Goto00_ck` toward the target. Only the floor's is ported.
+-- `FUN_00472aa0`: `Goto00_ck` toward the target, or off the ceiling or a
+-- wall toward the point opposite it.
 local function goto_target(e, rate)
     local x, _, z = e:player_pos()
+    if e:var(KIND) ~= 0 then
+        local at_x, _, at_z = e:pos()
+        x = at_x - (x - at_x)
+        z = at_z - (z - at_z)
+    end
     return e:goto_ck(x, z, rate)
+end
+
+-- `FUN_00472d80`: `Goto00_ck` toward the player, as the body would turn on
+-- the floor facing the way the wall does.
+local function toward_player(e, rate)
+    local x, _, z = e:pos()
+    local px, _, pz = e:player_pos()
+    return e:goto_ck_at(x, z, (e:var(FACING) & 3) << 10, px, pz, rate)
+end
+
+-- `FUN_004e3250`: a record's edge on a side, or the side itself past 3.
+local function edge(e, record, side)
+    if side > 3 then
+        return side
+    end
+    return e:sca_edge(record, side)
+end
+
+-- `FUN_00472b10`: the first record of `Sca_ck_info`'s list whose side faces
+-- the body's way, from 1, and whose floor isn't below the body's height.
+-- Each record it looks at is kept, with its side.
+local function find_wall(e, list)
+    local _, y = e:pos()
+    local high = tdiv(y, -1800) & 0xFFFFFFFF
+    for _, record in ipairs(list) do
+        local x, _, z = e:pos()
+        local side = e:sca_side(record, x, z)
+        e:set_var(RECORD, record)
+        e:set_var(WALL_DIR, (side << 10) & 0xFFFF)
+        local floor = select(6, e:sca_rect(record))
+        if side << 10 == (e:angle() + 0x200) & 0xC00 and high <= floor then
+            return side + 1
+        end
+    end
+    return 0
+end
+
+-- `FUN_00472c70`: whether the body is within 2500 of the wall record's end
+-- that `dir` turns it toward.
+local function near_end(e, dir)
+    local record = e:var(RECORD)
+    if record == 0 then
+        return false
+    end
+    local facing = e:var(FACING)
+    local x, _, z = e:pos()
+    if facing & 1 == 0 then
+        if i16(dir) == 0x400 then
+            return edge(e, record, 3) - 0x9C4 < z
+        end
+        return z < edge(e, record, 1) + 0x9C4
+    end
+    if (facing * 0x400 - 0x400 + dir) & 0xFFFF == 0x400 then
+        return x < edge(e, record, 2) + 0x9C4
+    end
+    return edge(e, record, 0) - 0x9C4 < x
+end
+
+-- `FUN_00472d20`: whether the player is within 3000 of a record's side.
+local function player_near_edge(e, record, side)
+    if record == 0 then
+        return false
+    end
+    local at = edge(e, record, side)
+    local px, _, pz = e:player_pos()
+    local along = side & 1 == 0 and px or pz
+    return abs(along - at) < 3000
+end
+
+-- `FUN_00472ba0`: a turn across the wall, of `Cdir_y` or `Cdir_x` by the
+-- way it faces, kept in `+0x226` too.
+local function shift(e, turn)
+    local facing = e:var(FACING)
+    if facing & 1 ~= 0 then
+        e:set_angle((e:angle() + turn) & 0xFFFF)
+    else
+        if facing & 2 == 0 then
+            turn = -turn
+        end
+        local cx, cz = e:cdir()
+        e:set_cdir(cx + turn, cz)
+    end
+    e:set_var(WALL_DIR, (e:var(WALL_DIR) + turn) & 0xFFFF)
+end
+
+-- `FUN_00470fe0`: the way a wall's spit flies.
+local function wall_aim(e)
+    local turn = i16(e:var(WALL_DIR))
+    local facing = e:var(FACING)
+    if facing == 0 then
+        turn = -turn
+    end
+    return (facing * 0x400 - turn // 4 + turn) & 0xFFF
 end
 
 -- `FUN_00473430`: a footstep on the frames that call for one.
@@ -116,7 +260,7 @@ local function init(e)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
     -- `+0x218` to `+0x247`.
-    for index = 0, 21 do
+    for index = 0, RISE do
         if index ~= WATER then
             e:set_var(index, 0)
         end
@@ -128,6 +272,8 @@ local function init(e)
     e:set_var(T221, 8)
     e:set_body_ofs_x(0)
     e:set_body_box(-0x578, 0x3E8, 0x578, 0x320)
+    -- `Ck_em_id`: another spider in play is its partner (`+0x240`).
+    e:set_parent(e:other_of(0x25))
     local kind = e:kind() & 0xF
     if kind == 0 then
         e:set_var(KIND, 0)
@@ -135,13 +281,33 @@ local function init(e)
         e:set_be_flg(e:be_flg() | 0xC000000)
         return
     end
-    -- The ceiling (2 and 3) and the walls (4 to 11) aren't ported.
     if kind == 2 or kind == 3 then
         e:set_var(KIND, 1)
+        e:set_var(ADD_DIR, 0x800)
+        e:set_cdir(0, 0x800)
+        e:set_body_box(0, 0x3E8, 0x578, 0x320)
+        e:set_be_flg(e:be_flg() | 0x10000000)
+        local _, y = e:pos()
+        e:set_var(TOP, y + 0x4E2)
     elseif kind >= 4 and kind <= 11 then
         e:set_var(KIND, 3)
+        e:set_var(ADD_DIR, 0x800)
+        local kind_byte = e:kind() & 0xFF
+        local facing = ((kind_byte - 4) >> 1) & 0xFF
+        e:set_var(FACING, facing)
+        e:set_angle((facing << 10) & 0xFFFF)
+        -- `DAT_00528558`.
+        e:set_body_box(0, 0x3E8, 0x578, 0x1E)
+        local x, _, z = e:pos()
+        local _, list = e:sca_ck_info(x, z, e:floor(), 0x400, 800)
+        find_wall(e, list)
+        if kind_byte & 0xF0 == 0 then
+            e:set_var(TOP, -0xF78)
+        else
+            e:set_var(TOP, ((kind_byte & 0xF0) >> 4) * -0x708 + 0x4E2)
+        end
+        e:set_var(T225, 1)
     end
-    e:set_var(ADD_DIR, 0x800)
 end
 
 -- `FUN_0046f520`: the rest's clip and its count.
@@ -419,12 +585,19 @@ local function lunge(e)
     footstep(e)
 end
 
--- `FUN_00472f70(e, row, dir)` with `row` from 0 to 0x7f: `Esp_call` 0x1d
--- (the spit) from part 0's matrix, 1000 ahead and 100 aside. Its
--- `Sca_ck_hit` first only sets the hit globals, which nothing here reads.
--- The rows with the top bit, which start from the body, are the ceiling's.
+-- `FUN_00472f70(e, row, dir)`: `Esp_call` 0x1d (the spit) from part 0's
+-- matrix, 1000 ahead and 100 aside, or for a row with the top bit, from
+-- that point turned by `Cdir` from part 0's place. Its `Sca_ck_hit` first
+-- only sets the hit globals, which nothing here reads.
 local function spit_out(e, row, dir)
-    e:effect(0x1D, row, 0x1000, dir, 0, 1000, 0, -100)
+    if row & 0x80 == 0 then
+        e:effect(0x1D, row, 0x1000, dir, 0, 1000, 0, -100)
+        return
+    end
+    local cx, cz = e:cdir()
+    local x, y, z = e:rot_apply(cx, e:angle(), cz, 1000, 0, -100)
+    local px, py, pz = e:own_part(0)
+    e:call_effect(0x1D, row & 0x7F, 0x1000, i16(dir), x + px, y + py, z + pz)
 end
 
 -- `Routine_1` 8 (`0x46fae0`): the spit, then back to the rest with
@@ -496,7 +669,665 @@ local FLOOR <const> = {
     [9] = leap,
 }
 
--- `FUN_004735a0`: `Be_flg`'s height bits for the kind.
+-- `Routine_1` 0 on the ceiling (`0x46fe30`).
+local function ceiling_rest(e)
+    rest_wait(e)
+    local near = distance(e) & 0xFFFF
+    local facing = goto_target(e, 0x80)
+    goto_target(e, 0x100)
+    goto_target(e, 0x400)
+    if e:noise() & 1 ~= 0 then
+        e:routines(1, 9, 0, 0)
+        if e:rnd() & 1 ~= 0 then
+            e:routines(1, 5, 0, 0)
+        end
+    end
+    if e:var(COOLDOWN) ~= 0 then
+        return
+    end
+    if near < 7500 and near > 3000 then
+        if facing == 0 and (1 << (e:rnd() & 0xF)) & 0x340 ~= 0 then
+            e:routines(1, 7, 0, 0)
+        else
+            e:routines(1, 1, 0, 0)
+        end
+    end
+    if near < 3000 and facing == 0 then
+        if (1 << (e:rnd() & 0xF)) & 0x340 ~= 0 then
+            e:routines(1, 8, 0, 0)
+            return
+        end
+        e:routines(1, 7, 0, 0)
+    end
+end
+
+-- `Routine_1` 1 to 3 on the ceiling (`0x46ff30`): the floor's walk, then
+-- at the edge of a wall's record (`0x400` and not `0x200`) the way down it
+-- (10), when the wall faces its way, neither of the wall's ends is near and
+-- the player is near the wall. With another spider between a wall and the
+-- ceiling, or `+0x232` still counting, it turns instead (4).
+local function ceiling_walk(e)
+    walk(e)
+    local x, _, z = e:pos()
+    if e:sca_ck_info(x, z, e:floor(), 0x200, 800) ~= 0 then
+        return
+    end
+    local flags, list = e:sca_ck_info(x, z, e:floor(), 0x400, 800)
+    if flags == 0 then
+        return
+    end
+    -- The partner on a wall within 2500 is kept away from (11).
+    if e:has_parent() and e:parent_routine(0) ~= 7 and e:parent_var(KIND) >= 2 then
+        local px, _, pz = e:parent_pos()
+        if e:hypot(x - px, z - pz) < 0x9C4 then
+            e:routines(1, 11, 0, 0)
+            return
+        end
+    end
+    if e:var(T232) ~= 0 or e:room_enemy() & 0x20 ~= 0 then
+        e:routines(1, 4, 0, 0)
+        return
+    end
+    local found = find_wall(e, list)
+    e:set_var(FACING, found)
+    if found == 0 then
+        return
+    end
+    e:set_var(FACING, found - 1)
+    if not near_end(e, 0x400) and not near_end(e, -0x400)
+        and player_near_edge(e, e:var(RECORD), e:var(FACING)) then
+        e:routines(1, 10, 0, 0)
+        e:set_var(BETWEEN, 1)
+        e:set_room_enemy(e:room_enemy() | 0x20)
+    end
+end
+
+-- `Routine_1` 7 on the ceiling (`0x4700c0`): a step, a turn to face away
+-- from the target, and a run that spits down at it every 12 ticks.
+local function ceiling_lunge(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(4, 0, 3)
+        e:set_routine(2, 1)
+        local x, y = e:speed()
+        e:set_speed(x, y, 0)
+        sub = 1
+    end
+    if sub == 1 then
+        e:set_routine(2, sub + joint_step(e))
+        e:set_speed_x(100)
+        e:add_speed_xz_at(e:var(ADD_DIR))
+        footstep(e)
+        return
+    end
+    if sub == 2 then
+        e:clip(5, 0, 3)
+        local draw = e:rnd()
+        e:set_routine(2, 3)
+        e:set_timer(0, (draw & 0x1F) + 0x2D)
+        sub = 3
+    end
+    if sub == 3 then
+        local turn = goto_target(e, 0x40)
+        e:set_angle((e:angle() + turn) & 0xFFFF)
+        e:joint(0x400)
+        if turn == 0 then
+            e:set_routine(2, 4)
+        end
+        local left = e:timer(0)
+        e:set_timer(0, (left - 1) & 0xFFFF)
+        if left == 0 then
+            e:set_routine(2, 6)
+        end
+        footstep(e)
+        return
+    end
+    if sub == 4 then
+        e:clip(5, 0, 3)
+        e:set_routine(2, 5)
+        local draw = e:rnd()
+        e:set_timer(2, 1)
+        e:set_speed_x(300)
+        e:set_timer(0, (draw & 0x1F) + 10)
+        sub = 5
+    end
+    if sub == 5 then
+        e:set_angle((e:angle() + goto_target(e, 0x10)) & 0xFFFF)
+        e:add_speed_xz_at(e:var(ADD_DIR))
+        e:joint(0x400)
+        local shot = (e:timer(2) - 1) & 0xFF
+        e:set_timer(2, shot)
+        if shot == 0 then
+            e:sound(3)
+            spit_out(e, 0x8A, e:angle())
+            e:set_timer(2, 0xC)
+        end
+        local left = e:timer(0)
+        e:set_timer(0, (left - 1) & 0xFFFF)
+        if left == 0 or goto_target(e, 0x200) ~= 0 or e:sca_info() & 1 ~= 0
+            or e:at_em_no() ~= 0xFF then
+            e:set_routine(2, 6)
+        end
+        footstep(e)
+        return
+    end
+    if sub == 6 then
+        e:clip(7, 0, 3)
+        e:set_speed_x(100)
+        e:set_routine(2, 7)
+        sub = 7
+    end
+    if sub == 7 then
+        e:add_speed_xz_at(e:var(ADD_DIR))
+        e:set_routine(2, sub + joint_step(e))
+        footstep(e)
+        return
+    end
+    if sub == 8 then
+        e:routines(1, 0, 0, 0)
+        e:set_var(COOLDOWN, 0x3C)
+    end
+    footstep(e)
+end
+
+-- `Routine_1` 11 on the ceiling (`0x4704c0`): a walk away from the partner
+-- for 60 ticks.
+local function avoid(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:clip(2, 0, 3)
+        e:set_timer(0, 0x3C)
+        local px, _, pz = e:parent_pos()
+        e:set_timer(1, e:goto_ck(px, pz, 0x40) & 0xFFFF)
+    end
+    e:set_angle((e:angle() + e:timer(1)) & 0xFFFF)
+    e:joint(0x400)
+    footstep(e)
+    -- `FUN_004729c0(1)`, and `WORD_005285f8`.
+    e:set_speed_x(foot_step(e) + 0x64)
+    local left = (e:timer(0) - 1) & 0xFFFF
+    e:set_timer(0, left)
+    if left == 0 then
+        e:routines(1, 0, 0, 0)
+    end
+    if e:sca_info() & 1 == 0 then
+        e:add_speed_xz_at(e:var(ADD_DIR))
+    end
+end
+
+local KIND_2
+
+-- `Routine_1` 10 on the ceiling (`0x470320`): a turn to the wall, then over
+-- its edge onto it (kind 2), where it carries on at once.
+local function to_wall(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        local wall = e:var(WALL_DIR)
+        local angle = e:angle() & 0xFFF
+        e:set_angle(angle)
+        local diff = (wall - angle) & 0xFFFF
+        e:set_routine(2, 1)
+        e:set_timer(1, 0x18)
+        e:set_timer(0, diff & 0xFFF)
+        if diff & 0x800 ~= 0 then
+            e:set_timer(1, 0xFFE8)
+            e:set_timer(0, (angle - wall) & 0xFFF)
+        end
+        e:clip(3, 0, 3)
+        sub = 1
+    end
+    if sub == 1 then
+        if i16(e:timer(0)) < 1 then
+            e:set_routine(2, 2)
+            e:set_angle(e:var(WALL_DIR))
+        else
+            e:set_angle((e:angle() + e:timer(1)) & 0xFFFF)
+            e:set_timer(0, (e:timer(0) - 0x18) & 0xFFFF)
+        end
+        e:joint(0x400)
+        footstep(e)
+        return
+    end
+    if sub == 2 then
+        e:set_routine(2, 3)
+        local _, y = e:speed()
+        e:set_speed(0x19, y, 0)
+        -- `DAT_00528538`.
+        e:set_body_box(-0x64, 0x3E8, 0x578, 0x1E)
+        e:clip(0xE, 0, 3)
+        sub = 3
+    end
+    if sub == 3 then
+        e:add_speed_xz_at(e:var(ADD_DIR))
+        if e:joint(0x400) then
+            e:routines(1, 0, 0, 0)
+            e:set_var(KIND, 2)
+            e:set_speed_x(0x1C2)
+            e:add_speed_xz_at(e:var(ADD_DIR))
+            local _, y = e:pos()
+            e:set_pos_y(y + 0x4E2)
+            e:set_var(TOP, y + 0x4E2)
+            e:set_var(BETWEEN, 0)
+            e:set_room_enemy(e:room_enemy() & 0xDF)
+            KIND_2[0](e)
+        end
+    end
+    footstep(e)
+end
+
+-- `FUN_004706a0`: settle on the wall: lean onto it (`Cdir_z` or `Cdir_x`),
+-- the wall's body box and the rest's clip.
+local function settle(e)
+    if e:var(FACING) & 1 == 0 then
+        e:set_cdir(0, 0x400)
+    else
+        e:set_cdir(e:angle(), 0)
+    end
+    -- `DAT_00528558`.
+    e:set_body_box(0, 0x3E8, 0x578, 0x1E)
+    e:set_var(WALL_DIR, 0)
+    e:set_var(T225, 1)
+    e:clip(0, 0, 3)
+    e:joint(0x400)
+end
+
+-- `Routine_1` 0 for kind 2 (`0x4705a0`): settle, then down the wall (1)
+-- while the player is more than 3500 below, as far as the water or their
+-- height, or wait (2).
+local function wall_arrive(e)
+    settle(e)
+    local x, y, z = e:pos()
+    local _, py = e:player_pos()
+    local below = py - y
+    if below > 0xDAC then
+        local water = e:water_ck(x, z)
+        local steps
+        if water < i16(e:var(GROUND)) then
+            steps = i16(tdiv(water - y - 0x898, 100))
+            if steps < 0 then
+                steps = 0
+            end
+        else
+            steps = i16(tdiv(below - 0xDAC, 100))
+        end
+        e:set_timer(0, steps & 0xFFFF)
+        if steps ~= 0 then
+            local draw = e:rnd()
+            e:routines(1, 1, 0, 0)
+            e:set_timer(0, (steps + (draw & 3)) & 0xFFFF)
+            e:set_var(NEXT, 2)
+            return
+        end
+    end
+    e:routines(1, 2, 1, 0)
+    e:set_timer(0, (e:rnd() & 0xF) + 0x1E)
+end
+
+-- `Routine_1` 0 on a wall (`0x471040`): settle and watch (2).
+local function wall_start(e)
+    settle(e)
+    e:routines(1, 2, 0, 0)
+end
+
+-- `Routine_1` 1 on a wall (`0x470710`): down it for `Timer0` ticks, then on
+-- to `+0x231`.
+local function descend(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:set_speed(100, 0, 0)
+        e:clip(2, 0, 3)
+    end
+    if e:timer(0) ~= 0 then
+        move_by(e, 0, 0, 0)
+        e:set_timer(0, e:timer(0) - 1)
+    end
+    e:joint(0x400)
+    footstep(e)
+    if e:timer(0) == 0 then
+        e:routines(1, e:var(NEXT), 0, 0)
+        e:set_timer(0, (e:rnd() & 0xF) + 0xF)
+    end
+end
+
+-- `Routine_1` 2 for kind 2 (`0x4707c0`): a wait, then the spit (7) with the
+-- player near or the crawl (3).
+local function hang(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:clip(0, 0, 3)
+    end
+    e:joint(0x400)
+    local left = (e:timer(0) - 1) & 0xFFFF
+    e:set_timer(0, left)
+    if left == 0 then
+        if distance(e) < 3000 and (1 << (e:rnd() & 0xF)) & 0x340 ~= 0 then
+            e:routines(1, 7, 0, 0)
+            return
+        end
+        e:routines(1, 3, 0, 0)
+    end
+end
+
+-- `Routine_1` 2 on a wall (`0x471070`): it waits for the player within 7200
+-- or near the wall, then spits (7) or crawls (3).
+local function watch(e)
+    e:joint(0x400)
+    if distance(e) < 0x1C20 or player_near_edge(e, e:var(RECORD), e:var(FACING)) then
+        if distance(e) < 3000 then
+            e:routines(1, 7, 0, 0)
+            return
+        end
+        e:routines(1, 3, 0, 0)
+    end
+end
+
+-- `Routine_1` 3 on a wall (`0x470860`): a crawl across it, turning toward the
+-- player, until it has turned a quarter (the lunge, 6), with pauses.
+local function crawl(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        local turn = toward_player(e, 0x20)
+        e:set_timer(1, turn & 0xFFFF)
+        if turn == 0 then
+            e:routines(1, 7, 0, 0)
+            e:joint(0x400)
+            footstep(e)
+            return
+        end
+        local way = turn >= 1 and 0x400 or -0x400
+        if e:var(FACING) == 0 then
+            way = -way
+        end
+        e:set_timer(0, way & 0xFFFF)
+        sub = 1
+    end
+    if sub == 1 then
+        e:set_routine(2, 2)
+        local draw = e:rnd()
+        e:clip(2, 0, 3)
+        e:set_timer(2, (draw & 0xF) + 0xF)
+        sub = 2
+    end
+    if sub == 2 then
+        shift(e, i16(e:timer(1)))
+        if (e:var(WALL_DIR) ~ e:timer(0)) & 0xFFF == 0 then
+            e:routines(1, 6, 0, 0)
+        else
+            local left = (e:timer(2) - 1) & 0xFF
+            e:set_timer(2, left)
+            if left == 0 then
+                e:set_routine(2, 3)
+                local draw = e:rnd()
+                e:clip(0, 0, 3)
+                e:set_timer(2, (draw & 0xF) + 1)
+            end
+        end
+    elseif sub == 3 then
+        local left = (e:timer(2) - 1) & 0xFF
+        e:set_timer(2, left)
+        if left == 0 then
+            e:set_routine(2, 1)
+        end
+    end
+    e:joint(0x400)
+    footstep(e)
+end
+
+-- `WORD_00528664`: the climb's turns.
+local CLIMBS <const> = { [0] = 0x40, -0x40, 0x40, -0x40, 0x20, -0x40, 0x40, -0x20 }
+
+-- `Routine_1` 4 on a wall (`0x4709a0`): a turn across the wall until it
+-- faces up, then up to `+0x22c` (5), unless another spider is between a
+-- wall and the ceiling.
+local function climb(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        local turn = 0x40
+        if e:var(NEXT) == 0 then
+            turn = CLIMBS[e:rnd() & 7]
+        end
+        e:set_timer(1, turn & 0xFFFF)
+        e:set_var(BETWEEN, 1)
+        sub = 1
+    end
+    if sub == 1 then
+        e:set_routine(2, 2)
+        if e:var(NEXT) == 0 then
+            e:set_timer(2, (e:rnd() & 0xF) + 0xF)
+        else
+            e:set_timer(2, 0xFF)
+        end
+        if abs(i16(e:timer(1))) == 0x20 then
+            e:clip(2, 0, 3)
+        else
+            e:clip(1, 0, 3)
+        end
+        sub = 2
+    end
+    if sub == 2 then
+        local turn = i16(e:timer(1))
+        shift(e, turn)
+        local size = abs(turn)
+        if (e:var(WALL_DIR) - 0x800 + size) & 0xFFF <= size * 2 then
+            if e:room_enemy() & 0x20 == 0 then
+                e:set_routine(2, 5)
+            else
+                e:set_routine(2, 4)
+                e:clip(0, 0, 3)
+            end
+        end
+        local left = (e:timer(2) - 1) & 0xFF
+        e:set_timer(2, left)
+        if left == 0 then
+            e:set_routine(2, 3)
+            local draw = e:rnd()
+            e:clip(0, 0, 3)
+            e:set_timer(2, (draw & 0xF) + 0xF)
+        end
+    elseif sub == 3 then
+        local left = (e:timer(2) - 1) & 0xFF
+        e:set_timer(2, left)
+        if left == 0 then
+            e:set_routine(2, 1)
+        end
+    elseif sub == 4 or sub == 5 then
+        if sub == 5 or e:room_enemy() & 0x20 == 0 then
+            e:set_routine(2, 6)
+            e:set_var(WALL_DIR, 0x800)
+            e:set_var(BETWEEN, 1)
+            e:set_room_enemy(e:room_enemy() | 0x20)
+            e:set_speed(100, 0, 0)
+            e:clip(2, 0, 3)
+        end
+    elseif sub == 6 then
+        move_by(e, 0, 0, 0)
+        local _, y = e:pos()
+        if y <= e:var(TOP) then
+            e:set_pos_y(e:var(TOP))
+            e:routines(1, 5, 0, 0)
+        end
+    end
+    e:joint(0x400)
+    footstep(e)
+end
+
+-- `Routine_1` 5 on a wall (`0x470b90`): over the top onto the ceiling
+-- (kind 1).
+local function to_ceiling(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        if e:var(FACING) & 1 == 0 then
+            e:set_speed(0x19, 0, 0)
+        else
+            e:set_speed(0, 0x19, 0)
+        end
+        -- `DAT_00528538`.
+        e:set_body_box(-0x64, 0x3E8, 0x578, 0x1E)
+        e:clip(0, 0, 3)
+    elseif sub ~= 1 then
+        if sub == 2 then
+            add_speed_xyz(e, 0, e:var(WALL_DIR))
+            if e:joint(0x400) then
+                e:set_var(KIND, 1)
+                e:set_var(ADD_DIR, 0x800)
+                if e:var(FACING) & 1 == 0 then
+                    e:set_angle((e:angle() + 0x800) & 0xFFFF)
+                else
+                    e:set_angle((e:cdir() + 0x800) & 0xFFFF)
+                end
+                e:set_cdir(0, 0x800)
+                e:set_var(T232, 0x96)
+                local _, y = e:pos()
+                e:set_pos_y(y - 0x1DB)
+                e:set_speed_x(0x4C9)
+                e:add_speed_xz_at(0x800)
+                -- `DAT_00528518`, with `Ofs_y` at 0.
+                e:set_body_box(0, 0x3E8, 0x578, 0x320)
+                e:routines(1, 0, 0, 0)
+                e:set_var(BETWEEN, 0)
+                e:set_room_enemy(e:room_enemy() & 0xDF)
+                e:set_var(T225, 0)
+            end
+        end
+        footstep(e)
+        return
+    end
+    -- The partner in play on the ceiling within 2500 holds it here.
+    local wait = false
+    if e:has_parent() and e:parent_routine(0) ~= 7 then
+        local x, _, z = e:pos()
+        local px, _, pz = e:parent_pos()
+        wait = e:parent_var(KIND) == 1 and e:hypot(x - px, z - pz) <= 0x9C4
+    end
+    if not wait then
+        e:set_routine(2, 2)
+        e:clip(0xE, 0, 3)
+    end
+    e:joint(0x400)
+    footstep(e)
+end
+
+-- `Routine_1` 6 on a wall (`0x470d50`): a lunge across it that bites the
+-- player in reach, to the wall's end, then the climb (4).
+local function wall_lunge(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        local draw = e:rnd()
+        e:set_speed(300, 0, 0)
+        e:clip(4, 0, 3)
+        e:set_timer(0, (draw & 0xF) + 0x1E)
+        sub = 1
+    end
+    if sub == 1 then
+        if e:joint(0x400) then
+            e:set_routine(2, 2)
+            e:clip(5, 0, 3)
+        end
+    elseif sub == 2 then
+        move_by(e, 0, 0, 0)
+        e:joint(0x400)
+        if near_end(e, e:var(WALL_DIR)) or e:at_em_no() ~= 0xFF or e:sca_info() & 1 ~= 0 then
+            e:set_routine(2, 3)
+            e:clip(7, 0, 3)
+        end
+        if bite(e, 2000, 0x10CC) then
+            e:set_routine(2, 3)
+            e:clip(7, 0, 3)
+        end
+    elseif sub == 3 then
+        if e:joint(0x400) then
+            e:routines(1, 4, 0, 0)
+            e:set_var(NEXT, 0)
+        end
+    end
+    footstep(e)
+end
+
+-- `Routine_1` 7 on a wall (`0x470eb0`): a turn toward the player, then the
+-- spit, then the climb (4). `Routine_2` 3 (`FUN_0046fbb0`) isn't entered.
+local function wall_spit(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_routine(2, 1)
+        e:set_timer(0, 0x10)
+        e:clip(1, 0, 3)
+        sub = 1
+    end
+    if sub == 1 then
+        local turn = toward_player(e, 0x40)
+        shift(e, turn)
+        local fire = turn == 0
+        if not fire then
+            local left = (e:timer(0) - 1) & 0xFFFF
+            e:set_timer(0, left)
+            fire = left == 0
+        end
+        if fire then
+            e:set_routine(2, 2)
+            e:clip(0xB, 0, 3)
+            local row = ((distance(e) < 3000 and 1 or 0) - 0x78) & 0xFF
+            spit_out(e, row, wall_aim(e))
+        end
+        e:joint(0x400)
+        e:seq_sound()
+        return
+    end
+    if sub == 2 and e:joint(0x400) then
+        e:routines(1, 4, 0, 0)
+        e:set_var(NEXT, 0)
+    end
+    e:seq_sound()
+end
+
+-- `funcs_46F38E[1]` (`FUN_0046fe10`), by `Routine_1`.
+local CEILING <const> = {
+    [0] = ceiling_rest,
+    [1] = ceiling_walk,
+    [2] = ceiling_walk,
+    [3] = ceiling_walk,
+    [4] = turn,
+    [5] = aim,
+    [6] = aim,
+    [7] = ceiling_lunge,
+    [8] = spit,
+    [9] = leap,
+    [10] = to_wall,
+    [11] = avoid,
+}
+
+-- `funcs_46F38E[2]` (`FUN_00470580`), the wall a spider came down onto from
+-- the ceiling.
+KIND_2 = {
+    [0] = wall_arrive,
+    [1] = descend,
+    [2] = hang,
+    [3] = crawl,
+    [4] = climb,
+    [5] = to_ceiling,
+    [6] = wall_lunge,
+    [7] = wall_spit,
+}
+
+-- `funcs_46F38E[3]` (`FUN_00471020`), the wall a spider starts on.
+local WALL <const> = {
+    [0] = wall_start,
+    [1] = descend,
+    [2] = watch,
+    [3] = crawl,
+    [4] = climb,
+    [5] = to_ceiling,
+    [6] = wall_lunge,
+    [7] = wall_spit,
+}
+
+local STATES <const> = { [0] = FLOOR, CEILING, KIND_2, WALL }
+
+-- `FUN_004735a0`: `Be_flg`'s height bits for the kind, on a wall by how far
+-- the player is below.
 local function heights(e)
     local flags = e:be_flg() & 0xE3FFFFFF
     local kind = e:var(KIND)
@@ -504,8 +1335,18 @@ local function heights(e)
         flags = flags | 0xC000000
     elseif kind == 1 then
         flags = flags | 0x10000000
+    elseif kind == 2 or kind == 3 then
+        local _, y = e:pos()
+        local _, py = e:player_pos()
+        local below = py - y
+        if below < 0x834 then
+            flags = flags | 0x1C000000
+        elseif below < 0x1069 then
+            flags = flags | 0x18000000
+        else
+            flags = flags | 0x10000000
+        end
     end
-    -- Kind 3's depend on the player's height; not ported.
     e:set_be_flg(flags)
 end
 
@@ -513,7 +1354,8 @@ end
 local function move(e)
     -- `FUN_004733d0`: the partner (`fg_status`'s `0x10000000`) isn't ported.
     e:set_var(TO_PARTNER, 0)
-    local state = e:var(KIND) == 0 and FLOOR[e:routine(1)]
+    local states = STATES[e:var(KIND)]
+    local state = states and states[e:routine(1)]
     if state then
         state(e)
     end
@@ -546,7 +1388,7 @@ local BLOOD_ROWS <const> = {
 
 -- `FUN_00472df0`: blood at a part, where `Joint_trans` left it. The way is
 -- `Direction_ck` from the body to itself. On the floor nothing is added to
--- the part's place.
+-- the part's place, on the ceiling 800 below it and on a wall 400 that way.
 local function blood(e, part, row)
     local effect = BLOOD_ROWS[row]
     if effect == nil then
@@ -555,6 +1397,14 @@ local function blood(e, part, row)
     local x, _, z = e:pos()
     local dir = e:direction(x, z, x, z)
     local px, py, pz = e:own_part(part)
+    local kind = e:var(KIND)
+    if kind == 1 then
+        py = py + 800
+    elseif kind == 2 or kind == 3 then
+        local dx, dz = e:rotate(dir, 400, 0)
+        px = px + dx
+        pz = pz + dz
+    end
     e:call_effect(effect[1], effect[2], effect[3], dir, px, py, pz)
 end
 
@@ -644,7 +1494,7 @@ local function flinch_bleeding(e)
             e:set_d_life(6)
         end
     end
-    flinch(e)
+    flinch_by_kind(e)
 end
 
 -- `FUN_00471340` on the floor (`0x471360`): the magnums' and shotguns' hits
@@ -664,16 +1514,198 @@ local function flinch_hard(e)
     e:set_routine(2, e:routine(2) + joint_step(e))
 end
 
--- `DWORD_00528694`, by weapon: only the weapons arklay fires, and only the
--- floor's half of each.
+-- A hit between a wall and the ceiling doesn't stop it: the state it was in
+-- carries on at once.
+local function carry_on(e)
+    e:routines(1, e:var(LAST), e:var(LAST + 1), e:var(LAST + 2))
+end
+
+-- `FUN_00471170` on the ceiling (`0x471240`): the floor's flinch.
+local function ceiling_flinch(e)
+    if e:var(BETWEEN) == 0 then
+        flinch(e)
+        return
+    end
+    carry_on(e)
+    if e:var(HIT_BY) ~= 1 then
+        blood(e, 0, 0)
+    end
+    move(e)
+end
+
+-- `FUN_00471170` on a wall (`0x4712c0`): the climb, with the turn of 0x40.
+local function wall_flinch(e)
+    if e:var(HIT_BY) ~= 1 then
+        blood(e, 1, 0)
+    end
+    if e:var(BETWEEN) == 0 then
+        e:set_var(NEXT, 1)
+        e:routines(1, 4, 0, 0)
+        return
+    end
+    carry_on(e)
+    move(e)
+end
+
+-- `FUN_00471170`, by kind.
+local FLINCHES <const> = { [0] = flinch, ceiling_flinch, wall_flinch, wall_flinch }
+local function flinch_by_kind(e)
+    FLINCHES[e:var(KIND)](e)
+end
+
+-- `0x471450`: the fall from the ceiling begins, with a leg off.
+local function fall_start(e)
+    e:set_routine(2, 1)
+    e:set_speed(0, 0x28, 0)
+    e:set_timer(0, 0x800)
+    e:clip(1, 0, 3)
+    e:set_var(SCE, 1)
+    e:set_var(ADD_DIR, 0)
+    e:set_be_flg(e:be_flg() & 0xE3FFFFFF)
+    e:set_damage_cnt(e:damage_cnt() | 0x80)
+    lose_leg(e)
+    send_young(e)
+end
+
+-- The landing's sound: 6 into water, 5 onto the floor.
+local function landing_sound(e)
+    e:sound(e:var(FLOAT) >= 0x80 and 6 or 5)
+end
+
+-- `0x4714d0`: down to `Ground`, turning over on the way.
+local function fall(e)
+    add_speed_xyz(e, 0, e:timer(0))
+    local x, y, z = e:speed()
+    e:set_speed(x, y + 0x28, z)
+    if e:timer(0) ~= 0 then
+        local cx, cz = e:cdir()
+        e:set_cdir(cx, cz + 0x200)
+        e:set_timer(0, e:timer(0) - 0x200)
+    end
+    local ground = i16(e:var(GROUND))
+    local _, at = e:pos()
+    if ground <= at then
+        e:set_pos_y(ground)
+        e:set_be_flg((e:be_flg() & 0xEFFFFFFF) | 0xC000000)
+        if e:timer(0) == 0 then
+            e:set_routine(2, 2)
+            e:clip(9, 0, 3)
+        end
+        landing_sound(e)
+    end
+    e:joint(0x400)
+end
+
+-- `0x471580`: up on the floor, it carries on there (kind 0).
+local function fall_end(e)
+    if e:joint(0x400) then
+        e:set_var(SCE, 0)
+        e:set_var(KIND, 0)
+        e:set_be_flg(e:be_flg() | 0xC000000)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        e:routines(1, 0, 0, 0)
+    end
+end
+
+-- `0x4716c0`: the fall from a wall begins, away from it.
+local function wall_fall_start(e)
+    fall_start(e)
+    e:joint(0x400)
+    e:set_speed(0x1E0, 0, 0)
+    local facing = e:var(FACING)
+    if facing & 1 == 0 then
+        e:set_timer(0, (-e:cdir()) & 0xFFFF)
+        e:set_timer(1, 0)
+    else
+        e:set_timer(0, 0)
+        e:set_timer(1, (facing * 0x400 - e:angle()) & 0xFFFF)
+    end
+    e:set_be_flg(e:be_flg() & 0xE3FFFFFF)
+end
+
+-- The way it faces once it's down off a wall.
+local function off_wall(e)
+    local facing = e:var(FACING)
+    e:set_angle((-(facing * 0x400 * (facing & 1) + e:var(WALL_DIR))) & 0xFFFF)
+    e:set_cdir(0, 0)
+end
+
+-- `0x471760`: off the wall to `Ground`.
+local function wall_fall(e)
+    move_by(e, i16(e:timer(0)), i16(e:timer(1)), 0)
+    local x, y, z = e:speed()
+    e:set_speed(x + 0x28, y, z)
+    local ground = i16(e:var(GROUND))
+    local _, at = e:pos()
+    if ground <= at + 400 then
+        e:set_pos_y(ground)
+        off_wall(e)
+        e:set_be_flg((e:be_flg() & 0xEFFFFFFF) | 0xC000000)
+        e:set_routine(2, 2)
+        e:clip(9, 0, 3)
+        e:joint(0x400)
+        -- `DAT_00528518`.
+        e:set_body_box(-0x578, 0x3E8, 0x578, 0x320)
+        e:set_var(T225, 0)
+        landing_sound(e)
+    end
+end
+
+-- `funcs_47142C` and `funcs_47167C`, by `Routine_2`.
+local FALLS <const> = { [0] = fall_start, fall, fall_end }
+local WALL_FALLS <const> = { [0] = wall_fall_start, wall_fall, fall_end }
+
+-- `FUN_004715d0`: an odd `Type` on the ceiling doesn't fall.
+local function ceiling_flinch_hard(e)
+    if e:var(BETWEEN) ~= 0 then
+        lose_leg(e)
+        carry_on(e)
+        move(e)
+        return
+    end
+    if e:kind() & 1 == 0 then
+        FALLS[e:routine(2)](e)
+        return
+    end
+    if e:routine(2) == 0 then
+        send_young(e)
+    end
+    flinch_hard(e)
+end
+
+-- `0x471610`: an odd `Type` on a wall climbs instead.
+local function wall_flinch_hard(e)
+    if e:var(BETWEEN) ~= 0 then
+        lose_leg(e)
+        carry_on(e)
+        move(e)
+        return
+    end
+    if e:kind() & 1 == 0 then
+        WALL_FALLS[e:routine(2)](e)
+        return
+    end
+    lose_leg(e)
+    send_young(e)
+    e:set_var(NEXT, 1)
+    e:routines(1, 4, 0, 0)
+end
+
+-- `FUN_00471340`, by kind.
+local HARD <const> = { [0] = flinch_hard, ceiling_flinch_hard, wall_flinch_hard, wall_flinch_hard }
+local function flinch_hard_by_kind(e)
+    HARD[e:var(KIND)](e)
+end
+
+-- `DWORD_00528694`, by weapon: only the weapons arklay fires.
 local HURTS <const> = {
-    [2] = flinch,
-    [3] = flinch,
+    [2] = flinch_by_kind,
+    [3] = flinch_by_kind,
     [4] = flinch_bleeding,
-    [5] = flinch_hard,
-    [6] = flinch_hard,
-    [7] = flinch_hard,
-    [8] = flinch_hard,
+    [5] = flinch_hard_by_kind,
+    [6] = flinch_hard_by_kind,
+    [7] = flinch_hard_by_kind,
+    [8] = flinch_hard_by_kind,
 }
 
 -- `FUN_00471110`: `Routine_0` 2.
@@ -682,7 +1714,7 @@ local function hurt(e)
         e:set_var(HIT_BY, e:routine(1))
     end
     find_water(e)
-    local entry = e:var(KIND) == 0 and HURTS[e:routine(1)]
+    local entry = HURTS[e:routine(1)]
     if entry then
         entry(e)
     end
@@ -714,6 +1746,154 @@ local function die_again(e)
     end
 end
 
+-- `FUN_004734c0`: whether it has come down `dy` short of the water (-1),
+-- which it floats on, or of `Ground` (1).
+local function land(e, dy, on_ground, on_water)
+    local water = i16(e:var(WATER))
+    local ground = i16(e:var(GROUND))
+    local _, y = e:pos()
+    if water < ground then
+        if water <= y + dy then
+            e:set_var(FLOAT, 0xFF)
+            e:set_pos_y(water + on_water)
+            return -1
+        end
+    elseif ground <= y + dy then
+        e:set_var(FLOAT, 1)
+        e:set_pos_y(ground + on_ground)
+        return 1
+    end
+    return 0
+end
+
+-- `WORD_00528790`: where the ripples of a fall into water start, from part 0.
+local RIPPLES <const> = {
+    { 0, 0 }, { 250, 500 }, { 250, -500 }, { 500, 1000 },
+    { 500, -1000 }, { 750, 500 }, { 750, -500 }, { 1000, 0 },
+}
+
+-- `FUN_00471e50`: a fall has landed. It's no longer between a wall and the
+-- ceiling, and in water it makes ripples and sinks (`FUN_004728b0`'s 1).
+local function splash(e)
+    if e:var(BETWEEN) ~= 0 then
+        e:set_room_enemy(e:room_enemy() & 0xDF)
+    end
+    local float = e:var(FLOAT)
+    if float == 0 or float >= 0x80 then
+        local px, _, pz = e:own_part(0)
+        local water = i16(e:var(WATER))
+        for _, ripple in ipairs(RIPPLES) do
+            e:call_effect(0x1A, 0, 0x2000, i16(e:angle()), px + ripple[1], water, pz + ripple[2])
+        end
+        e:set_var(BOB, 1)
+        e:set_var(F23F, 1)
+    end
+end
+
+-- `0x471ef0`: the end of a fall's death, and its body takes one more shot
+-- with a life of 1.
+local function fallen(e)
+    e:joint(0x400)
+    if e:now_seq() & 0x80000 == 0 then
+        return
+    end
+    e:routines(7, 0, 0, 0)
+    e:set_be_flg(e:be_flg() & 0xE3FFFFFF)
+    if e:var(T239) == 0 then
+        e:set_life(1)
+        e:set_var(REVIVED, 1)
+    end
+end
+
+-- `0x471d20`: the death on the ceiling drops it, on its back, to the floor.
+local function ceiling_die(e)
+    local sub = e:routine(2)
+    if sub == 1 then
+        e:joint(0x200)
+        add_speed_xyz(e, 0, 0)
+        local x, y, z = e:speed()
+        e:set_speed(x, y + 0x28, z)
+        if land(e, 0, 0, 0) ~= 0 then
+            e:set_routine(2, 2)
+            e:set_be_flg((e:be_flg() & 0xE7FFFFFF) | 0x4000000)
+            e:set_var(KIND, 0)
+            e:set_be_flg(e:be_flg() | 0x42)
+            landing_sound(e)
+            splash(e)
+        end
+        return
+    end
+    if sub == 2 then
+        fallen(e)
+        return
+    end
+    local _, y = e:pos()
+    e:set_pos_y(y + 800)
+    e:set_routine(2, 1)
+    e:set_speed(0, 0x28, 0)
+    local cx = e:cdir()
+    e:set_cdir(cx, 0)
+    e:clip(0xC, 9, 0)
+    if e:var(HIT_BY) ~= 1 then
+        blood(e, 0, 0)
+    end
+end
+
+-- `0x471f70`'s start: away from the wall.
+local function wall_die_start(e)
+    e:set_routine(2, 1)
+    e:set_timer(0, 0x800)
+    e:clip(1, 9, 0)
+    e:joint(0x400)
+    e:set_var(SCE, 1)
+    e:set_var(ADD_DIR, 0)
+    e:set_speed(0x1E0, 0, 0)
+    local facing = e:var(FACING)
+    if facing & 1 == 0 then
+        e:set_timer(1, 0)
+        e:set_timer(0, (-e:cdir()) & 0xFFFF)
+    else
+        e:set_timer(0, 0)
+        e:set_timer(1, (facing * 0x400 - e:angle()) & 0xFFFF)
+    end
+end
+
+-- `0x472020`: off the wall to the floor, on its back.
+local function wall_drop(e)
+    move_by(e, i16(e:timer(0)), i16(e:timer(1)), 0)
+    local x, y, z = e:speed()
+    e:set_speed(x + 0x28, y, z)
+    if land(e, 400, 0, 0) == 0 then
+        return
+    end
+    off_wall(e)
+    e:set_routine(2, 2)
+    e:set_var(KIND, 0)
+    e:set_be_flg(e:be_flg() | 0x42)
+    e:clip(0xC, 9, 0)
+    e:joint(0x200)
+    -- `DAT_00528518`.
+    e:set_body_box(-0x578, 0x3E8, 0x578, 0x320)
+    e:set_var(T225, 0)
+    landing_sound(e)
+    splash(e)
+end
+
+-- `0x471f50`: the death on a wall.
+local function wall_die(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        wall_die_start(e)
+        if e:var(HIT_BY) ~= 1 then
+            blood(e, 0, 0)
+        end
+    elseif sub == 2 then
+        fallen(e)
+    else
+        wall_drop(e)
+    end
+end
+
 -- `FUN_00471c10`: the handguns' death. On the floor (`0x471c40`) it falls on
 -- its back (clip 12), and its body takes one more shot with a life of 1.
 local function die_plain(e)
@@ -721,7 +1901,12 @@ local function die_plain(e)
         die_again(e)
         return
     end
-    if e:var(KIND) ~= 0 then
+    local kind = e:var(KIND)
+    if kind == 1 then
+        ceiling_die(e)
+        return
+    elseif kind ~= 0 then
+        wall_die(e)
         return
     end
     if e:routine(2) == 0 then
@@ -760,7 +1945,29 @@ local function die_blown(e)
         end
         return
     end
-    if e:var(KIND) ~= 0 then
+    local kind = e:var(KIND)
+    if kind == 1 then
+        -- `0x4722a0`.
+        if e:routine(2) == 0 then
+            blood(e, 0x13, 1)
+            lose_body(e)
+            send_young(e)
+        end
+        ceiling_die(e)
+        return
+    elseif kind ~= 0 then
+        -- `0x4722f0`.
+        local sub = e:routine(2)
+        if sub == 0 then
+            wall_die_start(e)
+            lose_body(e)
+            blood(e, 0x13, 1)
+            send_young(e)
+        elseif sub == 2 then
+            fallen(e)
+        else
+            wall_drop(e)
+        end
         return
     end
     if e:routine(2) == 0 then
@@ -794,17 +2001,54 @@ local DIES <const> = {
 -- `BYTE_005287f8`: the body's bob in the water, by `Timer1 >> 3 & 7`.
 local BOBS <const> = { [0] = 0, 8, 16, 32, 32, 16, 8, 0 }
 
--- `FUN_004728b0`: a body in water bobs there (`+0x23e`'s 3). Its rise to
--- the water (1 and 2) and its rest on `Ground` out of water follow
--- `FUN_00471e50`, the ceiling's fall, and aren't ported.
+-- `FUN_004728b0`: a body that fell into water sinks and comes back up
+-- (`+0x23e`'s 1 and 2), then bobs there (3). Out of water it lies on
+-- `Ground`.
 local function bob(e)
-    local water = i16(e:var(WATER))
-    if e:var(BOB) ~= 3 or water == 0 then
+    local state = e:var(BOB)
+    if state == 0 then
         return
     end
-    local timer = e:timer(1)
-    e:set_timer(1, (timer + 1) & 0xFFFF)
-    e:set_pos_y(BOBS[(timer >> 3) & 7] + 0x46 + water)
+    local water = i16(e:var(WATER))
+    if water == 0 then
+        e:set_var(FLOAT, 1)
+        e:set_var(F23F, 0)
+        e:set_pos_y(i16(e:var(GROUND)))
+        return
+    end
+    if state == 3 then
+        local timer = e:timer(1)
+        e:set_timer(1, (timer + 1) & 0xFFFF)
+        e:set_pos_y(BOBS[(timer >> 3) & 7] + 0x46 + water)
+        return
+    end
+    if state == 1 then
+        e:set_var(BOB, 2)
+        local x, _, z = e:speed()
+        e:set_speed(x, 0x8C, z)
+        e:set_var(RISE, 0)
+    elseif state ~= 2 then
+        return
+    end
+    local x, sink, z = e:speed()
+    local rise = i16(e:var(RISE) + sink)
+    e:set_var(RISE, rise)
+    sink = sink - 0xF
+    local y = rise + 0x46 + water
+    e:set_pos_y(y)
+    if sink < 1 then
+        if sink < -0x46 then
+            sink = -0x46
+        end
+        if y <= water then
+            e:set_pos_y(water)
+            e:set_var(BOB, 3)
+        end
+    elseif i16(e:var(GROUND)) <= y then
+        sink = 0
+        e:set_pos_y(i16(e:var(GROUND)))
+    end
+    e:set_speed(x, sink, z)
 end
 
 -- `FUN_00471bb0`: `Routine_0` 3.
