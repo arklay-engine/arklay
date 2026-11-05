@@ -610,16 +610,24 @@ local function scene_signature(scene)
     )
 end
 
-local function walk_waypoints(bot, points, tolerance, label)
+-- `face` ({x, z}, optional) is the point the route faces after the last
+-- waypoint: the walk then arrives already facing it.
+local function walk_waypoints(bot, points, tolerance, label, face)
     local index = BOT_STATE.wp or 1
     if index > #points then
         return true
     end
     local point = points[index]
     local tol = BOT_STATE.wp_tol or tolerance
+    local next_point = points[index + 1]
     local result = bot:walk_to(point[1], point[2], {
         run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
         tolerance = tol,
+        -- Turn into the next leg on the way instead of stopping on the
+        -- waypoint; a retry after a terminal status walks the point exactly.
+        next = (not BOT_STATE.wp_retry) and next_point
+            and { next_point[1], next_point[2] } or nil,
+        face = (not next_point) and face or nil,
     })
     if result.status == "moving" then
         return false
@@ -792,6 +800,7 @@ local function door_nav(bot, target, custom, label)
         local result = bot:walk_to(point[1], point[2], {
             run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
             tolerance = 120,
+            face = { point[3], point[4] },
         })
         if result.status == "arrived" then
             nav.pressing = true
@@ -1022,6 +1031,7 @@ local function action_nav(bot, slot, label, custom, opts)
         local result = bot:walk_to(point[1], point[2], {
             run = bot:distance(point[1], point[2]) >= RUN_MIN_DISTANCE,
             tolerance = nav.walk_tolerance or 120,
+            face = { point[3], point[4] },
         })
         if result.status == "arrived" then
             nav.pressing = true
@@ -1476,6 +1486,7 @@ local function stair_nav(bot, slot, label, approach)
     local result = bot:walk_to(approach[1], approach[2], {
         run = bot:distance(approach[1], approach[2]) >= RUN_MIN_DISTANCE,
         tolerance = 120,
+        face = { approach[3], approach[4] },
     })
     if result.status == "arrived" then
         local facing = bot:face_to(approach[3], approach[4])
@@ -1713,7 +1724,7 @@ local function run_117_puzzle(bot)
         BOT_STATE.wp_tol = nil
         return false
     end
-    if walk_waypoints(bot, step.points, 150, step.label) then
+    if walk_waypoints(bot, step.points, 150, step.label, step.face) then
         if press_flag_action(bot, step) then
             if BOT_STATE.puzzle_failed then
                 return true
@@ -2645,7 +2656,7 @@ local function phase_emblem_detour(bot)
                     { 9500, 3000 },
                     { 9500, 8000 },
                     { 9700, 8000 },
-                }, 150, "10F piano") then
+                }, 150, "10F piano", { 10500, 8000 }) then
                     local facing = bot:face_to(10500, 8000)
                     local item_use = bot:flag(BANK_ITEM_USE, 8)
                     local room23 = bot:flag(4, 0x23)
