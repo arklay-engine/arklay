@@ -309,6 +309,9 @@ pub struct Footstep {
     /// Entity sound type: 0 (the A footstep) for the walk, turn and backward
     /// run, 1 (the B footstep) for the forward run.
     pub sound_type: u8,
+    /// RE2's player stood in water (`Water`), which plays the water's sound
+    /// (`Snd_se_walk`'s 0x1a) in place of the floor's.
+    pub water: bool,
 }
 
 /// The footstep rule of one locomotion behavior: which clip's frames apply a
@@ -1380,10 +1383,16 @@ fn run_stop_tick(
 impl PlayerState {
     /// Record a footfall of RE2's player, whose frames mark their own.
     pub(crate) fn emit_footstep(&mut self, frame: u8, sound_type: u8) {
+        self.emit_footstep_in(frame, sound_type, false);
+    }
+
+    /// [`Self::emit_footstep`], in water (`Water`) or not.
+    pub(crate) fn emit_footstep_in(&mut self, frame: u8, sound_type: u8, water: bool) {
         self.footsteps.push(Footstep {
             pos: self.pos,
             frame,
             sound_type,
+            water,
         });
     }
 
@@ -1572,6 +1581,7 @@ impl PlayerState {
                 pos: self.pos,
                 frame: frame as u8,
                 sound_type: rule.sound_type,
+                water: false,
             });
         }
     }

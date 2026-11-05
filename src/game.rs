@@ -6250,6 +6250,9 @@ impl GameState {
         // `has_enter_switch_zone` bit before the walk; `set_stairs_zone`
         // re-raises it when a zone matches.
         self.entities[0].zone_flags &= !0x20;
+        // `Sce_at` clears the player's `Water` before its walk; a water area
+        // (`Sce_Water`) sets it again.
+        self.re2.player.water = 0;
         self.probe_actions(pos, angle, 1, pos, action_press);
     }
 
@@ -8175,10 +8178,15 @@ impl GameState {
     }
 
     /// Fire an RE2 interaction area (`Sce_at_jump_tbl`). The kinds with no
-    /// game side yet (`SCE_NORMAL`, water, slopes, damage) only record their
-    /// hit, which the probe already did.
+    /// game side yet (`SCE_NORMAL`, slopes) only record their hit, which the
+    /// probe already did. Water (kind 7) sets the player's `Water`.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
+        if action.sce == crate::scd2::host::SCE_WATER {
+            // `Sce_Water`: the area's first word is the water's level.
+            self.re2.player.water = i16::from_le_bytes([action.params[0], action.params[1]]);
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_DAMAGE {
             // A four-point area's first corners stand where the box would be.
             let zone = self.re2.gates[usize::from(slot)]

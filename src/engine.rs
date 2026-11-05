@@ -12924,6 +12924,9 @@ impl Re2Sounds {
     }
 }
 
+/// `Snd_se_walk`'s sound column for a footfall in water.
+const WATER_FOOTSTEP: u8 = 0x1A;
+
 /// One tick's sounds of an RE2 room: `se_on`'s, the player's footsteps
 /// (`Snd_se_walk`) and the weapon's.
 fn play_re2_sounds(
@@ -12999,12 +13002,16 @@ fn play_re2_sounds(
     }
     for footstep in footsteps {
         let floor = crate::sca::floor_of(footstep.pos[1]);
-        let zone = se2::floor_sound(
-            &room.footstep_zones,
-            footstep.pos[0],
-            footstep.pos[2],
-            floor,
-        );
+        let zone = if footstep.water {
+            WATER_FOOTSTEP
+        } else {
+            se2::floor_sound(
+                &room.footstep_zones,
+                footstep.pos[0],
+                footstep.pos[2],
+                floor,
+            )
+        };
         let id = SoundId {
             kind: Kind::Room,
             slot: footstep.sound_type + (zone & 0x7f),
