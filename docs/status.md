@@ -61,6 +61,8 @@ Rooms draw the models their scripts place (`obj_model_set`), and `kage_set` give
 
 The behaviour of the crow, the dog, the lickers and the zombies is Lua, like RE1's enemies: `enemy/21/enemy.lua`, `enemy/20/enemy.lua`, `lib/licker.lua` behind `enemy/22` and `enemy/24`, and `lib/zombie.lua` behind a thin script for each zombie id. The second licker (`Em_24`), in the lab's room 605, matches the original's `Rnd`, the player and both of its lickers through a 1500-tick fight in which the lickers close in, take a shot, and attack Leon five times. The engine keeps what they stand on: sight and routing, pushes and walls, thrown parts. New families start in Lua. The licker climbs walls and ceilings and drops from them. Items lying in a room twinkle (`Sce_kirakira_set`) until they're taken, and a taken item's model no longer comes back.
 
+The plants (the ivy, poison ivy and vines), Mr. X and the giant spider's first slice have since landed in Lua too (#394 to #396, #392 and #404). The spider's floor attack states and the rest of its family are #403, Mr. X's unchecked items are #391, and the plants' gaps are in `docs/re2-deviations.md`. RE2 bodies and room objects now take their light in part space as the original does (#389, #390), which fixes the 30% shortfall in #383; Marvin's face still reads about 10% dark there.
+
 The other RE2 milestones (R9 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
