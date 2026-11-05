@@ -206,7 +206,7 @@ function BotSurvival.shots_per_kill(knowledge, weapon)
         local keep = enemy.keep and enemy.keep[weapon]
         local damage = keep and keep.damage
         if enemy.policy == "fight" and enemy.health and damage and damage > 0 then
-            local shots = (enemy.health + damage - 1) // damage
+            local shots = enemy.health // damage + 1
             if not most or shots > most then
                 most = shots
             end
