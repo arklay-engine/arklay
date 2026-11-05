@@ -1,10 +1,15 @@
 # Player bot
 
 A restricted Lua route that drives a normal new Jill game through the same pad
-a human would use. It cannot set flags, items or positions. Its only legal
-state-changing actions are normal input, the room's own item/stair actions, an
-equip request that the host applies like the inventory menu, and a heal request
-that runs the menu USE rule and consumes the item.
+a human would use. It cannot set flags, items or positions, and it cannot run
+an item, equip, heal or room-action handler. Its only output is pad and UI
+input (`set_input`, `press_action`, `pulse_confirm`, and the direction/run
+buttons `walk_to`/`face_to` set). Equip, heal and item use go through the
+inventory menu by those presses ([Menu skills](#menu-skills)); room items,
+doors and stair checks are reached by walking into the zone and pressing
+action. A unit test (`bot_ctx_has_no_state_changing_method_but_input`) lists
+the Lua handle's registered methods and fails on any method that is not a
+read, the bot's own bookkeeping, or input.
 
 ```sh
 # Watch the bot in the normal window (bare --bot implies --ui game --character 1)
@@ -63,13 +68,18 @@ fountains stunlock the player in the only bed crossing, so that path uses the
    (`on_enter_3`) and registers the lockpick item. Skip the scene, then walk to
    camera 3/4 in the north hall (`(11000, 25000)`) and back to camera 2/5
    (`(11000, 23000)`). Those camera cuts play the rest of the hall scene and
-   restore the east-wing door. The lockpick item is registered at the room
-   origin, outside the walkable floor; `action_nav` recognises that scripted
-   handover, runs the item's room action (`bot:use_action`), closes the viewer,
-   and waits until `has_item(0x31)` is true. If the first Barry scene never
+   restore the east-wing door. The lockpick item (IT_31) is registered as
+   AOT_06 at `(0, 0, 16, 16)` with `SAT_UNDER | SAT_PLAYER`, an automatic
+   probe of the player's own position at the room origin, outside the walkable
+   floor. No Jill event in 106 fires it (its `aot_on`/`give_item` calls are in
+   the CHRIS branches), so **the inventory item cannot be obtained by input**
+   and the route does not fake it. The game's own handover is the Barry
+   scene's `set(FG_SCENARIO, F_SCENARIO_7C, TRUE)` in `from_main_11`, and the
+   door rule (`has_lockpick`) tests that flag; the route waits for the flag
+   (or the item) and logs the missing item. If the first Barry scene never
    starts, the route takes the 203 stairs and returns once before retrying the
    camera cuts.
-6. **107 gallery.** With the lockpick in the inventory and the east-wing door
+6. **107 gallery.** With the lockpick flag raised and the east-wing door
    a normal door again, walk to `(31000, 12500)` just outside the door zone,
    face east and press action. In 107, the ink ribbon (0x2F) zone is in the
    south gallery. The port's default `jill_ink_ribbons = false` unregisters
@@ -164,13 +174,15 @@ fountains stunlock the player in the only bed crossing, so that path uses the
     with F_COMMON_A6 now set, the 10F main re-arms the wood use-item probes
     AOT_06/AOT_07 (`aot_delete(..., SCE_USEITEM, SAT_PLAYER)`), so the route
     walks back to the key hollow at `(9000,18500)`, faces north, waits for
-    bank 9 bit 4 and F_ROOM_22, and calls `bot:use_item(0x1F)`. The room's
+    bank 9 bit 4 and F_ROOM_22, and uses the key from the inventory menu
+    (`BotMenu.use_item(0x1F)`). The room's
     wood branch runs `from_main_3`/`from_main_4`, which tween OBJ_00 west and
     then to `0,0,0`, reopening the gap. The gold key stays in the inventory.
 
     The route returns through 104 to 105, walks to the fireplace approach
     `(4100,8100)`, waits for the gold use flag (bank 9 bit 5) and F_ROOM_22,
-    and calls `bot:use_item(0x20)`. The room's gold event sets F_COMMON_AB and
+    and uses it from the menu (`BotMenu.use_item(0x20)`). The room's gold event
+    sets F_COMMON_AB and
     tweens OBJ_02 to `(16000,14300)`. The shield key is then approached around
     the moved sideboard: `(14000,13000)` -> `(17100,13000)` ->
     `(17100,14060)`, then the 600 reach lands at `(17492,14514)` inside the
@@ -187,7 +199,12 @@ fountains stunlock the player in the only bed crossing, so that path uses the
     `check_door` zones, walks to the west side of the east flight at
     `(19700, 25650)`, presses action, and lets the room's own climb clip warp
     the player onto the east corridor. It then walks around the balcony to the
-    202 door. This uses `bot:use_stair(slot)`, the same room handler a normal
+    202 door. The climb is one real action press: facing east from
+    `(19700, 25650)` puts the 600 reach inside the `door_check` zone
+    `(20220, 23900, 3540, 3500)`, and the press starts the room's climb. A
+    press that does not move the player is repeated every 40 ticks (at most 5)
+    and then reported as a blocker. This replaces the old `bot:use_stair`, the
+    same room handler a normal
     action press runs.
 15. **202 -> 201 -> 101 -> 103 -> 10C.** The route takes the long south
     corridor at `z 3000` around 202's central block and re-arms the handgun
@@ -207,7 +224,8 @@ fountains stunlock the player in the only bed crossing, so that path uses the
     pump solution: walk to `(16200, 4700)`, face north so the 600 reach lands
     in the pump's use-item zone `(15300, 5100, 1800, 600)`, wait for the
     herbicide use flag (bank 9 bit 11) and F_ROOM_20 (bank 4 bit 0x20), then
-    call `bot:use_item(0x26)`. The room's `from_main` event withers all six
+    use the herbicide from the menu (`BotMenu.use_item(0x26)`). The room's
+    `from_main` event withers all six
     fountains and sets F_COMMON_A9. The key is then taken from `(6100,6300)`
     with the normal reach. The 10C green-herb actions are reach-gated and can
     re-arm each other's got-item viewers; the route swallows the viewer-close
@@ -263,9 +281,9 @@ this hits the first allowed frame whatever tick the transition began on; every
 door transition in the route is 11 ticks.
 
 The east-wing door is restored by the camera 3/4 -> 2/5 scenes. The lockpick
-item's zone is at the room origin, so the route uses `bot:use_action(slot)` on
-that item action (the same handler a normal action press runs) and closes the
-got-item viewer. It checks `has_item(0x31)` before leaving 106. The finish
+item's zone is at the room origin and no Jill script fires it, so the route
+leaves 106 on `F_SCENARIO_7C` (the flag the door rule tests) without the
+inventory item, and records that in memory as `blocker_lockpick_item`. The finish
 reason always names the furthest room/item milestone reached, such as
 `11A reached; 11B store room door locked (...)`, so a partial run is still
 self-describing.
@@ -279,8 +297,9 @@ rounds and the empty weapon stacks still count) before the 105 wood-key
 pickup, without guessing from item counts. It never writes the inventory.
 
 `action_nav(bot, slot, label, custom, opts)` is the generic ground-item skill.
-It finds the action by slot, treats a zone at the room origin as the scripted
-lockpick handover (running `bot:use_action`), and otherwise computes four
+It finds the action by slot, treats a zone at the room origin as a scripted
+handover that only the room script can fire (it waits for the item and then
+reports a `BLOCKER`; it never runs the handler), and otherwise computes four
 approach points 300 units outside the zone. It tries the nearest side first,
 walks to it with `walk_to`, faces the zone centre, presses action, and waits
 for `item_count` to rise or the got-item viewer to close. A side that does not
@@ -322,7 +341,8 @@ replacement for the route:
   are both empty, or the clip is too small to finish a fresh zombie without
   spare ammunition, it returns `false` and the route's normal movement
   continues.
-- It equips the handgun through `bot:equip(0x02)`, faces the target, holds aim
+- It equips the handgun through the inventory menu (`BotMenu.equip(0x02)`),
+  faces the target, holds aim
   until the reticle locks, and fires one pulse every 14 ticks. It follows the
   target's `status_flags` 0x20/0x80 vertical bit with up/down aim, because the
   damage pipeline only connects when the aim direction matches the monster's
@@ -367,15 +387,43 @@ Richard death scene returns to 204 and the 20E serum branch is not armed. The
 10C green-herb viewers still show `count=0`; the spray and the other-room
 herbs are the reliable heals.
 
+### Menu skills
+
+`bot/menu.lua` defines `BotMenu.equip(bot, item)`, `BotMenu.use_heal(bot,
+item)` and `BotMenu.use_item(bot, item)`. Each starts a job and returns
+`true`, or returns `false` (and logs) when the item is not held, is the wrong
+kind, another job is running, or the same job failed in the last 300 ticks.
+While a job runs, `on_bot_tick` hands it the tick before the scene handler,
+and the job drives the menu with one button pulse at a time (one release tick
+between pulses), each step waiting on `bot:menu()`:
+
+1. `open`: pulse START (every 20 ticks at most) until the engine shows the
+   menu requested or open; fail after 150 ticks.
+2. wait through the fades and the open delay until `phase == "input"`.
+3. `cursor`: d-pad toward `8 + 2 * slot` (right flips the column, up/down
+   step rows), reading the cursor back after every press.
+4. `select`: confirm on the item until `mode == "actions"`.
+5. `option`: when the submenu is `ready`, d-pad to the `EQUIP`/`USE` row of
+   `options`, then confirm.
+6. `result`: success only when the engine's state shows it: `equipped` is
+   the weapon, or the item's count dropped. A refusal message is dismissed
+   with action and fails the job.
+7. `close`: cancel out of the submenu and the panel (a key item's use closes
+   the menu itself), then `settle` waits through the closing fade and the
+   room's post-menu freeze without pressing, so no press leaks into the room.
+
+The stats JSON's `menu` block counts, from the engine's menu state alone:
+`opens` (inventory panel opened), `viewer_opens` (the same menu slot under a
+pick-up viewer or item box), `open_ticks`, `cursor_moves`, `option_moves`,
+`item_uses`, `heal_uses` and `equips`.
+
 ### Healing
 
-`bot:use_heal(item)` queues a legal one-tick heal request. The Lua snapshot
-only accepts the item when it is in the inventory, has at least one unit, and
-the catalog kind is `Heal`; it then returns `true` (accepted). The host validates
-the same conditions again, calls `game.use_item(item)` (the menu USE rules),
-and on `UseResult::Used` consumes one unit through
-`select_item` + `use_selected_item`, before the gameplay tick. The bot never
-writes health, status, flags or inventory quantities itself.
+`BotMenu.use_heal(bot, item)` runs a menu USE on a heal item (see
+[Menu skills](#menu-skills)): it refuses an item that is not held, has no
+units, or whose catalog kind is not `heal`, and reports success only when the
+item's count dropped. The bot never writes health, status, flags or inventory
+quantities itself.
 
 The route calls it below 60 health, preferring the first-aid spray (0x41,
 full heal) and falling back to a green herb (0x44), at most once per 60
@@ -434,9 +482,9 @@ first-mansion route.
   The gold key survives for the 105 fireplace. Without the wood key the
   fallback spends the gold key on the same escape and forfeits the shield.
   The blue jewel key (scenario `0x0B` clear) remains absent in either case.
-- The 203 landing is sealed by room collision; the route uses the room's
-  `check_door` stair zones through `bot:use_stair(slot)` instead of trying to
-  walk through the wall. A stair that does not move the player is a precise
+- The 203 landing is sealed by room collision; the route presses action
+  facing the room's `check_door` stair zone instead of trying to walk through
+  the wall. A stair that does not move the player is a precise
   `fail`, not an endless press.
 - The 10C bed band is `z 3072..3570` (498 units after the 372 radius and
   18-unit nav skin). The plant fountains' Manhattan trigger covers the whole
@@ -482,6 +530,7 @@ first-mansion route.
 | `bot:flag(bank, bit)` | A flag bit, read-only. |
 | `bot:has_item(item)` / `bot:item_count(item)` | Inventory queries. |
 | `bot:inventory()` | Read-only array of the live inventory slots: `{slot, item, quantity}` rows, including zero-quantity weapon slots. |
+| `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind}` with the menu's 0-based `slot`. |
 | `bot:memory()` | String map set by `remember`. |
 | `bot:visited(room)` | Whether a room id such as `"106"` (or packed `0x106`) was seen. |
 | `bot:remember(key, value)` | Store a string/number/boolean in memory; `nil` removes it. |
@@ -490,11 +539,6 @@ first-mansion route.
 | `bot:set_input(table)` | Set the next tick's player/UI input. |
 | `bot:press_action()` | Hold and edge the action button for one tick. |
 | `bot:pulse_confirm()` | Edge UI confirm for one tick. |
-| `bot:equip(item)` | Queue an equip for the next tick; returns `false` and logs when the item is not held or is not a weapon. The host applies the same `set_equipped` the menu does before the tick. |
-| `bot:use_heal(item)` | Queue a heal for the next tick; returns `false` and logs when the item is not held, has no units, or is not a `Heal` catalog item. The host runs the menu `use_item` rule and consumes one unit through `select_item` + `use_selected_item` before the tick. |
-| `bot:use_item(item)` | Queue a non-heal menu USE for the next tick (a key, chemical or document); returns `false` and logs when the item is not held or is a heal. The host runs the same `use_item` rule, which only succeeds after the room's use-item zone has raised the item's bank-9 use flag, and then consumes one unit. |
-| `bot:use_action(slot)` | Run the item room action in `slot` for one tick (the same handler a normal action press runs). Restricted to `kind == "item"`; used for scripted handovers whose zone is outside the walkable floor. |
-| `bot:use_stair(slot)` | Run the `door_check` room action in `slot` for one tick, the in-room stair/climb handler a normal action press runs. Combined with `press_action`, this is how 203's sealed landing is climbed. |
 | `bot:walk_to(x, z, opts)` | Collision-aware A* walk. Returns `{status, distance, angle_error}`. |
 | `bot:face_to(x, z)` | Turn toward a point. Returns `{status, distance, angle_error}`. |
 | `bot:distance(x, z)` | Horizontal distance. |
