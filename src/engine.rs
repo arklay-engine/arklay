@@ -8702,7 +8702,8 @@ impl App {
         self.watch = watch::Watch::new(enabled, &self.pack, &[]);
     }
 
-    /// Poll for changed Lua files and reload the live session's hooks and bot.
+    /// Poll for changed script/metadata files and reload the live session's
+    /// hooks, bot route and room metadata.
     ///
     /// Called between presented frames, never inside a game tick. With no
     /// game session the change is logged and the next session picks it up from
@@ -8716,24 +8717,54 @@ impl App {
             return;
         }
         let count = changed.len();
+        let lua_changed = changed.iter().any(|path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("lua"))
+        });
+        let metadata_changed = changed.iter().any(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("bot.xml"))
+        });
         if let Mode::Play(session) = &mut self.mode {
-            if let Err(err) = session.reload_lua(&self.pack) {
-                eprintln!("[watch] Lua hook reload failed: {err:#}");
-                return;
+            if metadata_changed && let Some(bot) = self.bot.as_mut() {
+                bot.reload_meta();
+                eprintln!("[watch] invalidated the bot room metadata");
             }
-            // The app caches the save/load screen entry from `App::new`'s
-            // throwaway VM. A changed `on_init` registration must replace it
-            // along with the session's hooks.
-            self.save_screen = crate::lua::registered_save_screen(&self.pack);
-            eprintln!("[watch] reloaded {count} Lua file(s)");
-            if let Some(bot) = self.bot.as_mut() {
-                match bot.reload(&self.pack) {
-                    Ok(()) => eprintln!("[watch] reloaded the bot route"),
-                    Err(err) => eprintln!("[watch] bot route reload failed: {err:#}"),
+            let lua_ok = if lua_changed {
+                match session.reload_lua(&self.pack) {
+                    Ok(()) => {
+                        // The app caches the save/load screen entry from
+                        // `App::new`'s throwaway VM. A changed `on_init`
+                        // registration must replace it along with the session's
+                        // hooks.
+                        self.save_screen = crate::lua::registered_save_screen(&self.pack);
+                        if let Some(bot) = self.bot.as_mut() {
+                            match bot.reload(&self.pack) {
+                                Ok(()) => eprintln!("[watch] reloaded the bot route"),
+                                Err(err) => {
+                                    eprintln!("[watch] bot route reload failed: {err:#}")
+                                }
+                            }
+                        }
+                        true
+                    }
+                    Err(err) => {
+                        eprintln!("[watch] Lua hook reload failed: {err:#}");
+                        false
+                    }
                 }
+            } else {
+                true
+            };
+            if lua_ok {
+                eprintln!("[watch] reloaded {count} script/metadata file(s)");
             }
         } else {
-            eprintln!("[watch] {count} Lua file(s) changed; waiting for a game session");
+            eprintln!(
+                "[watch] {count} script/metadata file(s) changed; waiting for a game session"
+            );
         }
     }
 
@@ -9273,7 +9304,7 @@ impl App {
             if let Some(runtime) = self.bot.as_mut()
                 && !runtime.finished()
             {
-                let input = runtime.tick(session)?;
+                let input = runtime.tick(session, &self.pack)?;
                 // A scripted item handover can name a room action whose zone
                 // is not reachable (the 106 lockpick item sits at the room
                 // origin). Run the same handler a normal action press would.
