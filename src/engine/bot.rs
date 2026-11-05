@@ -16,6 +16,8 @@
 //! `bot:room_meta()`. The observed world model is in [`world`] and reaches
 //! Lua as `bot:world()`.
 
+#[cfg(test)]
+mod lua_lint;
 mod meta;
 mod stats;
 mod steer;
@@ -58,6 +60,9 @@ pub struct BotOptions {
     /// The planner's risk setting (`--bot-risk`), `0.0..=1.0`; read-only to
     /// Lua as `bot:risk()`.
     pub risk: f64,
+    /// The room whose entry ends the run (`--bot-goal-room`), such as
+    /// `"20D"`; read-only to Lua as `bot:goal_room()`.
+    pub goal_room: Option<String>,
 }
 
 impl Default for BotOptions {
@@ -68,6 +73,7 @@ impl Default for BotOptions {
             max_ticks: 0,
             stats_path: None,
             risk: DEFAULT_RISK,
+            goal_room: None,
         }
     }
 }
@@ -317,6 +323,56 @@ struct SessionSnapshot {
     menu: MenuSnapshot,
     flags: [FlagBank; game::FLAG_BANK_COUNT],
     inventory: Vec<InventoryItem>,
+    /// The room's camera switch zones (group headers left out).
+    cameras: Vec<CameraZoneSnapshot>,
+}
+
+/// One camera switch zone: standing in it while the camera is `from` cuts
+/// to `to`. `x`/`z` is the mean of its four corners.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CameraZoneSnapshot {
+    from: usize,
+    to: usize,
+    x: i32,
+    z: i32,
+}
+
+/// The switch zones of `room`: every record after its group's header whose
+/// cuts are both in range, as `camera_for_position` reads them.
+fn camera_zone_snapshots(room: &RoomState) -> Vec<CameraZoneSnapshot> {
+    let mut zones = Vec::new();
+    let mut group = None;
+    for zone in &room.zones {
+        if zone.cam_from < 0 {
+            group = None;
+            continue;
+        }
+        if group != Some(zone.cam_from) {
+            group = Some(zone.cam_from);
+            continue;
+        }
+        if zone.cam_to < 0 {
+            continue;
+        }
+        let (from, to) = (zone.cam_from as usize, zone.cam_to as usize);
+        if from >= room.cuts.len() || to >= room.cuts.len() {
+            continue;
+        }
+        let corner = |axis: usize| -> i32 {
+            zone.corners
+                .iter()
+                .map(|c| i32::from(c[axis] as u16))
+                .sum::<i32>()
+                / 4
+        };
+        zones.push(CameraZoneSnapshot {
+            from,
+            to,
+            x: corner(0),
+            z: corner(1),
+        });
+    }
+    zones
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -389,7 +445,14 @@ struct SceneSnapshot {
     /// The window is in a page wait, a finished-text wait or a yes/no prompt:
     /// the next fresh action edge is consumed.
     message_waiting: bool,
+    /// The window shows a yes/no prompt.
+    prompt: bool,
+    /// The prompt's highlighted answer: `true` for Yes.
+    prompt_yes: bool,
     pickup: bool,
+    /// The pick-up opened the document reader, which pages on the D-pad and
+    /// closes on cancel.
+    reader: bool,
     frozen: bool,
     controls_locked: bool,
     controllable: bool,
@@ -701,7 +764,14 @@ impl SessionSnapshot {
                         | crate::message::MessagePhase::WaitInput
                         | crate::message::MessagePhase::YesNo
                 ),
+            prompt: game.message.active
+                && game.message.phase() == crate::message::MessagePhase::YesNo,
+            prompt_yes: game.message.menu_choice_id() & 1 == 0,
             pickup: session.pickup_view.is_some(),
+            reader: session
+                .pickup_view
+                .as_ref()
+                .is_some_and(|pickup| pickup.reader.is_some()),
             frozen,
             controls_locked,
             controllable,
@@ -783,6 +853,7 @@ impl SessionSnapshot {
             menu,
             flags: game.flags,
             inventory: game.inventory.clone(),
+            cameras: camera_zone_snapshots(&session.loaded.room),
         }
     }
 
@@ -1775,6 +1846,8 @@ struct BotCtx {
     tick: u64,
     /// The `--bot-risk` setting.
     risk: f64,
+    /// The `--bot-goal-room` setting.
+    goal_room: Option<Rc<str>>,
     shares: BotShares,
 }
 
@@ -1887,9 +1960,18 @@ impl UserData for BotCtx {
             let interacts = lua.create_table()?;
             for fact in &meta.interacts {
                 let row = lua.create_table()?;
-                row.set("slot", fact.slot)?;
-                row.set("bank", fact.bank)?;
-                row.set("bit", fact.bit)?;
+                match fact.target {
+                    meta::Target::Slot(slot) => {
+                        row.set("kind", "press")?;
+                        row.set("slot", slot)?;
+                    }
+                    meta::Target::Camera(cut) => {
+                        row.set("kind", "camera")?;
+                        row.set("cut", cut)?;
+                    }
+                }
+                row.set("bank", fact.flag.map(|(bank, _)| bank))?;
+                row.set("bit", fact.flag.map(|(_, bit)| bit))?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }
@@ -1921,6 +2003,10 @@ impl UserData for BotCtx {
         });
 
         methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
+
+        methods.add_method("goal_room", |_lua, bot, ()| {
+            Ok(bot.goal_room.as_deref().map(str::to_owned))
+        });
 
         methods.add_method("player", |lua, bot, ()| {
             let p = &bot.snapshot.player;
@@ -1988,7 +2074,10 @@ impl UserData for BotCtx {
             table.set("message", scene.message)?;
             table.set("message_takes_input", scene.message_takes_input)?;
             table.set("message_waiting", scene.message_waiting)?;
+            table.set("prompt", scene.prompt)?;
+            table.set("prompt_choice", if scene.prompt_yes { "yes" } else { "no" })?;
             table.set("pickup", scene.pickup)?;
+            table.set("reader", scene.reader)?;
             table.set("frozen", scene.frozen)?;
             table.set("controls_locked", scene.controls_locked)?;
             table.set("controllable", scene.controllable)?;
@@ -2013,6 +2102,19 @@ impl UserData for BotCtx {
                 row.set("lock", action.lock)?;
                 row.set("handler", action.handler)?;
                 row.set("flags", action.flags)?;
+                table.set(index + 1, row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("cameras", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (index, zone) in bot.snapshot.cameras.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("from", zone.from)?;
+                row.set("to", zone.to)?;
+                row.set("x", zone.x)?;
+                row.set("z", zone.z)?;
                 table.set(index + 1, row)?;
             }
             Ok(table)
@@ -2358,6 +2460,8 @@ pub struct BotRuntime {
     meta_room: Option<RoomId>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
     risk: f64,
+    /// The `--bot-goal-room` setting; kept across [`Self::reset`].
+    goal_room: Option<Rc<str>>,
     /// Run statistics for `--bot-stats`.
     stats: stats::BotStats,
 }
@@ -2372,8 +2476,16 @@ impl BotRuntime {
             meta: None,
             meta_room: None,
             risk: DEFAULT_RISK,
+            goal_room: None,
             stats: stats::BotStats::default(),
         })
+    }
+
+    /// Set the room whose entry ends the run (`--bot-goal-room`). The id is
+    /// stored uppercased, the way `bot:room().id` spells it.
+    pub fn with_goal_room(mut self, room: Option<&str>) -> Self {
+        self.goal_room = room.map(|room| Rc::from(room.to_ascii_uppercase()));
+        self
     }
 
     /// Set the planner's risk setting (`--bot-risk`), clamped to `0..=1`.
@@ -2430,6 +2542,7 @@ impl BotRuntime {
             meta: self.meta.clone(),
             tick: self.tick,
             risk: self.risk,
+            goal_room: self.goal_room.clone(),
             shares: BotShares {
                 memory: Rc::clone(&self.shares.memory),
                 nav: Rc::clone(&self.shares.nav),
@@ -2608,6 +2721,8 @@ mod tests {
             "path",
             "world",
             "risk",
+            "goal_room",
+            "cameras",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -3246,10 +3361,10 @@ mod tests {
                 local m = bot:room_meta()
                 local i, a, v = m.interacts[1], m.answers[1], m.avoids[1]
                 local w = bot:world()
-                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g",
+                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g|%s",
                     m.format, #m.puzzles, i.slot, i.bank, i.bit, i.label,
                     a.choice, tostring(a.slot), tostring(a.bank), v.slot, v.reason,
-                    w.room, #w.frontier, bot:risk())
+                    w.room, #w.frontier, bot:risk(), tostring(bot:goal_room()))
             end
 "#,
         )
@@ -3283,12 +3398,13 @@ mod tests {
             meta: Some(Rc::new(meta)),
             tick: 1,
             risk: 0.6,
+            goal_room: Some(Rc::from("20D")),
             shares,
         })
         .unwrap();
         assert_eq!(
             vm.lua.globals().get::<String>("RESULT").unwrap(),
-            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6"
+            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D"
         );
     }
 

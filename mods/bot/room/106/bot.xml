@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 106 main hall. After Barry's lockpick scene (on returning with common
+     flag 0x02 set), the rest of the hall scene plays on two camera cuts: the
+     north hall, then the middle hall. The second sets common flag 0x05 and
+     turns the east-wing door back into a door. -->
+<bot format="2">
+  <camera cut="4" label="north hall"/>
+  <camera cut="2" bank="1" bit="0x05" label="middle hall; hall scene done"/>
+</bot>

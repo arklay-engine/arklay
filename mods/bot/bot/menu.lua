@@ -36,12 +36,13 @@ local FIRST_SLOT_CURSOR = 8
 local PRESS_GAP = 2
 -- START is retried this rarely, so a slow open is not toggled shut.
 local START_GAP = 20
-local OPEN_TIMEOUT = 150
+local SECOND = BotConst.SECOND
+local OPEN_TIMEOUT = 5 * SECOND
 local STEP_TIMEOUT = 90
-local JOB_TIMEOUT = 1200
-local SETTLE_TIMEOUT = 120
+local JOB_TIMEOUT = 40 * SECOND
+local SETTLE_TIMEOUT = 4 * SECOND
 -- A failed job for the same item and kind is not retried for this long.
-local RETRY_COOLDOWN = 300
+local RETRY_COOLDOWN = 10 * SECOND
 
 local function log(bot, text)
     bot:log("menu: " .. text)
@@ -110,8 +111,8 @@ local function start(bot, kind, item, label)
         stage = "open",
         ticks = 0,
         stage_ticks = 0,
-        last_press = -100,
-        last_start = -100,
+        last_press = -SECOND,
+        last_start = -SECOND,
         before_count = bot:item_count(item),
         before_equipped = bot:player().equipped,
         ok = nil,
@@ -317,7 +318,7 @@ function BotMenu.step(bot)
         end
         if not menu.open then
             set_stage(job, "settle")
-        elseif job.ticks > JOB_TIMEOUT + 300 then
+        elseif job.ticks > JOB_TIMEOUT + RETRY_COOLDOWN then
             -- The panel would not close: give the tick back to the route
             -- with the failure on record rather than holding it forever.
             log(bot, string.format("%s: menu still open after the timeout; %s",

@@ -171,6 +171,14 @@ impl World {
             });
             record.target = door.target.clone();
             record.key = door.key;
+            // A room script can rewrite the lock byte: a door seen without
+            // its lock bit is unlocked outright, and one that gains a lock
+            // while its flag is clear is locked again.
+            if door.lock & 0x80 == 0 {
+                record.lock_bit = None;
+            } else if record.lock_bit.is_none() && !snapshot.flag(BANK_LOCKS, door.lock & 0x3F) {
+                record.lock_bit = Some(door.lock & 0x3F);
+            }
             record.present = true;
             record.x = x;
             record.z = z;
@@ -485,6 +493,9 @@ pub(super) mod tests {
                 message: None,
                 message_takes_input: false,
                 message_waiting: false,
+                prompt: false,
+                prompt_yes: true,
+                reader: false,
                 pickup: false,
                 frozen: false,
                 controls_locked: false,
@@ -507,6 +518,7 @@ pub(super) mod tests {
             menu: MenuSnapshot::default(),
             flags: [FlagBank::new(); game::FLAG_BANK_COUNT],
             inventory: Vec::new(),
+            cameras: Vec::new(),
         }
     }
 
@@ -647,6 +659,29 @@ pub(super) mod tests {
         let (_lua, table) = world_table(&world, &a);
         let doors: Table = room_row(&table, "106").get("doors").unwrap();
         assert!(!row(&doors, 1).get::<bool>("locked").unwrap());
+    }
+
+    #[test]
+    fn a_door_follows_a_rewritten_lock_byte() {
+        let mut world = World::default();
+        let mut a = snapshot(0x101, 5000, 5000);
+        a.doors.push(door(2, "103", 0, 9000, 9000));
+        world.observe(1, &a);
+        let locked = |world: &World, a: &SessionSnapshot| {
+            let (_lua, table) = world_table(world, a);
+            let doors: Table = room_row(&table, "101").get("doors").unwrap();
+            let door = row(&doors, 2);
+            door.get::<bool>("locked").unwrap() && !door.get::<bool>("unlocked").unwrap()
+        };
+        assert!(!locked(&world, &a));
+        // A room script arms the lock while its flag is clear.
+        a.doors[0].lock = 0x80 | 9;
+        world.observe(2, &a);
+        assert!(locked(&world, &a));
+        // ...and later removes the lock bit again.
+        a.doors[0].lock = 9;
+        world.observe(3, &a);
+        assert!(!locked(&world, &a));
     }
 
     #[test]

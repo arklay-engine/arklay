@@ -21,6 +21,11 @@ declare -A PACKS=(
   [rando-123456]="$CACHE/games/biorand-123456.akpak"
   [rando-777777]="$CACHE/games/biorand-777777.akpak"
 )
+# The room whose entry ends a scenario's run (--bot-goal-room); none for the
+# randomised packs, which run until the planner finishes or the tick budget.
+declare -A GOALS=(
+  [re1]=20D
+)
 LABELS=(re1 rando-123456 rando-777777)
 record=0
 only=""
@@ -51,8 +56,10 @@ for label in "${LABELS[@]}"; do
   json="$OUT/$label-$stamp.json"
   log="$OUT/$label-$stamp.log"
   echo "== $label ($pack)"
+  goal=()
+  [ -n "${GOALS[$label]:-}" ] && goal=(--bot-goal-room "${GOALS[$label]}")
   start=$EPOCHREALTIME
-  "$BIN" "$pack" --mod mods/bot --bot --bot-headless \
+  "$BIN" "$pack" --mod mods/bot --bot --bot-headless "${goal[@]}" \
     --bot-max-ticks "$MAX_TICKS" --bot-stats "$json" >"$log" 2>&1 || \
     echo "warning: $label exited non-zero (see $log)" >&2
   wall=$(python3 -I -c "import sys;print(float(sys.argv[1])-float(sys.argv[2]))" "$EPOCHREALTIME" "$start")

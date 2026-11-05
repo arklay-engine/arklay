@@ -7,9 +7,10 @@
 //!
 //! Format 2 adds room facts (never coordinates or walk paths) a generic
 //! planner reads: `<interact>` (an AOT slot and the flag that shows it is
-//! done), `<answer>` (the choice to make at a yes/no prompt) and `<avoid>`
-//! (an AOT slot the planner should not use). A format-1 document may not use
-//! them.
+//! done), `<camera>` (a camera cut to enter, which starts a room scene),
+//! `<answer>` (the choice to make at a yes/no prompt) and `<avoid>` (an AOT
+//! slot the planner should not use). `<interact>` and `<camera>` share one
+//! ordered step list. A format-1 document may not use them.
 //!
 //! The merged pack resolves the file next to the room's other entries, so a
 //! mod's `room/117/bot.xml` overlays the base pack's copy (or adds one when the
@@ -44,13 +45,23 @@ pub struct RoomMeta {
     pub avoids: Vec<Avoid>,
 }
 
-/// `<interact>`: press the AOT `slot`; flag `bank`/`bit` set means done.
+/// One step of the room's ordered sequence: `<interact>` (press the AOT
+/// slot; its flag set means done) or `<camera>` (enter the camera cut; done
+/// once the optional flag is set, or on entering the cut without one).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Interact {
-    pub slot: u8,
-    pub bank: u8,
-    pub bit: u8,
+    pub target: Target,
+    pub flag: Option<(u8, u8)>,
     pub label: Option<String>,
+}
+
+/// What an [`Interact`] step goes to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// Press action in this AOT slot's zone.
+    Slot(u8),
+    /// Walk into a camera switch zone that leads to this cut.
+    Camera(u8),
 }
 
 /// `<answer>`: the choice to make at a yes/no prompt, identified by the AOT
@@ -144,7 +155,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
     )?;
     for child in elements(root) {
         let name = child.tag_name().name();
-        let fact = matches!(name, "interact" | "answer" | "avoid");
+        let fact = matches!(name, "interact" | "camera" | "answer" | "avoid");
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
         }
@@ -157,6 +168,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
                 meta.puzzles.push(puzzle);
             }
             "interact" => meta.interacts.push(parse_interact(child)?),
+            "camera" => meta.interacts.push(parse_camera(child)?),
             "answer" => meta.answers.push(parse_answer(child)?),
             "avoid" => meta.avoids.push(parse_avoid(child)?),
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -195,9 +207,26 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
     check_attributes(node, &["slot", "bank", "bit", "label"])?;
     check_leaf(node)?;
     Ok(Interact {
-        slot: attr(node, "slot")?,
-        bank: bank_attr(node)?,
-        bit: attr(node, "bit")?,
+        target: Target::Slot(attr(node, "slot")?),
+        flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(node, &["cut", "bank", "bit", "label"])?;
+    check_leaf(node)?;
+    let flag = match (node.attribute("bank"), node.attribute("bit")) {
+        (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
+        (None, None) => None,
+        _ => bail!(
+            "{}: <camera> needs both `bank` and `bit`, or neither",
+            at(node)
+        ),
+    };
+    Ok(Interact {
+        target: Target::Camera(attr(node, "cut")?),
+        flag,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -428,73 +457,23 @@ mod tests {
     #[test]
     fn checked_in_117_metadata_has_the_seven_paintings() {
         let meta = checked_in();
-        assert_eq!(meta.format, 1);
-        assert_eq!(meta.puzzles.len(), 1);
-        let puzzle = &meta.puzzles[0];
-        assert_eq!(puzzle.id, "paintings");
-        assert_eq!(
-            puzzle.title.as_deref(),
-            Some("117 large gallery painting order")
-        );
+        assert_eq!(meta.format, 2);
+        assert!(meta.puzzles.is_empty(), "format 2 has no walk steps");
+        let interact = |slot, bank, bit, label: &str| Interact {
+            target: Target::Slot(slot),
+            flag: Some((bank, bit)),
+            label: Some(label.to_string()),
+        };
         let expected = vec![
-            PuzzleStep {
-                slot: 3,
-                bank: 4,
-                bit: 0x1A,
-                label: "117 painting 1/7 newborn".to_string(),
-                walks: vec![[19500, 8100]],
-                face: Some([19500, 7200]),
-            },
-            PuzzleStep {
-                slot: 5,
-                bank: 4,
-                bit: 0x1C,
-                label: "117 painting 2/7 infant".to_string(),
-                walks: vec![[24000, 8100], [24000, 5300], [16000, 5300]],
-                face: Some([16000, 6100]),
-            },
-            PuzzleStep {
-                slot: 6,
-                bank: 4,
-                bit: 0x1D,
-                label: "117 painting 3/7 lively boy".to_string(),
-                walks: vec![[10500, 5300]],
-                face: Some([10500, 6100]),
-            },
-            PuzzleStep {
-                slot: 4,
-                bank: 4,
-                bit: 0x1B,
-                label: "117 painting 4/7 young man".to_string(),
-                walks: vec![[19500, 5300]],
-                face: Some([19500, 6100]),
-            },
-            PuzzleStep {
-                slot: 2,
-                bank: 4,
-                bit: 0x19,
-                label: "117 painting 5/7 tired middle-aged man".to_string(),
-                walks: vec![[24000, 5300], [24000, 8100], [16000, 8100]],
-                face: Some([16000, 7200]),
-            },
-            PuzzleStep {
-                slot: 7,
-                bank: 4,
-                bit: 0x1E,
-                label: "117 painting 6/7 bold old man".to_string(),
-                walks: vec![[24000, 8100], [24000, 5300], [7250, 5300]],
-                face: Some([7250, 6100]),
-            },
-            PuzzleStep {
-                slot: 8,
-                bank: 0,
-                bit: 0x03,
-                label: "117 painting 7/7 people mourning".to_string(),
-                walks: vec![[2900, 4100]],
-                face: Some([1850, 4100]),
-            },
+            interact(3, 4, 0x1A, "painting 1/7 newborn"),
+            interact(5, 4, 0x1C, "painting 2/7 infant"),
+            interact(6, 4, 0x1D, "painting 3/7 lively boy"),
+            interact(4, 4, 0x1B, "painting 4/7 young man"),
+            interact(2, 4, 0x19, "painting 5/7 tired middle-aged man"),
+            interact(7, 4, 0x1E, "painting 6/7 bold old man"),
+            interact(8, 0, 0x03, "painting 7/7 people mourning"),
         ];
-        assert_eq!(puzzle.steps, expected);
+        assert_eq!(meta.interacts, expected);
     }
 
     #[test]
@@ -538,6 +517,8 @@ mod tests {
             <puzzle id="p"><step slot="1" bank="0" bit="1" label="x"/></puzzle>
             <interact slot="4" bank="1" bit="0x22" label="push the statue"/>
             <interact slot="5" bank="0" bit="3"/>
+            <camera cut="3" label="north hall"/>
+            <camera cut="2" bank="1" bit="0x05"/>
             <answer choice="no" slot="6" label="do not drink"/>
             <answer choice="yes" bank="4" bit="0x10"/>
             <avoid slot="7" reason="the plant stuns the player"/>
@@ -549,15 +530,23 @@ mod tests {
             meta.interacts,
             vec![
                 Interact {
-                    slot: 4,
-                    bank: 1,
-                    bit: 0x22,
+                    target: Target::Slot(4),
+                    flag: Some((1, 0x22)),
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
-                    slot: 5,
-                    bank: 0,
-                    bit: 3,
+                    target: Target::Slot(5),
+                    flag: Some((0, 3)),
+                    label: None,
+                },
+                Interact {
+                    target: Target::Camera(3),
+                    flag: None,
+                    label: Some("north hall".to_string()),
+                },
+                Interact {
+                    target: Target::Camera(2),
+                    flag: Some((1, 0x05)),
                     label: None,
                 },
             ]
