@@ -75,3 +75,6 @@ BotConst.COMBAT_RETREAT_START = 1800
 BotConst.COMBAT_RETREAT_DONE = 2600
 -- Monsters beyond this distance are outside the handgun's lock range.
 BotConst.COMBAT_RANGE = 4500
+-- The save/load screen lists eight numbered slots (rows 0..7), then the
+-- load mode's autosave rows, then the exit row (ui/save_load.lua).
+BotConst.SAVE_SLOTS = 8

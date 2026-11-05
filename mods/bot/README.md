@@ -28,6 +28,10 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
 ```
 
+A bot run saves at typewriters through the game's own save screen. Without
+an explicit `--save-dir` it writes to a fresh directory of its own,
+`<temp>/arklay-bot-saves-<pid>`, so it never overwrites the player's saves.
+
 `--watch` reloads the bot in place when `bot/**.lua` changes: the chunks
 re-run in the same Lua state, so `BOT_STATE` keeps its plan and the engine
 keeps its remembered memory, navigation and tick count. Editing a bot file
@@ -55,20 +59,26 @@ Chunks run in path order, so the modules are global tables:
 | `bot/nav.lua` | `BotNav` | Zone skills: approach points, `press_zone` (walk, face, press) and `visit_camera` (walk into a camera switch zone). |
 | `bot/planner.lua` | `BotPlanner` | Goal choice, attempt marks, the door route and the finish. |
 | `bot/puzzle.lua` | `BotPuzzle` | The `<interact>`/`<camera>` sequence, `<use>`, `<answer>` and `<avoid>` facts. |
+| `bot/save.lua` | `BotSave` | Saving at typewriters, the latest-save tracking and the reload after a death ([Saving and reloading](#saving-and-reloading)). |
 | `bot/scene.lua` | `BotScene` | Films, transitions, messages, yes/no prompts, pick-up viewers and the document reader. |
-| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health stop and the common-zombie fight. |
+| `bot/survival.lua` | `BotSurvival` | Healing, the critical-health rule and the common-zombie fight. |
 
 Priorities, highest first:
 
-1. A running menu job owns the pad. Scenes, films, transitions, messages and
-   viewers go to `BotScene`. A yes/no prompt takes the `<answer>` that
+1. A running menu job owns the pad. A death goes to `BotSave.on_death`; the
+   typewriter's save screen and its fades go to `BotSave`. Scenes, films,
+   transitions, messages and viewers go to `BotScene`. A yes/no prompt takes the `<answer>` that
    matches the last press or a set flag, and Yes otherwise. A document
    pick-up's reader is closed with cancel.
 2. Survival. Heal below `max_health * (0.6 - 0.35 * risk)` with the largest
-   held heal stack, never in a grab, a fight or a scene. Below
+   held heal stack, never in a grab, a fight or a scene. Then a save at a
+   typewriter here when the save decision allows it
+   ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
-   in the last 5 seconds, the run finishes with
-   `health critical with no heal item while under attack` rather than dying.
+   in the last 5 seconds (critical), the bot saves if a typewriter here
+   allows it, plays on if a save exists (a death loads it), and only with no
+   save at all finishes with
+   `health critical with no heal item and no save while under attack`.
    The fight takes only a common zombie that is visible and in front. A
    crowd (more than one monster within range) stands the fight down. The
    gun is the equipped weapon with rounds, or the menu weapon with the most.
@@ -158,6 +168,53 @@ the line above, naming the engine rule. Room-id strings are banned there
 too. Write larger values as expressions of constants (`30 * C.SECOND`,
 `C.APPROACH // 2`).
 
+### Saving and reloading
+
+A typewriter is a room action of kind `typewriter` (the engine's room-action
+handler `0x10`). The bot saves like a player: it walks into the zone and
+presses action, answers the save prompt Yes, waits through the fade
+(`scene.typewriter`), then drives the save screen (`scene.save_screen`):
+d-pad to the first empty slot (or, with all eight full, the slots in turn),
+confirm, accept the overwrite question, and wait for the write and the fade
+back. `bot:saves()` reports only what the engine's save screen wrote.
+
+The ink ribbon: the save prompt needs one only when the character's ink
+ribbon option is on (`bot:saves().needs_ribbon`), and then the save spends
+one. Jill's option (`jill_ink_ribbons`) is off by default, so by default Jill
+saves without a ribbon, spends none, and no ribbon appears in the game. With
+the option on she needs a held ribbon for every save, and the bot saves only
+while it holds one.
+
+The decision (`BotSave.wants`), scaled by `bot:risk()`:
+
+- no save without a ribbon when one is needed;
+- no save when nothing new happened since the last save or since the run
+  started (rooms entered, items taken, doors unlocked);
+- critical health saves at once (it skips only the cooldown);
+- otherwise at most one save per `(20 + 100 * risk)` seconds;
+- risk up to `0.5` saves at every typewriter it passes;
+- a bolder bot saves only below half of max health, or in a risky room: a
+  live monster in the room, or damage taken in the last 30 seconds.
+
+The latest save is kept in bot memory (`save_count`, `save_slot`,
+`save_room`, `save_tick`, `save_progress`). The engine also keeps a copy of
+the bot's memory and world model from the tick each save is written.
+
+After a death, with a save, the bot confirms through the DIED screen. The
+game returns to the title; there `on_bot_screen(bot)` runs instead of
+`on_bot_tick`: it picks LOAD GAME, moves the load screen's cursor to the
+latest save's slot and confirms. The loaded session carries the run on: the
+tick count, the statistics and the save history continue, the memory and the
+world model go back to the copy from that save (the room path is kept), the
+navigation cache is dropped and the Lua VM is rebuilt (`BOT_STATE` starts
+fresh). Without a save the run finishes `dead, no save`; more than 3 deaths
+since one save finish the run too. The stats JSON counts `saves`,
+`reloads` and `deaths_before_reload`.
+
+The bot reads the shipped save screen's state; a mod's registered save
+screen or the modern screen shows the bot nothing, and the save or load
+finishes with a reason.
+
 ### Menu skills
 
 `bot/menu.lua` defines `BotMenu.equip(bot, item)`, `BotMenu.use_heal(bot,
@@ -193,17 +250,27 @@ pick-up viewer or item box), `open_ticks`, `cursor_moves`, `option_moves`,
 
 `on_bot_tick(bot)` runs once per app update, before the game tick.
 
+`on_bot_screen(bot)` (optional) runs instead on the title and the title's
+load screen, where the bot loads its latest save after a death. Its handle
+has `tick`, `risk`, `saves`, `memory`, `log`, `finish`, `set_input`,
+`pulse_confirm` and `screen()`: `{kind = "title", stage, selection,
+any_saves}` (`stage` `press`/`menu`/`fade_out`/`attract_fade`, `selection`
+1 NEW GAME or 2 LOAD GAME) or `{kind = "load", readable, mode, stage,
+cursor, exit_row, slots}`. A route without it finishes the run when it
+leaves the game session.
+
 | Call | Result |
 | --- | --- |
 | `bot:tick()` | Monotonic app-update counter. |
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
 | `bot:world()` | The observed world model: rooms, doors, items, action presses and the frontier. Read-only; see [World model](#world-model). |
-| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight and critical-health thresholds. |
+| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight, save and critical-health thresholds. |
+| `bot:saves()` | The run's saves, read-only: `{count, slot, room, tick, reloads, deaths, deaths_since_save, needs_ribbon, ribbons}`. `slot` (0-based), `room` and `tick` describe the latest save the engine's save screen wrote and are `nil` before the first. `needs_ribbon` is the character's ink ribbon rule and `ribbons` the held count. |
 | `bot:goal_room()` | The `--bot-goal-room` id (uppercase, such as `"20D"`), or `nil`. |
 | `bot:cameras()` | The current room's camera switch zones: `{from, to, x, z}` rows, `x`/`z` the zone's corner mean. Each cut group's header record is skipped. |
 | `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags, grabbed}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `grabbed` is the entity's grab zone flag. |
-| `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead}`. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. |
+| `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead, typewriter, save_screen}`. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. `typewriter` is the fade into or out of the typewriter's save screen; `save_screen` (only while it is up) is `{mode, stage, cursor, exit_row, slots}`: `mode` `"save"`, `stage` `idle`/`confirm_overwrite`/`save_anim`/`error`/`fade_out`, `cursor` the highlighted row (0-based; rows `0..7` are the slots), `slots` whether each slot holds a save. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
 | `bot:doors()` | Array of `{slot, target, next_room, key, lock, x, z, width, depth}`; `target` is the destination room id. |
 | `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |

@@ -6,11 +6,16 @@
 --   1. a running inventory-menu job (bot/menu.lua) owns the pad;
 --   2. scenes, films, door transitions, messages, prompts and viewers
 --      (bot/scene.lua);
---   3. survival: heal below a risk-scaled threshold, then fight a common
---      zombie in front (bot/survival.lua);
---   4. the planner (bot/planner.lua): room puzzle facts, items, stairs,
+--   3. survival: heal below a risk-scaled threshold (bot/survival.lua);
+--   4. saving at a typewriter here when the risk-scaled decision says so
+--      (bot/save.lua); at critical health with no heal item, a save if one
+--      is possible, else play on when a save exists, else stop;
+--   5. combat: fight a common zombie in front (bot/survival.lua);
+--   6. the planner (bot/planner.lua): room puzzle facts, items, stairs,
 --      doors, and the finish when nothing reachable is left or the
 --      --bot-goal-room is entered.
+-- A death loads the latest save through the title's load screen
+-- (on_bot_screen below); without a save the run finishes "dead, no save".
 -- Module tables are globals because chunks run in path order and a --watch
 -- reload re-runs them in the same Lua state. No module holds a room id, flag
 -- bit, item id, slot number or coordinate; engine rules live in
@@ -46,6 +51,8 @@ function on_bot_tick(bot)
     local room = bot:room()
     local scene = bot:scene()
     local player = bot:player()
+    -- First, so the memory the engine checkpoints with a save holds it.
+    BotSave.observe(bot)
     on_damage(bot, player)
 
     if BOT_STATE.room ~= room.id then
@@ -63,7 +70,11 @@ function on_bot_tick(bot)
         bot:log("scene " .. signature)
     end
     if scene.dead then
-        BotPlanner.finish(bot, "player died")
+        BotSave.on_death(bot)
+        return
+    end
+    BotSave.note_prompt(bot, scene)
+    if BotSave.screen_step(bot, scene) then
         return
     end
     if BotScene.handle(bot, scene) then
@@ -84,12 +95,23 @@ function on_bot_tick(bot)
     if BotSurvival.heal(bot, player) then
         return
     end
-    if BotSurvival.critical(bot, player) then
-        BotPlanner.finish(bot, "health critical with no heal item while under attack")
+    local critical = BotSurvival.critical(bot, player)
+    if BotSave.step(bot, player, critical) then
+        return
+    end
+    if critical and not BotSave.has_save(bot) then
+        BotPlanner.finish(bot,
+            "health critical with no heal item and no save while under attack")
         return
     end
     if BotSurvival.step(bot, scene, player) then
         return
     end
     BotPlanner.step(bot)
+end
+
+-- The title and its load screen, where the bot loads its latest save after
+-- a death (bot/save.lua).
+function on_bot_screen(bot)
+    BotSave.app_screen(bot)
 end

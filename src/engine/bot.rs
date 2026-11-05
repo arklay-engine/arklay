@@ -38,6 +38,7 @@ use crate::pack::Pack;
 use crate::player;
 use crate::state::{RoomId, RoomState};
 use crate::ui::UiInput;
+use crate::ui::save_load::SaveScreenView;
 use crate::weapons::WeaponState;
 
 /// The default headless tick budget (about 55 minutes at 30 Hz).
@@ -196,7 +197,7 @@ struct DoorMemory {
 }
 
 /// What the bot has seen and remembered this run. In-memory only.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct BotMemory {
     /// The rooms entered, in order (repeats included when the room changes).
     room_path: Vec<String>,
@@ -325,6 +326,25 @@ struct SessionSnapshot {
     inventory: Vec<InventoryItem>,
     /// The room's camera switch zones (group headers left out).
     cameras: Vec<CameraZoneSnapshot>,
+    /// The typewriter save screen as a player sees it, while it is up.
+    save_screen: Option<SaveScreenView>,
+    /// This session's completed saves and the ink ribbon rule.
+    saves: SaveSnapshot,
+}
+
+/// The session's save facts: what the save screen reported writing, and
+/// whether a save needs an ink ribbon. Read-only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SaveSnapshot {
+    /// Saves this session's typewriter screens wrote.
+    written: u32,
+    /// The slot of the last one (0-based).
+    slot: Option<usize>,
+    /// A typewriter save needs, and spends, an ink ribbon (the character's
+    /// ink ribbon option).
+    needs_ribbon: bool,
+    /// Ink ribbons held.
+    ribbons: u32,
 }
 
 /// One camera switch zone: standing in it while the camera is `from` cuts
@@ -457,6 +477,9 @@ struct SceneSnapshot {
     controls_locked: bool,
     controllable: bool,
     dead: bool,
+    /// The typewriter's save hand-off (the fade into or out of the save
+    /// screen) is running.
+    typewriter: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -778,6 +801,10 @@ impl SessionSnapshot {
             dead: !session.death.is_idle()
                 || game.flags[5].bit(game::MSF_PLAYER_DEAD)
                 || entity.health <= 0,
+            typewriter: session.typewriter_arm.is_some()
+                || session.typewriter_fade.is_some()
+                || session.typewriter_open.is_some()
+                || session.typewriter_exit_fade,
         };
         let player = PlayerSnapshot {
             x: session.player.pos[0],
@@ -854,6 +881,16 @@ impl SessionSnapshot {
             flags: game.flags,
             inventory: game.inventory.clone(),
             cameras: camera_zone_snapshots(&session.loaded.room),
+            save_screen: session
+                .save_screen
+                .as_ref()
+                .and_then(|screen| screen.bot_view()),
+            saves: SaveSnapshot {
+                written: session.saves_written,
+                slot: session.last_saved_slot,
+                needs_ribbon: game.needs_ink_ribbons(),
+                ribbons: game.item_count(game.ink_ribbon_item()),
+            },
         }
     }
 
@@ -2043,6 +2080,19 @@ struct BotShares {
     finish_reason: Rc<RefCell<Option<String>>>,
 }
 
+impl BotShares {
+    /// Another handle on the same shared values.
+    fn share(&self) -> Self {
+        Self {
+            memory: Rc::clone(&self.memory),
+            nav: Rc::clone(&self.nav),
+            input: Rc::clone(&self.input),
+            finished: Rc::clone(&self.finished),
+            finish_reason: Rc::clone(&self.finish_reason),
+        }
+    }
+}
+
 impl Default for BotShares {
     fn default() -> Self {
         Self {
@@ -2055,10 +2105,70 @@ impl Default for BotShares {
     }
 }
 
+/// One completed save the bot saw: the slot the save screen wrote, the room
+/// and the bot tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SaveRecord {
+    slot: Option<usize>,
+    room: RoomId,
+    tick: u64,
+}
+
+/// The run's saves, reloads and deaths, observed from the engine and kept
+/// across a reload (`bot:saves()`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SaveLog {
+    /// Saves written this run.
+    count: u32,
+    /// The latest one.
+    last: Option<SaveRecord>,
+    /// Saves the bot loaded after a death.
+    reloads: u32,
+    /// Deaths this run.
+    deaths: u32,
+    /// Deaths since the latest save was written.
+    deaths_since_save: u32,
+}
+
+/// The `bot:saves()` table.
+fn saves_table(lua: &Lua, log: &SaveLog, facts: Option<&SaveSnapshot>) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("count", log.count)?;
+    table.set("reloads", log.reloads)?;
+    table.set("deaths", log.deaths)?;
+    table.set("deaths_since_save", log.deaths_since_save)?;
+    if let Some(last) = &log.last {
+        table.set("slot", last.slot)?;
+        table.set("room", last.room.room3())?;
+        table.set("tick", last.tick)?;
+    }
+    if let Some(facts) = facts {
+        table.set("needs_ribbon", facts.needs_ribbon)?;
+        table.set("ribbons", facts.ribbons)?;
+    }
+    Ok(table)
+}
+
+/// The `scene.save_screen` table.
+fn save_screen_table(lua: &Lua, view: &SaveScreenView) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("mode", if view.save { "save" } else { "load" })?;
+    table.set("stage", view.stage.as_str())?;
+    table.set("cursor", view.cursor)?;
+    table.set("exit_row", view.exit_row)?;
+    table.set(
+        "slots",
+        lua.create_sequence_from(view.slots.iter().copied())?,
+    )?;
+    Ok(table)
+}
+
 /// The Lua-facing bot handle. Every method is a read of the snapshot or a
 /// normal input write; there is deliberately no state-authoring method.
 struct BotCtx {
     snapshot: SessionSnapshot,
+    /// The run's save history.
+    saves: SaveLog,
     /// The current room's authored metadata, cached by [`BotRuntime`].
     meta: Option<Rc<meta::RoomMeta>>,
     tick: u64,
@@ -2311,7 +2421,15 @@ impl UserData for BotCtx {
             table.set("controls_locked", scene.controls_locked)?;
             table.set("controllable", scene.controllable)?;
             table.set("dead", scene.dead)?;
+            table.set("typewriter", scene.typewriter)?;
+            if let Some(view) = &bot.snapshot.save_screen {
+                table.set("save_screen", save_screen_table(lua, view)?)?;
+            }
             Ok(table)
+        });
+
+        methods.add_method("saves", |lua, bot, ()| {
+            saves_table(lua, &bot.saves, Some(&bot.snapshot.saves))
         });
 
         methods.add_method("actions", |lua, bot, ()| {
@@ -2579,11 +2697,117 @@ impl UserData for BotCtx {
     }
 }
 
-/// The sandboxed Lua VM and the `on_bot_tick` function it defines.
+/// An app screen the bot drives outside a game session, as a player sees
+/// it: the title (after a death returned there) or the title's load screen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BotScreen {
+    /// The title: its stage (`press`, `menu`, `fade_out`, `attract_fade`),
+    /// the highlighted entry (1 NEW GAME, 2 LOAD GAME) and whether LOAD
+    /// GAME is offered.
+    Title {
+        stage: String,
+        selection: i64,
+        any_saves: bool,
+    },
+    /// The load screen; `None` for a screen with no readable state.
+    Load(Option<SaveScreenView>),
+}
+
+/// The Lua handle `on_bot_screen(bot)` gets on an app screen. Like
+/// [`BotCtx`] it only reads (the screen, the save history, memory) and writes
+/// pad/UI input.
+struct BotScreenCtx {
+    screen: BotScreen,
+    saves: SaveLog,
+    tick: u64,
+    risk: f64,
+    shares: BotShares,
+}
+
+impl BotScreenCtx {
+    fn finish(&self, reason: &str) {
+        if !self.shares.finished.get() {
+            self.shares.finished.set(true);
+            *self.shares.finish_reason.borrow_mut() = Some(reason.to_string());
+            self.shares
+                .memory
+                .borrow_mut()
+                .log(format!("tick {} screen: finished: {reason}", self.tick));
+        }
+    }
+}
+
+impl UserData for BotScreenCtx {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("tick", |_lua, bot, ()| Ok(bot.tick));
+        methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
+        methods.add_method("screen", |lua, bot, ()| match &bot.screen {
+            BotScreen::Title {
+                stage,
+                selection,
+                any_saves,
+            } => {
+                let table = lua.create_table()?;
+                table.set("kind", "title")?;
+                table.set("stage", stage.as_str())?;
+                table.set("selection", *selection)?;
+                table.set("any_saves", *any_saves)?;
+                Ok(table)
+            }
+            BotScreen::Load(view) => {
+                let table = match view {
+                    Some(view) => save_screen_table(lua, view)?,
+                    None => lua.create_table()?,
+                };
+                table.set("kind", "load")?;
+                table.set("readable", view.is_some())?;
+                Ok(table)
+            }
+        });
+        methods.add_method("saves", |lua, bot, ()| saves_table(lua, &bot.saves, None));
+        methods.add_method("memory", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (key, value) in &bot.shares.memory.borrow().values {
+                table.set(key.clone(), value.clone())?;
+            }
+            Ok(table)
+        });
+        methods.add_method("log", |_lua, bot, text: String| {
+            bot.shares
+                .memory
+                .borrow_mut()
+                .log(format!("tick {} screen: {text}", bot.tick));
+            Ok(())
+        });
+        methods.add_method("finish", |_lua, bot, reason: String| {
+            bot.finish(&reason);
+            Ok(())
+        });
+        methods.add_method("set_input", |_lua, bot, table: Table| {
+            for pair in table.pairs::<String, bool>() {
+                let (name, value) = pair?;
+                if !bot.shares.input.borrow_mut().set(&name, value) {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "unknown bot input key `{name}`"
+                    )));
+                }
+            }
+            Ok(())
+        });
+        methods.add_method("pulse_confirm", |_lua, bot, ()| {
+            bot.shares.input.borrow_mut().pulse_confirm();
+            Ok(())
+        });
+    }
+}
+
+/// The sandboxed Lua VM and the `on_bot_tick` function it defines, plus the
+/// optional `on_bot_screen` for app screens.
 struct BotVm {
     lua: Lua,
     budget: Rc<crate::lua::Budget>,
     on_tick: Function,
+    on_screen: Option<Function>,
 }
 
 impl BotVm {
@@ -2594,10 +2818,15 @@ impl BotVm {
         let (lua, budget) = crate::lua::new_sandboxed_state()?;
         run_chunks(&lua, &budget, &paths, pack)?;
         let on_tick = find_on_tick(&lua)?;
+        let on_screen = lua
+            .globals()
+            .get::<Option<Function>>("on_bot_screen")
+            .map_err(|err| anyhow!("{err}"))?;
         Ok(Self {
             lua,
             budget,
             on_tick,
+            on_screen,
         })
     }
 
@@ -2612,7 +2841,27 @@ impl BotVm {
         let paths = chunk_paths(pack)?;
         run_chunks(&self.lua, &self.budget, &paths, pack)?;
         self.on_tick = find_on_tick(&self.lua)?;
+        self.on_screen = self
+            .lua
+            .globals()
+            .get::<Option<Function>>("on_bot_screen")
+            .map_err(|err| anyhow!("{err}"))?;
         Ok(())
+    }
+
+    /// Run `on_bot_screen(bot)`; `false` when the route defines none.
+    fn call_screen(&self, ctx: BotScreenCtx) -> Result<bool> {
+        let Some(on_screen) = &self.on_screen else {
+            return Ok(false);
+        };
+        self.budget.begin();
+        self.lua
+            .scope(|scope| {
+                let bot = scope.create_userdata(ctx)?;
+                on_screen.call::<()>(bot)
+            })
+            .map_err(|err| anyhow!("{err}"))?;
+        Ok(true)
     }
 
     fn call(&self, ctx: BotCtx) -> Result<()> {
@@ -2693,6 +2942,19 @@ pub struct BotRuntime {
     goal_room: Option<Rc<str>>,
     /// Run statistics for `--bot-stats`.
     stats: stats::BotStats,
+    /// Saves, reloads and deaths; kept across a reload.
+    save_log: SaveLog,
+    /// The session's `saves_written` already counted.
+    seen_saves_written: u32,
+    /// Whether the player was dead on the previous tick.
+    was_dead: bool,
+    /// The bot's memory as it stood when the latest save was written, put
+    /// back when that save is loaded: what the bot saw after the save did
+    /// not happen in the loaded game.
+    checkpoint: Option<BotMemory>,
+    /// The bot drove an app screen (the title or the load screen) since the
+    /// last session started, so the next session is its reload.
+    screen_driven: bool,
 }
 
 impl BotRuntime {
@@ -2707,6 +2969,11 @@ impl BotRuntime {
             risk: DEFAULT_RISK,
             goal_room: None,
             stats: stats::BotStats::default(),
+            save_log: SaveLog::default(),
+            seen_saves_written: 0,
+            was_dead: false,
+            checkpoint: None,
+            screen_driven: false,
         })
     }
 
@@ -2756,6 +3023,7 @@ impl BotRuntime {
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
+        let saved = self.observe_saves(&snapshot);
         {
             let mut input = self.shares.input.borrow_mut();
             input.reset();
@@ -2768,17 +3036,12 @@ impl BotRuntime {
         }
         let ctx = BotCtx {
             snapshot,
+            saves: self.save_log,
             meta: self.meta.clone(),
             tick: self.tick,
             risk: self.risk,
             goal_room: self.goal_room.clone(),
-            shares: BotShares {
-                memory: Rc::clone(&self.shares.memory),
-                nav: Rc::clone(&self.shares.nav),
-                input: Rc::clone(&self.shares.input),
-                finished: Rc::clone(&self.shares.finished),
-                finish_reason: Rc::clone(&self.shares.finish_reason),
-            },
+            shares: self.shares.share(),
         };
         if let Err(err) = self.vm.call(ctx) {
             self.shares.finished.set(true);
@@ -2801,7 +3064,120 @@ impl BotRuntime {
             .world
             .observe_input(self.tick, &input);
         self.shares.nav.borrow_mut().end_tick(&input);
+        if saved {
+            // After the route's tick, so what it remembered about the save
+            // (its slot, room and tick) is part of the checkpoint.
+            self.checkpoint = Some(self.shares.memory.borrow().clone());
+        }
         Ok(input)
+    }
+
+    /// Count a save the session's save screen completed and a new death.
+    /// Returns whether a save was written since the last tick.
+    fn observe_saves(&mut self, snapshot: &SessionSnapshot) -> bool {
+        let dead = snapshot.scene.dead;
+        if dead && !self.was_dead {
+            self.save_log.deaths += 1;
+            self.save_log.deaths_since_save += 1;
+        }
+        self.was_dead = dead;
+        if snapshot.saves.written <= self.seen_saves_written {
+            return false;
+        }
+        self.seen_saves_written = snapshot.saves.written;
+        self.save_log.count += 1;
+        self.save_log.deaths_since_save = 0;
+        self.save_log.last = Some(SaveRecord {
+            slot: snapshot.saves.slot,
+            room: snapshot.room,
+            tick: self.tick,
+        });
+        self.stats.note_save();
+        true
+    }
+
+    /// Run one `on_bot_screen` on an app screen (the title or its load
+    /// screen), returning the input it asked for. A route without the hook
+    /// finishes the run, since nothing would drive the screen.
+    pub fn tick_screen(&mut self, screen: BotScreen) -> Result<BotInput> {
+        self.tick = self.tick.saturating_add(1);
+        self.screen_driven = true;
+        self.shares.input.borrow_mut().reset();
+        let ctx = BotScreenCtx {
+            screen,
+            saves: self.save_log,
+            tick: self.tick,
+            risk: self.risk,
+            shares: self.shares.share(),
+        };
+        match self.vm.call_screen(ctx) {
+            Ok(true) => {}
+            Ok(false) => {
+                self.shares.finished.set(true);
+                *self.shares.finish_reason.borrow_mut() =
+                    Some("left the game session: the route has no on_bot_screen".to_string());
+            }
+            Err(err) => {
+                self.shares.finished.set(true);
+                if self.shares.finish_reason.borrow().is_none() {
+                    *self.shares.finish_reason.borrow_mut() = Some(format!("Lua error: {err}"));
+                }
+                return Err(err).with_context(|| format!("bot screen tick {}", self.tick));
+            }
+        }
+        let input = *self.shares.input.borrow();
+        Ok(input)
+    }
+
+    /// Whether the run has a save the bot could load after a death.
+    pub fn has_save(&self) -> bool {
+        self.save_log.last.is_some()
+    }
+
+    /// A new session is starting: the bot's reload when it drove the load
+    /// screen to it ([`Self::resume_after_load`]), a fresh run otherwise
+    /// ([`Self::reset`]).
+    pub fn start_session(&mut self, pack: &Pack) -> Result<()> {
+        if std::mem::take(&mut self.screen_driven) {
+            self.resume_after_load(pack)
+        } else {
+            self.reset(pack)
+        }
+    }
+
+    /// Carry the run on in a session the bot loaded from its latest save:
+    /// keep the tick count, the statistics and the save history, put the
+    /// memory back as it was at that save (keeping the full room path), drop
+    /// the navigation cache and rebuild the Lua VM, as a player who reloads
+    /// keeps only what they knew when they saved.
+    pub fn resume_after_load(&mut self, pack: &Pack) -> Result<()> {
+        self.save_log.reloads += 1;
+        self.stats.note_reload(self.was_dead);
+        self.seen_saves_written = 0;
+        self.was_dead = false;
+        let room_path = std::mem::take(&mut self.shares.memory.borrow_mut().room_path);
+        let mut memory = self.checkpoint.clone().unwrap_or_default();
+        memory.room_path = room_path;
+        memory.current_room = None;
+        let last = self.save_log.last;
+        memory.log(format!(
+            "tick {} reloaded the save {} (reload {}, {} death(s) since it)",
+            self.tick,
+            last.map_or("?".to_string(), |save| format!(
+                "in slot {} written in room {} at tick {}",
+                save.slot.map_or(-1, |slot| slot as i64),
+                save.room.room3(),
+                save.tick
+            )),
+            self.save_log.reloads,
+            self.save_log.deaths_since_save
+        ));
+        *self.shares.memory.borrow_mut() = memory;
+        *self.shares.nav.borrow_mut() = BotNav::default();
+        self.shares.input.borrow_mut().reset();
+        self.reload_meta();
+        self.vm = BotVm::load(pack)?;
+        Ok(())
     }
 
     /// Clear the remembered state and tick count for a new game, and rebuild
@@ -2814,6 +3190,11 @@ impl BotRuntime {
         self.shares = BotShares::default();
         self.tick = 0;
         self.stats = stats::BotStats::default();
+        self.save_log = SaveLog::default();
+        self.seen_saves_written = 0;
+        self.was_dead = false;
+        self.checkpoint = None;
+        self.screen_driven = false;
         self.reload_meta();
         self.vm = BotVm::load(pack)?;
         Ok(())
@@ -2952,6 +3333,7 @@ mod tests {
             "risk",
             "goal_room",
             "cameras",
+            "saves",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -2964,10 +3346,49 @@ mod tests {
             "walk_to",
             "face_to",
         ];
-        // The removed shortcuts into game handlers must never come back.
-        const FORBIDDEN: &[&str] = &["use_item", "use_heal", "equip", "use_action", "use_stair"];
+        // The removed shortcuts into game handlers must never come back, and
+        // a save is loaded through the load screen, never by a call.
+        const FORBIDDEN: &[&str] = &[
+            "use_item",
+            "use_heal",
+            "equip",
+            "use_action",
+            "use_stair",
+            "load",
+            "load_slot",
+            "save",
+        ];
 
         let lua = Lua::new();
+        // The app-screen handle may only read and press.
+        let proxy = lua
+            .create_proxy::<BotScreenCtx>()
+            .expect("BotScreenCtx proxy");
+        let index: Table = proxy
+            .metatable()
+            .expect("BotScreenCtx metatable")
+            .get("__index")
+            .expect("BotScreenCtx methods are an __index table");
+        let mut screen_names = Vec::new();
+        for pair in index.pairs::<String, Value>() {
+            screen_names.push(pair.expect("method entry").0);
+        }
+        screen_names.sort();
+        assert_eq!(
+            screen_names,
+            [
+                "finish",
+                "log",
+                "memory",
+                "pulse_confirm",
+                "risk",
+                "saves",
+                "screen",
+                "set_input",
+                "tick"
+            ],
+            "on_bot_screen's handle reads, keeps the bot's bookkeeping and presses"
+        );
         let proxy = lua.create_proxy::<BotCtx>().expect("BotCtx proxy");
         let index: Table = proxy
             .metatable()
@@ -3714,6 +4135,7 @@ mod tests {
         shares.memory.borrow_mut().world.observe(1, &snapshot);
         vm.call(BotCtx {
             snapshot,
+            saves: SaveLog::default(),
             meta: Some(Rc::new(meta)),
             tick: 1,
             risk: 0.6,
@@ -3764,5 +4186,188 @@ mod tests {
         vm.reload(&pack).unwrap();
         assert_eq!(vm.lua.globals().get::<i64>("VERSION").unwrap(), 2);
         assert!(vm.lua.globals().get::<Function>("on_bot_tick").is_ok());
+    }
+
+    /// The checked-in route, loaded from `mods/bot`.
+    fn route_vm() -> BotVm {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        BotVm::load(&pack).unwrap()
+    }
+
+    fn eval<T: mlua::FromLuaMulti>(vm: &BotVm, body: &str) -> T {
+        vm.lua.load(body).eval::<T>().unwrap()
+    }
+
+    #[test]
+    fn save_decision_follows_risk_ribbons_and_cooldown() {
+        let vm = route_vm();
+        // A base case: new progress, healthy, calm, never saved.
+        vm.lua
+            .load(
+                r#"
+                function decide(over)
+                    local o = { risk = 0.25, can_save = true, health = 90, max_health = 100,
+                        critical = false, risky = false, progress = 5, saved_progress = 4 }
+                    for k, v in pairs(over or {}) do o[k] = v end
+                    local wants, why = BotSave.wants(o)
+                    return tostring(wants) .. ":" .. why
+                end
+            "#,
+            )
+            .exec()
+            .unwrap();
+        let decide = |over: &str| -> String { eval(&vm, &format!("return decide({over})")) };
+        // The ribbon rule: a character that needs ribbons saves only with one.
+        assert!(eval::<bool>(
+            &vm,
+            "return BotSave.can_save({ needs_ribbon = false, ribbons = 0 })"
+        ));
+        assert!(!eval::<bool>(
+            &vm,
+            "return BotSave.can_save({ needs_ribbon = true, ribbons = 0 })"
+        ));
+        assert!(eval::<bool>(
+            &vm,
+            "return BotSave.can_save({ needs_ribbon = true, ribbons = 2 })"
+        ));
+        assert_eq!(decide("{ can_save = false }"), "false:no ink ribbon");
+        // A cautious bot saves at every typewriter; nothing new, no save.
+        assert!(decide("{ risk = 0 }").starts_with("true:"));
+        assert_eq!(
+            decide("{ progress = 4 }"),
+            "false:nothing new since the last save"
+        );
+        // The cooldown: 20 s at risk 0, 120 s at risk 1.
+        assert_eq!(eval::<i64>(&vm, "return BotSave.cooldown(0)"), 20 * 30);
+        assert_eq!(eval::<i64>(&vm, "return BotSave.cooldown(1)"), 120 * 30);
+        assert_eq!(
+            decide("{ risk = 0, since_save = 599 }"),
+            "false:saved recently"
+        );
+        assert!(decide("{ risk = 0, since_save = 600 }").starts_with("true:"));
+        // Critical health skips the cooldown, not the progress test.
+        assert_eq!(
+            decide("{ since_save = 10, critical = true }"),
+            "true:critical health"
+        );
+        assert!(decide("{ progress = 4, critical = true }").starts_with("false:"));
+        // A bold bot saves only on low health or in a risky room.
+        assert!(decide("{ risk = 1 }").starts_with("false:a bold bot"));
+        assert_eq!(decide("{ risk = 1, health = 40 }"), "true:low health");
+        assert_eq!(decide("{ risk = 1, risky = true }"), "true:risky room");
+        assert!(decide("{ risk = 0.5 }").starts_with("true:"));
+        assert!(decide("{ risk = 0.6 }").starts_with("false:"));
+    }
+
+    #[test]
+    fn latest_save_tracking_and_slot_choice() {
+        let vm = route_vm();
+        // A new save is reported once; memory strings read back as numbers.
+        let first: String = eval(
+            &vm,
+            r#"local e = BotSave.track({}, { count = 1, slot = 0, room = "R", tick = 50 }, 7)
+               return string.format("%d|%d|%s|%d|%d", e.save_count, e.save_slot, e.save_room,
+                   e.save_tick, e.save_progress)"#,
+        );
+        assert_eq!(first, "1|0|R|50|7");
+        assert!(eval::<bool>(
+            &vm,
+            r#"return BotSave.track({ save_count = "1" }, { count = 1, slot = 0 }, 7) == nil"#
+        ));
+        assert!(eval::<bool>(
+            &vm,
+            r#"return BotSave.track({ save_count = "1" }, { count = 2, slot = 1 }, 9).save_slot == 1"#
+        ));
+        let latest: String = eval(
+            &vm,
+            r#"local l = BotSave.latest({ save_count = "2", save_slot = "1", save_room = "R",
+                   save_tick = "900", save_progress = "9" })
+               return string.format("%d|%d|%s|%d|%d", l.count, l.slot, l.room, l.tick, l.progress)"#,
+        );
+        assert_eq!(latest, "2|1|R|900|9");
+        assert!(eval::<bool>(&vm, "return BotSave.latest({}) == nil"));
+        // The first empty slot, then the slots in turn.
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSave.pick_slot({ true, true, false }, 2)"),
+            2
+        );
+        assert_eq!(
+            eval::<i64>(
+                &vm,
+                "return BotSave.pick_slot({ true, true, true, true, true, true, true, true }, 10)"
+            ),
+            2
+        );
+    }
+
+    #[test]
+    fn the_runtime_counts_saves_and_deaths_and_a_reload_restores_the_save_memory() {
+        let temp = TempDir::new("saves");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(bot.join("init.lua"), b"function on_bot_tick(bot) end\n").unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut runtime = BotRuntime::load(&pack).unwrap();
+        let mut snapshot = world::tests::snapshot(0x100, 0, 0);
+        runtime.tick = 10;
+        assert!(!runtime.observe_saves(&snapshot));
+        assert!(!runtime.has_save());
+        // The save screen wrote slot 3.
+        snapshot.saves.written = 1;
+        snapshot.saves.slot = Some(3);
+        assert!(runtime.observe_saves(&snapshot));
+        assert!(!runtime.observe_saves(&snapshot), "one save counts once");
+        assert_eq!(
+            runtime.save_log.last,
+            Some(SaveRecord {
+                slot: Some(3),
+                room: snapshot.room,
+                tick: 10
+            })
+        );
+        runtime
+            .shares
+            .memory
+            .borrow_mut()
+            .remember("save_slot".into(), Some("3".into()));
+        runtime.checkpoint = Some(runtime.shares.memory.borrow().clone());
+        // Later knowledge and a death.
+        runtime
+            .shares
+            .memory
+            .borrow_mut()
+            .remember("later".into(), Some("x".into()));
+        snapshot.scene.dead = true;
+        runtime.observe_saves(&snapshot);
+        runtime.observe_saves(&snapshot);
+        assert_eq!(
+            runtime.save_log.deaths, 1,
+            "a death counts on its first tick"
+        );
+        assert_eq!(runtime.save_log.deaths_since_save, 1);
+        // The bot drove the load screen: the next session is its reload.
+        runtime.tick_screen(BotScreen::Load(None)).unwrap();
+        runtime.start_session(&pack).unwrap();
+        let memory = runtime.shares.memory.borrow();
+        assert_eq!(
+            memory.values.get("save_slot").map(String::as_str),
+            Some("3")
+        );
+        assert!(
+            !memory.values.contains_key("later"),
+            "post-save memory is dropped"
+        );
+        drop(memory);
+        assert_eq!(runtime.save_log.reloads, 1);
+        assert_eq!(runtime.save_log.count, 1);
+        assert!(runtime.has_save());
+        let json = runtime.stats_json("finished", 0.0);
+        assert_eq!(json["saves"], 1);
+        assert_eq!(json["reloads"], 1);
+        assert_eq!(json["deaths_before_reload"], 1);
+        // A session the bot did not load is a fresh run.
+        runtime.start_session(&pack).unwrap();
+        assert!(!runtime.has_save());
+        assert_eq!(runtime.save_log, SaveLog::default());
     }
 }

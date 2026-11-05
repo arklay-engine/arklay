@@ -326,6 +326,41 @@ impl LuaScreen {
         }
     }
 
+    /// A string field of the script's `M.state` table, read like
+    /// [`Self::state_int`]; `None` when the field is absent or not a string.
+    pub fn state_str(&self, key: &str) -> Option<String> {
+        let Ok(Value::Table(state)) = self.vm.module.raw_get::<Value>("state") else {
+            return None;
+        };
+        match state.raw_get::<Value>(key).ok()? {
+            Value::String(text) => Some(text.to_string_lossy()),
+            _ => None,
+        }
+    }
+
+    /// The truthiness of each entry of an array field of `M.state` (a slot
+    /// list holding an info table or `false` per row), read like
+    /// [`Self::state_int`]; `None` when the field is not a table.
+    pub fn state_truthy_list(&self, key: &str) -> Option<Vec<bool>> {
+        let Ok(Value::Table(state)) = self.vm.module.raw_get::<Value>("state") else {
+            return None;
+        };
+        let Value::Table(list) = state.raw_get::<Value>(key).ok()? else {
+            return None;
+        };
+        let len = list.raw_len();
+        Some(
+            (1..=len)
+                .map(|index| {
+                    !matches!(
+                        list.raw_get::<Value>(index),
+                        Ok(Value::Nil | Value::Boolean(false)) | Err(_)
+                    )
+                })
+                .collect(),
+        )
+    }
+
     /// Overwrite a published value, as the script's `api:set` would.
     #[cfg(test)]
     pub fn set_value(&mut self, key: &str, value: i64) {
@@ -525,6 +560,21 @@ impl crate::ui::save_load::SaveScreen for LuaScreen {
 
     fn value(&self, key: &str) -> Option<i64> {
         self.host.values.get(key).copied()
+    }
+
+    fn bot_view(&self) -> Option<crate::ui::save_load::SaveScreenView> {
+        let stage = self.state_str("stage")?;
+        let slots = self.state_truthy_list("slots")?;
+        let autosaves = self
+            .state_truthy_list("autosaves")
+            .map_or(0, |rows| rows.len());
+        Some(crate::ui::save_load::SaveScreenView {
+            save: self.state_int("save").unwrap_or(0) != 0,
+            stage,
+            cursor: self.state_int("cursor").unwrap_or(0),
+            exit_row: (slots.len() + autosaves) as i64,
+            slots,
+        })
     }
 }
 

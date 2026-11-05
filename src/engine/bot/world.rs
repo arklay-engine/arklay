@@ -99,7 +99,7 @@ struct Pending {
 }
 
 /// The world model. Reset with the bot's memory on a new game.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct World {
     rooms: BTreeMap<String, RoomRecord>,
     current: Option<String>,
@@ -449,7 +449,8 @@ fn record_rising(
 #[cfg(test)]
 pub(super) mod tests {
     use super::super::{
-        ActionSnapshot, DoorSnapshot, MenuSnapshot, PlayerSnapshot, SceneSnapshot, WeaponSnapshot,
+        ActionSnapshot, DoorSnapshot, MenuSnapshot, PlayerSnapshot, SaveSnapshot, SceneSnapshot,
+        WeaponSnapshot,
     };
     use super::*;
     use crate::game::InventoryItem;
@@ -501,6 +502,7 @@ pub(super) mod tests {
                 controls_locked: false,
                 controllable: true,
                 dead: false,
+                typewriter: false,
             },
             actions: Vec::new(),
             doors: Vec::new(),
@@ -519,6 +521,8 @@ pub(super) mod tests {
             flags: [FlagBank::new(); game::FLAG_BANK_COUNT],
             inventory: Vec::new(),
             cameras: Vec::new(),
+            save_screen: None,
+            saves: SaveSnapshot::default(),
         }
     }
 
