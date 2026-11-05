@@ -9310,6 +9310,17 @@ impl App {
                 if let Some(item) = input.equip {
                     session.game.set_equipped(Some(item));
                 }
+                // A heal request runs the same item rule as the menu USE and
+                // consumes the unit through the menu's select + use path, all
+                // before the gameplay tick applies the healed state.
+                if let Some(item) = input.heal
+                    && session.game.item_count(item) > 0
+                    && session.game.item_defs.get(item).kind == crate::item_catalog::ItemKind::Heal
+                    && let game::UseResult::Used { .. } = session.game.use_item(item)
+                {
+                    session.game.select_item(Some(item));
+                    session.game.use_selected_item();
+                }
                 // A scripted item handover can name a room action whose zone
                 // is not reachable (the 106 lockpick item sits at the room
                 // origin). Run the same handler a normal action press would.

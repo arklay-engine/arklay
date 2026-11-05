@@ -2,8 +2,9 @@
 
 A restricted Lua route that drives a normal new Jill game through the same pad
 a human would use. It cannot set flags, items or positions. Its only legal
-state-changing actions are normal input, the room's own item action and an
-equip request that the host applies like the inventory menu.
+state-changing actions are normal input, the room's own item/stair actions, an
+equip request that the host applies like the inventory menu, and a heal request
+that runs the menu USE rule and consumes the item.
 
 ```sh
 # Watch the bot in the normal window (bare --bot implies --ui game --character 1)
@@ -28,8 +29,9 @@ through `bot:room_meta()` on the next tick.
 ## Route
 
 The route starts a fresh Jill game. It used to stop when it entered room 10A;
-it now continues through 117 and 11A, and stops at the furthest milestone it
-can legally reach (11A when the 11B door is locked, 11B or 300 otherwise):
+it now continues through 117, 11A, the east-wing return, the 203 stair landing
+and 10C. It stops at the furthest milestone it can legally reach; the current
+blocker is the 10C armor key behind the greenhouse plant bed:
 
 1. **106 opening.** Skip the live-action intro and the main-hall scene. The
    shipped opening ends by scripting Jill through the 106 -> 105 walk-in door.
@@ -42,8 +44,11 @@ can legally reach (11A when the 11B door is locked, 11B or 300 otherwise):
    walk to the 105 -> 104 door (AOT_00), leaving her facing it.
 3. **104 tea room.** Walk west to `(4300, 4800)`, inside the diagonal
    camera 1 -> 4 switch band. Entering camera 4 starts the first-zombie FMV;
-   skip it. `F_COMMON_02` is set after the film. Return east to
-   `(12000, 2700)` and open the 104 -> 105 door (AOT_03) from the north.
+   skip it. `F_COMMON_02` is set after the film. On the way back the route
+   optionally takes the handgun ammunition (0x0B, AOT_05/AOT_09 at
+   `3300, 5600, 2000, 2000`) from the south side; this supplies the reserve
+   the later zombie fights need. Return east to `(12000, 2700)` and open the
+   104 -> 105 door (AOT_03) from the north.
 4. **105 return.** Skip the entry scene and cross the dining room to
    `(31300, 8300)` in one leg. Open the 105 -> 106 door (AOT_01) from the
    west.
@@ -110,6 +115,37 @@ can legally reach (11A when the 11B door is locked, 11B or 300 otherwise):
     (0x3D, AOT_02 at `8100, 8500`) and crank key (0x1D, AOT_03 at
     `5000, 1200`), then optionally opens the first-house door (AOT_01 at
     `8800, 4300`) to 300.
+12. **11A return to the east wing.** The crest/key extension leaves 11A back
+    through 10A -> 109 -> 108 -> 107 -> 106 -> 105. Each leg is a normal
+    `door_nav`; `enter_room` hands the arrival to the next named travel phase,
+    so the outward room defaults cannot restart the opening route.
+13. **105 shield key and blue jewel key.** The shield key (0x35) action exists
+    at `(17400, 14500, 1000, 1000)`, but the sideboard object at
+    `(18000, 14300)` and the north wall leave no standable point inside the
+    action reach. The route tries the south side at `(17100, 14000)`, reports
+    the exact count and continues to 106. The blue jewel key (0x21) is only
+    registered when scenario flag `0x0B` is set; in the checked-in Jill route it
+    is absent and is logged as such.
+14. **106 -> 203 -> 202.** The 203 stair door lands on the balcony landing,
+    which is sealed by the room collision. The route recognises the in-room
+    `check_door` zones, walks to the west side of the east flight at
+    `(19700, 25650)`, presses action, and lets the room's own climb clip warp
+    the player onto the east corridor. It then walks around the balcony to the
+    202 door. This uses `bot:use_stair(slot)`, the same room handler a normal
+    action press runs.
+15. **202 -> 201 -> 101 -> 103 -> 10C.** The route takes the long south
+    corridor around 202's central block, clears the groundskeeper with the
+    handgun when it has enough ammunition, and follows safe-edge waypoints
+    through 201 and 101. In 10C the armor key (0x34, AOT_04 at
+    `5000, 4500, 800, 2000`) is the current blocker: the north-bed corridor
+    around `(8000, 7600)` does not accept normal movement, and the plant
+    fountain at `(8200, 6200)` deals 2 acid damage about every 28 ticks from
+    more than 2300 units. The route stops with a self-describing finish reason
+    before the player dies, rather than forcing the key or the crest route.
+16. **Unreached crest/key phases.** The 205 sun crest, 20D/20E/210 moon crest,
+    the return to 11A and the final crest-hollow report are implemented as
+    normal travel/item phases, but cannot run until the 10C armor key is
+    obtainable. The finish reason names the exact blocker and the held items.
 
 Long legs run and only the final 400 units walk. `walk_to` uses pure pursuit
 (the farthest path point within 1600 units that is in clear sight), keeps the
@@ -196,12 +232,35 @@ replacement for the route:
 The `--watch` reload keeps `BOT_STATE.combat` with the rest of the route
 state, so editing the policy mid-fight does not restart or reset the fight.
 
-Headless evidence from the checked-in route: the 10A zombie is engaged and
-killed, the player drops from 96 to 76 health and the handgun from 15 to 8
-rounds. The route continues to 117 and 11A and finishes at the locked 11B
-door. A later 10A/11A zombie still lands hits during the existing route, so
-the run ends at 36 health rather than full health; combat did not add any
-ammunition or healing.
+Headless evidence from the checked-in route: the 104 ammunition pickup gives
+30 rounds of reserve, the 10A zombies are engaged and killed, the one 109 green
+herb is used at 56 health, and the 202/201 groundskeeper fights are won with the
+handgun. The run reaches 10C at 36 health after the 202 and 201 fights, then the
+plant-fountain acid and the blocked north-bed corridor stop it at health 10;
+the guard finishes with `10C reached; armor key blocked: ...` instead of dying.
+The room path is
+`106 -> 105 -> 104 -> 105 -> 106 -> 107 -> 108 -> 109 -> 10A -> 117 ->
+10A -> 11A -> 10A -> 109 -> 108 -> 107 -> 106 -> 105 -> 106 -> 203 -> 202 ->
+201 -> 101 -> 103 -> 10C`, with 0 shield keys, 0 blue jewels, 0 armor keys,
+1 star crest, and the 11B lock still closed. This is the current blocker, not a
+finish of the crest collection.
+
+### Healing
+
+`bot:use_heal(item)` queues a legal one-tick heal request. The Lua snapshot
+only accepts the item when it is in the inventory, has at least one unit, and
+the catalog kind is `Heal`; it then returns `true` (accepted). The host validates
+the same conditions again, calls `game.use_item(item)` (the menu USE rules),
+and on `UseResult::Used` consumes one unit through
+`select_item` + `use_selected_item`, before the gameplay tick. The bot never
+writes health, status, flags or inventory quantities itself.
+
+The route calls it below 60 health with a green herb (0x44), at most once per
+60 controllable ticks, and only when no fight is active. Scenes, menus and
+grabs never reach the healing step; an active fight is allowed to finish
+first, so a heal cannot interrupt a grab or a shooting sequence. The
+checked-in run uses the one 109 green herb after the first 10A fight. Later
+zombie fights are supplied by the 104 handgun ammunition pickup.
 
 ### Failure handling
 
@@ -225,6 +284,19 @@ ammunition or healing.
 - The 108 ammo is a known geometry blocker: its zone is inside a solid table
   and the reach cannot enter from any side. The route logs it and continues to
   109 instead of treating the room as a failed run.
+- The 105 shield key action exists but is out of reach behind the sideboard
+  object and the north wall; the route logs the approach and item count and
+  continues. The blue jewel key action is absent while scenario `0x0B` is
+  clear.
+- The 203 landing is sealed by room collision; the route uses the room's
+  `check_door` stair zones through `bot:use_stair(slot)` instead of trying to
+  walk through the wall. A stair that does not move the player is a precise
+  `fail`, not an endless press.
+- The 10C north-bed corridor rejects normal movement around `(8000, 7600)` and
+  the plant fountain at `(8200, 6200)` deals repeated acid damage from beyond
+  2300 units. When health falls to 10 the route logs the armor-key block with
+  the position, held keys/crests and hollow count and finishes, so a headless
+  run reports the blocker instead of a death.
 - A locked 11B door is not a failed run: the route records the lock and stops
   in 11A with the lock, key, crest and inventory state in the finish reason.
 
@@ -255,7 +327,9 @@ ammunition or healing.
 | `bot:press_action()` | Hold and edge the action button for one tick. |
 | `bot:pulse_confirm()` | Edge UI confirm for one tick. |
 | `bot:equip(item)` | Queue an equip for the next tick; returns `false` and logs when the item is not held or is not a weapon. The host applies the same `set_equipped` the menu does before the tick. |
+| `bot:use_heal(item)` | Queue a heal for the next tick; returns `false` and logs when the item is not held, has no units, or is not a `Heal` catalog item. The host runs the menu `use_item` rule and consumes one unit through `select_item` + `use_selected_item` before the tick. |
 | `bot:use_action(slot)` | Run the item room action in `slot` for one tick (the same handler a normal action press runs). Restricted to `kind == "item"`; used for scripted handovers whose zone is outside the walkable floor. |
+| `bot:use_stair(slot)` | Run the `door_check` room action in `slot` for one tick, the in-room stair/climb handler a normal action press runs. Combined with `press_action`, this is how 203's sealed landing is climbed. |
 | `bot:walk_to(x, z, opts)` | Collision-aware A* walk. Returns `{status, distance, angle_error}`. |
 | `bot:face_to(x, z)` | Turn toward a point. Returns `{status, distance, angle_error}`. |
 | `bot:distance(x, z)` | Horizontal distance. |
