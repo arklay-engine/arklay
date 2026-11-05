@@ -66,6 +66,8 @@ BOT_STATE = BOT_STATE or {
     paint_steps_source = nil,
     milestone = nil,
     combat = {},
+    next_phase = nil,
+    heal = {},
 }
 
 -- Fields added after the first checked-in route. A --watch reload keeps the
@@ -77,6 +79,17 @@ BOT_STATE.puzzle_index = BOT_STATE.puzzle_index or 1
 BOT_STATE.puzzle_failed = BOT_STATE.puzzle_failed or false
 BOT_STATE.milestone = BOT_STATE.milestone or nil
 BOT_STATE.combat = BOT_STATE.combat or {}
+BOT_STATE.next_phase = BOT_STATE.next_phase or nil
+BOT_STATE.heal = BOT_STATE.heal or {}
+BOT_STATE.heal.cooldown = BOT_STATE.heal.cooldown or 0
+BOT_STATE.heal.uses = BOT_STATE.heal.uses or 0
+BOT_STATE.heal.last_health = BOT_STATE.heal.last_health or nil
+BOT_STATE.crest = BOT_STATE.crest or {}
+BOT_STATE.crest.index = BOT_STATE.crest.index or 1
+BOT_STATE.crest.stair_203_done = BOT_STATE.crest.stair_203_done or false
+BOT_STATE.crest.stair_nudge = BOT_STATE.crest.stair_nudge or 0
+BOT_STATE.crest.clear_202_positioned = BOT_STATE.crest.clear_202_positioned or false
+BOT_STATE.last_health = BOT_STATE.last_health or nil
 
 -- Combat is a conservative layer over the route: it only stops to shoot the
 -- common zombies with the handgun, and stands down for bosses, crowds, low
@@ -125,7 +138,13 @@ local ITEM_STAR_CREST = 0x2D
 local ITEM_DESK_KEY = 0x3D
 local ITEM_RADIO_KEY = 0x4D
 local ITEM_HANDGUN = 0x02
+local ITEM_SHIELD_KEY = 0x35
+local ITEM_BLUE_JEWEL_KEY = 0x21
+local ITEM_ARMOR_KEY = 0x34
+local ITEM_SUN_CREST = 0x2E
+local ITEM_MOON_CREST = 0x2C
 local SCENARIO_HAS_LOCKPICK = 0x7C
+local F_SCENARIO_0B = 0x0B
 
 -- Combat thresholds. The route only needs the 10A/109 zombies, so it engages
 -- one or two plain zombies with the starting handgun and runs past everything
@@ -148,6 +167,12 @@ local COMBAT_MIN_CLIP = 9
 local COMBAT_RETREAT_START = 1800
 local COMBAT_RETREAT_DONE = 2600
 local COMBAT_RETREAT_WAIT = 150
+
+-- Healing: between fights, one green herb below 60 health, at most once per
+-- 60 controllable ticks. The host applies the menu's USE rule and consumes a
+-- unit, so this cannot set health or inventory directly.
+local HEAL_THRESHOLD = 60
+local HEAL_COOLDOWN = 60
 
 -- 117 large gallery: the seven painting switches must be pushed in the order
 -- below. Each painting clears the room bits 0x18..0x1E and leaves only its own
@@ -177,6 +202,13 @@ local ACTION_TIMEOUT_TICKS = 1200
 
 local function log(bot, text)
     bot:log(text)
+end
+
+local function abs(value)
+    if value < 0 then
+        return -value
+    end
+    return value
 end
 
 local function flag_common(bot, bit)
@@ -241,7 +273,8 @@ local function fail(bot, reason)
             .. "common64=%s common65=%s status1a=%s lockpick=%s "
             .. "scenario7c=%s scenario03=%s scenario69=%s scenario6a=%s "
             .. "scenario6b=%s scenario6c=%s lock17=%s "
-            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d) "
+            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d "
+            .. "shield=%d blue=%d armor=%d sun=%d moon=%d) "
             .. "scene(film=%s trans=%s skip=%s skippable=%s msg=%s ctrl=%s frozen=%s)",
         BOT_STATE.phase, reason, room.id, p.x, p.z, room.camera, p.health, p.max_health,
         p.collision_flags,
@@ -266,6 +299,11 @@ local function fail(bot, reason)
         bot:item_count(ITEM_RADIO_KEY),
         bot:item_count(ITEM_DESK_KEY),
         bot:item_count(ITEM_CRANK_KEY),
+        bot:item_count(ITEM_SHIELD_KEY),
+        bot:item_count(ITEM_BLUE_JEWEL_KEY),
+        bot:item_count(ITEM_ARMOR_KEY),
+        bot:item_count(ITEM_SUN_CREST),
+        bot:item_count(ITEM_MOON_CREST),
         tostring(scene.film), tostring(scene.transition), tostring(scene.cutscene_skip),
         tostring(scene.skippable), tostring(scene.message), tostring(scene.controllable),
         tostring(scene.frozen)
@@ -819,6 +857,407 @@ local function action_nav(bot, slot, label, custom, opts)
     return false
 end
 
+-- Extended crest/key route ---------------------------------------------------
+-- After the first 11A visit the route goes back through the east wing, then
+-- through the main hall and west stairs to the armor key, the sun crest and
+-- the moon crest. Every leg is a normal `door_nav` to the next room; the
+-- `next_phase` hand-off lets `enter_room` resume the route without the old
+-- room-id defaults (which only describe the outward opening route).
+local TRAVEL_PHASES = {
+    to_10a_from_11a = {
+        target = "10A", next_phase = "to_109_from_10a",
+        label = "door 11A->10A", deadline = 1200,
+        custom = { { 4400, 3850, 5600, 3850 } },
+    },
+    to_109_from_10a = {
+        target = "109", next_phase = "to_108_from_109",
+        label = "door 10A->109", deadline = 1200,
+        custom = { { 14900, 3700, 16200, 3700 } },
+    },
+    to_108_from_109 = {
+        target = "108", next_phase = "to_107_from_108",
+        label = "door 109->108", deadline = 2400,
+        points = { { 20000, 5000 } },
+        custom = { { 24400, 2800, 24400, 1650 } },
+    },
+    to_107_from_108 = {
+        target = "107", next_phase = "to_106_from_107",
+        label = "door 108->107", deadline = 3000,
+        points = { { 23500, 20000 }, { 12000, 20000 } },
+        custom = { { 3500, 4200, 1600, 4200 } },
+    },
+    to_106_from_107 = {
+        target = "106", next_phase = "to_105_from_106",
+        label = "door 107->106", deadline = 2400,
+        points = { { 14000, 3000 }, { 9000, 3000 } },
+        custom = { { 2950, 6750, 1300, 6750 } },
+    },
+    to_105_from_106 = {
+        target = "105", next_phase = "to_105_items",
+        label = "door 106->105", deadline = 1800,
+        custom = { { 3250, 16900, 1975, 16900 } },
+    },
+    to_106_from_105 = {
+        target = "106", next_phase = "to_203_from_106",
+        label = "door 105->106", deadline = 1800,
+        custom = { { 31300, 8300, 33000, 8300 } },
+    },
+    to_203_from_106 = {
+        target = "203", next_phase = "to_202_from_203",
+        label = "door 106->203", deadline = 1800,
+        points = { { 17000, 15400 } },
+        custom = { { 17000, 15400, 17000, 17500 } },
+    },
+    to_201_from_202 = {
+        target = "201", next_phase = "to_101_from_201",
+        label = "door 202->201", deadline = 4200,
+        points = {
+            { 16000, 3500 }, { 4608, 3500 }, { 3072, 5120 },
+            { 3072, 11776 }, { 4096, 12800 }, { 4608, 13824 },
+            { 6144, 13824 },
+        },
+        custom = { { 6150, 13800, 6150, 15650 } },
+    },
+    to_101_from_201 = {
+        target = "101", next_phase = "to_103_from_101",
+        label = "door 201->101", deadline = 4200,
+        points = {
+            { 15872, 4608 }, { 15872, 6656 }, { 14336, 8192 },
+            { 3584, 8192 }, { 3072, 8704 }, { 3072, 12800 },
+            { 4608, 13824 }, { 14336, 14336 }, { 15360, 11776 },
+        },
+        custom = { { 14208, 11000, 12600, 11000 } },
+    },
+    to_103_from_101 = {
+        target = "103", next_phase = "to_10c_from_103",
+        label = "door 101->103", deadline = 4200,
+        points = {
+            { 3600, 4500 }, { 5600, 6700 }, { 5600, 18000 },
+            { 6200, 19500 }, { 7000, 21000 }, { 18000, 21000 },
+            { 19000, 20400 },
+        },
+        custom = { { 19100, 20350, 20400, 20350 } },
+    },
+    to_10c_from_103 = {
+        target = "10C", next_phase = "to_10c_item",
+        label = "door 103->10C", deadline = 2400,
+        custom = { { 18700, 18900, 20250, 18900 } },
+    },
+    to_103_from_10c = {
+        target = "103", next_phase = "to_101_from_103",
+        label = "door 10C->103", deadline = 1200,
+        custom = { { 13900, 8300, 15100, 8300 } },
+    },
+    to_101_from_103 = {
+        target = "101", next_phase = "to_201_from_101",
+        label = "door 103->101", deadline = 2400,
+        custom = { { 2800, 24750, 1250, 24750 } },
+    },
+    to_201_from_101 = {
+        target = "201", next_phase = "to_202_from_201",
+        label = "door 101->201", deadline = 2400,
+        custom = { { 7600, 3150, 6000, 3150 } },
+    },
+    to_202_from_201 = {
+        target = "202", next_phase = "to_203_from_202",
+        label = "door 201->202", deadline = 1800,
+        custom = { { 18200, 3200, 18200, 1900 } },
+    },
+    to_203_from_202 = {
+        target = "203", next_phase = "to_204_from_203",
+        label = "door 202->203", deadline = 2400,
+        custom = { { 30700, 8550, 32400, 8550 } },
+    },
+    to_204_from_203 = {
+        target = "204", next_phase = "to_205_from_204",
+        label = "door 203->204", deadline = 2400,
+        custom = { { 31100, 20500, 32400, 20500 } },
+    },
+    to_205_from_204 = {
+        target = "205", next_phase = "to_205_item",
+        label = "door 204->205 (armor key)", deadline = 2400,
+        custom = { { 16300, 12100, 17700, 12100 } },
+    },
+    to_204_from_205 = {
+        target = "204", next_phase = "to_20d_from_204",
+        label = "door 205->204", deadline = 1800,
+        custom = { { 16100, 7300, 17400, 7300 } },
+    },
+    to_20d_from_204 = {
+        target = "20D", next_phase = "to_20e_from_20d",
+        label = "door 204->20D (armor key)", deadline = 2400,
+        custom = { { 12450, 3000, 12450, 1900 } },
+    },
+    to_20e_from_20d = {
+        target = "20E", next_phase = "to_210_from_20e",
+        label = "door 20D->20E", deadline = 2400,
+        custom = { { 11700, 2650, 13150, 2650 } },
+    },
+    to_210_from_20e = {
+        target = "210", next_phase = "to_210_item",
+        label = "door 20E->210 (shield key)", deadline = 2400,
+        custom = { { 8900, 3150, 10050, 3150 } },
+    },
+    to_20e_from_210 = {
+        target = "20E", next_phase = "to_20d_from_20e",
+        label = "door 210->20E", deadline = 3000,
+        points = { { 4600, 20000 }, { 4600, 6000 } },
+        custom = { { 4400, 4600, 4400, 3250 } },
+    },
+    to_20d_from_20e = {
+        target = "20D", next_phase = "to_204_from_20d",
+        label = "door 20E->20D", deadline = 1800,
+        custom = { { 2500, 4400, 1350, 4400 } },
+    },
+    to_204_from_20d = {
+        target = "204", next_phase = "to_203_from_204",
+        label = "door 20D->204", deadline = 2400,
+        custom = { { 3000, 15200, 3000, 13900 } },
+    },
+    to_203_from_204 = {
+        target = "203", next_phase = "to_106_from_203",
+        label = "door 204->203", deadline = 1800,
+        custom = { { 3100, 3700, 1850, 3700 } },
+    },
+    to_106_from_203 = {
+        target = "106", next_phase = "to_107_from_106",
+        label = "door 203->106", deadline = 2400,
+        custom = { { 17000, 23800, 17000, 22500 } },
+    },
+    to_107_from_106 = {
+        target = "107", next_phase = "to_108_from_107",
+        label = "door 106->107", deadline = 2400,
+        custom = { { 30800, 11500, 32100, 11500 } },
+    },
+    to_108_from_107 = {
+        target = "108", next_phase = "to_109_from_108",
+        label = "door 107->108", deadline = 2400,
+        points = { { 9000, 3000 }, { 14000, 3000 } },
+        custom = { { 15100, 4200, 16550, 4200 } },
+    },
+    to_109_from_108 = {
+        target = "109", next_phase = "to_10a_from_109",
+        label = "door 108->109", deadline = 3000,
+        points = { { 23500, 12000 }, { 23500, 20000 } },
+        custom = { { 24800, 25200, 24800, 26700 } },
+    },
+    to_10a_from_109 = {
+        target = "10A", next_phase = "to_11a_from_10a",
+        label = "door 109->10A", deadline = 3000,
+        points = { { 20000, 3000 }, { 9000, 5000 } },
+        custom = { { 2900, 8550, 1300, 8550 } },
+    },
+    to_11a_from_10a = {
+        target = "11A", next_phase = "place_crests_11a",
+        label = "door 10A->11A", deadline = 2400,
+        points = { { 2600, 8000 }, { 2600, 11850 } },
+        custom = { { 2500, 11850, 1200, 11850 } },
+    },
+}
+
+-- A locked door with a key the route did not obtain must stop here, not be
+-- forced. A raised lock-bank flag means the room already opened it.
+local function locked_door_blocker(bot, target)
+    local door = door_by_target(bot, target)
+    if not door then
+        return nil
+    end
+    local lock = door.lock or 0
+    local key = door.key or 0
+    if lock < 0x80 or key == 0 then
+        return nil
+    end
+    if bot:flag(2, lock % 64) or bot:has_item(key) then
+        return nil
+    end
+    return string.format(
+        "locked door %s needs key 0x%02X (lock=0x%02X bit=%d flag=%s); key not held",
+        target, key, lock, lock % 64, tostring(bot:flag(2, lock % 64))
+    )
+end
+
+local function phase_travel(bot, spec)
+    if spec.points then
+        if not walk_waypoints(bot, spec.points, spec.tolerance or 150, spec.label) then
+            if BOT_STATE.phase_ticks > spec.deadline then
+                fail(bot, spec.label .. " waypoint timed out; "
+                    .. door_diag(bot, spec.target))
+            end
+            return
+        end
+    end
+    local blocker = locked_door_blocker(bot, spec.target)
+    if blocker then
+        log(bot, blocker)
+        fail(bot, blocker)
+        return
+    end
+    BOT_STATE.next_phase = spec.next_phase
+    door_nav(bot, spec.target, spec.custom or {}, spec.label)
+    if BOT_STATE.phase_ticks > spec.deadline then
+        fail(bot, spec.label .. " timed out; " .. door_diag(bot, spec.target))
+    end
+end
+
+-- The 203 stair landing is an in-room `check_door` zone, not a door. Pressing
+-- action in it starts the room's climb clip and warps the player onto the
+-- balcony/east corridor without a room change. The route walks to the west
+-- side of the east flight, faces into it, then uses the same handler a normal
+-- action press runs. Success is the player's own position jump.
+local function stair_action_slot(bot, min_x)
+    local actions = bot:actions()
+    for i = 1, #actions do
+        if actions[i].kind == "door_check" and actions[i].x >= min_x then
+            return actions[i].slot
+        end
+    end
+    return nil
+end
+
+local function stair_nav(bot, slot, label, approach)
+    local action = action_by_slot(bot, slot)
+    local nav = BOT_STATE.nav
+    if not nav or nav.kind ~= "stair" or nav.slot ~= slot then
+        if not action or action.kind ~= "door_check" then
+            log(bot, string.format(
+                "%s: stair check slot %s is not present (kind=%s)",
+                label, tostring(slot), tostring(action and action.kind or "missing")))
+            return true
+        end
+        local p = bot:player()
+        nav = {
+            kind = "stair", slot = slot, label = label,
+            x = p.x, y = p.y, z = p.z,
+            pressed = false, ticks = 0,
+        }
+        BOT_STATE.nav = nav
+        log(bot, string.format(
+            "%s: stair check slot=%d zone=(%d,%d,%d,%d) pos=(%d,%d,%d)",
+            label, slot, action.x, action.z, action.width, action.depth,
+            p.x, p.y, p.z))
+    end
+    local p = bot:player()
+    if nav.pressed then
+        local moved = abs(p.x - nav.x) + abs(p.y - nav.y) + abs(p.z - nav.z)
+        if moved > 1000 then
+            log(bot, string.format(
+                "%s: stair warp landed pos=(%d,%d,%d) moved=%d",
+                label, p.x, p.y, p.z, moved))
+            BOT_STATE.nav = nil
+            return true
+        end
+        nav.ticks = nav.ticks + 1
+        if nav.ticks > 600 then
+            fail(bot, string.format(
+                "%s: stair warp did not move the player (pos=(%d,%d,%d))",
+                label, p.x, p.y, p.z))
+        end
+        return false
+    end
+    local result = bot:walk_to(approach[1], approach[2], {
+        run = bot:distance(approach[1], approach[2]) >= RUN_MIN_DISTANCE,
+        tolerance = 120,
+    })
+    if result.status == "arrived" then
+        local facing = bot:face_to(approach[3], approach[4])
+        if facing.status == "facing" then
+            nav.pressed = true
+            nav.ticks = 0
+            log(bot, string.format(
+                "%s: pressing stair check at (%d,%d) d=%d",
+                label, approach[1], approach[2], result.distance))
+            bot:use_stair(slot)
+            bot:press_action()
+        end
+    elseif result.status ~= "moving" then
+        fail(bot, string.format(
+            "%s: stair approach (%d,%d) %s d=%d",
+            label, approach[1], approach[2], result.status, result.distance))
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, label .. ": stair approach timed out")
+    end
+    return false
+end
+
+local function phase_clear_202(bot)
+    if not BOT_STATE.crest.clear_202_positioned then
+        if not walk_waypoints(bot, { { 20000, 3500 } }, 150, "202 south approach") then
+            if BOT_STATE.phase_ticks > 1200 then
+                fail(bot, "202 south approach timed out")
+            end
+            return
+        end
+        BOT_STATE.crest.clear_202_positioned = true
+    end
+    local target = nil
+    local enemies = bot:enemies()
+    for i = 1, #enemies do
+        local enemy = enemies[i]
+        local common = enemy.id == 0x00 or enemy.id == 0x01 or enemy.id == 0x11
+        local dx, dz = enemy.x - 16416, enemy.z - 2384
+        if common and dx * dx + dz * dz <= 3500 * 3500 then
+            target = enemy
+            break
+        end
+    end
+    if not target then
+        set_phase(bot, "to_201_from_202", "202 south zombie cleared")
+        return
+    end
+    local p = bot:player()
+    bot:face_to(target.x, target.z)
+    if BOT_STATE.phase_ticks % 60 == 0 then
+        log(bot, string.format(
+            "202 south zombie wait slot=%d dist=%d health=%d player_health=%d clipped=%s",
+            target.slot, target.distance, target.health, p.health,
+            tostring(BOT_STATE.combat.disarmed)))
+    end
+    if BOT_STATE.phase_ticks > 900 then
+        log(bot, "202 south zombie not cleared; running past")
+        set_phase(bot, "to_201_from_202", "south zombie still up")
+    end
+end
+
+local function phase_to_202_from_203(bot)
+    if not BOT_STATE.crest.stair_203_done then
+        local slot = stair_action_slot(bot, 20000)
+        if slot then
+            if not stair_nav(bot, slot, "203 east flight", { 19700, 25650, 21990, 25650 }) then
+                return
+            end
+        else
+            log(bot, "203 east stair check not present; trying the room floor directly")
+        end
+        BOT_STATE.crest.stair_203_done = true
+        -- The warp lands only just past the stair block's collision, inside
+        -- the grown radius the planner uses. Walk east clear of it before
+        -- planning, otherwise every straight segment starts blocked.
+        BOT_STATE.crest.stair_nudge = 25
+    end
+    if BOT_STATE.crest.stair_nudge > 0 then
+        BOT_STATE.crest.stair_nudge = BOT_STATE.crest.stair_nudge - 1
+        bot:face_to(26000, 25650)
+        bot:set_input({ up = true })
+        return
+    end
+    -- The climb lands east of the stair block. Go east of it, then south down
+    -- the balcony corridor into the open west strip and the 202 door.
+    local points = {
+        { 26000, 25000 },
+        { 26000, 16000 },
+        { 3000, 16900 },
+    }
+    if walk_waypoints(bot, points, 150, "203 balcony") then
+        local custom = { { 3000, 16900, 1850, 16900 } }
+        BOT_STATE.next_phase = "clear_202"
+        door_nav(bot, "202", custom, "door 203->202")
+    end
+    if BOT_STATE.phase_ticks > 3000 then
+        fail(bot, "door 203->202 timed out; " .. door_diag(bot, "202"))
+    end
+end
+
 -- The 117 gallery paintings, in the only order that satisfies the script's
 -- room-bit requires. Each entry walks to an approach on the reachable side of
 -- the wall (north for AOT_02/03, south for AOT_04..07) and presses action.
@@ -969,6 +1408,301 @@ local function run_117_puzzle(bot)
     return false
 end
 
+local function crest_hollows(bot)
+    local count = 0
+    local bits = { F_SCENARIO_69, F_SCENARIO_6A, F_SCENARIO_6B, F_SCENARIO_6C }
+    for i = 1, #bits do
+        if bot:flag(0, bits[i]) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function held_crest_names(bot)
+    local held = {}
+    if bot:item_count(ITEM_SUN_CREST) > 0 then held[#held + 1] = "sun" end
+    if bot:item_count(ITEM_MOON_CREST) > 0 then held[#held + 1] = "moon" end
+    if bot:item_count(ITEM_STAR_CREST) > 0 then held[#held + 1] = "star" end
+    if bot:item_count(0x29) > 0 then held[#held + 1] = "wind" end
+    if #held == 0 then
+        return "none"
+    end
+    return table.concat(held, ",")
+end
+
+local function finish_11a_crests(bot, reason)
+    local hollows = crest_hollows(bot)
+    local opened = bot:flag(2, F_LOCK_17)
+    local held = held_crest_names(bot)
+    log(bot, string.format(
+        "11A crest check: hollows=%d/4 held=%s lock17=%s 11B=%s "
+            .. "sun=%d moon=%d star=%d wind=%d (%s)",
+        hollows, held, tostring(opened), opened and "open" or "locked",
+        bot:item_count(ITEM_SUN_CREST), bot:item_count(ITEM_MOON_CREST),
+        bot:item_count(ITEM_STAR_CREST), bot:item_count(0x29), reason
+    ))
+    BOT_STATE.milestone = "11A crests"
+    bot:finish(string.format(
+        "11A crests: hollows %d/4, held %s, 11B %s (%s)",
+        hollows, held, opened and "open" or "locked", reason
+    ))
+end
+
+-- In 11A the room itself tests each crest in the inventory and plays its
+-- placement event. The route only waits on the resulting scenario flag; it
+-- never calls use_action, sets a flag or forces F_LOCK_17.
+local function phase_place_crests_11a(bot)
+    local expected = {
+        { item = ITEM_SUN_CREST, bit = F_SCENARIO_6A, name = "sun" },
+        { item = ITEM_MOON_CREST, bit = F_SCENARIO_6B, name = "moon" },
+        { item = ITEM_STAR_CREST, bit = F_SCENARIO_69, name = "star" },
+        { item = 0x29, bit = F_SCENARIO_6C, name = "wind" },
+    }
+    local pending = {}
+    for i = 1, #expected do
+        local crest = expected[i]
+        if bot:item_count(crest.item) > 0 and not bot:flag(0, crest.bit) then
+            pending[#pending + 1] = crest.name
+        end
+    end
+    if #pending == 0 then
+        finish_11a_crests(bot, "placement flags set")
+        return
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        finish_11a_crests(bot, "placement timeout waiting for "
+            .. table.concat(pending, ","))
+    end
+end
+
+local function phase_to_105_items(bot)
+    local crest = BOT_STATE.crest
+    if crest.index == 1 then
+        local count = bot:item_count(ITEM_SHIELD_KEY)
+        if count > 0 then
+            log(bot, string.format("105 shield key already held count=%d", count))
+            crest.index = 2
+            return
+        end
+        local slot = item_action_slot(bot, ITEM_SHIELD_KEY)
+        if not slot then
+            log(bot, "105 shield key action not present; count=0")
+            crest.index = 2
+            return
+        end
+        local result = false
+        if walk_waypoints(bot, { { 14000, 13000 } }, 150, "105 dining room") then
+            result = action_nav(bot, slot, "105 shield key", {
+                { 17100, 14000, 18400, 15300 },
+            }, { optional = true })
+        end
+        if result == true then
+            log(bot, string.format("105 shield key count=%d",
+                bot:item_count(ITEM_SHIELD_KEY)))
+            crest.index = 2
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format(
+                "105 shield key unreachable; count=%d",
+                bot:item_count(ITEM_SHIELD_KEY)))
+            crest.index = 2
+            return
+        end
+        if BOT_STATE.phase_ticks > 2400 then
+            fail(bot, "105 shield key timed out; count="
+                .. bot:item_count(ITEM_SHIELD_KEY))
+        end
+        return
+    end
+    if crest.index == 2 then
+        local count = bot:item_count(ITEM_BLUE_JEWEL_KEY)
+        if count > 0 then
+            log(bot, string.format("105 blue jewel key already held count=%d", count))
+            crest.index = 3
+            return
+        end
+        local slot = item_action_slot(bot, ITEM_BLUE_JEWEL_KEY)
+        if not slot then
+            log(bot, string.format(
+                "105 blue jewel key action not present (scenario 0x0B=%s); count=%d",
+                tostring(bot:flag(0, F_SCENARIO_0B)), count))
+            crest.index = 3
+            return
+        end
+        local result = action_nav(bot, slot, "105 blue jewel key", {
+            { 11700, 4750, 12500, 4750 },
+        }, { optional = true })
+        if result == true then
+            log(bot, string.format("105 blue jewel key count=%d",
+                bot:item_count(ITEM_BLUE_JEWEL_KEY)))
+            crest.index = 3
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format(
+                "105 blue jewel key unreachable (scenario 0x0B=%s); count=%d",
+                tostring(bot:flag(0, F_SCENARIO_0B)),
+                bot:item_count(ITEM_BLUE_JEWEL_KEY)))
+            crest.index = 3
+            return
+        end
+        if BOT_STATE.phase_ticks > 2400 then
+            fail(bot, "105 blue jewel key timed out; count="
+                .. bot:item_count(ITEM_BLUE_JEWEL_KEY))
+        end
+        return
+    end
+    set_phase(bot, "to_106_from_105", "105 items done")
+end
+
+local function finish_10c_blocked(bot, reason)
+    local p = bot:player()
+    local hollows = crest_hollows(bot)
+    log(bot, string.format(
+        "10C armor key blocked: %s pos=(%d,%d) health=%d/%d "
+            .. "shield=%d blue=%d armor=%d sun=%d moon=%d hollows=%d/4",
+        reason, p.x, p.z, p.health, p.max_health,
+        bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_BLUE_JEWEL_KEY),
+        bot:item_count(ITEM_ARMOR_KEY), bot:item_count(ITEM_SUN_CREST),
+        bot:item_count(ITEM_MOON_CREST), hollows))
+    BOT_STATE.milestone = "10C"
+    bot:finish(string.format(
+        "10C reached; armor key blocked: %s (pos=(%d,%d), health=%d, "
+            .. "shield=%d, blue=%d, armor=%d, sun=%d, moon=%d, hollows=%d/4)",
+        reason, p.x, p.z, p.health,
+        bot:item_count(ITEM_SHIELD_KEY), bot:item_count(ITEM_BLUE_JEWEL_KEY),
+        bot:item_count(ITEM_ARMOR_KEY), bot:item_count(ITEM_SUN_CREST),
+        bot:item_count(ITEM_MOON_CREST), hollows))
+end
+
+local function phase_to_10c_item(bot)
+    local p = bot:player()
+    if p.health <= 10 then
+        finish_10c_blocked(bot,
+            "plant-fountain acid damage and the blocked north-bed corridor")
+        return
+    end
+    local count = bot:item_count(ITEM_ARMOR_KEY)
+    if count > 0 then
+        log(bot, string.format("10C armor key already held count=%d", count))
+        set_phase(bot, "to_103_from_10c", "armor key already held")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_ARMOR_KEY)
+    if not slot then
+        log(bot, "10C armor key action not present; count=0")
+        set_phase(bot, "to_103_from_10c", "no armor key action")
+        return
+    end
+    -- Stay north of the garden beds until the narrow west corridor, then
+    -- walk south to the key. The direct goal threads the plant-fountain bed.
+    -- Go north of the plant bed, then down the west service corridor. The
+    -- direct line runs inside the fountains' acid range.
+    local result = false
+    if walk_waypoints(bot, {
+        { 13824, 8192 }, { 7800, 7500 }, { 6144, 7500 },
+        { 6144, 3584 },
+    }, 150, "10C west corridor") then
+        result = action_nav(bot, slot, "10C armor key", {
+            { 6144, 5500, 5400, 5500 },
+        }, { optional = true })
+    end
+    if result == true then
+        log(bot, string.format("10C armor key count=%d",
+            bot:item_count(ITEM_ARMOR_KEY)))
+        set_phase(bot, "to_103_from_10c", "armor key taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, string.format("10C armor key unreachable; count=%d",
+            bot:item_count(ITEM_ARMOR_KEY)))
+        set_phase(bot, "to_103_from_10c", "armor key unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, "10C armor key timed out; count="
+            .. bot:item_count(ITEM_ARMOR_KEY))
+    end
+end
+
+local function phase_to_205_item(bot)
+    local count = bot:item_count(ITEM_SUN_CREST)
+    if count > 0 then
+        log(bot, string.format("205 sun crest already held count=%d", count))
+        set_phase(bot, "to_204_from_205", "sun crest already held")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_SUN_CREST)
+    if not slot then
+        log(bot, "205 sun crest action not present; count=0")
+        set_phase(bot, "to_204_from_205", "no sun crest action")
+        return
+    end
+    -- The two armor-room pillars are object collision, which the A* grid does
+    -- not see. Pass between them at z=7000 rather than straight west.
+    if walk_waypoints(bot, { { 10000, 7000 } }, 150, "205 armor room") then
+        local result = action_nav(bot, slot, "205 sun crest", {
+            { 3900, 7350, 2500, 7350 },
+        }, { optional = true })
+        if result == true then
+            log(bot, string.format("205 sun crest count=%d",
+                bot:item_count(ITEM_SUN_CREST)))
+            set_phase(bot, "to_204_from_205", "sun crest taken")
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format("205 sun crest unreachable; count=%d",
+                bot:item_count(ITEM_SUN_CREST)))
+            set_phase(bot, "to_204_from_205", "sun crest unreachable")
+            return
+        end
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        fail(bot, "205 sun crest timed out; count="
+            .. bot:item_count(ITEM_SUN_CREST))
+    end
+end
+
+local function phase_to_210_item(bot)
+    local count = bot:item_count(ITEM_MOON_CREST)
+    if count > 0 then
+        log(bot, string.format("210 moon crest already held count=%d", count))
+        set_phase(bot, "to_20e_from_210", "moon crest already held")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_MOON_CREST)
+    if not slot then
+        log(bot, "210 moon crest action not present; count=0")
+        set_phase(bot, "to_20e_from_210", "no moon crest action")
+        return
+    end
+    -- Keep to the west wall on the way north: the Yawn spawns near
+    -- (11000,10000) and must not be fought.
+    if walk_waypoints(bot, { { 4600, 8000 }, { 4600, 20000 } }, 150, "210 attic west") then
+        local result = action_nav(bot, slot, "210 moon crest", {
+            { 4608, 22740, 4608, 24000 },
+        }, { optional = true })
+        if result == true then
+            log(bot, string.format("210 moon crest count=%d",
+                bot:item_count(ITEM_MOON_CREST)))
+            set_phase(bot, "to_20e_from_210", "moon crest taken")
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format("210 moon crest unreachable; count=%d",
+                bot:item_count(ITEM_MOON_CREST)))
+            set_phase(bot, "to_20e_from_210", "moon crest unreachable")
+            return
+        end
+    end
+    if BOT_STATE.phase_ticks > 3000 then
+        fail(bot, "210 moon crest timed out; count="
+            .. bot:item_count(ITEM_MOON_CREST))
+    end
+end
+
 local function enter_room(bot, room, tick)
     local p = bot:player()
     log(bot, string.format(
@@ -976,7 +1710,8 @@ local function enter_room(bot, room, tick)
             .. "common02=%s common03=%s common05=%s common64=%s common65=%s "
             .. "lockpick=%s scenario7c=%s scenario03=%s scenario69=%s "
             .. "scenario6a=%s scenario6b=%s scenario6c=%s lock17=%s "
-            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d)",
+            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d "
+            .. "shield=%d blue=%d armor=%d sun=%d moon=%d)",
         room.id, tick, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
@@ -997,7 +1732,12 @@ local function enter_room(bot, room, tick)
         bot:item_count(ITEM_STAR_CREST),
         bot:item_count(ITEM_RADIO_KEY),
         bot:item_count(ITEM_DESK_KEY),
-        bot:item_count(ITEM_CRANK_KEY)
+        bot:item_count(ITEM_CRANK_KEY),
+        bot:item_count(ITEM_SHIELD_KEY),
+        bot:item_count(ITEM_BLUE_JEWEL_KEY),
+        bot:item_count(ITEM_ARMOR_KEY),
+        bot:item_count(ITEM_SUN_CREST),
+        bot:item_count(ITEM_MOON_CREST)
     ))
     BOT_STATE.room = room.id
     BOT_STATE.room_ticks = 0
@@ -1005,6 +1745,16 @@ local function enter_room(bot, room, tick)
     BOT_STATE.wp = 1
     BOT_STATE.wp_retry = false
     BOT_STATE.wp_tol = nil
+
+    -- A travel phase names the phase that owns the room it just entered. The
+    -- outward route below only describes the opening trip; using this hand-off
+    -- first keeps a return leg from falling back into a stale room default.
+    if BOT_STATE.next_phase then
+        local next_phase = BOT_STATE.next_phase
+        BOT_STATE.next_phase = nil
+        set_phase(bot, next_phase, "entered " .. room.id)
+        return
+    end
 
     if room.id == "106" and has_lockpick_action(bot) then
         log(bot, "Barry lockpick item registered")
@@ -1119,7 +1869,7 @@ end
 
 local function phase_walk_104(bot)
     if flag_common(bot, F_COMMON_02) then
-        set_phase(bot, "return_104", "first-zombie FMV done")
+        set_phase(bot, "to_104_ammo", "first-zombie FMV done")
         return
     end
     -- The 1 -> 4 switch zone is the diagonal band between (500,3600) and
@@ -1140,6 +1890,33 @@ local function phase_walk_104(bot)
     end
     if BOT_STATE.phase_ticks > 1500 then
         fail(bot, "could not trigger the 104 FMV")
+    end
+end
+
+local function phase_to_104_ammo(bot)
+    local slot = item_action_slot(bot, ITEM_HANDGUN_AMMO)
+    if not slot then
+        log(bot, "104 handgun ammo action not present; continuing")
+        set_phase(bot, "return_104", "no ammo action")
+        return
+    end
+    local result = action_nav(bot, slot, "104 handgun ammo", {
+        { 4300, 5300, 4300, 5900 },
+    }, { optional = true })
+    if result == true then
+        log(bot, string.format("104 handgun ammo count=%d",
+            bot:item_count(ITEM_HANDGUN_AMMO)))
+        set_phase(bot, "return_104", "ammo taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, "104 handgun ammo unreachable; continuing")
+        set_phase(bot, "return_104", "ammo unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 900 then
+        log(bot, "104 handgun ammo timed out; continuing")
+        set_phase(bot, "return_104", "ammo timeout")
     end
 end
 
@@ -1629,7 +2406,7 @@ local function phase_to_11a_item(bot)
         log(bot, string.format(
             "11A radio key action not present (Jill first mansion registers the "
                 .. "crest use-item zones here); count=%d", count))
-        set_phase(bot, "to_11b", "no radio key action")
+        set_phase(bot, "to_10a_from_11a", "no radio key action; return east")
         return
     end
     local points = {
@@ -1642,20 +2419,20 @@ local function phase_to_11a_item(bot)
         if result == true then
             log(bot, string.format("11A radio key count=%d",
                 bot:item_count(ITEM_RADIO_KEY)))
-            set_phase(bot, "to_11b", "radio key taken")
+            set_phase(bot, "to_10a_from_11a", "radio key done; return east")
             return
         end
         if result == "failed" then
             log(bot, string.format(
                 "11A radio key unreachable; count=%d",
                 bot:item_count(ITEM_RADIO_KEY)))
-            set_phase(bot, "to_11b", "radio key unreachable")
+            set_phase(bot, "to_10a_from_11a", "radio key unreachable; return east")
             return
         end
     end
     if BOT_STATE.phase_ticks > 3000 then
         log(bot, "11A radio key timed out; continuing to the store-room door")
-        set_phase(bot, "to_11b", "radio key timeout")
+        set_phase(bot, "to_10a_from_11a", "radio key timeout; return east")
     end
 end
 
@@ -1792,13 +2569,6 @@ local function angle_delta(a, b)
     return delta
 end
 
-local function abs(value)
-    if value < 0 then
-        return -value
-    end
-    return value
-end
-
 local function is_common_zombie(enemy)
     return enemy.id == 0x00 or enemy.id == 0x01 or enemy.id == 0x11
 end
@@ -1885,6 +2655,38 @@ local function combat_start(bot, combat, enemy, player, weapon)
         enemy.slot, enemy.id, enemy.distance, enemy.health, enemy.state,
         player.health, weapon.clip, weapon.reserve
     ))
+end
+
+-- Between fights: one green herb below 60 health. The host validates the item
+-- again and applies the menu USE rule, so this only queues a legal action.
+-- The cooldown is in controllable ticks; a grab, scene or menu never reaches
+-- this function, and an active fight is allowed to finish first.
+local function step_healing(bot, player)
+    local heal = BOT_STATE.heal
+    if heal.cooldown > 0 then
+        heal.cooldown = heal.cooldown - 1
+    end
+    if player.grabbed or player.health >= HEAL_THRESHOLD then
+        return false
+    end
+    if BOT_STATE.combat and BOT_STATE.combat.active then
+        return false
+    end
+    if heal.cooldown > 0 or bot:item_count(ITEM_GREEN_HERB) <= 0 then
+        return false
+    end
+    local health = player.health
+    if not bot:use_heal(ITEM_GREEN_HERB) then
+        heal.cooldown = HEAL_COOLDOWN
+        return false
+    end
+    heal.cooldown = HEAL_COOLDOWN
+    heal.uses = heal.uses + 1
+    heal.last_health = health
+    log(bot, string.format(
+        "heal green herb health=%d uses=%d cooldown=%d",
+        health, heal.uses, heal.cooldown))
+    return true
 end
 
 local function combat_step(bot, scene, player)
@@ -2135,6 +2937,24 @@ function on_bot_tick(bot)
     local scene = bot:scene()
     local player = bot:player()
 
+    if BOT_STATE.last_health and player.health < BOT_STATE.last_health then
+        local nearest = nil
+        local enemies = bot:enemies()
+        for i = 1, #enemies do
+            if not nearest or enemies[i].distance < nearest.distance then
+                nearest = enemies[i]
+            end
+        end
+        log(bot, string.format(
+            "damage health %d -> %d pos=(%d,%d) attacked=%d nearest=%s",
+            BOT_STATE.last_health, player.health, player.x, player.z,
+            player.being_attacked,
+            nearest and string.format("slot=%d id=%#04x dist=%d pos=(%d,%d)",
+                nearest.slot, nearest.id, nearest.distance,
+                nearest.x, nearest.z) or "none"))
+    end
+    BOT_STATE.last_health = player.health
+
     if BOT_STATE.room ~= room.id then
         enter_room(bot, room, tick)
         if room.id == "10A" then
@@ -2182,12 +3002,39 @@ function on_bot_tick(bot)
     BOT_STATE.controllable_ticks = BOT_STATE.controllable_ticks + 1
     BOT_STATE.locked_ticks = 0
 
+    if step_healing(bot, player) then
+        return
+    end
+
     if combat_step(bot, scene, player) then
         return
     end
 
     local phase = BOT_STATE.phase
-    if phase == "opening" then
+    if phase == "clear_202" then
+        phase_clear_202(bot)
+        return
+    end
+    if phase == "to_202_from_203" then
+        phase_to_202_from_203(bot)
+        return
+    end
+    local travel = TRAVEL_PHASES[phase]
+    if travel then
+        phase_travel(bot, travel)
+        return
+    end
+    if phase == "to_105_items" then
+        phase_to_105_items(bot)
+    elseif phase == "to_10c_item" then
+        phase_to_10c_item(bot)
+    elseif phase == "to_205_item" then
+        phase_to_205_item(bot)
+    elseif phase == "to_210_item" then
+        phase_to_210_item(bot)
+    elseif phase == "place_crests_11a" then
+        phase_place_crests_11a(bot)
+    elseif phase == "opening" then
         phase_opening(bot)
     elseif phase == "goto_105_from_106" then
         phase_goto_105_from_106(bot)
@@ -2195,6 +3042,8 @@ function on_bot_tick(bot)
         phase_to_104(bot)
     elseif phase == "walk_104" then
         phase_walk_104(bot)
+    elseif phase == "to_104_ammo" then
+        phase_to_104_ammo(bot)
     elseif phase == "return_104" then
         phase_return_104(bot)
     elseif phase == "to_106" then
