@@ -59,11 +59,21 @@ BOT_STATE = BOT_STATE or {
     barry_scene_logged = false,
     barry_done_ticks = 0,
     saw_pickup = false,
+    did_117 = false,
+    did_11a = false,
+    puzzle_index = 1,
+    puzzle_failed = false,
+    milestone = nil,
 }
 
 -- Fields added after the first checked-in route. A --watch reload keeps the
 -- old table, so fill any field that the previous chunk did not define.
 BOT_STATE.saw_pickup = BOT_STATE.saw_pickup or false
+BOT_STATE.did_117 = BOT_STATE.did_117 or false
+BOT_STATE.did_11a = BOT_STATE.did_11a or false
+BOT_STATE.puzzle_index = BOT_STATE.puzzle_index or 1
+BOT_STATE.puzzle_failed = BOT_STATE.puzzle_failed or false
+BOT_STATE.milestone = BOT_STATE.milestone or nil
 
 -- Flag banks: FG_COMMON is 1, FG_ROOM is 4, FG_STATUS is 5, FG_ITEM is 7.
 local BANK_COMMON = 1
@@ -86,7 +96,30 @@ local ITEM_SWORD_KEY = 0x33
 local ITEM_INK_RIBBON = 0x2F
 local ITEM_HANDGUN_AMMO = 0x0B
 local ITEM_GREEN_HERB = 0x44
+local ITEM_CRANK_KEY = 0x1D
+local ITEM_STAR_CREST = 0x2D
+local ITEM_DESK_KEY = 0x3D
+local ITEM_RADIO_KEY = 0x4D
 local SCENARIO_HAS_LOCKPICK = 0x7C
+
+-- 117 large gallery: the seven painting switches must be pushed in the order
+-- below. Each painting clears the room bits 0x18..0x1E and leaves only its own
+-- bit, and the next one requires that bit (it is the picture chronology:
+-- newborn, infant, lively boy, young man, tired middle-aged man, bold old man,
+-- people mourning). Pushing the last one sets F_SCENARIO_03, opens the frame
+-- and puts Jill beside the star crest.
+local F_SCENARIO_03 = 0x03
+local F_SCENARIO_69 = 0x69
+local F_SCENARIO_6A = 0x6A
+local F_SCENARIO_6B = 0x6B
+local F_SCENARIO_6C = 0x6C
+local F_LOCK_17 = 0x17
+local F_ROOM_19 = 0x19
+local F_ROOM_1A = 0x1A
+local F_ROOM_1B = 0x1B
+local F_ROOM_1C = 0x1C
+local F_ROOM_1D = 0x1D
+local F_ROOM_1E = 0x1E
 
 -- A ground item pickup gets this many controllable ticks on one side before
 -- the route walks around to the next side. The item viewer itself runs while
@@ -159,7 +192,9 @@ local function fail(bot, reason)
         "FAIL phase=%s reason=%s room=%s pos=(%d,%d) camera=%d health=%d/%d "
             .. "collision=%d common02=%s common03=%s common05=%s "
             .. "common64=%s common65=%s status1a=%s lockpick=%s "
-            .. "scenario7c=%s items(ribbon=%d ammo=%d herb=%d) "
+            .. "scenario7c=%s scenario03=%s scenario69=%s scenario6a=%s "
+            .. "scenario6b=%s scenario6c=%s lock17=%s "
+            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d) "
             .. "scene(film=%s trans=%s skip=%s skippable=%s msg=%s ctrl=%s frozen=%s)",
         BOT_STATE.phase, reason, room.id, p.x, p.z, room.camera, p.health, p.max_health,
         p.collision_flags,
@@ -171,9 +206,19 @@ local function fail(bot, reason)
         tostring(bot:flag(BANK_STATUS, F_STATUS_1A)),
         tostring(bot:has_item(ITEM_LOCKPICK)),
         tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+        tostring(bot:flag(0, F_SCENARIO_03)),
+        tostring(bot:flag(0, F_SCENARIO_69)),
+        tostring(bot:flag(0, F_SCENARIO_6A)),
+        tostring(bot:flag(0, F_SCENARIO_6B)),
+        tostring(bot:flag(0, F_SCENARIO_6C)),
+        tostring(bot:flag(2, F_LOCK_17)),
         bot:item_count(ITEM_INK_RIBBON),
         bot:item_count(ITEM_HANDGUN_AMMO),
         bot:item_count(ITEM_GREEN_HERB),
+        bot:item_count(ITEM_STAR_CREST),
+        bot:item_count(ITEM_RADIO_KEY),
+        bot:item_count(ITEM_DESK_KEY),
+        bot:item_count(ITEM_CRANK_KEY),
         tostring(scene.film), tostring(scene.transition), tostring(scene.cutscene_skip),
         tostring(scene.skippable), tostring(scene.message), tostring(scene.controllable),
         tostring(scene.frozen)
@@ -521,7 +566,7 @@ end
 --
 -- A zone at the room origin is a scripted handover (the 106 lockpick): its
 -- zone is outside the walkable floor, so use the room item action directly.
-local function action_nav(bot, slot, label, custom)
+local function action_nav(bot, slot, label, custom, opts)
     local action = action_by_slot(bot, slot)
     local nav = BOT_STATE.nav
     if not nav or nav.kind ~= "action" or nav.slot ~= slot then
@@ -541,6 +586,7 @@ local function action_nav(bot, slot, label, custom)
             label = label,
             before = bot:item_count(action.item),
             scripted = scripted,
+            optional = opts and opts.optional or false,
             points = {},
             index = 1,
             pressing = false,
@@ -628,7 +674,7 @@ local function action_nav(bot, slot, label, custom)
     end
 
     if nav.index > #nav.points then
-        fail(bot, string.format(
+        local message = string.format(
             "%s: every approach failed for item 0x%02X slot %d "
                 .. "(count=%d zone=(%d,%d,%d,%d) action=%s pickup=%s)",
             label, nav.item, slot, count,
@@ -636,7 +682,13 @@ local function action_nav(bot, slot, label, custom)
             action and action.width or -1, action and action.depth or -1,
             tostring(action and action.kind or "gone"),
             tostring(BOT_STATE.saw_pickup)
-        ))
+        )
+        if nav.optional then
+            log(bot, message .. "; optional item skipped")
+            BOT_STATE.nav = nil
+            return "failed"
+        end
+        fail(bot, message)
         return false
     end
     local point = nav.points[nav.index]
@@ -664,10 +716,16 @@ local function action_nav(bot, slot, label, custom)
             nav.pressing = false
         end
         if nav.total > ACTION_TIMEOUT_TICKS then
-            fail(bot, string.format(
+            local message = string.format(
                 "%s: timed out walking to item 0x%02X slot %d (count=%d)",
                 label, nav.item, slot, count
-            ))
+            )
+            if nav.optional then
+                log(bot, message .. "; optional item skipped")
+                BOT_STATE.nav = nil
+                return "failed"
+            end
+            fail(bot, message)
         end
         return false
     end
@@ -697,13 +755,125 @@ local function action_nav(bot, slot, label, custom)
         nav.ticks = 0
     end
     if nav.total > ACTION_TIMEOUT_TICKS then
-        fail(bot, string.format(
+        local message = string.format(
             "%s: timed out picking up item 0x%02X slot %d "
                 .. "(count=%d approach=%d/%d zone=(%d,%d,%d,%d))",
             label, nav.item, slot, count, nav.index, #nav.points,
             action and action.x or -1, action and action.z or -1,
             action and action.width or -1, action and action.depth or -1
-        ))
+        )
+        if nav.optional then
+            log(bot, message .. "; optional item skipped")
+            BOT_STATE.nav = nil
+            return "failed"
+        end
+        fail(bot, message)
+    end
+    return false
+end
+
+-- The 117 gallery paintings, in the only order that satisfies the script's
+-- room-bit requires. Each entry walks to an approach on the reachable side of
+-- the wall (north for AOT_02/03, south for AOT_04..07) and presses action.
+local PAINT_STEPS = {
+    { slot = 3, bank = 4, bit = F_ROOM_1A,
+      label = "117 painting 1/7 newborn",
+      points = { { 19500, 8100 } }, face = { 19500, 7200 } },
+    { slot = 5, bank = 4, bit = F_ROOM_1C,
+      label = "117 painting 2/7 infant",
+      points = { { 24000, 8100 }, { 24000, 5300 }, { 16000, 5300 } },
+      face = { 16000, 6100 } },
+    { slot = 6, bank = 4, bit = F_ROOM_1D,
+      label = "117 painting 3/7 lively boy",
+      points = { { 10500, 5300 } }, face = { 10500, 6100 } },
+    { slot = 4, bank = 4, bit = F_ROOM_1B,
+      label = "117 painting 4/7 young man",
+      points = { { 19500, 5300 } }, face = { 19500, 6100 } },
+    { slot = 2, bank = 4, bit = F_ROOM_19,
+      label = "117 painting 5/7 tired middle-aged man",
+      points = { { 24000, 5300 }, { 24000, 8100 }, { 16000, 8100 } },
+      face = { 16000, 7200 } },
+    { slot = 7, bank = 4, bit = F_ROOM_1E,
+      label = "117 painting 6/7 bold old man",
+      points = { { 24000, 8100 }, { 24000, 5300 }, { 7250, 5300 } },
+      face = { 7250, 6100 } },
+    { slot = 8, bank = 0, bit = F_SCENARIO_03,
+      label = "117 painting 7/7 people mourning",
+      points = { { 2900, 4100 } }, face = { 1850, 4100 } },
+}
+
+-- Press one painting zone and wait for its room bit. A press starts the
+-- picture message and then the yes/no switch prompt; handle_scene closes both
+-- while the phase is not called. The bit is the proof the push landed: the
+-- script clears 0x18..0x1E first and sets only this painting's bit afterwards.
+local function press_flag_action(bot, step)
+    if bot:flag(step.bank, step.bit) then
+        return true
+    end
+    local action = action_by_slot(bot, step.slot)
+    if not action then
+        log(bot, string.format("%s: action slot %d is not present",
+            step.label, step.slot))
+        return true
+    end
+    local nav = BOT_STATE.nav
+    if not nav or nav.kind ~= "paint" or nav.slot ~= step.slot then
+        nav = { kind = "paint", slot = step.slot, ticks = 0,
+            last_press = -1000, presses = 0 }
+        BOT_STATE.nav = nav
+    end
+    nav.ticks = nav.ticks + 1
+    if nav.ticks - nav.last_press < 20 then
+        return false
+    end
+    if nav.presses >= 4 then
+        log(bot, string.format(
+            "%s: flag %d:0x%02X still clear after %d presses; "
+                .. "painting sequence stopped",
+            step.label, step.bank, step.bit, nav.presses))
+        BOT_STATE.puzzle_failed = true
+        BOT_STATE.nav = nil
+        return false
+    end
+    local facing = bot:face_to(step.face[1], step.face[2])
+    if facing.status ~= "facing" then
+        return false
+    end
+    nav.presses = nav.presses + 1
+    nav.last_press = nav.ticks
+    log(bot, string.format("%s: press %d (slot=%d, waiting for flag %d:0x%02X)",
+        step.label, nav.presses, step.slot, step.bank, step.bit))
+    bot:press_action()
+    return false
+end
+
+local function run_117_puzzle(bot)
+    local index = BOT_STATE.puzzle_index or 1
+    if index > #PAINT_STEPS then
+        return true
+    end
+    local step = PAINT_STEPS[index]
+    if bot:flag(step.bank, step.bit) then
+        log(bot, string.format("%s: flag already set", step.label))
+        BOT_STATE.puzzle_index = index + 1
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        return false
+    end
+    if walk_waypoints(bot, step.points, 150, step.label) then
+        if press_flag_action(bot, step) then
+            if BOT_STATE.puzzle_failed then
+                return true
+            end
+            log(bot, string.format("%s: flag 0x%02X set", step.label, step.bit))
+            BOT_STATE.puzzle_index = index + 1
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+        elseif BOT_STATE.puzzle_failed then
+            return true
+        end
     end
     return false
 end
@@ -713,7 +883,9 @@ local function enter_room(bot, room, tick)
     log(bot, string.format(
         "room %s at tick %d pos=(%d,%d) camera=%d health=%d/%d "
             .. "common02=%s common03=%s common05=%s common64=%s common65=%s "
-            .. "lockpick=%s scenario7c=%s items(ribbon=%d ammo=%d herb=%d)",
+            .. "lockpick=%s scenario7c=%s scenario03=%s scenario69=%s "
+            .. "scenario6a=%s scenario6b=%s scenario6c=%s lock17=%s "
+            .. "items(ribbon=%d ammo=%d herb=%d star=%d radio=%d desk=%d crank=%d)",
         room.id, tick, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
         tostring(flag_common(bot, F_COMMON_03)),
@@ -722,9 +894,19 @@ local function enter_room(bot, room, tick)
         tostring(flag_common(bot, 0x41)),
         tostring(bot:has_item(ITEM_LOCKPICK)),
         tostring(bot:flag(0, SCENARIO_HAS_LOCKPICK)),
+        tostring(bot:flag(0, F_SCENARIO_03)),
+        tostring(bot:flag(0, F_SCENARIO_69)),
+        tostring(bot:flag(0, F_SCENARIO_6A)),
+        tostring(bot:flag(0, F_SCENARIO_6B)),
+        tostring(bot:flag(0, F_SCENARIO_6C)),
+        tostring(bot:flag(2, F_LOCK_17)),
         bot:item_count(ITEM_INK_RIBBON),
         bot:item_count(ITEM_HANDGUN_AMMO),
-        bot:item_count(ITEM_GREEN_HERB)
+        bot:item_count(ITEM_GREEN_HERB),
+        bot:item_count(ITEM_STAR_CREST),
+        bot:item_count(ITEM_RADIO_KEY),
+        bot:item_count(ITEM_DESK_KEY),
+        bot:item_count(ITEM_CRANK_KEY)
     ))
     BOT_STATE.room = room.id
     BOT_STATE.room_ticks = 0
@@ -773,7 +955,32 @@ local function enter_room(bot, room, tick)
         set_phase(bot, "to_109_item", "L passage west")
     elseif room.id == "10A" then
         log(bot, "10A reached")
-        bot:finish("10A reached")
+        BOT_STATE.milestone = BOT_STATE.milestone or "10A"
+        if not BOT_STATE.did_117 then
+            set_phase(bot, "to_117", "back passage")
+        elseif not BOT_STATE.did_11a then
+            set_phase(bot, "to_11a", "roofed passage")
+        else
+            bot:finish("10A reached; east wing already tried")
+        end
+    elseif room.id == "117" then
+        log(bot, "117 large gallery reached")
+        BOT_STATE.did_117 = true
+        BOT_STATE.milestone = "117"
+        set_phase(bot, "to_117_puzzle", "large gallery")
+    elseif room.id == "11A" then
+        log(bot, "11A roofed passage reached")
+        BOT_STATE.did_11a = true
+        BOT_STATE.milestone = "11A"
+        set_phase(bot, "to_11a_item", "roofed passage")
+    elseif room.id == "11B" then
+        log(bot, "11B store room reached")
+        BOT_STATE.milestone = "11B"
+        set_phase(bot, "to_11b_desk", "store room")
+    elseif room.id == "300" then
+        log(bot, "300 first house reached")
+        BOT_STATE.milestone = "300"
+        bot:finish("300 first house reached (11B -> 300 door)")
     else
         fail(bot, "unexpected room " .. room.id)
     end
@@ -1172,6 +1379,314 @@ local function phase_to_10a(bot)
     end
 end
 
+local function crest_flags_placed(bot)
+    local count = 0
+    if bot:flag(0, F_SCENARIO_69) then count = count + 1 end
+    if bot:flag(0, F_SCENARIO_6A) then count = count + 1 end
+    if bot:flag(0, F_SCENARIO_6B) then count = count + 1 end
+    if bot:flag(0, F_SCENARIO_6C) then count = count + 1 end
+    return count
+end
+
+-- The 11A -> 11B door is `DOOR_LOCKED | F_LOCK_17` with no key. In the first
+-- mansion the room raises that lock bit only after all four crests are placed
+-- in the roofed passage's use-item hollows; the radio key is a second-visit
+-- Chris item and is not a key for this door. Report whatever state the room
+-- actually left behind instead of forcing the lock.
+local function finish_11b_locked(bot)
+    local crests = crest_flags_placed(bot)
+    log(bot, string.format(
+        "11B door stays locked: %s crests=%d/4 star=%s radio=%s lock17=%s",
+        door_diag(bot, "11B"), crests,
+        tostring(bot:has_item(ITEM_STAR_CREST)),
+        tostring(bot:has_item(ITEM_RADIO_KEY)),
+        tostring(bot:flag(2, F_LOCK_17))
+    ))
+    BOT_STATE.milestone = "11A"
+    bot:finish(string.format(
+        "11A reached; 11B store room door locked "
+            .. "(F_LOCK_17 false, key 0x00, crest hollows %d/4, star crest %s)",
+        crests, bot:has_item(ITEM_STAR_CREST) and "held" or "missing"))
+end
+
+local function phase_to_117(bot)
+    local points = {
+        -- Stay south of the 10A zombie at (8272,2433) on the long west leg.
+        { 14000, 4500 },
+        { 8000, 4500 },
+        { 3000, 4500 },
+        { 3000, 2700 },
+    }
+    if walk_waypoints(bot, points, 150, "10A back passage") then
+        -- The door is in the north wall band; approach from the south.
+        local custom = { { 3000, 2700, 3000, 1700 } }
+        door_nav(bot, "117", custom, "door 10A->117")
+    end
+    if BOT_STATE.phase_ticks > 1500 then
+        fail(bot, "could not open the 10A -> 117 door; " .. door_diag(bot, "117"))
+    end
+end
+
+local function phase_to_117_puzzle(bot)
+    if bot:flag(0, F_SCENARIO_03) then
+        set_phase(bot, "to_117_item", "painting sequence already done")
+        return
+    end
+    if BOT_STATE.puzzle_failed then
+        set_phase(bot, "to_117_item", "painting sequence failed")
+        return
+    end
+    if run_117_puzzle(bot) then
+        if BOT_STATE.puzzle_failed then
+            set_phase(bot, "to_117_item", "painting sequence failed")
+        else
+            set_phase(bot, "to_117_item", "painting sequence done")
+        end
+        return
+    end
+    if BOT_STATE.phase_ticks > 4000 then
+        log(bot, string.format(
+            "117 painting sequence timed out at step %d; giving up",
+            BOT_STATE.puzzle_index or 1))
+        BOT_STATE.puzzle_failed = true
+        set_phase(bot, "to_117_item", "painting timeout")
+    end
+end
+
+local function phase_to_117_item(bot)
+    local count = bot:item_count(ITEM_STAR_CREST)
+    if count > 0 then
+        log(bot, string.format("117 star crest count=%d", count))
+        BOT_STATE.milestone = "117 star crest"
+        set_phase(bot, "return_117", "star crest already held")
+        return
+    end
+    if not bot:flag(0, F_SCENARIO_03) then
+        log(bot, "117 star crest blocked: the painting sequence did not set "
+            .. "F_SCENARIO_03, so the AOT_08 painting event still covers AOT_09")
+        set_phase(bot, "return_117", "star crest blocked")
+        return
+    end
+    local slot = item_action_slot(bot, ITEM_STAR_CREST)
+    if not slot then
+        log(bot, string.format(
+            "117 star crest action not present; count=%d", count))
+        set_phase(bot, "return_117", "no star crest action")
+        return
+    end
+    -- The final painting move leaves Jill at (2773,4147), just east of the
+    -- crest zone; the east approach is inside reach already. The west wall's
+    -- grown edge is x=2710, so the approach stays at x=2900.
+    local result = action_nav(bot, slot, "117 star crest", {
+        { 2900, 4100, 1850, 4100 },
+    }, { optional = true })
+    if result == true then
+        log(bot, string.format("117 star crest count=%d",
+            bot:item_count(ITEM_STAR_CREST)))
+        BOT_STATE.milestone = "117 star crest"
+        set_phase(bot, "return_117", "star crest taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, string.format(
+            "117 star crest unreachable; count=%d", bot:item_count(ITEM_STAR_CREST)))
+        set_phase(bot, "return_117", "star crest unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, "could not take the 117 star crest")
+    end
+end
+
+local function phase_return_117(bot)
+    -- Go back through the east gap in the gallery's inner wall, then to the
+    -- south-wall door to 10A.
+    local points = {
+        { 24000, 5000 },
+        { 24000, 10000 },
+        { 3200, 10500 },
+    }
+    if walk_waypoints(bot, points, 150, "117 return") then
+        local custom = { { 3200, 10500, 3200, 11600 } }
+        door_nav(bot, "10A", custom, "door 117->10A")
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        fail(bot, "could not return to 10A from 117; " .. door_diag(bot, "10A"))
+    end
+end
+
+local function phase_to_11a(bot)
+    -- The door is on the west wall of the south corridor. Keep west of the
+    -- 10A zombie at (3023,6864) on the way down.
+    local points = {
+        { 2600, 8000 },
+        { 2600, 11850 },
+    }
+    if walk_waypoints(bot, points, 150, "10A west passage") then
+        local custom = { { 2500, 11850, 1300, 11850 } }
+        door_nav(bot, "11A", custom, "door 10A->11A")
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        fail(bot, "could not open the 10A -> 11A door; " .. door_diag(bot, "11A"))
+    end
+end
+
+local function phase_to_11a_item(bot)
+    local slot = item_action_slot(bot, ITEM_RADIO_KEY)
+    local count = bot:item_count(ITEM_RADIO_KEY)
+    if not slot then
+        log(bot, string.format(
+            "11A radio key action not present (Jill first mansion registers the "
+                .. "crest use-item zones here); count=%d", count))
+        set_phase(bot, "to_11b", "no radio key action")
+        return
+    end
+    local points = {
+        { 4500, 12000 },
+        { 4500, 23000 },
+        { 6000, 25000 },
+    }
+    if walk_waypoints(bot, points, 150, "11A north passage") then
+        local result = action_nav(bot, slot, "11A radio key", nil, { optional = true })
+        if result == true then
+            log(bot, string.format("11A radio key count=%d",
+                bot:item_count(ITEM_RADIO_KEY)))
+            set_phase(bot, "to_11b", "radio key taken")
+            return
+        end
+        if result == "failed" then
+            log(bot, string.format(
+                "11A radio key unreachable; count=%d",
+                bot:item_count(ITEM_RADIO_KEY)))
+            set_phase(bot, "to_11b", "radio key unreachable")
+            return
+        end
+    end
+    if BOT_STATE.phase_ticks > 3000 then
+        log(bot, "11A radio key timed out; continuing to the store-room door")
+        set_phase(bot, "to_11b", "radio key timeout")
+    end
+end
+
+local function phase_to_11b(bot)
+    local p = bot:player()
+    local points
+    if p.z > 24000 then
+        points = {
+            { 6000, 25000 },
+            { 7700, 25550 },
+        }
+    else
+        points = {
+            { 4500, 12000 },
+            { 4500, 23000 },
+            { 6000, 24500 },
+            { 7700, 25550 },
+        }
+    end
+    if walk_waypoints(bot, points, 150, "11A store room door") then
+        -- The door is on the east wall; approach from the west.
+        local custom = { { 7700, 25550, 8750, 25550 } }
+        door_nav(bot, "11B", custom, "door 11A->11B")
+        local nav = BOT_STATE.nav
+        if nav and nav.target == "11B"
+            and (nav.exhausted or (nav.index > 1 and not nav.pressing)) then
+            -- The known-good west approach timed out. The room's lock bit and
+            -- crest flags are already in the log; stop in 11A rather than
+            -- trying the wall-side approaches or forcing the lock.
+            finish_11b_locked(bot)
+            return
+        end
+    end
+    if BOT_STATE.phase_ticks > 2400 then
+        log(bot, string.format(
+            "11B door approach did not finish; pos=(%d,%d) %s",
+            p.x, p.z, door_diag(bot, "11B")))
+        BOT_STATE.milestone = "11A"
+        bot:finish("11A reached; 11B door approach unreachable")
+    end
+end
+
+local function phase_to_11b_desk(bot)
+    local slot = item_action_slot(bot, ITEM_DESK_KEY)
+    if not slot then
+        log(bot, string.format(
+            "11B desk key action not present; count=%d",
+            bot:item_count(ITEM_DESK_KEY)))
+        set_phase(bot, "to_11b_crank", "no desk key action")
+        return
+    end
+    local result = action_nav(bot, slot, "11B desk key", {
+        { 8800, 8200, 8750, 9500 },
+    }, { optional = true })
+    if result == true then
+        log(bot, string.format("11B desk key count=%d",
+            bot:item_count(ITEM_DESK_KEY)))
+        set_phase(bot, "to_11b_crank", "desk key taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, string.format(
+            "11B desk key unreachable; count=%d",
+            bot:item_count(ITEM_DESK_KEY)))
+        set_phase(bot, "to_11b_crank", "desk key unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        log(bot, "11B desk key timed out; continuing to the crank key")
+        set_phase(bot, "to_11b_crank", "desk key timeout")
+    end
+end
+
+local function phase_to_11b_crank(bot)
+    local slot = item_action_slot(bot, ITEM_CRANK_KEY)
+    if not slot then
+        log(bot, string.format(
+            "11B crank key action not present; count=%d",
+            bot:item_count(ITEM_CRANK_KEY)))
+        set_phase(bot, "to_300", "no crank key action")
+        return
+    end
+    local result = action_nav(bot, slot, "11B crank key", {
+        { 5650, 3100, 5650, 2000 },
+    }, { optional = true })
+    if result == true then
+        log(bot, string.format("11B crank key count=%d",
+            bot:item_count(ITEM_CRANK_KEY)))
+        set_phase(bot, "to_300", "crank key taken")
+        return
+    end
+    if result == "failed" then
+        log(bot, string.format(
+            "11B crank key unreachable; count=%d",
+            bot:item_count(ITEM_CRANK_KEY)))
+        set_phase(bot, "to_300", "crank key unreachable")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1800 then
+        log(bot, "11B crank key timed out; continuing to the 300 door")
+        set_phase(bot, "to_300", "crank key timeout")
+    end
+end
+
+local function phase_to_300(bot)
+    -- The first-house door is on the east wall; approach from the west.
+    local custom = { { 8500, 5900, 9100, 5900 } }
+    door_nav(bot, "300", custom, "door 11B->300")
+    local nav = BOT_STATE.nav
+    if nav and nav.target == "300" and nav.exhausted then
+        log(bot, "11B -> 300 first-house door did not open: " .. door_diag(bot, "300"))
+        BOT_STATE.milestone = "11B"
+        bot:finish("11B reached; 300 first-house door did not open")
+        return
+    end
+    if BOT_STATE.phase_ticks > 1500 then
+        log(bot, "11B -> 300 door timed out: " .. door_diag(bot, "300"))
+        BOT_STATE.milestone = "11B"
+        bot:finish("11B reached; 300 first-house door timed out")
+    end
+end
+
 function on_bot_tick(bot)
     local tick = bot:tick()
     local room = bot:room()
@@ -1260,6 +1775,26 @@ function on_bot_tick(bot)
         phase_to_109_item(bot)
     elseif phase == "to_10a" then
         phase_to_10a(bot)
+    elseif phase == "to_117" then
+        phase_to_117(bot)
+    elseif phase == "to_117_puzzle" then
+        phase_to_117_puzzle(bot)
+    elseif phase == "to_117_item" then
+        phase_to_117_item(bot)
+    elseif phase == "return_117" then
+        phase_return_117(bot)
+    elseif phase == "to_11a" then
+        phase_to_11a(bot)
+    elseif phase == "to_11a_item" then
+        phase_to_11a_item(bot)
+    elseif phase == "to_11b" then
+        phase_to_11b(bot)
+    elseif phase == "to_11b_desk" then
+        phase_to_11b_desk(bot)
+    elseif phase == "to_11b_crank" then
+        phase_to_11b_crank(bot)
+    elseif phase == "to_300" then
+        phase_to_300(bot)
     else
         fail(bot, "unknown phase " .. tostring(phase))
     end
