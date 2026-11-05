@@ -12078,7 +12078,7 @@ fn run_ui_impl(
         } else {
             bot.max_ticks
         };
-        return run_bot_headless(&mut app, max_ticks);
+        return run_bot_headless(&mut app, max_ticks, bot.stats_path.as_deref());
     }
     if capture.is_some()
         || trace.path.is_some()
@@ -12634,7 +12634,7 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
 
 /// Run the attached bot with no display or audio until it finishes, dies or
 /// spends `max_ticks` app updates. Prints a concise `[bot]` report.
-fn run_bot_headless(app: &mut App, max_ticks: u64) -> Result<()> {
+fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) -> Result<()> {
     let started = Instant::now();
     let mut outcome = "max_ticks";
     for _ in 0..max_ticks {
@@ -12654,6 +12654,7 @@ fn run_bot_headless(app: &mut App, max_ticks: u64) -> Result<()> {
             Ok(AppFlow::Continue) => {}
             Err(err) => {
                 print_bot_report(app, "error", started.elapsed());
+                write_bot_stats(app, "error", started.elapsed(), stats_path)?;
                 return Err(err);
             }
         }
@@ -12665,6 +12666,26 @@ fn run_bot_headless(app: &mut App, max_ticks: u64) -> Result<()> {
         outcome = "death";
     }
     print_bot_report(app, outcome, started.elapsed());
+    write_bot_stats(app, outcome, started.elapsed(), stats_path)
+}
+
+/// Write the `--bot-stats` JSON report, whatever the outcome.
+fn write_bot_stats(
+    app: &App,
+    outcome: &str,
+    elapsed: std::time::Duration,
+    path: Option<&Path>,
+) -> Result<()> {
+    let (Some(path), Some(runtime)) = (path, app.bot.as_ref()) else {
+        return Ok(());
+    };
+    let json = runtime.stats_json(outcome, elapsed.as_secs_f64());
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&json)?)
+        .with_context(|| format!("writing bot stats to {}", path.display()))?;
+    println!("[bot] stats: {}", path.display());
     Ok(())
 }
 
@@ -28647,6 +28668,7 @@ mod tests {
                 enabled: true,
                 headless: true,
                 max_ticks: 20,
+                stats_path: None,
             },
         )
         .unwrap();
