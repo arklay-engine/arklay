@@ -2318,6 +2318,7 @@ impl GameSession {
         game.re2.scenario_b = scenario_b;
         seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
+        apply_pack_setup(pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
         if scenario_b {
@@ -2582,6 +2583,16 @@ impl GameSession {
         // typewriter.
         let lua = load_lua(pack);
         let mut game = game;
+        // A randomizer's system flags follow the pack, not the save: a save
+        // keeps none of bank 5, so every path into a session raises them here.
+        let raised = pack
+            .manifest()
+            .map(crate::manifest::Manifest::system_flags)
+            .unwrap_or_default();
+        for (_, flag) in scd::opcode::system::BY_NAME {
+            // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+            game.apply_flag(5, flag, u8::from(!raised.contains(&flag)));
+        }
         // The run options land before `on_init`, so the hooks read them on the
         // first room as well as after a door.
         game.player_options = options;
@@ -7872,6 +7883,32 @@ fn pack_start_room(pack: &Pack, character: u8) -> Option<RoomId> {
     RoomId::from_room_and_player(room, character & 1).ok()
 }
 
+/// The new-game part of a generated pack's [`crate::manifest::GameSetup`]:
+/// the start items in place of `game/new_game.lua`'s, then the scenario flags.
+/// An ordinary pack's setup is empty and changes nothing. (Slot counts are not
+/// ported.)
+fn apply_pack_setup(pack: &Pack, game: &mut game::GameState) {
+    let Some(manifest) = pack.manifest() else {
+        return;
+    };
+    let setup = &manifest.setup;
+    if let Some(items) = &setup.start_items {
+        game.inventory.clear();
+        let capacity = game.inventory_capacity();
+        game.inventory.extend(
+            items
+                .iter()
+                .take(capacity)
+                .map(|&(id, quantity)| game::InventoryItem { id, quantity }),
+        );
+        game.rebuild_slots();
+    }
+    for &(flag, raised) in &setup.scenario_flags {
+        // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+        game.apply_flag(game::BANK_SCENARIO, flag, u8::from(!raised));
+    }
+}
+
 /// Apply the character-specific new-game seed over the fresh state:
 /// `SetInitialItems`, the save counter and the Jill first-run flags. The
 /// room-BGM bytes, item box and room-item bank come from
@@ -9198,7 +9235,13 @@ impl App {
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         match action {
-            ScreenAction::CharSelect => self.open_select()?,
+            ScreenAction::CharSelect => {
+                // A randomizer's seed has already picked the character.
+                match self.pack.manifest().and_then(|manifest| manifest.character) {
+                    Some(character) => self.start_new_game(character)?,
+                    None => self.open_select()?,
+                }
+            }
             ScreenAction::SaveLoad => self.open_load()?,
             ScreenAction::NewGame { character } => {
                 // The interactive root boot plays the prologue film (id 1)

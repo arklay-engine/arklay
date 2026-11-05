@@ -1371,6 +1371,7 @@ impl Pack {
             .expect("a base manifest always exists here")
             .id
             .clone();
+        let generated = pack.manifest.as_ref().is_some_and(|m| m.seed.is_some());
 
         let mut applied = Vec::with_capacity(layers.len());
         let mut discovered_ids: HashSet<String> = HashSet::new();
@@ -1403,6 +1404,9 @@ impl Pack {
             // mod builder's check.
             if let Some(declared) = &manifest.base
                 && declared != &base_id
+                // A randomizer's generated pack (`seed`) is an `re1` game
+                // under its own id, so `re1` mods layer over it.
+                && !(declared == "re1" && generated)
                 && !opened.only_hd_textures()
             {
                 // A shared mods folder holds every game's mods; an explicit
@@ -3054,6 +3058,12 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
         }
         .render()
