@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 302 courtyard below the pool. The door from 301's drained pool lands
+     on the elevator platform; AOT 7 calls the elevator, which rides back up
+     to 301 (scenario 0x30). The way on is the door to 304; the way back to
+     the mansion is the door to 300. -->
+<bot format="2">
+  <avoid slot="7" reason="the elevator back up to 301"/>
+</bot>

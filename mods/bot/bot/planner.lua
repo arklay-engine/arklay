@@ -956,19 +956,29 @@ local function stair_goal(bot, action)
             zone = zone_of(action), label = label, pattern = "edge",
             presses = 2, gap = 40, side = 10 * C.SECOND,
             timeout = action.kind == "event" and PASSAGE_TIMEOUT or nil,
-            -- The climb is a warp: one tick's jump after the press.
+            -- The climb is a warp: one tick's jump after the press. A
+            -- ladder (`stairs_zone`, started by the press or by leaning
+            -- into it) carries the player over a few seconds instead: done
+            -- once it has moved that far from the approach point and
+            -- control is back.
             done = function(b, job)
                 local q = b:player()
                 local last = job.last_pos
-                return job.pressed and last ~= nil
+                if job.pressed and last ~= nil
                     and BotNav.abs(q.x - last[1]) + BotNav.abs(q.z - last[2])
-                        > C.WARP_DISTANCE
+                        > C.WARP_DISTANCE then
+                    return true
+                end
+                local at = job.arrived_at
+                return at ~= nil and b:scene().controllable
+                    and BotNav.abs(q.x - at[1]) + BotNav.abs(q.z - at[2]) > C.WARP_DISTANCE
             end,
         },
     }
 end
 
--- A passage check here: a stair zone (`door_check`), or an action-key
+-- A passage check here: a stair zone (`door_check`), a ladder
+-- (`stairs_zone`), or an action-key
 -- event zone no fact names (a room may start its stair climb from an
 -- event, as when a script turns the stair zone on from the event). One try
 -- per slot per entry, nearest first.
@@ -977,7 +987,7 @@ local function passage_goal(bot, room)
     p.stairs[room] = p.stairs[room] or {}
     local stair, stair_len = nil, nil
     for _, action in ipairs(bot:actions()) do
-        local passage = action.kind == "door_check"
+        local passage = action.kind == "door_check" or action.kind == "stairs_zone"
             or (action.kind == "event" and action.flags >= C.ACTION_KEY
                 and not BotPuzzle.is_fact_slot(bot, action.slot))
         if passage and not p.stairs[room][action.slot]
@@ -1413,7 +1423,7 @@ local function choose(bot)
     end
 
     -- 3. A passage check when part of this room is out of reach: a stair
-    -- zone (`door_check`), or an action-key event zone no fact names (a
+    -- zone (`door_check`), a ladder (`stairs_zone`), or an action-key event zone no fact names (a
     -- room may start its stair climb from an event, as when a script turns
     -- the stair zone on from the event). One try per slot per entry.
     for _, m in pairs(plan().marks) do
