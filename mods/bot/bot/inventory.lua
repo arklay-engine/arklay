@@ -310,6 +310,10 @@ function BotInventory.context(bot)
             ctx.uses[fact.item] = true
         end
     end
+    -- An item a wanted <deliver> needs is kept like a <use> item.
+    for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
+        ctx.uses[item] = true
+    end
     for _, room in ipairs(bot:world().rooms) do
         for _, door in ipairs(room.doors) do
             if door.present and door.locked and not door.unlocked and not door.traversed then
@@ -351,7 +355,8 @@ end
 -- Known pickups that need a free slot: frontier items that merge into no
 -- held stack. `skip(goal)` drops one the planner has given up on.
 function BotInventory.pickups_needing_room(bot, skip)
-    local n = 0
+    -- A due <fetch> hands over an item that needs a slot too.
+    local n = #BotPuzzle.fetches_due(bot)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local _, merge = bot:item_kind(goal.item)
@@ -366,7 +371,7 @@ end
 -- Known pickups that need a free slot and that the run needs: a key, an
 -- item a <use> fact needs, or the ammunition a held gun lacks.
 function BotInventory.needed_pickups(bot, ctx, skip)
-    local n = 0
+    local n = #BotPuzzle.fetches_due(bot)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local kind, merge = bot:item_kind(goal.item)

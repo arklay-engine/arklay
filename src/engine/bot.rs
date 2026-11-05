@@ -2484,6 +2484,8 @@ struct BotCtx {
     uses: Rc<Vec<meta::RoomUse>>,
     /// Every room's `<holds>` facts, cached by [`BotRuntime`].
     holds: Rc<Vec<meta::RoomHolds>>,
+    /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
+    errands: Rc<Vec<meta::RoomErrand>>,
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
@@ -2707,6 +2709,33 @@ impl UserData for BotCtx {
                 row.set("room", entry.room.as_str())?;
                 row.set("item", entry.fact.item)?;
                 row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("errand_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.errands.iter() {
+                let fact = &entry.fact;
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                match fact.kind {
+                    meta::ErrandKind::Deliver { cut } => {
+                        row.set("kind", "deliver")?;
+                        row.set("cut", cut)?;
+                    }
+                    meta::ErrandKind::Fetch { slot } => {
+                        row.set("kind", "fetch")?;
+                        row.set("slot", slot)?;
+                    }
+                }
+                row.set("item", fact.item)?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("label", fact.label.as_deref())?;
                 table.push(row)?;
             }
             Ok(table)
@@ -3432,6 +3461,8 @@ pub struct BotRuntime {
     uses: Option<(bool, Rc<Vec<meta::RoomUse>>)>,
     /// Every room's `<holds>` facts, loaded with `uses`.
     holds: Rc<Vec<meta::RoomHolds>>,
+    /// Every room's errand facts, loaded with `uses`.
+    errands: Rc<Vec<meta::RoomErrand>>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
@@ -3466,6 +3497,7 @@ impl BotRuntime {
             meta_room: None,
             uses: None,
             holds: Rc::default(),
+            errands: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
@@ -3528,6 +3560,7 @@ impl BotRuntime {
         if self.uses.as_ref().is_none_or(|(held, _)| *held != jill) {
             self.uses = Some((jill, Rc::new(meta::load_uses(pack, Some(jill))?)));
             self.holds = Rc::new(meta::load_holds(pack, Some(jill))?);
+            self.errands = Rc::new(meta::load_errands(pack, Some(jill))?);
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
@@ -3553,6 +3586,7 @@ impl BotRuntime {
                 .map(|(_, uses)| uses.clone())
                 .unwrap_or_default(),
             holds: self.holds.clone(),
+            errands: self.errands.clone(),
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -3857,6 +3891,7 @@ mod tests {
             "ammo_for",
             "use_facts",
             "item_facts",
+            "errand_facts",
             "combine_result",
         ];
         // The bot's own memory and run bookkeeping, never the game.
@@ -4805,6 +4840,7 @@ mod tests {
             meta: Some(Rc::new(meta)),
             uses: Rc::default(),
             holds: Rc::default(),
+            errands: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -5813,6 +5849,7 @@ mod tests {
             meta: None,
             uses: Rc::default(),
             holds: Rc::default(),
+            errands: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.25,

@@ -114,6 +114,10 @@ local USE_BONUS = 60 * C.REACH
 -- A route to a seen key item that a remembered locked door needs: more
 -- than the ammunition bonus, so a needed key comes first.
 local KEY_BONUS = 70 * C.REACH
+-- A route for an item errand (<deliver>/<fetch>): more than a key, since
+-- the room that wants the item may want it only for a while (a poisoned
+-- partner who dies after some minutes).
+local ERRAND_BONUS = 2 * KEY_BONUS
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
@@ -723,6 +727,41 @@ local function interact_goal(bot, fact, index, count)
     }
 end
 
+-- A <deliver> here with its item held: walk into its camera cut; the room
+-- script takes the item there and sets the done flag.
+local function deliver_goal(bot, fact)
+    local label = string.format("deliver 0x%02X into camera %d (%s)", fact.item, fact.cut,
+        fact.label or "unnamed")
+    return {
+        kind = "deliver", slot = "camera" .. fact.cut, label = label,
+        job = {
+            camera = fact.cut, label = label,
+            done = function(b) return b:flag(fact.bank, fact.bit) end,
+        },
+    }
+end
+
+-- A <fetch> here that a wanted <deliver> needs: press its zone until the
+-- item is held (or the offer is gone).
+local function fetch_goal(bot, fact)
+    local action = BotNav.action_by_slot(bot, fact.slot)
+    if not action then
+        return nil, string.format("fetch slot %d is not a live action", fact.slot)
+    end
+    local label = string.format("fetch 0x%02X at slot %d (%s)", fact.item, fact.slot,
+        fact.label or "unnamed")
+    return {
+        kind = "fetch", slot = fact.slot, label = label,
+        job = {
+            zone = zone_of(action), label = label, pattern = "edge",
+            presses = 2, gap = 20, side = 4 * C.SECOND,
+            done = function(b)
+                return b:has_item(fact.item) or not BotPuzzle.fetch_offered(b, fact)
+            end,
+        },
+    }
+end
+
 -- How long a used item may take to show its done flag once the menu closed:
 -- the room event (a scene) runs in between.
 local USE_SETTLE = 20 * C.SECOND
@@ -974,6 +1013,20 @@ local function target_goal(bot, world, t)
         end
         return nil
     end
+    if t.kind == "deliver" or t.kind == "fetch" then
+        local fact = t.fact
+        local live
+        if t.kind == "deliver" then
+            live = BotPuzzle.deliver_wanted(bot, fact) and bot:has_item(fact.item)
+        else
+            live = BotPuzzle.wanted_items(bot)[fact.item] and not bot:has_item(fact.item)
+                and BotPuzzle.fetch_offered(bot, fact)
+        end
+        if live and not blocked(bot, t.kind, t.room, t.slot, true) then
+            return { kind = t.kind, room = t.room, slot = t.slot }
+        end
+        return nil
+    end
     return frontier_goal(world, t)
 end
 
@@ -1201,6 +1254,30 @@ local function choose(bot)
         return box_goal(bot, box, box_here)
     end
     local box_why = BotInventory.box_reason(bot, gave_up)
+
+    -- 1d. Item errands here: carry a held item a <deliver> wants into its
+    -- camera cut, or take one a wanted <deliver> needs where a <fetch>
+    -- offers it.
+    for _, fact in ipairs(BotPuzzle.errands(bot)) do
+        if fact.room == room and BotPuzzle.deliver_wanted(bot, fact)
+            and bot:has_item(fact.item)
+            and not blocked(bot, "deliver", room, "camera" .. fact.cut) then
+            return deliver_goal(bot, fact)
+        end
+    end
+    for _, fact in ipairs(BotPuzzle.fetches_due(bot)) do
+        if fact.room == room and not blocked(bot, "fetch", room, fact.slot) then
+            if not pickup_fits(bot, fact.item, inventory_full(bot)) then
+                mark(bot, "fetch", room, fact.slot, "inventory full: " .. inventory_sig(bot))
+            else
+                local goal, why = fetch_goal(bot, fact)
+                if goal then
+                    return goal
+                end
+                mark(bot, "fetch", room, fact.slot, why)
+            end
+        end
+    end
 
     -- 2. Ground items here, keys first (a key opens a door; nothing else
     -- in the room is worth more), then the nearest planned path.
@@ -1477,7 +1554,8 @@ local function choose(bot)
             -- The inventory filled on the way: no slot for it there.
             goal = nil
         end
-        if goal and (goal.kind == "use" or goal.kind == "box") and goal.room == room then
+        if goal and (goal.kind == "use" or goal.kind == "box" or goal.kind == "deliver"
+            or goal.kind == "fetch") and goal.room == room then
             -- Here, and step 1b/1c did not take it: its probe is not live,
             -- or the box is not.
             mark(bot, goal.kind, room, t.slot, goal.kind .. " not live on arrival")
@@ -1500,7 +1578,8 @@ local function choose(bot)
                 BotPlanner.action_point(world, goal.room, goal.slot))
         else
             steps = goal and goal.room ~= room
-                and (goal.kind == "use" or usable(goal))
+                and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
+                    or usable(goal))
                 and route(bot, world, room, goal.room)
         end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -1630,6 +1709,37 @@ local function choose(bot)
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,
                         item = fact.item, bank = fact.bank, bit = fact.bit,
+                        label = label, best = #steps, stalls = 0 },
+                })
+            end
+        end
+    end
+    -- An item errand in another room: carry a held item to the <deliver>
+    -- that wants it, or go to a <fetch> that offers one it needs.
+    local wanted = BotPuzzle.wanted_items(bot)
+    for _, fact in ipairs(BotPuzzle.errands(bot)) do
+        local go
+        if fact.kind == "deliver" then
+            go = BotPuzzle.deliver_wanted(bot, fact) and bot:has_item(fact.item)
+        else
+            go = wanted[fact.item] and not bot:has_item(fact.item)
+                and BotPuzzle.fetch_offered(bot, fact)
+        end
+        local slot = fact.kind == "deliver" and ("camera" .. fact.cut) or fact.slot
+        if go and fact.room ~= room and not blocked(bot, fact.kind, fact.room, slot, true) then
+            local steps = route(bot, world, room, fact.room)
+            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+            if first then
+                order = order + 1
+                local label = string.format("%s 0x%02X in %s (%s)", fact.kind, fact.item,
+                    fact.room, fact.label or "unnamed")
+                consider({
+                    cost = door_len(first.slot) + #steps * DOOR_COST - ERRAND_BONUS
+                        + route_monsters(steps),
+                    order = order, door = first,
+                    why = string.format("toward %s, %d door(s)", label, #steps),
+                    target = { kind = fact.kind, room = fact.room, slot = slot,
+                        item = fact.item, fact = fact,
                         label = label, best = #steps, stalls = 0 },
                 })
             end
@@ -1997,7 +2107,8 @@ function BotPlanner.step(bot)
         bot:log("goal done: " .. goal.label)
         p.last_done = { room = room, tick = bot:tick(), zone = goal.job.zone }
         progress(bot)
-        if goal.kind == "interact" or goal.kind == "use" or goal.kind == "camera" then
+        if goal.kind == "interact" or goal.kind == "use" or goal.kind == "camera"
+            or goal.kind == "deliver" or goal.kind == "fetch" then
             if goal.kind ~= "camera" then
                 p.steps_done = (p.steps_done or 0) + 1
             end
