@@ -1,39 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bot format="1">
-  <puzzle id="paintings" title="117 large gallery painting order">
-    <step slot="3" bank="4" bit="0x1A" label="117 painting 1/7 newborn">
-      <walk x="19500" z="8100"/>
-      <face x="19500" z="7200"/>
-    </step>
-    <step slot="5" bank="4" bit="0x1C" label="117 painting 2/7 infant">
-      <walk x="24000" z="8100"/>
-      <walk x="24000" z="5300"/>
-      <walk x="16000" z="5300"/>
-      <face x="16000" z="6100"/>
-    </step>
-    <step slot="6" bank="4" bit="0x1D" label="117 painting 3/7 lively boy">
-      <walk x="10500" z="5300"/>
-      <face x="10500" z="6100"/>
-    </step>
-    <step slot="4" bank="4" bit="0x1B" label="117 painting 4/7 young man">
-      <walk x="19500" z="5300"/>
-      <face x="19500" z="6100"/>
-    </step>
-    <step slot="2" bank="4" bit="0x19" label="117 painting 5/7 tired middle-aged man">
-      <walk x="24000" z="5300"/>
-      <walk x="24000" z="8100"/>
-      <walk x="16000" z="8100"/>
-      <face x="16000" z="7200"/>
-    </step>
-    <step slot="7" bank="4" bit="0x1E" label="117 painting 6/7 bold old man">
-      <walk x="24000" z="8100"/>
-      <walk x="24000" z="5300"/>
-      <walk x="7250" z="5300"/>
-      <face x="7250" z="6100"/>
-    </step>
-    <step slot="8" bank="0" bit="0x03" label="117 painting 7/7 people mourning">
-      <walk x="2900" z="4100"/>
-      <face x="1850" z="4100"/>
-    </step>
-  </puzzle>
+<!-- 117 large gallery. The seven painting switches run in picture order:
+     each push clears room bits 0x18..0x1E and sets only its own, and the next
+     painting needs the bit the previous one left. The last push sets scenario
+     0x03 and opens the frame over the star crest. -->
+<bot format="2">
+  <interact slot="3" bank="4" bit="0x1A" label="painting 1/7 newborn"/>
+  <interact slot="5" bank="4" bit="0x1C" label="painting 2/7 infant"/>
+  <interact slot="6" bank="4" bit="0x1D" label="painting 3/7 lively boy"/>
+  <interact slot="4" bank="4" bit="0x1B" label="painting 4/7 young man"/>
+  <interact slot="2" bank="4" bit="0x19" label="painting 5/7 tired middle-aged man"/>
+  <interact slot="7" bank="4" bit="0x1E" label="painting 6/7 bold old man"/>
+  <interact slot="8" bank="0" bit="0x03" label="painting 7/7 people mourning"/>
 </bot>
