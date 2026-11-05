@@ -6344,7 +6344,13 @@ impl GameState {
             } else {
                 self.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)] = hit;
             }
-            self.fire_room_action(room_action, pos);
+            // `Sce_Water` sets the probed entity's `Water`. Only the player's own
+            // pass (mask 1) sets the player's: an object standing in a water area
+            // is probed at its own position and must leave the player's alone.
+            let object_water = re2 && room_action.sce == crate::scd2::host::SCE_WATER && mask != 1;
+            if !object_water {
+                self.fire_room_action(room_action, pos);
+            }
             if flags & 0x80 != 0 {
                 action_fired = true;
             }
@@ -17927,6 +17933,36 @@ mod tests {
         assert!(state.pick_up(1), "the award path still consumes it");
         assert!(state.has_item(0x41));
         assert!(state.room_actions[1].is_none_or(|a| a.handler == 0));
+    }
+
+    #[test]
+    fn an_object_in_a_water_area_leaves_the_players_water_alone() {
+        let mut state = game();
+        state.is_re2_room = true;
+        // Room 302's water area, shrunk to a box round the origin. Its level
+        // is the first two params, 76 and 255, which is -180.
+        state.room_actions[2] = Some(RoomAction {
+            slot: 2,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_WATER,
+            handler: 1,
+            flags: 0x4F,
+            params: [76, 255, 0, 0, 0, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        // An object stands in the water and the player is out of it. The object
+        // pass hits the area at the object's position (slot 2 records as 3), but
+        // it must not set the player's level.
+        state.probe_actions([5000, 0, 5000], 0, 4, [0, 0, 0], false);
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)], 3);
+        assert_eq!(state.re2.player.water, 0);
+
+        // The player's own pass sets it while the player is inside the box.
+        state.probe_actions([0, 0, 0], 0, 1, [0, 0, 0], false);
+        assert_eq!(state.re2.player.water, -180);
     }
 
     #[test]
