@@ -61,7 +61,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **The door's room load.** The original with sound holds `Set_room` for `Snd_bgm_ck`'s 91 ticks. Here the room loads when it does without sound, and only the music waits, so nothing else in the door moves. `Door_snd_trans`, which rewrites the table once seven of the item flags 0xF8 to 0xFF are set in a game with `fg_system`'s `0x1000000`, isn't ported: nothing sets that bit yet.
 - **Music's stereo.** Tracks are mixed to mono and placed with the script's pan.
 - **Sound effects.** `Snd_se_on`'s room-specific rules and loops aren't ported. `se_on` from an object's work uses the player's position.
-- **Footsteps.** `Floor_check`'s zones choose the sound. Water, `+0x1e4`'s case and the core slots aren't ported, and `flr_set` does nothing.
+- **Footsteps.** `Floor_check`'s zones choose the sound. Water, `+0x1e4`'s case and the core slots aren't ported, and `flr_set` does nothing. In water (an `aot_set` of kind 7, which sets the player's `Water`), `Snd_se_walk` calls `Esp_call` three times on each footfall for the ripples, and the original draws `Rnd` three times there. arklay draws nothing, so a walk in water is three draws out from the first footfall: in room 302, a walk from `-13500, 0, -8500` differs on `Rnd` from its tick 22 (`oracle/re2.md`).
 - **Room 11D.** The retail PC data has no `room11d.sap`, though its script plays slot 33, so the conversion takes the PlayStation samples in the room file, at a fixed 22050 Hz.
 
 ## Effects
