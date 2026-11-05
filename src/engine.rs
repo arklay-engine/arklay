@@ -11375,7 +11375,10 @@ impl App {
         // A running bot owns the pad on the title and its load screen too,
         // where it loads its latest save after a death.
         let ui = match self.bot_screen_input()? {
-            Some(bot) => bot.ui,
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                bot.ui
+            }
             None => ui,
         };
         let result = self.screen_update(ui);
@@ -11401,10 +11404,28 @@ impl App {
             None
         };
         let (ui, input, action) = match bot_input {
-            Some(bot) => (bot.ui, bot.input, bot.action),
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                (bot.ui, bot.input, bot.action)
+            }
             None => (ui, input, action),
         };
         self.play_update(ui, input, action)
+    }
+
+    /// Hand the running bot's pad presses to the open native save/load
+    /// screen, which reads key events rather than the tick's input: the
+    /// same keys a player's presses give it.
+    fn feed_bot_native_screen(&mut self, ui: &UiInput) {
+        let events = ui::save_load::pad_events(ui);
+        if events.is_empty() {
+            return;
+        }
+        let Some(screen) = self.native_screen() else {
+            return;
+        };
+        let sounds = screen.handle(&events);
+        self.play_ui_cues(gui_cues(sounds));
     }
 
     /// The running bot's input on the title or the title's load screen, read
@@ -13050,16 +13071,19 @@ fn drive_native_screen(
     scale_pointer(display, &mut events);
     let sounds = screen.handle(&events);
     input.discard_presses();
-    app.play_ui_cues(
-        sounds
-            .into_iter()
-            .map(|sound| match sound {
-                gui::Sound::Cursor => ui::UiCue::Cursor,
-                gui::Sound::Decide => ui::UiCue::Decide,
-                gui::Sound::Cancel => ui::UiCue::Cancel,
-            })
-            .collect(),
-    );
+    app.play_ui_cues(gui_cues(sounds));
+}
+
+/// A native screen's sounds as the UI cues that play them.
+fn gui_cues(sounds: Vec<gui::Sound>) -> Vec<ui::UiCue> {
+    sounds
+        .into_iter()
+        .map(|sound| match sound {
+            gui::Sound::Cursor => ui::UiCue::Cursor,
+            gui::Sound::Decide => ui::UiCue::Decide,
+            gui::Sound::Cancel => ui::UiCue::Cancel,
+        })
+        .collect()
 }
 
 /// Load the system faces the in-game menu needs for `language`'s strings

@@ -2,7 +2,13 @@
 <!-- 10C greenhouse. The pump's SCE_USEITEM probes (AOT 2 arms the herbicide's
      use flag, AOT 3 room bit 0x20) fire while the reach point is in the pump
      zone. USE the herbicide there and the room's withering event sets common
-     0xA9 and parks the six plant fountains. -->
+     0xA9 and parks the six plant fountains.
+
+     Until common 0xA9 is set, the six plant fountains (x 7900..8400,
+     z 4700..6200) stand across the bed passage to the mansion armor key
+     (item AOT 4, x 5000..5800): the way to it runs through their reach. -->
 <bot format="2">
   <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
+  <avoid slot="4" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains stand across the way until the herbicide (common 0xA9)"/>
 </bot>

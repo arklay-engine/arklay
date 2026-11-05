@@ -13,7 +13,9 @@
 //!   has bit `0x80` and its bank-2 lock flag (`lock & 0x3F`) is clear. It is
 //!   *unlocked* once that flag is observed set. It is *traversed* when the
 //!   room changes to its target right after the bot pressed action on it, or
-//!   when it is the only door of the old room that leads to the new one.
+//!   when it is the only door of the old room that leads to the new one. On
+//!   arrival, the new room's door back to the old room (the one nearest the
+//!   player, if several) is traversed too: the bot came through its far side.
 //! - A *press* is a tick whose input has the action edge while the room is
 //!   controllable; it is credited to the first action-key entry (flags `0x80`
 //!   and `0x01`, live handler) whose zone holds the engine's reach point
@@ -27,6 +29,8 @@
 //!   marked not *present*.
 //! - The frontier is every present, untraversed door and every present item
 //!   not taken, in room then slot order.
+//! - Each action keeps its zone centre (`x`, `z`) as last seen, so the
+//!   planner can price walks between a room's doors and item boxes.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -74,6 +78,9 @@ struct ItemRecord {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ActionRecord {
     kind: &'static str,
+    /// The zone centre when last seen: the mental map's box positions.
+    x: i32,
+    z: i32,
     presses: u32,
     last_press: Option<u64>,
     message: Option<u16>,
@@ -124,6 +131,25 @@ fn zone_contains(origin: (i32, i32), size: (i32, i32), x: i32, z: i32) -> bool {
     inside(x, origin.0, size.0) && inside(z, origin.1, size.1)
 }
 
+/// Mark the door of the room just entered that leads back to `from`, the
+/// room just left, as traversed: the bot came through its other side, so
+/// both ends are known. With several such doors, the one nearest the
+/// player's arrival point `(x, z)`.
+fn mark_arrival(room: &mut RoomRecord, from: &str, x: i32, z: i32) {
+    let distance = |door: &DoorRecord| {
+        let (dx, dz) = (i64::from(door.x - x), i64::from(door.z - z));
+        dx * dx + dz * dz
+    };
+    if let Some(door) = room
+        .doors
+        .values_mut()
+        .filter(|door| door.present && door.target.as_deref() == Some(from))
+        .min_by_key(|door| distance(door))
+    {
+        door.traversed = true;
+    }
+}
+
 fn counts(snapshot: &SessionSnapshot) -> BTreeMap<u8, u32> {
     let mut counts = BTreeMap::new();
     for stack in snapshot.inventory.iter().filter(|stack| stack.id != 0) {
@@ -142,9 +168,11 @@ impl World {
         }
         let key = snapshot.room.room3();
         let entered = self.current.as_deref() != Some(key.as_str());
+        let mut arrived_from = None;
         if entered {
             if let Some(previous) = self.current.take() {
                 self.mark_traversed(&previous, &key);
+                arrived_from = Some(previous);
             }
             let room = self.rooms.entry(key.clone()).or_default();
             room.entries += 1;
@@ -188,10 +216,15 @@ impl World {
             record.x = x;
             record.z = z;
         }
+        if let Some(from) = arrived_from {
+            mark_arrival(room, &from, snapshot.player.x, snapshot.player.z);
+        }
 
         let mut present = BTreeSet::new();
         for action in &snapshot.actions {
-            room.actions.entry(action.slot).or_default().kind = action.kind;
+            let record = room.actions.entry(action.slot).or_default();
+            record.kind = action.kind;
+            (record.x, record.z) = centre(action.x, action.z, action.width, action.depth);
             let (Some(item), Some(quantity)) = (action.item, action.quantity) else {
                 continue;
             };
@@ -392,6 +425,8 @@ impl World {
                 let action_row = lua.create_table()?;
                 action_row.set("slot", *slot)?;
                 action_row.set("kind", action.kind)?;
+                action_row.set("x", action.x)?;
+                action_row.set("z", action.z)?;
                 action_row.set("presses", action.presses)?;
                 action_row.set("last_press", action.last_press)?;
                 action_row.set("message", action.message)?;
@@ -554,6 +589,7 @@ pub(super) mod tests {
             lock: None,
             handler: 1,
             flags: 0x81,
+            desk: None,
         }
     }
 
@@ -786,6 +822,37 @@ pub(super) mod tests {
         let doors: Table = room_row(&table, "106").get("doors").unwrap();
         assert!(!row(&doors, 1).get::<bool>("traversed").unwrap());
         assert!(row(&doors, 2).get::<bool>("traversed").unwrap());
+    }
+
+    #[test]
+    fn the_door_back_to_the_room_left_is_traversed_on_arrival() {
+        let mut world = World::default();
+        let mut a = snapshot(0x106, 0, 0);
+        a.doors.push(door(1, "107", 0, 9000, 9000));
+        world.observe(1, &a);
+        // 107 has two doors back to 106 and one onward; the player arrives
+        // next to slot 2.
+        let mut b = snapshot(0x107, 3200, 3100);
+        b.doors.push(door(1, "106", 0, 20000, 20000));
+        b.doors.push(door(2, "106", 0, 3000, 3000));
+        b.doors.push(door(3, "108", 0, 3500, 3500));
+        world.observe(2, &b);
+
+        let (_lua, table) = world_table(&world, &b);
+        let doors: Table = room_row(&table, "107").get("doors").unwrap();
+        assert!(!row(&doors, 1).get::<bool>("traversed").unwrap());
+        assert!(row(&doors, 2).get::<bool>("traversed").unwrap());
+        assert!(!row(&doors, 3).get::<bool>("traversed").unwrap());
+        let frontier: Table = table.get("frontier").unwrap();
+        let slots: Vec<(String, u8)> = frontier
+            .sequence_values::<Table>()
+            .map(|goal| {
+                let goal = goal.unwrap();
+                (goal.get("room").unwrap(), goal.get("slot").unwrap())
+            })
+            .collect();
+        assert!(!slots.contains(&("107".to_string(), 2)));
+        assert!(slots.contains(&("107".to_string(), 3)));
     }
 
     #[test]

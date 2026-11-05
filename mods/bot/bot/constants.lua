@@ -43,6 +43,9 @@ BotConst.SWORD_KEY = 0x33
 BotConst.LOCKPICK = 0x31
 -- See SWORD_KEY: the scenario bank and bit has_lockpick tests.
 BotConst.LOCKPICK_FLAG = { bank = 0, bit = 0x7C }
+-- check_desk: a drawer whose bank-2 lock bit is clear opens only with the
+-- desk key (0x3D) held or the lockpick (see LOCKPICK, LOCKPICK_FLAG).
+BotConst.DESK_KEY = 0x3D
 
 -- Bank 9 holds the per-item use flags: item `id` is armed at selector
 -- id - ITEM_USE_BASE, and the menu USE of a key, special or chemical item
@@ -70,6 +73,10 @@ BotConst.STATUS_HIGH = 0x80
 -- player::TURN_STEP: an in-place turn rotates 0x60 a tick, so turning
 -- around takes FULL_TURN / 2 / TURN_STEP ticks.
 BotConst.TURN_STEP = 0x60
+-- player::BACK_SPEED: the backward walk covers 0x40 a tick and keeps the
+-- player facing forward, so it opens a gap on anything slower without the
+-- turn-around a forward walk needs.
+BotConst.BACK_SPEED = 0x40
 -- Weapon behaviour 0x13 is the gun hold: a fire press is taken only here.
 BotConst.HOLD_BEHAVIOR = 0x13
 -- Weapon behaviour 0x18 is the reload running.

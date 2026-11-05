@@ -15,15 +15,21 @@
 --             and its ammunition (the ammo reserve), every key, every item
 --             an open <use> fact needs (bot:use_facts(), done flag clear),
 --             and every heal item. Anything else may go in the box.
---   deposit:  only when the inventory is at its limit and a known pickup
---             (a frontier item that merges into no held stack) needs room;
---             then every item the keep rule does not hold goes in.
---   look:     sourcing ammunition (BotSurvival.sourcing) before any box
---             was opened: one visit to read what the shared box holds;
+--   deposit:  when the inventory is at its limit and a known pickup
+--             (a frontier item that merges into no held stack) needs room,
+--             or, at a box in this room, when no more than RESERVE slots
+--             are free and more pickups than that need one (the slot
+--             reserve); then every item the keep rule does not hold goes in.
+--   look:     before any box was opened, at a box in this room with a slot
+--             free (or from anywhere while sourcing ammunition,
+--             BotSurvival.sourcing): one visit to read what the shared
+--             box holds;
 --   withdraw: an item in the box that an open <use> fact needs, a key a
 --             remembered locked door needs, the equipped gun's ammunition
 --             below the reserve floor, or a heal item when none is held;
---             only into free slots.
+--             only into free slots. At a box in this room, also every
+--             stack of that ammunition while the rounds are under TOP_UP
+--             times the floor, as long as RESERVE slots stay free.
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -53,6 +59,11 @@ local LID_WAIT = 5 * C.SECOND
 local SETTLE_TIMEOUT = 4 * C.SECOND
 -- Controllable ticks in a row that end a visit.
 local CLEAR_TICKS = C.SECOND
+-- Slots kept free for pickups at a box in this room (the slot reserve).
+BotInventory.RESERVE = 1
+-- At a box here, the equipped gun's ammunition is topped up under this many
+-- times the reserve floor.
+local TOP_UP = 2
 -- Kinds the combine may mix.
 local MIX_KINDS = { heal = 1, ammo = 2, weapon = 2 }
 
@@ -125,6 +136,9 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.ammo_low and ctx.ammo_low == item then
         return "ammunition under the reserve floor"
     end
+    if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
+        return "ammunition top-up at the box"
+    end
     if row.kind == "heal" and (ctx.heals or 0) == 0 then
         return "no heal item held"
     end
@@ -140,6 +154,11 @@ function BotInventory.withdrawals(box_items, ctx, free)
             break
         end
         local why = BotInventory.wanted_back(row, ctx)
+        -- A top-up takes the stacks only while the reserve stays free.
+        local top_up = why == "ammunition top-up at the box"
+        if top_up and free - #out <= BotInventory.RESERVE then
+            why = nil
+        end
         -- One heal stack is enough to stop the "none held" rule.
         if why and not (row.kind == "heal" and heal_taken
             and not (ctx.uses and ctx.uses[row.item])) then
@@ -150,6 +169,15 @@ function BotInventory.withdrawals(box_items, ctx, free)
         end
     end
     return out
+end
+
+-- The slot reserve at a box here: deposit when no more than RESERVE slots
+-- are free and more known pickups than that need one. ctx: {capacity,
+-- used}; `deposits` the count the keep rule lets go; `pickups` the count
+-- of known pickups needing a slot.
+function BotInventory.reserve_due(ctx, deposits, pickups)
+    local free = ctx.capacity - ctx.used
+    return deposits > 0 and free <= BotInventory.RESERVE and pickups > free
 end
 
 -- The best MOVE that empties a slot: `{slot, target}` (0-based menu slots)
@@ -240,6 +268,14 @@ function BotInventory.context(bot)
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
+    local weapon = bot:weapon()
+    if weapon.ammo then
+        local rounds, shots = BotSurvival.rounds(bot)
+        local floor = BotSurvival.ammo_floor(shots, bot:risk() or 0.25)
+        if floor > 0 and rounds < TOP_UP * floor then
+            ctx.top_up = weapon.ammo
+        end
+    end
     local menu = bot:menu()
     for _, row in ipairs(menu.items or {}) do
         if row.kind == "heal" and row.quantity > 0 then
@@ -277,30 +313,48 @@ function BotInventory.pickups_needing_room(bot, skip)
     return n
 end
 
--- Whether to open an item box only to see what it holds: the bot is
--- sourcing ammunition (BotSurvival.sourcing), no box has ever been opened
--- (`box_items`, the remembered contents, is nil) and a slot is free for
--- what it may hold. Every box shares one store, so one look covers them all.
-function BotInventory.look_in_box(ctx, box_items, sourcing)
-    return sourcing == true and box_items == nil and ctx.used < ctx.capacity
+-- Whether to open an item box only to see what it holds: no box has ever
+-- been opened (`box_items`, the remembered contents, is nil), a slot is
+-- free for what it may hold, and the box is in this room (`here`, a look on
+-- the way) or the bot is sourcing ammunition (BotSurvival.sourcing, worth
+-- a trip). Every box shares one store, so one look covers them all.
+function BotInventory.look_in_box(ctx, box_items, sourcing, here)
+    return (sourcing == true or here == true) and box_items == nil
+        and ctx.used < ctx.capacity
 end
 
 -- Why the bot should visit an item box now, or nil: a deposit (full, a
 -- pickup needs room and something may go in) or a withdrawal (the box
 -- holds an item the bot needs and a slot is, or can be made, free).
-function BotInventory.box_reason(bot, skip)
+-- `here` asks for a box in this room, which also takes the slot reserve,
+-- a first look and the ammunition top-up (see the header); a trip to a
+-- remote box is worth only the rest.
+function BotInventory.box_reason(bot, skip, here)
     local ctx = BotInventory.context(bot)
     local items = bot:menu().items or {}
     local deposits = BotInventory.deposits(items, ctx)
-    if ctx.full and #deposits > 0 and BotInventory.pickups_needing_room(bot, skip) > 0 then
+    local pickups = BotInventory.pickups_needing_room(bot, skip)
+    if ctx.full and #deposits > 0 and pickups > 0 then
         return "deposit: the inventory is full and a pickup needs room"
     end
-    if BotInventory.look_in_box(ctx, bot:memory().box_items, BotSurvival.sourcing_now(bot)) then
-        return "look in the box: sourcing ammunition and the box was never opened"
+    if here and BotInventory.reserve_due(ctx, #deposits, pickups) then
+        return "deposit: keep a slot free for pickups"
     end
-    if ctx.used < ctx.capacity or #deposits > 0 then
+    if BotInventory.look_in_box(ctx, bot:memory().box_items, BotSurvival.sourcing_now(bot),
+        here) then
+        return here and "look in the box on the way: never opened"
+            or "look in the box: sourcing ammunition and the box was never opened"
+    end
+    if not here then
+        ctx.reserve_only = true
+    end
+    local free = ctx.capacity - ctx.used
+    if free > 0 or #deposits > 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local why = BotInventory.wanted_back({ item = item, kind = bot:item_kind(item) }, ctx)
+            if why == "ammunition top-up at the box" and free <= BotInventory.RESERVE then
+                why = nil
+            end
             if why then
                 return string.format("withdraw 0x%02X: %s", item, why)
             end
@@ -341,8 +395,14 @@ local function plan_visit(bot, menu, view)
     local ctx = BotInventory.context(bot)
     local ops = {}
     local free = ctx.capacity - ctx.used
-    if ctx.full and BotInventory.pickups_needing_room(bot) > 0 then
-        for _, row in ipairs(BotInventory.deposits(menu.items, ctx)) do
+    local deposits = BotInventory.deposits(menu.items, ctx)
+    local pickups = BotInventory.pickups_needing_room(bot)
+    -- The reserve is judged after this visit's withdrawals, so one visit
+    -- both takes and makes room.
+    local taking = #BotInventory.withdrawals(view.items, ctx, free)
+    local after = { capacity = ctx.capacity, used = ctx.used + taking }
+    if (ctx.full and pickups > 0) or BotInventory.reserve_due(after, #deposits, pickups) then
+        for _, row in ipairs(deposits) do
             ops[#ops + 1] = { kind = "deposit", item = row.item }
             free = free + 1
         end

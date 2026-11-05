@@ -5,6 +5,17 @@
 --                                   USE `item` from the menu; flag = done
 --   <answer choice slot|bank+bit>   the yes/no prompt answer
 --   <avoid slot reason>             never press AOT `slot`
+--   <avoid slot bank bit while reason>
+--                                   not while the flag is `while` ("set" or
+--                                   "clear"): a slot a scene blocks for now
+--   <avoid slot unless_held reason> not while item `unless_held` is held
+--                                   (a swap: lift one item while holding
+--                                   the one that goes in its place); it
+--                                   combines with the flag gate
+--   <watch bank bit [after_bank after_bit] label>
+--                                   let a scene play, not skip it, while
+--                                   the flag is clear (and the `after` flag
+--                                   set): a scene a skip would break
 -- The facts carry every room number; this module holds none.
 
 BotPuzzle = BotPuzzle or {}
@@ -28,6 +39,33 @@ function BotPuzzle.uses(bot)
     return out
 end
 
+-- Whether two zones {x, z, width, depth} overlap (edges count).
+function BotPuzzle.zones_overlap(a, b)
+    return a.x <= b.x + b.width and b.x <= a.x + a.width
+        and a.z <= b.z + b.depth and b.z <= a.z + a.depth
+end
+
+-- The <use> fact of this room that waits only on its probe, or nil: the
+-- item is held and the done flag clear, the slot is not a live use-item
+-- probe yet, but its zone is here and overlaps `zone`, where the last step
+-- acted. That step's room event may still be arming it (116's rack turns
+-- AOT 5 into the probe once the lift its pickup started has played). A
+-- probe elsewhere in the room waits on some other step.
+function BotPuzzle.use_pending(bot, zone)
+    if not zone then
+        return nil
+    end
+    for _, fact in ipairs(meta(bot).uses or {}) do
+        local action = BotNav.action_by_slot(bot, fact.slot)
+        if bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
+            and action and action.kind ~= "flag_bank_set"
+            and BotPuzzle.zones_overlap(action, zone) then
+            return fact
+        end
+    end
+    return nil
+end
+
 -- Whether AOT `slot` is named by any fact of this room.
 function BotPuzzle.is_fact_slot(bot, slot)
     local m = meta(bot)
@@ -41,14 +79,53 @@ function BotPuzzle.is_fact_slot(bot, slot)
     return false
 end
 
--- The avoid reason for `slot` in this room, or nil.
+-- Whether a gated <avoid> still holds: the `unless_held` item is not held,
+-- and its flag (if any) is in its `while` state. `gate` is {bank, bit, set,
+-- unless_held}; flags and the inventory are global, so this is answerable
+-- from any room.
+function BotPuzzle.gate_holds(bot, gate)
+    if gate.unless_held and bot:has_item(gate.unless_held) then
+        return false
+    end
+    return gate.bank == nil or bot:flag(gate.bank, gate.bit) == gate.set
+end
+
+-- The avoid reason for `slot` in this room, or nil; a gated avoid counts
+-- only while its gate holds, and its gate {bank, bit, set} is the second
+-- result (nil for an avoid that always holds).
 function BotPuzzle.avoided(bot, slot)
     for _, avoid in ipairs(meta(bot).avoids or {}) do
         if avoid.slot == slot then
-            return avoid.reason
+            if avoid.bank == nil and avoid.unless_held == nil then
+                return avoid.reason, nil
+            end
+            local gate = { bank = avoid.bank, bit = avoid.bit, set = avoid["while"] == "set",
+                unless_held = avoid.unless_held }
+            if BotPuzzle.gate_holds(bot, gate) then
+                return avoid.reason, gate
+            end
         end
     end
     return nil
+end
+
+-- The <watch> fact that holds now, or nil: its done flag is clear and its
+-- `after` flag, if any, is set. The scene handler lets a skippable scene
+-- play while one holds.
+function BotPuzzle.watching(bot)
+    for _, fact in ipairs(meta(bot).watches or {}) do
+        if not bot:flag(fact.bank, fact.bit)
+            and (fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit)) then
+            return fact
+        end
+    end
+    return nil
+end
+
+-- Whether a step's done flag reads done: set, or clear for done="clear"
+-- (bank 7's item bits clear when the item is taken).
+function BotPuzzle.flag_done(bot, fact)
+    return bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
 end
 
 -- The next <interact> in document order, with its position in the list, or
@@ -66,7 +143,7 @@ function BotPuzzle.next_interact(bot)
     local room = bot:room().id
     local done = BOT_STATE.puzzle[room] or 0
     for index, fact in ipairs(interacts) do
-        if index > done and fact.bank and bot:flag(fact.bank, fact.bit) then
+        if index > done and fact.bank and BotPuzzle.flag_done(bot, fact) then
             done = index
         end
     end
@@ -78,7 +155,7 @@ function BotPuzzle.next_interact(bot)
         if fact.kind == "push" then
             finished = BotPuzzle.push_done(bot, fact)
         elseif fact.bank then
-            finished = bot:flag(fact.bank, fact.bit)
+            finished = BotPuzzle.flag_done(bot, fact)
         else
             finished = visits[index] == true
         end
