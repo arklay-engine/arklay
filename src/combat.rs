@@ -2337,6 +2337,42 @@ mod tests {
         assert_eq!(game.apply_weapon_damage(&room, 2), 0, "behind the cone");
     }
 
+    /// The bot's knowledge file (`mods/bot/knowledge/re1.xml`) quotes this
+    /// geometry: a gun hits a body whose centre is at least 0x28A (650) ahead
+    /// of the player along the aim and within `radius + range` of the aim
+    /// line, with no far limit (the shotgun only weakens past 9000).
+    #[test]
+    fn gun_cone_is_a_forward_strip_from_650_as_wide_as_the_range() {
+        let room = RoomState::default();
+        for (weapon, range) in [(2u8, 1300), (3u8, 2600)] {
+            let mut game = armed_game();
+            game.id.player_flag = 1;
+            game.entities[0].angle = 0;
+            place_enemy(&mut game, 1, 0x13, [0, 0, 0]);
+            let radius = i32::from(game.entities[1].sca_radius);
+            let mut shoot = |pos: [i32; 3]| {
+                game.entities[1].pos = pos;
+                game.entities[1].hit_state = 0;
+                game.entities[1].health = 55;
+                game.apply_weapon_damage(&room, weapon)
+            };
+            assert_eq!(shoot([640, 0, 0]), 0, "weapon {weapon}: inside 650");
+            assert_eq!(shoot([660, 0, 0]), 1, "weapon {weapon}: just past 650");
+            assert_eq!(shoot([20000, 0, 0]), 1, "weapon {weapon}: no far limit");
+            let edge = radius + range;
+            assert_eq!(
+                shoot([3000, 0, edge - 20]),
+                1,
+                "weapon {weapon}: inside the side"
+            );
+            assert_eq!(
+                shoot([3000, 0, edge + 20]),
+                0,
+                "weapon {weapon}: past the side"
+            );
+        }
+    }
+
     #[test]
     fn line_of_sight_blocks_a_gun_shot_through_a_wall() {
         use crate::state::CollisionRect;
