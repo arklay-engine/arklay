@@ -9988,6 +9988,11 @@ impl App {
                 && !runtime.finished()
             {
                 let input = runtime.tick(session, &self.pack)?;
+                // An equip request is the legal menu action, applied before
+                // the gameplay tick reads the weapon machine.
+                if let Some(item) = input.equip {
+                    session.game.set_equipped(Some(item));
+                }
                 // A scripted item handover can name a room action whose zone
                 // is not reachable (the 106 lockpick item sits at the room
                 // origin). Run the same handler a normal action press would.
