@@ -523,16 +523,20 @@ const RUN_TURN_DEADBAND: i32 = 0x100;
 /// The heading error above which the run latch drops at a sharp corner.
 const RUN_STOP_DEADBAND: i32 = 0x1C0;
 /// Remaining distance above which a run may start.
-const RUN_START_DISTANCE: i32 = 1200;
+const RUN_START_DISTANCE: i32 = 800;
 /// Remaining distance at or below which a run walks the final approach.
-const RUN_STOP_DISTANCE: i32 = 1200;
+const RUN_STOP_DISTANCE: i32 = 400;
 /// Advance to the next waypoint within this distance of the current one.
 const WAYPOINT_RADIUS: i32 = 256;
-/// Target the next waypoint when the current one is this close and the next
-/// one is already in clear sight.
-const LOOKAHEAD_RADIUS: i32 = 512;
+/// Pure-pursuit lookahead: aim at the farthest path point within this distance
+/// that the player can already see, so the bot arcs through smoothed corners
+/// instead of stopping on each one.
+const LOOKAHEAD_DISTANCE: i32 = 1600;
 /// A forward step shorter than this counts as no progress.
 const STUCK_STEP: i32 = 8;
+/// A position jump larger than this is a scripted move or a room warp, not
+/// walking: the cached path is planned from the old position and must go.
+const TELEPORT_STEP: i32 = 1500;
 /// Forward ticks with no progress before a replan.
 const STUCK_TICKS: u32 = 12;
 /// Replans before `walk_to` reports `blocked`.
@@ -701,8 +705,19 @@ fn nearest_grid(x: i32, z: i32) -> (i32, i32) {
 }
 
 /// Whether `(x, z)` is blocked for the player body.
+///
+/// The engine's collision resolver grows every box by an 18-unit skin on top
+/// of the player radius; `position_blocked` alone does not. Planning with the
+/// bare radius lets a smoothed path graze a wall that the resolver then pushes
+/// against, so the bot wedges and replans. Add the skin here so the plan has
+/// the same margin the movement has.
 fn blocked(room: &RoomState, x: i32, z: i32, y: i32, radius: i32, flags: u8) -> bool {
-    player::position_blocked(room, [x, y, z], radius, flags)
+    player::position_blocked(
+        room,
+        [x, y, z],
+        radius + i32::from(player::COLLISION_SKIN),
+        flags,
+    )
 }
 
 /// Whether a straight segment is clear enough to walk, sampled every 96 units.
@@ -787,6 +802,7 @@ fn find_grid_path(
         (-1, 1, 14),
         (-1, -1, 14),
     ];
+    let exact_goal = goal;
     let start = nearest_free(room, start.0, start.1, y, radius, flags)?;
     // The player may start wedged in a soft spot, but a goal the route names
     // must be walkable; silently snapping it to the far side of a wall would
@@ -824,6 +840,17 @@ fn find_grid_path(
                 path.push(grid_xy(current));
             }
             path.reverse();
+            // The search snaps the goal to a 512-unit node. End the path at
+            // the point the route actually named when the last leg is clear,
+            // so the bot does not run past it and spin back.
+            if exact_goal != goal && !blocked(room, exact_goal.0, exact_goal.1, y, radius, flags) {
+                let last = path.len() - 1;
+                if last > 0 && line_clear(room, path[last - 1], exact_goal, y, radius, flags) {
+                    path[last] = exact_goal;
+                } else if line_clear(room, path[last], exact_goal, y, radius, flags) {
+                    path.push(exact_goal);
+                }
+            }
             return Some(path);
         }
         if closed[index] {
@@ -964,6 +991,21 @@ impl BotNav {
             self.replans = 0;
             self.stuck = 0;
         }
+        // A big jump is a scripted move (the 105 Barry scene, a cutscene
+        // teleport), so throw away the path planned from the old position,
+        // along with any terminal status that only applied there, and replan
+        // from where the player actually is.
+        let jumped = self
+            .last_pos
+            .is_some_and(|last| (pos.0 - last.0).abs() + (pos.1 - last.1).abs() > TELEPORT_STEP);
+        if jumped {
+            self.path.clear();
+            self.index = 0;
+            self.stuck = 0;
+            self.replans = 0;
+            self.unreachable_goal = None;
+            self.blocked_goal = None;
+        }
         if self.blocked_goal == Some(goal) {
             self.running = false;
             return NavOutcome {
@@ -1052,20 +1094,33 @@ impl BotNav {
         {
             self.index += 1;
         }
-        // The smoothed path turns at a waypoint; when the next one is already
-        // in clear sight, aim for it instead of stopping on the near one.
-        if self.index + 1 < self.path.len()
-            && distance_xz(pos, self.path[self.index]) <= LOOKAHEAD_RADIUS
-            && line_clear(
-                &self.collision,
-                pos,
-                self.path[self.index + 1],
-                player.y,
-                player.radius,
-                player.collision_flags,
-            )
-        {
-            self.index += 1;
+        // Pure pursuit: of the path points already inside the lookahead,
+        // steer at the farthest one the player can see. The smoothed path's
+        // points are corners, and line of sight proves a later one is safe to
+        // skip, so the bot arcs through the corner instead of stopping on it.
+        if self.index < self.path.len() {
+            let mut best = self.index;
+            let mut best_distance = distance_xz(pos, self.path[self.index]);
+            for candidate in self.index + 1..self.path.len() {
+                let distance = distance_xz(pos, self.path[candidate]);
+                if distance > LOOKAHEAD_DISTANCE {
+                    break;
+                }
+                if distance >= best_distance
+                    && line_clear(
+                        &self.collision,
+                        pos,
+                        self.path[candidate],
+                        player.y,
+                        player.radius,
+                        player.collision_flags,
+                    )
+                {
+                    best = candidate;
+                    best_distance = distance;
+                }
+            }
+            self.index = best;
         }
         if self.index >= self.path.len() {
             // The smoothed path ended short of the exact goal: try the goal
@@ -1689,7 +1744,8 @@ mod tests {
             .expect("a path around the wall");
         assert!(path.len() > 2, "the path must detour: {path:?}");
         assert_eq!(path.first().copied(), Some(nearest_grid(4000, 16000)));
-        assert_eq!(path.last().copied(), Some(nearest_grid(16000, 16000)));
+        // The tail is the route's exact point, not the 512-unit grid snap.
+        assert_eq!(path.last().copied(), Some((16000, 16000)));
         for &(x, z) in &path {
             assert!(
                 !blocked(&room, x, z, 0, 100, 0),
@@ -1834,8 +1890,10 @@ mod tests {
                 running: false,
             }
         );
+        // Inside the final-approach distance the run walks even with a clear
+        // heading, and drops the latch.
         assert_eq!(
-            movement_for(0, 900, true, true),
+            movement_for(0, 300, true, true),
             Movement {
                 forward: true,
                 run: false,
@@ -1902,6 +1960,123 @@ mod tests {
         assert!(!turn.run);
         assert_eq!(turn.turn, Turn::Right);
         assert!(nav.running, "the latch survives the in-place turn");
+    }
+
+    fn player_at(x: i32, z: i32, angle: u16) -> PlayerSnapshot {
+        PlayerSnapshot {
+            x,
+            y: 0,
+            z,
+            angle,
+            health: 96,
+            max_health: 96,
+            state: 1,
+            being_attacked: 0,
+            equipped: None,
+            radius: 100,
+            collision_flags: 0,
+        }
+    }
+
+    #[test]
+    fn planning_keeps_the_resolver_skin_from_walls() {
+        let mut room = RoomState::default();
+        // A wall with its south face at z = 4000.
+        room.collision.quadrants[0].push(wall(0, 20000, 4000, 5000));
+        // 110 units south of the face: clear for the bare 100-unit radius,
+        // inside the resolver's 18-unit skin, so the plan must reject it.
+        assert!(!player::position_blocked(&room, [10000, 0, 3890], 100, 0));
+        assert!(blocked(&room, 10000, 3890, 0, 100, 0));
+        // 130 units clear is fine for both.
+        assert!(!blocked(&room, 10000, 3870, 0, 100, 0));
+    }
+
+    #[test]
+    fn grid_path_ends_at_the_exact_route_point() {
+        let room = RoomState::default();
+        let goal = (4300, 4800);
+        let path = find_grid_path(&room, (4000, 4000), goal, 0, 100, 0)
+            .expect("a path across an empty room");
+        assert_eq!(
+            path.last().copied(),
+            Some(goal),
+            "the path must not stop at the 512-unit grid snap: {path:?}"
+        );
+    }
+
+    #[test]
+    fn walk_replans_after_a_scripted_move() {
+        let room = RoomState::default();
+        let goal = (12000, 4000);
+        let mut nav = BotNav::default();
+        nav.sync_room(
+            RoomId {
+                stage: 1,
+                room: 0x06,
+                player_flag: 1,
+                mansion2: false,
+            },
+            &room,
+        );
+        // A goal the old position reported as blocked: a scripted move can
+        // make it reachable, so the stale status must not stick.
+        nav.goal = Some(goal);
+        nav.tolerance = DEFAULT_TOLERANCE;
+        nav.blocked_goal = Some(goal);
+        nav.last_pos = Some((4000, 4000));
+        let player = player_at(8000, 8000, 0);
+        let outcome = nav.walk_to(
+            &player,
+            goal.0,
+            goal.1,
+            WalkOptions {
+                run: true,
+                tolerance: DEFAULT_TOLERANCE,
+            },
+        );
+        assert_eq!(outcome.status, "moving");
+        assert_eq!(nav.blocked_goal, None);
+        assert_eq!(nav.path.last().copied(), Some(goal));
+    }
+
+    #[test]
+    fn walk_looks_past_near_waypoints_it_can_see() {
+        let room = RoomState::default();
+        let goal = (9000, 4000);
+        let mut nav = BotNav::default();
+        nav.sync_room(
+            RoomId {
+                stage: 1,
+                room: 0x06,
+                player_flag: 1,
+                mansion2: false,
+            },
+            &room,
+        );
+        let player = player_at(4000, 4000, 0);
+        // Establish the goal, then hand the nav a path with three points
+        // inside the lookahead. The farthest visible one must win.
+        nav.walk_to(
+            &player,
+            goal.0,
+            goal.1,
+            WalkOptions {
+                run: true,
+                tolerance: DEFAULT_TOLERANCE,
+            },
+        );
+        nav.path = vec![(4400, 4000), (5000, 4000), (5500, 4000), goal];
+        nav.index = 0;
+        nav.walk_to(
+            &player,
+            goal.0,
+            goal.1,
+            WalkOptions {
+                run: true,
+                tolerance: DEFAULT_TOLERANCE,
+            },
+        );
+        assert_eq!(nav.index, 2, "target the farthest point inside 1600 units");
     }
 
     #[test]

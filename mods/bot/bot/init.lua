@@ -37,6 +37,7 @@ local STATE = {
     saw_scene = false,
     saw_film = false,
     scene_sig = nil,
+    transition_start = nil,
     controllable_ticks = 0,
     locked_ticks = 0,
     tried_203 = false,
@@ -55,9 +56,9 @@ local BANK_STATUS = 5
 local BANK_ITEM = 7
 
 -- Short final approaches walk: running into a waypoint or door overshoots and
--- forces a turn-back, and the bot's Rust walk_to drops the run latch at this
--- distance anyway.
-local RUN_MIN_DISTANCE = 1200
+-- forces a turn-back. The Rust walk_to walks the last 400 units anyway; keep
+-- this gate close to that so the route only asks for a run when it helps.
+local RUN_MIN_DISTANCE = 600
 
 local F_COMMON_02 = 0x02 -- 104 FMV seen
 local F_COMMON_03 = 0x03 -- first 106 Barry scene started
@@ -175,6 +176,9 @@ local function handle_scene(bot, scene)
         return true
     end
     local tick = bot:tick()
+    if not scene.transition then
+        STATE.transition_start = nil
+    end
     if scene.film then
         if tick % 2 == 0 then
             bot:pulse_confirm()
@@ -182,7 +186,15 @@ local function handle_scene(bot, scene)
         return true
     end
     if scene.transition then
-        if tick % 2 == 0 then
+        -- The transition's skip gate opens on animation frame 11, and a
+        -- button already down when the transition begins cannot skip it. Use
+        -- transition-relative parity: release on the first tick, then press on
+        -- frames 1, 3, 5, ... so the press on frame 11 is the first allowed
+        -- one whatever tick the transition started on.
+        if not STATE.transition_start then
+            STATE.transition_start = tick
+        end
+        if (tick - STATE.transition_start) % 2 == 1 then
             bot:press_action()
         end
         return true
@@ -467,11 +479,14 @@ local function phase_goto_105_from_106(bot)
 end
 
 local function phase_to_104(bot)
+    -- The A* planner only knows the room collision, not the OBJ_02 sideboard
+    -- at (18000, 14300), so a single goal hugs the north wall and wedges on
+    -- it. This one waypoint stays south of the sideboard; after it the AOT_02
+    -- zone is straight ahead, and the scene's scripted move leaves a clean
+    -- north walk to the door.
     local points = {
-        { 23000, 12800 },
-        { 12000, 13000 },
-        { 8000, 13000 },
-        { 6700, 13600 },
+        { 14000, 13000 },
+        { 6700, 13700 },
     }
     if walk_waypoints(bot, points, 120, "105 dining room") then
         local custom = { { 6700, 13700, 6700, 16000 } }
@@ -487,11 +502,11 @@ local function phase_walk_104(bot)
         set_phase(bot, "return_104", "first-zombie FMV done")
         return
     end
+    -- The 1 -> 4 switch zone is the diagonal band between (500,3600) and
+    -- (8200,8600). The old (4300, 4400) goal sat just south of it and only
+    -- worked because the path overshot into the band; aim well inside it.
     local points = {
-        { 9500, 2600 },
-        { 8000, 3000 },
-        { 6500, 4200 },
-        { 4300, 4400 },
+        { 4300, 4800 },
     }
     if walk_waypoints(bot, points, 200, "104 tea room") then
         STATE.west_wait = STATE.west_wait + 1
@@ -509,13 +524,15 @@ local function phase_walk_104(bot)
 end
 
 local function phase_return_104(bot)
+    -- Straight back east along the south wall. The zombie is north of this
+    -- corridor, so the direct route does not pass it.
     local points = {
-        { 8000, 3000 },
-        { 11500, 2600 },
         { 12000, 2700 },
     }
     if walk_waypoints(bot, points, 150, "104 return") then
-        local custom = { { 12000, 2600, 12000, 0 } }
+        -- The reach probe is 600 ahead, so z = 2700 already covers the door
+        -- zone (z <= 2300) and leaves more clearance from the south wall.
+        local custom = { { 12000, 2700, 12000, 0 } }
         door_nav(bot, "105", custom, "door 104->105")
     end
     if STATE.phase_ticks > 900 then
@@ -524,12 +541,12 @@ local function phase_return_104(bot)
 end
 
 local function phase_to_106(bot)
+    -- One goal at the door approach; the old (24000, 10000) point was inside
+    -- the long table and reported unreachable every run.
     local points = {
-        { 24000, 10000 },
-        { 30000, 8200 },
-        { 31300, 8000 },
+        { 31300, 8300 },
     }
-    if walk_waypoints(bot, points, 150, "105 return") then
+    if walk_waypoints(bot, points, 120, "105 return") then
         local custom = { { 31300, 8300, 33000, 8300 } }
         door_nav(bot, "106", custom, "door 105->106")
     end
@@ -550,12 +567,14 @@ local function phase_barry(bot)
         set_phase(bot, "barry_done", "lockpick already held")
         return
     end
-    if STATE.phase_ticks > 120 then
-        if not STATE.saw_scene and not STATE.tried_203 then
-            set_phase(bot, "goto_203", "Barry scene did not start")
-            return
-        end
+    -- The tick only reaches this phase while the scene is already over, so a
+    -- seen-and-finished scene is enough: do not spend 120 ticks idling.
+    if STATE.saw_scene then
         set_phase(bot, "barry_camera", "walking the hall camera cuts")
+        return
+    end
+    if STATE.phase_ticks > 120 then
+        set_phase(bot, "goto_203", "Barry scene did not start")
         return
     end
     if STATE.phase_ticks > 900 then
@@ -596,9 +615,11 @@ local function phase_barry_camera(bot)
 
     local camera = bot:room().camera
     if STATE.cam_stage == "north" then
+        -- The camera 4 switch zone starts at z ~24305 on this line, so the
+        -- old 22000 point was pure detour. One goal just inside the zone is
+        -- enough for the cut.
         local points = {
-            { 11000, 22000 },
-            { 11000, 25500 },
+            { 11000, 25000 },
         }
         if walk_waypoints(bot, points, 250, "106 north hall") then
             STATE.cam_stage = "north_wait"
@@ -707,10 +728,9 @@ local function phase_to_107(bot)
         return
     end
     local points = {
-        { 30000, 13500 },
         { 31000, 12500 },
     }
-    if walk_waypoints(bot, points, 150, "106 east wing") then
+    if walk_waypoints(bot, points, 120, "106 east wing") then
         local custom = { { 31000, 12500, 33000, 12500 } }
         door_nav(bot, "107", custom, "door 106->107")
     end

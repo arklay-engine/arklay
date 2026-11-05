@@ -102,7 +102,7 @@ const BACK_OFFSET: u16 = 0x800;
 pub const REACH_DISTANCE: i32 = 600;
 
 /// 18-unit skin added to the entity radius for rectangle pushes.
-const COLLISION_SKIN: i16 = 0x12;
+pub(crate) const COLLISION_SKIN: i16 = 0x12;
 /// The single-axis push test accepts a correction of at most 400 units, which
 /// is `(push + 0x190) as u16 <= 0x320`.
 const MAX_PUSH_TEST: u16 = 0x320;
