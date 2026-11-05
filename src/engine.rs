@@ -10833,7 +10833,7 @@ impl App {
             let entity = &session.game.entities[0];
             !session.death.is_idle()
                 || session.game.flags[5].bit(game::MSF_PLAYER_DEAD)
-                || entity.health <= 0
+                || entity.health < 0
         })
     }
 
