@@ -492,6 +492,7 @@ pub(super) mod tests {
                 radius: 400,
                 collision_flags: 0,
                 grabbed: false,
+                health_status: 0,
             },
             scene: SceneSnapshot {
                 mode: "play",

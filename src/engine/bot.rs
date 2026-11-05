@@ -423,7 +423,15 @@ struct PlayerSnapshot {
     /// The entity's grabbed zone flag (`0x80`). Combat stands down while a
     /// grab owns the player.
     grabbed: bool,
+    /// `GameState::health_status`: [`POISON`] and [`SERIOUS_POISON`].
+    health_status: u8,
 }
+
+/// The health-status bit a blue herb clears (`cure_poison`): the drain that
+/// takes 2 health every 120 ticks.
+const POISON: u8 = 0x02;
+/// The health-status bit the serum clears (`cure_serious_poison`).
+const SERIOUS_POISON: u8 = 0x20;
 
 /// One active monster. Rows are sorted by `distance`, nearest first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -551,6 +559,9 @@ struct MenuItem {
     quantity: u8,
     /// The catalog kind (`"weapon"`, `"heal"`, `"key"`, ...).
     kind: &'static str,
+    /// The catalog says a USE of it restores health (a red herb alone is a
+    /// `"heal"` that restores none and the menu refuses it).
+    heals: bool,
 }
 
 /// The pause/inventory menu, read from the engine's real UI state: the
@@ -655,6 +666,8 @@ impl MenuSnapshot {
                     id: stack.id,
                     quantity: stack.quantity,
                     kind: game.item_defs.get(stack.id).kind.name(),
+                    heals: game.item_defs.get(stack.id).heal.amount
+                        != crate::item_catalog::HealAmount::None,
                 }
             })
             .collect();
@@ -769,6 +782,13 @@ fn combine_result_table(
         }
     }
     Ok(table)
+}
+
+/// Whether the player's action probe can fire an AOT with these flags: the
+/// probe (`GameState::probe_actions`) passes the player mask `0x01`, and an
+/// action-key zone (`0x80`) also needs that bit.
+fn player_can_fire(flags: u8) -> bool {
+    flags & 0x01 != 0
 }
 
 fn action_kind_name(kind: RoomActionKind) -> &'static str {
@@ -936,6 +956,7 @@ impl SessionSnapshot {
             radius: session.player.radius,
             collision_flags: session.player.collision_flags,
             grabbed: entity.zone_flags & 0x80 != 0,
+            health_status: game.health_status,
         };
         let actions = game
             .room_actions
@@ -947,15 +968,22 @@ impl SessionSnapshot {
                     .iter()
                     .flatten()
                     .find(|door| door.slot == action.slot);
+                // A pickup the player's probe cannot fire (no player bit, as
+                // a script arms one only once a statue turns) is dormant.
+                let item = action.kind == RoomActionKind::Item && player_can_fire(action.flags);
                 ActionSnapshot {
                     slot: action.slot,
-                    kind: action_kind_name(action.kind),
+                    kind: if action.kind == RoomActionKind::Item && !item {
+                        "item_dormant"
+                    } else {
+                        action_kind_name(action.kind)
+                    },
                     x: i32::from(action.zone[0]),
                     z: i32::from(action.zone[1]),
                     width: i32::from(action.zone[2]),
                     depth: i32::from(action.zone[3]),
-                    item: (action.kind == RoomActionKind::Item).then(|| action.item_id()),
-                    quantity: (action.kind == RoomActionKind::Item).then(|| action.item_quantity()),
+                    item: item.then(|| action.item_id()),
+                    quantity: item.then(|| action.item_quantity()),
                     next_room: door.map(|door| door.next_room),
                     key: door.map(|door| door.key),
                     lock: door.map(|door| door.lock),
@@ -2671,6 +2699,8 @@ impl UserData for BotCtx {
             table.set("equipped", p.equipped)?;
             table.set("collision_flags", p.collision_flags)?;
             table.set("grabbed", p.grabbed)?;
+            table.set("poisoned", p.health_status & POISON != 0)?;
+            table.set("seriously_poisoned", p.health_status & SERIOUS_POISON != 0)?;
             Ok(table)
         });
 
@@ -2875,6 +2905,7 @@ impl UserData for BotCtx {
                 row.set("item", item.id)?;
                 row.set("quantity", item.quantity)?;
                 row.set("kind", item.kind)?;
+                row.set("heals", item.heals)?;
                 items.set(index + 1, row)?;
             }
             table.set("items", items)?;
@@ -4093,6 +4124,7 @@ mod tests {
             radius: 100,
             collision_flags: 0,
             grabbed: false,
+            health_status: 0,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
@@ -4125,6 +4157,7 @@ mod tests {
             radius: 100,
             collision_flags: 0,
             grabbed: false,
+            health_status: 0,
         }
     }
 
@@ -4291,6 +4324,7 @@ mod tests {
             radius: 100,
             collision_flags: 0,
             grabbed: false,
+            health_status: 0,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
@@ -5068,6 +5102,52 @@ mod tests {
             r#"local d = BotPuzzle.push_dir({ direction = "east", dx = 1, dz = 0 })
             return d.x == 1 and d.z == 0 and BotPuzzle.push_dir({}) == nil"#
         ));
+    }
+
+    #[test]
+    fn cure_rule_uses_a_held_cure_for_the_poison_the_engine_reports() {
+        let vm = tactics_vm();
+        let pick = |player: &str, held: &str, low: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {held}
+                    local c = BotSurvival.pick_cure(K.cures, {player},
+                        function(item) return held[item] == true end, {low})
+                    return c and string.format("0x%02X", c.item) or "none""#
+                ),
+            )
+        };
+        let poisoned = "{ poisoned = true, seriously_poisoned = false }";
+        let serious = "{ poisoned = false, seriously_poisoned = true }";
+        let healthy = "{ poisoned = false, seriously_poisoned = false }";
+        // Not poisoned: nothing, whatever is held.
+        assert_eq!(pick(healthy, "{ [0x45] = true }", true), "none");
+        // The 0x02 poison: the blue herb, at once.
+        assert_eq!(
+            pick(poisoned, "{ [0x45] = true, [0x48] = true }", false),
+            "0x45"
+        );
+        // A herb mix also heals, so it waits until health is low.
+        assert_eq!(pick(poisoned, "{ [0x48] = true }", false), "none");
+        assert_eq!(pick(poisoned, "{ [0x48] = true }", true), "0x48");
+        // The serum clears only the 0x20 poison, and a herb never does.
+        assert_eq!(pick(poisoned, "{ [0x42] = true }", true), "none");
+        assert_eq!(
+            pick(serious, "{ [0x45] = true, [0x42] = true }", false),
+            "0x42"
+        );
+        // No cure held.
+        assert_eq!(pick(poisoned, "{ [0x44] = true }", true), "none");
+    }
+
+    #[test]
+    fn only_a_pickup_with_the_player_bit_is_an_item() {
+        assert!(player_can_fire(0x81));
+        assert!(player_can_fire(0x01));
+        // 10D's wind crest before the statue turns: SAT_MANUAL | SAT_UNDER.
+        assert!(!player_can_fire(0xC0));
+        assert!(!player_can_fire(0x84));
     }
 
     #[test]

@@ -68,7 +68,8 @@ pub enum Target {
     Camera(u8),
     /// Push room object `object` until its position lies in AOT `slot`'s
     /// zone, or, with a `direction`, push it that way until it no longer
-    /// covers that zone (done by position; the step has no flag).
+    /// covers that zone (done by position, or once the optional flag is set:
+    /// a zone event that takes the object away, like 202's falling statue).
     Push {
         object: u8,
         slot: u8,
@@ -329,8 +330,19 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
 }
 
 fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["object", "slot", "direction", "label"])?;
+    check_attributes(
+        node,
+        &["object", "slot", "direction", "bank", "bit", "label"],
+    )?;
     check_leaf(node)?;
+    let flag = match (node.attribute("bank"), node.attribute("bit")) {
+        (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
+        (None, None) => None,
+        _ => bail!(
+            "{}: <push> needs both `bank` and `bit`, or neither",
+            at(node)
+        ),
+    };
     let direction = match node.attribute("direction") {
         None => None,
         Some("north") => Some(Direction::North),
@@ -348,7 +360,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             slot: attr(node, "slot")?,
             direction,
         },
-        flag: None,
+        flag,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -740,6 +752,29 @@ mod tests {
     }
 
     #[test]
+    fn push_takes_an_optional_done_flag() {
+        let text = r#"<bot format="2">
+            <push object="0" slot="3" bank="0" bit="0x0B" label="statue off the balcony"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.interacts,
+            vec![Interact {
+                target: Target::Push {
+                    object: 0,
+                    slot: 3,
+                    direction: None,
+                },
+                flag: Some((0, 0x0B)),
+                label: Some("statue off the balcony".to_string()),
+            }]
+        );
+        let half = r#"<bot format="2"><push object="0" slot="3" bank="0"/></bot>"#;
+        let error = parse(half).unwrap_err().to_string();
+        assert!(error.contains("both `bank` and `bit`"), "{error}");
+    }
+
+    #[test]
     fn push_direction_is_a_compass_point() {
         let bad = r#"<bot format="2"><push object="1" slot="5" direction="up"/></bot>"#;
         let error = parse(bad).unwrap_err().to_string();
@@ -829,6 +864,8 @@ mod tests {
             vec![
                 ("105", 11, 0x20),
                 ("10C", 2, 0x26),
+                ("10D", 2, 0x21),
+                ("10D", 2, 0x22),
                 ("10F", 13, 0x23),
                 ("10F", 6, 0x1F),
                 ("11A", 5, 0x2D),

@@ -5,6 +5,14 @@
 -- bot:risk() (0.0 heals early, 1.0 heals late), use a held heal item through
 -- the inventory menu. Never in a grab, a scene or a fight.
 --
+-- BotSurvival.cure(bot, player): poisoned (the engine's health status,
+-- bot:player().poisoned / seriously_poisoned), use a held item the
+-- knowledge file's <cure> list says clears that poison, before any heal. A
+-- cure that only cures goes at once; one that also heals (a herb mix) waits
+-- until health is under the heal threshold, so its healing is not wasted.
+-- With no cure held it logs that once per poisoning and the heal rule
+-- carries on.
+--
 -- BotSurvival.critical(bot, player): health under a risk-scaled floor
 -- (0.2 of max at risk 0, 0.05 at risk 1), no heal item held and damage taken
 -- in the last 5 seconds. The rule for a critical tick (bot/init.lua):
@@ -50,6 +58,63 @@ local function menu_items(bot, kind)
     return rows
 end
 
+-- The cure to use now: the first <cure> (knowledge order) for a poison the
+-- player has, held (`held(item)` true), and either cure-only or `low`.
+function BotSurvival.pick_cure(cures, player, held, low)
+    for _, cure in ipairs(cures or {}) do
+        local has = (cure.poison == "poison" and player.poisoned)
+            or (cure.poison == "serious" and player.seriously_poisoned)
+        if has and held(cure.item) and (low or not cure.heals) then
+            return cure
+        end
+    end
+    return nil
+end
+
+function BotSurvival.cure(bot, player)
+    local s = state()
+    if not (player.poisoned or player.seriously_poisoned) then
+        s.poison_logged = nil
+        return false
+    end
+    s.cure_cooldown = (s.cure_cooldown or 0) - 1
+    if player.grabbed or BotTactics.active() or s.cure_cooldown > 0 then
+        return false
+    end
+    local low = player.health < player.max_health * heal_fraction(bot)
+    local cure = BotSurvival.pick_cure(bot:knowledge().cures, player,
+        function(item) return bot:item_count(item) > 0 end, low)
+    if not cure then
+        if not s.poison_logged then
+            s.poison_logged = true
+            bot:log(string.format("poisoned (poison=%s serious=%s) health=%d/%d: "
+                .. "no cure item held", tostring(player.poisoned),
+                tostring(player.seriously_poisoned), player.health, player.max_health))
+        end
+        return false
+    end
+    s.cure_cooldown = HEAL_COOLDOWN
+    if not BotMenu.use_heal(bot, cure.item, "cure") then
+        return false
+    end
+    s.cures = (s.cures or 0) + 1
+    bot:log(string.format("cure item=0x%02X poison=%s health=%d/%d uses=%d",
+        cure.item, cure.poison, player.health, player.max_health, s.cures))
+    return true
+end
+
+-- The held heal stacks that restore health (the menu row's `heals`, from
+-- the catalog): a blue herb, the serum or a red herb alone is no heal.
+local function heal_rows(bot)
+    local heals = {}
+    for _, row in ipairs(menu_items(bot, "heal")) do
+        if row.heals ~= false then
+            heals[#heals + 1] = row
+        end
+    end
+    return heals
+end
+
 function BotSurvival.heal(bot, player)
     local s = state()
     s.heal_cooldown = (s.heal_cooldown or 0) - 1
@@ -60,7 +125,7 @@ function BotSurvival.heal(bot, player)
         return false
     end
     -- The largest stack first keeps the rarer single heals for later.
-    local heals = menu_items(bot, "heal")
+    local heals = heal_rows(bot)
     table.sort(heals, function(a, b)
         if a.quantity ~= b.quantity then
             return a.quantity > b.quantity
@@ -93,7 +158,7 @@ function BotSurvival.critical(bot, player)
     if player.health >= player.max_health * (0.2 - 0.15 * risk(bot)) then
         return false
     end
-    if #menu_items(bot, "heal") > 0 then
+    if #heal_rows(bot) > 0 then
         return false
     end
     return s.hurt_tick ~= nil and bot:tick() - s.hurt_tick <= 5 * C.SECOND

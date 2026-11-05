@@ -92,7 +92,8 @@ end
 -- A <push> step is done while its object's centre sits in the middle half
 -- of its zone (the room's object probe tests the object's position). A push
 -- with a direction is done once the object has cleared the zone that way,
--- or once the zone is gone or its item was taken (the item it hid).
+-- or once the zone is gone or its item was taken (the item it hid). A push
+-- with a flag is also done once the flag is set.
 function BotPuzzle.push_dir(fact)
     if fact.direction then
         return { x = fact.dx, z = fact.dz }
@@ -116,6 +117,11 @@ local function item_taken(bot, slot)
 end
 
 function BotPuzzle.push_done(bot, fact)
+    -- A push whose zone event takes the object away (a statue that falls)
+    -- names the event's flag: set means done.
+    if fact.bank and bot:flag(fact.bank, fact.bit) then
+        return true
+    end
     local dir = BotPuzzle.push_dir(fact)
     local object = BotNav.object_by_slot(bot, fact.object)
     local action = BotNav.action_by_slot(bot, fact.slot)

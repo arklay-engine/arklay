@@ -415,6 +415,14 @@ function BotNav.push_object(bot, job)
     if job.done and job.done(bot, job) then
         return "done"
     end
+    -- A tick the job did not run (a fight, a heal, a message) is no stall:
+    -- walk back behind the object and measure the push afresh.
+    local now = bot:tick()
+    if job.last_tick and now - job.last_tick > 1 and job.phase == "push" then
+        job.phase = "approach"
+        job.walk_ticks = 0
+    end
+    job.last_tick = now
     if job.total > (job.timeout or 3 * WALK_TICKS) then
         job.reason = "timed out"
         return "failed"

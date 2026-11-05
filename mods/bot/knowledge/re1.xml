@@ -115,4 +115,19 @@
     <keep weapon="0x02" min="3200" max="6000" damage="14"/>
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
   </enemy>
+
+  <!-- Poison cures, from the engine's item definitions
+       (games/re1/item/<id>/item.xml effects; a unit test keeps this list
+       equal to them). poison = the 0x02 health-status drain (2 health every
+       120 ticks; `cure_poison`); serious = the 0x20 bit (`cure_serious_poison`,
+       the serum); heals = the item also restores health. Listed cheapest
+       first: the plain blue herb before the
+       mixes that also heal, so a mix is kept for its healing. The blue herbs
+       grow only from stage 3 (the guardhouse) on; the serum is a scripted
+       handover. -->
+  <cure item="0x45" poison="poison" heals="no"/>
+  <cure item="0x48" poison="poison" heals="yes"/>
+  <cure item="0x4B" poison="poison" heals="yes"/>
+  <cure item="0x49" poison="poison" heals="yes"/>
+  <cure item="0x42" poison="serious" heals="no"/>
 </knowledge>

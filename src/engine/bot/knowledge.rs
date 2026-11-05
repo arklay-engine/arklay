@@ -128,12 +128,41 @@ pub struct Weapon {
     pub status_bit: bool,
 }
 
+/// The poison a `<cure>` item clears: the engine's health-status bits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Poison {
+    /// The `0x02` drain (a blue herb's `cure_poison`).
+    Poison,
+    /// The `0x20` poison (the serum's `cure_serious_poison`).
+    Serious,
+}
+
+impl Poison {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Poison => "poison",
+            Self::Serious => "serious",
+        }
+    }
+}
+
+/// `<cure item poison heals>`: an item whose menu USE clears that poison,
+/// and whether it also restores health.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cure {
+    pub item: u8,
+    pub poison: Poison,
+    pub heals: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Knowledge {
     /// The pack path it was read from.
     pub source: String,
     pub enemies: Vec<Enemy>,
     pub weapons: Vec<Weapon>,
+    /// Poison cures in document order (the planner prefers the first held).
+    pub cures: Vec<Cure>,
 }
 
 /// The pack path of a game's knowledge file.
@@ -210,6 +239,13 @@ pub fn parse(text: &str) -> Result<Knowledge> {
                     bail!("{}: duplicate weapon id {:#04x}", at(child), weapon.id);
                 }
                 knowledge.weapons.push(weapon);
+            }
+            "cure" => {
+                let cure = parse_cure(child)?;
+                if knowledge.cures.iter().any(|c| c.item == cure.item) {
+                    bail!("{}: duplicate cure item {:#04x}", at(child), cure.item);
+                }
+                knowledge.cures.push(cure);
             }
             other => bail!("{}: unknown <knowledge> element <{other}>", at(child)),
         }
@@ -358,6 +394,31 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     })
 }
 
+fn parse_cure(node: Node<'_, '_>) -> Result<Cure> {
+    check_attributes(node, &["item", "poison", "heals"])?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    if item == 0 {
+        bail!("{}: <cure> `item` must not be 0 (no item)", at(node));
+    }
+    let poison = match attr_text(node, "poison")? {
+        "poison" => Poison::Poison,
+        "serious" => Poison::Serious,
+        other => bail!(
+            "{}: `poison` value `{other}` is not poison or serious",
+            at(node)
+        ),
+    };
+    let Some(heals) = yes_no(node, "heals")? else {
+        bail!("{}: `heals` must be yes or no", at(node));
+    };
+    Ok(Cure {
+        item,
+        poison,
+        heals,
+    })
+}
+
 fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
     check_attributes(
         node,
@@ -439,6 +500,15 @@ impl Knowledge {
             weapons.set(weapon.id, row)?;
         }
         table.set("weapons", weapons)?;
+        let cures = lua.create_table()?;
+        for cure in &self.cures {
+            let row = lua.create_table()?;
+            row.set("item", cure.item)?;
+            row.set("poison", cure.poison.name())?;
+            row.set("heals", cure.heals)?;
+            cures.push(row)?;
+        }
+        table.set("cures", cures)?;
         Ok(table)
     }
 }
@@ -456,6 +526,64 @@ mod tests {
         assert!(knowledge.weapons.iter().any(|w| w.name == "handgun"));
         assert!(knowledge.weapons.iter().any(|w| w.name == "shotgun"));
         assert!(knowledge.enemies.len() >= 5);
+    }
+
+    /// Each `<cure>` names an item whose engine definition clears that
+    /// poison, and every engine cure item of the game is listed.
+    #[test]
+    fn the_re1_cures_match_the_item_catalog() {
+        use crate::item_catalog::StatusCure;
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot/knowledge/re1.xml");
+        let knowledge = parse(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let catalog = crate::item_catalog::ItemCatalog::embedded();
+        let mut listed = 0;
+        for item in 0..=u8::MAX {
+            let heal = catalog.get(item).heal;
+            let heals = heal.amount != crate::item_catalog::HealAmount::None;
+            let want = match heal.cure {
+                StatusCure::None => None,
+                StatusCure::Poison02 => Some((Poison::Poison, heals)),
+                StatusCure::Poison20 => Some((Poison::Serious, heals)),
+            };
+            let have = knowledge
+                .cures
+                .iter()
+                .find(|c| c.item == item)
+                .map(|c| (c.poison, c.heals));
+            assert_eq!(have, want, "item {item:#04x}");
+            listed += usize::from(want.is_some());
+        }
+        assert_eq!(listed, knowledge.cures.len());
+        assert!(listed >= 2);
+    }
+
+    #[test]
+    fn cures_parse_and_reject_typos() {
+        let text = r#"<knowledge format="1">
+            <cure item="0x45" poison="poison" heals="no"/>
+            <cure item="0x42" poison="serious" heals="no"/>
+        </knowledge>"#;
+        let k = parse(text).unwrap();
+        assert_eq!(
+            k.cures,
+            vec![
+                Cure {
+                    item: 0x45,
+                    poison: Poison::Poison,
+                    heals: false,
+                },
+                Cure {
+                    item: 0x42,
+                    poison: Poison::Serious,
+                    heals: false,
+                },
+            ]
+        );
+        assert!(parse(&text.replace("poison=\"serious\"", "poison=\"gas\"")).is_err());
+        assert!(parse(&text.replace("item=\"0x42\"", "item=\"0x45\"")).is_err());
+        assert!(parse(&text.replace("item=\"0x42\"", "item=\"0\"")).is_err());
+        assert!(parse(&text.replace("heals=\"no\"/>", "heals=\"no\" n=\"1\"/>")).is_err());
+        assert!(parse(&text.replace("heals=\"no\"", "heals=\"unknown\"")).is_err());
     }
 
     #[test]
