@@ -6110,6 +6110,7 @@ impl GameSession {
             necks: self.game.re2.necks(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
     }
@@ -14980,6 +14981,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         necks: context.game.re2.necks(),
         targets: &targets,
         neck_targets: &neck_targets,
+        enemies: context.game.re2.enemies,
     };
     let old = context.player.pos;
     let arrived = if crate::player2::is_held(&context.game.re2.player) {

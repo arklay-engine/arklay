@@ -1,0 +1,39 @@
+# walk_101.txt 780 ticks earlier, for arklay's start at room 100's door (door_101_102.lua).
+0
+10 confirm
+12
+520 up
+550
+1700 up run left
+1745 right
+1840 up run
+1871 right
+1908 right
+1934 up run
+1970 right
+2071 up left
+2095 up run
+2171 up run
+2206
+2251 up
+2314 up left
+2409 left
+2418 up run left
+2444 up run
+2553 up run
+2594 up run
+2659
+2722 up left
+2831 up run left
+2884 up run
+2921 down left
+3025 down right
+3105 down
+3198 up run right
+3261 right
+3309 right
+3332 up run right
+3416 up run
+3505 up run left
+3601 down left
+3620

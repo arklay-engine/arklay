@@ -1,0 +1,41 @@
+# Room 11A's door 1 into room 11B (door_11b.txt), then a random walk through room 11B from its first ticks of play: walks, turns, runs, backing and stops (oracle/re2.md).
+344 up
+354
+364 action
+368
+720 down left
+799 up run
+906 down left
+971 down right
+1054 up right
+1085 up run
+1158 down left
+1246 left
+1355 up left
+1375 down left
+1421 up left
+1440 down right
+1536 right
+1549 left
+1607 down left
+1698
+1784 right
+1812 left
+1821 up run
+1896 up run
+1911 up
+1943 up right
+2027 up
+2134 down left
+2183 down left
+2266 up run
+2299 down right
+2336 right
+2381 down left
+2389 right
+2407 down left
+2498 up run left
+2558 down right
+2576
+2616 up run right
+2700

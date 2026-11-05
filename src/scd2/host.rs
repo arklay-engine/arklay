@@ -752,6 +752,10 @@ impl Re2State {
                     pos: character.body.pos,
                     neck: character.work.neck.position.unwrap_or(character.body.pos),
                     distance: character.distance,
+                    // A script character's `Life` is -1: Kendo's is, in room 101,
+                    // so the back walk's look (`FUN_004daa60`) passes him by.
+                    life: character.zombie.as_ref().map_or(-1, |zombie| zombie.life),
+                    angle: character.body.angle,
                 })
             })
             .collect()
@@ -2111,6 +2115,30 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    #[test]
+    fn neck_targets_give_a_script_character_no_life_and_each_its_facing() {
+        let mut game = GameState::default();
+        spawn_character(&mut game, 0x48, 255);
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[0, 1, 0x1F, 64, 0, 0, 5, 1, 62, 1000, 0, 2000, 1240, 0, 0],
+        );
+        let targets = game.re2.neck_targets();
+        let kendo = targets.iter().find(|target| target.index == 2).unwrap();
+        assert_eq!((kendo.life, kendo.angle), (-1, 3950));
+        let zombie = targets.iter().find(|target| target.index == 3).unwrap();
+        let life = game.re2.characters.0[1]
+            .as_ref()
+            .unwrap()
+            .zombie
+            .as_ref()
+            .unwrap()
+            .life;
+        assert_eq!((zombie.life, zombie.angle), (life, 1240));
+        assert!(life >= 0);
     }
 
     #[test]

@@ -76,6 +76,14 @@ const ROTATE_CLIPS: [u8; 3] = [0, 3, 6];
 const FORWARD_TURN: [u16; 3] = [0x28, 0x20, 0x10];
 const RUN_TURN: [u16; 3] = [0x38, 0x30, 0x18];
 const BACK_TURN: [u16; 3] = [0x28, 0x10, 0x10];
+/// `pl_mv03`'s clip that walks back looking at an enemy (`D_life_u` 0 only),
+/// how often it looks, and its `FUN_004daa60`'s reach and half field of view.
+const BACK_LOOK_CLIP: u8 = 1;
+const BACK_LOOK_WAIT: u8 = 15;
+const BACK_LOOK_REACH: u32 = 5000;
+const BACK_LOOK_VIEW: u16 = 800;
+/// The plain back walk takes over on a multiple of this frame.
+const BACK_LOOK_FRAME_STEP: u8 = 7;
 const ROTATE_TURN: [u16; 3] = [0x50, 0x30, 0x20];
 /// A run only steers above this speed (`pl_br_02`).
 const RUN_TURN_MIN_SPEED: i16 = 0x32;
@@ -291,6 +299,10 @@ pub struct Work {
     /// `Timer1` and `Timer2`: the climb's steps left and whether it goes down.
     timer1: i16,
     timer2: u8,
+    /// `pl_mv03`'s `+0x16A` and `+0x16B`: whether the back walk plays its clip
+    /// that looks at an enemy, and the ticks until it looks again.
+    back_look: bool,
+    back_wait: u8,
     /// The flags of `pNow_seq`, the frame `Joint_move` played last.
     now_seq: u32,
     /// `Type`: the weapon, and the bit that stops the player being moved.
@@ -772,6 +784,8 @@ impl Default for Work {
             timer0: 0,
             timer1: 0,
             timer2: 0,
+            back_look: false,
+            back_wait: 0,
             now_seq: 0,
             kind: 0,
             sce_flg: 0,
@@ -896,6 +910,8 @@ pub struct Tick<'a> {
     /// Who `Pl_neck` can look at, in its order: none while the room has no
     /// enemies.
     pub neck_targets: &'a [NeckTarget],
+    /// `BYTE_00989eeb`: the room's enemies so far.
+    pub enemies: u8,
 }
 
 /// A body `Pl_neck` considers.
@@ -909,6 +925,9 @@ pub struct NeckTarget {
     pub neck: [i32; 3],
     /// `+0x1F0`: how far it was from the player when it last ran.
     pub distance: u32,
+    /// `Life` (`+0x156`) and `Cdir_y`.
+    pub life: i16,
+    pub angle: u16,
 }
 
 /// The necks of [`Tick::necks`].
@@ -2807,14 +2826,77 @@ impl Mover<'_, '_> {
         self.add_speed_xz();
     }
 
+    /// `pl_mv03` (`0x4da7c0`). Every 15 ticks, unhurt, it swaps to the clip
+    /// that looks at an enemy while one is in view, and back when none is,
+    /// keeping the frame (the plain clip's on a multiple of 7).
     fn pl_mv_backward(&mut self) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Pld, self.life_clip(&BACK_CLIPS));
+            self.work.back_look = false;
+            self.work.back_wait = 0;
+            self.work.noise |= 2;
         }
+        if self.work.back_wait == 0 && self.work.d_life_u == 0 {
+            let seen = self.enemy_in_view(BACK_LOOK_REACH, BACK_LOOK_VIEW);
+            if seen != self.work.back_look {
+                let frame = if seen {
+                    self.work.move_cnt
+                } else {
+                    self.work.move_cnt / BACK_LOOK_FRAME_STEP * BACK_LOOK_FRAME_STEP
+                };
+                self.work.move_no = if seen { BACK_LOOK_CLIP } else { BACK_CLIPS[0] };
+                self.work.back_look = seen;
+                // Two `Spd_get`s move the speed's base onto the new clip's
+                // frame, so this tick's own one finds no step.
+                self.work.move_cnt = 0;
+                self.work.hokan = FULL_BLEND;
+                self.spd_get();
+                self.work.move_cnt = frame;
+                self.spd_get();
+            }
+            self.work.back_wait = BACK_LOOK_WAIT;
+        }
+        self.work.back_wait = self.work.back_wait.wrapping_sub(1);
         self.spd_get();
         self.joint_move();
+        if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+            self.work.noise |= 2;
+        }
         self.footstep(0);
         self.add_speed_xz();
+    }
+
+    /// `FUN_004daa60`: whether an enemy in play (not the second player) stands
+    /// within `reach` of the player, alive, upright, in the view of `view`
+    /// either side, in clear sight head to head, and facing the player's way
+    /// back rather than away. None while the room has no enemies.
+    fn enemy_in_view(&self, reach: u32, view: u16) -> bool {
+        if self.tick.enemies == 0 {
+            return false;
+        }
+        let sca = self.tick.room.sca.as_ref();
+        let from = self.work.neck.position.unwrap_or(self.player.pos);
+        let [x, _, z] = self.player.pos;
+        let angle = self.player.angle;
+        self.tick.neck_targets.iter().any(|target| {
+            if target.index < 2 || target.kind & 0xE000 != 0 || target.life < 0 {
+                return false;
+            }
+            let (dx, dz) = (x - target.pos[0], z - target.pos[2]);
+            let distance =
+                crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)))
+                    as u32;
+            distance < reach
+                && !sca.is_some_and(|sca| {
+                    crate::zombie2::sca_ck_line(&sca.records, from, target.neck, NECK_LINE_MASK)
+                })
+                && direction_ck(x, z, target.pos[0], target.pos[2])
+                    .wrapping_sub(angle)
+                    .wrapping_add(view)
+                    & 0xFFF
+                    < view * 2
+                && target.angle.wrapping_sub(angle).wrapping_add(0x400) & 0xFFF >= 0x800
+        })
     }
 
     fn pl_mv_rotate(&mut self) {
@@ -4639,6 +4721,8 @@ mod tests {
         clips: Vec<Clip>,
         keyframes: Vec<Keyframe>,
         neck_targets: Vec<NeckTarget>,
+        /// `BYTE_00989eeb`, else as many as `neck_targets`.
+        enemies: Option<u8>,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -4654,6 +4738,8 @@ mod tests {
             pos,
             neck: pos,
             distance,
+            life: 100,
+            angle: 0,
         }
     }
 
@@ -4779,6 +4865,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.rot_neck_em(None);
@@ -4828,6 +4915,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.footstep(0);
@@ -4883,6 +4971,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.move_cnt = 2;
@@ -4986,6 +5075,7 @@ mod tests {
                 clips,
                 keyframes,
                 neck_targets: Vec::new(),
+                enemies: None,
             }
         }
 
@@ -5010,6 +5100,7 @@ mod tests {
                 necks: Default::default(),
                 targets: &[],
                 neck_targets: &self.neck_targets,
+                enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -5037,6 +5128,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         let mut rnd = crate::zombie2::Rnd::default();
         for _ in 0..200 {
@@ -5107,6 +5199,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         let Setup {
             mut work,
@@ -5150,6 +5243,128 @@ mod tests {
         run_held(&mut setup, &mut life, |work| work.routine[2] == 5);
         // `Rnd`'s first draw, 0x7D, gives 0x1D + 3, less the tick just run.
         assert_eq!(setup.work.timers[2], 0x1F);
+    }
+
+    /// A back walk from a stand at the origin, facing +x, with `targets`.
+    fn backing(targets: Vec<NeckTarget>) -> Setup {
+        let mut setup = Setup::new(10);
+        (setup.clips, setup.keyframes) = bank(10, 40, 10);
+        setup.player.pos = [0; 3];
+        setup.player.angle = 0;
+        setup.neck_targets = targets;
+        setup
+    }
+
+    fn back() -> Input {
+        Input {
+            down: true,
+            ..Input::default()
+        }
+    }
+
+    /// An enemy ahead at `distance`, facing the player.
+    fn facing_enemy(distance: u32) -> NeckTarget {
+        NeckTarget {
+            angle: 0x800,
+            ..neck_target(2, 0, 0.0, distance)
+        }
+    }
+
+    #[test]
+    fn the_back_walk_looks_at_an_enemy_in_view_every_15_ticks() {
+        let mut setup = backing(vec![facing_enemy(2000)]);
+        setup.tick(back(), 200);
+        assert_eq!(setup.work.routine[1], MOVE_BACKWARD);
+        assert_eq!(setup.work.move_no, BACK_LOOK_CLIP, "seen on the first tick");
+        assert_eq!(setup.work.move_cnt, 1, "on the frame it had");
+        assert_eq!(setup.work.spd, [10, 0, 0], "a first frame steps as ever");
+        assert_ne!(setup.work.noise & 2, 0, "a step's noise");
+        assert_eq!(setup.work.back_wait, BACK_LOOK_WAIT - 1);
+
+        setup.neck_targets.clear();
+        for _ in 1..BACK_LOOK_WAIT {
+            setup.tick(back(), 200);
+            assert_eq!(setup.work.move_no, BACK_LOOK_CLIP, "not time to look yet");
+        }
+        assert_eq!(setup.work.back_wait, 0);
+        let frame = setup.work.move_cnt;
+        assert_eq!(frame, 15);
+        setup.tick(back(), 200);
+        assert_eq!(setup.work.move_no, BACK_CLIPS[0], "nobody in view");
+        assert_eq!(
+            setup.work.move_cnt,
+            frame / BACK_LOOK_FRAME_STEP * BACK_LOOK_FRAME_STEP + 1,
+            "back on a multiple of 7, then a frame on"
+        );
+        assert_eq!(setup.work.spd, [0; 3], "a swap mid-clip loses its step");
+        assert!(!setup.work.back_look);
+        assert_eq!(setup.work.back_wait, BACK_LOOK_WAIT - 1);
+    }
+
+    #[test]
+    fn the_back_walk_looks_only_at_an_enemy_alive_upright_near_in_view_and_facing() {
+        let behind = std::f64::consts::PI;
+        let cases = [
+            (
+                "the second player",
+                NeckTarget {
+                    index: 1,
+                    ..facing_enemy(2000)
+                },
+            ),
+            (
+                "dead",
+                NeckTarget {
+                    life: -1,
+                    ..facing_enemy(2000)
+                },
+            ),
+            (
+                "on the floor",
+                NeckTarget {
+                    kind: 0x2000,
+                    ..facing_enemy(2000)
+                },
+            ),
+            // `SquareRoot0` rounds down: 5000 itself comes out under the reach.
+            ("too far", facing_enemy(BACK_LOOK_REACH + 100)),
+            (
+                "facing away",
+                NeckTarget {
+                    angle: 0,
+                    ..facing_enemy(2000)
+                },
+            ),
+            (
+                "behind",
+                NeckTarget {
+                    angle: 0,
+                    ..neck_target(2, 0, behind, 2000)
+                },
+            ),
+        ];
+        for (what, target) in cases {
+            let mut setup = backing(vec![target]);
+            setup.tick(back(), 200);
+            assert_eq!(setup.work.move_no, BACK_CLIPS[0], "{what}");
+        }
+        let mut setup = backing(vec![facing_enemy(BACK_LOOK_REACH - 10)]);
+        setup.tick(back(), 200);
+        assert_eq!(setup.work.move_no, BACK_LOOK_CLIP, "just within reach");
+
+        let mut setup = backing(vec![facing_enemy(2000)]);
+        setup.enemies = Some(0);
+        setup.tick(back(), 200);
+        assert_eq!(setup.work.move_no, BACK_CLIPS[0], "the room has no enemies");
+
+        let mut setup = backing(vec![facing_enemy(2000)]);
+        setup.work.d_life_u = 1;
+        setup.tick(back(), 50);
+        assert_eq!(
+            (setup.work.d_life_u, setup.work.move_no),
+            (1, BACK_CLIPS[1]),
+            "hurt, it doesn't look"
+        );
     }
 
     fn input(up: bool, right: bool, run: bool) -> Input {
@@ -5648,6 +5863,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         // `Key_trg` comes from the pad, which goes on being read.
@@ -5705,6 +5921,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work.neck.body, None);
@@ -5801,6 +6018,7 @@ mod tests {
             necks: Default::default(),
             targets: &[],
             neck_targets: &[],
+            enemies: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.bank = Bank::Pld;
