@@ -15,8 +15,10 @@
 //! `while="set"|"clear"`, only while that flag is in that state; with
 //! `unless_held`, never while that item is held) and `<push>` (push a
 //! room object until it stands in an AOT slot's zone, or, with a compass
-//! `direction`, push it that way until it clears the zone). `<interact>`,
-//! `<camera>` and `<push>` share one ordered step list. `<watch>` names a
+//! `direction`, push it that way until it clears the zone) and `<climb>`
+//! (push a room object under an AOT slot's item zone, a high shelf, climb
+//! it and take the item; its flag shows the item taken). `<interact>`,
+//! `<camera>`, `<push>` and `<climb>` share one ordered step list. `<watch>` names a
 //! scene the bot lets play instead of skipping: while its `bank`/`bit` flag
 //! is clear and, with `after_bank`/`after_bit`, that flag is set. `<holds>`
 //! says what the room holds (an item and a label): a location fact the
@@ -138,6 +140,11 @@ pub enum Target {
         slot: u8,
         direction: Option<Direction>,
     },
+    /// Push room object `object` under AOT `slot`'s item zone until it
+    /// covers the zone, climb it, take the item from on top and climb down
+    /// (11B's square crank on its shelf). Done once the item flag says so
+    /// and the player is back on the floor.
+    Climb { object: u8, slot: u8 },
 }
 
 /// A compass direction in room coordinates: east is `+x`, north is `+z`.
@@ -403,6 +410,7 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
             "interact"
                 | "camera"
                 | "push"
+                | "climb"
                 | "use"
                 | "answer"
                 | "avoid"
@@ -438,10 +446,11 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 }
                 meta.puzzles.push(puzzle);
             }
-            "interact" | "camera" | "push" => {
+            "interact" | "camera" | "push" | "climb" => {
                 let fact = match name {
                     "interact" => parse_interact(child)?,
                     "camera" => parse_camera(child)?,
+                    "climb" => parse_climb(child)?,
                     _ => parse_push(child)?,
                 };
                 if keep {
@@ -516,17 +525,48 @@ fn bank_attr(node: Node<'_, '_>) -> Result<u8> {
     Ok(bank)
 }
 
+fn parse_done(node: Node<'_, '_>) -> Result<bool> {
+    match node.attribute("done") {
+        None | Some("set") => Ok(false),
+        Some("clear") => Ok(true),
+        Some(other) => bail!(
+            "{}: <{}> `done` value `{other}` is not `set` or `clear`",
+            at(node),
+            node.tag_name().name()
+        ),
+    }
+}
+
+fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(
+        node,
+        &[
+            "object",
+            "slot",
+            "bank",
+            "bit",
+            "done",
+            "label",
+            "character",
+        ],
+    )?;
+    check_leaf(node)?;
+    let done_clear = parse_done(node)?;
+    Ok(Interact {
+        target: Target::Climb {
+            object: attr(node, "object")?,
+            slot: attr(node, "slot")?,
+        },
+        flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        done_clear,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
 fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
     check_attributes(node, &["slot", "bank", "bit", "done", "label", "character"])?;
     check_leaf(node)?;
-    let done_clear = match node.attribute("done") {
-        None | Some("set") => false,
-        Some("clear") => true,
-        Some(other) => bail!(
-            "{}: <interact> `done` value `{other}` is not `set` or `clear`",
-            at(node)
-        ),
-    };
+    let done_clear = parse_done(node)?;
     Ok(Interact {
         target: Target::Slot(attr(node, "slot")?),
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
@@ -1142,6 +1182,29 @@ mod tests {
     }
 
     #[test]
+    fn climb_names_an_object_an_item_slot_and_its_flag() {
+        let text = r#"<bot format="2">
+            <climb object="0" slot="3" bank="7" bit="35" done="clear" label="the crank"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.interacts,
+            vec![Interact {
+                target: Target::Climb { object: 0, slot: 3 },
+                flag: Some((7, 35)),
+                done_clear: true,
+                label: Some("the crank".to_string()),
+            }]
+        );
+        let flagless = r#"<bot format="2"><climb object="0" slot="3"/></bot>"#;
+        assert!(parse(flagless).is_err());
+        let bad =
+            r#"<bot format="2"><climb object="0" slot="3" bank="7" bit="1" done="gone"/></bot>"#;
+        let error = parse(bad).unwrap_err().to_string();
+        assert!(error.contains("<climb> `done`"), "{error}");
+    }
+
+    #[test]
     fn push_takes_an_optional_done_flag() {
         let text = r#"<bot format="2">
             <push object="0" slot="3" bank="0" bit="0x0B" label="statue off the balcony"/>
@@ -1283,6 +1346,7 @@ mod tests {
                 ("11A", 3, 0x2E),
                 ("11A", 4, 0x2C),
                 ("11A", 6, 0x29),
+                ("301", 4, 0x1D),
             ]
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));

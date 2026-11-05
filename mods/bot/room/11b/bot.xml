@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 11B storeroom by the back door. The square crank (0x1D, AOT 3) lies on
+     a shelf above the north wall: the room script keeps AOT 3 an item only
+     while main-state flag 24 is clear, which it is while the player stands
+     on top of the crate (object 0). Pushed north it stops against the wall
+     under the shelf; from its top a press reaches the crank. Taking it
+     clears item bit 35 (bank 7). The crank drains 301's pool. -->
+<bot format="2">
+  <climb object="0" slot="3" bank="7" bit="35" done="clear" label="square crank on the shelf"/>
+</bot>
