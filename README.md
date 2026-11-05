@@ -277,6 +277,12 @@ cargo run -- mod build mods/demo --out demo.akpak
 cargo run -- re1.akpak --mod demo.akpak --room 100 --ticks 40 --capture demo.bmp
 cargo run -- re1.akpak --mod mods/demo --room 100 --ticks 40 --capture demo.bmp
 
+# Edit a mod source directory while the interactive game runs: --watch
+# reloads its lua/**.lua hooks and bot/**.lua route in place, keeping the
+# current room, session and bot memory. Room XML, room scripts, assets and
+# .akpak changes still need a room reload or a restart.
+cargo run -- re1.akpak --mod mods/bot --bot --watch
+
 # The replacement-format example: a PNG background, a PNG/WebP UI page and an
 # OGG BGM track over the shipped art
 cargo run -- mod build mods/hd --out hd.akpak
@@ -315,6 +321,14 @@ cargo run -- scd build games/re1/room/103/room.akscr --room 6031 --region jpn --
 # Boot a mansion room on its second visit
 cargo run -- re1.akpak --room 106 --mansion2
 ```
+
+`--watch` is for the interactive window only: `--ui game`, `--ui title`,
+`--room` and a continue all accept it. It polls the base pack and every layered
+mod source directory, reloads changed `lua/**.lua` hooks into a fresh VM (hook
+globals reset; `on_init` and `on_room_load` run over the live room) and
+re-executes the `bot/**.lua` chunks in the same VM (route globals such as
+`BOT_STATE` survive). It is rejected with `--capture`, `--trace`, `--input` and
+`--bot-headless`.
 
 The documentation is an mdbook in `docs/` (`mdbook serve docs`), published at
 <https://arklay-engine.github.io/arklay/>. `docs/packs/` has a page per pack

@@ -163,6 +163,15 @@ struct Cli {
     #[arg(long, requires = "pack")]
     no_mods: bool,
 
+    /// Watch the applied mod source directories while the interactive game
+    /// runs: a change to a `lua/**.lua` hook or a `bot/**.lua` route reloads it
+    /// in place, keeping the current room, session and bot memory. Room XML,
+    /// room scripts, assets and `.akpak` changes still need a room reload or a
+    /// restart. Not available with `--capture`, `--trace`, `--input`,
+    /// `--bot-headless` or `--save-out`
+    #[arg(long, requires = "pack")]
+    watch: bool,
+
     /// Drive the game with the pack's restricted `bot/**.lua` mod instead of
     /// the keyboard: normal player input only, no state authoring. Without
     /// `--ui` it implies `--ui game --character 1` (Jill); use
@@ -1612,6 +1621,28 @@ fn main() -> Result<()> {
                     bail!("--bot does not take --trace/--input");
                 }
             }
+            if cli.watch {
+                if cli.capture.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --capture");
+                }
+                if tracing || cli.input.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --trace/--input");
+                }
+                if cli.bot_headless {
+                    bail!("--watch needs the interactive window; it does not take --bot-headless");
+                }
+                if cli.save_out.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --save-out");
+                }
+                if cli.stats && cli.ticks > 0 {
+                    bail!(
+                        "--watch needs the interactive window; it does not take --stats with --ticks"
+                    );
+                }
+                if cli.ui.as_deref() == Some("font") {
+                    bail!("--watch needs the interactive window; `--ui font` has none");
+                }
+            }
             // A bare `--bot` implies the new Jill game the opening route starts
             // from; an explicit `--ui game --character N` keeps N.
             let (ui_screen, character) = if bot_enabled && cli.ui.is_none() {
@@ -1638,6 +1669,7 @@ fn main() -> Result<()> {
                     order: config.mods.order.clone(),
                 },
                 global_dirs: arklay::config::Config::mod_dirs(),
+                watch: cli.watch,
             };
             let trace_options = arklay::trace::TraceOptions {
                 path: cli.trace.as_deref(),
