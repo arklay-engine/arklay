@@ -118,6 +118,46 @@ function BotInventory.deposits(items, ctx)
     return out
 end
 
+-- Heal stacks a full inventory keeps when it must make room for a needed
+-- pickup; the rest may go in the box (the "none held" withdrawal brings one
+-- back).
+BotInventory.SOFT_HEALS = 2
+
+-- When nothing the keep rule lets go is held, the inventory is full and a
+-- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
+-- the ammunition a held gun lacks) has no slot, the softer keeps that may
+-- go in, at most `needed` of them: first a key no remembered locked door
+-- needs, then heal stacks past SOFT_HEALS (the smallest stacks first is not
+-- known, so the last in slot order).
+function BotInventory.soft_deposits(items, ctx, needed)
+    local out = {}
+    if not ctx.full or (needed or 0) == 0 then
+        return out
+    end
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == "key"
+            and not (ctx.keys and ctx.keys[row.item]) then
+            out[#out + 1] = row
+        end
+    end
+    local heals = {}
+    for _, row in ipairs(items) do
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == "heal" then
+            heals[#heals + 1] = row
+        end
+    end
+    for i = #heals, BotInventory.SOFT_HEALS + 1, -1 do
+        if #out >= needed then
+            break
+        end
+        out[#out + 1] = heals[i]
+    end
+    return out
+end
+
 -- Why the box item `row` ({item, kind}) should come out, or nil.
 -- ctx adds: keys = {[id] = true} (keys remembered locked doors need),
 --           ammo_low = the equipped gun's ammunition below the floor,
@@ -135,6 +175,9 @@ function BotInventory.wanted_back(row, ctx)
     end
     if ctx.ammo_low and ctx.ammo_low == item then
         return "ammunition under the reserve floor"
+    end
+    if ctx.gun_ammo and ctx.gun_ammo[item] then
+        return "ammunition for a held gun"
     end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
@@ -247,9 +290,16 @@ function BotInventory.context(bot)
     local knowledge = bot:knowledge()
     for id, _ in pairs(knowledge and knowledge.weapons or {}) do
         ctx.guns[id] = true
+        -- The reserve is kept only for a gun the bot holds: shells carried
+        -- before the shotgun fill a slot a pickup needs, and the box gives
+        -- them back once the gun is equipped (the reserve-floor withdrawal).
         local ammo = bot:ammo_for(id)
-        if ammo then
+        if ammo and bot:has_item(id) then
             ctx.ammo[ammo] = true
+            if bot:item_count(ammo) == 0 then
+                ctx.gun_ammo = ctx.gun_ammo or {}
+                ctx.gun_ammo[ammo] = true
+            end
         end
     end
     if ctx.equipped and bot:ammo_for(ctx.equipped) then
@@ -313,6 +363,44 @@ function BotInventory.pickups_needing_room(bot, skip)
     return n
 end
 
+-- Known pickups that need a free slot and that the run needs: a key, an
+-- item a <use> fact needs, or the ammunition a held gun lacks.
+function BotInventory.needed_pickups(bot, ctx, skip)
+    local n = 0
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" and not (skip and skip(goal)) then
+            local kind, merge = bot:item_kind(goal.item)
+            local needed = kind == "key" or ctx.uses[goal.item]
+                or (ctx.gun_ammo and ctx.gun_ammo[goal.item])
+                or ctx.ammo_low == goal.item
+            if needed and not (merge and bot:has_item(goal.item)) then
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+
+-- What a deposit puts in the box: the keep rule's leftovers, else the soft
+-- keeps (BotInventory.soft_deposits) when a needed pickup has no slot.
+function BotInventory.make_room(bot, ctx, items, skip)
+    local deposits = BotInventory.deposits(items, ctx)
+    if #deposits == 0 and ctx.full then
+        local needed = BotInventory.needed_pickups(bot, ctx, skip)
+        -- A box item the bot needs back (a key a locked door needs, an
+        -- item a <use> fact needs) is a needed pickup too: a swap.
+        for item, _ in pairs(BotInventory.remembered(bot)) do
+            local why = BotInventory.wanted_back({ item = item, kind = bot:item_kind(item) }, ctx)
+            if why == "a <use> fact needs it" or why == "a locked door needs it"
+                or why == "ammunition for a held gun" then
+                needed = needed + 1
+            end
+        end
+        deposits = BotInventory.soft_deposits(items, ctx, needed)
+    end
+    return deposits
+end
+
 -- Whether to open an item box only to see what it holds: no box has ever
 -- been opened (`box_items`, the remembered contents, is nil), a slot is
 -- free for what it may hold, and the box is in this room (`here`, a look on
@@ -332,7 +420,7 @@ end
 function BotInventory.box_reason(bot, skip, here)
     local ctx = BotInventory.context(bot)
     local items = bot:menu().items or {}
-    local deposits = BotInventory.deposits(items, ctx)
+    local deposits = BotInventory.make_room(bot, ctx, items, skip)
     local pickups = BotInventory.pickups_needing_room(bot, skip)
     if ctx.full and #deposits > 0 and pickups > 0 then
         return "deposit: the inventory is full and a pickup needs room"
@@ -395,7 +483,7 @@ local function plan_visit(bot, menu, view)
     local ctx = BotInventory.context(bot)
     local ops = {}
     local free = ctx.capacity - ctx.used
-    local deposits = BotInventory.deposits(menu.items, ctx)
+    local deposits = BotInventory.make_room(bot, ctx, menu.items)
     local pickups = BotInventory.pickups_needing_room(bot)
     -- The reserve is judged after this visit's withdrawals, so one visit
     -- both takes and makes room.

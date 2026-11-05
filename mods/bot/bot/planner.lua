@@ -154,6 +154,11 @@ local MONSTER_CAP = 3
 local HURT_SHARE = 0.25
 -- How often the live monsters of this room are counted.
 local MONSTER_EVERY = C.SECOND // 2
+-- A door a room event turned into a message (BotPlanner.note_message) is
+-- retried on a later entry into its room; remote planning heads back for it
+-- only once nothing else is left, and not before it has waited this long
+-- (doubled per attempt): the event may clear with time, on a room entry.
+local EVENT_WAIT = 60 * C.SECOND
 -- An action-key event pressed as a passage gets this long.
 local PASSAGE_TIMEOUT = 15 * C.SECOND
 
@@ -227,6 +232,15 @@ local function blocked(bot, kind, room, slot, remote)
         end
         plan().marks[mark_key(kind, room, slot)] = nil
         return false
+    end
+    if m.event then
+        -- A door a room event made a message: off limits on the entry it
+        -- failed on; from another room until the empty-frontier retry
+        -- forgives it (forgive_events).
+        if remote then
+            return not m.event.forgiven
+        end
+        return (plan().entries or {})[room] == m.event.entry
     end
     if m.gate then
         -- A gated <avoid>: off limits exactly while its flag says so, from
@@ -874,6 +888,8 @@ local function door_goal(bot, door, why)
         tostring(door.target), why)
     return {
         kind = "door", slot = door.slot, target = door.target, label = label,
+        -- A locked door's press opens the key's message: not an event's.
+        was_locked = live_locked(bot, door),
         job = {
             zone = zone_of(door), label = label, pattern = "door",
             side = 4 * C.SECOND - 10, timeout = GOAL_TIMEOUT,
@@ -1318,6 +1334,26 @@ local function choose(bot)
         end
     end
 
+    -- 4-. The empty-frontier retry of an event door here (forgive_events):
+    -- step out through the nearest door to a room already entered, so the
+    -- way back is a new entry that lets the room's script decide again.
+    if plan().reenter == room then
+        local best_out, best_out_len = nil, nil
+        for _, door in ipairs(bot:doors()) do
+            if door.target and door.target ~= room and bot:visited(door.target)
+                and not BotNav.is_origin_zone(door) and not live_locked(bot, door) then
+                local len = BotNav.reach_length(bot, door)
+                if len and (not best_out_len or len < best_out_len) then
+                    best_out, best_out_len = door, len
+                end
+            end
+        end
+        if best_out then
+            return door_goal(bot, best_out, "step out to re-enter " .. room)
+        end
+        plan().reenter = nil
+    end
+
     -- 4. Leave the room: rank every way out by its distance cost (see the
     -- header), the doors of this room and the first door of the route to a
     -- remote frontier item or door alike.
@@ -1436,6 +1472,11 @@ local function choose(bot)
     if p.target then
         local t = p.target
         local goal = target_goal(bot, world, t)
+        if goal and goal.kind == "item" and goal.room ~= room
+            and not pickup_fits(bot, goal.item, full) then
+            -- The inventory filled on the way: no slot for it there.
+            goal = nil
+        end
         if goal and (goal.kind == "use" or goal.kind == "box") and goal.room == room then
             -- Here, and step 1b/1c did not take it: its probe is not live,
             -- or the box is not.
@@ -1512,46 +1553,54 @@ local function choose(bot)
             cost = cost, order = order, door = row.door, why = why,
         })
     end
-    for _, goal in ipairs(world.frontier) do
-        if goal.room ~= room then
-            local steps = usable(goal) and route(bot, world, room, goal.room)
-            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
-            if first then
-                order = order + 1
-                local cost = door_len(first.slot) + #steps * DOOR_COST
-                    + (p.lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
-                    + route_monsters(steps)
-                local why, label
-                if goal.kind == "item" then
-                    local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
-                        needed)
-                    cost = cost - bonus
-                    label = string.format("item 0x%02X in %s", goal.item, goal.room)
-                    if tag then
-                        label = label .. " (" .. tag .. ")"
+    local function consider_frontier(allow_unfit)
+        for _, goal in ipairs(world.frontier) do
+            -- A remote item that would not fit is no trip: arriving full only
+            -- marks it again. The box (box_why) or a combine makes room first.
+            local fits = allow_unfit or goal.kind ~= "item"
+                or pickup_fits(bot, goal.item, full)
+            if goal.room ~= room and fits then
+                local steps = usable(goal) and route(bot, world, room, goal.room)
+                local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+                if first then
+                    order = order + 1
+                    local cost = door_len(first.slot) + #steps * DOOR_COST
+                        + (p.lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
+                        + route_monsters(steps)
+                    local why, label
+                    if goal.kind == "item" then
+                        local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
+                            needed)
+                        cost = cost - bonus
+                        label = string.format("item 0x%02X in %s", goal.item, goal.room)
+                        if tag then
+                            label = label .. " (" .. tag .. ")"
+                        end
+                    else
+                        cost = cost - toward_goal(goal.target)
+                        local tag = nil
+                        if not goal.target_visited then
+                            local bonus
+                            bonus, tag = holds_bonus(goal.target)
+                            cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0) - bonus
+                        end
+                        label = string.format("the %s -> %s door", goal.room, tostring(goal.target))
+                        if tag then
+                            label = label .. " (" .. tag .. ")"
+                        end
                     end
-                else
-                    cost = cost - toward_goal(goal.target)
-                    local tag = nil
-                    if not goal.target_visited then
-                        local bonus
-                        bonus, tag = holds_bonus(goal.target)
-                        cost = cost - UNVISITED_BONUS - (sourcing and SOURCE_BONUS or 0) - bonus
-                    end
-                    label = string.format("the %s -> %s door", goal.room, tostring(goal.target))
-                    if tag then
-                        label = label .. " (" .. tag .. ")"
-                    end
+                    why = string.format("toward %s, %d door(s)", label, #steps)
+                    consider({
+                        cost = cost, order = order, door = first, why = why,
+                        target = { kind = goal.kind, room = goal.room, slot = goal.slot,
+                            label = label, best = #steps, stalls = 0 },
+                    })
                 end
-                why = string.format("toward %s, %d door(s)", label, #steps)
-                consider({
-                    cost = cost, order = order, door = first, why = why,
-                    target = { kind = goal.kind, room = goal.room, slot = goal.slot,
-                        label = label, best = #steps, stalls = 0 },
-                })
             end
         end
     end
+    consider_frontier(false)
+
     -- A held item with a <use> fact in another room: go there.
     for _, fact in ipairs(bot:use_facts()) do
         if fact.room ~= room and bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
@@ -1595,6 +1644,11 @@ local function choose(bot)
                     label = label, best = #box.steps, stalls = 0 },
             })
         end
+    end
+    if not best_way and full then
+        -- Nothing else is left: the full-inventory trips are the only
+        -- way on (an item may merge or a combine may free a slot there).
+        consider_frontier(true)
     end
     if best_way then
         if best_way.target then
@@ -1670,6 +1724,8 @@ end
 -- approach or its time budget depends on where the bot stood, so each such
 -- mark under MAX_ATTEMPTS gets another try (its attempts still count, so
 -- this ends). Returns how many marks were forgiven.
+local forgive_events
+
 local function forgive_approaches(bot)
     local n = 0
     for key, m in pairs(plan().marks) do
@@ -1684,6 +1740,39 @@ local function forgive_approaches(bot)
     return n
 end
 
+-- Before the run finishes on an empty frontier: each door a room event
+-- made a message is retried, once it has waited EVENT_WAIT (doubled per
+-- attempt) since it failed. Standing in its room on the entry it failed
+-- on, the bot first steps out (p.reenter): the room's script decides the
+-- door again only on an entry. Returns the forgiven count and whether a
+-- mark is still waiting (the bot then idles instead of finishing).
+forgive_events = function(bot)
+    local p = plan()
+    local n, waiting = 0, false
+    for key, m in pairs(p.marks) do
+        if m.event and not m.event.forgiven then
+            local wait = EVENT_WAIT * (1 << (m.attempts - 1))
+            if bot:tick() - m.event.tick >= wait then
+                m.event.forgiven = true
+                n = n + 1
+                if m.room == bot:room().id and p.entries[m.room] == m.event.entry then
+                    p.reenter = m.room
+                end
+                bot:log(string.format("frontier empty; retrying %s (%s) after %d ticks; %s",
+                    key, m.reason, bot:tick() - m.event.tick,
+                    p.reenter and "stepping out to re-enter its room" or "travelling back"))
+            else
+                if not m.event.waiting then
+                    m.event.waiting = true
+                    bot:log(string.format("frontier empty; waiting for %s (%s)", key, m.reason))
+                end
+                waiting = true
+            end
+        end
+    end
+    return n, waiting
+end
+
 -- Called once on every room change.
 function BotPlanner.enter_room(bot, room)
     local p = plan()
@@ -1694,6 +1783,7 @@ function BotPlanner.enter_room(bot, room)
     end
     p.goal = nil
     p.entries[room.id] = (p.entries[room.id] or 0) + 1
+    p.reenter = nil
     -- The mental map: where the bot arrives in this room from the last one.
     if p.last_room and p.last_room ~= room.id then
         local me = bot:player()
@@ -1761,6 +1851,16 @@ end
 
 -- Give up the current goal without marking it, for a layer that takes the
 -- pad for a while (a save at a typewriter); it is chosen again afterwards.
+-- A message is up. If the current goal is a door the bot pressed, the
+-- press opened a message instead of the door (a room event's lock).
+function BotPlanner.note_message(bot, message)
+    local goal = plan().goal
+    if goal and goal.kind == "door" and not goal.was_locked and goal.job
+        and goal.job.pressed and not goal.door_message then
+        goal.door_message = message
+    end
+end
+
 function BotPlanner.drop_goal(bot)
     local p = plan()
     if p.goal then
@@ -1809,6 +1909,14 @@ function BotPlanner.step(bot)
             p.goal = choose(bot)
         end
         if not p.goal then
+            local forgiven, waiting = forgive_events(bot)
+            if forgiven > 0 then
+                p.goal = choose(bot)
+            elseif waiting then
+                return
+            end
+        end
+        if not p.goal then
             local loops = 0
             for _, m in pairs(p.marks) do
                 if m.reason:find("looping", 1, true) and blocked(bot, m.kind, m.room, m.slot, true) then
@@ -1854,6 +1962,13 @@ function BotPlanner.step(bot)
             BotInventory.expect_box(bot)
         end
     end
+    if goal.door_message then
+        -- The press opened a message, not the door: a room event holds it.
+        status = "failed"
+        goal.job.reason = string.format("a room event made the door a message (%d)",
+            goal.door_message)
+        goal.event = true
+    end
     if status == "busy" and bot:tick() - goal.started > GOAL_TIMEOUT * 2 then
         status = "failed"
         goal.job.reason = "goal timed out"
@@ -1891,6 +2006,10 @@ function BotPlanner.step(bot)
         -- A combine is about the inventory, not the room it was tried in.
         local where = goal.kind == "combine" and "inventory" or room
         mark(bot, kind, where, goal.slot, goal.job.reason or "failed", goal.job.permanent)
+        if goal.event then
+            local m = p.marks[mark_key(kind, where, goal.slot)]
+            m.event = { entry = p.entries[room], tick = bot:tick(), forgiven = false }
+        end
         p.goal = nil
     end
 end
