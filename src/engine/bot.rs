@@ -363,6 +363,9 @@ struct SceneSnapshot {
     cutscene_skip: bool,
     message: Option<u16>,
     message_takes_input: bool,
+    /// The window is in a page wait, a finished-text wait or a yes/no prompt:
+    /// the next fresh action edge is consumed.
+    message_waiting: bool,
     pickup: bool,
     frozen: bool,
     controls_locked: bool,
@@ -668,6 +671,13 @@ impl SessionSnapshot {
             cutscene_skip: session.cutscene_skip.is_some(),
             message,
             message_takes_input: game.message.takes_input(),
+            message_waiting: game.message.active
+                && matches!(
+                    game.message.phase(),
+                    crate::message::MessagePhase::PageWait
+                        | crate::message::MessagePhase::WaitInput
+                        | crate::message::MessagePhase::YesNo
+                ),
             pickup: session.pickup_view.is_some(),
             frozen,
             controls_locked,
@@ -1675,6 +1685,7 @@ impl UserData for BotCtx {
             table.set("cutscene_skip", scene.cutscene_skip)?;
             table.set("message", scene.message)?;
             table.set("message_takes_input", scene.message_takes_input)?;
+            table.set("message_waiting", scene.message_waiting)?;
             table.set("pickup", scene.pickup)?;
             table.set("frozen", scene.frozen)?;
             table.set("controls_locked", scene.controls_locked)?;
