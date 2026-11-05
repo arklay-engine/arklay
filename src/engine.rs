@@ -625,6 +625,7 @@ pub fn run_with_options(
                         re2_die: None,
                         re2_neck: None,
                         re2_neck_position: None,
+                        re2_xa_volume: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -2040,6 +2041,12 @@ struct GameSession {
     drawn_cut: Option<(RoomId, usize)>,
     /// The room and camera as this tick began, which `drawn_cut` takes next.
     tick_cut: Option<(RoomId, usize)>,
+    /// The cut changed on the tick before this one, so this tick's frame is
+    /// still the one from before that change. A change on the tick after
+    /// another holds the same frame a tick longer (room 200's opening pan).
+    cut_held: bool,
+    /// The background's scroll (`sce_scr_move`) in the frame a held cut shows.
+    held_scroll: i16,
     /// The RE2 frames still to skip after a door: `Swap_Cbuff`'s
     /// `Movie_set`, which `WinMain` counts down instead of presenting, so the
     /// door's black stays on screen.
@@ -2623,6 +2630,8 @@ impl GameSession {
             gpu_room: None,
             drawn_cut: None,
             tick_cut: None,
+            cut_held: false,
+            held_scroll: 0,
             load_hold: 0,
             load_held: false,
             transition: None,
@@ -2880,10 +2889,15 @@ impl GameSession {
         self.game.countdown_hud = None;
         self.finish_menu_request(pack);
         let cut = Some((self.loaded.id, self.loaded.room.current_cut));
-        self.drawn_cut = self
-            .tick_cut
-            .filter(|(room, _)| *room == self.loaded.id)
-            .or(cut);
+        let previous = self.tick_cut.filter(|(room, _)| *room == self.loaded.id);
+        self.cut_held = previous.is_some_and(|previous| Some(previous) != cut)
+            && self
+                .drawn_cut
+                .is_some_and(|(room, _)| room == self.loaded.id);
+        if !self.cut_held {
+            self.drawn_cut = previous.or(cut);
+            self.held_scroll = self.game.re2.scroll;
+        }
         self.tick_cut = cut;
         self.load_held = self.load_hold > 0;
         self.load_hold = self.load_hold.saturating_sub(1);
@@ -6829,6 +6843,7 @@ impl GameSession {
                     .position
                     .map_or_else(|| "-".to_string(), |[x, y, z]| format!("{x},{y},{z}"))
             }),
+            re2_xa_volume: self.game.is_re2_room.then_some(self.game.re2.xa_volume),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -7054,11 +7069,17 @@ impl GameSession {
             };
             // RE2's new view comes in at the frame's swap (`Bg_loadPC`), so the
             // tick that changes the cut and the one after still draw the old one.
+            // The held frame keeps its scroll too: room 200's pan scrolls back
+            // to the top on the tick it changes cut.
             let cut = self.loaded.room.current_cut;
+            let scroll = self.game.re2.scroll;
             if let Some((_, drawn)) = self
                 .drawn_cut
                 .filter(|(room, _)| self.game.is_re2_room && *room == self.loaded.id)
             {
+                if self.cut_held || drawn != cut {
+                    self.game.re2.scroll = self.held_scroll;
+                }
                 self.loaded.room.current_cut = drawn;
             }
             let visible = render_frame_on(
@@ -7077,6 +7098,7 @@ impl GameSession {
                 &mut self.tween,
             );
             self.loaded.room.current_cut = cut;
+            self.game.re2.scroll = scroll;
             self.gpu_scene_visible = visible?;
             // The cutscene letterbox bars sit on the scene after the
             // room-entry fade has darkened it: `main_loop` draws the fading
@@ -13859,7 +13881,7 @@ fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameStat
         };
         game.voice.request = Some(game::VoiceRequest {
             path,
-            volume: 0,
+            volume: crate::scd2::host::xa_millibels(game.re2.xa_volume),
             pan: 0,
         });
     }
@@ -14659,6 +14681,7 @@ fn run_re2_init(
     };
     game.re2.gates = Default::default();
     game.re2.reset_mask_groups();
+    game.re2.reset_xa_volume();
     game.re2.pending_events.clear();
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();

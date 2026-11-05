@@ -8198,10 +8198,21 @@ impl GameState {
     }
 
     /// Fire an RE2 interaction area (`Sce_at_jump_tbl`). The kinds with no
-    /// game side yet (`SCE_NORMAL`, slopes) only record their hit, which the
-    /// probe already did. Water (kind 7) sets the player's `Water`.
+    /// game side yet (slopes) only record their hit, which the probe already
+    /// did; so does `Sce_Normal` (kind 3, `0x4E97C0`), whose handler only
+    /// returns. Water (kind 7) sets the player's `Water`.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
+        if action.sce == crate::scd2::host::SCE_FLAG_CHANGE {
+            // `Sce_Flg_chg`: the words bank, flag and whether to set it, on
+            // `Flg_addr`'s banks as `set` has them.
+            let word = |index: usize| {
+                u16::from_le_bytes([action.params[index * 2], action.params[index * 2 + 1]])
+            };
+            let op = u8::from(word(2) != 0);
+            self.re2.set_flag(word(0) as u8, word(1) as u8, op);
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_WATER {
             // `Sce_Water`: the area's first word is the water's level.
             self.re2.player.water = i16::from_le_bytes([action.params[0], action.params[1]]);
@@ -17977,6 +17988,35 @@ mod tests {
         // The player's own pass sets it while the player is inside the box.
         state.probe_actions([0, 0, 0], 0, 1, [0, 0, 0], false);
         assert_eq!(state.re2.player.water, -180);
+    }
+
+    #[test]
+    fn a_flag_change_area_sets_its_flag_while_the_player_is_in_it() {
+        let mut state = game();
+        state.is_re2_room = true;
+        // Room 102's area 2 (`aot_set 2, 6, 65, ...`): flag 5:8 on, by body.
+        state.room_actions[2] = Some(RoomAction {
+            slot: 2,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_FLAG_CHANGE,
+            handler: 1,
+            flags: 0x41,
+            params: [5, 0, 8, 0, 1, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        state.probe_actions([5000, 0, 5000], 0, 1, [5000, 0, 5000], false);
+        assert!(!state.re2.flag(5, 8));
+        state.probe_actions([0, 0, 0], 0, 1, [0, 0, 0], false);
+        assert!(state.re2.flag(5, 8));
+        // A third word of 0 clears it.
+        if let Some(action) = state.room_actions[2].as_mut() {
+            action.params[4] = 0;
+        }
+        state.probe_actions([0, 0, 0], 0, 1, [0, 0, 0], false);
+        assert!(!state.re2.flag(5, 8));
     }
 
     #[test]

@@ -152,6 +152,7 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 | `neck` | the player's `Neck_flg`, `Neck_no`, whether it aims at another work, and the joint's turn, rates, limits and rotation; arklay writes the first five |
 | `pneck` | where the player's head is in the world, the neck joint's `+0x5C`, which `Root_ck` aims at; `-` when arklay hasn't posed it. Compared only when `--fields` names it |
 | `bgm` | `Bgm`, each of the three `Seq_ctr`'s state and hold, and the tracks of the five channels (`bgm/<track>`), `-` for none; it says something only with `--sound` |
+| `xavol` | `xa_vol`'s level for the voice channel (`0x693E88`), which the next line's start gives DirectSound. Compared only when `--fields` names it |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade
 have no RE2 equivalent recorded yet, and the frame isn't hashed. A screenshot of
