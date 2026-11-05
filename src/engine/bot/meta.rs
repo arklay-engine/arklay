@@ -192,7 +192,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
 }
 
 /// A fact element has no children.
-fn check_leaf(node: Node<'_, '_>) -> Result<()> {
+pub(super) fn check_leaf(node: Node<'_, '_>) -> Result<()> {
     if let Some(child) = elements(node).next() {
         bail!(
             "{}: unknown <{}> element <{}>",
@@ -370,12 +370,14 @@ fn parse_step(node: Node<'_, '_>) -> Result<PuzzleStep> {
 }
 
 /// The element children of `node`.
-fn elements<'a, 'input>(node: Node<'a, 'input>) -> impl Iterator<Item = Node<'a, 'input>> {
+pub(super) fn elements<'a, 'input>(
+    node: Node<'a, 'input>,
+) -> impl Iterator<Item = Node<'a, 'input>> {
     node.children().filter(Node::is_element)
 }
 
 /// Refuse any attribute of `node` not in `known`.
-fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
+pub(super) fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
     for attribute in node.attributes() {
         if !known.contains(&attribute.name()) {
             bail!("{}: unknown attribute `{}`", at(node), attribute.name());
@@ -384,7 +386,7 @@ fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn attr_text<'a>(node: Node<'a, '_>, name: &str) -> Result<&'a str> {
+pub(super) fn attr_text<'a>(node: Node<'a, '_>, name: &str) -> Result<&'a str> {
     node.attribute(name).with_context(|| {
         format!(
             "{}: <{}> needs a `{name}` attribute",
@@ -395,7 +397,7 @@ fn attr_text<'a>(node: Node<'a, '_>, name: &str) -> Result<&'a str> {
 }
 
 /// Parse a decimal or `0x` hex integer.
-fn integer(text: &str) -> Option<i64> {
+pub(super) fn integer(text: &str) -> Option<i64> {
     let text = text.trim();
     let (negative, digits) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -411,7 +413,7 @@ fn integer(text: &str) -> Option<i64> {
     Some(if negative { -value } else { value })
 }
 
-fn attr<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str) -> Result<T> {
+pub(super) fn attr<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str) -> Result<T> {
     let raw = attr_text(node, name)?;
     integer(raw)
         .and_then(|value| T::try_from(value).ok())
@@ -438,7 +440,7 @@ fn line(node: Node<'_, '_>) -> u32 {
 }
 
 /// The source line and element name of `node`, for parse errors.
-fn at(node: Node<'_, '_>) -> String {
+pub(super) fn at(node: Node<'_, '_>) -> String {
     format!("line {} <{}>", line(node), node.tag_name().name())
 }
 

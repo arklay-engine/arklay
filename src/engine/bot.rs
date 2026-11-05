@@ -16,6 +16,7 @@
 //! `bot:room_meta()`. The observed world model is in [`world`] and reaches
 //! Lua as `bot:world()`.
 
+mod knowledge;
 #[cfg(test)]
 mod lua_lint;
 mod meta;
@@ -2171,6 +2172,8 @@ struct BotCtx {
     saves: SaveLog,
     /// The current room's authored metadata, cached by [`BotRuntime`].
     meta: Option<Rc<meta::RoomMeta>>,
+    /// The game's combat knowledge file, if the pack carries one.
+    knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
     /// The `--bot-risk` setting.
     risk: f64,
@@ -2342,6 +2345,49 @@ impl UserData for BotCtx {
         });
 
         methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
+
+        methods.add_method("knowledge", |lua, bot, ()| match &bot.knowledge {
+            Some(knowledge) => knowledge.to_lua(lua),
+            None => {
+                let table = lua.create_table()?;
+                table.set("enemies", lua.create_table()?)?;
+                table.set("weapons", lua.create_table()?)?;
+                Ok(table)
+            }
+        });
+
+        methods.add_method("spacing_point", |lua, bot, (slot, want): (u8, i32)| {
+            let enemies = &bot.snapshot.enemies;
+            let Some(target) = enemies.iter().find(|enemy| enemy.slot == slot) else {
+                return Ok(Value::Nil);
+            };
+            let others: Vec<(i32, i32)> = enemies
+                .iter()
+                .filter(|enemy| enemy.slot != slot)
+                .map(|enemy| (enemy.x, enemy.z))
+                .collect();
+            let p = &bot.snapshot.player;
+            let body = steer::Body {
+                y: p.y,
+                radius: p.radius,
+                flags: p.collision_flags,
+            };
+            let nav = bot.shares.nav.borrow();
+            let Some((x, z)) = steer::spacing_goal(
+                &nav.collision,
+                body,
+                (p.x, p.z),
+                (target.x, target.z),
+                &others,
+                want,
+            ) else {
+                return Ok(Value::Nil);
+            };
+            let table = lua.create_table()?;
+            table.set("x", x)?;
+            table.set("z", z)?;
+            Ok(Value::Table(table))
+        });
 
         methods.add_method("goal_room", |_lua, bot, ()| {
             Ok(bot.goal_room.as_deref().map(str::to_owned))
@@ -2936,6 +2982,8 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
+    /// `knowledge/<game>.xml`, read with the chunks.
+    knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
     risk: f64,
     /// The `--bot-goal-room` setting; kept across [`Self::reset`].
@@ -2966,6 +3014,7 @@ impl BotRuntime {
             tick: 0,
             meta: None,
             meta_room: None,
+            knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
             stats: stats::BotStats::default(),
@@ -3001,6 +3050,7 @@ impl BotRuntime {
     /// reparsed on the next tick.
     pub fn reload(&mut self, pack: &Pack) -> Result<()> {
         self.reload_meta();
+        self.knowledge = knowledge::load(pack)?.map(Rc::new);
         self.vm.reload(pack)
     }
 
@@ -3038,6 +3088,7 @@ impl BotRuntime {
             snapshot,
             saves: self.save_log,
             meta: self.meta.clone(),
+            knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
             goal_room: self.goal_room.clone(),
@@ -3334,6 +3385,8 @@ mod tests {
             "goal_room",
             "cameras",
             "saves",
+            "knowledge",
+            "spacing_point",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -4137,6 +4190,7 @@ mod tests {
             snapshot,
             saves: SaveLog::default(),
             meta: Some(Rc::new(meta)),
+            knowledge: None,
             tick: 1,
             risk: 0.6,
             goal_room: Some(Rc::from("20D")),
@@ -4196,6 +4250,222 @@ mod tests {
 
     fn eval<T: mlua::FromLuaMulti>(vm: &BotVm, body: &str) -> T {
         vm.lua.load(body).eval::<T>().unwrap()
+    }
+
+    /// The route VM with the checked-in knowledge file as the global `K`.
+    fn tactics_vm() -> BotVm {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        let knowledge = knowledge::load(&pack)
+            .unwrap()
+            .expect("knowledge/re1.xml by the mod's base");
+        assert_eq!(knowledge.source, "knowledge/re1.xml");
+        let vm = BotVm::load(&pack).unwrap();
+        let table = knowledge.to_lua(&vm.lua).unwrap();
+        vm.lua.globals().set("K", table).unwrap();
+        vm
+    }
+
+    #[test]
+    fn aim_pose_follows_the_status_bit_the_engine_matches() {
+        let vm = tactics_vm();
+        let pose = |args: &str| -> String {
+            eval(&vm, &format!("return tostring((BotTactics.pose({args})))"))
+        };
+        // A standing zombie (0x40, plus 0x20 inside 4500 and 0x80 inside
+        // 3000): the handgun aims at the torso, never the legs.
+        assert_eq!(
+            pose("K.enemies[0], K.weapons[2], 0x40 | 0x20, 4000"),
+            "torso"
+        );
+        assert_eq!(pose("K.enemies[0], K.weapons[2], 0xE0, 2000"), "torso");
+        // A crawler shows only the low bit: shoot down.
+        assert_eq!(pose("K.enemies[0], K.weapons[2], 0x20, 2500"), "down");
+        // The shotgun inside its headshot distance aims up at a zombie
+        // showing the high bit; past it, the torso.
+        assert_eq!(pose("K.enemies[0], K.weapons[3], 0xE0, 2500"), "up");
+        assert_eq!(pose("K.enemies[0], K.weapons[3], 0x60, 2500"), "torso");
+        assert_eq!(pose("K.enemies[0], K.weapons[3], 0xE0, 3500"), "torso");
+        // The handgun never aims up at a zombie (detect_gun refuses it).
+        assert_eq!(pose("K.enemies[0], K.weapons[2], 0x80, 2000"), "nil");
+        // A crow high up shows only 0x80: the handgun may aim up at it.
+        assert_eq!(pose("K.enemies[5], K.weapons[2], 0x80, 3000"), "up");
+        // No aim bit at all (a ceiling spider, a crow in flight): no shot.
+        assert_eq!(pose("K.enemies[3], K.weapons[2], 0x00, 3000"), "nil");
+        // A monster without a knowledge entry still gets the matching bit.
+        assert_eq!(pose("nil, K.weapons[2], 0x40, 3000"), "torso");
+        assert_eq!(pose("nil, K.weapons[2], 0x80, 3000"), "nil");
+        assert_eq!(
+            eval::<String>(
+                &vm,
+                "local i = BotTactics.aim_input('down') return tostring(i.aim and i.down)"
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn fight_or_run_follows_policy_health_rounds_and_the_room() {
+        let vm = tactics_vm();
+        vm.lua
+            .load(
+                r#"
+                function verdict(over)
+                    local o = { policy = "fight", gun = true, rounds = 30, needed = 5,
+                        health = 96, max_health = 96, risk = 0.25, crossing = false,
+                        distance = 5000, reach = 1500, outrun = true }
+                    for k, v in pairs(over or {}) do o[k] = v end
+                    local v, why = BotTactics.decide(o)
+                    return v .. ":" .. why
+                end
+            "#,
+            )
+            .exec()
+            .unwrap();
+        let verdict = |over: &str| -> String { eval(&vm, &format!("return verdict({over})")) };
+        // Only in the way: a slow zombie far off in a room not crossed again.
+        assert_eq!(verdict("{}"), "run:only in the way");
+        assert_eq!(
+            verdict("{ crossing = true }"),
+            "fight:the room is crossed again"
+        );
+        assert_eq!(verdict("{ distance = 2900 }"), "fight:closing in");
+        // Closing in, it is shot with what is left; farther off, the rounds
+        // must cover it.
+        assert_eq!(
+            verdict("{ distance = 2900, rounds = 2 }"),
+            "fight:closing in"
+        );
+        assert_eq!(
+            verdict("{ distance = 2900, rounds = 0 }"),
+            "run:too few rounds"
+        );
+        assert_eq!(
+            verdict("{ rounds = 2, crossing = true }"),
+            "run:too few rounds"
+        );
+        // A dog cannot be outrun: it is fought wherever it is.
+        assert_eq!(verdict("{ outrun = false }"), "fight:cannot outrun it");
+        // The policy, knowledge and rounds come first.
+        assert_eq!(
+            verdict("{ policy = 'pass', outrun = false }"),
+            "run:policy pass"
+        );
+        assert_eq!(
+            verdict("{ policy = false }"),
+            "run:not in the knowledge file"
+        );
+        assert_eq!(
+            verdict("{ gun = false, outrun = false }"),
+            "run:no firearm with rounds"
+        );
+        // Rounds: 1.5x the need at risk 0, 1x at risk 1.
+        assert_eq!(
+            verdict("{ rounds = 7, risk = 0, outrun = false }"),
+            "run:too few rounds"
+        );
+        assert_eq!(
+            verdict("{ rounds = 7, risk = 1, outrun = false }"),
+            "fight:cannot outrun it"
+        );
+        assert_eq!(
+            verdict("{ crowd_needed = 40, outrun = false }"),
+            "run:too few rounds for the crowd"
+        );
+        // Health floor: 0.45 of max at risk 0, 0.15 at risk 1.
+        assert_eq!(
+            verdict("{ health = 40, risk = 0, outrun = false }"),
+            "run:low health"
+        );
+        assert_eq!(
+            verdict("{ health = 40, risk = 1, outrun = false }"),
+            "fight:cannot outrun it"
+        );
+        // At low health a slow zombie closing in is run from; a hunter
+        // (speed unknown) or a dog closing in is shot.
+        assert_eq!(
+            verdict("{ health = 30, distance = 2900 }"),
+            "run:low health"
+        );
+        assert_eq!(
+            verdict("{ health = 30, distance = 2900, outrun = 'unknown' }"),
+            "fight:closing in, cannot outrun it"
+        );
+    }
+
+    #[test]
+    fn spacing_backs_off_reloads_far_and_steps_into_the_headshot() {
+        let vm = tactics_vm();
+        let space = |args: &str| -> String {
+            eval(
+                &vm,
+                &format!("local m, d = BotTactics.spacing({args}) return m .. ':' .. d"),
+            )
+        };
+        // The zombie's handgun band is 2000..4000.
+        assert_eq!(
+            space("{ distance = 1600, min = 2000, max = 4000 }"),
+            "back:3000"
+        );
+        assert_eq!(
+            space("{ distance = 2500, min = 2000, max = 4000 }"),
+            "hold:2500"
+        );
+        assert_eq!(
+            space("{ distance = 6000, min = 2000, max = 4000 }"),
+            "hold:6000"
+        );
+        // Reloading backs off to the far edge of the band first.
+        assert_eq!(
+            space("{ distance = 2500, min = 2000, max = 4000, reloading = true }"),
+            "back:4000"
+        );
+        assert_eq!(
+            space("{ distance = 4200, min = 2000, max = 4000, reloading = true }"),
+            "hold:4200"
+        );
+        // A zombie (reach 1500, 45 a tick) closes 945 while the bot turns
+        // around (21 ticks): too close to back off, so it holds and shoots.
+        assert_eq!(
+            space("{ distance = 1900, min = 2000, max = 4000, reach = 1500, speed = 45 }"),
+            "hold:1900"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 3000, min = 2000, max = 4000, reach = 1500, speed = 45, reloading = true }"
+            ),
+            "back:4000"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 2300, min = 2000, max = 4000, reach = 1500, speed = 45, reloading = true }"
+            ),
+            "hold:2300"
+        );
+        // Inside the reach (a hunter's swipe starts at 3000), back-offs stop.
+        assert_eq!(
+            space("{ distance = 1300, min = 3200, max = 6000, reach = 3000 }"),
+            "hold:1300"
+        );
+        // A crawler reaches 2200: the near edge moves out to 2500.
+        assert_eq!(
+            space("{ distance = 2300, min = 2000, max = 4000, crawl_reach = 2200 }"),
+            "back:3250"
+        );
+        // The shotgun (band 1800..2800, headshot 3000) steps in from just
+        // past the band, but not from across the room.
+        assert_eq!(
+            space("{ distance = 3200, min = 1800, max = 2800, headshot = 3000 }"),
+            "close:2300"
+        );
+        assert_eq!(
+            space("{ distance = 5000, min = 1800, max = 2800, headshot = 3000 }"),
+            "hold:5000"
+        );
+        // Past the band but already inside the headshot: shoot, do not walk.
+        assert_eq!(
+            space("{ distance = 2900, min = 1800, max = 2800, headshot = 3000 }"),
+            "hold:2900"
+        );
     }
 
     #[test]
