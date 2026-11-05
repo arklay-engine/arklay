@@ -1,0 +1,87 @@
+# door_101_102.txt's start through room 100's door and Kendo's scene in room 101, then a random walk through room 101: walks, turns, runs, backing and stops (oracle/re2.md).
+0 up run
+25 right
+26 right
+27 up run
+52 up run
+65 right
+77 right
+85 up
+91 left
+103 left
+112 up run
+137 up run
+162 up run
+187 left
+188 left
+189 up run
+214 up run
+227 left
+239 left
+250 up
+256 right
+268 right
+271 up run
+288 right
+300 right
+311 up
+317 left
+329 left
+341 left
+342 up run
+367 up run
+392 left
+393 left
+394 up run
+419 left
+431 left
+443 up
+449 left
+461 left
+463 up
+469 left
+471 up
+475 left
+477 left
+478 
+480 confirm
+482 
+700 up
+760 
+790 confirm
+792 
+1300 up
+1330 
+2480 up run left
+2525 right
+2620 up run
+2651 right
+2688 right
+2714 up run
+2750 right
+2851 up left
+2875 up run
+2951 up run
+2986
+3031 up
+3094 up left
+3189 left
+3198 up run left
+3224 up run
+3333 up run
+3374 up run
+3439
+3502 up left
+3611 up run left
+3664 up run
+3701 down left
+3805 down right
+3885 down
+3978 up run right
+4041 right
+4089 right
+4112 up run right
+4196 up run
+4285 up run left
+4381 down left
+4400

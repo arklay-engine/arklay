@@ -1158,6 +1158,7 @@ pub fn tick_of<'a>(
         necks: game.re2.necks(),
         targets: &[],
         neck_targets: &[],
+        enemies: 0,
     }
 }
 
