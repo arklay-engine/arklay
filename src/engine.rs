@@ -10030,42 +10030,10 @@ impl App {
             if let Some(runtime) = self.bot.as_mut()
                 && !runtime.finished()
             {
+                // The bot's only output is pad/UI input: equip, heal, item
+                // use and room actions go through the menu and the action
+                // button exactly as a player's input does.
                 let input = runtime.tick(session, &self.pack)?;
-                // An equip request is the legal menu action, applied before
-                // the gameplay tick reads the weapon machine.
-                if let Some(item) = input.equip {
-                    session.game.set_equipped(Some(item));
-                }
-                // A heal request runs the same item rule as the menu USE and
-                // consumes the unit through the menu's select + use path, all
-                // before the gameplay tick applies the healed state.
-                if let Some(item) = input.heal
-                    && session.game.item_count(item) > 0
-                    && session.game.item_defs.get(item).kind == crate::item_catalog::ItemKind::Heal
-                    && let game::UseResult::Used { .. } = session.game.use_item(item)
-                {
-                    session.game.select_item(Some(item));
-                    session.game.use_selected_item();
-                }
-                // A non-heal item use is the same menu USE path (the room's
-                // use-item zone raises the per-item flag; `use_item` refuses
-                // the item while that flag is clear). It is how the route uses
-                // the 10F gold emblem key at the 105 fireplace and the 118
-                // herbicide at the 10C pump.
-                if let Some(item) = input.use_item
-                    && session.game.item_count(item) > 0
-                    && session.game.item_defs.get(item).kind != crate::item_catalog::ItemKind::Heal
-                    && let game::UseResult::Used { .. } = session.game.use_item(item)
-                {
-                    session.game.select_item(Some(item));
-                    session.game.use_selected_item();
-                }
-                // A scripted item handover can name a room action whose zone
-                // is not reachable (the 106 lockpick item sits at the room
-                // origin). Run the same handler a normal action press would.
-                if let Some((slot, handler)) = input.room_action {
-                    session.game.run_room_action(slot, handler);
-                }
                 Some(input)
             } else {
                 None
