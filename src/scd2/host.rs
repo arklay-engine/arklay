@@ -27,6 +27,8 @@ pub struct Re2State {
     pub random: u32,
     /// `Xa_control`'s voice line.
     pub voice: VoiceLine,
+    /// `xa_vol`'s level for the voice channel (`0x693E88`), 0 to 127.
+    pub xa_volume: u8,
     /// The camera `cut_old` returns to.
     pub cut_old: u8,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
@@ -232,6 +234,22 @@ pub struct Arms {
     pub faded: bool,
 }
 
+/// `xa_vol`'s default, which the room load and a new game set.
+pub const XA_VOLUME: u8 = 120;
+
+/// `Snd_xa_vol` (`0x434AB0`, channel 7): DirectSound's millibels for an
+/// `xa_vol` level. The voice channel takes the level as it is, without the
+/// master volume the other channels are scaled by.
+pub fn xa_millibels(level: u8) -> i32 {
+    let level = i32::from(level);
+    let millibels = if level < 0x20 {
+        level * 259 - 10_000
+    } else {
+        (level * 9 - 0x477) * 2
+    };
+    millibels.clamp(-10_000, 0)
+}
+
 /// `xa_on`'s line, which `wsleep` waits out. A save doesn't hold it, so a line
 /// doesn't outlast the load.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -334,6 +352,9 @@ const SCE_DOOR: u8 = 1;
 const SCE_ITEM: u8 = 2;
 const SCE_MESSAGE: u8 = 4;
 const SCE_EVENT: u8 = 5;
+/// `Sce_Flg_chg`'s area (`0x4E9830`): sets or clears a flag while the probe
+/// is inside it.
+pub const SCE_FLAG_CHANGE: u8 = 6;
 /// `Sce_Water`'s area: the player's `Water` while inside it.
 pub const SCE_WATER: u8 = 7;
 const SCE_SAVE: u8 = 9;
@@ -355,6 +376,7 @@ impl Default for Re2State {
             random: 0x1382_01C3,
             cut_old: 0,
             voice: VoiceLine::default(),
+            xa_volume: XA_VOLUME,
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             pending_cuts: Vec::new(),
@@ -747,6 +769,12 @@ impl Re2State {
     /// `Sce_work_clr_set`: every room starts with all of its mask groups on.
     pub fn reset_mask_groups(&mut self) {
         self.banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
+    }
+
+    /// The room's script set-up (`0x4E3F12`, from the room load's
+    /// `0x4E42D0`) puts the voice channel back to `xa_vol`'s default.
+    pub fn reset_xa_volume(&mut self) {
+        self.xa_volume = XA_VOLUME;
     }
 
     /// `Psp_trans`'s `Flg_ck`: which of a camera's mask groups a script has
@@ -1938,6 +1966,17 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_item_get" => self.game.add_item(at(0) as u8, at(1) as u8),
+            // The PC executable has no rumble: both handlers (`0x4E9110`) only
+            // step over their operands.
+            "vib_set0" | "vib_set1" => {}
+            // `0x4E84B0` keeps a level below 0x80 for the next line's start.
+            "xa_vol" => {
+                if let Ok(level) = u8::try_from(at(0))
+                    && level < 0x80
+                {
+                    self.game.re2.xa_volume = level;
+                }
+            }
             "sce_item_lost" => {
                 self.game.remove_item(at(0) as u8);
             }
@@ -2285,6 +2324,25 @@ mod tests {
         assert!(!GameHost { game: &mut game }.waiting());
         exec(&mut game, "xa_on", &[1, 6]);
         assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/00_06.wav"));
+    }
+
+    #[test]
+    fn xa_vol_keeps_a_level_below_0x80_for_the_next_line() {
+        let mut game = GameState::default();
+        assert_eq!(game.re2.xa_volume, XA_VOLUME);
+        exec(&mut game, "xa_vol", &[100]);
+        assert_eq!(game.re2.xa_volume, 100);
+        exec(&mut game, "xa_vol", &[0x80]);
+        assert_eq!(game.re2.xa_volume, 100);
+        game.re2.reset_xa_volume();
+        assert_eq!(game.re2.xa_volume, 120);
+        // `Snd_xa_vol`'s curve: two lines meeting at 0x20, clamped to full.
+        assert_eq!(xa_millibels(120), -126);
+        assert_eq!(xa_millibels(100), -486);
+        assert_eq!(xa_millibels(127), 0);
+        assert_eq!(xa_millibels(0x20), -1710);
+        assert_eq!(xa_millibels(0x1F), -1971);
+        assert_eq!(xa_millibels(0), -10_000);
     }
 
     #[test]

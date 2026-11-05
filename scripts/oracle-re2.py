@@ -169,6 +169,7 @@ BGM_CURRENT = 0x00693498
 SS_NAME_BGM = 0x006934E0
 SS_NAME_SBGM = 0x00693EA0
 SEQ_CTR = 0x00693800
+XA_VOLUME = 0x00693E88  # `xa_vol`'s level for the voice channel
 
 
 def parse_input(path: Path | None) -> list[tuple[int, int]]:
@@ -528,6 +529,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         fields.append("neck=-")
     fields.append(neck_position(game))
     fields.append(music_trace(game))
+    fields.append(f"xavol={game.u32(XA_VOLUME)}")
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
