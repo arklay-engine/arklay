@@ -10,6 +10,12 @@
 //! The API is deliberately small and generic: the Lua mod owns route policy
 //! (which door to take, when to skip a scene), while Rust owns the reusable
 //! skills (collision-aware walking, turning, button pulses).
+//!
+//! Per-room puzzle data lives next to the room in `room/<id>/bot.xml`; the
+//! parser is in [`meta`] and the Lua API exposes it read-only as
+//! `bot:room_meta()`.
+
+mod meta;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
@@ -1240,6 +1246,8 @@ impl Default for BotShares {
 /// normal input write; there is deliberately no state-authoring method.
 struct BotCtx {
     snapshot: SessionSnapshot,
+    /// The current room's authored metadata, cached by [`BotRuntime`].
+    meta: Option<Rc<meta::RoomMeta>>,
     tick: u64,
     shares: BotShares,
 }
@@ -1295,6 +1303,49 @@ impl UserData for BotCtx {
             table.set("camera", bot.snapshot.camera)?;
             table.set("controllable", bot.snapshot.scene.controllable)?;
             Ok(table)
+        });
+
+        methods.add_method("room_meta", |lua, bot, ()| {
+            let Some(meta) = &bot.meta else {
+                return Ok(Value::Nil);
+            };
+            let table = lua.create_table()?;
+            table.set("format", meta.format)?;
+            let puzzles = lua.create_table()?;
+            for (puzzle_index, puzzle) in meta.puzzles.iter().enumerate() {
+                let puzzle_table = lua.create_table()?;
+                puzzle_table.set("id", puzzle.id.as_str())?;
+                if let Some(title) = &puzzle.title {
+                    puzzle_table.set("title", title.as_str())?;
+                }
+                let steps = lua.create_table()?;
+                for (step_index, step) in puzzle.steps.iter().enumerate() {
+                    let step_table = lua.create_table()?;
+                    step_table.set("slot", step.slot)?;
+                    step_table.set("bank", step.bank)?;
+                    step_table.set("bit", step.bit)?;
+                    step_table.set("label", step.label.as_str())?;
+                    let walks = lua.create_table()?;
+                    for (walk_index, walk) in step.walks.iter().enumerate() {
+                        let point = lua.create_table()?;
+                        point.set("x", walk[0])?;
+                        point.set("z", walk[1])?;
+                        walks.set(walk_index + 1, point)?;
+                    }
+                    step_table.set("walks", walks)?;
+                    if let Some(face) = step.face {
+                        let point = lua.create_table()?;
+                        point.set("x", face[0])?;
+                        point.set("z", face[1])?;
+                        step_table.set("face", point)?;
+                    }
+                    steps.set(step_index + 1, step_table)?;
+                }
+                puzzle_table.set("steps", steps)?;
+                puzzles.set(puzzle_index + 1, puzzle_table)?;
+            }
+            table.set("puzzles", puzzles)?;
+            Ok(Value::Table(table))
         });
 
         methods.add_method("player", |lua, bot, ()| {
@@ -1597,6 +1648,11 @@ pub struct BotRuntime {
     vm: BotVm,
     shares: BotShares,
     tick: u64,
+    /// The current room's parsed metadata; shared with the Lua handle so a
+    /// tick clones only the pointer.
+    meta: Option<Rc<meta::RoomMeta>>,
+    /// The room `meta` was loaded for, so each room loads it once.
+    meta_room: Option<RoomId>,
 }
 
 impl BotRuntime {
@@ -1606,21 +1662,38 @@ impl BotRuntime {
             vm: BotVm::load(pack)?,
             shares: BotShares::default(),
             tick: 0,
+            meta: None,
+            meta_room: None,
         })
     }
 
     /// Reload the pack's bot chunks in place, preserving the Lua globals, the
     /// remembered memory/navigation and the tick counter.
+    ///
+    /// The room metadata cache is invalidated too, so a changed `bot.xml` is
+    /// reparsed on the next tick.
     pub fn reload(&mut self, pack: &Pack) -> Result<()> {
+        self.reload_meta();
         self.vm.reload(pack)
+    }
+
+    /// Drop the cached room metadata so the next tick reparses it.
+    pub fn reload_meta(&mut self) {
+        self.meta = None;
+        self.meta_room = None;
     }
 
     /// Run one `on_bot_tick`, returning the input it asked for.
     ///
     /// The tick counter advances even when the script fails, so the error can
     /// name the exact tick and room.
-    pub fn tick(&mut self, session: &GameSession) -> Result<BotInput> {
+    pub fn tick(&mut self, session: &GameSession, pack: &Pack) -> Result<BotInput> {
         self.tick = self.tick.saturating_add(1);
+        let room_id = session.loaded.id;
+        if self.meta_room != Some(room_id) {
+            self.meta = meta::load(pack, room_id)?.map(Rc::new);
+            self.meta_room = Some(room_id);
+        }
         let snapshot = SessionSnapshot::build(session);
         {
             let mut input = self.shares.input.borrow_mut();
@@ -1633,6 +1706,7 @@ impl BotRuntime {
         }
         let ctx = BotCtx {
             snapshot,
+            meta: self.meta.clone(),
             tick: self.tick,
             shares: BotShares {
                 memory: Rc::clone(&self.shares.memory),
@@ -1675,6 +1749,7 @@ impl BotRuntime {
     pub fn reset(&mut self, pack: &Pack) -> Result<()> {
         self.shares = BotShares::default();
         self.tick = 0;
+        self.reload_meta();
         self.vm = BotVm::load(pack)?;
         Ok(())
     }

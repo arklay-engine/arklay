@@ -19,7 +19,9 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 re-run in the same Lua state, so `BOT_STATE` keeps its phase and the engine
 keeps its remembered memory, navigation and tick count. Editing a route file
 does not restart the room or the run. A new game or restart rebuilds the bot
-VM from the pack, so route globals start fresh there.
+VM from the pack, so route globals start fresh there. A changed
+`room/<id>/bot.xml` invalidates the cached room metadata, which the route sees
+through `bot:room_meta()` on the next tick.
 
 ## Route
 
@@ -186,6 +188,7 @@ crest bits instead of trying wall-side approaches for a door that cannot open.
 | --- | --- |
 | `bot:tick()` | Monotonic app-update counter. |
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
+| `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
 | `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). |
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, pickup, frozen, controls_locked, controllable, dead}`. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
@@ -204,6 +207,55 @@ crest bits instead of trying wall-side approaches for a door that cannot open.
 | `bot:walk_to(x, z, opts)` | Collision-aware A* walk. Returns `{status, distance, angle_error}`. |
 | `bot:face_to(x, z)` | Turn toward a point. Returns `{status, distance, angle_error}`. |
 | `bot:distance(x, z)` | Horizontal distance. |
+
+### Room metadata
+
+A room may author puzzle data next to its other files as
+`room/<id>/bot.xml`. The merged pack resolves it like any other entry, so a
+mod's copy overlays the base pack's. The file is optional; without one
+`bot:room_meta()` returns `nil`. The parser rejects unknown elements and
+attributes, malformed actions, and out-of-range banks, and names the file and
+source line on error.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<bot format="1">
+  <puzzle id="paintings" title="117 large gallery painting order">
+    <step slot="3" bank="4" bit="0x1A" label="117 painting 1/7 newborn">
+      <walk x="19500" z="8100"/>
+      <face x="19500" z="7200"/>
+    </step>
+  </puzzle>
+</bot>
+```
+
+`format` is required to be `1` when present (the default). `puzzle` takes
+`id` and optional `title`; `step` takes `slot`, `bank`, `bit` and `label`.
+`bit` is the flag selector passed to `bot:flag`, so the examples use `0x1A`,
+not bit number 26. A step has any number of `<walk x="..." z="..."/>` points
+and at most one `<face x="..." z="..."/>`; coordinates are signed 32-bit
+integers. `slot` and `bit` are bytes and `bank` must be below 10.
+
+`bot:room_meta()` returns a fresh Lua table; it is a read-only view in the
+sense that it cannot write game state:
+
+```lua
+local meta = bot:room_meta()
+if meta then
+    for _, puzzle in ipairs(meta.puzzles) do
+        if puzzle.id == "paintings" then
+            for _, step in ipairs(puzzle.steps) do
+                -- step.slot, step.bank, step.bit, step.label,
+                -- step.walks = { {x=..., z=...}, ... }, step.face = {x=..., z=...}
+            end
+        end
+    end
+end
+```
+
+The checked-in route uses this metadata for the 117 painting order. It keeps
+the hardcoded `PAINT_STEPS` table as a fallback and logs which source it is
+using once per source change.
 
 `set_input` keys are literal: `up down left right` (player directions plus the
 UI edge/held flag), `held_up` etc. (UI held only), `up_pressed` etc. (UI edge
