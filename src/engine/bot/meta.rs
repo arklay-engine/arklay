@@ -10,8 +10,9 @@
 //! done), `<camera>` (a camera cut to enter, which starts a room scene),
 //! `<use>` (an item to USE from the menu while standing in an AOT slot's
 //! use-item zone), `<answer>` (the choice to make at a yes/no prompt) and
-//! `<avoid>` (an AOT slot the planner should not use). `<interact>` and `<camera>` share one
-//! ordered step list. A format-1 document may not use them.
+//! `<avoid>` (an AOT slot the planner should not use) and `<push>` (push a
+//! room object until it stands in an AOT slot's zone). `<interact>`,
+//! `<camera>` and `<push>` share one ordered step list. A format-1 document may not use them.
 //!
 //! The merged pack resolves the file next to the room's other entries, so a
 //! mod's `room/117/bot.xml` overlays the base pack's copy (or adds one when the
@@ -64,6 +65,9 @@ pub enum Target {
     Slot(u8),
     /// Walk into a camera switch zone that leads to this cut.
     Camera(u8),
+    /// Push room object `object` until its position lies in AOT `slot`'s
+    /// zone (done by position; the step has no flag).
+    Push { object: u8, slot: u8 },
 }
 
 /// `<use>`: stand where the room's use-item probe in AOT `slot` (a
@@ -209,7 +213,10 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
     )?;
     for child in elements(root) {
         let name = child.tag_name().name();
-        let fact = matches!(name, "interact" | "camera" | "use" | "answer" | "avoid");
+        let fact = matches!(
+            name,
+            "interact" | "camera" | "push" | "use" | "answer" | "avoid"
+        );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
         }
@@ -223,6 +230,7 @@ pub fn parse(text: &str) -> Result<RoomMeta> {
             }
             "interact" => meta.interacts.push(parse_interact(child)?),
             "camera" => meta.interacts.push(parse_camera(child)?),
+            "push" => meta.interacts.push(parse_push(child)?),
             "use" => meta.uses.push(parse_use(child)?),
             "answer" => meta.answers.push(parse_answer(child)?),
             "avoid" => meta.avoids.push(parse_avoid(child)?),
@@ -279,6 +287,19 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
         slot: attr(node, "slot")?,
         item,
         flag: (bank_attr(node)?, attr(node, "bit")?),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(node, &["object", "slot", "label"])?;
+    check_leaf(node)?;
+    Ok(Interact {
+        target: Target::Push {
+            object: attr(node, "object")?,
+            slot: attr(node, "slot")?,
+        },
+        flag: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -591,6 +612,7 @@ mod tests {
             <interact slot="5" bank="0" bit="3"/>
             <camera cut="3" label="north hall"/>
             <camera cut="2" bank="1" bit="0x05"/>
+            <push object="1" slot="2" label="armor onto the vent"/>
             <answer choice="no" slot="6" label="do not drink"/>
             <answer choice="yes" bank="4" bit="0x10"/>
             <avoid slot="7" reason="the plant stuns the player"/>
@@ -620,6 +642,11 @@ mod tests {
                     target: Target::Camera(2),
                     flag: Some((1, 0x05)),
                     label: None,
+                },
+                Interact {
+                    target: Target::Push { object: 1, slot: 2 },
+                    flag: None,
+                    label: Some("armor onto the vent".to_string()),
                 },
             ]
         );

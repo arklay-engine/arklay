@@ -75,7 +75,9 @@ function BotPuzzle.next_interact(bot)
     for index = done + 1, #interacts do
         local fact = interacts[index]
         local finished
-        if fact.bank then
+        if fact.kind == "push" then
+            finished = BotPuzzle.push_done(bot, fact)
+        elseif fact.bank then
             finished = bot:flag(fact.bank, fact.bit)
         else
             finished = visits[index] == true
@@ -85,6 +87,18 @@ function BotPuzzle.next_interact(bot)
         end
     end
     return nil, #interacts, #interacts
+end
+
+-- A <push> step is done while its object's centre sits in the middle half
+-- of its zone (the room's object probe tests the object's position).
+function BotPuzzle.push_done(bot, fact)
+    local object = BotNav.object_by_slot(bot, fact.object)
+    local action = BotNav.action_by_slot(bot, fact.slot)
+    if not object or not action then
+        return false
+    end
+    local ex, ez = BotNav.push_error(object, action)
+    return ex == 0 and ez == 0
 end
 
 -- Record that the flagless step `index` of this room was done this entry.
