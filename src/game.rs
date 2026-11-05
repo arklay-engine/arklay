@@ -295,7 +295,7 @@ pub const BANK_SCENARIO: u8 = 0;
 /// Second scenario flag bank index (`g_ScenarioFlags2`).
 pub const BANK_SCENARIO2: u8 = 1;
 /// Door lock flag bank index.
-const BANK_LOCKS: u8 = 2;
+pub const BANK_LOCKS: u8 = 2;
 /// `room_check_actions` index of the item pickup handler.
 const HANDLER_ITEM: u8 = 4;
 /// `room_check_actions` index of the include-key prompt handler.

@@ -31,6 +31,14 @@
 //! - `combines`: the inventory changed while the menu was in its MOVE mode
 //!   on the previous tick (a mix). Neither a box swap nor a mix counts as an
 //!   item use.
+//!
+//! `activity` puts every tick in exactly one bucket, the first that applies:
+//! `saving` (typewriter or save screen), `item_box`, `pickup_viewer`,
+//! `examine`, `menu` (the inventory panel), `doors` (a room transition), `scenes`
+//! (films, skippable scenes and messages), `pickup`, `combat` (aim or fire
+//! held, or the player grabbed), `walking` (up or down held), `turning`
+//! (left or right only), `uncontrolled` (no control for another reason) and
+//! `waiting` (in control with no input).
 
 use super::{BotInput, EnemySnapshot, MenuSnapshot, SessionSnapshot};
 use serde_json::{Value, json};
@@ -84,6 +92,52 @@ pub(super) struct BotStats {
     menu: MenuCounters,
     /// The previous tick's menu state and equipped item.
     prev_menu: Option<(MenuSnapshot, Option<u8>)>,
+    /// Ticks per activity bucket (see the module docs).
+    activity: BTreeMap<&'static str, u64>,
+    /// The same buckets per room.
+    room_activity: BTreeMap<String, BTreeMap<&'static str, u64>>,
+    /// This tick's bucket when the snapshot alone decides it, else `None`
+    /// with the snapshot facts the input still needs.
+    pending_activity: Option<PendingActivity>,
+}
+
+/// What the snapshot said about the tick, before the input is known.
+#[derive(Clone, Copy, Debug)]
+enum PendingActivity {
+    Fixed(&'static str),
+    Controlled { grabbed: bool, controllable: bool },
+}
+
+/// The bucket the snapshot alone decides, if any.
+fn snapshot_activity(snapshot: &SessionSnapshot) -> PendingActivity {
+    let scene = &snapshot.scene;
+    let menu = &snapshot.menu;
+    let fixed = if snapshot.save_screen.is_some() || scene.typewriter {
+        Some("saving")
+    } else if menu.item_box.is_some() || menu.screen == Some("item_box") {
+        Some("item_box")
+    } else if menu.open {
+        Some(match menu.screen {
+            Some("pickup") => "pickup_viewer",
+            Some("examine") => "examine",
+            _ => "menu",
+        })
+    } else if scene.transition {
+        Some("doors")
+    } else if scene.film || scene.skippable || scene.cutscene_skip || scene.message.is_some() {
+        Some("scenes")
+    } else if scene.pickup || scene.reader {
+        Some("pickup")
+    } else {
+        None
+    };
+    match fixed {
+        Some(bucket) => PendingActivity::Fixed(bucket),
+        None => PendingActivity::Controlled {
+            grabbed: snapshot.player.grabbed,
+            controllable: scene.controllable,
+        },
+    }
 }
 
 /// Counted menu transitions (see the module docs).
@@ -297,6 +351,8 @@ impl BotStats {
         }
         self.prev_enemies = now;
 
+        self.pending_activity = Some(snapshot_activity(snapshot));
+
         let equipped = snapshot.player.equipped;
         self.menu
             .observe(self.prev_menu.as_ref(), &snapshot.menu, equipped);
@@ -312,6 +368,35 @@ impl BotStats {
         let moving = pad.up || pad.down;
         self.move_ticks += u64::from(moving);
         self.turn_in_place_ticks += u64::from(turning && !moving && !pad.aim);
+        let bucket = match self.pending_activity.take() {
+            Some(PendingActivity::Fixed(bucket)) => bucket,
+            Some(PendingActivity::Controlled {
+                grabbed,
+                controllable,
+            }) => {
+                if pad.aim || pad.fire || grabbed {
+                    "combat"
+                } else if moving {
+                    "walking"
+                } else if turning {
+                    "turning"
+                } else if !controllable {
+                    "uncontrolled"
+                } else {
+                    "waiting"
+                }
+            }
+            None => "uncontrolled",
+        };
+        *self.activity.entry(bucket).or_default() += 1;
+        if let Some(room) = &self.current_room {
+            *self
+                .room_activity
+                .entry(room.clone())
+                .or_default()
+                .entry(bucket)
+                .or_default() += 1;
+        }
     }
 
     /// The report as JSON.
@@ -384,6 +469,8 @@ impl BotStats {
                 "uncontrollable_ticks": self.uncontrollable_ticks,
             },
             "menu": self.menu.to_json(),
+            "activity": self.activity,
+            "room_activity": self.room_activity,
             "door_unlocks": unlocks,
             "unlock_to_room_change_ticks_total": known.iter().sum::<u64>(),
         })

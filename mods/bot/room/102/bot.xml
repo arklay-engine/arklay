@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 102 vacant room. The broken shotgun (item AOT 1, x 6500..7000,
+     z 9100..10000, item flag 0x30) lies here; 116's rack takes it in the
+     real shotgun's place. The room's door from 101 is locked with the
+     mansion armor key. -->
+<bot format="2">
+  <holds item="0x1C" label="broken shotgun"/>
+</bot>

@@ -199,7 +199,8 @@ impl Manifest {
     /// The bank-5 system flags this manifest raises: `RANDOMIZER` for a seed,
     /// then the names in `biorand_flags`. A seeded pack without the list
     /// predates it, so it also raises the proof of concept's
-    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`.
+    /// `DOOR_RANDOMIZER` and `ENEMY_RANDOMIZER`, and the bits its scripts
+    /// test for them ([`system::PROOF_OF_CONCEPT`]).
     pub fn system_flags(&self) -> Vec<u8> {
         let mut flags = Vec::new();
         if self.seed.is_some() {
@@ -209,6 +210,8 @@ impl Manifest {
             Some(names) => flags.extend(names.iter().filter_map(|name| system::bit_named(name))),
             None if self.seed.is_some() => {
                 flags.extend([system::DOOR_RANDOMIZER, system::ENEMY_RANDOMIZER]);
+                // Its room scripts test the bits the flags had then.
+                flags.extend(system::PROOF_OF_CONCEPT);
             }
             None => {}
         }
@@ -1071,7 +1074,10 @@ mod tests {
             [
                 system::RANDOMIZER,
                 system::DOOR_RANDOMIZER,
-                system::ENEMY_RANDOMIZER
+                system::ENEMY_RANDOMIZER,
+                0xF0,
+                0xF1,
+                0xF2
             ]
         );
         // The list raises its flags with or without a seed.

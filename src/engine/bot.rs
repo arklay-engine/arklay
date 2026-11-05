@@ -517,6 +517,47 @@ struct ActionSnapshot {
     lock: Option<u8>,
     handler: u8,
     flags: u8,
+    /// A drawer (`Desk`, handler 0x0E): what `check_desk` reads.
+    desk: Option<DeskSnapshot>,
+}
+
+/// A drawer's parameter words as `GameState::check_desk` reads them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DeskSnapshot {
+    /// Word 0: the bank-2 (LocksFlags) bit; the drawer opens without a key
+    /// once it is set.
+    lock_bit: u8,
+    /// Word 1: the room action slot of the item the drawer holds.
+    item_slot: u8,
+    /// That item action's id and quantity, when the slot holds an item
+    /// action (a drawer item may lack the player probe bit, so the item row
+    /// itself can be dormant and hide them).
+    item: Option<u8>,
+    quantity: Option<u8>,
+    /// The item is still in the drawer: its bank-7 room-items bit is set.
+    full: bool,
+}
+
+/// The drawer fields of the room action `action`, or `None` for any other
+/// kind.
+fn desk_snapshot(game: &game::GameState, action: &game::RoomAction) -> Option<DeskSnapshot> {
+    if action.kind != RoomActionKind::Desk {
+        return None;
+    }
+    let item_slot = action.param_word(1) as u8;
+    let item = game
+        .room_actions
+        .get(usize::from(item_slot))
+        .copied()
+        .flatten()
+        .filter(|item| item.kind == RoomActionKind::Item);
+    Some(DeskSnapshot {
+        lock_bit: action.param_word(0) as u8,
+        item_slot,
+        item: item.map(|item| item.item_id()),
+        quantity: item.map(|item| item.item_quantity()),
+        full: item.is_some_and(|item| game.room_item_present(item.room_items_flag)),
+    })
 }
 
 /// One active room object (a pushable block, a statue, a shelf), read-only.
@@ -989,6 +1030,7 @@ impl SessionSnapshot {
                     lock: door.map(|door| door.lock),
                     handler: action.handler,
                     flags: action.flags,
+                    desk: desk_snapshot(game, action),
                 }
             })
             .collect();
@@ -2421,6 +2463,12 @@ fn save_screen_table(lua: &Lua, view: &SaveScreenView) -> mlua::Result<Table> {
         "slots",
         lua.create_sequence_from(view.slots.iter().copied())?,
     )?;
+    if let Some(rows) = &view.rows {
+        table.set("rows", lua.create_sequence_from(rows.iter().copied())?)?;
+    }
+    if let Some(yes) = view.answer {
+        table.set("answer", if yes { "yes" } else { "no" })?;
+    }
     Ok(table)
 }
 
@@ -2434,6 +2482,8 @@ struct BotCtx {
     meta: Option<Rc<meta::RoomMeta>>,
     /// Every room's `<use>` facts, cached by [`BotRuntime`].
     uses: Rc<Vec<meta::RoomUse>>,
+    /// Every room's `<holds>` facts, cached by [`BotRuntime`].
+    holds: Rc<Vec<meta::RoomHolds>>,
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
@@ -2580,6 +2630,7 @@ impl UserData for BotCtx {
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
+                row.set("done_clear", fact.done_clear)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }
@@ -2611,9 +2662,26 @@ impl UserData for BotCtx {
                 let row = lua.create_table()?;
                 row.set("slot", fact.slot)?;
                 row.set("reason", fact.reason.as_str())?;
+                if let Some(gate) = fact.gate {
+                    row.set("bank", gate.flag.0)?;
+                    row.set("bit", gate.flag.1)?;
+                    row.set("while", if gate.set { "set" } else { "clear" })?;
+                }
+                row.set("unless_held", fact.unless_held)?;
                 avoids.push(row)?;
             }
             table.set("avoids", avoids)?;
+            let watches = lua.create_table()?;
+            for fact in &meta.watches {
+                let row = lua.create_table()?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("label", fact.label.as_deref())?;
+                watches.push(row)?;
+            }
+            table.set("watches", watches)?;
             Ok(Value::Table(table))
         });
 
@@ -2626,6 +2694,18 @@ impl UserData for BotCtx {
                 row.set("item", entry.fact.item)?;
                 row.set("bank", entry.fact.flag.0)?;
                 row.set("bit", entry.fact.flag.1)?;
+                row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("item_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.holds.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("item", entry.fact.item)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -2692,6 +2772,11 @@ impl UserData for BotCtx {
             table.set("y", p.y)?;
             table.set("z", p.z)?;
             table.set("angle", p.angle)?;
+            // The forward action probe (`probe_actions`): a zone press fires
+            // only when this point is inside the zone.
+            let (reach_x, reach_z) = crate::player::reach_offset(p.angle);
+            table.set("reach_x", p.x + reach_x)?;
+            table.set("reach_z", p.z + reach_z)?;
             table.set("health", p.health)?;
             table.set("max_health", p.max_health)?;
             table.set("state", p.state)?;
@@ -2790,6 +2875,15 @@ impl UserData for BotCtx {
                 row.set("lock", action.lock)?;
                 row.set("handler", action.handler)?;
                 row.set("flags", action.flags)?;
+                if let Some(desk) = action.desk {
+                    // The lock flag as a (bank, bit) pair for `bot:flag`.
+                    row.set("lock_bank", game::BANK_LOCKS)?;
+                    row.set("lock_bit", desk.lock_bit)?;
+                    row.set("item_slot", desk.item_slot)?;
+                    row.set("desk_item", desk.item)?;
+                    row.set("desk_quantity", desk.quantity)?;
+                    row.set("full", desk.full)?;
+                }
                 table.set(index + 1, row)?;
             }
             Ok(table)
@@ -3333,8 +3427,11 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
-    /// Every room's `<use>` facts, read from the pack on the first tick.
-    uses: Option<Rc<Vec<meta::RoomUse>>>,
+    /// Every room's `<use>` facts for one character (`true`: Jill), read
+    /// from the pack on the first tick and again if the character changes.
+    uses: Option<(bool, Rc<Vec<meta::RoomUse>>)>,
+    /// Every room's `<holds>` facts, loaded with `uses`.
+    holds: Rc<Vec<meta::RoomHolds>>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
@@ -3368,6 +3465,7 @@ impl BotRuntime {
             meta: None,
             meta_room: None,
             uses: None,
+            holds: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
@@ -3426,8 +3524,10 @@ impl BotRuntime {
             self.meta = meta::load(pack, room_id)?.map(Rc::new);
             self.meta_room = Some(room_id);
         }
-        if self.uses.is_none() {
-            self.uses = Some(Rc::new(meta::load_uses(pack)?));
+        let jill = meta::jill(room_id.player_flag);
+        if self.uses.as_ref().is_none_or(|(held, _)| *held != jill) {
+            self.uses = Some((jill, Rc::new(meta::load_uses(pack, Some(jill))?)));
+            self.holds = Rc::new(meta::load_holds(pack, Some(jill))?);
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
@@ -3447,7 +3547,12 @@ impl BotRuntime {
             snapshot,
             saves: self.save_log,
             meta: self.meta.clone(),
-            uses: self.uses.clone().unwrap_or_default(),
+            uses: self
+                .uses
+                .as_ref()
+                .map(|(_, uses)| uses.clone())
+                .unwrap_or_default(),
+            holds: self.holds.clone(),
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -3751,6 +3856,7 @@ mod tests {
             "item_kind",
             "ammo_for",
             "use_facts",
+            "item_facts",
             "combine_result",
         ];
         // The bot's own memory and run bookkeeping, never the game.
@@ -3934,6 +4040,63 @@ mod tests {
         assert_eq!(enemies[0].hit_state, 1);
         assert!(enemies[0].visible);
         assert_eq!(enemies[1].health, 100);
+    }
+
+    #[test]
+    fn desk_snapshot_reads_the_lock_bit_item_slot_and_contents() {
+        let mut game = game::GameState::default();
+        // A drawer on slot 0 (lock bit 5, item slot 1, camera 3) holding
+        // seven of item 0x0C behind room-items bit 9.
+        let desk = game::RoomAction {
+            slot: 0,
+            kind: RoomActionKind::Desk,
+            zone: [100, 100, 10, 10],
+            sce: 0x0E,
+            handler: 0x0E,
+            flags: 0x81,
+            params: [0, 0, 5, 0, 1, 0, 3, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        };
+        game.room_actions[0] = Some(desk);
+        game.room_actions[1] = Some(game::RoomAction {
+            slot: 1,
+            kind: RoomActionKind::Item,
+            zone: [0, 0, 10, 10],
+            sce: 2,
+            handler: 2,
+            flags: 0x00,
+            params: [0x0C, 7, 0, 0, 0, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 9,
+            reach_animation: false,
+        });
+        game.apply_flag(7, 9, 0);
+        let snap = desk_snapshot(&game, &desk).unwrap();
+        assert_eq!(
+            snap,
+            DeskSnapshot {
+                lock_bit: 5,
+                item_slot: 1,
+                item: Some(0x0C),
+                quantity: Some(7),
+                full: true,
+            }
+        );
+        // Taken: the room-items bit clears and the drawer reads empty.
+        game.mark_item_taken(9);
+        assert!(!desk_snapshot(&game, &desk).unwrap().full);
+        // No item action on the slot: no contents.
+        game.room_actions[1] = None;
+        let snap = desk_snapshot(&game, &desk).unwrap();
+        assert_eq!((snap.item, snap.full), (None, false));
+        // Any other kind has no drawer fields.
+        let item = game::RoomAction {
+            kind: RoomActionKind::Item,
+            ..desk
+        };
+        assert_eq!(desk_snapshot(&game, &item), None);
     }
 
     #[test]
@@ -4594,13 +4757,17 @@ mod tests {
             br#"function on_bot_tick(bot)
                 local m = bot:room_meta()
                 local i, a, v = m.interacts[1], m.answers[1], m.avoids[1]
+                local g = m.avoids[2]
                 local u = m.uses[1]
+                local wa = m.watches[1]
                 local w = bot:world()
-                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g|%s|%d:%d:%d:%d:%s",
+                RESULT = string.format("%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s|%d|%g|%s|%d:%d:%d:%d:%s|%s:%d:%d:%d:%s|%d:%d:%d:%d:%s:%d",
                     m.format, #m.puzzles, i.slot, i.bank, i.bit, i.label,
                     a.choice, tostring(a.slot), tostring(a.bank), v.slot, v.reason,
                     w.room, #w.frontier, bot:risk(), tostring(bot:goal_room()),
-                    u.slot, u.item, u.bank, u.bit, u.label)
+                    u.slot, u.item, u.bank, u.bit, u.label,
+                    tostring(v.bank), g.slot, g.bank, g.bit, g["while"],
+                    wa.bank, wa.bit, wa.after_bank, wa.after_bit, wa.label, #m.watches)
             end
 "#,
         )
@@ -4613,6 +4780,8 @@ mod tests {
                 <use slot="2" item="0x26" bank="1" bit="0xA9" label="pump"/>
                 <answer choice="no" slot="6"/>
                 <avoid slot="7" reason="plant"/>
+                <avoid slot="9" bank="1" bit="0xA1" while="clear" reason="barry"/>
+                <watch bank="1" bit="0xAD" after_bank="1" after_bit="0xAC" label="zombie"/>
             </bot>"#,
         )
         .unwrap();
@@ -4635,6 +4804,7 @@ mod tests {
             saves: SaveLog::default(),
             meta: Some(Rc::new(meta)),
             uses: Rc::default(),
+            holds: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -4644,7 +4814,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             vm.lua.globals().get::<String>("RESULT").unwrap(),
-            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D|2:38:1:169:pump"
+            "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D|2:38:1:169:pump|nil:9:1:161:clear|1:173:1:172:zombie:1"
         );
     }
 
@@ -4736,6 +4906,9 @@ mod tests {
         assert_eq!(pose("K.enemies[5], K.weapons[2], 0x80, 3000"), "up");
         // No aim bit at all (a ceiling spider, a crow in flight): no shot.
         assert_eq!(pose("K.enemies[3], K.weapons[2], 0x00, 3000"), "nil");
+        // A zombie the room has not woken (still feeding) shows only 0x01:
+        // no pose, so the target choice skips it.
+        assert_eq!(pose("K.enemies[0x11], K.weapons[2], 0x01, 2900"), "nil");
         // A monster without a knowledge entry still gets the matching bit.
         assert_eq!(pose("nil, K.weapons[2], 0x40, 3000"), "torso");
         assert_eq!(pose("nil, K.weapons[2], 0x80, 3000"), "nil");
@@ -4911,6 +5084,81 @@ mod tests {
             space("{ distance = 2900, min = 1800, max = 2800, headshot = 3000 }"),
             "hold:2900"
         );
+        // The backward walk (0x40 a tick) outpaces a zombie (45): inside the
+        // near edge the bot backpedals, still facing it, to the middle; a
+        // reload backpedals to the far edge. Inside its reach it shoots.
+        assert_eq!(
+            space(
+                "{ distance = 1900, min = 2000, max = 4000, reach = 1500, speed = 45, back_speed = 0x40 }"
+            ),
+            "retreat:3000"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 2500, min = 2000, max = 4000, reach = 1500, speed = 45, back_speed = 0x40, reloading = true }"
+            ),
+            "retreat:4000"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 1400, min = 2000, max = 4000, reach = 1500, speed = 45, back_speed = 0x40 }"
+            ),
+            "hold:1400"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 2500, min = 2000, max = 4000, reach = 1500, speed = 45, back_speed = 0x40 }"
+            ),
+            "hold:2500"
+        );
+        // A dog (240) or a hunter (speed unknown) is not backpedalled from.
+        assert_eq!(
+            space(
+                "{ distance = 1200, min = 1500, max = 5000, reach = 1000, speed = 240, back_speed = 0x40 }"
+            ),
+            "hold:1200"
+        );
+        assert_eq!(
+            space("{ distance = 3100, min = 3200, max = 6000, reach = 3000, back_speed = 0x40 }"),
+            "back:4600"
+        );
+    }
+
+    #[test]
+    fn dormancy_counts_only_until_the_monster_first_shows_an_aim_bit() {
+        let vm = tactics_vm();
+        let ticks: Vec<i64> = eval(
+            &vm,
+            r#"
+            local s, e, out = { now = 0 }, { slot = 1 }, {}
+            local function at(now, shootable)
+                s.now = now
+                out[#out + 1] = BotTactics.no_aim_ticks(s, e, shootable)
+            end
+            at(100, false) at(101, false) at(115, false)
+            -- Unseen for more than a second: the count restarts.
+            at(200, false) at(210, false)
+            -- Woken: a later gap (a dog in mid-leap) is not dormancy.
+            at(211, true) at(212, false) at(240, false)
+            return out
+            "#,
+        );
+        assert_eq!(ticks, vec![0, 1, 15, 0, 10, 0, 0, 0]);
+    }
+
+    #[test]
+    fn retreat_spot_must_lie_behind_the_player() {
+        let vm = tactics_vm();
+        let behind =
+            |args: &str| -> bool { eval(&vm, &format!("return BotTactics.behind({args})")) };
+        // The player at the origin, the target 2000 along +X.
+        assert!(behind("0, 0, 2000, 0, -1000, 0"));
+        assert!(behind("0, 0, 2000, 0, -1000, 600"));
+        // Sideways (a wall straight behind) or towards the target: no.
+        assert!(!behind("0, 0, 2000, 0, -300, 1000"));
+        assert!(!behind("0, 0, 2000, 0, 0, 1000"));
+        assert!(!behind("0, 0, 2000, 0, 1000, 0"));
+        assert!(!behind("0, 0, 2000, 0, 0, 0"));
     }
 
     #[test]
@@ -4955,6 +5203,221 @@ mod tests {
             ),
             "o1,o2,o3,o4,o5,o6,l7,l8,l9,l10,l11,l12,f13:1"
         );
+    }
+
+    #[test]
+    fn a_failed_item_approach_is_not_headed_back_for_remotely() {
+        let vm = route_vm();
+        // Arguments: mark kind, mark reason, inventory signature now, entry
+        // count now, remote. The mark was made with signature "a" on entry 1.
+        let holds = |kind: &str, reason: &str, sig: &str, entry: u32, remote: bool| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local m = {{ kind = "{kind}", reason = "{reason}", sig = "a", entry = 1 }}
+                    return BotPlanner.mark_holds(m, "{sig}", {entry}, {remote})"#
+                ),
+            )
+        };
+        let failed = "every approach failed";
+        // An item out of reach stays off remote planning after the
+        // inventory changes...
+        assert!(holds("item", failed, "b", 1, true));
+        assert!(holds("item", failed, "a", 2, true));
+        // ...but is tried again in its room on a new entry or inventory.
+        assert!(holds("item", failed, "a", 1, false));
+        assert!(!holds("item", failed, "a", 2, false));
+        assert!(!holds("item", failed, "b", 1, false));
+        // A door keeps the inventory rule for routing.
+        assert!(!holds("door", failed, "b", 1, true));
+        assert!(holds("door", failed, "a", 2, true));
+        // Any other mark lifts on an inventory change only.
+        let full = "inventory full: 02";
+        assert!(holds("item", full, "a", 2, true));
+        assert!(!holds("item", full, "b", 1, true));
+        assert!(holds("item", full, "a", 2, false));
+    }
+
+    #[test]
+    fn the_nearest_item_box_in_this_room_is_chosen() {
+        let vm = route_vm();
+        // Two boxes in one room: the near one (by planned approach length)
+        // wins whatever the action order; an unplanned one comes last.
+        let pick = |rows: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local rows = {{ {rows} }}
+                    local box, len = BotPlanner.nearest(rows, function(r) return r.len end)
+                    return box.slot .. ":" .. tostring(len)"#
+                ),
+            )
+        };
+        assert_eq!(
+            pick("{ slot = 2, len = 9000 }, { slot = 5, len = 1200 }"),
+            "5:1200"
+        );
+        assert_eq!(
+            pick("{ slot = 5, len = 1200 }, { slot = 2, len = 9000 }"),
+            "5:1200"
+        );
+        assert_eq!(pick("{ slot = 2 }, { slot = 5, len = 9000 }"), "5:9000");
+        assert_eq!(
+            pick("{ slot = 2, len = 700 }, { slot = 5, len = 700 }"),
+            "2:700"
+        );
+        // A box in another room: see
+        // the_remote_box_is_chosen_by_walking_distance_through_the_map.
+    }
+
+    /// A synthetic remembered world for the remote box choice. The bot
+    /// stands in S. A is one door away, its box 20000 deep inside; C is two
+    /// doors away (S -> B -> C), its box beside the door the bot arrives at.
+    /// By walking distance C's box is nearer; by door count A's is.
+    const BOX_WORLD: &str = r#"{ rooms = {
+        { id = "S", doors = {
+            { slot = 0, target = "A", x = 1000, z = 0, present = true },
+            { slot = 1, target = "B", x = 1000, z = 2000, present = true } }, actions = {} },
+        { id = "A", doors = { { slot = 0, target = "S", x = 0, z = 0, present = true } },
+          actions = { { slot = 4, kind = "item_box", x = 20000, z = 0 } } },
+        { id = "B", doors = {
+            { slot = 0, target = "S", x = 0, z = 0, present = true },
+            { slot = 1, target = "C", x = 2000, z = 0, present = true } }, actions = {} },
+        { id = "C", doors = { { slot = 0, target = "B", x = 0, z = 0, present = true } },
+          actions = { { slot = 2, kind = "item_box", x = 500, z = 0 } } },
+    } }"#;
+
+    #[test]
+    fn the_remote_box_is_chosen_by_walking_distance_through_the_map() {
+        let vm = route_vm();
+        let pick = |arrivals: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local world = {BOX_WORLD}
+                    local best = BotPlanner.pick_remote_box(world, "S", {{
+                        exit_len = function(slot) return 1500 end,
+                        passable = function(room, door) return true end,
+                        usable_box = function(room, action) return true end,
+                        arrivals = {arrivals},
+                    }})
+                    return best.room .. ":" .. best.slot .. ":" .. #best.steps"#
+                ),
+            )
+        };
+        // Nothing learned from earlier choices: the map alone decides.
+        assert_eq!(pick("{}"), "C:2:2");
+        // Arrival points, when remembered, are where the leg starts: arriving
+        // in A next to its box makes A's the nearer one.
+        assert_eq!(pick(r#"{ A = { S = { x = 19500, z = 0 } } }"#), "A:4:1");
+    }
+
+    #[test]
+    fn a_room_holding_a_needed_item_is_worth_a_visit() {
+        let vm = route_vm();
+        // 102 holds the broken shotgun, which 116's rack <use> needs.
+        let bonus = |held: &str, done: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local holds = {{ {{ room = "102", item = 0x1C, label = "broken shotgun" }} }}
+                    local uses = {{ {{ room = "116", slot = 5, item = 0x1C, bank = 7, bit = 1,
+                        label = "rack" }} }}
+                    local b, tag = BotPlanner.holds_bonus("102", holds, uses,
+                        function(item) return {held} end,
+                        function(fact) return {done} end,
+                        function(item) return "key" end, nil, {{}})
+                    return b .. ":" .. tostring(tag)"#
+                ),
+            )
+        };
+        let needed = bonus("false", "false");
+        assert!(needed.starts_with(&format!("{}:", 70 * 600)), "{needed}");
+        assert!(needed.ends_with("holds 0x1C for rack"), "{needed}");
+        // Held already, or its use done: nothing to fetch.
+        assert_eq!(bonus("true", "false"), "0:nil");
+        assert_eq!(bonus("false", "true"), "0:nil");
+        // Another room's facts do not count.
+        let other: String = eval(
+            &vm,
+            r#"return (BotPlanner.holds_bonus("103", { { room = "102", item = 0x1C } }, {},
+                function() return false end, function() return false end,
+                function() return "key" end, nil, {}))"#,
+        );
+        assert_eq!(other, "0");
+    }
+
+    #[test]
+    fn a_needed_key_ranks_before_herbs_and_ammunition() {
+        let vm = route_vm();
+        // The way-out bonus at equal distance: the bigger bonus goes first.
+        let bonus = |item: &str, kind: &str, ammo: &str| -> i64 {
+            eval(
+                &vm,
+                &format!(
+                    r#"local needed = {{ [0x34] = "204 -> 20D" }}
+                    return (BotPlanner.item_bonus({item}, "{kind}", {ammo}, needed))"#
+                ),
+            )
+        };
+        let key = bonus("0x34", "key", "0x0B");
+        let herb = bonus("0x44", "heal", "0x0B");
+        let ammo = bonus("0x0B", "ammo", "0x0B");
+        assert!(key > herb, "a needed key before a herb");
+        assert!(key > ammo, "a needed key before the needed ammunition");
+        assert!(ammo > herb);
+        // A key no remembered door needs is a plain item.
+        assert_eq!(bonus("0x36", "key", "nil"), herb);
+    }
+
+    #[test]
+    fn desk_gating_follows_the_lock_bit_key_and_lockpick() {
+        let vm = route_vm();
+        let gate = |flags: &str, items: &str, full: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local flags, items = {{ {flags} }}, {{ {items} }}
+                    local bot = {{
+                        flag = function(_, bank, bit) return flags[bank .. ":" .. bit] == true end,
+                        has_item = function(_, id) return items[id] == true end,
+                    }}
+                    local desk = {{ kind = "desk", slot = 0, item_slot = 3, lock_bank = 2,
+                        lock_bit = 5, desk_item = 0x0C, full = {full} }}
+                    return tostring(BotPlanner.desk_blocker(bot, desk))"#
+                ),
+            )
+        };
+        // Lock bit set: opens on a press.
+        assert_eq!(gate(r#"["2:5"] = true"#, "", "true"), "nil");
+        // Lock bit clear: the desk key, the lockpick item or the lockpick
+        // scenario flag opens it; nothing held blocks it.
+        assert_eq!(gate("", "[0x3D] = true", "true"), "nil");
+        assert_eq!(gate("", "[0x31] = true", "true"), "nil");
+        assert_eq!(gate(r#"["0:124"] = true"#, "", "true"), "nil");
+        assert_eq!(
+            gate("", "[0x33] = true", "true"),
+            "drawer locked: no desk key 0x3D or lockpick"
+        );
+        // An emptied drawer is no goal, whatever its lock.
+        assert_eq!(
+            gate(r#"["2:5"] = true"#, "", "false"),
+            "the drawer is empty"
+        );
+        // The drawers map their item slots; other kinds are ignored.
+        let slots: String = eval(
+            &vm,
+            r#"local by = BotPlanner.drawers({
+                { kind = "desk", slot = 0, item_slot = 3 },
+                { kind = "item", slot = 3, item_slot = 9 },
+                { kind = "desk", slot = 5, item_slot = 6 },
+            })
+            local out = {}
+            for item, desk in pairs(by) do out[#out + 1] = item .. "=" .. desk.slot end
+            table.sort(out)
+            return table.concat(out, ",")"#,
+        );
+        assert_eq!(slots, "3=0,6=5");
     }
 
     #[test]
@@ -5011,6 +5474,46 @@ mod tests {
         assert_eq!(withdrawals(8), "44,2C,35,0B");
         assert_eq!(withdrawals(2), "44,2C");
         assert_eq!(withdrawals(0), "");
+        // The top-up at a box here: every stack of the gun's ammunition,
+        // while RESERVE (1) slots stay free; never from a remote reason.
+        let top_up = |free: u8, remote: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ top_up = 0x0B, reserve_only = {remote} }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x0B, kind = "ammo" }},
+                        {{ slot = 1, item = 0x07, kind = "weapon" }},
+                        {{ slot = 2, item = 0x0B, kind = "ammo" }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.withdrawals(rows, ctx, {free})) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(top_up(4, false), "0B,0B");
+        assert_eq!(top_up(2, false), "0B");
+        assert_eq!(top_up(1, false), "");
+        assert_eq!(top_up(4, true), "");
+        // The slot reserve: deposit at a box here once no more than one slot
+        // is free and more pickups than that need one.
+        let reserve = |used: u8, deposits: u8, pickups: u8| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    "return BotInventory.reserve_due({{ capacity = 8, used = {used} }}, \
+                     {deposits}, {pickups})"
+                ),
+            )
+        };
+        assert!(reserve(7, 1, 2));
+        assert!(reserve(8, 1, 1));
+        assert!(!reserve(7, 1, 1), "the one free slot covers the one pickup");
+        assert!(!reserve(6, 1, 5), "two free slots");
+        assert!(!reserve(7, 0, 3), "nothing may go in the box");
         // Paging the box cursor: the nearest wanted slot, wrapping.
         let target = |cursor: u8, want: u8| -> String {
             eval(
@@ -5102,6 +5605,225 @@ mod tests {
             r#"local d = BotPuzzle.push_dir({ direction = "east", dx = 1, dz = 0 })
             return d.x == 1 and d.z == 0 and BotPuzzle.push_dir({}) == nil"#
         ));
+    }
+
+    #[test]
+    fn lean_rule_tests_the_probe_against_the_zone() {
+        let vm = route_vm();
+        // The 102 drawer: x 2000..3750, z 2237..2937, both edges inclusive.
+        let zone = "{ x = 2000, z = 2237, width = 1750, depth = 700 }";
+        let call = |f: &str, args: &str| -> bool {
+            eval(&vm, &format!("return BotNav.{f}({zone}, {args})"))
+        };
+        assert!(call("reach_in", "2911, 2937"));
+        assert!(call("reach_in", "3750, 2237"));
+        assert!(!call("reach_in", "2911, 2938"));
+        // The walk stops a skin off the desk: facing north from z 3538 the
+        // probe lands one unit short, and a step forward carries it in.
+        assert!(call("reach_short", "2911, 3542, 2911, 2943"));
+        // Already inside, or facing away (the zone behind the probe): no.
+        assert!(!call("reach_short", "2911, 3518, 2911, 2918"));
+        assert!(!call("reach_short", "2911, 2343, 2911, 2943"));
+        // Short by more than an approach on an axis: not a lean.
+        assert!(!call("reach_short", "2911, 3838, 2911, 3238"));
+        // An overshoot past the far edge lies behind the probe.
+        assert!(!call("reach_short", "2911, 2600, 2911, 2000"));
+        // Within a reach and an approach of the zone (Manhattan gap), not
+        // beyond it.
+        assert!(call("within_reach", "2885, 3538"));
+        assert!(call("within_reach", "1700, 3437"));
+        assert!(!call("within_reach", "2885, 3838"));
+        assert!(!call("within_reach", "1000, 3500"));
+    }
+
+    #[test]
+    fn side_offsets_reach_a_narrow_zone_from_its_open_end() {
+        let vm = route_vm();
+        let offsets = |span: i32| -> String {
+            eval(
+                &vm,
+                &format!("return table.concat(BotNav.side_offsets({span}), ',')"),
+            )
+        };
+        // A long side: the middle and a quarter in from each end.
+        assert_eq!(offsets(1800), "0,-450,450");
+        assert_eq!(offsets(600), "0,-150,150");
+        // 102's broken shotgun (x 6500..7000) beside the east wall: the
+        // middle (6750) is inside the wall's grown box, so a short side
+        // also tries a quarter approach in from each end (6575 and 6925).
+        assert_eq!(offsets(500), "0,-175,175");
+        // Too short for an end point inside the span: the middle only.
+        assert_eq!(offsets(150), "0");
+        assert_eq!(offsets(0), "0");
+    }
+
+    #[test]
+    fn pick_gun_switches_only_when_the_plain_pick_cannot_finish_the_kill() {
+        let vm = route_vm();
+        let pick = |guns: &str, entry: &str, health: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local row = BotTactics.pick_gun({{ {guns} }}, {entry}, {health})
+                    return row and string.format("%#04x", row.item) or "none""#
+                ),
+            )
+        };
+        // The zombie's keep bands: handgun 12 a hit, shotgun 53.
+        let zombie =
+            "{ health = 99, keep = { [0x02] = { damage = 12 }, [0x03] = { damage = 53 } } }";
+        let handgun = "{ item = 0x02, rounds = 45, equipped = true }";
+        let shotgun = "{ item = 0x03, rounds = 7, equipped = false }";
+        // The equipped handgun covers the kill (9 of 45 rounds): it stands,
+        // and the shells are kept for a fight it cannot finish.
+        assert_eq!(
+            pick(&format!("{handgun}, {shotgun}"), zombie, "nil"),
+            "0x02"
+        );
+        // Five handgun rounds do not cover a full-health zombie; two shells do.
+        let short = "{ item = 0x02, rounds = 5, equipped = true }";
+        assert_eq!(pick(&format!("{short}, {shotgun}"), zombie, "nil"), "0x03");
+        // A wounded zombie (live health 40): four handgun rounds cover it.
+        assert_eq!(pick(&format!("{short}, {shotgun}"), zombie, "40"), "0x02");
+        // Nothing covers it: the plain pick, the equipped gun.
+        let last_shell = "{ item = 0x03, rounds = 1, equipped = false }";
+        assert_eq!(
+            pick(&format!("{short}, {last_shell}"), zombie, "nil"),
+            "0x02"
+        );
+        // Not equipped: the plain pick is the most rounds.
+        let unequipped = "{ item = 0x02, rounds = 45, equipped = false }";
+        assert_eq!(
+            pick(&format!("{shotgun}, {unequipped}"), zombie, "nil"),
+            "0x02"
+        );
+        // No knowledge of the enemy: the plain pick.
+        assert_eq!(pick(&format!("{short}, {shotgun}"), "nil", "nil"), "0x02");
+        assert_eq!(pick("", zombie, "nil"), "none");
+    }
+
+    #[test]
+    fn use_pending_waits_only_for_a_probe_where_the_last_step_acted() {
+        let vm = route_vm();
+        let pending = |kind: &str, zone: &str, items: &str, flags: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local items, flags = {{ {items} }}, {{ {flags} }}
+                    local bot = {{
+                        flag = function(_, bank, bit) return flags[bank .. ":" .. bit] == true end,
+                        has_item = function(_, id) return items[id] == true end,
+                        actions = function() return {{
+                            {{ slot = 5, kind = "{kind}", x = 9820, z = 5340, width = 2000, depth = 2000 }},
+                        }} end,
+                        room_meta = function() return {{ uses = {{
+                            {{ slot = 5, item = 0x1C, bank = 7, bit = 1, label = "rack" }},
+                        }} }} end,
+                    }}
+                    local fact = BotPuzzle.use_pending(bot, {zone})
+                    return fact and fact.label or "none""#
+                ),
+            )
+        };
+        // 116: the rack pickup's zone overlaps AOT 5, still SCE_NONE.
+        let rack = "{ x = 10200, z = 5700, width = 1400, depth = 1400 }";
+        assert_eq!(pending("other", rack, "[0x1C] = true", ""), "rack");
+        // Live already, done, or the item not held: nothing to wait for.
+        assert_eq!(pending("flag_bank_set", rack, "[0x1C] = true", ""), "none");
+        assert_eq!(
+            pending("other", rack, "[0x1C] = true", r#"["7:1"] = true"#),
+            "none"
+        );
+        assert_eq!(pending("other", rack, "", ""), "none");
+        // A step elsewhere in the room (10F's piano, far from the hollow).
+        let far = "{ x = 17000, z = 11500, width = 800, depth = 1000 }";
+        assert_eq!(pending("other", far, "[0x1C] = true", ""), "none");
+        assert_eq!(pending("other", "nil", "[0x1C] = true", ""), "none");
+        let touching = "{ x = 11820, z = 7340, width = 10, depth = 10 }";
+        assert_eq!(pending("other", touching, "[0x1C] = true", ""), "rack");
+    }
+
+    #[test]
+    fn avoid_unless_held_lifts_while_the_item_is_held() {
+        let vm = route_vm();
+        let avoided = |avoid: &str, flags: &str, items: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local flags, items = {{ {flags} }}, {{ {items} }}
+                    local bot = {{
+                        flag = function(_, bank, bit) return flags[bank .. ":" .. bit] == true end,
+                        has_item = function(_, id) return items[id] == true end,
+                        room_meta = function() return {{ avoids = {{ {avoid} }} }} end,
+                    }}
+                    local reason, gate = BotPuzzle.avoided(bot, 1)
+                    return tostring(reason) .. "|" .. tostring(gate ~= nil)"#
+                ),
+            )
+        };
+        let rack = r#"{ slot = 1, unless_held = 0x1C, reason = "trap" }"#;
+        // Without the broken shotgun the rack is off limits, and the avoid
+        // is gated (not permanent), so the mark lifts once it is held.
+        assert_eq!(avoided(rack, "", ""), "trap|true");
+        assert_eq!(avoided(rack, "", "[0x1C] = true"), "nil|false");
+        // With a flag gate too, both must allow it.
+        let both = r#"{ slot = 1, unless_held = 0x1C, bank = 7, bit = 1, ["while"] = "clear",
+            reason = "trap" }"#;
+        assert_eq!(avoided(both, "", ""), "trap|true");
+        assert_eq!(avoided(both, r#"["7:1"] = true"#, ""), "nil|false");
+        assert_eq!(avoided(both, "", "[0x1C] = true"), "nil|false");
+        // A plain avoid always holds and has no gate.
+        assert_eq!(
+            avoided(r#"{ slot = 1, reason = "x" }"#, "", "[0x1C] = true"),
+            "x|false"
+        );
+        // gate_holds reads the item from any room.
+        assert!(eval::<bool>(
+            &vm,
+            r#"local bot = { has_item = function() return true end }
+            return BotPuzzle.gate_holds(bot, { unless_held = 0x1C }) == false"#
+        ));
+    }
+
+    #[test]
+    fn player_row_reports_the_forward_action_probe() {
+        let temp = TempDir::new("reach");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(
+            bot.join("init.lua"),
+            br#"function on_bot_tick(bot)
+                local p = bot:player()
+                RESULT = string.format("%d,%d", p.reach_x, p.reach_z)
+            end
+"#,
+        )
+        .unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let vm = BotVm::load(&pack).unwrap();
+        let mut snapshot = world::tests::snapshot(0x102, 2911, 3518);
+        // Facing north (-Z): the probe is a reach ahead, where probe_actions
+        // tests the zones.
+        snapshot.player.angle = 0x400;
+        let (dx, dz) = crate::player::reach_offset(0x400);
+        assert!(dx.abs() <= 1 && (590..=600).contains(&-dz));
+        vm.call(BotCtx {
+            snapshot,
+            saves: SaveLog::default(),
+            meta: None,
+            uses: Rc::default(),
+            holds: Rc::default(),
+            knowledge: None,
+            tick: 1,
+            risk: 0.25,
+            goal_room: None,
+            shares: BotShares::default(),
+        })
+        .unwrap();
+        assert_eq!(
+            vm.lua.globals().get::<String>("RESULT").unwrap(),
+            format!("{},{}", 2911 + dx, 3518 + dz)
+        );
     }
 
     #[test]
@@ -5215,12 +5937,69 @@ mod tests {
             "return BotSave.can_save({ needs_ribbon = true, ribbons = 2 })"
         ));
         assert_eq!(decide("{ can_save = false }"), "false:no ink ribbon");
-        // A cautious bot saves at every typewriter; nothing new, no save.
-        assert!(decide("{ risk = 0 }").starts_with("true:"));
+        // A cautious bot saves only for a reason: no milestone, no save.
         assert_eq!(
-            decide("{ progress = 4 }"),
+            decide("{ risk = 0, since_save = 9000 }"),
+            "false:no milestone since the last save"
+        );
+        assert_eq!(
+            decide("{ progress = 4, milestone = true }"),
             "false:nothing new since the last save"
         );
+        // A milestone saves once the last save is milestone_gap old (2 min
+        // at risk 0, 3 at 0.25), and at once when no save exists yet.
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSave.milestone_gap(0)"),
+            2 * 60 * 30
+        );
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSave.milestone_gap(0.25)"),
+            3 * 60 * 30
+        );
+        assert_eq!(
+            decide("{ milestone = true }"),
+            "true:the first milestone of the run (no save yet)"
+        );
+        assert_eq!(
+            decide("{ milestone = true, since_save = 5399 }"),
+            "false:a milestone, but the last save is recent"
+        );
+        assert_eq!(
+            decide("{ milestone = true, since_save = 5400 }"),
+            "true:a milestone since the last save"
+        );
+        // Low health, or a monster in the next room below 3/4 health.
+        assert_eq!(
+            decide("{ since_save = 9000, health = 49 }"),
+            "true:low health"
+        );
+        assert_eq!(
+            decide("{ since_save = 9000, risky_next = '101', health = 74 }"),
+            "true:a risky room is next: 101"
+        );
+        assert_eq!(
+            decide("{ since_save = 9000, risky_next = '101', health = 75 }"),
+            "false:no milestone since the last save"
+        );
+        // Inventory work due here comes first, even before critical health.
+        assert_eq!(
+            decide("{ milestone = true, critical = true, inventory_due = 'a combine is due' }"),
+            "false:inventory work first: a combine is due"
+        );
+        // Milestones: key items taken, doors unlocked, <use> facts done and
+        // the planner's finished puzzle steps.
+        let milestones: i64 = eval(
+            &vm,
+            r#"local world = { rooms = {
+                   { items = { { item = 0x35, taken = true }, { item = 0x44, taken = true },
+                               { item = 0x34, taken = false } },
+                     doors = { { unlocked = true }, { unlocked = false } } } } }
+               local kinds = { [0x35] = "key", [0x34] = "key", [0x44] = "heal" }
+               local facts = { { done = true }, { done = false } }
+               return BotSave.milestones(world, function(i) return kinds[i] end, facts,
+                   function(f) return f.done end, 2)"#,
+        );
+        assert_eq!(milestones, 5);
         // The cooldown: 20 s at risk 0, 120 s at risk 1.
         assert_eq!(eval::<i64>(&vm, "return BotSave.cooldown(0)"), 20 * 30);
         assert_eq!(eval::<i64>(&vm, "return BotSave.cooldown(1)"), 120 * 30);
@@ -5228,7 +6007,7 @@ mod tests {
             decide("{ risk = 0, since_save = 599 }"),
             "false:saved recently"
         );
-        assert!(decide("{ risk = 0, since_save = 600 }").starts_with("true:"));
+        assert!(decide("{ risk = 0, since_save = 600, health = 40 }").starts_with("true:"));
         // Critical health skips the cooldown, not the progress test.
         assert_eq!(
             decide("{ since_save = 10, critical = true }"),
@@ -5239,8 +6018,8 @@ mod tests {
         assert!(decide("{ risk = 1 }").starts_with("false:a bold bot"));
         assert_eq!(decide("{ risk = 1, health = 40 }"), "true:low health");
         assert_eq!(decide("{ risk = 1, risky = true }"), "true:risky room");
-        assert!(decide("{ risk = 0.5 }").starts_with("true:"));
-        assert!(decide("{ risk = 0.6 }").starts_with("false:"));
+        assert!(decide("{ risk = 0.5, milestone = true }").starts_with("true:"));
+        assert!(decide("{ risk = 0.6, milestone = true }").starts_with("false:a bold bot"));
     }
 
     #[test]
@@ -5383,6 +6162,10 @@ mod tests {
         assert!(!look("{ used = 6, capacity = 8 }, '0B', true"));
         assert!(!look("{ used = 6, capacity = 8 }, nil, false"));
         assert!(!look("{ used = 8, capacity = 8 }, nil, true"));
+        // At a box in this room the first look needs no sourcing.
+        assert!(look("{ used = 6, capacity = 8 }, nil, false, true"));
+        assert!(!look("{ used = 6, capacity = 8 }, '0B', false, true"));
+        assert!(!look("{ used = 8, capacity = 8 }, nil, false, true"));
     }
 
     #[test]
