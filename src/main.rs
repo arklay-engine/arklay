@@ -216,6 +216,12 @@ struct Cli {
     )]
     bot_risk: f64,
 
+    /// End the bot run when the player enters this room: a three-digit room
+    /// id such as `20D` (stage, then room, in hex). Lua reads it as
+    /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
+    #[arg(long, value_name = "ROOM", value_parser = parse_bot_goal_room, requires = "bot")]
+    bot_goal_room: Option<String>,
+
     /// Enable Classic REbirth's quick turn for this run: while walking
     /// backward, RUN turns the player 180 degrees in place over eight ticks.
     /// Overrides `[game] quick_turn` in arklay.toml
@@ -884,6 +890,17 @@ fn parse_bot_risk(text: &str) -> Result<f64, String> {
         return Err(format!("`{text}` is outside 0.0..1.0"));
     }
     Ok(risk)
+}
+
+/// `--bot-goal-room`: three hex digits such as `20D`, returned uppercased.
+fn parse_bot_goal_room(text: &str) -> Result<String, String> {
+    let room = text.trim();
+    if room.len() != 3 || !room.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!(
+            "`{text}` is not a room id; use three hex digits such as 20D"
+        ));
+    }
+    Ok(room.to_ascii_uppercase())
 }
 
 fn parse_position(text: &str) -> Result<[i32; 3], String> {
@@ -1685,6 +1702,7 @@ fn main() -> Result<()> {
                 max_ticks: cli.bot_max_ticks,
                 stats_path: cli.bot_stats.clone(),
                 risk: cli.bot_risk,
+                goal_room: cli.bot_goal_room.clone(),
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -1943,6 +1961,27 @@ mod tests {
             assert!(error.to_string().contains(bad), "{error}");
         }
         assert!(parse(&["arklay", "game.akpak", "--bot-risk", "0.5"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_goal_room_is_validated_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert_eq!(
+            parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_goal_room,
+            None
+        );
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-goal-room", "20d"]).unwrap();
+        assert_eq!(cli.bot_goal_room.as_deref(), Some("20D"));
+        for bad in ["20", "20DD", "2G0", ""] {
+            let flag = format!("--bot-goal-room={bad}");
+            assert!(
+                parse(&["arklay", "game.akpak", "--bot", &flag]).is_err(),
+                "--bot-goal-room {bad:?} was accepted"
+            );
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-goal-room", "20D"]).is_err());
     }
 
     #[test]

@@ -10733,11 +10733,15 @@ impl App {
     }
 
     /// Attach the pack's Lua bot to the running game session.
-    fn attach_bot(&mut self, risk: f64) -> Result<()> {
+    fn attach_bot(&mut self, risk: f64, goal_room: Option<&str>) -> Result<()> {
         if !matches!(self.mode, Mode::Play(_)) {
             bail!("--bot requires a game session (use `--ui game`)");
         }
-        self.bot = Some(bot::BotRuntime::load(&self.pack)?.with_risk(risk));
+        self.bot = Some(
+            bot::BotRuntime::load(&self.pack)?
+                .with_risk(risk)
+                .with_goal_room(goal_room),
+        );
         Ok(())
     }
 
@@ -12035,7 +12039,7 @@ fn run_ui_impl(
         app.player_options = player_options;
         app.boot(boot)?;
         app.enable_skips();
-        app.attach_bot(bot.risk)?;
+        app.attach_bot(bot.risk, bot.goal_room.as_deref())?;
         // A headless run has no frame to stay responsive for: let one update
         // fast-forward a whole second of scene instead of a 12 ms burst.
         if let Mode::Play(session) = &mut app.mode {
@@ -12247,7 +12251,7 @@ fn run_ui_impl(
     }
     if bot.enabled {
         app.enable_skips();
-        app.attach_bot(bot.risk)?;
+        app.attach_bot(bot.risk, bot.goal_room.as_deref())?;
     }
     let mut owned = None;
     let display = match shared {
@@ -34164,7 +34168,7 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot(bot::DEFAULT_RISK).unwrap();
+        app.attach_bot(bot::DEFAULT_RISK, None).unwrap();
         app.enable_skips();
         let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
         let Mode::Play(session) = &mut app.mode else {
