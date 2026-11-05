@@ -536,6 +536,58 @@ pub(super) fn path_exposure(zones: &[EnemyZone], start: (i32, i32), path: &[(i32
     total
 }
 
+/// Directions the spacing search tries around the target: every 1/16 turn.
+const SPACING_DIRECTIONS: u16 = 16;
+
+/// The spot to stand on to hold `want` units from the monster at `target`:
+/// a point on the circle of that radius around it, free of the room (with
+/// the resolver skin) and reachable from `pos` by a straight walk, at least
+/// `want` from every other monster in `others`. The nearest such point to
+/// the player wins, so a step back is preferred over a long detour; a point
+/// whose walk would pass closer to the target than half of `want` is
+/// refused, so the bot never crosses in front of it to reach the far side.
+/// `None` when the room leaves no such spot (a corridor dead end).
+pub(super) fn spacing_goal(
+    room: &RoomState,
+    body: Body,
+    pos: (i32, i32),
+    target: (i32, i32),
+    others: &[(i32, i32)],
+    want: i32,
+) -> Option<(i32, i32)> {
+    let want = want.max(1);
+    let (tx, tz) = (f64::from(target.0), f64::from(target.1));
+    let near = f64::from(want / 2).powi(2);
+    let mut best: Option<(i32, (i32, i32))> = None;
+    for step in 0..SPACING_DIRECTIONS {
+        let angle = step * (0x1000 / SPACING_DIRECTIONS);
+        let (dx, dz) = heading_dir(angle);
+        let point = (
+            (tx + dx * f64::from(want)).round() as i32,
+            (tz + dz * f64::from(want)).round() as i32,
+        );
+        if blocked(room, point.0, point.1, body.y, body.radius, body.flags) {
+            continue;
+        }
+        if others.iter().any(|&other| distance_xz(point, other) < want) {
+            continue;
+        }
+        let a = (f64::from(pos.0), f64::from(pos.1));
+        let b = (f64::from(point.0), f64::from(point.1));
+        if distance_xz(pos, target) > want / 2 && segment_distance_sq(a, b, (tx, tz)) < near {
+            continue;
+        }
+        if !super::line_clear(room, pos, point, body.y, body.radius, body.flags) {
+            continue;
+        }
+        let travel = distance_xz(pos, point);
+        if best.is_none_or(|(held, _)| travel < held) {
+            best = Some((travel, point));
+        }
+    }
+    best.map(|(_, point)| point)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -742,5 +794,25 @@ mod tests {
         assert!(segment_avoids(&zones, (8800, 7000), (8800, 13000)));
         assert!(segment_avoids(&[], (10000, 7000), (10000, 13000)));
         assert!(path_exposure(&zones, (10000, 7000), &[(10000, 13000)]) > 0);
+    }
+
+    #[test]
+    fn spacing_goal_steps_straight_back_or_sideways_from_a_wall() {
+        let open = RoomState::default();
+        let target = (10000, 10000);
+        // The player 1000 east of the monster backs off east to 2400.
+        let goal = spacing_goal(&open, BODY, (11000, 10000), target, &[], 2400).unwrap();
+        assert_eq!(goal, (12400, 10000));
+        // A wall east of the player: the nearest free spot is off to a side,
+        // never through the monster to the west.
+        let mut walled = RoomState::default();
+        walled.collision.quadrants[0].push(wall(11400, 13000, 0, 20000));
+        let goal = spacing_goal(&walled, BODY, (11000, 10000), target, &[], 2400).unwrap();
+        assert!(goal.0 < 11400 && goal.0 > 10000 - 100, "{goal:?}");
+        assert!((goal.1 - 10000).abs() > 1500, "{goal:?}");
+        // A second monster where the step back would land rules that out.
+        let goal =
+            spacing_goal(&open, BODY, (11000, 10000), target, &[(13000, 10000)], 2400).unwrap();
+        assert!(distance_xz(goal, (13000, 10000)) >= 2400, "{goal:?}");
     }
 }
