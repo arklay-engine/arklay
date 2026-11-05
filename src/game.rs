@@ -952,6 +952,240 @@ pub enum CombineCheck {
     Applied,
 }
 
+/// What a menu MOVE/combine between two inventory slots would leave in
+/// them, computed without writing anything (the bot reads it to see whether
+/// a mix frees a slot). An emptied slot has id `0`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CombineOutcome {
+    /// What the cursor slot holds afterwards.
+    pub cursor: InventoryItem,
+    /// What the target slot holds afterwards.
+    pub target: InventoryItem,
+    /// A herb mix: the menu asks the `0xF5` yes/no prompt before it applies.
+    pub herb: bool,
+}
+
+/// The outcome of the menu MOVE/combine of `cursor_slot` onto `target_slot`
+/// of `inventory`, or the refusal the menu would report. `drug_store` is
+/// whether the player stands in the guardhouse drug store (chemicals mix
+/// only there). This runs the same recipe and effect code the menu applies.
+pub fn combine_outcome(
+    item_defs: &crate::item_catalog::ItemCatalog,
+    inventory: &[InventoryItem],
+    cursor_slot: usize,
+    target_slot: usize,
+    drug_store: bool,
+) -> Result<CombineOutcome, CombineResult> {
+    let (record, herb) = combine_recipe(inventory, cursor_slot, target_slot, drug_store)?;
+    let (cursor, target) = combine_slots_after(
+        item_defs,
+        inventory[cursor_slot],
+        inventory[target_slot],
+        record,
+    );
+    Ok(CombineOutcome {
+        cursor,
+        target,
+        herb,
+    })
+}
+
+/// The recipe between two inventory slots, or the refusal the reference
+/// reports. `Ok` carries the record and whether the cursor item is a herb
+/// (the deferred prompt case).
+fn combine_recipe(
+    inventory: &[InventoryItem],
+    cursor_slot: usize,
+    target_slot: usize,
+    drug_store: bool,
+) -> Result<(items::CombineRecord, bool), CombineResult> {
+    if cursor_slot == target_slot {
+        return Err(CombineResult::NoRecipe);
+    }
+    let Some(cursor) = inventory.get(cursor_slot).copied() else {
+        return Err(CombineResult::NoRecipe);
+    };
+    let Some(target) = inventory.get(target_slot).copied() else {
+        return Err(CombineResult::NoRecipe);
+    };
+    if cursor.id == 0 || target.id == 0 {
+        return Err(CombineResult::NoRecipe);
+    }
+    let Some(record) = items::combine(cursor.id, target.id) else {
+        // No recipe: the original distinguishes two herbs (its result 3,
+        // the `0xF6` "cannot combine" message) from every other pair.
+        return Err(
+            if (HERB_MIN..=HERB_MAX).contains(&cursor.id)
+                && (HERB_MIN..=HERB_MAX).contains(&target.id)
+            {
+                CombineResult::HerbNoRecipe
+            } else {
+                CombineResult::NoRecipe
+            },
+        );
+    };
+    // The one-way ammo transfers need an empty destination: effect 6 fills
+    // the cursor stack, effect 7 the target stack, and the original refuses
+    // the recipe untouched when that slot already holds rounds.
+    if (record.effect == 6 && cursor.quantity != 0) || (record.effect == 7 && target.quantity != 0)
+    {
+        return Err(CombineResult::NoRecipe);
+    }
+    if (CHEMICAL_MIN..=CHEMICAL_MAX).contains(&cursor.id) && !drug_store {
+        return Err(CombineResult::NeedsDrugStore);
+    }
+    let herb = (HERB_MIN..=HERB_MAX).contains(&cursor.id);
+    Ok((record, herb))
+}
+
+/// The two slots after a recipe: `new_cursor` and `new_target` replace the
+/// ids first (an emptied target loses its quantity), then the record's
+/// effect byte rearranges the quantities: 1/2 ammo transfer with the cursor
+/// / other slot winning, 3 quantity merge (cap `0xFA`), 6/7 one-way ammo
+/// transfer. Effects 4 (the chemical flag, which the caller raises) and 5
+/// (mode only) leave the quantities alone.
+fn combine_slots_after(
+    item_defs: &crate::item_catalog::ItemCatalog,
+    cursor: InventoryItem,
+    target: InventoryItem,
+    record: items::CombineRecord,
+) -> (InventoryItem, InventoryItem) {
+    let cursor = InventoryItem {
+        id: record.new_cursor,
+        quantity: cursor.quantity,
+    };
+    let target = InventoryItem {
+        id: record.new_target,
+        quantity: if record.new_target == 0 {
+            0
+        } else {
+            target.quantity
+        },
+    };
+    match record.effect {
+        1 => {
+            let sum = u16::from(target.quantity) + (u16::from(cursor.quantity) & 0x7F);
+            let max = u16::from(item_defs.get(cursor.id).stack);
+            if max < sum {
+                (
+                    InventoryItem {
+                        quantity: max as u8,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_sub(max as u8),
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        2 => {
+            let sum = u16::from(cursor.quantity) + (u16::from(target.quantity) & 0x7F);
+            let max = u16::from(item_defs.get(target.id).stack);
+            if max < sum {
+                (
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_sub(max as u8),
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: max as u8,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem::default(),
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..target
+                    },
+                )
+            }
+        }
+        3 => {
+            let sum = u16::from(cursor.quantity) + u16::from(target.quantity);
+            if sum > u16::from(items::ITEM_QUANTITY_CAP) {
+                (
+                    InventoryItem {
+                        quantity: items::ITEM_QUANTITY_CAP,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: (sum as u8).wrapping_add(6),
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: sum as u8,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        6 => {
+            let other = target.quantity;
+            let max = item_defs.get(cursor.id).stack;
+            if max < other {
+                (
+                    InventoryItem {
+                        quantity: max,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: other - max,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem {
+                        quantity: other,
+                        ..cursor
+                    },
+                    InventoryItem::default(),
+                )
+            }
+        }
+        7 => {
+            let other = cursor.quantity;
+            let max = item_defs.get(target.id).stack;
+            if max < other {
+                (
+                    InventoryItem {
+                        quantity: other - max,
+                        ..cursor
+                    },
+                    InventoryItem {
+                        quantity: max,
+                        ..target
+                    },
+                )
+            } else {
+                (
+                    InventoryItem::default(),
+                    InventoryItem {
+                        quantity: other,
+                        ..target
+                    },
+                )
+            }
+        }
+        _ => (cursor, target),
+    }
+}
+
 /// What a room action does when the player triggers it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoomActionKind {
@@ -5987,44 +6221,12 @@ impl GameState {
         cursor_slot: usize,
         target_slot: usize,
     ) -> Result<(items::CombineRecord, bool), CombineResult> {
-        if cursor_slot == target_slot {
-            return Err(CombineResult::NoRecipe);
-        }
-        let Some(cursor) = self.inventory.get(cursor_slot).copied() else {
-            return Err(CombineResult::NoRecipe);
-        };
-        let Some(target) = self.inventory.get(target_slot).copied() else {
-            return Err(CombineResult::NoRecipe);
-        };
-        if cursor.id == 0 || target.id == 0 {
-            return Err(CombineResult::NoRecipe);
-        }
-        let Some(record) = items::combine(cursor.id, target.id) else {
-            // No recipe: the original distinguishes two herbs (its result 3,
-            // the `0xF6` "cannot combine" message) from every other pair.
-            return Err(
-                if (HERB_MIN..=HERB_MAX).contains(&cursor.id)
-                    && (HERB_MIN..=HERB_MAX).contains(&target.id)
-                {
-                    CombineResult::HerbNoRecipe
-                } else {
-                    CombineResult::NoRecipe
-                },
-            );
-        };
-        // The one-way ammo transfers need an empty destination: effect 6 fills
-        // the cursor stack, effect 7 the target stack, and the original refuses
-        // the recipe untouched when that slot already holds rounds.
-        if (record.effect == 6 && cursor.quantity != 0)
-            || (record.effect == 7 && target.quantity != 0)
-        {
-            return Err(CombineResult::NoRecipe);
-        }
-        if (CHEMICAL_MIN..=CHEMICAL_MAX).contains(&cursor.id) && !self.is_drug_store() {
-            return Err(CombineResult::NeedsDrugStore);
-        }
-        let herb = (HERB_MIN..=HERB_MAX).contains(&cursor.id);
-        Ok((record, herb))
+        combine_recipe(
+            &self.inventory,
+            cursor_slot,
+            target_slot,
+            self.is_drug_store(),
+        )
     }
 
     /// Write a resolved recipe into the slots and run its effect.
@@ -6035,12 +6237,17 @@ impl GameState {
         record: items::CombineRecord,
         herb: bool,
     ) -> CombineResult {
-        self.inventory[cursor_slot].id = record.new_cursor;
-        self.inventory[target_slot].id = record.new_target;
-        if record.new_target == 0 {
-            self.inventory[target_slot].quantity = 0;
+        let (cursor, target) = combine_slots_after(
+            &self.item_defs,
+            self.inventory[cursor_slot],
+            self.inventory[target_slot],
+            record,
+        );
+        self.inventory[cursor_slot] = cursor;
+        self.inventory[target_slot] = target;
+        if record.effect == 4 {
+            self.apply_flag(0, SCENARIO_FLAG_CHEMICAL_COMBINE, 0);
         }
-        self.apply_combine_effect(cursor_slot, target_slot, record.effect);
         self.rebuild_slots();
         if self.equipped.is_some_and(|item| !self.has_item(item)) {
             self.set_equipped(None);
@@ -6048,75 +6255,6 @@ impl GameState {
         CombineResult::Applied {
             herb,
             chemical: record.effect == 4,
-        }
-    }
-
-    /// The combine record's effect byte: 1/2 ammo transfer with the cursor /
-    /// other slot winning, 3 quantity merge (cap `0xFA`), 4 chemical flag,
-    /// 5 mode only, 6/7 one-way ammo transfer.
-    fn apply_combine_effect(&mut self, cursor_slot: usize, target_slot: usize, effect: u8) {
-        let cursor = self.inventory[cursor_slot];
-        let target = self.inventory[target_slot];
-        match effect {
-            1 => {
-                let sum = u16::from(target.quantity) + (u16::from(cursor.quantity) & 0x7F);
-                let max = u16::from(self.item_defs.get(cursor.id).stack);
-                if max < sum {
-                    self.inventory[cursor_slot].quantity = max as u8;
-                    self.inventory[target_slot].quantity = (sum as u8).wrapping_sub(max as u8);
-                } else {
-                    self.inventory[cursor_slot].quantity = sum as u8;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            2 => {
-                let sum = u16::from(cursor.quantity) + (u16::from(target.quantity) & 0x7F);
-                let max = u16::from(self.item_defs.get(target.id).stack);
-                if max < sum {
-                    self.inventory[target_slot].quantity = max as u8;
-                    self.inventory[cursor_slot].quantity = (sum as u8).wrapping_sub(max as u8);
-                } else {
-                    self.inventory[target_slot].quantity = sum as u8;
-                    self.inventory[cursor_slot] = InventoryItem::default();
-                }
-            }
-            3 => {
-                let sum = u16::from(cursor.quantity) + u16::from(target.quantity);
-                if sum > u16::from(items::ITEM_QUANTITY_CAP) {
-                    self.inventory[cursor_slot].quantity = items::ITEM_QUANTITY_CAP;
-                    self.inventory[target_slot].quantity = (sum as u8).wrapping_add(6);
-                } else {
-                    self.inventory[cursor_slot].quantity = sum as u8;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            4 => {
-                self.apply_flag(0, SCENARIO_FLAG_CHEMICAL_COMBINE, 0);
-            }
-            5 => {}
-            6 => {
-                let other = target.quantity;
-                let max = self.item_defs.get(cursor.id).stack;
-                if max < other {
-                    self.inventory[cursor_slot].quantity = max;
-                    self.inventory[target_slot].quantity = other - max;
-                } else {
-                    self.inventory[cursor_slot].quantity = other;
-                    self.inventory[target_slot] = InventoryItem::default();
-                }
-            }
-            7 => {
-                let other = cursor.quantity;
-                let max = self.item_defs.get(target.id).stack;
-                if max < other {
-                    self.inventory[target_slot].quantity = max;
-                    self.inventory[cursor_slot].quantity = other - max;
-                } else {
-                    self.inventory[target_slot].quantity = other;
-                    self.inventory[cursor_slot] = InventoryItem::default();
-                }
-            }
-            _ => {}
         }
     }
 
