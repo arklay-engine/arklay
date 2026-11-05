@@ -16,6 +16,7 @@
 //! `bot:room_meta()`.
 
 mod meta;
+mod stats;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
@@ -39,7 +40,7 @@ use crate::weapons::WeaponState;
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
 /// The bot run options the CLI adds on top of a normal boot.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BotOptions {
     /// Drive the game from the pack's `bot/**.lua` entries.
     pub enabled: bool,
@@ -47,6 +48,8 @@ pub struct BotOptions {
     pub headless: bool,
     /// Headless app-update budget; ignored by the interactive path.
     pub max_ticks: u64,
+    /// Write the headless run's statistics as JSON to this path.
+    pub stats_path: Option<std::path::PathBuf>,
 }
 
 /// One tick of input the Lua script asked for. Reset before every call.
@@ -1969,6 +1972,8 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
+    /// Run statistics for `--bot-stats`.
+    stats: stats::BotStats,
 }
 
 impl BotRuntime {
@@ -1980,6 +1985,7 @@ impl BotRuntime {
             tick: 0,
             meta: None,
             meta_room: None,
+            stats: stats::BotStats::default(),
         })
     }
 
@@ -2011,6 +2017,7 @@ impl BotRuntime {
             self.meta_room = Some(room_id);
         }
         let snapshot = SessionSnapshot::build(session);
+        self.stats.observe_snapshot(self.tick, &snapshot);
         {
             let mut input = self.shares.input.borrow_mut();
             input.reset();
@@ -2046,6 +2053,7 @@ impl BotRuntime {
             });
         }
         let input = *self.shares.input.borrow();
+        self.stats.observe_input(&input);
         let mut nav = self.shares.nav.borrow_mut();
         if !nav.driving {
             // The script did not drive movement this tick (a scene, a door
@@ -2065,6 +2073,7 @@ impl BotRuntime {
     pub fn reset(&mut self, pack: &Pack) -> Result<()> {
         self.shares = BotShares::default();
         self.tick = 0;
+        self.stats = stats::BotStats::default();
         self.reload_meta();
         self.vm = BotVm::load(pack)?;
         Ok(())
@@ -2080,6 +2089,16 @@ impl BotRuntime {
 
     pub fn ticks(&self) -> u64 {
         self.tick
+    }
+
+    /// The run statistics as JSON (see [`stats`]).
+    pub fn stats_json(&self, outcome: &str, elapsed_secs: f64) -> serde_json::Value {
+        self.stats.to_json(
+            outcome,
+            self.finish_reason().as_deref(),
+            self.tick,
+            elapsed_secs,
+        )
     }
 
     pub fn room_path(&self) -> Vec<String> {
