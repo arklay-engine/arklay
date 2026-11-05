@@ -331,6 +331,8 @@ struct SessionSnapshot {
     save_screen: Option<SaveScreenView>,
     /// This session's completed saves and the ink ribbon rule.
     saves: SaveSnapshot,
+    /// The item catalog, for each item's kind and a weapon's ammunition.
+    item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
 }
 
 /// The session's save facts: what the save screen reported writing, and
@@ -892,7 +894,21 @@ impl SessionSnapshot {
                 needs_ribbon: game.needs_ink_ribbons(),
                 ribbons: game.item_count(game.ink_ribbon_item()),
             },
+            item_defs: game.item_defs.clone(),
         }
+    }
+
+    /// The catalog kind name of `item` (`"weapon"`, `"ammo"`, `"key"`, ...).
+    fn item_kind(&self, item: u8) -> &'static str {
+        self.item_defs.get(item).kind.name()
+    }
+
+    /// The ammunition item `weapon` fires (the engine's `weapon + 9`), when
+    /// the catalog lists `weapon` as a weapon and that item as ammunition.
+    fn ammo_for(&self, weapon: u8) -> Option<u8> {
+        let ammo = crate::weapons::weapon_ammo_item_id(weapon);
+        (weapon != 0 && self.item_kind(weapon) == "weapon" && self.item_kind(ammo) == "ammo")
+            .then_some(ammo)
     }
 
     fn flag(&self, bank: u8, bit: u8) -> bool {
@@ -2172,6 +2188,8 @@ struct BotCtx {
     saves: SaveLog,
     /// The current room's authored metadata, cached by [`BotRuntime`].
     meta: Option<Rc<meta::RoomMeta>>,
+    /// Every room's `<use>` facts, cached by [`BotRuntime`].
+    uses: Rc<Vec<meta::RoomUse>>,
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
@@ -2340,6 +2358,21 @@ impl UserData for BotCtx {
             Ok(Value::Table(table))
         });
 
+        methods.add_method("use_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.uses.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("slot", entry.fact.slot)?;
+                row.set("item", entry.fact.item)?;
+                row.set("bank", entry.fact.flag.0)?;
+                row.set("bit", entry.fact.flag.1)?;
+                row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
         methods.add_method("world", |lua, bot, ()| {
             bot.shares.memory.borrow().world.to_lua(lua, &bot.snapshot)
         });
@@ -2441,6 +2474,7 @@ impl UserData for BotCtx {
             table.set("weapon", weapon.weapon)?;
             table.set("clip", weapon.clip)?;
             table.set("reserve", weapon.reserve)?;
+            table.set("ammo", bot.snapshot.ammo_for(weapon.weapon))?;
             table.set("behavior", weapon.behavior)?;
             table.set("state", weapon.state)?;
             table.set("aim_state", weapon.aim_state)?;
@@ -2550,9 +2584,20 @@ impl UserData for BotCtx {
                 row.set("slot", index + 1)?;
                 row.set("item", stack.id)?;
                 row.set("quantity", stack.quantity)?;
+                row.set("kind", bot.snapshot.item_kind(stack.id))?;
                 table.set(index + 1, row)?;
             }
             Ok(table)
+        });
+
+        // The catalog kind, and whether a pickup merges into a held stack.
+        methods.add_method("item_kind", |_lua, bot, item: u8| {
+            let merge = bot.snapshot.item_defs.get(item).merge;
+            Ok((bot.snapshot.item_kind(item), merge))
+        });
+
+        methods.add_method("ammo_for", |_lua, bot, weapon: u8| {
+            Ok(bot.snapshot.ammo_for(weapon))
         });
 
         methods.add_method("menu", |lua, bot, ()| {
@@ -2982,6 +3027,8 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
+    /// Every room's `<use>` facts, read from the pack on the first tick.
+    uses: Option<Rc<Vec<meta::RoomUse>>>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
@@ -3014,6 +3061,7 @@ impl BotRuntime {
             tick: 0,
             meta: None,
             meta_room: None,
+            uses: None,
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
@@ -3058,6 +3106,7 @@ impl BotRuntime {
     pub fn reload_meta(&mut self) {
         self.meta = None;
         self.meta_room = None;
+        self.uses = None;
     }
 
     /// Run one `on_bot_tick`, returning the input it asked for.
@@ -3070,6 +3119,9 @@ impl BotRuntime {
         if self.meta_room != Some(room_id) {
             self.meta = meta::load(pack, room_id)?.map(Rc::new);
             self.meta_room = Some(room_id);
+        }
+        if self.uses.is_none() {
+            self.uses = Some(Rc::new(meta::load_uses(pack)?));
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
@@ -3088,6 +3140,7 @@ impl BotRuntime {
             snapshot,
             saves: self.save_log,
             meta: self.meta.clone(),
+            uses: self.uses.clone().unwrap_or_default(),
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -3387,6 +3440,9 @@ mod tests {
             "saves",
             "knowledge",
             "spacing_point",
+            "item_kind",
+            "ammo_for",
+            "use_facts",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -4190,6 +4246,7 @@ mod tests {
             snapshot,
             saves: SaveLog::default(),
             meta: Some(Rc::new(meta)),
+            uses: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -4466,6 +4523,82 @@ mod tests {
             space("{ distance = 2900, min = 1800, max = 2800, headshot = 3000 }"),
             "hold:2900"
         );
+    }
+
+    #[test]
+    fn loop_rule_counts_stalls_and_room_repeats() {
+        let vm = route_vm();
+        // A pursued target: each room entry whose route is no shorter than
+        // the shortest seen is a stall; the third stall is a loop.
+        assert_eq!(
+            eval::<String>(
+                &vm,
+                r#"local rec, out = {}, {}
+                for _, steps in ipairs({ 4, 3, 2, 1 }) do
+                    out[#out + 1] = tostring(BotPlanner.pursue(rec, steps))
+                end
+                return table.concat(out, ",") .. ":" .. rec.best .. ":" .. (rec.stalls or 0)"#
+            ),
+            "false,false,false,false:1:0"
+        );
+        assert_eq!(
+            eval::<String>(
+                &vm,
+                r#"local rec, out = {}, {}
+                for _, steps in ipairs({ 3, 2, 3, 2, 2 }) do
+                    out[#out + 1] = tostring(BotPlanner.pursue(rec, steps))
+                end
+                return table.concat(out, ",")"#
+            ),
+            "false,false,false,false,true"
+        );
+        // Room repeats since the last real progress: entries 1..6 are fine,
+        // 7..12 mark the pursued goal, the 13th finishes the run.
+        assert_eq!(
+            eval::<String>(
+                &vm,
+                r#"local counts, out = {}, {}
+                for _ = 1, 13 do
+                    local verdict, n = BotPlanner.repeat_check(counts, "R")
+                    out[#out + 1] = verdict:sub(1, 1) .. n
+                end
+                BotPlanner.repeat_check(counts, "S")
+                return table.concat(out, ",") .. ":" .. counts.S"#
+            ),
+            "o1,o2,o3,o4,o5,o6,l7,l8,l9,l10,l11,l12,f13:1"
+        );
+    }
+
+    #[test]
+    fn ammo_floor_scales_with_risk_and_the_hardest_kill() {
+        let vm = tactics_vm();
+        // The handgun's hardest `fight` kill in re1.xml: a zombie, 99
+        // health at 12 a hit, is 9 shots (a cerberus 5, a hunter 8).
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 2)"),
+            9
+        );
+        // The shotgun: the cerberus (122 at 40) and the hunter (111 at 32)
+        // are 4 shots.
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 3)"),
+            4
+        );
+        // A weapon nobody fights with has no floor.
+        assert!(eval::<bool>(
+            &vm,
+            "return BotSurvival.shots_per_kill(K, 0x40) == nil"
+        ));
+        assert_eq!(eval::<i64>(&vm, "return BotSurvival.ammo_floor(nil, 0)"), 0);
+        // 1 + 2 * (1 - risk) kills, rounded up: 3 kills at risk 0, 2.5 at
+        // the default 0.25, one at risk 1.
+        assert_eq!(eval::<i64>(&vm, "return BotSurvival.ammo_floor(9, 0)"), 27);
+        assert_eq!(
+            eval::<i64>(&vm, "return BotSurvival.ammo_floor(9, 0.25)"),
+            23
+        );
+        assert_eq!(eval::<i64>(&vm, "return BotSurvival.ammo_floor(9, 1)"), 9);
+        assert_eq!(eval::<i64>(&vm, "return BotSurvival.ammo_floor(4, 0.5)"), 8);
     }
 
     #[test]
