@@ -1,0 +1,43 @@
+# room 302: shots away from the floor spiders every 20 ticks, for the noise (oracle/re2.md)
+400 aim
+420 aim fire
+425 aim
+440 aim fire
+445 aim
+460 aim fire
+465 aim
+480 aim fire
+485 aim
+500 aim fire
+505 aim
+520 aim fire
+525 aim
+540 aim fire
+545 aim
+560 aim fire
+565 aim
+580 aim fire
+585 aim
+600 aim fire
+605 aim
+620 aim fire
+625 aim
+640 aim fire
+645 aim
+660 aim fire
+665 aim
+680 aim fire
+685 aim
+700 aim fire
+705 aim
+720 aim fire
+725 aim
+740 aim fire
+745 aim
+760 aim fire
+765 aim
+780 aim fire
+785 aim
+800 aim fire
+805 aim
+830
