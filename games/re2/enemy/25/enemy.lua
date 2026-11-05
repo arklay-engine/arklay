@@ -17,7 +17,8 @@
 -- crawl (3), the climb (4), the way onto the ceiling (5), the lunge (6) and
 -- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
 -- weapons 2 to 8, on each kind. Another spider in play is its partner
--- (`Ck_em_id`, `+0x240`). The young spiders (`Em_26`) a death sends out,
+-- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
+-- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
 -- `FUN_004727e0`'s water, `FUN_00473530`'s blood, the player's partner
 -- (`splayer_work`) as a target and the spit's `Routine_2` 3
 -- (`FUN_0046fbb0`) aren't ported.
@@ -1446,10 +1447,38 @@ local function lose_body(e)
     end
 end
 
--- `FUN_004732a0`: the young spiders (`Em_26`) a death sends out. `Em_26`
--- isn't ported, so only the draw before the call, for how many, is made.
-local function send_young(e)
-    e:rnd()
+-- `FUN_004732a0`: the young spiders (`Em_26`) a hit or a death sends out,
+-- `(Rnd & mask) + base` of them, from its place, while fewer than 18 are in
+-- play. `Set_enemy_work` takes back a dead one or copies the last, and finds
+-- none in a room that places none. Each is `kind`, with bit 0 in water, and
+-- its routine runs at once: its init's `Rnd` is drawn here, after its facing's.
+local function send_young(e, kind, mask, base)
+    local count = (e:rnd() & mask) + base
+    if e:var(HIT_BY) == 0xE then
+        return
+    end
+    local others = e:count_of(0x26)
+    if count + others >= 0x12 then
+        count = (0x11 - others) & 0xFF
+    end
+    if e:var(WATER) & 0xFFFF ~= 0 then
+        kind = kind | 1
+    end
+    local x, y, z = e:pos()
+    for _ = 1, count do
+        if e:spawn(0x26, kind, {}) == nil then
+            return
+        end
+        local angle
+        if e:var(KIND) < 2 then
+            angle = e:rnd() << 4
+        else
+            angle = (((e:var(FACING) & 0xFF) << 8) | e:rnd()) * 4 - 0x200
+        end
+        local drawn = e:rnd() | 0x100
+        -- `Em_26`'s `DRAWN`.
+        e:place_spawn(x, y, z, angle & 0xFFFF, { [6] = drawn })
+    end
 end
 
 -- `BYTE_005286f4`: where a handgun's hit sends it, by `Rnd & 7`.
@@ -1564,7 +1593,7 @@ local function fall_start(e)
     e:set_be_flg(e:be_flg() & 0xE3FFFFFF)
     e:set_damage_cnt(e:damage_cnt() | 0x80)
     lose_leg(e)
-    send_young(e)
+    send_young(e, 0x2004, 1, 1)
 end
 
 -- The landing's sound: 6 into water, 5 onto the floor.
@@ -1668,7 +1697,7 @@ local function ceiling_flinch_hard(e)
         return
     end
     if e:routine(2) == 0 then
-        send_young(e)
+        send_young(e, 0x2004, 1, 1)
     end
     flinch_hard(e)
 end
@@ -1686,7 +1715,7 @@ local function wall_flinch_hard(e)
         return
     end
     lose_leg(e)
-    send_young(e)
+    send_young(e, 0x2004, 1, 1)
     e:set_var(NEXT, 1)
     e:routines(1, 4, 0, 0)
 end
@@ -1737,7 +1766,7 @@ end
 local function die_again(e)
     e:clip(0xD, 0, 7)
     e:joint(0x200)
-    send_young(e)
+    send_young(e, 0x2002, 3, 1)
     blood(e, 0, 0)
     e:routines(7, 0, 0, 0)
     e:set_be_flg(e:be_flg() | 0x42)
@@ -1935,7 +1964,7 @@ local function die_blown(e)
     if e:var(REVIVED) ~= 0 then
         e:clip(0xD, 0, 7)
         e:joint(0x200)
-        send_young(e)
+        send_young(e, 0x2002, 3, 6)
         blood(e, 0x13, 1)
         lose_body(e)
         e:set_be_flg(e:be_flg() | 0x42)
@@ -1951,7 +1980,7 @@ local function die_blown(e)
         if e:routine(2) == 0 then
             blood(e, 0x13, 1)
             lose_body(e)
-            send_young(e)
+            send_young(e, 0x2004, 3, 6)
         end
         ceiling_die(e)
         return
@@ -1962,7 +1991,7 @@ local function die_blown(e)
             wall_die_start(e)
             lose_body(e)
             blood(e, 0x13, 1)
-            send_young(e)
+            send_young(e, 0x2004, 3, 6)
         elseif sub == 2 then
             fallen(e)
         else
@@ -1977,7 +2006,7 @@ local function die_blown(e)
         e:clip(0xC, 0, 7)
         blood(e, 0x13, 1)
         lose_body(e)
-        send_young(e)
+        send_young(e, 0x2002, 3, 6)
     end
     e:joint(0x200)
     if e:now_seq() & 0x40000 == 0 then
