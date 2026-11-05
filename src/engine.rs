@@ -34035,6 +34035,85 @@ off_0010:
         assert!(player_walks(&mut skipped, &pack), "control is back");
     }
 
+    /// Skipping Barry's scene in Jill's 105 (back from 104, he shoots the
+    /// zombie) lands on the state watching it does, with Barry standing at
+    /// the same spot in the same clip. The bot once watched this scene
+    /// because a skip left Barry's legs in the floor; this keeps that fixed.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn real_barry_shoots_the_zombie_skip_matches_watching_it() {
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let start = || {
+            let mut session =
+                GameSession::from_room(&pack, RoomId::parse("1041").unwrap(), Path::new("saves"))
+                    .unwrap();
+            // 104 seen (common 0xAC), Barry gone from the fireplace (0x02),
+            // the zombie scene not yet played (0xAD clear).
+            session.game.apply_flag(1, 0xAC, 0);
+            session.game.apply_flag(1, 0x02, 0);
+            session
+                .debug_jump(&pack, RoomId::parse("1051").unwrap())
+                .unwrap();
+            session.set_skips_enabled(true);
+            for _ in 0..600 {
+                if session.cutscene_skippable() {
+                    break;
+                }
+                app_step(&mut session, &pack, player::Input::default());
+            }
+            assert!(session.cutscene_skippable(), "the scene never started");
+            session
+        };
+
+        let mut watched = start();
+        watch_scene(&mut watched, &pack);
+        let mut skipped = start();
+        let (skips, _, _) = skip_scene(&mut skipped, &pack);
+        assert!(skips >= 1);
+        assert!(skipped.game.flags[1].bit(0xAD), "the scene's done flag");
+        assert_scene_states_match(&skipped, &watched);
+        // Barry (entity 1) and the zombie (2) end where the watched run puts
+        // them. Barry's clip and pose root agree; only the clip's phase may
+        // differ by the ticks the two runs took.
+        for slot in 1..3 {
+            let (w, s) = (&watched.game.entities[slot], &skipped.game.entities[slot]);
+            assert_eq!(
+                (w.id, w.pos, w.angle),
+                (s.id, s.pos, s.angle),
+                "entity {slot}"
+            );
+            assert_eq!(w.animation_id, s.animation_id, "entity {slot} clip");
+        }
+        assert_eq!(skipped.game.entities[1].id, 34, "Barry");
+        for _ in 0..90 {
+            app_step(&mut watched, &pack, player::Input::default());
+            app_step(&mut skipped, &pack, player::Input::default());
+        }
+        // Barry poses a frame of the clip he plays: a pose left behind by the
+        // skip (the legs in the floor) is no keyframe of it.
+        let posed_from_clip = |session: &mut GameSession| {
+            let model = session
+                .npc_models
+                .get(&pack, session.game.entities[1].id, 1)
+                .expect("Barry's model");
+            let entity = &session.game.entities[1];
+            assert_eq!(entity.blend_counter, 0, "the clip switch has eased out");
+            let pose = session.game.entity_anims[1]
+                .pose_keyframe(entity, &model.clips, &model.keyframes)
+                .expect("Barry's pose");
+            model.clips[usize::from(entity.animation_id)]
+                .frames
+                .iter()
+                .any(|frame| model.keyframes[usize::from(frame.keyframe)].offset == pose.offset)
+        };
+        assert!(posed_from_clip(&mut watched));
+        assert!(posed_from_clip(&mut skipped), "Barry's skipped pose");
+        assert!(player_walks(&mut skipped, &pack), "control is back");
+    }
+
     /// Skipping Chris's scene with Rebecca in room 100 hands control back
     /// with the scene finished. The scene forks its actors' animations onto
     /// timed events; the skip must run its lines out at their own pace, or
