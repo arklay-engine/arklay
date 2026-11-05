@@ -711,7 +711,7 @@ files. The checked-in facts:
 
 | Room | Facts |
 | --- | --- |
-| 105 | Jill: `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. Chris: the same at slot 8; done flag `0xA8`. `<watch>` Barry shooting the zombie (common `0xAC` set, `0xAD` clear). The fireplace hollow's message (Jill slot 13, Chris slot 10) is avoided. |
+| 105 | Jill: `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. Chris: the same at slot 8; done flag `0xA8`. The fireplace hollow's message (Jill slot 13, Chris slot 10) is avoided. |
 | 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. `<avoid slot="4" bank="1" bit="0xA9" while="clear">`: the plant fountains stand across the way to the armor key until the herbicide. |
 | 102 | `<holds item="0x1C">`: the broken shotgun lies here (the room's door from 101 takes the armor key). |
 | 210 | `<interact slot="4" bank="7" bit="0x81" done="clear">`: the moon crest has no player bit; the nest event (AOT 4) hands it over. |

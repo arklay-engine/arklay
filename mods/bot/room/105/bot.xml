@@ -22,10 +22,10 @@
      walking to the emblem.
 
      Back from 104 (common 0xAC set, 0xAD clear), Barry shoots the zombie
-     (event on_enter_2, which sets 0xAD at its end). Let it play: a skipped
-     run of it left Barry's legs in the floor while his upper body moved (a
-     player report; headless, the skipped and the watched scene end with the
-     same actor state). Watching it costs about 900 ticks once.
+     (event on_enter_2, which sets 0xAD at its end). It is skipped like any
+     other scene: the engine test
+     real_barry_shoots_the_zombie_skip_matches_watching_it checks that a skip
+     leaves Barry and the zombie where watching it does.
 
      AOT 13 (Jill) and AOT 10 (Chris) are the fireplace hollow's "an emblem
      was in" message, not a passage: a passage check there only reads it.
@@ -45,6 +45,4 @@
          reason="Barry stands in front of the fireplace until common 0xA1 is set"/>
   <avoid slot="13" character="jill" reason="the fireplace hollow's message, not a passage"/>
   <avoid slot="10" character="chris" reason="the fireplace hollow's message, not a passage"/>
-  <watch bank="1" bit="0xAD" after_bank="1" after_bit="0xAC" character="jill"
-         label="Barry shoots the zombie"/>
 </bot>
