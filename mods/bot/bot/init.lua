@@ -89,6 +89,8 @@ BOT_STATE.crest.index = BOT_STATE.crest.index or 1
 BOT_STATE.crest.stair_203_done = BOT_STATE.crest.stair_203_done or false
 BOT_STATE.crest.stair_nudge = BOT_STATE.crest.stair_nudge or 0
 BOT_STATE.crest.clear_202_positioned = BOT_STATE.crest.clear_202_positioned or false
+BOT_STATE.crest.star_stage = BOT_STATE.crest.star_stage or "start"
+BOT_STATE.crest.star_ticks = BOT_STATE.crest.star_ticks or 0
 BOT_STATE.last_health = BOT_STATE.last_health or nil
 BOT_STATE.stale_attack_logged = BOT_STATE.stale_attack_logged or false
 BOT_STATE.pickup_cooldown = BOT_STATE.pickup_cooldown or 0
@@ -133,10 +135,28 @@ BOT_STATE.emblem.tenf_ticks = BOT_STATE.emblem.tenf_ticks or 0
 BOT_STATE.emblem.push_x = BOT_STATE.emblem.push_x or nil
 BOT_STATE.emblem.tenf_cleared = BOT_STATE.emblem.tenf_cleared or false
 
+-- The 105 wood emblem key is the legal way out of the 10F bar trap: it sits in
+-- the dining-room fireplace while F_COMMON_AA is set, and picking it clears AA
+-- (the 105 main re-arms the fireplace use-item probes with SCE_USEITEM). In
+-- 10F the checked-in engine only re-arms the wood use-item probes after the
+-- gold pickup sets F_COMMON_A6, so the route uses the wood key once the trap
+-- event has fired: the room's from_main_3 then moves OBJ_00 back to 0,0,0
+-- and the gold key survives for the 105 fireplace. `wood_used_10f` records
+-- the hollow use; `gold_used_10f` is the fallback where the gold key itself is
+-- spent to reopen the bar (which forfeits the shield key).
+BOT_STATE.emblem.wood_stage = BOT_STATE.emblem.wood_stage or "start"
+BOT_STATE.emblem.wood_used_10f = BOT_STATE.emblem.wood_used_10f or false
+BOT_STATE.emblem.wood_missing = BOT_STATE.emblem.wood_missing or false
+BOT_STATE.emblem.wood_use_started = BOT_STATE.emblem.wood_use_started or false
+BOT_STATE.emblem.gold_used_10f = BOT_STATE.emblem.gold_used_10f or false
+BOT_STATE.emblem.gold_escape_failed = BOT_STATE.emblem.gold_escape_failed or false
+BOT_STATE.emblem.gold_used_105 = BOT_STATE.emblem.gold_used_105 or false
+
 -- 205 armor-room switch. `F_ROOM_1D` is the room's own "wall moved" flag.
 BOT_STATE.sun = BOT_STATE.sun or {}
 BOT_STATE.sun.stage = BOT_STATE.sun.stage or "switch"
 BOT_STATE.sun.ticks = BOT_STATE.sun.ticks or 0
+BOT_STATE.sun.prompt_ticks = BOT_STATE.sun.prompt_ticks or 0
 
 -- Combat is a conservative layer over the route: it only stops to shoot the
 -- common zombies with the handgun, and stands down for bosses, crowds, low
@@ -176,6 +196,9 @@ local F_COMMON_03 = 0x03 -- first 106 Barry scene started
 local F_COMMON_05 = 0x05 -- 106 camera scenes done
 local F_COMMON_A9 = 0xA9 -- 10C pump event ran; the fountains wither
 local F_COMMON_A5 = 0xA5 -- 10F piano played; the bar counter moved to 0,0
+local F_COMMON_A6 = 0xA6 -- 10F gold pickup ran from_main_2_jill
+local F_COMMON_A7 = 0xA7 -- 10F wood emblem used; the bar reopened
+local F_COMMON_AA = 0xAA -- 105 wood key item present / taken
 local F_COMMON_AB = 0xAB -- 105 gold-emblem event ran; OBJ_02 moved west
 local F_STATUS_1A = 0x1A
 local F_STATUS_1C = 0x1C
@@ -193,6 +216,7 @@ local ITEM_HANDGUN = 0x02
 local ITEM_FIRST_AID_SPRAY = 0x41
 local ITEM_HERBICIDE = 0x26
 local ITEM_MUSIC_SCORE = 0x23
+local ITEM_WOOD_EMBLEM = 0x1F
 local ITEM_GOLD_EMBLEM = 0x20
 local ITEM_SHIELD_KEY = 0x35
 local ITEM_BLUE_JEWEL_KEY = 0x21
@@ -435,11 +459,21 @@ local function handle_scene(bot, scene)
         return true
     end
     if scene.cutscene_skip then
+        if bot:room().id == "20D" and tick % 2 == 0 then
+            -- The Richard scene ends by moving the player next to the 204
+            -- door. An action press buffered during the skip triggers that
+            -- door on the first controllable frame, so skip with confirm only.
+            bot:pulse_confirm()
+        end
         return true
     end
     if scene.skippable then
         if tick % 2 == 0 then
-            bot:press_action()
+            if bot:room().id == "20D" then
+                bot:pulse_confirm()
+            else
+                bot:press_action()
+            end
         end
         return true
     end
@@ -477,6 +511,20 @@ local function handle_scene(bot, scene)
     if scene.message_takes_input then
         -- A page wait or a yes/no prompt needs a fresh press edge; holding
         -- the button every tick can leave the window waiting forever.
+        if bot:room().id == "205" and scene.message == 0 then
+            -- The armor switch's "Will you push it?" prompt starts on No in
+            -- this build. Move the cursor to Yes before confirming, or the
+            -- event exits without setting F_ROOM_1C and the gas keeps hurting.
+            local sun = BOT_STATE.sun
+            sun.prompt_ticks = (sun.prompt_ticks or 0) + 1
+            if sun.prompt_ticks == 1 then
+                log(bot, "205 armor switch prompt: selecting Yes")
+                bot:set_input({ right = true })
+            elseif sun.prompt_ticks % 2 == 0 then
+                bot:press_action()
+            end
+            return true
+        end
         if tick % 2 == 0 then
             bot:press_action()
         end
@@ -1796,6 +1844,299 @@ local function phase_emblem_return(bot)
     fail(bot, "emblem return: unexpected room " .. tostring(room))
 end
 
+-- Jill's 105 fireplace holds the wood emblem key while F_COMMON_AA is set by
+-- the 106 intro. Picking it runs the room's own testpickup branch, clearing AA
+-- and leaving the fireplace use-item probes armed. The wood key is the legal
+-- 10F trap solution: using it at the key hollow sets F_COMMON_A7, and the
+-- gold-key pickup only runs from_main_2_jill while A7 is clear.
+local function take_105_wood_key(bot)
+    local e = BOT_STATE.emblem
+    if e.wood_stage == "done" then
+        return true
+    end
+    if bot:item_count(ITEM_WOOD_EMBLEM) > 0 then
+        log(bot, string.format(
+            "105 wood emblem key already held count=%d; it opens the 10F key "
+                .. "hollow (commonAA=%s)",
+            bot:item_count(ITEM_WOOD_EMBLEM),
+            tostring(bot:flag(BANK_COMMON, F_COMMON_AA))))
+        e.wood_stage = "done"
+        return true
+    end
+    -- The pack can be full on this leg (the 106 Barry gift adds the acid
+    -- rounds, and the empty weapon stacks still count). The wood-key pickup
+    -- then opens viewer 0xC2 (inventory full), so free a slot with the
+    -- carried green herb first.
+    local p = bot:player()
+    local slots = #bot:inventory()
+    if bot:item_count(ITEM_GREEN_HERB) > 0 and slots >= 8 then
+        local used = bot:use_heal(ITEM_GREEN_HERB)
+        log(bot, string.format(
+            "105 wood key: using the green herb to free an inventory slot "
+                .. "accepted=%s slots=%d health=%d/%d herb=%d",
+            tostring(used), slots, p.health, p.max_health,
+            bot:item_count(ITEM_GREEN_HERB)))
+        if used then
+            return false
+        end
+    end
+    local slot = item_action_slot(bot, ITEM_WOOD_EMBLEM)
+    if not slot then
+        log(bot, string.format(
+            "105 wood emblem key action not present (commonAA=%s); the 10F "
+                .. "gold pickup will use the escape use and forfeit the "
+                .. "shield key",
+            tostring(bot:flag(BANK_COMMON, F_COMMON_AA))))
+        e.wood_stage = "done"
+        e.wood_missing = true
+        return true
+    end
+    if e.wood_stage == "start" then
+        e.wood_stage = "walk"
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        local held = {}
+        local stacks = bot:inventory()
+        for i = 1, #stacks do
+            held[#held + 1] = string.format("%02X:%d",
+                stacks[i].item, stacks[i].quantity)
+        end
+        log(bot, string.format(
+            "105 wood emblem key: action slot %d commonAA=%s slots=%d "
+                .. "inventory=%s",
+            slot, tostring(bot:flag(BANK_COMMON, F_COMMON_AA)), #stacks,
+            table.concat(held, " ")))
+    end
+    if e.wood_stage == "walk" then
+        if walk_waypoints(bot, {
+            { 14000, 13000 },
+            { 7000, 11500 },
+            { 3800, 8100 },
+        }, 150, "105 wood key") then
+            e.wood_stage = "take"
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            log(bot, "105 wood key: at the fireplace approach")
+        end
+        if BOT_STATE.phase_ticks > 2400 then
+            log(bot, "105 wood key walk timed out")
+            e.wood_stage = "done"
+            e.wood_missing = true
+            return true
+        end
+        return false
+    end
+    if e.wood_stage == "take" then
+        local result = action_nav(bot, slot, "105 wood emblem key", {
+            { 3800, 8100, 3000, 8100 },
+        }, { optional = true, require_count = true, side_ticks = 300 })
+        if result == true or bot:item_count(ITEM_WOOD_EMBLEM) > 0 then
+            log(bot, string.format(
+                "105 wood emblem key count=%d; commonAA=%s",
+                bot:item_count(ITEM_WOOD_EMBLEM),
+                tostring(bot:flag(BANK_COMMON, F_COMMON_AA))))
+            e.wood_stage = "done"
+            return true
+        end
+        if result == "failed" then
+            local p = bot:player()
+            log(bot, string.format(
+                "105 wood emblem key unreachable (count=%d commonAA=%s "
+                    .. "pos=(%d,%d) health=%d collision=%d); the 10F gold "
+                    .. "pickup will use the escape use",
+                bot:item_count(ITEM_WOOD_EMBLEM),
+                tostring(bot:flag(BANK_COMMON, F_COMMON_AA)),
+                p.x, p.z, p.health, p.collision_flags))
+            e.wood_stage = "done"
+            e.wood_missing = true
+            return true
+        end
+        if BOT_STATE.phase_ticks > 2400 then
+            log(bot, "105 wood emblem key timed out")
+            e.wood_stage = "done"
+            e.wood_missing = true
+            return true
+        end
+        return false
+    end
+    return false
+end
+
+-- Use the wood emblem key at the 10F key hollow. The zone's SCE_USEITEM
+-- actions arm bank 9 bit 4 and F_ROOM_22; the menu USE then runs the room's
+-- wood-key branch, which sets F_COMMON_A7 and starts from_main_3/4. That is
+-- the same room event the gold pickup would otherwise run, but it leaves the
+-- gold key in the inventory for the 105 fireplace.
+local function use_10f_wood_key(bot)
+    local e = BOT_STATE.emblem
+    if e.wood_used_10f then
+        return true
+    end
+    local stage = e.tenf_wood_stage
+    if stage == nil or stage == "start" then
+        if e.wood_missing or bot:item_count(ITEM_WOOD_EMBLEM) == 0 then
+            log(bot, string.format(
+                "10F wood emblem key not held (missing=%s count=%d); the gold "
+                    .. "pickup will run from_main_2_jill",
+                tostring(e.wood_missing),
+                bot:item_count(ITEM_WOOD_EMBLEM)))
+            e.wood_missing = true
+            e.wood_used_10f = true
+            return true
+        end
+    end
+    stage = e.tenf_wood_stage or "start"
+    if stage == "start" then
+        e.tenf_wood_stage = "wait"
+        e.tenf_wood_ticks = 0
+        local acts = bot:actions()
+        local rows = {}
+        for i = 1, #acts do
+            local a = acts[i]
+            if a.x >= 7000 and a.x <= 10000 and a.z >= 12000 and a.z <= 21000 then
+                rows[#rows + 1] = string.format(
+                    "%d:%s h=%d f=%#x z=%d,%d,%d,%d",
+                    a.slot, tostring(a.kind), a.handler, a.flags,
+                    a.x, a.z, a.width, a.depth)
+            end
+        end
+        log(bot, string.format(
+            "10F wood emblem key: at the key hollow use zone (A5=%s A6=%s) "
+                .. "actions=%s",
+            tostring(bot:flag(BANK_COMMON, F_COMMON_A5)),
+            tostring(bot:flag(BANK_COMMON, F_COMMON_A6)),
+            table.concat(rows, " ")))
+    end
+    if e.tenf_wood_stage == "wait" then
+        local facing = bot:face_to(9220, 19550)
+        e.tenf_wood_ticks = e.tenf_wood_ticks + 1
+        local item_use = bot:flag(BANK_ITEM_USE, 4)
+        local room22 = bot:flag(4, 0x22)
+        if e.tenf_wood_ticks % 60 == 0 then
+            log(bot, string.format(
+                "10F wood key wait ticks=%d face=%s item_use=%s room22=%s "
+                    .. "pos=(%d,%d)",
+                e.tenf_wood_ticks, facing.status, tostring(item_use),
+                tostring(room22), bot:player().x, bot:player().z))
+        end
+        if item_use and room22 and facing.status == "facing" then
+            local accepted = bot:use_item(ITEM_WOOD_EMBLEM)
+            log(bot, string.format(
+                "10F wood key: use accepted=%s count=%d", tostring(accepted),
+                bot:item_count(ITEM_WOOD_EMBLEM)))
+            e.tenf_wood_stage = "settle"
+            e.tenf_wood_ticks = 0
+        elseif e.tenf_wood_ticks > 300 then
+            log(bot, string.format(
+                "10F wood key flags did not set (item_use=%s room22=%s "
+                    .. "pos=(%d,%d)); the gold pickup will need the escape use",
+                tostring(item_use), tostring(room22),
+                bot:player().x, bot:player().z))
+            e.wood_missing = true
+            e.wood_used_10f = true
+            return true
+        end
+        return false
+    end
+    if e.tenf_wood_stage == "settle" then
+        e.tenf_wood_ticks = e.tenf_wood_ticks + 1
+        if e.tenf_wood_ticks % 30 == 0 then
+            log(bot, string.format(
+                "10F wood key settle ticks=%d A7=%s A6=%s pos=(%d,%d)",
+                e.tenf_wood_ticks,
+                tostring(bot:flag(BANK_COMMON, F_COMMON_A7)),
+                tostring(bot:flag(BANK_COMMON, F_COMMON_A6)),
+                bot:player().x, bot:player().z))
+        end
+        if bot:flag(BANK_COMMON, F_COMMON_A7) then
+            log(bot, "10F wood emblem event done (F_COMMON_A7); the gold "
+                .. "pickup no longer moves the bar")
+            e.wood_used_10f = true
+            return true
+        elseif e.tenf_wood_ticks > 600 then
+            log(bot, "10F wood emblem event did not set F_COMMON_A7; the gold "
+                .. "pickup may trap and use the escape path")
+            e.wood_missing = true
+            e.wood_used_10f = true
+            return true
+        end
+        return false
+    end
+    e.wood_used_10f = true
+    return true
+end
+
+-- Fallback escape when the wood key is unavailable: use the gold emblem key
+-- at the same hollow. The zone arms bank 9 bit 5 and F_ROOM_21; the menu USE
+-- runs the room's gold-key branch, whose from_main_3 tweens OBJ_00 back to
+-- 0,0,0 and reopens the north gap. The gold key is consumed, so the 105
+-- sideboard event cannot run and the shield/moon crests stay unavailable.
+local function use_10f_gold_escape(bot)
+    local e = BOT_STATE.emblem
+    if e.gold_used_10f then
+        return true
+    end
+    local stage = e.tenf_gold_stage
+    if (stage == nil or stage == "start")
+        and bot:item_count(ITEM_GOLD_EMBLEM) == 0 then
+        log(bot, "10F escape: no gold emblem key to reopen the bar")
+        e.gold_escape_failed = true
+        return false
+    end
+    stage = e.tenf_gold_stage or "start"
+    if stage == "start" then
+        e.tenf_gold_stage = "wait"
+        e.tenf_gold_ticks = 0
+        log(bot, "10F gold escape: at the key hollow use zone")
+    end
+    if e.tenf_gold_stage == "wait" then
+        local facing = bot:face_to(9220, 19550)
+        e.tenf_gold_ticks = e.tenf_gold_ticks + 1
+        local item_use = bot:flag(BANK_ITEM_USE, 5)
+        local room21 = bot:flag(4, 0x21)
+        if e.tenf_gold_ticks % 60 == 0 then
+            log(bot, string.format(
+                "10F gold escape wait ticks=%d face=%s item_use=%s room21=%s "
+                    .. "pos=(%d,%d)",
+                e.tenf_gold_ticks, facing.status, tostring(item_use),
+                tostring(room21), bot:player().x, bot:player().z))
+        end
+        if item_use and room21 and facing.status == "facing" then
+            local accepted = bot:use_item(ITEM_GOLD_EMBLEM)
+            log(bot, string.format(
+                "10F gold escape: use accepted=%s count=%d", tostring(accepted),
+                bot:item_count(ITEM_GOLD_EMBLEM)))
+            e.tenf_gold_stage = "settle"
+            e.tenf_gold_ticks = 0
+        elseif e.tenf_gold_ticks > 300 then
+            log(bot, string.format(
+                "10F gold escape flags did not set (item_use=%s room21=%s "
+                    .. "pos=(%d,%d))",
+                tostring(item_use), tostring(room21),
+                bot:player().x, bot:player().z))
+            return false
+        end
+        return false
+    end
+    if e.tenf_gold_stage == "settle" then
+        e.tenf_gold_ticks = e.tenf_gold_ticks + 1
+        if not bot:flag(BANK_COMMON, F_COMMON_A6)
+            and e.tenf_gold_ticks >= 200 then
+            log(bot, "10F gold escape event done; the bar is back at 0,0,0")
+            e.gold_used_10f = true
+            return true
+        elseif e.tenf_gold_ticks > 600 then
+            log(bot, "10F gold escape did not clear F_COMMON_A6")
+            return false
+        end
+        return false
+    end
+    e.gold_used_10f = true
+    return true
+end
+
 -- 105 shield key via the 10F gold emblem key. The room's own fireplace
 -- SCE_USEITEM actions raise the item's per-frame use flag (bank 9 bit 5) and
 -- F_ROOM_22; the menu USE then lets the 105 main script run its gold-emblem
@@ -1818,7 +2159,21 @@ local function phase_emblem_detour(bot)
     end
 
     if room == "105" then
-        if not gold_held then
+        if e.gold_used_10f and not gold_held then
+            local p = bot:player()
+            log(bot, string.format(
+                "105 gold-emblem detour: the gold key was spent reopening the "
+                    .. "10F bar; shield key unavailable (pos=(%d,%d) "
+                    .. "health=%d commonAB=%s)",
+                p.x, p.z, p.health,
+                tostring(bot:flag(BANK_COMMON, F_COMMON_AB))))
+            e.failed = true
+            BOT_STATE.crest.index = 2
+            set_phase(bot, "to_105_items",
+                "gold spent on the 10F escape; continuing 105 items")
+            return
+        end
+        if not gold_held and not e.gold_used_105 then
             -- Leg 1: 105 -> 104. The dining-room walk keeps south of the
             -- sideboard and uses the known 105->104 door approach.
             if walk_waypoints(bot, {
@@ -1849,10 +2204,13 @@ local function phase_emblem_detour(bot)
                 BOT_STATE.wp_tol = nil
             end
             e.stage = "walk"
+            -- (3800,8100) is inside the fireplace collision grow; the wood
+            -- pickup's working side approach is (4100,8100), whose west-facing
+            -- 600-unit reach still lands at x=3500 inside the zone.
             if walk_waypoints(bot, {
                 { 14000, 13000 },
                 { 7000, 11500 },
-                { 3800, 8100 },
+                { 4100, 8100 },
             }, 150, "105 fireplace") then
                 e.stage = "zone"
                 e.ticks = 0
@@ -1880,6 +2238,7 @@ local function phase_emblem_detour(bot)
             if item_use and room22 and facing.status == "facing" then
                 local accepted = bot:use_item(ITEM_GOLD_EMBLEM)
                 e.used = accepted
+                e.gold_used_105 = accepted and true or e.gold_used_105
                 e.stage = "use"
                 e.ticks = 0
                 log(bot, string.format(
@@ -1926,6 +2285,37 @@ local function phase_emblem_detour(bot)
             return
         end
         if e.stage == "shield" then
+            -- The sideboard is now at (16000,14300): a direct A* leg from the
+            -- fireplace to the east corner plans through it because the bot's
+            -- collision grid has no room-object pass. Walk south of it first,
+            -- then north along its east side to the action reach corner.
+            if not e.shield_route_started then
+                e.shield_route_started = true
+                BOT_STATE.phase_ticks = 0
+                BOT_STATE.wp = 1
+                BOT_STATE.wp_retry = false
+                BOT_STATE.wp_tol = nil
+            end
+            if not e.shield_positioned then
+                if walk_waypoints(bot, {
+                    { 14000, 13000 },
+                    { 17100, 13000 },
+                    { 17100, 14060 },
+                }, 100, "105 shield route") then
+                    e.shield_positioned = true
+                    BOT_STATE.wp = 1
+                    BOT_STATE.wp_retry = false
+                    BOT_STATE.wp_tol = nil
+                    log(bot, "105 shield route: at the sideboard east corner")
+                end
+                if BOT_STATE.phase_ticks > 3600 then
+                    log(bot, "105 shield route timed out around the sideboard")
+                    e.failed = true
+                    finish_emblem_detour(bot,
+                        "gold emblem detour: shield route blocked")
+                end
+                return
+            end
             local slot = item_action_slot(bot, ITEM_SHIELD_KEY)
             if not slot then
                 log(bot, string.format(
@@ -1976,7 +2366,7 @@ local function phase_emblem_detour(bot)
     end
 
     if room == "104" then
-        if not gold_held then
+        if not gold_held and not e.gold_used_10f and not e.gold_used_105 then
             -- Leg 2: 104 -> 10F. The bar door is the east-wall sword-key lock;
             -- Jill's lockpick substitutes for the sword key. Walk the south
             -- corridor east, then approach the door from the south.
@@ -2106,13 +2496,13 @@ local function phase_emblem_detour(bot)
                     -- consumes it legally.
                     local pp = bot:player()
                     if bot:item_count(ITEM_GREEN_HERB) > 0
-                        and pp.health < pp.max_health then
+                        and #bot:inventory() >= 8 then
                         local used = bot:use_heal(ITEM_GREEN_HERB)
                         e.tenf_cleared = true
                         log(bot, string.format(
                             "10F music score: using a green herb to free an "
-                                .. "inventory slot accepted=%s health=%d",
-                            tostring(used), pp.health))
+                                .. "inventory slot accepted=%s slots=%d health=%d",
+                            tostring(used), #bot:inventory(), pp.health))
                         return
                     end
                     e.tenf_cleared = true
@@ -2278,8 +2668,12 @@ local function phase_emblem_detour(bot)
                 { 12000, 3000 },
                 { 8800, 3000 },
                 { 9000, 12000 },
-                { 9000, 18200 },
-            }, 150, "10F gold key corridor") then
+                -- The use-item zones at the hollow start at z=18800 and the
+                -- 600-unit reach is measured from the player. Stand at
+                -- z=18500 so both the wood-key menu use and the gold pickup
+                -- keep their reach point inside the zone.
+                { 9000, 18500 },
+            }, 100, "10F gold key corridor") then
                 local slot = item_action_slot(bot, ITEM_GOLD_EMBLEM)
                 if not slot then
                     log(bot, "10F gold emblem key action not present; "
@@ -2289,7 +2683,7 @@ local function phase_emblem_detour(bot)
                     return
                 end
                 local result = action_nav(bot, slot, "10F gold emblem key", {
-                    { 9000, 18200, 9000, 19200 },
+                    { 9000, 18500, 9000, 19500 },
                 }, { optional = true, require_count = true, side_ticks = 300 })
                 if bot:has_item(ITEM_GOLD_EMBLEM) then
                     log(bot, string.format(
@@ -2332,12 +2726,42 @@ local function phase_emblem_detour(bot)
             end
             return
         end
+        -- The gold pickup has just run from_main_2_jill and closed the bar.
+        -- That also re-arms the wood use-item zones (A6 true), so use the
+        -- 105 wood key at the same hollow: its from_main_3/4 branch reopens
+        -- the bar and leaves the gold key in the inventory for the 105
+        -- fireplace. Without the wood key, spend the gold key on the same
+        -- escape; that forfeits the shield key but still escapes legally.
+        if not e.wood_used_10f then
+            if e.wood_use_started or bot:item_count(ITEM_WOOD_EMBLEM) > 0 then
+                e.wood_use_started = true
+                if not use_10f_wood_key(bot) then
+                    if BOT_STATE.phase_ticks > 3600 then
+                        log(bot, "10F wood key escape timed out")
+                        finish_10f_trapped(bot,
+                            "gold picked but the wood-key escape did not fire")
+                    end
+                    return
+                end
+            elseif not use_10f_gold_escape(bot) then
+                if BOT_STATE.phase_ticks > 3600 then
+                    finish_10f_trapped(bot,
+                        "wood key absent and the gold escape did not fire")
+                end
+                return
+            end
+        end
         -- Leg 4: 10F -> 104. The return door is the north-wall door at
         -- (13700,960,1700,1900); approach from the south. The key corridor
-        -- left the shared waypoint index past its list, so reset it first.
-        BOT_STATE.wp = 1
-        BOT_STATE.wp_retry = false
-        BOT_STATE.wp_tol = nil
+        -- left the shared waypoint index past its list, so reset it once on
+        -- entry to this leg; resetting every tick would pin it to waypoint 1.
+        if not e.tenf_return_started then
+            e.tenf_return_started = true
+            BOT_STATE.phase_ticks = 0
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+        end
         if walk_waypoints(bot, {
             { 9000, 12000 },
             { 8800, 3000 },
@@ -2375,9 +2799,22 @@ local function phase_to_105_items(bot)
             crest.index = 2
             return
         end
+        if BOT_STATE.emblem.gold_used_10f then
+            log(bot, "105 shield key skipped: the gold key was spent reopening "
+                .. "the 10F bar")
+            crest.index = 2
+            return
+        end
         if not BOT_STATE.emblem.failed then
-            -- Take the gold emblem key from the 10F bar and use it at the 105
-            -- fireplace. The detour owns 105/104/10F until it returns here.
+            -- Take the wood emblem key from this fireplace first. Placing the
+            -- star crest in 11A freed a slot, so the pack now has room for
+            -- the wood key. Its pickup clears F_COMMON_AA (leaving the gold
+            -- use-item probes armed); after the gold pickup closes the bar,
+            -- using the wood key at the 10F hollow runs from_main_3 and
+            -- reopens it, keeping the gold key for this room.
+            if not take_105_wood_key(bot) then
+                return
+            end
             set_phase(bot, "emblem_detour", "105 shield key needs the gold emblem")
             return
         end
@@ -2834,10 +3271,6 @@ end
 
 local function finish_205_blocked(bot, reason)
     local p = bot:player()
-    if not BOT_STATE.emblem.done then
-        reason = reason .. "; 10F gold emblem blocked by the music-score/"
-            .. "bookshelf geometry"
-    end
     log(bot, string.format(
         "205 armor room reached; sun crest blocked: %s "
             .. "(pos=(%d,%d) health=%d armor=%d shield=%d star=%d sun=%d moon=%d)",
@@ -2861,6 +3294,35 @@ local function phase_to_205_item(bot)
         set_phase(bot, "to_204_from_205", "sun crest already held")
         return
     end
+    -- The sun-crest action is dead at room init in this port, so pressing the
+    -- gas-covered armor switch cannot reveal a usable pickup. Detect that
+    -- before walking into the damage and continue to the moon-crest leg.
+    if not item_action_slot(bot, ITEM_SUN_CREST) then
+        local actions = bot:actions()
+        local parts = {}
+        for i = 1, #actions do
+            local a = actions[i]
+            parts[#parts + 1] = string.format(
+                "%d:%s:item=%s:zone=%d,%d,%d,%d", a.slot, tostring(a.kind),
+                tostring(a.item), a.x, a.z, a.width, a.depth)
+        end
+        log(bot, string.format(
+            "205 sun crest action not present; count=%d flags(item24=%s "
+                .. "room1b=%s room1c=%s room1d=%s) actions=[%s]",
+            count, tostring(bot:flag(BANK_ITEM, 0x24)),
+            tostring(bot:flag(4, 0x1B)), tostring(bot:flag(4, 0x1C)),
+            tostring(bot:flag(4, 0x1D)), table.concat(parts, " ")))
+        log(bot, "205 sun crest blocked: item action slot 9 is "
+            .. "kind=other/handler 0 at entry; the room init "
+            .. "aot_delete(AOT_09_ITEM, SCE_NONE, SAT_MANUAL|SAT_PLAYER) "
+            .. "cleared the handler (item24 flag and the item model remain). "
+            .. "Continuing to 20D/20E/210 for the moon crest; the 11B lock "
+            .. "will still be short of the four hollows.")
+        BOT_STATE.milestone = "205 sun crest blocked"
+        set_phase(bot, "to_204_from_205",
+            "sun crest action disabled at init; continuing to the moon crest")
+        return
+    end
     local sun = BOT_STATE.sun
     if sun.stage == "switch" and not bot:flag(4, 0x1D) then
         if bot:player().health <= 10 then
@@ -2872,16 +3334,32 @@ local function phase_to_205_item(bot)
             "205 armor switch") then
             local facing = bot:face_to(9735, 7236)
             sun.ticks = sun.ticks + 1
+            if sun.ticks == 1 then
+                local a3 = action_by_slot(bot, 3)
+                log(bot, string.format(
+                    "205 switch start: slot3=%s/%s scenario3a=%s room1b=%s "
+                        .. "room1c=%s room1d=%s room20=%s room21=%s",
+                    tostring(a3 and a3.kind or "missing"),
+                    tostring(a3 and a3.handler or "nil"),
+                    tostring(bot:flag(0, 0x3A)),
+                    tostring(bot:flag(4, 0x1B)), tostring(bot:flag(4, 0x1C)),
+                    tostring(bot:flag(4, 0x1D)), tostring(bot:flag(4, 0x20)),
+                    tostring(bot:flag(4, 0x21))))
+            end
             if facing.status == "facing" then
                 bot:press_action()
             end
             if sun.ticks % 60 == 0 then
                 local p = bot:player()
+                local a3 = action_by_slot(bot, 3)
                 log(bot, string.format(
                     "205 armor switch ticks=%d face=%s room1c=%s room1d=%s "
-                        .. "pos=(%d,%d) health=%d",
+                        .. "slot3=%s/%s pos=(%d,%d) health=%d",
                     sun.ticks, facing.status, tostring(bot:flag(4, 0x1C)),
-                    tostring(bot:flag(4, 0x1D)), p.x, p.z, p.health))
+                    tostring(bot:flag(4, 0x1D)),
+                    tostring(a3 and a3.kind or "missing"),
+                    tostring(a3 and a3.handler or "nil"),
+                    p.x, p.z, p.health))
             end
             if bot:flag(4, 0x1D) then
                 log(bot, "205 armor switch done; the armor wall moved (room1d)")
@@ -2918,9 +3396,15 @@ local function phase_to_205_item(bot)
             tostring(bot:flag(BANK_ITEM, 0x24)),
             tostring(bot:flag(4, 0x1B)), tostring(bot:flag(4, 0x1C)),
             tostring(bot:flag(4, 0x1D)), table.concat(parts, " ")))
-        finish_205_blocked(bot,
-            "item action slot 9 is kind=other/handler 0 at entry; the room "
-                .. "init aot_delete disabled AOT_09_ITEM")
+        log(bot, "205 sun crest blocked: item action slot 9 is "
+            .. "kind=other/handler 0 at entry; the room init "
+            .. "aot_delete(AOT_09_ITEM, SCE_NONE, SAT_MANUAL|SAT_PLAYER) "
+            .. "cleared the handler (item24 flag and the item model remain). "
+            .. "Continuing to 20D/20E/210 for the moon crest; the 11B lock "
+            .. "will still be short of the four hollows.")
+        BOT_STATE.milestone = "205 sun crest blocked"
+        set_phase(bot, "to_204_from_205",
+            "sun crest action disabled at init; continuing to the moon crest")
         return
     end
     -- The two armor-room pillars are object collision, which the A* grid does
@@ -3166,7 +3650,7 @@ local function enter_room(bot, room, tick)
             .. "common02=%s common03=%s common05=%s common64=%s common65=%s "
             .. "lockpick=%s scenario7c=%s scenario03=%s scenario69=%s "
             .. "scenario6a=%s scenario6b=%s scenario6c=%s lock17=%s "
-            .. "items(ribbon=%d ammo=%d herb=%d spray=%d gold=%d music=%d star=%d "
+            .. "items(ribbon=%d ammo=%d acid=%d herb=%d spray=%d gold=%d music=%d star=%d "
             .. "radio=%d desk=%d crank=%d shield=%d blue=%d armor=%d sun=%d moon=%d)",
         room.id, tick, p.x, p.z, room.camera, p.health, p.max_health,
         tostring(flag_common(bot, F_COMMON_02)),
@@ -3184,6 +3668,7 @@ local function enter_room(bot, room, tick)
         tostring(bot:flag(2, F_LOCK_17)),
         bot:item_count(ITEM_INK_RIBBON),
         bot:item_count(ITEM_HANDGUN_AMMO),
+        bot:item_count(0x11),
         bot:item_count(ITEM_GREEN_HERB),
         bot:item_count(ITEM_FIRST_AID_SPRAY),
         bot:item_count(ITEM_GOLD_EMBLEM),
@@ -3204,6 +3689,54 @@ local function enter_room(bot, room, tick)
     BOT_STATE.wp = 1
     BOT_STATE.wp_retry = false
     BOT_STATE.wp_tol = nil
+    if room.id == "20D"
+        and (BOT_STATE.phase == "to_20e_from_20d"
+            or BOT_STATE.next_phase == "to_20e_from_20d") then
+        local p = bot:player()
+        local hollows = crest_hollows(bot)
+        log(bot, "20D reached; its Richard death entry scene sends the player "
+            .. "back to 204 before the 20E door. The 20E door is armed only by "
+            .. "item_ck(IT_42_KEY_SERUM), which this route does not hold, so "
+            .. "20E/210 and the moon crest are not reachable here.")
+        BOT_STATE.milestone = "20D moon route blocked"
+        bot:finish(string.format(
+            "10F shield key taken; 205 sun crest blocked by the room-init "
+                .. "aot_delete; 20D Richard death scene blocks 20E/210 "
+                .. "(no serum) (health=%d armor=%d shield=%d star=%d "
+                .. "sun=%d moon=%d hollows=%d/4 lock17=%s)",
+            p.health, bot:item_count(ITEM_ARMOR_KEY),
+            bot:item_count(ITEM_SHIELD_KEY),
+            bot:item_count(ITEM_STAR_CREST), bot:item_count(ITEM_SUN_CREST),
+            bot:item_count(ITEM_MOON_CREST), hollows,
+            tostring(bot:flag(2, F_LOCK_17))))
+        return
+    end
+    if room.id == "204"
+        and (BOT_STATE.phase == "to_20e_from_20d"
+            or BOT_STATE.next_phase == "to_20e_from_20d") then
+        local p = bot:player()
+        local hollows = crest_hollows(bot)
+        log(bot, "20D Richard death scene returned the player to 204; the "
+            .. "20E/210 moon leg needs the serum-selected 20E door, which "
+            .. "this route never arms")
+        BOT_STATE.milestone = "20D moon route blocked"
+        bot:finish(string.format(
+            "10F shield key taken; 205 sun crest blocked by the room-init "
+                .. "aot_delete; 20D Richard scene returned to 204 before the "
+                .. "20E/210 moon door (health=%d armor=%d shield=%d star=%d "
+                .. "sun=%d moon=%d hollows=%d/4 lock17=%s)",
+            p.health, bot:item_count(ITEM_ARMOR_KEY),
+            bot:item_count(ITEM_SHIELD_KEY),
+            bot:item_count(ITEM_STAR_CREST), bot:item_count(ITEM_SUN_CREST),
+            bot:item_count(ITEM_MOON_CREST), hollows,
+            tostring(bot:flag(2, F_LOCK_17))))
+        return
+    end
+    -- The emblem detour keeps its phase across 105/104/10F; its per-leg
+    -- deadlines are room-relative, so start the clock fresh on each room.
+    if BOT_STATE.phase == "emblem_detour" then
+        BOT_STATE.phase_ticks = 0
+    end
 
     -- A travel phase names the phase that owns the room it just entered. The
     -- outward route below only describes the opening trip; using this hand-off
@@ -3858,7 +4391,95 @@ local function phase_to_11a(bot)
     end
 end
 
+-- The 11A crest wall is a set of SCE_USEITEM probes, not item actions. The
+-- star crest hollow (AOT_05) arms bank 9 bit 18, and the menu USE runs the
+-- room's from_main_5 placement event (F_SCENARIO_6A). Placing it on the first
+-- visit frees an inventory slot before the 105/10F detour and counts toward
+-- the 11B lock.
+local function place_11a_star_crest(bot)
+    local crest = BOT_STATE.crest
+    if crest.star_stage == "done" then
+        return true
+    end
+    if bot:item_count(ITEM_STAR_CREST) == 0 then
+        log(bot, string.format(
+            "11A star crest not held (placed=%s); continuing",
+            tostring(bot:flag(0, F_SCENARIO_6A))))
+        crest.star_stage = "done"
+        return true
+    end
+    if crest.star_stage == "start" then
+        crest.star_stage = "walk"
+        crest.star_ticks = 0
+        BOT_STATE.wp = 1
+        BOT_STATE.wp_retry = false
+        BOT_STATE.wp_tol = nil
+        log(bot, "11A star crest: walking to the crest hollow")
+    end
+    if crest.star_stage == "walk" then
+        crest.star_ticks = crest.star_ticks + 1
+        if walk_waypoints(bot, {
+            { 4500, 12000 },
+            { 4500, 23000 },
+            { 6000, 25000 },
+            { 7500, 26800 },
+        }, 150, "11A star crest") then
+            crest.star_stage = "use"
+            crest.star_ticks = 0
+            BOT_STATE.wp = 1
+            BOT_STATE.wp_retry = false
+            BOT_STATE.wp_tol = nil
+            log(bot, "11A star crest: at the hollow approach")
+        end
+        if crest.star_ticks > 3000 then
+            log(bot, "11A star crest walk timed out")
+            crest.star_stage = "done"
+        end
+        return false
+    end
+    if crest.star_stage == "use" then
+        local facing = bot:face_to(7500, 27600)
+        crest.star_ticks = crest.star_ticks + 1
+        local item_use = bot:flag(BANK_ITEM_USE, 18)
+        if item_use and facing.status == "facing" then
+            local accepted = bot:use_item(ITEM_STAR_CREST)
+            log(bot, string.format(
+                "11A star crest: use accepted=%s count=%d pos=(%d,%d)",
+                tostring(accepted), bot:item_count(ITEM_STAR_CREST),
+                bot:player().x, bot:player().z))
+            crest.star_stage = "wait"
+            crest.star_ticks = 0
+        elseif crest.star_ticks > 300 then
+            log(bot, string.format(
+                "11A star crest use flag absent (item_use=%s pos=(%d,%d)); "
+                    .. "leaving it for the crest route",
+                tostring(item_use), bot:player().x, bot:player().z))
+            crest.star_stage = "done"
+        end
+        return false
+    end
+    if crest.star_stage == "wait" then
+        crest.star_ticks = crest.star_ticks + 1
+        if bot:flag(0, F_SCENARIO_6A) and crest.star_ticks >= 60 then
+            log(bot, string.format(
+                "11A star crest placed (F_SCENARIO_6A); count=%d",
+                bot:item_count(ITEM_STAR_CREST)))
+            crest.star_stage = "done"
+            return true
+        elseif crest.star_ticks > 600 then
+            log(bot, "11A star crest placement did not set F_SCENARIO_6A")
+            crest.star_stage = "done"
+            return true
+        end
+        return false
+    end
+    return false
+end
+
 local function phase_to_11a_item(bot)
+    if not place_11a_star_crest(bot) then
+        return
+    end
     local slot = item_action_slot(bot, ITEM_RADIO_KEY)
     local count = bot:item_count(ITEM_RADIO_KEY)
     if not slot then

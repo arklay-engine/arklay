@@ -1663,6 +1663,18 @@ impl UserData for BotCtx {
             Ok(bot.snapshot.item_count(item))
         });
 
+        methods.add_method("inventory", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (index, stack) in bot.snapshot.inventory.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("slot", index + 1)?;
+                row.set("item", stack.id)?;
+                row.set("quantity", stack.quantity)?;
+                table.set(index + 1, row)?;
+            }
+            Ok(table)
+        });
+
         methods.add_method("can_see", |_lua, bot, slot: u8| {
             Ok(bot
                 .snapshot
