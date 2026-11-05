@@ -199,6 +199,12 @@ struct Cli {
     )]
     bot_max_ticks: u64,
 
+    /// Write a JSON statistics report (outcome, ticks, room entries, health,
+    /// damage, fire presses, turn-in-place ticks, scene ticks, door-unlock
+    /// timing) to this path when a `--bot-headless` run ends
+    #[arg(long, value_name = "PATH", requires = "bot_headless")]
+    bot_stats: Option<PathBuf>,
+
     /// Enable Classic REbirth's quick turn for this run: while walking
     /// backward, RUN turns the player 180 degrees in place over eight ticks.
     /// Overrides `[game] quick_turn` in arklay.toml
@@ -1452,6 +1458,7 @@ fn main() -> Result<()> {
                 enabled: bot_enabled,
                 headless: cli.bot_headless,
                 max_ticks: cli.bot_max_ticks,
+                stats_path: cli.bot_stats.clone(),
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -1553,7 +1560,7 @@ fn main() -> Result<()> {
                     player_options,
                     trace_options,
                     authoring,
-                    bot_options,
+                    bot_options.clone(),
                 );
             }
             // `--load` without `--ui` is the interactive continue: the same
