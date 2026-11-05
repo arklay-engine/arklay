@@ -378,6 +378,17 @@ local function interact_goal(bot, fact, index, count)
     if not action then
         return nil, string.format("interact slot %d is not a live action", fact.slot)
     end
+    if fact.kind == "push" then
+        local label = string.format("push %d/%d object %d onto slot %d (%s)", index, count,
+            fact.object, fact.slot, fact.label or "unnamed")
+        return {
+            kind = "interact", slot = fact.slot, label = label,
+            job = {
+                push = true, object = fact.object, zone = zone_of(action), label = label,
+                done = function(b) return BotPuzzle.push_done(b, fact) end,
+            },
+        }
+    end
     local label = string.format("interact %d/%d slot %d (%s)", index, count,
         fact.slot, fact.label or "unnamed")
     return {
@@ -633,7 +644,7 @@ local function choose(bot)
             if not pickup_fits(bot, action.item, full) then
                 -- No slot for it and no stack to merge into: retried once
                 -- the inventory changes.
-                mark(bot, "item", room, action.slot, "inventory full")
+                mark(bot, "item", room, action.slot, "inventory full: " .. inventory_sig(bot))
             elseif avoid then
                 -- Marked so remote planning stops heading back for it.
                 mark(bot, "item", room, action.slot, "avoid: " .. avoid, true)
@@ -1074,6 +1085,8 @@ function BotPlanner.step(bot)
     local status
     if goal.job.camera then
         status = BotNav.visit_camera(bot, goal.job)
+    elseif goal.job.push then
+        status = BotNav.push_object(bot, goal.job)
     else
         status = BotNav.press_zone(bot, goal.job)
     end
