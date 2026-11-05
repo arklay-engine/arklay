@@ -19,6 +19,9 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 # same Lua state, so BOT_STATE and the engine's bot memory keep their progress.
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --watch
 
+# --bot-risk 0.0..1.0 (default 0.25) is how much danger the planner may accept;
+# the route reads it as bot:risk(). Values outside the range are an error.
+
 # Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
 ```
@@ -520,6 +523,8 @@ first-mansion route.
 | `bot:tick()` | Monotonic app-update counter. |
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
+| `bot:world()` | The observed world model: rooms, doors, items, action presses and the frontier. Read-only; see [World model](#world-model). |
+| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Not used by the route yet. |
 | `bot:player()` | `{x, y, z, angle, health, max_health, state, being_attacked, equipped, collision_flags, grabbed}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `grabbed` is the entity's grab zone flag. |
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, pickup, frozen, controls_locked, controllable, dead}`. |
 | `bot:actions()` | Array of `{slot, kind, x, z, width, depth, item, quantity, next_room, key, lock, handler, flags}`. |
@@ -543,6 +548,54 @@ first-mansion route.
 | `bot:face_to(x, z)` | Turn toward a point. Returns `{status, distance, angle_error}`. |
 | `bot:distance(x, z)` | Horizontal distance. |
 
+### World model
+
+`bot:world()` returns a fresh table built only from what the bot observed
+this run (the room snapshot, doors, actions, room items, inventory counts and
+flags); it is reset with the bot's memory on a new game. Arrays are sorted by
+room id, then slot, so iteration is deterministic.
+
+```lua
+{
+  room = "106",
+  rooms = {
+    { id = "106", visited = true, entries = 2, last_entry = 812,
+      doors = { { slot = 1, target = "107", target_visited = true, key = 0,
+                  locked = false, unlocked = false, traversed = true,
+                  present = true, x = 9000, z = 9000 } },
+      items = { { slot = 4, item = 0x30, quantity = 1, present = false,
+                  taken = true, taken_tick = 640, x = 12000, z = 14000 } },
+      actions = { { slot = 3, kind = "event", presses = 1, last_press = 700,
+                    message = 0x21, flags = { { bank = 4, bit = 0x1A } } } } },
+    { id = "107", visited = false, entries = 0, doors = {}, items = {}, actions = {} },
+  },
+  frontier = {
+    { kind = "door", room = "106", slot = 2, target = "108", target_visited = false,
+      key = 0x30, locked = true, x = 3000, z = 3000 },
+    { kind = "item", room = "107", slot = 3, item = 0x40, quantity = 1, x = 1000, z = 1000 },
+  },
+}
+```
+
+- `rooms` lists every room entered and every target of a seen door;
+  `visited` is true once entered. `entries` counts room changes into it.
+- A door is `locked` when it was locked the first time the bot saw it
+  (lock bit `0x80` and its bank-2 flag clear), and `unlocked` once that flag
+  is observed set. It is `traversed` when the room changes to its target
+  right after an action press on it, or when it is the old room's only door
+  to the new room. `x`/`z` are the zone centre.
+- A *press* is an action edge while the room is controllable, credited to
+  the first action-key entry whose zone holds the reach point (as the engine
+  picks it). `message` is the first message opened and `flags` the flags
+  (bank 5 excepted, at most 8) that rose within 60 ticks of the latest press
+  in the same room.
+- A room item is `taken` when its slot stops being that item while the bot
+  stays in the room, and either the item's inventory count rose that tick or
+  the bot pressed the slot within 120 ticks. An item that vanished otherwise
+  (a script, or absent on re-entry) is only `present = false`.
+- `frontier` is every present, untraversed door and every present item not
+  taken; `locked` there is the door's current state.
+
 ### Room metadata
 
 A room may author puzzle data next to its other files as
@@ -564,12 +617,34 @@ source line on error.
 </bot>
 ```
 
-`format` is required to be `1` when present (the default). `puzzle` takes
+`format` is `1` (the default when absent) or `2`. `puzzle` takes
 `id` and optional `title`; `step` takes `slot`, `bank`, `bit` and `label`.
 `bit` is the flag selector passed to `bot:flag`, so the examples use `0x1A`,
 not bit number 26. A step has any number of `<walk x="..." z="..."/>` points
 and at most one `<face x="..." z="..."/>`; coordinates are signed 32-bit
 integers. `slot` and `bit` are bytes and `bank` must be below 10.
+
+Format 2 adds fact elements. They describe the room, never coordinates or
+walk paths, have no children, and are an error in a format-1 file:
+
+| Element | Attributes | Meaning |
+| --- | --- | --- |
+| `<interact>` | `slot`, `bank`, `bit`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. |
+| `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
+| `<avoid>` | `slot`, `reason` | The planner should not use AOT `slot`; `reason` is a non-empty note. |
+
+```xml
+<bot format="2">
+  <interact slot="4" bank="1" bit="0x22" label="push the statue"/>
+  <answer choice="no" slot="6" label="do not drink"/>
+  <avoid slot="7" reason="the plant stuns the player"/>
+</bot>
+```
+
+`bot:room_meta()` always has `interacts`, `answers` and `avoids` arrays
+(empty for a format-1 file): `{slot, bank, bit, label}`,
+`{choice, slot, bank, bit, label}` (absent fields are `nil`) and
+`{slot, reason}`.
 
 `bot:room_meta()` returns a fresh Lua table; it is a read-only view in the
 sense that it cannot write game state:
