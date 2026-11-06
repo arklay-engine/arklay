@@ -11,6 +11,8 @@
 //! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
 //! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp`, `room/<id>/mask/<nn>.bmp` |
 //! | `Common/bin/rc2000_.adt`, `rc2168_.adt` | `room/<id>/scroll/<nn>.bmp` |
+//! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
+//! | ADT streams in `Common/bin/itemdata.bin` | `ui/status/check_<id:02x>.tim` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -38,7 +40,9 @@
 //! ([`emd2::texture_bmps`]). Music tracks are numbered as RE1's are
 //! ([`bgm_track`]). Sound banks are split into one WAV per slot, named as
 //! [`crate::se2`] describes. Each room's English name comes from Classic REbirth's
-//! debug room table in the install's `ddraw.dll` ([`room_names`]).
+//! debug room table in the install's `ddraw.dll` ([`room_names`]), and the
+//! status screen's English labels from the 7z archive in the same DLL
+//! ([`sevenz`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
 //! alternate takes of the six reels (three byte-identical, three differing
@@ -60,7 +64,7 @@ use crate::mask::MaskTable;
 use crate::pack::PackWriter;
 use crate::progress::Progress;
 use crate::state::RoomId;
-use crate::{adt, bmp, emd2, rdt2, sap, se2, tim};
+use crate::{adt, bmp, emd2, rdt2, sap, se2, sevenz, tim};
 
 /// The pack id of a converted RE2 install.
 pub const BASE_PACK_ID: &str = "re2";
@@ -329,26 +333,28 @@ impl Tally {
 /// install, keyed by ([`Re2Room::stage_group`], room); empty, with a
 /// warning, when there is no DLL or it holds no table this reader knows.
 fn find_room_names(
-    root: &Path,
-    data: &Path,
+    dll: Option<&(PathBuf, Vec<u8>)>,
     warnings: &mut Vec<String>,
 ) -> BTreeMap<(usize, u8), String> {
-    // The DLL sits beside the executable, at or above the data directory.
-    let dll = data
-        .ancestors()
-        .take_while(|dir| dir.starts_with(root))
-        .find_map(|dir| child(dir, "ddraw.dll"));
-    let names = dll
-        .as_ref()
-        .and_then(|dll| fs::read(dll).ok())
-        .and_then(|bytes| room_names(&bytes));
+    let names = dll.and_then(|(_, bytes)| room_names(bytes));
     names.unwrap_or_else(|| {
         warnings.push(match dll {
-            Some(dll) => format!("{}: no room-name table; rooms are unnamed", dll.display()),
+            Some((dll, _)) => format!("{}: no room-name table; rooms are unnamed", dll.display()),
             None => "no Classic REbirth ddraw.dll; rooms are unnamed".to_owned(),
         });
         BTreeMap::new()
     })
+}
+
+/// Classic REbirth's `ddraw.dll` beside the install, read: it sits beside the
+/// executable, at or above the data directory.
+fn find_ddraw(root: &Path, data: &Path) -> Option<(PathBuf, Vec<u8>)> {
+    let dll = data
+        .ancestors()
+        .take_while(|dir| dir.starts_with(root))
+        .find_map(|dir| child(dir, "ddraw.dll"))?;
+    let bytes = fs::read(&dll).ok()?;
+    Some((dll, bytes))
 }
 
 /// The room names in Classic REbirth's debug room table in `dll`, keyed by
@@ -412,7 +418,8 @@ pub(crate) fn convert(
         ));
     }
     let rooms = scan_rooms(&layout, &mut warnings)?;
-    let names = find_room_names(root, &layout.data, &mut warnings);
+    let ddraw = find_ddraw(root, &layout.data);
+    let names = find_room_names(ddraw.as_ref(), &mut warnings);
     progress.advance("scan");
     progress.end_phase();
 
@@ -498,6 +505,13 @@ pub(crate) fn convert(
     copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_scroll_pictures(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_status_art(
+        &layout,
+        ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
+        &mut writer,
+        &mut tally,
+        &mut warnings,
+    )?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_die_text(&layout, &mut writer, &mut tally)?;
     copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
@@ -1279,6 +1293,137 @@ fn copy_scroll_pictures(
         }
     }
     Ok(())
+}
+
+/// The status screen's sheets, each a run of TIMs: `Common/Data/st<n>_jp.tim`
+/// (one per character), and `Common/Data/itemall.bin`, the item icons.
+const STATUS_SHEETS: [&str; 4] = ["ST0_JP", "ST1_JP", "ST2_JP", "ITEMALL"];
+
+/// The status screen's art, as `ui/status/<stem>_<k>.tim` per TIM `k` of each
+/// [`STATUS_SHEETS`] file, and CHECK's pictures from `Common/bin/itemdata.bin`
+/// as `ui/status/check_<id:02x>.tim`.
+///
+/// The `st*_jp.tim` in the data folder carry Japanese command labels; Classic
+/// REbirth's `ddraw.dll` holds English copies in a 7z archive ([`sevenz`]),
+/// which win when present.
+fn copy_status_art(
+    layout: &Layout,
+    ddraw: Option<&[u8]>,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let english: BTreeMap<String, Vec<u8>> = ddraw
+        .and_then(sevenz::find)
+        .map(|archive| {
+            sevenz::extract(archive, |name| {
+                let name = name.to_ascii_lowercase();
+                name.starts_with("common/data/st") && name.ends_with("_jp.tim")
+            })
+        })
+        .transpose()
+        .unwrap_or_else(|error| {
+            warnings.push(format!("ddraw.dll: no English status art: {error:#}"));
+            None
+        })
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(name, data)| {
+            let leaf = name.rsplit('/').next()?;
+            Some((leaf.to_ascii_uppercase(), data))
+        })
+        .collect();
+    let data_files = files_in(layout.common(&["Data"]))?;
+    for stem in STATUS_SHEETS {
+        let bytes = match english.get(&format!("{stem}.TIM")) {
+            Some(bytes) => bytes.clone(),
+            None => match data_files
+                .iter()
+                .find(|path| upper_parts(path).is_some_and(|(name, _)| name == stem))
+            {
+                Some(path) => read(path)?,
+                None => {
+                    if layout.common.is_some() {
+                        warnings.push(format!("no Common/Data/{stem}; the status screen lacks it"));
+                    }
+                    continue;
+                }
+            },
+        };
+        let tims = split_tims(&bytes).with_context(|| format!("Common/Data/{stem}"))?;
+        for (index, tim) in tims.into_iter().enumerate() {
+            let entry = format!("ui/status/{}_{index}.tim", stem.to_ascii_lowercase());
+            tally.add(writer, "status", &entry, tim.to_vec())?;
+        }
+    }
+    let itemdata = files_in(layout.common(&["bin"]))?
+        .into_iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "ITEMDATA"));
+    match itemdata {
+        Some(path) => {
+            let bytes = read(&path)?;
+            for (id, tim) in
+                check_pictures(&bytes).with_context(|| format!("{}", path.display()))?
+            {
+                tally.add(
+                    writer,
+                    "status",
+                    &format!("ui/status/check_{id:02x}.tim"),
+                    tim,
+                )?;
+            }
+        }
+        None if layout.common.is_some() => {
+            warnings.push("no Common/bin/itemdata.bin; CHECK shows no picture".into());
+        }
+        None => {}
+    }
+    Ok(())
+}
+
+/// The TIMs laid end to end in `data`.
+fn split_tims(data: &[u8]) -> Result<Vec<&[u8]>> {
+    let mut tims = Vec::new();
+    let mut rest = data;
+    while !rest.is_empty() {
+        let len = tim::byte_len(rest)?;
+        let (tim, tail) = rest.split_at_checked(len).context("TIM is truncated")?;
+        tims.push(tim);
+        rest = tail;
+    }
+    Ok(tims)
+}
+
+/// Pictures `itemdata.bin` holds: one ADT stream per item id, behind a
+/// table of their offsets.
+const CHECK_PICTURES: usize = 100;
+
+/// CHECK's pictures in `itemdata.bin`, by item id, each decoded to its TIM.
+/// The executable loads entry `id` for the item checked (0x4FE090).
+fn check_pictures(data: &[u8]) -> Result<Vec<(usize, Vec<u8>)>> {
+    let table = data
+        .get(..CHECK_PICTURES * 4)
+        .context("itemdata.bin's offset table is truncated")?;
+    let offsets: Vec<usize> = table
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|word| u32::from_le_bytes(*word) as usize)
+        .collect();
+    let mut out = Vec::with_capacity(CHECK_PICTURES);
+    for (id, &start) in offsets.iter().enumerate() {
+        let end = offsets
+            .get(id + 1)
+            .copied()
+            .filter(|&end| end > start)
+            .unwrap_or(data.len());
+        let stream = data
+            .get(start..end)
+            .with_context(|| format!("picture {id:#04x} is past the file"))?;
+        let tim = adt::decode(stream).with_context(|| format!("picture {id:#04x}"))?;
+        out.push((id, tim));
+    }
+    Ok(out)
 }
 
 /// `Common/Data/Kage.adt`, the shadows' texture, as [`crate::shadow::KAGE_ENTRY`].

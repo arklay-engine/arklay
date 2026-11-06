@@ -159,6 +159,18 @@ The inventory runs (`inv_*.txt`) use the same warp, with the items given by `--g
 - `inv_mix.txt` with `--give 2:0x26:1 --give 3:0x27:1 --give 4:0x14:30 --life 200 --ticks 800` (`inv_mix.lua`): COMBN the green herb onto the red one. "Will you mix the herb?" shows at 521, the yes at 600 (with the message's decide cue, 4:6) makes the green and red mix (0x2A) in the herb's slot at 602, the red herb's slot empties, the rounds move up at 617 and the menu closes from 621. `inv` and `ip` match on every tick.
 - `inv_reload.txt` with `--give 0:2:5 --give 2:0x14:30 --life 200 --ticks 1100` (`inv_reload.lua`): COMBN the 30 rounds onto the handgun's 5: the handgun takes 18 and 17 rounds are left, and the cursor follows the handgun. Then COMBN the full handgun with the rounds: "It's already fully loaded." from 702 until the press at 780, then the grid. Then EQUIP on the handgun, which takes it off. All 756 ticks match, `rseed` included (the run ends with the screen up).
 
+The screen's frames compare the same way: record with `--shot-dir DIR --shot-every 1` added, run arklay with `--capture-every 1 --capture-dir DIR` added, and compare each of the original's frames with arklay's 344 ticks earlier, as `pixels` does (the 640x480 frame boxed down to 320x240, the mean error over the three channels). The status screen's background is the clear colour (8, 8, 32, from `0x4C4690` in the screen's start, `0x501BD0`), and the blue behind the slots is the icons' own: an empty slot draws icon 0. The sheets are `ui/status/st0_jp_<n>` for Leon and `st1_jp_<n>` for Claire (the 7z archive in `ddraw.dll`'s resources), the icons `ui/status/itemall_<n>` and CHECK's pictures `ui/status/check_<id>` (`itemdata.bin`, ADT). CHECK in the PC original shows a still picture of the item, not a turning model. From 360 to the run's last tick, and again with the message box's corner, (0, 165) to (232, 240), blanked on both sides:
+
+| Run | Frames | Mean error | Without the message box |
+|---|---|---|---|
+| `inv_check` | 640 | 1.45 | 0.64 |
+| `inv_reload` | 740 | 1.40 | 0.74 |
+| `inv_mix` | 440 | 1.35 | 0.60 |
+| `inv_use` (life 100) | 440 | 1.77 | 0.68 |
+| `weapon_shotgun` (to 700) | 340 | 0.46 | 0.26 |
+
+The open, the close and the room's fade back in, the cursor's pulse, the command menu's slides, CHECK's slides, COMBN's cursor slides (`0x502B30`) and the heal's sweep differ from the original by no more than a still frame of the screen does (0.77 with no name shown). The worst frames are the item names and the messages, which are the port's font (S11): up to 6.05 in `inv_check`'s description. Outside the message box every frame is within 1.0, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory").
+
 ## Weapons
 
 Leon A's route (100, 101, 102, 118, 119, 11A, 11B, 103, 200) has three weapons: the handgun (0x02) and the knife (0x01) from the start, and the shotgun (0x07) with five shells, which room 101's script gives on the second check of Kendo's body after the scene (its flag 15). Room 102 has 30 handgun rounds (0x14) and room 200 more. Nothing else on the route arms the player.

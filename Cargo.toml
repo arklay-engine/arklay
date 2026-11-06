@@ -28,6 +28,9 @@ clap = { version = "4", features = ["derive"] }
 fontdue = "0.9"
 image-webp = { version = "0.2", optional = true }
 lewton = { version = "0.10", optional = true }
+# Classic REbirth's English status-screen art: a 7z archive of LZMA streams
+# in its `ddraw.dll` (`src/sevenz.rs`).
+lzma-rs = "0.3"
 mlua = { version = "0.10", default-features = false, features = [
     "lua54",
     "vendored",

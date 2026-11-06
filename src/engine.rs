@@ -1869,6 +1869,54 @@ const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 /// every recording closes in the same ten.
 const RE2_STATUS_CLOSE_TICKS: u8 = 10;
 
+/// What RE2's status screen's open and close draw on a frame
+/// ([`GameSession::re2_status_view`]), over the same ticks as RE 1's fades.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Re2StatusView {
+    /// The frozen room, darkened by the fade's alpha.
+    Room(Option<u8>),
+    /// Nothing: the fade has reached black.
+    Black,
+    /// The status screen, darkened by the fade's alpha.
+    Screen(Option<u8>),
+}
+
+/// RE2's status screen's open, by tick since START (1 the tick it opens,
+/// whose frame still shows the room as it was): the room darkens over two
+/// ticks (`0x3000` a tick), the screen is black for three while the page
+/// loads, then fades in from `0x5000` over four (`0x1800` a tick).
+fn re2_status_open_view(ticks: u8) -> Re2StatusView {
+    match ticks {
+        0 | 1 => Re2StatusView::Room(None),
+        2 | 3 => Re2StatusView::Room(Some(96 * (ticks - 1))),
+        4..=6 => Re2StatusView::Black,
+        7..=10 => Re2StatusView::Screen(Some(160 - 48 * (ticks - 7))),
+        _ => Re2StatusView::Screen(None),
+    }
+}
+
+/// RE2's status screen's close, by tick since its page went to 0 (page 0,
+/// `0x502130`, then page 1, `0x502150`): the tick after drops the cursor and
+/// the item's name, the fade out adds `0x1800` a tick from the next, and the
+/// screen is black from the seventh until the room returns.
+fn re2_status_close_view(ticks: u8) -> Re2StatusView {
+    match ticks {
+        0 | 1 => Re2StatusView::Screen(None),
+        2..=6 => Re2StatusView::Screen(Some(48 * (ticks - 1))),
+        _ => Re2StatusView::Black,
+    }
+}
+
+/// The fade over the room as RE2's status screen hands it back, by tick
+/// since the room returned: game mode 5 fades it in from `0xD000`, `0x1800`
+/// a tick, as the screen's own fade in does.
+fn re2_status_return_alpha(ticks: u8) -> Option<u8> {
+    match ticks {
+        1..=5 => Some(0xD0 - 0x30 * (ticks - 1)),
+        _ => None,
+    }
+}
+
 /// Which of [`GameSession::render_pass`]'s variants draws the scene.
 enum ScenePass<'g> {
     /// The software rasterizer draws it into the framebuffer.
@@ -1943,6 +1991,12 @@ struct GameSession {
     /// RE2's status screen is closing: the ticks since its page went to 0
     /// (see [`RE2_STATUS_CLOSE_TICKS`]).
     re2_status_close: Option<u8>,
+    /// RE2's status screen is up: the ticks since START opened it, 1 on the
+    /// opening tick (see [`GameSession::re2_status_view`]).
+    re2_status_open: Option<u8>,
+    /// RE2's status screen has closed: the ticks since the room came back,
+    /// 1 on the first, while it fades in ([`re2_status_return_alpha`]).
+    re2_status_return: Option<u8>,
     /// The first fixed tick after arming a fade must not advance it: the frame
     /// it was armed on has not been drawn yet.
     menu_fade_pending: bool,
@@ -2669,6 +2723,8 @@ impl GameSession {
             menu_fade: transition::Fade::inactive(),
             menu_fade_phase: MenuFadePhase::None,
             re2_status_close: None,
+            re2_status_open: None,
+            re2_status_return: None,
             menu_fade_pending: false,
             menu_fade_draw: None,
             menu_fade_started: false,
@@ -2899,6 +2955,26 @@ impl GameSession {
     /// the menu bits (`0x100`/`0x40`); while the menu is up the room stays
     /// frozen and the same input drives the menu.
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
+        if let Some(ticks) = self.re2_status_open.as_mut() {
+            *ticks = ticks.saturating_add(1);
+        }
+        self.re2_status_return = self
+            .re2_status_return
+            .map(|ticks| ticks + 1)
+            .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
+        let result = self.tick_session(pack, ui, input, action);
+        self.animate_re2_status(pack);
+        result
+    }
+
+    /// [`GameSession::tick`]'s work, before RE2's status screen animates.
+    fn tick_session(
+        &mut self,
+        pack: &Pack,
+        ui: UiInput,
+        input: player::Input,
+        action: bool,
+    ) -> Result<()> {
         self.game.countdown_hud = None;
         self.finish_menu_request(pack);
         let cut = Some((self.loaded.id, self.loaded.room.current_cut));
@@ -4455,6 +4531,57 @@ impl GameSession {
             return;
         }
         self.arm_menu_open_fade();
+        if self.game.is_re2_room {
+            self.re2_status_open = Some(1);
+        }
+    }
+
+    /// One tick of RE2's status screen's own drawing state, its open and
+    /// close included: the original's draw routines step the cursor's pulse
+    /// and the condition panel's trace on every frame they run, whatever the
+    /// page's logic is doing (`M.animate(api, open, close)`).
+    fn animate_re2_status(&mut self, pack: &Pack) {
+        if self.menu.is_none() || !self.game.is_re2_room {
+            self.re2_status_open = None;
+            return;
+        }
+        let Some(open) = self.re2_status_open else {
+            return;
+        };
+        let close = self.re2_status_close;
+        let Self {
+            menu,
+            save_dir,
+            font,
+            text,
+            game,
+            ..
+        } = self;
+        if let Some(screen) = menu.as_mut() {
+            let cx = UiContext {
+                authentic: game.player_options.authentic,
+                pack,
+                save_dir,
+                font: font.as_ref(),
+                text: Some(text),
+                ticks: game.frame,
+                cues: std::cell::RefCell::new(Vec::new()),
+                game: Some(game),
+            };
+            screen.signal_with("animate", (open, close), &cx);
+        }
+    }
+
+    /// What RE2's status screen draws this frame, while it is up: the room
+    /// or the screen and the fade over it.
+    fn re2_status_view(&self) -> Option<Re2StatusView> {
+        if self.menu.is_none() || !self.game.is_re2_room {
+            return None;
+        }
+        if let Some(close) = self.re2_status_close {
+            return Some(re2_status_close_view(close));
+        }
+        self.re2_status_open.map(re2_status_open_view)
     }
 
     /// The frame after a menu was requested: restore the message word the
@@ -5980,6 +6107,7 @@ impl GameSession {
             return;
         }
         self.re2_status_close = None;
+        self.re2_status_return = Some(1);
         self.menu = None;
         self.game.close_re2_items();
         self.examine = None;
@@ -7269,10 +7397,19 @@ impl GameSession {
         // one last time, so the frozen frame comes from this pass's renderer
         // (the GPU keeps compositing its last recorded scene). A canvas shows
         // no room at all.
-        let fade_hides_room = self.menu.is_some()
-            && self.menu_fade_hides()
-            && !(self.menu_fade_phase == MenuFadePhase::Out && self.menu_fade_pending);
-        if canvas.is_some() || (self.load_held && self.menu.is_none()) {
+        let re2_status = self.re2_status_view();
+        let fade_hides_room = match re2_status {
+            Some(view) => view == Re2StatusView::Black,
+            None => {
+                self.menu.is_some()
+                    && self.menu_fade_hides()
+                    && !(self.menu_fade_phase == MenuFadePhase::Out && self.menu_fade_pending)
+            }
+        };
+        // RE2's status screen draws the room under the first frames of its
+        // fade, the way the original's suspended game loop still draws it.
+        let re2_room = matches!(re2_status, Some(Re2StatusView::Room(_)));
+        if (canvas.is_some() && !re2_room) || (self.load_held && self.menu.is_none()) {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         } else if self.document_pickup_hides_menu() {
@@ -7282,7 +7419,8 @@ impl GameSession {
             // menu shows through.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
-        } else if self.menu.is_none() || (self.freeze_room_frame && !fade_hides_room) {
+        } else if self.menu.is_none() || ((self.freeze_room_frame || re2_room) && !fade_hides_room)
+        {
             let gpu = if let ScenePass::Record(gpu) = pass {
                 // A new room retires the previous room's uploads.
                 if self.gpu_room.replace(self.loaded.id) != Some(self.loaded.id) {
@@ -7382,7 +7520,11 @@ impl GameSession {
         // frame and while the closing fade runs; it is revealed for the
         // fade-in. A document pick-up suppresses it for the whole flow: the
         // original's state-8 file screen draws no inventory panel.
-        if self.menu.is_some() && !self.menu_fade_hides() && !self.document_pickup_hides_menu() {
+        let menu_shown = match re2_status {
+            Some(view) => matches!(view, Re2StatusView::Screen(_)),
+            None => !self.menu_fade_hides(),
+        };
+        if self.menu.is_some() && menu_shown && !self.document_pickup_hides_menu() {
             // The cursor and the 0xBA item-name line are drawn from
             // menu_handle_input (state 1), which only runs once the opening
             // fade has finished *and* the state-0 transition frame has passed;
@@ -7423,6 +7565,13 @@ impl GameSession {
             // Only the menu's input handler draws the slot cursor, and the
             // pick-up viewer's state never calls it.
             let show_cursor = menu_ready && !box_owns_cursor && self.pickup_view.is_none();
+            // RE2's status screen draws its cursor and the item's name from
+            // its first frame; it hides them itself when it closes.
+            let (show_cursor, show_item_name) = if re2_status.is_some() {
+                (self.pickup_view.is_none(), self.pickup_view.is_none())
+            } else {
+                (show_cursor, show_item_name)
+            };
             let Self {
                 menu,
                 save_dir,
@@ -7609,6 +7758,21 @@ impl GameSession {
             }
         }
         // The pause-menu open/close fade sits over the menu and its overlays.
+        if let Some(view) = re2_status {
+            // RE2's status screen fades on its own ticks, not RE 1's.
+            self.menu_fade_draw = None;
+            if let Re2StatusView::Room(Some(alpha)) | Re2StatusView::Screen(Some(alpha)) = view {
+                self.framebuffer
+                    .fade_to_color(crate::transition::FadeColor::Black, alpha);
+            }
+        } else if let Some(alpha) = self
+            .re2_status_return
+            .filter(|_| self.menu.is_none())
+            .and_then(re2_status_return_alpha)
+        {
+            self.framebuffer
+                .fade_to_color(crate::transition::FadeColor::Black, alpha);
+        }
         self.draw_menu_fade();
         if let (Some(hud), Some(font)) = (&self.game.countdown_hud, &self.font) {
             let tint = if hud.red {
@@ -34502,5 +34666,49 @@ end
         let ids: Vec<_> = room.zones.iter().map(|z| (z.cam_from, z.cam_to)).collect();
         assert_eq!(ids, [(1, 4), (4, 3), (2, 0), (3, 2)]);
         assert!(room.zone_gates.iter().all(|g| g.flag == 2 && g.floor == 4));
+    }
+
+    #[test]
+    fn re2_status_fades_on_the_originals_frames() {
+        use Re2StatusView::{Black, Room, Screen};
+        // `inv_check`'s frames: START at 364 (tick 1), the room unchanged on
+        // its frame, then darker over two, three black, the screen in over
+        // four.
+        let open: Vec<_> = (1..=11).map(re2_status_open_view).collect();
+        assert_eq!(
+            open,
+            [
+                Room(None),
+                Room(Some(96)),
+                Room(Some(192)),
+                Black,
+                Black,
+                Black,
+                Screen(Some(160)),
+                Screen(Some(112)),
+                Screen(Some(64)),
+                Screen(Some(16)),
+                Screen(None),
+            ]
+        );
+        let close: Vec<_> = (0..=7).map(re2_status_close_view).collect();
+        assert_eq!(
+            close,
+            [
+                Screen(None),
+                Screen(None),
+                Screen(Some(48)),
+                Screen(Some(96)),
+                Screen(Some(144)),
+                Screen(Some(192)),
+                Screen(Some(240)),
+                Black,
+            ]
+        );
+        let back: Vec<_> = (1..=6).map(re2_status_return_alpha).collect();
+        assert_eq!(
+            back,
+            [Some(208), Some(160), Some(112), Some(64), Some(16), None]
+        );
     }
 }
