@@ -408,6 +408,12 @@ function BotPuzzle.placed_before(index)
     return (BOT_STATE.pushed or 0) > 0 and BOT_STATE.pushed < index
 end
 
+-- Whether a push step finished on this entry: what it placed goes back
+-- once the bot leaves (306's box, which holds Doom Book II's zone live).
+function BotPuzzle.pushed_here()
+    return (BOT_STATE.pushed or 0) > 0
+end
+
 -- A new room entry forgets the flagless steps and the pushes done.
 function BotPuzzle.enter_room()
     BOT_STATE.puzzle_visits = {}

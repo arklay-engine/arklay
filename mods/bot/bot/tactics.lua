@@ -550,6 +550,17 @@ local function firearm(bot, k, enemy)
             end
         end
     end
+    local margin = 1 + 0.5 * (1 - risk(bot))
+    -- An ordinary gun holds the rounds for the kill, with the margin.
+    local finish = false
+    for _, row in ipairs(guns) do
+        local band = entry and entry.keep and entry.keep[row.item]
+        local damage = band and band.damage
+        if not row.reserve and damage and damage > 0 and enemy and enemy.health
+            and (enemy.health // damage + 1) * margin <= row.rounds then
+            finish = true
+        end
+    end
     -- A reserve gun spends only the rounds the <fight>s ahead leave
     -- (BotTactics.saved_rounds).
     for i = #guns, 1, -1 do
@@ -557,11 +568,18 @@ local function firearm(bot, k, enemy)
         if row.reserve then
             local base = row.base or row.item
             -- A band's `spare`: the rounds it leaves held (a zombie
-            -- gets a grenade only while the lab's fights keep theirs).
+            -- gets a grenade only while the lab's fights keep theirs),
+            -- only while an ordinary gun can finish it and it has not hurt
+            -- the bot yet: running past costs a grab (401's zombies grabbed
+            -- twice past a handgun holding five rounds, then five times
+            -- past an empty one, the launcher holding six).
             local band = entry and entry.keep and entry.keep[row.item]
+            local hurt = enemy and state().hurt_by
+                and state().hurt_by[hurt_key(bot:room().id, enemy.slot)]
+            local keep = band and finish and not hurt and band.spare or 0
             local spare = family_rounds(bot, k, base)
                 - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id)
-                - (band and band.spare or 0)
+                - keep
             if spare < row.rounds then
                 row.rounds = spare
             end
@@ -570,8 +588,7 @@ local function firearm(bot, k, enemy)
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health,
-        1 + 0.5 * (1 - risk(bot)))
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin)
     if not best then
         return nil, 0
     end
@@ -792,6 +809,9 @@ local function choose(bot, s, k, enemies, player)
                 -- yet (a zombie still feeding shows only 0x01) or one out of
                 -- every aim's line. No shot can hit it, so do not stand
                 -- aiming. The wait lets a waking monster's first tick pass.
+                -- The walk gives it a berth, as a run past does: 114's
+                -- zombie woke beside the herb walk and grabbed.
+                s.avoid_until = bot:tick() + RUN_HOLD
                 s.run_logs = s.run_logs or {}
                 local note = string.format("no aim bit (status=0x%02X)", enemy.status_flags)
                 if s.run_logs[enemy.slot] ~= note then

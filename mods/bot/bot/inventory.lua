@@ -854,8 +854,9 @@ BotInventory.MAKE_ROOM_HURT = 24
 -- or nil: every slot used, a frontier pickup here (one the planner has not
 -- given up on, `skip`) that merges into no held stack and that the run
 -- needs (a key, a <use> item, or the ammunition of a gun held or in the
--- box), at least two heal stacks held (a cure is none), and MAKE_ROOM_HURT
--- health missing.
+-- box), at least two heal stacks held (a cure is none; one will do for a
+-- doom book a push on this entry made reachable), and MAKE_ROOM_HURT health
+-- missing.
 -- 219 left 12 grenade rounds for a full inventory at 56/96 health with
 -- four heal stacks held.
 function BotInventory.heal_for_room(bot, skip)
@@ -872,7 +873,7 @@ function BotInventory.heal_for_room(bot, skip)
             heals[#heals + 1] = row
         end
     end
-    if #heals < 2 then
+    if #heals == 0 then
         return nil
     end
     local box = BotInventory.remembered(bot)
@@ -884,7 +885,7 @@ function BotInventory.heal_for_room(bot, skip)
         end
     end
     local here = bot:room().id
-    local wanted, needed = false, false
+    local wanted, needed, lone = false, false, false
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and goal.room == here and not (skip and skip(goal)) then
             local kind, merge = bot:item_kind(goal.item)
@@ -893,6 +894,7 @@ function BotInventory.heal_for_room(bot, skip)
                 and (kind == "key" or ctx.uses[goal.item] or book or guns_ammo[goal.item]) then
                 wanted = true
                 needed = needed or kind == "key" or ctx.uses[goal.item] or book
+                lone = lone or (book and BotPuzzle.pushed_here())
             end
         end
     end
@@ -900,6 +902,14 @@ function BotInventory.heal_for_room(bot, skip)
     -- book lies in its zone only while the pushed box stands in the probe,
     -- and the room puts the box back once the bot leaves.
     if not wanted or (not needed and hurt < BotInventory.MAKE_ROOM_HURT) then
+        return nil
+    end
+    -- The last heal goes only for a doom book a push on this entry made
+    -- reachable: the bot left 306's book for a full inventory holding
+    -- one spray, and back from the box the slab held the reset box short
+    -- of the probe, so the Wolf Medal never came (119's book, behind no
+    -- push, took the last herb and the bot died in 207).
+    if #heals < 2 and not lone then
         return nil
     end
     -- The largest stack first, as BotSurvival.heal does.
