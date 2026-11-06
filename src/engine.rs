@@ -1917,6 +1917,17 @@ fn re2_status_return_alpha(ticks: u8) -> Option<u8> {
     }
 }
 
+/// What RE2's get-item window draws, by the ticks since its first (1 on
+/// it) and, while it closes, its ticks in the close: it opens and closes
+/// as the status screen does (its routines 0 and 1 run the same fades), the
+/// close from the tick sub 0 plays its cancel cue.
+fn re2_item_get_view(opened: u8, closing: Option<u8>) -> Re2StatusView {
+    match closing {
+        Some(ticks) => re2_status_close_view(ticks),
+        None => re2_status_open_view(opened),
+    }
+}
+
 /// Which of [`GameSession::render_pass`]'s variants draws the scene.
 enum ScenePass<'g> {
     /// The software rasterizer draws it into the framebuffer.
@@ -1997,6 +2008,12 @@ struct GameSession {
     /// RE2's status screen has closed: the ticks since the room came back,
     /// 1 on the first, while it fades in ([`re2_status_return_alpha`]).
     re2_status_return: Option<u8>,
+    /// RE2's get-item window's art: the status screen's script in its
+    /// `get` mode, while the window is up.
+    re2_item_screen: Option<Box<LuaScreen>>,
+    /// The ticks since the get-item window's first, 1 on it: its open fade
+    /// runs on these whatever the window's phase.
+    re2_item_ticks: u8,
     /// The first fixed tick after arming a fade must not advance it: the frame
     /// it was armed on has not been drawn yet.
     menu_fade_pending: bool,
@@ -2725,6 +2742,8 @@ impl GameSession {
             re2_status_close: None,
             re2_status_open: None,
             re2_status_return: None,
+            re2_item_screen: None,
+            re2_item_ticks: 0,
             menu_fade_pending: false,
             menu_fade_draw: None,
             menu_fade_started: false,
@@ -3622,9 +3641,11 @@ impl GameSession {
                 self.swallow_action = false;
             }
             let was_active = self.game.message.active;
+            self.open_re2_item_screen(pack);
             if let Some(cue) = self.game.tick_re2_item_get() {
                 self.play_re2_status_sounds(pack, &[cue]);
             }
+            self.animate_re2_item_screen(pack);
             self.game.update_message(
                 MessageInput {
                     action,
@@ -4574,6 +4595,93 @@ impl GameSession {
             };
             screen.signal_with("animate", (open, close), &cx);
         }
+    }
+
+    /// Open the get-item window's art for the window that has just opened.
+    fn open_re2_item_screen(&mut self, pack: &Pack) {
+        if self.re2_item_screen.is_some() {
+            return;
+        }
+        self.re2_item_ticks = 0;
+        let Self {
+            re2_item_screen,
+            save_dir,
+            font,
+            text,
+            game,
+            ..
+        } = self;
+        let mut cx = UiContext {
+            authentic: game.player_options.authentic,
+            pack,
+            save_dir,
+            font: font.as_ref(),
+            text: Some(text),
+            ticks: game.frame,
+            cues: std::cell::RefCell::new(Vec::new()),
+            game: None,
+        };
+        let args = [("mode", ScreenArg::Str("get".to_owned()))];
+        match LuaScreen::open_screen_with_game(
+            "main_menu",
+            &args,
+            ScreenAction::Resume,
+            &mut cx,
+            game,
+        ) {
+            Ok(screen) => *re2_item_screen = Some(Box::new(screen)),
+            Err(err) => eprintln!("warning: get-item window's art unavailable: {err:#}"),
+        }
+    }
+
+    /// One tick of the get-item window's art after the window's: its trace
+    /// steps while its screen is drawn. When the window has closed, the room
+    /// comes back with the status screen's fade in (game mode 5).
+    fn animate_re2_item_screen(&mut self, pack: &Pack) {
+        if self.game.re2_item_get.is_none() {
+            if self.re2_item_screen.take().is_some() {
+                self.re2_status_return = Some(1);
+            }
+            return;
+        }
+        self.re2_item_ticks = self.re2_item_ticks.saturating_add(1);
+        let opened = self.re2_item_ticks;
+        let closing = self
+            .game
+            .re2_item_get
+            .filter(|get| get.phase == game::Re2ItemGetPhase::Close)
+            .map(|get| get.ticks);
+        let Self {
+            re2_item_screen,
+            save_dir,
+            font,
+            text,
+            game,
+            ..
+        } = self;
+        if let Some(screen) = re2_item_screen.as_mut() {
+            let cx = UiContext {
+                authentic: game.player_options.authentic,
+                pack,
+                save_dir,
+                font: font.as_ref(),
+                text: Some(text),
+                ticks: game.frame,
+                cues: std::cell::RefCell::new(Vec::new()),
+                game: Some(game),
+            };
+            screen.signal_with("animate_get", (opened, closing), &cx);
+        }
+    }
+
+    /// What RE2's get-item window draws this frame, while it is up.
+    fn re2_item_get_view(&self) -> Option<Re2StatusView> {
+        if self.menu.is_some() || self.re2_item_screen.is_none() {
+            return None;
+        }
+        let get = self.game.re2_item_get?;
+        let closing = (get.phase == game::Re2ItemGetPhase::Close).then_some(get.ticks);
+        Some(re2_item_get_view(self.re2_item_ticks, closing))
     }
 
     /// What RE2's status screen draws this frame, while it is up: the room
@@ -7432,7 +7540,8 @@ impl GameSession {
         // one last time, so the frozen frame comes from this pass's renderer
         // (the GPU keeps compositing its last recorded scene). A canvas shows
         // no room at all.
-        let re2_status = self.re2_status_view();
+        let re2_item = self.re2_item_get_view();
+        let re2_status = self.re2_status_view().or(re2_item);
         let fade_hides_room = match re2_status {
             Some(view) => view == Re2StatusView::Black,
             None => {
@@ -7445,6 +7554,10 @@ impl GameSession {
         // fade, the way the original's suspended game loop still draws it.
         let re2_room = matches!(re2_status, Some(Re2StatusView::Room(_)));
         if (canvas.is_some() && !re2_room) || (self.load_held && self.menu.is_none()) {
+            self.framebuffer.clear();
+            self.gpu_scene_visible = false;
+        } else if re2_item.is_some() && !re2_room {
+            // The get-item window's screen and its black cover the room.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         } else if self.document_pickup_hides_menu() {
@@ -7628,6 +7741,31 @@ impl GameSession {
                     game: Some(game),
                 };
                 screen.signal_with("present", (show_cursor, show_item_name, backdrop), &cx);
+                screen.draw(&cx, framebuffer);
+            }
+        }
+        // RE2's get-item window's art, under its message.
+        if matches!(re2_item, Some(Re2StatusView::Screen(_))) {
+            let Self {
+                re2_item_screen,
+                save_dir,
+                font,
+                text,
+                game,
+                framebuffer,
+                ..
+            } = self;
+            if let Some(screen) = re2_item_screen.as_mut() {
+                let cx = UiContext {
+                    authentic: game.player_options.authentic,
+                    pack,
+                    save_dir,
+                    font: font.as_ref(),
+                    text: Some(text),
+                    ticks: game.frame,
+                    cues: std::cell::RefCell::new(Vec::new()),
+                    game: Some(game),
+                };
                 screen.draw(&cx, framebuffer);
             }
         }
@@ -34751,6 +34889,55 @@ end
         assert_eq!(
             back,
             [Some(208), Some(160), Some(112), Some(64), Some(16), None]
+        );
+    }
+
+    #[test]
+    fn re2_item_get_fades_on_the_originals_frames() {
+        use Re2StatusView::{Black, Room, Screen};
+        // `item_take_102.txt`'s frames: the press at 364, the window's
+        // first tick at 365 (1), the room darker on 366 and 367, black from
+        // 368 to 370 and the screen in from 371 to 374, though the question
+        // shows at 371.
+        let open: Vec<_> = (1..=11)
+            .map(|ticks| re2_item_get_view(ticks, None))
+            .collect();
+        assert_eq!(
+            open,
+            [
+                Room(None),
+                Room(Some(96)),
+                Room(Some(192)),
+                Black,
+                Black,
+                Black,
+                Screen(Some(160)),
+                Screen(Some(112)),
+                Screen(Some(64)),
+                Screen(Some(16)),
+                Screen(None),
+            ]
+        );
+        assert_eq!(re2_item_get_view(u8::MAX, None), Screen(None));
+        // The cancel cue at 801 (0): the screen fades out from 803 and is
+        // black from 808 until the room comes back at 811.
+        let close: Vec<_> = (0..=9)
+            .map(|ticks| re2_item_get_view(u8::MAX, Some(ticks)))
+            .collect();
+        assert_eq!(
+            close,
+            [
+                Screen(None),
+                Screen(None),
+                Screen(Some(48)),
+                Screen(Some(96)),
+                Screen(Some(144)),
+                Screen(Some(192)),
+                Screen(Some(240)),
+                Black,
+                Black,
+                Black,
+            ]
         );
     }
 }

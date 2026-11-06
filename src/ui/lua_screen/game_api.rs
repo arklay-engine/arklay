@@ -91,6 +91,34 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_item_get()`: RE2's get-item window while it is up: its `item`
+    // and, on the ticks it flies to its slot, the picture's `fly` (`x`, `y`,
+    // `w`, `h`, from the window's origin) and whether the player is
+    // `poisoned`; nil when it isn't up.
+    methods.add_method("re2_item_get", |lua, api, ()| {
+        let Some((get, fly, poisoned)) = api.game().and_then(|game| {
+            Some((
+                game.re2_item_get?,
+                game.re2_item_get_fly(),
+                game.re2.player.poisoned,
+            ))
+        }) else {
+            return Ok(mlua::Value::Nil);
+        };
+        let table = lua.create_table()?;
+        table.set("item", get.action.params[0])?;
+        table.set("poisoned", poisoned)?;
+        if let Some(fly) = fly {
+            let entry = lua.create_table()?;
+            entry.set("x", fly.x)?;
+            entry.set("y", fly.y)?;
+            entry.set("w", fly.w)?;
+            entry.set("h", fly.h)?;
+            table.set("fly", entry)?;
+        }
+        Ok(mlua::Value::Table(table))
+    });
+
     // `re2_map()`: what RE2's MAP page draws on the player's floor: its
     // `map` picture's number, its `rooms` in the draw order (each `x`, `y`,
     // `w`, `h`, an `outline` and maybe a translucent `fill`, both a
