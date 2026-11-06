@@ -513,6 +513,14 @@ function BotMenu.step(bot)
             set_stage(job, "wait_input")
             return true
         end
+        -- A scene that holds the controls (513's entry unequips the gun
+        -- and plays the pod breaking) ignores START: give the tick to the
+        -- scene handler, which may skip it, without pressing or counting;
+        -- JOB_TIMEOUT still bounds the job.
+        if not bot:scene().controllable then
+            job.stage_ticks = 0
+            return false
+        end
         if job.stage_ticks > OPEN_TIMEOUT then
             local scene = bot:scene()
             local player = bot:player()

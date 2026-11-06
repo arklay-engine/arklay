@@ -179,6 +179,10 @@ pub struct Interact {
     /// once the red book moved the bookcase; 306's box is pushed on once
     /// the crank's slab has shoved it off the wall.
     pub after: Option<(u8, u8)>,
+    /// `<interact after_while="clear">`: the step waits for the `after`
+    /// flag to be clear instead. Bank 7 runs this way: 508's reader lights
+    /// a pass code's lamp only once that code's file (its item bit) is taken.
+    pub after_clear: bool,
     /// `<interact reveals>`: the step is also done once this AOT slot is a
     /// live item or event zone (40C's fireplace turns slot 3 into the helmet
     /// key; 30B's corridor end arms slot 5, the boulder's trigger).
@@ -708,6 +712,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
         after: None,
+        after_clear: false,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -723,6 +728,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             "done",
             "after_bank",
             "after_bit",
+            "after_while",
             "reveals",
             "label",
             "character",
@@ -735,6 +741,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
         after: after_flag(node)?,
+        after_clear: parse_after_while(node)?,
         reveals: node
             .attribute("reveals")
             .map(|_| attr(node, "reveals"))
@@ -928,6 +935,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         flag,
         done_clear: false,
         after: after_flag(node)?,
+        after_clear: false,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -943,6 +951,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
         after: None,
+        after_clear: false,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -966,6 +975,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
         after: after_flag(node)?,
+        after_clear: false,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -987,6 +997,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         flag,
         done_clear: false,
         after: None,
+        after_clear: false,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1123,6 +1134,20 @@ fn parse_errand(node: Node<'_, '_>) -> Result<Errand> {
 }
 
 /// The optional `after_bank`/`after_bit` pair: both or neither.
+/// `after_while`: `"set"` (the default) or `"clear"`, the sense the
+/// `after` flag waits for. It needs `after_bank`/`after_bit`.
+fn parse_after_while(node: Node<'_, '_>) -> Result<bool> {
+    match node.attribute("after_while") {
+        None | Some("set") => Ok(false),
+        Some("clear") if node.attribute("after_bank").is_some() => Ok(true),
+        Some("clear") => bail!("{}: `after_while` needs `after_bank`/`after_bit`", at(node)),
+        Some(other) => bail!(
+            "{}: `after_while` must be \"set\" or \"clear\", not {other:?}",
+            at(node)
+        ),
+    }
+}
+
 fn after_flag(node: Node<'_, '_>) -> Result<Option<(u8, u8)>> {
     match (node.attribute("after_bank"), node.attribute("after_bit")) {
         (Some(_), Some(_)) => {
@@ -1351,6 +1376,7 @@ mod tests {
             flag: Some((bank, bit)),
             done_clear: false,
             after: None,
+            after_clear: false,
             reveals: None,
             label: Some(label.to_string()),
         };
@@ -1428,6 +1454,7 @@ mod tests {
                     flag: Some((1, 0x22)),
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: Some("push the statue".to_string()),
                 },
@@ -1436,6 +1463,7 @@ mod tests {
                     flag: Some((0, 3)),
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: None,
                 },
@@ -1444,6 +1472,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: Some("north hall".to_string()),
                 },
@@ -1452,6 +1481,7 @@ mod tests {
                     flag: Some((1, 0x05)),
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: None,
                 },
@@ -1467,6 +1497,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: Some("armor onto the vent".to_string()),
                 },
@@ -1482,6 +1513,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    after_clear: false,
                     reveals: None,
                     label: Some("shelf off the score".to_string()),
                 },
@@ -1590,6 +1622,7 @@ mod tests {
                 flag: Some((7, 35)),
                 done_clear: true,
                 after: None,
+                after_clear: false,
                 reveals: None,
                 label: Some("the crank".to_string()),
             }]
@@ -1622,6 +1655,7 @@ mod tests {
                 flag: Some((0, 0x0B)),
                 done_clear: false,
                 after: None,
+                after_clear: false,
                 reveals: None,
                 label: Some("statue off the balcony".to_string()),
             }]
@@ -1732,6 +1766,27 @@ mod tests {
         let meta = parse(text).unwrap();
         assert_eq!(meta.interacts[0].after, Some((0, 0x25)));
         assert_eq!(meta.interacts[1].after, None);
+        assert!(!meta.interacts[0].after_clear);
+        // 508: a lamp waits for its pass code's item bit to clear.
+        let clear = r#"<bot format="2"><interact slot="4" bank="0" bit="52"
+            after_bank="7" after_bit="82" after_while="clear"/></bot>"#;
+        assert!(parse(clear).unwrap().interacts[0].after_clear);
+        let lone = r#"<bot format="2"><interact slot="4" bank="0" bit="52"
+            after_while="clear"/></bot>"#;
+        assert!(
+            parse(lone)
+                .unwrap_err()
+                .to_string()
+                .contains("needs `after_bank`")
+        );
+        let bad = r#"<bot format="2"><interact slot="4" bank="0" bit="52"
+            after_bank="7" after_bit="82" after_while="gone"/></bot>"#;
+        assert!(
+            parse(bad)
+                .unwrap_err()
+                .to_string()
+                .contains("\"set\" or \"clear\"")
+        );
         // 306: the box is pushed on only once the crank's slab shoved it.
         let push =
             r#"<bot format="2"><push object="2" slot="5" after_bank="0" after_bit="60"/></bot>"#;

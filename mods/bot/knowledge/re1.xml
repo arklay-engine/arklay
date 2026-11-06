@@ -158,6 +158,24 @@
     <keep weapon="0x03" min="3000" max="5500" damage="unknown"/>
   </enemy>
 
+  <!-- Tyrant (the lab encounter, 513). enemy/0c: state 1 sets status 0x40
+       every frame and never 0x20 or 0x80, so torso shots hit it. The
+       decision layer (behaviour 14) slashes inside 0xA8C (2700) and swipes
+       inside 2000, the reach given; neither holds the player. HEALTH 0xDC;
+       handgun 20, shotgun 30 a hit (DEFAULT_FIRST_RUN rows 121 and 122). Its
+       walk is root motion (about 113 a tick measured in 513, faster than
+       the backward walk), so the fight is a damage race: each slash takes
+       12 and knocks the player 1300 to 2000 back, about every 36 ticks
+       while it is close. The shotgun's eight hits win it where the
+       handgun's eleven lose it (measured in 513). Enemy bit 112 (0x70) is
+       set by its death (513's init). -->
+  <enemy id="0x0C" name="tyrant" policy="fight" stand="torso" downed="none"
+         up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="220"
+         prefer="0x03">
+    <keep weapon="0x02" min="3500" max="8000" damage="20"/>
+    <keep weapon="0x03" min="3200" max="5000" damage="30"/>
+  </enemy>
+
   <!-- Black Tiger (the giant spider, 30C). enemy/04 run: 0x40 every frame,
        never 0x20 or 0x80 outside its attack states. The picker commits to
        the bite inside 5000 (the reach given) and spits from anywhere it is

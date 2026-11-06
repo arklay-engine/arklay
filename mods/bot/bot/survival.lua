@@ -2,7 +2,8 @@
 -- after constants.lua (chunks run in path order), whose table it captures.
 --
 -- BotSurvival.heal(bot, player): below a health threshold that scales with
--- bot:risk() (0.0 heals early, 1.0 heals late), use a held heal item through
+-- bot:risk() (0.0 heals early, 1.0 heals late), or up to 0.85 before a
+-- room's <fight> step starts, use a held heal item through
 -- the inventory menu. Never in a grab or a scene; a fight is paused for it.
 --
 -- BotSurvival.cure(bot, player): poisoned (the engine's health status,
@@ -46,8 +47,19 @@ local function risk(bot)
 end
 
 -- Heal below this fraction of max health: 0.6 at risk 0, 0.25 at risk 1.
+-- While the room's next step is a <fight> (a boss: 513's Tyrant is a race
+-- of heals) and no combat runs yet, the bot heals up to
+-- FIGHT_HEAL_FRACTION first; the menu pauses the game, so the heal costs
+-- no fight time. Once the fight runs the usual threshold holds, so a full
+-- heal is not spent on a scratch.
+local FIGHT_HEAL_FRACTION = 0.85
 local function heal_fraction(bot)
-    return 0.6 - 0.35 * risk(bot)
+    local fraction = 0.6 - 0.35 * risk(bot)
+    local step = not BotTactics.active() and BotPuzzle.next_interact(bot)
+    if step and step.kind == "fight" and fraction < FIGHT_HEAL_FRACTION then
+        fraction = FIGHT_HEAL_FRACTION
+    end
+    return fraction
 end
 
 local function menu_items(bot, kind)

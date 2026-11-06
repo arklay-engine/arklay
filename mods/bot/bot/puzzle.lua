@@ -253,7 +253,9 @@ function BotPuzzle.next_interact(bot)
         if not finished then
             -- A step behind an `after` flag waits for it; the sequence holds
             -- (a <use> may set it, as 40A's red book moves the bookcase).
-            if fact.after_bank and not bot:flag(fact.after_bank, fact.after_bit) then
+            -- With `after_clear` it waits for the flag to clear instead.
+            if fact.after_bank
+                and bot:flag(fact.after_bank, fact.after_bit) == (fact.after_clear == true) then
                 return nil, index - 1, #interacts
             end
             -- So does a <fight> whose enemy is fought by hand while that
