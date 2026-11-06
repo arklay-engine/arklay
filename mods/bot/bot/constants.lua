@@ -98,3 +98,16 @@ BotConst.RELOAD_BEHAVIOR = 0x18
 -- The save/load screen lists eight numbered slots (rows 0..7), then the
 -- load mode's autosave rows, then the exit row (ui/save_load.lua).
 BotConst.SAVE_SLOTS = 8
+-- Doom Book II; Doom Book I is the next id. Opened in the CHECK viewer, a
+-- book becomes its medal (ui/item_view.lua).
+BotConst.DOOM_BOOK_2 = 0x3F
+-- The medal Doom Book II becomes: item - DOOM_BOOK_2 + WOLF_MEDAL.
+BotConst.WOLF_MEDAL = 0x24
+-- A doom book opens when the turntable's yaw is near 0x400 (the examine
+-- check's window is 0x270..0x590); the bot turns into this narrower band so
+-- the release tick cannot leave the window.
+BotConst.EXAMINE_YAW_LOW = 0x340
+-- The band's upper end (see EXAMINE_YAW_LOW).
+BotConst.EXAMINE_YAW_HIGH = 0x4C0
+-- A 12-bit angle's full turn: the viewer's yaw wraps at it.
+BotConst.ANGLE_FULL = 0x1000

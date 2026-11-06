@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 119 the small study, open only on the second mansion visit. The init
+     sets room bit 10 on every entry, which hides the shelf's Doom Book I
+     (AOT 1, item bit 67) and the magnum rounds (AOT 4). The switch at AOT 2
+     asks first; Yes with bit 10 set runs event_02, which clears it, and the
+     main script then turns both AOTs into items. The bit comes back on the
+     next entry, so the <interact> is done once the book is taken (its item
+     bit clear) or, for this visit, once slot 1 is a live item. -->
+<bot format="2">
+  <interact slot="2" bank="7" bit="67" done="clear" reveals="1" label="press the study switch"/>
+  <answer choice="yes" slot="2" label="push the switch"/>
+</bot>

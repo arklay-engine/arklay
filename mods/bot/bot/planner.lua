@@ -886,14 +886,32 @@ local function combine_goal(bot, pick)
         pick.item, pick.other, pick.slot, pick.target)
     return {
         kind = "combine", slot = "mix", label = label,
-        job = { menu = true, label = label, pick = pick },
+        job = {
+            menu = "combine", label = label,
+            start = function(b) return BotMenu.combine(b, pick.slot, pick.target, label) end,
+        },
     }
 end
 
--- One tick of a combine goal: start the menu job, then read its outcome.
-local function combine_step(bot, job)
+-- A held doom book is opened in the menu's CHECK viewer, which turns it
+-- into its medal (Doom Book II the Wolf Medal, Doom Book I the Eagle).
+local DOOM_BOOKS = { C.DOOM_BOOK_2, C.DOOM_BOOK_2 + 1 }
+
+local function examine_goal(bot, item)
+    local label = string.format("open doom book 0x%02X", item)
+    return {
+        kind = "examine", slot = item, label = label,
+        job = {
+            menu = "examine", label = label,
+            start = function(b) return BotMenu.examine(b, item, label) end,
+        },
+    }
+end
+
+-- One tick of a menu goal: start the menu job, then read its outcome.
+local function menu_step(bot, job)
     if not job.started then
-        if not BotMenu.combine(bot, job.pick.slot, job.pick.target, job.label) then
+        if not job.start(bot) then
             job.reason = "the menu job did not start"
             return "failed"
         end
@@ -904,14 +922,14 @@ local function combine_step(bot, job)
         return "busy"
     end
     local last = BotMenu.last()
-    if last and last.kind == "combine" and last.tick >= job.started then
+    if last and last.kind == job.menu and last.tick >= job.started then
         if last.ok then
             return "done"
         end
-        job.reason = "combine failed: " .. tostring(last.reason)
+        job.reason = job.menu .. " failed: " .. tostring(last.reason)
         return "failed"
     end
-    job.reason = "the combine job left no result"
+    job.reason = "the " .. job.menu .. " job left no result"
     return "failed"
 end
 
@@ -1330,6 +1348,11 @@ local function choose(bot)
         local pick = BotInventory.combine_now(bot, gave_up)
         if pick then
             return combine_goal(bot, pick)
+        end
+    end
+    for _, book in ipairs(DOOM_BOOKS) do
+        if bot:item_count(book) > 0 and not blocked(bot, "examine", "inventory", book, true) then
+            return examine_goal(bot, book)
         end
     end
     local boxes = BotPlanner.boxes_here(bot)
@@ -2165,7 +2188,7 @@ function BotPlanner.step(bot)
     if goal.job.camera then
         status = BotNav.visit_camera(bot, goal.job)
     elseif goal.job.menu then
-        status = combine_step(bot, goal.job)
+        status = menu_step(bot, goal.job)
     elseif goal.job.push then
         status = BotNav.push_object(bot, goal.job)
         if status == "done" then
@@ -2226,8 +2249,8 @@ function BotPlanner.step(bot)
         p.goal = nil
     elseif status == "failed" then
         local kind = (goal.kind == "camera") and "interact" or goal.kind
-        -- A combine is about the inventory, not the room it was tried in.
-        local where = goal.kind == "combine" and "inventory" or room
+        -- A combine or a book opened is about the inventory, not the room.
+        local where = (goal.kind == "combine" or goal.kind == "examine") and "inventory" or room
         mark(bot, kind, where, goal.slot, goal.job.reason or "failed", goal.job.permanent)
         if goal.event then
             local m = p.marks[mark_key(kind, where, goal.slot)]
