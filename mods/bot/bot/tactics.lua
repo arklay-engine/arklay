@@ -23,7 +23,7 @@ BotTactics = BotTactics or {}
 local C = BotConst
 local abs = BotNav.abs
 
--- A fight that has not ended in this long stands down.
+-- A fight with no hit on its target in this long stands down.
 local MAX_TICKS = 25 * C.SECOND
 -- The gun hold must show a lock (or the aim settle) within this long.
 local LOCK_WAIT = 3 * C.SECOND
@@ -631,6 +631,7 @@ local function reset(s)
     s.active = false
     s.target = nil
     s.ticks = 0
+    s.since_hit = 0
     s.aim_ticks = 0
     s.reload_ticks = 0
     s.reload_started = false
@@ -953,7 +954,8 @@ function BotTactics.step(bot, scene, player)
     local entry = k.enemies[target.id]
     local wrow = k.weapons[s.gun]
     s.ticks = s.ticks + 1
-    if s.ticks > MAX_TICKS then
+    s.since_hit = (s.since_hit or 0) + 1
+    if s.since_hit > MAX_TICKS then
         stop(bot, s, "timeout", LOST_CALM)
         return false
     end
@@ -974,9 +976,20 @@ function BotTactics.step(bot, scene, player)
     if s.last_health and target.health < s.last_health then
         bot:log(string.format("combat hit slot=%d health=%d->%d",
             target.slot, s.last_health, target.health))
+        -- A fight that lands hits is not timed out: 40C's plant, shot from
+        -- past its vines' reach, took the shotgun's hits past MAX_TICKS,
+        -- and the bot walked back into the vines between the fights.
+        s.since_hit = 0
     end
     s.last_health = target.health
 
+    -- A hit while fighting what never attacks (BotNav.harmless: 30C's web)
+    -- came from something no fight here can answer: the fight stands down
+    -- and the fight goal steps out of the room (BotNav.hold_fight).
+    if player.state == HIT_STATE and BotNav.harmless(entry) then
+        stop(bot, s, "hurt by something unseen", LOST_CALM)
+        return false
+    end
     -- A hit reaction holds the player and drops the aim or the reload:
     -- wait it out, then start them again.
     if player.state == HIT_STATE then
@@ -1174,8 +1187,18 @@ function BotTactics.step(bot, scene, player)
     local face = bot:face_to(target.x, target.z)
     local locked = weapon.target ~= nil
     -- A monster of parts (Plant 42) takes the shot on its next free part
-    -- while the target's own hit reaction runs.
-    local reacting = target.hit_state ~= 0 and not (entry and entry.parts)
+    -- while the target's own hit reaction runs; with no part free the shot
+    -- meets nothing (nine shotgun shells into 40C's plant while every part
+    -- held hit state 1).
+    local reacting = target.hit_state ~= 0
+    if entry and entry.parts then
+        reacting = true
+        for _, e in ipairs(enemies) do
+            if e.id == target.id and e.health > 0 and e.hit_state == 0 then
+                reacting = false
+            end
+        end
+    end
     -- A hunter's dodge (enemy/06 behaviour 6) hops clear of the shot from
     -- its first frame and swipes on landing: a round fired into the hop
     -- missed, and its pump cost the shot at the swipe's rise (0x80, up).
@@ -1184,6 +1207,10 @@ function BotTactics.step(bot, scene, player)
     if not pose or leaping or weapon.behavior ~= C.HOLD_BEHAVIOR or reacting
         or (not locked and s.aim_ticks < AIM_SETTLE)
         or abs(face.angle_error) > FACE_BAND * 2 then
+        -- Waiting out a parts monster's shared hit state is no lock trouble.
+        if reacting and entry and entry.parts then
+            s.aim_ticks = AIM_SETTLE
+        end
         if s.aim_ticks > LOCK_WAIT * 3 then
             stop(bot, s, pose and "never ready to fire" or "no aim pose hits it", LOST_CALM)
             return false

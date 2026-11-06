@@ -1000,6 +1000,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "bit",
             "after_bank",
             "after_bit",
+            "reveals",
             "label",
             "character",
         ],
@@ -1058,7 +1059,10 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         done_clear: false,
         after: after_flag(node)?,
         after_clear: false,
-        reveals: None,
+        reveals: node
+            .attribute("reveals")
+            .map(|_| attr(node, "reveals"))
+            .transpose()?,
         opens: None,
         label: node.attribute("label").map(str::to_string),
     })

@@ -1565,6 +1565,7 @@ local function choose(bot)
 
     -- 1. The room puzzle.
     local fact, index, count = BotPuzzle.next_interact(bot)
+    local held_full = false
     if fact then
         if fact.slot and BotPuzzle.avoided(bot, fact.slot) then
             bot:log(string.format("interact slot %d is also an <avoid>; skipped", fact.slot))
@@ -1575,6 +1576,17 @@ local function choose(bot)
             -- to an event zone (507's duct) needs no slot.
             if not blocked(bot, "interact", room, fact.slot) then
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
+            end
+        elseif fact.kind == "push" and fact.reveals and inventory_full(bot) then
+            -- So does a push puzzle that reveals an item: 306's box went
+            -- into the book's probe with no slot for the book, and on the
+            -- next entry the box stood back against the wall with the slab
+            -- already cranked out, which no push gets past. The room's
+            -- <use> steps wait with it (the crank comes after the push).
+            held_full = true
+            if not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
+                mark(bot, "interact", room, BotPuzzle.step_key(fact),
+                    "inventory full: " .. inventory_sig(bot))
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
             -- A boss fight ahead waits for health and rounds, a hazard
@@ -1607,7 +1619,13 @@ local function choose(bot)
     -- 1b. A held item to use at a zone (<use> facts that apply now).
     for _, row in ipairs(BotPuzzle.uses(bot)) do
         local fact = row.fact
-        if not blocked(bot, "use", room, fact.slot) then
+        if held_full then
+            -- Marked like the push, so the use draws the bot back here
+            -- once the inventory changes.
+            if not blocked(bot, "use", room, fact.slot) then
+                mark(bot, "use", room, fact.slot, "inventory full: " .. inventory_sig(bot))
+            end
+        elseif not blocked(bot, "use", room, fact.slot) then
             return use_goal(bot, fact, row.action)
         end
     end
@@ -2173,8 +2191,10 @@ local function choose(bot)
 
     -- A held item with a <use> fact in another room: go there.
     for _, fact in ipairs(bot:use_facts()) do
+        local m = plan().marks[mark_key("use", fact.room, fact.slot)]
         if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
-            and not plan().marks[mark_key("use", fact.room, fact.slot)] then
+            and (not m or (m.reason:find("inventory full", 1, true)
+                and not blocked(bot, "use", fact.room, fact.slot, true))) then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
             if first then
@@ -2383,14 +2403,27 @@ end
 local forgive_events
 
 local function forgive_approaches(bot)
+    local p = plan()
+    local room = bot:room().id
     local n = 0
-    for key, m in pairs(plan().marks) do
+    for key, m in pairs(p.marks) do
         if not m.permanent and m.attempts < MAX_ATTEMPTS and not m.hold and m.sig ~= ""
             and (m.reason:find("approach", 1, true) or m.reason:find("timed out", 1, true)) then
-            m.sig = ""
-            m.entry = nil
+            if m.room == room and m.entry == (p.entries or {})[room]
+                and m.reason:find("every approach failed", 1, true) then
+                -- Planned unreachable on this very entry: a retry from the
+                -- same spot plans the same, so the bot steps out and back
+                -- (an approach mark lifts on the next entry). 305's drained
+                -- fountain opens the way to 310 only on a later entry; three
+                -- retries in 20 ticks gave the door up for good.
+                p.reenter = room
+                bot:log("frontier empty; stepping out to retry " .. key .. " (" .. m.reason .. ")")
+            else
+                m.sig = ""
+                m.entry = nil
+                bot:log("frontier empty; retrying " .. key .. " (" .. m.reason .. ")")
+            end
             n = n + 1
-            bot:log("frontier empty; retrying " .. key .. " (" .. m.reason .. ")")
         end
     end
     return n
@@ -2742,6 +2775,9 @@ function BotPlanner.step(bot)
         if goal.event then
             local m = p.marks[mark_key(kind, where, goal.slot)]
             m.event = { entry = p.entries[room], tick = bot:tick(), forgiven = false }
+        end
+        if goal.job.reenter then
+            p.reenter = room
         end
         p.goal = nil
     end
