@@ -1652,6 +1652,9 @@ const FINE_STEP: i32 = 128;
 const FINE_DIM: usize = ((GRID_MAX - GRID_MIN) / FINE_STEP + 1) as usize;
 /// Rings the fine lattice searches for a free node next to the start or goal.
 const FINE_RINGS: i32 = 4;
+/// Half steps a goal no node sees walks out along an axis, looking for a
+/// point that one does: 4096 units.
+const FINE_BEND_STEPS: i32 = 64;
 
 /// The fine lattice of one room and body: its blocked nodes and the
 /// four-connected component of each free node, so a goal in another part of
@@ -1745,14 +1748,32 @@ impl FineGrid {
         let lattice = self.lattice();
         // The goal node must see the exact goal, so the tail cannot hop a
         // wall thinner than the step.
-        let goal_index = lattice.nearest_free(goal.0, goal.1, FINE_RINGS, |index| {
-            line_clear(room, lattice.xy(index), goal, y, radius, flags)
-        })?;
+        let sighted = |point: (i32, i32)| {
+            lattice.nearest_free(point.0, point.1, FINE_RINGS, |index| {
+                line_clear(room, lattice.xy(index), point, y, radius, flags)
+            })
+        };
+        // A goal at the end of a corridor narrower than the step (406's
+        // strip beside the crate) has no node in sight: walk out of it along
+        // an axis, in sight of the goal, to the first point a node sees, and
+        // bend there.
+        let (goal_index, bend) = match sighted(goal) {
+            Some(index) => (index, None),
+            None => (1..=FINE_BEND_STEPS)
+                .flat_map(|step| {
+                    let reach = step * FINE_STEP / 2;
+                    [(reach, 0), (-reach, 0), (0, reach), (0, -reach)]
+                })
+                .map(|(dx, dz)| (goal.0 + dx, goal.1 + dz))
+                .filter(|&point| line_clear(room, goal, point, y, radius, flags))
+                .find_map(|point| sighted(point).map(|index| (index, Some(point))))?,
+        };
         let part = self.component[goal_index];
         let start_index = lattice.nearest_free(start.0, start.1, FINE_RINGS, |index| {
             self.component[index] == part
         })?;
-        let path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
+        let mut path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
+        path.extend(bend);
         Some(end_at_exact_goal(room, path, goal, y, radius, flags))
     }
 }
@@ -2625,6 +2646,7 @@ impl UserData for BotCtx {
                         object,
                         slot,
                         direction,
+                        clear_full,
                     } => {
                         row.set("kind", "push")?;
                         row.set("object", object)?;
@@ -2634,6 +2656,7 @@ impl UserData for BotCtx {
                             row.set("direction", direction.name())?;
                             row.set("dx", dx)?;
                             row.set("dz", dz)?;
+                            row.set("clear_full", clear_full)?;
                         }
                     }
                     meta::Target::Climb { object, slot } => {
@@ -4306,6 +4329,25 @@ mod tests {
         assert_eq!(path.last().copied(), Some(goal));
         assert_path_clear(&room, path[0], &path[1..]);
         assert!(!blocked(&room, path[0].0, path[0].1, 0, 100, 0));
+    }
+
+    #[test]
+    fn fine_fallback_reaches_a_dead_end_narrower_than_the_step() {
+        // A north-south dead end whose free centres x 10118..10182 hold no
+        // 128-unit lattice column (10112, 10240): 406's strip beside the
+        // crate. The goal is reached through one bend on the strip's line.
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(wall(0, 10000, 9000, 32768));
+        room.collision.quadrants[0].push(wall(10300, 32768, 9000, 32768));
+        let (start, goal) = ((4000, 4000), (10150, 11000));
+        let fine = RefCell::new(None);
+        let path = find_path(&room, &fine, start, goal, 0, 100, 0, &[])
+            .expect("the bend reaches the dead end");
+        assert_eq!(path.last().copied(), Some(goal));
+        assert_path_clear(&room, start, &path);
+        let smooth = smooth_path(&room, start, path, 0, 100, 0, &[]);
+        assert_eq!(smooth.last().copied(), Some(goal));
+        assert_path_clear(&room, start, &smooth);
     }
 
     #[test]
