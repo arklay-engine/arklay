@@ -162,9 +162,9 @@ BotInventory.SOFT_HEALS = 1
 -- with one herb), then a key no remembered locked door needs, then a
 -- spare hand weapon (ctx.spare: held, not equipped, and no <fight> in this stage
 -- prefers it), then, only to make room for a key or <use> item, boxed or
--- on the frontier (ctx.swap), a held firearm other than the equipped one,
--- the staple (the handgun) and the loadout,
--- fewest rounds first (ctx.spare_guns: {[id] = rounds}).
+-- on the frontier (ctx.swap), a held firearm other than the equipped one
+-- and the loadout, fewest rounds first (ctx.spare_guns: {[id] = rounds}),
+-- the staple (the handgun, ctx.staple_guns) last.
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
     if not ctx.full or (needed or 0) == 0 then
@@ -208,10 +208,14 @@ function BotInventory.soft_deposits(items, ctx, needed)
         local rounds = row.item ~= 0 and ctx.spare_guns and ctx.spare_guns[row.item]
         if rounds and not (ctx.loadout and ctx.loadout[row.item])
             and not (ctx.uses and ctx.uses[row.item]) then
-            guns[#guns + 1] = { row = row, rounds = rounds }
+            guns[#guns + 1] = { row = row, rounds = rounds,
+                staple = ctx.staple_guns and ctx.staple_guns[row.item] or false }
         end
     end
     table.sort(guns, function(a, b)
+        if a.staple ~= b.staple then
+            return b.staple
+        end
         if a.rounds ~= b.rounds then
             return a.rounds < b.rounds
         end
@@ -341,12 +345,31 @@ end
 
 -- The best MOVE that empties a slot: `{slot, target}` (0-based menu slots)
 -- or nil. `result(slot, target)` is bot:combine_result.
+-- Whether combining rows `a` and `b` loads a weapon with ammunition other
+-- than its own (ctx.own_ammo: {[weapon] = ammo}): that turns it into
+-- another item (the grenade launcher 0x07 with acid rounds is 0x08), which
+-- the knowledge, the loadout and the rearm do not know as the weapon. The
+-- empty launcher took 118's acid rounds to free a slot, and the bot then
+-- boxed it and met 30C's Black Tiger without it.
+local function loads_other(a, b, ctx)
+    local own = ctx.own_ammo
+    if not own then
+        return false
+    end
+    local gun, ammo = a, b
+    if b.kind == "weapon" then
+        gun, ammo = b, a
+    end
+    return gun.kind == "weapon" and ammo.kind == "ammo" and own[gun.item] ~= ammo.item
+end
+
 function BotInventory.combine_pick(items, ctx, result)
     local best, best_rank = nil, nil
     for i, a in ipairs(items) do
         for j, b in ipairs(items) do
             if i ~= j and a.item ~= 0 and b.item ~= 0
                 and MIX_KINDS[a.kind] and MIX_KINDS[b.kind]
+                and not loads_other(a, b, ctx)
                 and not (ctx.uses and (ctx.uses[a.item] or ctx.uses[b.item])) then
                 local r = result(a.slot, b.slot)
                 if r.frees and (r.result == "applied" or r.result == "herb") then
@@ -420,8 +443,10 @@ function BotInventory.context(bot)
     if next(cure_for) and not cure_held then
         ctx.cure_now = cure_for
     end
+    ctx.own_ammo = {}
     for id, _ in pairs(knowledge and knowledge.weapons or {}) do
         ctx.guns[id] = true
+        ctx.own_ammo[id] = bot:ammo_for(id)
         -- The reserve is kept only for a gun the bot holds: shells carried
         -- before the shotgun fill a slot a pickup needs, and the box gives
         -- them back once the gun is equipped (the reserve-floor withdrawal).
@@ -468,8 +493,14 @@ function BotInventory.context(bot)
         local entry = knowledge and knowledge.enemies[fight.enemy]
         local prefer = entry and entry.prefer
         local row = prefer and knowledge.weapons[prefer]
-        if row and fight.room:sub(1, 1) == here:sub(1, 1)
-            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+        local pending = row and not (fight.bank and bot:flag(fight.bank, fight.bit))
+        -- A firearm for a fight in a room already seen counts in any
+        -- stage: a box trip into stage 4 deposited the launcher and its
+        -- rounds that 30C's Black Tiger wanted, and the bot met the tiger
+        -- with an empty handgun, twice. (A hand weapon waits for its
+        -- fight's stage: the knife.)
+        if pending and (fight.room:sub(1, 1) == here:sub(1, 1)
+            or (not row.melee and bot:visited(fight.room))) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
             local ammo = bot:ammo_for(prefer)
@@ -489,12 +520,19 @@ function BotInventory.context(bot)
     -- Held firearms other than the equipped one and the staple (the
     -- handgun, whose ammunition is the most common), by rounds (the clip
     -- plus the ammunition held): the very last soft keeps, fewest rounds
-    -- first.
+    -- first. The staple, not equipped, goes after every other spare gun
+    -- (ctx.staple_guns): 408's guardhouse key found the slots full of the
+    -- equipped shotgun's kit, the loadout's grenade launcher and the
+    -- handgun. The rearm takes it back once its ammunition is held.
     for id, row in pairs(knowledge and knowledge.weapons or {}) do
-        if not row.melee and not row.staple and id ~= ctx.equipped and bot:has_item(id) then
+        if not row.melee and id ~= ctx.equipped and bot:has_item(id) then
             local ammo = bot:ammo_for(id)
             ctx.spare_guns = ctx.spare_guns or {}
             ctx.spare_guns[id] = bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
+            if row.staple then
+                ctx.staple_guns = ctx.staple_guns or {}
+                ctx.staple_guns[id] = true
+            end
         end
     end
     -- The loadout keeps a hand weapon a fight in this stage prefers; one

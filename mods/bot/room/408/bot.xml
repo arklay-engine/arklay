@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 408 guardhouse hub. Init sets door 1 to 409 (the drug storehouse), but
+     the same init then resets AOT 1 to message 143 on every entry, and the
+     main deletes the door outright once scenario 0x21 is set: 409 is never
+     reached from here. Each retry walks the bot back through the room's
+     wasps. -->
+<bot format="2">
+  <avoid slot="1" reason="the door to 409 is always message 143"/>
+</bot>

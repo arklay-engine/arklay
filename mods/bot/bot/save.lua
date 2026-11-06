@@ -252,7 +252,7 @@ end
 local function milestones(bot)
     return BotSave.milestones(bot:world(), function(item) return (bot:item_kind(item)) end,
         bot:use_facts(), function(fact) return BotPuzzle.use_done(bot, fact) end,
-        BotPlanner.steps_done())
+        BotPlanner.steps_done(bot))
 end
 
 -- The latest-save tracking: given bot:memory() and bot:saves(), the memory

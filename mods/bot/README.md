@@ -92,12 +92,20 @@ Priorities, highest first:
    ready for the fight`, lifted once the inventory changes) while health
    is under that with no heal held, while no heal is held and the
    remembered box holds one (a firearm fight; the box's `no heal item
-   held` withdrawal fetches it), or while the held rounds' damage (each
-   gun's rounds times its `<keep>` damage) is under the enemy's health.
+   held` withdrawal fetches it), while no held firearm has rounds at all
+   (`no firearm with rounds`, whatever the `<keep>` bands know: 30C's
+   Black Tiger met with an empty handgun), or while the held rounds'
+   damage (each gun's rounds times its `<keep>` damage) is under the
+   enemy's health.
    Fight steps are seen only in their own room, so once a held-back
    fight is ready (a heal fetched from the box), the planner heads back
    to its room from anywhere (`toward the fight in 40C ... now ready`,
-   weighted like a held item's `<use>`). Then a save at a
+   weighted like a held item's `<use>`). A fight counts as held back
+   once its step was held back or once the step found its enemy and left
+   it alive; both are kept in the memory (`fight_met:ROOM:ENEMY`), which a
+   reload puts back as it was at the save, while the planner's marks are
+   lost with the rebuilt VM (40C's Plant 42, never returned to after a
+   death). Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
@@ -168,7 +176,11 @@ Priorities, highest first:
    once the climb has carried the player a warp's distance from the
    approach point), or an action-key event zone (flags `>= 0x80`) that no
    fact names, since a script may start the climb from an event. One press
-   per slot per room entry, nearest first.
+   per slot per room entry, nearest first. A slot that is a door to
+   another room is no passage (307's ladder up to 302 was climbed on
+   every entry while its door to 30B was out of reach). A puzzle step
+   done here lifts this room's door marks of a room event's message too
+   (302's battery powers the elevator whose call showed message 132).
 6. The way out. A pursued target keeps its course: the bot takes the first
    door of the route to it until it is reached, real progress (a room
    entered for the first time, an item taken, a door unlocked or newly made a
@@ -503,8 +515,8 @@ The decision (`BotSave.wants`), scaled by `bot:risk()`:
   health`); below three quarters when the room the pursued target's route
   enters next had a live monster (`a risky room is next: ROOM`); or when a
   milestone is new since the last save (a key item taken, a door unlocked,
-  a `<use>` fact done, or a puzzle goal the planner finished:
-  `BotSave.milestones`) and the last save is at least
+  a `<use>` fact done, or a puzzle goal the planner finished, counted in
+  the memory so a reload restores it with the save: `BotSave.milestones`) and the last save is at least
   `(2 + 4 * risk)` minutes old (`a milestone since the last save`), or at
   once while no save exists (`the first milestone of the run`);
 - a bolder bot saves only below half of max health, or in a risky room: a
@@ -599,8 +611,11 @@ drives the box screen with pad input only.
   until 30C's stage, where the loadout takes it back out). Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
   fact or a locked door needs back) do spare guns go too, fewest rounds
-  first, never the `staple` gun (the handgun, whose ammunition is the most
-  common) or one the loadout or a `<use>` needs.
+  first, the `staple` gun (the handgun, whose ammunition is the most
+  common) after every other, never one the loadout or a `<use>` needs
+  (408's guardhouse key found the slots full of the equipped shotgun's
+  kit, the loadout's launcher and the handgun). The rearm brings the
+  handgun back once its clips are held.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
@@ -620,7 +635,9 @@ drives the box screen with pad input only.
   twice the reserve floor, and every heal stack, as long as one slot stays
   free (the top-ups; no trip is made for them).
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
-  pending `<fight>` in the current stage (the room id's first character), and its
+  pending `<fight>` in the current stage (the room id's first character),
+  or, for a firearm, in a room already seen (a box trip into stage 4 put
+  away the launcher and rounds 30C's Black Tiger wanted), and its
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
@@ -645,7 +662,10 @@ drives the box screen with pad input only.
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
-  ammo rank 2), never an item a `<use>` fact needs. Mixing herbs keeps the
+  ammo rank 2), never an item a `<use>` fact needs, and never a weapon
+  with ammunition other than its own (`bot:ammo_for`): that turns it
+  into another item (the launcher with acid rounds is `0x08`), which the
+  knowledge, the loadout and the rearm do not know. Mixing herbs keeps the
   healing; a full herb stack stays reachable.
 
 A box visit is a planner goal: press the nearest live `item_box` zone here
@@ -906,7 +926,7 @@ files. The checked-in facts:
 | 307 | `<use>` the hex crank (`0x1E`) at slot 4 turns the bridge (common `0x47`), which opens door 2 to 30B. In the BioRand pack slot 3 is a handover item at the room origin. |
 | 30A | `<interact slot="2">` (Jill): the body probe in front of Enrico runs his scene (common `0x48`), which hands over the hex crank. |
 | 30B | `<interact slot="10" reveals="5">`: the corridor's west end sets a room flag that the main clears at once, so the step is done when it arms AOT 5. `<interact slot="5">` then sets the boulder rolling (scenario `0x3D`), and the init opens the way to 30C. |
-| 30C | `<fight enemy="0x13" bank="3" bit="138">`: the web over door 1 to 30D, cut with the knife picked up in the room (AOT 2). The init deletes the door while the web stands, and the main arms it again once enemy bit 138 is set. Before it, `<fight enemy="0x04" bank="3" bit="137" label="Black Tiger">`: the spider's knockback breaks the web cut, so it is killed first with the grenade launcher (its knowledge `prefer`). |
+| 30C | `<fight enemy="0x13" bank="3" bit="138">`: the web over door 1 to 30D, cut with the knife picked up in the room (AOT 2). The init deletes the door while the web stands, and the main arms it again once enemy bit 138 is set. Before it, `<fight enemy="0x04" bank="3" bit="137" label="Black Tiger">`: the spider's knockback breaks the web cut, so it is killed first with the grenade launcher (its knowledge `prefer`). `<avoid slot="1" bank="3" bit="138" while="clear">`: the bot still saw door 1 while the web stood, walked into the web and stood stuck there until the tiger's poison killed it. |
 | 30F | Two `<use slot="6" item="0x1E">` facts: the hex crank turns the passages one step a use, cycling scenario bits 74 and 75 through (0,0), (1,0), (0,1), (1,1). Only (1,1) joins the 30D door to door 1 (306). The first fact waits for bit 75, the second for bit 74 after 75; a use whose done flag stays clear is retried at once. `<door slot="0" via="3">`: the passage to 305 from the AOT 3 event at the east end. |
 | 500 | `<avoid slot="1">`: the lift back up to 310. The lab needs nothing from before it, and an ungated `<avoid>` on a door is marked for good, so remote planning never routes through it either. |
 | 504 | `<interact slot="7" bank="4" bit="0">`, then `<interact slot="7" bank="0" bit="102" reveals="1">`, each with `<answer choice="yes" slot="7">`: the switch lowers the first panel, then the one in front of the lab key (AOT 1). |
@@ -923,6 +943,7 @@ files. The checked-in facts:
 | 303 | `<use slot="6" item="0x2A" bank="4" bit="0">`: the flare (AOT 2) used on the deck calls the helicopter. Without scenario `0x2B` (the partner's self-destruct scenes in 505/514) the helicopter takes the player away and the game ends; with it, `<fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0">`: the Tyrant comes up, Brad drops the rocket launcher (AOT 1, the knowledge `prefer` takes it first), and its death starts the ending. |
 | 402 | `<interact slot="3" bank="0" bit="0x43">`: pulling the bath plug makes AOT 1 the key `0x3B` (to 411). |
 | 406 | `<push object="1" slot="5" direction="north" clear="full">` (the west crate deep into the recess behind it), `<push object="0" slot="5" direction="west">` (the east crate off the hatch, pushed from the 335-unit strip beside it), then `<interact slot="5" bank="0" bit="0x45">` and `<answer choice="yes" slot="5">`: Yes opens the ladder door down to 40D, whose init sets scenario `0x45`. `<door slot="2" via="5">`: on later entries door 2 is parked at the origin again, and the route goes down by pressing the hatch. |
+| 408 | `<avoid slot="1">`: the door to 409 is reset to message 143 on every entry (and deleted once scenario `0x21` is set), so it is never retried; each retry crossed the room's wasps. |
 | 40D | Six `<push>` steps make the bridge over the water to 40E. Objects 3 and 1 go `direction="south"` into AOT 2's edge zone (done flags scenario `0x39`, then `0x38`; the second clears the first). Object 2 stands against the room's north wall: `axis="x"` onto the ladder corridor's AOT 10, `south` `until="stop"`, `east` `until="stop"`, then `south` into the water. Bit `0x39` is set again only by the third crate. |
 | 40A | `<interact slot="5" bank="7" bit="0x4E" done="clear">` with `<answer choice="yes" slot="5">`: the bookshelf hands over document `0x69`. `<use>` the red book (`0x3E`, from 401) at slot 5, done flag scenario `0x24`: the bookcase slides aside (scenario `0x25`). Then `<interact slot="7" bank="0" bit="0x44" after_bank="0" after_bit="0x25">`: the gap behind it turns on door 2 to 40C, whose init sets scenario `0x44`. |
 | 40C | `<fight enemy="0x08" bank="3" bit="96">`: Plant 42 (Barry's branch), its body in slot 1 with five vines. Once the vines are shot Barry's event burns it, and its death sets enemy bit 96. Then `<interact slot="2" bank="7" bit="0x58" done="clear" after_bank="3" after_bit="96" reveals="3">`: AOT 2 at the fireplace is a body probe that raises system bit 62, and the main script turns AOT 3 into the helmet key while that bit and enemy bit 96 are set. |

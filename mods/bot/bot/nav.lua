@@ -26,6 +26,12 @@ local UNPLANNED_TRIES = 6
 -- the collision resolver lets the player press into).
 local LEAN_TICKS = C.SECOND
 
+-- The memory key (bot:remember) a <fight> step sets once it finds its
+-- enemy in `room`.
+function BotNav.fight_met_key(room, enemy)
+    return string.format("fight_met:%s:%02X", room, enemy)
+end
+
 function BotNav.abs(value)
     if value < 0 then
         return -value
@@ -807,6 +813,13 @@ function BotNav.hold_fight(bot, job)
         return "busy"
     end
     if target.slot ~= job.slot then
+        if not job.slot then
+            -- The boss is met: a fight left undone (the bot ran out of
+            -- rounds or health, or a reload undid it) is worth a trip back
+            -- (BotPlanner's fight_due). Memory survives the reload; the
+            -- planner's marks do not.
+            bot:remember(BotNav.fight_met_key(bot:room().id, job.enemy), "1")
+        end
         job.slot = target.slot
         BotTactics.focus(target.slot)
         bot:log(string.format("%s: target slot %d (health %d)", job.label, target.slot,
