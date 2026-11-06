@@ -2029,9 +2029,12 @@ local function choose(bot)
     if p.target then
         local t = p.target
         local goal = target_goal(bot, world, t)
-        if goal and goal.kind == "item" and goal.room ~= room
+        if goal and goal.kind == "item" and goal.room ~= room and not t.unfit
             and not pickup_fits(bot, goal.item, full) then
-            -- The inventory filled on the way: no slot for it there.
+            -- The inventory filled on the way: no slot for it there. (Not
+            -- for a trip chosen full, the only way on: dropping it on the
+            -- first entry walked 302 and 304 back and forth between two
+            -- such trips until the loop rule ended the run.)
             goal = nil
         end
         if goal and (goal.kind == "use" or goal.kind == "box" or goal.kind == "deliver"
@@ -2181,7 +2184,8 @@ local function choose(bot)
                     consider({
                         cost = cost, order = order, door = first, why = why,
                         target = { kind = goal.kind, room = goal.room, slot = goal.slot,
-                            label = label, best = #steps, stalls = 0, heal = heal_target },
+                            label = label, best = #steps, stalls = 0, heal = heal_target,
+                            unfit = allow_unfit or nil },
                     })
                 end
             end

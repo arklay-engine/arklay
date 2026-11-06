@@ -233,6 +233,20 @@ function BotInventory.soft_deposits(items, ctx, needed)
         end
         out[#out + 1] = gun.row
     end
+    -- For a heal (ctx.heal_swap), last: rounds kept only for a gun's other
+    -- loading (no held gun's own ammunition): the flame rounds held for
+    -- the launcher, which still had its own (30C, every slot used and the
+    -- spray in the box).
+    for _, row in ipairs(ctx.heal_swap and items or {}) do
+        if #out >= needed then
+            return out
+        end
+        local why = row.item ~= 0 and row.kind == "ammo" and BotInventory.keep(row, ctx)
+        if (why == "a fight ahead prefers it" or why == "rounds for the gun's other loading")
+            and not (ctx.ammo and ctx.ammo[row.item]) then
+            out[#out + 1] = row
+        end
+    end
     return out
 end
 
@@ -314,11 +328,15 @@ function BotInventory.withdrawals(box_items, ctx, free)
     -- The cure first, then the loadout and the rearm, so the heal top-up
     -- does not fill their slots.
     local rows = {}
+    -- A heal swapped in for (ctx.heal_swap) goes with the cure.
+    local function first(why)
+        return why == CURE or (ctx.heal_swap and why == "no heal item held")
+    end
     for pass = 1, 3 do
         for _, row in ipairs(box_items) do
             local why = BotInventory.wanted_back(row, ctx)
-            if (pass == 1 and why == CURE) or (pass == 2 and why ~= CURE and FIRST[why])
-                or (pass == 3 and not FIRST[why]) then
+            if (pass == 1 and first(why)) or (pass == 2 and not first(why) and FIRST[why])
+                or (pass == 3 and not first(why) and not FIRST[why]) then
                 rows[#rows + 1] = row
             end
         end
@@ -798,8 +816,16 @@ function BotInventory.make_room(bot, ctx, items, skip)
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
+            -- So is a heal while the bot needs one (or a fight's readiness
+            -- does) and holds none: 30C's Black Tiger left it at 48/96 with every slot used, its fight
+            -- held back for the boxed spray, and the run ended there.
+            local heal = why == "no heal item held"
+                and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight"))
+            if heal then
+                ctx.heal_swap = true
+            end
             if why == "a <use> fact needs it" or why == "a locked door needs it"
-                or why == "ammunition for a held gun" or FIRST[why] then
+                or why == "ammunition for a held gun" or FIRST[why] or heal then
                 needed = needed + 1
                 if why ~= "ammunition for a held gun" and not FIRST[why] then
                     ctx.swap = true
@@ -1022,7 +1048,8 @@ local function plan_visit(bot, menu, view)
     -- both takes and makes room.
     local taking = #BotInventory.withdrawals(view.items, ctx, free)
     local after = { capacity = ctx.capacity, used = ctx.used + taking }
-    if (ctx.full and pickups > 0) or BotInventory.reserve_due(after, #deposits, pickups) then
+    if (ctx.full and (pickups > 0 or ctx.heal_swap))
+        or BotInventory.reserve_due(after, #deposits, pickups) then
         for _, row in ipairs(deposits) do
             ops[#ops + 1] = { kind = "deposit", item = row.item }
             free = free + 1

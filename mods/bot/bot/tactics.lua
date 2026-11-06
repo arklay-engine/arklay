@@ -384,7 +384,7 @@ end
 -- stronger gun (the shotgun) is spent only on a fight the plain pick
 -- cannot finish, and a fight with no kill data keeps the plain pick.
 -- Returns the row or nil.
-function BotTactics.pick_gun(guns, entry, health, margin)
+function BotTactics.pick_gun(guns, entry, health, margin, crowd)
     health = health or (entry and entry.health)
     margin = margin or 1
     local function shots(row)
@@ -428,6 +428,19 @@ function BotTactics.pick_gun(guns, entry, health, margin)
             end
         end
     end
+    -- Two or more grabbers near (`crowd`, the count): a reserve gun that
+    -- covers the kill goes first, so the fight is short. 308's two
+    -- hunters met a handgun holding the rounds for both and swiped the
+    -- bot to death while it took them down seven shots each.
+    -- Only for one the bot cannot outrun: zombies are walked past.
+    if entry and entry.grabs and entry.outrun ~= true and (crowd or 0) >= 2 then
+        for _, row in ipairs(guns) do
+            local n = row.reserve and shots(row)
+            if n and n <= row.rounds then
+                return row
+            end
+        end
+    end
     local need = plain and shots(plain)
     local spare_plain = plain and not plain.reserve
     if need and need * margin <= plain.rounds and spare_plain then
@@ -451,6 +464,18 @@ function BotTactics.pick_gun(guns, entry, health, margin)
     local covered = fewest(margin, false)
     if covered then
         return covered
+    end
+    -- A grabber no ordinary gun covers with the margin: a reserve gun that
+    -- does goes before the bare kill (a reserve gun has rounds here only
+    -- past the band's `spare`, or when no ordinary gun finishes it). With
+    -- five handgun rounds for 401's two zombies the bot ran past both
+    -- (too few rounds) and was grabbed three times; the launcher, holding
+    -- five, then killed each with one round.
+    if entry and entry.grabs then
+        covered = fewest(margin, true)
+        if covered then
+            return covered
+        end
     end
     if need and need <= plain.rounds and spare_plain then
         return plain
@@ -501,6 +526,24 @@ function BotTactics.saved_rounds(bot, k, base, enemy_id)
     return saved
 end
 
+-- Rounds of weapon `base` the <fight>s still to be won in any stage keep
+-- for their kills (BotTactics.saved_rounds, beyond this stage's).
+local function saved_everywhere(bot, k, base)
+    local saved = 0
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = k.enemies[fight.enemy]
+        if entry and (entry.prefer == base or entry.open == base)
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            local band = entry.keep and entry.keep[base]
+            local damage = band and band.damage
+            local kill = damage and damage > 0 and entry.health
+                and entry.health // damage + 1
+            saved = saved + (entry.save or kill or 0)
+        end
+    end
+    return saved
+end
+
 -- Every round held for weapon `base`: each loading's loaded rounds and
 -- its ammunition.
 local function family_rounds(bot, k, base)
@@ -518,8 +561,10 @@ end
 -- with and its rounds, counting the ammunition held for each held weapon
 -- with knowledge, so an emptied gun with reserve still counts; see
 -- BotTactics.pick_gun. A hand weapon (the knife) counts only for an enemy
--- that prefers it, with rounds that never run out.
-local function firearm(bot, k, enemy)
+-- that prefers it, with rounds that never run out. `crowd` (optional):
+-- every grabber of the same kind near the bot, `enemy` among them; an
+-- ordinary gun finishes only the rounds for all of them.
+local function firearm(bot, k, enemy, crowd)
     local weapon = bot:weapon()
     local entry = enemy and k.enemies[enemy.id]
     local function melee(item)
@@ -555,13 +600,21 @@ local function firearm(bot, k, enemy)
     end
     local margin = 1 + 0.5 * (1 - risk(bot))
     -- An ordinary gun holds the rounds for the kill, with the margin.
+    -- With a crowd it holds the rounds for all of them: 509's four naked
+    -- zombies met a handgun holding enough for one, the launcher's spare
+    -- kept back, and grabbed the bot twenty times.
     local finish = false
     for _, row in ipairs(guns) do
         local band = entry and entry.keep and entry.keep[row.item]
         local damage = band and band.damage
-        if not row.reserve and damage and damage > 0 and enemy and enemy.health
-            and (enemy.health // damage + 1) * margin <= row.rounds then
-            finish = true
+        if not row.reserve and damage and damage > 0 and enemy and enemy.health then
+            local shots = 0
+            for _, e in ipairs(crowd or { enemy }) do
+                shots = shots + e.health // damage + 1
+            end
+            if shots * margin <= row.rounds then
+                finish = true
+            end
         end
     end
     -- A reserve gun spends only the rounds the <fight>s ahead leave
@@ -591,7 +644,18 @@ local function firearm(bot, k, enemy)
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin)
+    -- The crowd rule spends only what every boss ahead leaves: 308's
+    -- hunters took the rounds 513's Tyrant needed.
+    local crowd_n = crowd and #crowd or 0
+    for _, row in ipairs(guns) do
+        if row.reserve and crowd_n >= 2 then
+            local base = row.base or row.item
+            if family_rounds(bot, k, base) - saved_everywhere(bot, k, base) <= 0 then
+                crowd_n = 0
+            end
+        end
+    end
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin, crowd_n)
     if not best then
         return nil, 0
     end
@@ -742,7 +806,19 @@ local function choose(bot, s, k, enemies, player)
             nearest = enemies[i]
         end
     end
-    local gun, rounds = firearm(bot, k, nearest)
+    local crowd = nil
+    local nentry = nearest and k.enemies[nearest.id]
+    if nentry and nentry.grabs then
+        crowd = {}
+        -- The whole room's: 308's second hunter joined a fight opened on
+        -- the first.
+        for i = 1, #enemies do
+            if enemies[i].id == nearest.id and (enemies[i].health or 0) > 0 then
+                crowd[#crowd + 1] = enemies[i]
+            end
+        end
+    end
+    local gun, rounds = firearm(bot, k, nearest, crowd)
     local near, fightable = {}, {}
     for i = 1, #enemies do
         local enemy = enemies[i]
