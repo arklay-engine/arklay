@@ -1,0 +1,30 @@
+# room 102: raise the handgun, empty it at each tilt, reload from the 30 rounds, turn, release a shot early, lower (oracle/re2.md, "Weapons")
+364 aim
+400 aim fire
+700 aim
+704 aim fire
+708 aim
+760 aim up
+790 aim up fire
+794 aim up
+830 aim down
+860 aim down fire
+864 aim down
+900 aim left
+930 aim right
+960 aim
+990 aim fire
+996
+1040 aim
+1060 aim fire
+1300 aim
+1310
+1360 aim
+1380 aim fire
+1384 aim
+1440 aim fire
+1600 aim
+1606 aim fire
+1610 aim
+1640
+1700

@@ -1,0 +1,35 @@
+# weapon_shotgun.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Weapons")
+20 start
+24
+56 down
+60
+76 confirm
+80
+96 confirm
+100
+136 start
+140
+196 aim
+236 aim fire
+240 aim
+296 aim up
+326 aim up fire
+330 aim up
+396 aim down
+426 aim down fire
+430 aim down
+496 aim
+526 aim fire
+530 aim
+596 aim fire
+600 aim
+666 aim fire
+670 aim
+756 aim fire
+760 aim
+816 aim fire
+822
+896 aim
+936 aim fire
+940 aim
+996

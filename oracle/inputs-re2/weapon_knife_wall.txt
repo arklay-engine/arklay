@@ -1,0 +1,31 @@
+# room 102: EQUIP the knife from slot 1, then slash at each tilt where a wall is in reach of every one, from the spot the item runs use, where the player is boxed in and walks on the spot (oracle/re2.md, "Weapons")
+364 start
+368
+400 right
+404
+420 confirm
+424
+440 confirm
+444
+480 start
+484
+520 left
+546
+560 up
+620
+640 aim
+680 aim fire
+684 aim
+760 aim up
+790 aim up fire
+794 aim up
+860 aim down
+890 aim down fire
+894 aim down
+960 aim
+990 aim fire
+1002
+1060 aim
+1090 aim fire
+1190 aim
+1220

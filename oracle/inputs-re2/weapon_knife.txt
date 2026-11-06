@@ -1,0 +1,29 @@
+# room 102: EQUIP the knife from slot 1, walk on in the open, slash at each tilt, let go mid-slash, hold the slash for a run of them, lower (oracle/re2.md, "Weapons")
+364 start
+368
+400 right
+404
+420 confirm
+424
+440 confirm
+444
+480 start
+484
+520 up
+560
+600 aim
+640 aim fire
+644 aim
+720 aim up
+750 aim up fire
+754 aim up
+820 aim down
+850 aim down fire
+854 aim down
+920 aim
+950 aim fire
+962
+1020 aim
+1050 aim fire
+1150 aim
+1180

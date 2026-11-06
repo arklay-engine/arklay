@@ -13250,7 +13250,7 @@ impl Re2Sounds {
 }
 
 /// One tick's sounds of an RE2 room: `se_on`'s, the player's footsteps
-/// (`Snd_se_walk`) and the weapon's.
+/// (`Snd_se_walk`), the weapon's and the effects'.
 #[allow(clippy::too_many_arguments)]
 fn play_re2_sounds(
     music: &mut Option<Mixer>,
@@ -13266,6 +13266,7 @@ fn play_re2_sounds(
     let requests = std::mem::take(&mut game.re2.sounds);
     let footsteps = player.take_footsteps();
     let weapon = player.take_sounds();
+    let effects = std::mem::take(&mut game.re2.effect_sounds);
     let character = u8::from(game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
     sounds.load(
         pack,
@@ -13338,6 +13339,9 @@ fn play_re2_sounds(
             muffled: true,
         };
         play(id, sound.pos);
+    }
+    for request in effects {
+        play(request.id, request.pos);
     }
     sounds.played = played;
 }

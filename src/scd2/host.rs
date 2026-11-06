@@ -84,6 +84,9 @@ pub struct Re2State {
     pub effects: crate::esp2::Effects,
     /// `se_on`'s sounds, not yet played.
     pub sounds: Vec<SoundRequest>,
+    /// The effects' sounds, not yet played: `Esp_`'s run after
+    /// `Player_move`, so they follow the player's footsteps and weapon.
+    pub effect_sounds: Vec<SoundRequest>,
     /// `sce_scr_move`: how far the background has scrolled down.
     pub scroll: i16,
     /// `Rnd`, for what's ported to its stream. A save doesn't hold it: the
@@ -462,6 +465,7 @@ impl Default for Re2State {
             music_set: false,
             effects: Default::default(),
             sounds: Vec::new(),
+            effect_sounds: Vec::new(),
             scroll: 0,
             rnd: Default::default(),
             tongue_owner: 0,
@@ -777,7 +781,7 @@ impl Re2State {
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
                 let pos = pos.map(i32::from);
-                self.sounds.push(SoundRequest { id, pos });
+                self.effect_sounds.push(SoundRequest { id, pos });
             }
         }
     }
