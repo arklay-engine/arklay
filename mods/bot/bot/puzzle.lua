@@ -160,13 +160,14 @@ end
 
 -- Whether a step's done flag reads done: set, or clear for done="clear"
 -- (bank 7's item bits clear when the item is taken). A step that names
--- the item slot it `reveals` is also done once that slot is a live item
--- zone: the item frontier takes it from there (40C's fireplace, which
--- turns slot 3 into the helmet key).
+-- the slot it `reveals` is also done once that slot is a live item or
+-- event zone: the item frontier or the next step takes it from there (40C's
+-- fireplace, which turns slot 3 into the helmet key; 30B's corridor end,
+-- whose flag the room's main clears at once but which arms slot 5).
 function BotPuzzle.flag_done(bot, fact)
     if fact.reveals then
         local action = BotNav.action_by_slot(bot, fact.reveals)
-        if action and action.kind == "item" then
+        if action and (action.kind == "item" or action.kind == "event") then
             return true
         end
     end
