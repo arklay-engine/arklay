@@ -190,6 +190,21 @@ function BotTactics.note_hurt(bot, enemy)
     s.hurt_by[key] = true
 end
 
+-- How many monsters hurt the bot in room `room_id` (BotTactics.note_hurt).
+function BotTactics.hurt_count(room_id)
+    local hurt_by = state().hurt_by
+    local n = 0
+    if hurt_by then
+        local prefix = room_id .. ":"
+        for key in pairs(hurt_by) do
+            if key:sub(1, #prefix) == prefix then
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+
 function BotTactics.decide(o)
     if not o.policy then
         return "run", "not in the knowledge file"

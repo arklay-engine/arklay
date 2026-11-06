@@ -5957,6 +5957,24 @@ mod tests {
                 ),
             )
         };
+        // The rearm: the shotgun and its shells come out ahead of a heal
+        // top-up, into any free slot, even from a remote reason.
+        let rearm = eval::<String>(
+            &vm,
+            r#"local ctx = { heals = 1, heal_top_up = true, reserve_only = true,
+                rearm = { [0x03] = true, [0x0C] = true } }
+            local rows = {
+                { slot = 0, item = 0x44, kind = "heal" },
+                { slot = 1, item = 0x0C, kind = "ammo" },
+                { slot = 2, item = 0x03, kind = "weapon" },
+            }
+            local out = {}
+            for _, row in ipairs(BotInventory.withdrawals(rows, ctx, 2)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end
+            return table.concat(out, ",")"#,
+        );
+        assert_eq!(rearm, "0C,03");
         assert_eq!(heal_top_up(4, false), "44,4A");
         assert_eq!(heal_top_up(2, false), "44");
         assert_eq!(heal_top_up(1, false), "");

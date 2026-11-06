@@ -37,7 +37,10 @@
 --             RESERVE slots stay free. First of all, from any box (a
 --             trip is made for it), the weapon and ammunition a <fight>
 --             ahead in this stage prefers (the loadout, the knowledge
---             file's `prefer`), into any free slot.
+--             file's `prefer`), into any free slot; so is the rearm:
+--             while sourcing ammunition, a firearm in the box (not a
+--             `reserve` one) whose ammunition is held or in the box, with
+--             that ammunition.
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -218,6 +221,12 @@ end
 -- worth a trip to a remote box (a full inventory makes room for it the way
 -- it does for a needed pickup).
 local LOADOUT = "loadout: a fight ahead prefers it"
+-- The rearm withdrawal's reason, handled like the loadout's: sourcing
+-- ammunition (BotSurvival.sourcing_now), a firearm in the box whose
+-- ammunition is held or in the box comes out with it.
+local REARM = "rearm: the held guns are short of rounds"
+-- The reasons that take any free slot and are worth a remote trip.
+local FIRST = { [LOADOUT] = true, [REARM] = true }
 
 -- The free slots a top-up withdrawal must leave.
 local function slots_to_leave()
@@ -248,6 +257,9 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.loadout and ctx.loadout[item] then
         return LOADOUT
     end
+    if ctx.rearm and ctx.rearm[item] then
+        return REARM
+    end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
     end
@@ -270,15 +282,16 @@ local TOP_UPS = {
 function BotInventory.withdrawals(box_items, ctx, free)
     local out = {}
     local heal_taken = false
-    -- The loadout first, so the heal top-up does not fill its slots.
+    -- The loadout and the rearm first, so the heal top-up does not fill
+    -- their slots.
     local rows = {}
     for _, row in ipairs(box_items) do
-        if BotInventory.wanted_back(row, ctx) == LOADOUT then
+        if FIRST[BotInventory.wanted_back(row, ctx)] then
             rows[#rows + 1] = row
         end
     end
     for _, row in ipairs(box_items) do
-        if BotInventory.wanted_back(row, ctx) ~= LOADOUT then
+        if not FIRST[BotInventory.wanted_back(row, ctx)] then
             rows[#rows + 1] = row
         end
     end
@@ -465,6 +478,22 @@ function BotInventory.context(bot)
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
+    -- The rearm: sourcing ammunition, a firearm (not a reserve one) the
+    -- remembered box holds, with its ammunition held or in the box.
+    if knowledge and BotSurvival.sourcing_now(bot) then
+        local box = BotInventory.remembered(bot)
+        for id, row in pairs(knowledge.weapons) do
+            local ammo = bot:ammo_for(id)
+            if not row.melee and not row.reserve and box[id] and not bot:has_item(id)
+                and ammo and (box[ammo] or bot:item_count(ammo) > 0) then
+                ctx.rearm = ctx.rearm or {}
+                ctx.rearm[id] = true
+                if box[ammo] then
+                    ctx.rearm[ammo] = true
+                end
+            end
+        end
+    end
     local weapon = bot:weapon()
     if weapon.ammo then
         local rounds, shots = BotSurvival.rounds(bot)
@@ -555,9 +584,9 @@ function BotInventory.make_room(bot, ctx, items, skip)
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
             if why == "a <use> fact needs it" or why == "a locked door needs it"
-                or why == "ammunition for a held gun" or why == LOADOUT then
+                or why == "ammunition for a held gun" or FIRST[why] then
                 needed = needed + 1
-                if why ~= "ammunition for a held gun" and why ~= LOADOUT then
+                if why ~= "ammunition for a held gun" and not FIRST[why] then
                     ctx.swap = true
                 end
             end
@@ -669,8 +698,8 @@ local function plan_visit(bot, menu, view)
     for _, op in ipairs(ops) do
         parts[#parts + 1] = string.format("%s 0x%02X", op.kind, op.item)
     end
-    log(bot, string.format("box open: %d op(s) [%s], inventory %d/%d", #ops,
-        table.concat(parts, ", "), ctx.used, ctx.capacity))
+    log(bot, string.format("box open: %d op(s) [%s], inventory %d/%d, box %s", #ops,
+        table.concat(parts, ", "), ctx.used, ctx.capacity, bot:memory().box_items or "?"))
     return ops
 end
 
