@@ -8379,12 +8379,13 @@ impl GameState {
         });
     }
 
-    /// One tick of the get-item window, before its message's.
-    pub fn tick_re2_item_get(&mut self) {
+    /// One tick of the get-item window, before its message's. Returns the
+    /// cue it plays: the cancel cue when the "taken" or "full" message has
+    /// closed or a no has counted out (sub 0, `0x4FD701`).
+    pub fn tick_re2_item_get(&mut self) -> Option<status2::Sound> {
         use crate::scd2::host::{MESSAGE_FULL, MESSAGE_TAKE};
-        let Some(mut get) = self.re2_item_get.take() else {
-            return;
-        };
+        let mut get = self.re2_item_get.take()?;
+        let mut cue = None;
         get.ticks = get.ticks.saturating_add(1);
         let item = get.action.params[0];
         let next = |phase| (phase, 0);
@@ -8410,21 +8411,27 @@ impl GameState {
                 self.take_re2_item(get.action);
                 next(Re2ItemGetPhase::Shown)
             }
+            // The count out ends in sub 0 too, which plays the same cue.
             Re2ItemGetPhase::Refuse if get.ticks == ITEM_GET_REFUSE_TICKS => {
+                cue = Some(status2::Sound::Cancel);
                 next(Re2ItemGetPhase::Close)
             }
-            Re2ItemGetPhase::Shown if !self.message.active => next(Re2ItemGetPhase::Close),
+            Re2ItemGetPhase::Shown if !self.message.active => {
+                cue = Some(status2::Sound::Cancel);
+                next(Re2ItemGetPhase::Close)
+            }
             Re2ItemGetPhase::Close if get.ticks == ITEM_GET_CLOSE_TICKS => {
                 // Game mode 5 hands the player back with its motion restarted.
                 self.re2.player.routine[2] = 0;
                 self.re2.player.move_cnt = 1;
-                return;
+                return None;
             }
             phase => (phase, get.ticks),
         };
         get.phase = phase;
         get.ticks = ticks;
         self.re2_item_get = Some(get);
+        cue
     }
 
     /// The oracle's `inv` field: `Item_work`'s ten slots, the personal item,
@@ -8489,7 +8496,7 @@ impl GameState {
     /// bits past the low six in the id's high byte ([`crate::text::message_index`]).
     pub fn show_re2_message(&mut self, id: u8) {
         let id = u16::from(id);
-        self.message.set_re2_timing();
+        self.message.set_re2_timing(false);
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
     }
 
@@ -8530,7 +8537,7 @@ impl GameState {
 
     /// One of the executable's own messages.
     fn show_re2_global(&mut self, id: u8) {
-        self.message.set_re2_timing();
+        self.message.set_re2_timing(true);
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
     }
 

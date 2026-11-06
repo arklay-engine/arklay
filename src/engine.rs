@@ -3622,7 +3622,9 @@ impl GameSession {
                 self.swallow_action = false;
             }
             let was_active = self.game.message.active;
-            self.game.tick_re2_item_get();
+            if let Some(cue) = self.game.tick_re2_item_get() {
+                self.play_re2_status_sounds(pack, &[cue]);
+            }
             self.game.update_message(
                 MessageInput {
                     action,
@@ -3633,6 +3635,7 @@ impl GameSession {
                 &self.loaded.room,
                 &self.text,
             );
+            self.play_re2_choice_cue(pack);
             if was_active && !self.game.message.active && action {
                 self.swallow_action = true;
             }
@@ -3804,6 +3807,7 @@ impl GameSession {
             &self.loaded.room,
             &self.text,
         );
+        self.play_re2_choice_cue(pack);
         // The dismissal bookkeeping now sees the post-script window state: a
         // press that dismissed a window this tick latches the swallow until
         // the key is released.
@@ -6043,23 +6047,31 @@ impl GameSession {
         self.play_re2_status_sounds(pack, &outcome.sounds);
         self.game
             .update_message(message_input, &self.loaded.room, &self.text);
-        // The yes/no ("Will you mix the herb?") plays its own cue from the
-        // message code (`0x4C9600`).
-        if let Some(cue) = self.game.message.choice_cue() {
-            use crate::message::ChoiceCue;
-            let sound = match cue {
-                ChoiceCue::Move => game::status2::Sound::Cursor,
-                ChoiceCue::Yes => game::status2::Sound::Decide,
-                ChoiceCue::No => game::status2::Sound::Cancel,
-            };
-            self.play_re2_status_sounds(pack, &[sound]);
-        }
+        self.play_re2_choice_cue(pack);
         self.tick_menu_screen(pack);
         if outcome.close {
             // Page 0 (`0x502130`) starts the fade out; the screen's task and
             // `Game_loop`'s game modes take it from there.
             self.re2_status_close = Some(0);
         }
+    }
+
+    /// A yes/no's cue ("Will you mix the herb?", "Will you take the ...?"),
+    /// which the message code plays itself (`0x4C9600`).
+    fn play_re2_choice_cue(&mut self, pack: &Pack) {
+        use crate::message::ChoiceCue;
+        if !self.game.is_re2_room {
+            return;
+        }
+        let Some(cue) = self.game.message.choice_cue() else {
+            return;
+        };
+        let sound = match cue {
+            ChoiceCue::Move => game::status2::Sound::Cursor,
+            ChoiceCue::Yes => game::status2::Sound::Decide,
+            ChoiceCue::No => game::status2::Sound::Cancel,
+        };
+        self.play_re2_status_sounds(pack, &[sound]);
     }
 
     /// The status screen's cues, through the RE2 sound path, as `Snd_se_on`

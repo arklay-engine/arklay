@@ -59,9 +59,11 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
                 let delay = if delay == 0 { 0 } else { (delay / 2).max(1) };
                 let _ = write!(value, "{{scroll {delay}}}");
             }
-            // A question: the rest of the bytes are the next message's.
+            // A question: the rest of the bytes are the next message's. Its
+            // argument (the cue flags, `& 0x60` and `& 0x20`) is the tag's
+            // third byte, behind a branch that runs nothing.
             0xFB => {
-                value.push_str("{branch 0 0 0}");
+                let _ = write!(value, "{{branch 0 0 {}}}", operand());
                 break;
             }
             0xEE..=0xF0 => match (byte, operand()) {
@@ -376,7 +378,10 @@ mod tests {
         // A page held for a while.
         assert_eq!(decode_message(&[0xFD, 0x49, 0xFE, 0]), "{clear 73}");
         // A question stops where the next message begins.
-        assert_eq!(decode_message(&[0x24, 0xFB, 0x44, 0x24]), "H{branch 0 0 0}");
+        assert_eq!(
+            decode_message(&[0x24, 0xFB, 0x44, 0x24]),
+            "H{branch 0 0 68}"
+        );
     }
 
     #[test]
@@ -430,7 +435,7 @@ mod tests {
         // The yes/no line's spacing draws nothing.
         assert_eq!(
             decode_message(&[0xFC, 0xF5, 0xF5, 0xFB, 0x80]),
-            "\\n{branch 0 0 0}"
+            "\\n{branch 0 0 128}"
         );
     }
 
@@ -457,14 +462,14 @@ mod tests {
         let system = |id: usize| decode_message(&exe.system[id]);
         assert_eq!(
             system(0),
-            "Will you take the\\n{color 1}{string 0}{color 0}?\\n{branch 0 0 0}"
+            "Will you take the\\n{color 1}{string 0}{color 0}?\\n{branch 0 0 128}"
         );
         assert_eq!(
             system(6),
             "You've taken the\\n{color 1}{string 0}{color 0}."
         );
         assert_eq!(system(7), "You don't need to\\nuse this right now.");
-        assert_eq!(system(0xB), "Will you mix \\nthe herb?\\n{branch 0 0 0}");
+        assert_eq!(system(0xB), "Will you mix \\nthe herb?\\n{branch 0 0 128}");
         assert_eq!(
             system(0x11),
             "A combat knife.\\nIt could come in\\nhandy..."

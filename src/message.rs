@@ -275,9 +275,21 @@ pub struct MessageWindow {
     /// scripts' `voice_play` then `message` pair); see
     /// [`MessageWindow::is_subtitle`].
     voiced: bool,
-    /// Whether the window keeps `Mess_disp`'s timing rather than RE1's: a
-    /// space costs no tick and a page break has no settle passes.
+    /// Whether the window keeps `Mess_disp`'s timing (`0x4C8DCE`) rather
+    /// than RE1's: the delays doubled (the PC build's `0x98F07A` is clear), a
+    /// space costs no tick, a page break has no settle passes, the speed-up
+    /// is always on, and a yes/no takes no answer for its first 16 ticks.
     re2_timing: bool,
+    /// Whether the yes/no's answer always plays its cue: the system and
+    /// status messages (flag `0x2000` of the request). A room's question
+    /// cues only by its own argument (`& 0x60`).
+    re2_cues: bool,
+    /// The yes/no's lockout (`+0x3BAA`): an answer counts only once it has
+    /// run out.
+    answer_lock: u8,
+    /// The window's text still draws on the tick a yes/no is answered, as
+    /// `Mess_disp` builds it after the answer, without the choice row.
+    linger: bool,
     /// How many pages the window has turned since the request.
     page: usize,
 }
@@ -312,6 +324,9 @@ impl Default for MessageWindow {
             actions: Vec::new(),
             voiced: false,
             re2_timing: false,
+            re2_cues: false,
+            answer_lock: 0,
+            linger: false,
             page: 0,
         }
     }
@@ -386,7 +401,9 @@ impl MessageWindow {
         self.pause = pause;
         self.active = true;
         self.menu = menu;
-        self.speed_up = id & 0x80 != 0;
+        // RE2's requests all set the speed-up (`+0x3B8E`).
+        self.speed_up = id & 0x80 != 0 || self.re2_timing;
+        self.linger = false;
         self.source_ready = false;
         self.phase = MessagePhase::Init;
         self.bytes.clear();
@@ -410,9 +427,27 @@ impl MessageWindow {
         self.voiced = voiced;
     }
 
-    /// Keep `Mess_disp`'s timing from now on.
-    pub fn set_re2_timing(&mut self) {
+    /// Keep `Mess_disp`'s timing from now on, for a message whose yes/no
+    /// always cues (`cues`, a system or status message) or only by its own
+    /// argument (a room's).
+    pub fn set_re2_timing(&mut self, cues: bool) {
         self.re2_timing = true;
+        self.re2_cues = cues;
+    }
+
+    /// Whether the delays are doubled: the pause menu's in RE1, and every
+    /// RE2 message (`Mess_disp`'s shift, set while `0x98F07A` is clear).
+    fn shifted(&self) -> bool {
+        self.menu || self.re2_timing
+    }
+
+    /// The RE2 yes/no's argument (the byte after `0xFB`), which the
+    /// converter keeps as the `{branch}` tag's third byte.
+    fn re2_choice_argument(&self) -> u8 {
+        match self.ptr {
+            Cursor::Message(position) => self.bytes.get(position + 3).copied().unwrap_or(0),
+            Cursor::Name(_) => 0,
+        }
     }
 
     /// Whether the window is showing a voiced line's subtitle: a message
@@ -528,6 +563,7 @@ impl MessageWindow {
     /// Advance the window one fixed tick.
     pub fn update(&mut self, input: MessageInput, text: &Text, selected_item: u8) {
         self.choice_cue = None;
+        self.linger = false;
         // The engine's door-animation adapter writes `id`/`pause`/`active`
         // directly; turn that into a real request on the next tick.
         if self.active
@@ -550,7 +586,13 @@ impl MessageWindow {
         let pressed_left = input.left && !self.previous.left;
         let pressed_right = input.right && !self.previous.right;
         let pressed_dismiss = pressed_action || (input.cancel && !self.previous.cancel);
-        let shifted = self.menu;
+        let shifted = self.shifted();
+        // RE2's page break turns on the confirm key only (`0x1000`).
+        let pressed_page = if self.re2_timing {
+            pressed_action
+        } else {
+            pressed_dismiss
+        };
 
         match self.phase {
             MessagePhase::Idle => {}
@@ -562,7 +604,7 @@ impl MessageWindow {
             }
             MessagePhase::Reveal => self.update_reveal(input, text, shifted),
             MessagePhase::PageWait => {
-                if pressed_dismiss {
+                if pressed_page {
                     self.page += 1;
                     self.render_start = match self.ptr {
                         Cursor::Message(index) => index,
@@ -587,6 +629,9 @@ impl MessageWindow {
                     self.clut_base = self.clut_copy;
                     self.char_timer = self.char_delay << u8::from(shifted);
                 }
+            }
+            MessagePhase::YesNo if self.re2_timing => {
+                self.update_re2_yes_no(pressed_action, pressed_left, pressed_right)
             }
             MessagePhase::YesNo => {
                 self.yes_no_shown = true;
@@ -631,6 +676,28 @@ impl MessageWindow {
     /// The state-1 reveal step: decrement the character timer with the
     /// speed-up rule, then process stream bytes until one consumes the tick.
     fn update_reveal(&mut self, input: MessageInput, text: &Text, shifted: bool) {
+        if self.re2_timing {
+            // `Mess_disp`'s state 1: the held confirm or cancel key takes
+            // three more off the timer, and once it runs out types four
+            // glyphs a tick at a delay of one, two at two or three.
+            self.char_timer = self.char_timer.wrapping_sub(1);
+            let mut count = 1;
+            if self.speed_up && (input.action || input.cancel) {
+                self.char_timer = self.char_timer.wrapping_sub(3);
+                if self.char_timer as i8 <= 0 {
+                    count = match self.char_delay {
+                        0 | 1 => 4,
+                        2 | 3 => 2,
+                        _ => 1,
+                    };
+                }
+            }
+            if self.char_timer as i8 > 0 {
+                return;
+            }
+            self.reveal_bytes(text, shifted, count);
+            return;
+        }
         let previous = self.char_timer;
         self.char_timer = self.char_timer.wrapping_sub(1);
         if self.speed_up && self.char_timer != 0 {
@@ -643,7 +710,12 @@ impl MessageWindow {
         } else if !self.speed_up && self.char_timer != 0 {
             return;
         }
+        self.reveal_bytes(text, shifted, 1);
+    }
 
+    /// Process stream bytes until `count` glyphs have typed or a byte ends
+    /// the tick.
+    fn reveal_bytes(&mut self, text: &Text, shifted: bool, mut count: u8) {
         loop {
             let Some(byte) = self.peek(self.ptr) else {
                 self.dismiss();
@@ -673,7 +745,10 @@ impl MessageWindow {
                     }
                     return;
                 }
-                0x02 => self.ptr = next(self.ptr),
+                0x02 => {
+                    self.ptr = next(self.ptr);
+                    continue;
+                }
                 0x03 => {
                     let line = self.line_counter;
                     self.line_counter = line.wrapping_add(1);
@@ -714,25 +789,19 @@ impl MessageWindow {
                             }
                         }
                         let delay = self.peek(self.ptr).unwrap_or(0);
-                        self.char_delay = if shifted {
-                            delay.wrapping_mul(2)
-                        } else {
-                            delay
-                        };
+                        self.char_delay = self.tag_delay(delay, shifted);
                         self.ptr = next(self.ptr);
                     } else {
-                        self.char_delay = if shifted {
-                            operand.wrapping_mul(2)
-                        } else {
-                            operand
-                        };
+                        self.char_delay = self.tag_delay(operand, shifted);
                         self.ptr = next(self.ptr);
                     }
+                    continue;
                 }
                 0x05 => {
                     self.ptr = next(self.ptr);
                     self.clut_copy = self.peek(self.ptr).unwrap_or(0);
                     self.ptr = next(self.ptr);
+                    continue;
                 }
                 0x06 => {
                     let saved = self.ptr.index();
@@ -749,36 +818,86 @@ impl MessageWindow {
                     if !self.name.is_empty() {
                         self.ptr = Cursor::Name(0);
                     }
+                    continue;
                 }
                 0x07 => {
                     self.ptr = match self.ptr {
                         Cursor::Name(_) => Cursor::Message(self.saved + 2),
                         Cursor::Message(_) => next(self.ptr),
                     };
+                    continue;
                 }
                 0x08 => {
                     self.phase = MessagePhase::YesNo;
                     self.yes_no_shown = false;
+                    self.answer_lock = if self.re2_timing { 8 << 1 } else { 0 };
                     return;
                 }
-                0xF8..=0xFA => {
-                    self.ptr = skip(self.ptr);
-                    self.char_timer = self.char_delay;
-                    return;
-                }
-                0xFB => self.ptr = next(self.ptr),
-                0xFF => {
+                0xF8..=0xFA => self.ptr = skip(self.ptr),
+                0xFB => {
                     self.ptr = next(self.ptr);
-                    self.char_timer = self.char_delay;
-                    return;
+                    continue;
                 }
-                _ => {
-                    self.ptr = next(self.ptr);
-                    self.char_timer = self.char_delay;
-                    return;
+                _ => self.ptr = next(self.ptr),
+            }
+            // A glyph (or RE1's half-cell advance) typed.
+            count = count.saturating_sub(1);
+            if count == 0 {
+                self.char_timer = self.char_delay;
+                return;
+            }
+        }
+    }
+
+    /// A delay tag's character delay. RE2's is at least one before the
+    /// shift (`0x4C90A7`; the converter has halved it already).
+    fn tag_delay(&self, delay: u8, shifted: bool) -> u8 {
+        let delay = if self.re2_timing { delay.max(1) } else { delay };
+        if shifted {
+            delay.wrapping_mul(2)
+        } else {
+            delay
+        }
+    }
+
+    /// `Mess_disp`'s state 4 (`0x4C9593`): the answer counts once the
+    /// lockout has run out, and the choice moves on the direction keys
+    /// meanwhile. The yes plays the decide cue unless the argument's `0x20`
+    /// silences it, the no the cancel cue, both only for a message that
+    /// always cues or whose argument has `0x60`; a move always plays the
+    /// cursor cue.
+    fn update_re2_yes_no(&mut self, pressed_action: bool, left: bool, right: bool) {
+        self.yes_no_shown = true;
+        self.answer_lock = self.answer_lock.saturating_sub(1);
+        if pressed_action && self.answer_lock == 0 {
+            let argument = self.re2_choice_argument();
+            let yes = self.menu_choice & 1 == 0;
+            if self.re2_cues || argument & 0x60 != 0 {
+                self.choice_cue = if !yes {
+                    Some(ChoiceCue::No)
+                } else if argument & 0x20 == 0 {
+                    Some(ChoiceCue::Yes)
+                } else {
+                    None
+                };
+            }
+            self.menu_choice &= 0x7F;
+            self.active = false;
+            self.linger = true;
+            self.phase = MessagePhase::Idle;
+            self.run_post_action();
+            return;
+        }
+        if !pressed_action {
+            for pressed in [right, left] {
+                if pressed {
+                    self.menu_choice ^= 1;
+                    self.char_timer = 0;
+                    self.choice_cue = Some(ChoiceCue::Move);
                 }
             }
         }
+        self.char_timer = self.char_timer.wrapping_sub(1);
     }
 
     /// Read the post-action stream after a confirmed yes/no prompt.
@@ -843,7 +962,7 @@ impl MessageWindow {
     /// line keeps its distance from the bottom when `framebuffer` is a
     /// wider aspect's shorter band.
     pub fn draw(&self, framebuffer: &mut Framebuffer, font: &Font, text: &Text) {
-        if !self.active || !self.source_ready {
+        if !(self.active || self.linger) || !self.source_ready {
             return;
         }
         let metrics = font.metrics;
@@ -919,7 +1038,7 @@ impl MessageWindow {
             }
         }
 
-        let blink = BLINK_BITS << u8::from(self.menu);
+        let blink = BLINK_BITS << u8::from(self.shifted());
         match self.phase {
             MessagePhase::PageWait => {
                 if self.char_timer & blink != 0 {
@@ -1833,7 +1952,7 @@ mod tests {
         let ticks = |re2: bool| {
             let mut window = MessageWindow::default();
             if re2 {
-                window.set_re2_timing();
+                window.set_re2_timing(true);
             }
             assert!(window.start(0x40, 0, &bytes, false));
             let mut ticks = 0;
@@ -1843,8 +1962,131 @@ mod tests {
             }
             ticks
         };
-        // The two spaces and the five settle passes.
-        assert_eq!(ticks(false) - ticks(true), 7);
+        // RE1 spends a tick on each space and five settle passes on the page.
+        // RE2's spaces are free and its delays doubled: A on the second tick,
+        // B on the fourth, the page on the sixth, its 6 ticks, C four ticks
+        // later (the delay shifted again), the end two after and its 18.
+        assert_eq!(ticks(false), 24);
+        assert_eq!(ticks(true), 2 + 2 + 2 + 6 + 4 + 2 + 18);
+    }
+
+    /// The text an RE2 window shows after each of `ticks` ticks, holding the
+    /// confirm key on the ticks `held` says.
+    fn re2_typing(source: &str, ticks: usize, held: impl Fn(usize) -> bool) -> Vec<String> {
+        let (text, bytes) = latin_message(source);
+        let mut window = MessageWindow::default();
+        window.set_re2_timing(true);
+        assert!(window.start(0x40, 0, &bytes, false));
+        (0..ticks)
+            .map(|tick| {
+                window.update(
+                    MessageInput {
+                        action: held(tick),
+                        ..MessageInput::default()
+                    },
+                    &text,
+                    0,
+                );
+                window.page_lines(&text).concat()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn re2_types_a_glyph_every_two_ticks_from_the_tick_after_the_request() {
+        // `Mess_disp`: the request's tick sets the timer to 2 and takes one
+        // off; each glyph sets it to 2 again. Spaces cost nothing.
+        let shown = re2_typing("Ab c{timed 0}", 6, |_| false);
+        assert_eq!(shown, ["", "A", "A", "Ab", "Ab", "Ab c"]);
+    }
+
+    #[test]
+    fn re2_types_two_glyphs_a_tick_while_confirm_is_held() {
+        // The held key takes three more off the timer; at a delay of two the
+        // tick types two glyphs.
+        let shown = re2_typing("abcdefgh{timed 0}", 4, |tick| tick != 2);
+        assert_eq!(shown, ["ab", "abcd", "abcd", "abcdef"]);
+    }
+
+    /// An RE2 yes/no that has just typed and drawn its choice row.
+    fn re2_question(source: &str, cues: bool) -> (Text, MessageWindow) {
+        let (text, bytes) = latin_message(source);
+        let mut window = MessageWindow::default();
+        window.set_re2_timing(cues);
+        assert!(window.start(0x40, 0, &bytes, false));
+        run_until(&mut window, &text, |w| w.phase() == MessagePhase::YesNo);
+        (text, window)
+    }
+
+    #[test]
+    fn an_re2_yes_no_takes_its_answer_only_after_sixteen_ticks() {
+        let (text, mut window) = re2_question("Take?{branch 0 0 128}", true);
+        let press = MessageInput {
+            action: true,
+            ..MessageInput::default()
+        };
+        // Presses on the 4th, 8th, 12th and 16th tick: the lockout (`8 << 1`)
+        // runs out on the 16th, so that one answers.
+        for tick in 1..=16 {
+            let input = if tick % 4 == 0 {
+                press
+            } else {
+                MessageInput::default()
+            };
+            window.update(input, &text, 0);
+            assert_eq!(window.active, tick != 16, "tick {tick}");
+        }
+        assert_eq!(window.choice_cue(), Some(ChoiceCue::Yes));
+    }
+
+    #[test]
+    fn an_re2_yes_no_moves_during_its_lockout() {
+        let (text, mut window) = re2_question("Take?{branch 0 0 128}", true);
+        let right = MessageInput {
+            right: true,
+            ..MessageInput::default()
+        };
+        window.update(right, &text, 0);
+        assert_eq!(window.choice_cue(), Some(ChoiceCue::Move));
+        assert_eq!(window.menu_choice_id() & 1, 1);
+    }
+
+    /// Answer `window`'s question with the current choice once its lockout
+    /// is over, and return the cue.
+    fn answer(window: &mut MessageWindow, text: &Text) -> Option<ChoiceCue> {
+        run_until(window, text, |w| w.answer_lock == 0);
+        let press = MessageInput {
+            action: true,
+            ..MessageInput::default()
+        };
+        window.update(press, text, 0);
+        assert!(!window.active);
+        window.choice_cue()
+    }
+
+    #[test]
+    fn an_re2_yes_cues_unless_its_argument_silences_it() {
+        let (text, mut window) = re2_question("Take?{branch 0 0 128}", true);
+        assert_eq!(answer(&mut window, &text), Some(ChoiceCue::Yes));
+        let (text, mut window) = re2_question("Take?{branch 0 0 160}", true);
+        assert_eq!(answer(&mut window, &text), None);
+        let (text, mut window) = re2_question("Take?{branch 0 0 160}", true);
+        window.menu_choice ^= 1;
+        assert_eq!(answer(&mut window, &text), Some(ChoiceCue::No));
+        // A room's question cues only by its argument's 0x60.
+        let (text, mut window) = re2_question("Take?{branch 0 0 128}", false);
+        assert_eq!(answer(&mut window, &text), None);
+        let (text, mut window) = re2_question("Take?{branch 0 0 64}", false);
+        assert_eq!(answer(&mut window, &text), Some(ChoiceCue::Yes));
+    }
+
+    #[test]
+    fn an_answered_re2_question_draws_its_text_on_the_answers_tick() {
+        let (text, mut window) = re2_question("Take?{branch 0 0 128}", true);
+        answer(&mut window, &text);
+        assert!(window.linger);
+        window.update(MessageInput::default(), &text, 0);
+        assert!(!window.linger);
     }
 
     #[test]

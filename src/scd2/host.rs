@@ -2719,19 +2719,28 @@ mod tests {
 
     /// Run the get-item window to its close, answering its question as the
     /// oracle's room 102 runs do: the window's tick, then the message's.
-    /// Returns the tick numbers (from the pick-up's) the take and the close
-    /// landed on.
-    fn take_through_the_window(game: &mut GameState, refuse: bool) -> (Option<u32>, u32) {
+    /// Returns the tick numbers (from the pick-up's) the take, the window's
+    /// cue and the close landed on.
+    fn take_through_the_window(
+        game: &mut GameState,
+        refuse: bool,
+    ) -> (Option<u32>, Option<u32>, u32) {
         use crate::game::Re2ItemGetPhase;
+        use crate::game::status2::Sound;
         let mut taken = None;
+        let mut cue = None;
         for tick in 1..400 {
             let before = game.inventory.clone();
-            game.tick_re2_item_get();
+            if let Some(sound) = game.tick_re2_item_get() {
+                assert_eq!(sound, Sound::Cancel);
+                assert_eq!(cue, None, "one cue");
+                cue = Some(tick);
+            }
             if game.inventory != before {
                 taken = Some(tick);
             }
             let Some(get) = game.re2_item_get else {
-                return (taken, tick);
+                return (taken, cue, tick);
             };
             // The window's message, answered (or closed) the tick it shows.
             if game.message.active
@@ -2769,9 +2778,11 @@ mod tests {
         // The question shows on the seventh tick and is answered on it; the
         // take is 20 ticks after the answer, the close ten after the tick
         // that sees the "taken" message gone, and the player restarts its
-        // motion.
-        let (taken, closed) = take_through_the_window(&mut game, false);
+        // motion. The window's cancel cue plays on the tick that sees the
+        // message gone.
+        let (taken, cue, closed) = take_through_the_window(&mut game, false);
         assert_eq!(taken, Some(7 + 20));
+        assert_eq!(cue, Some(7 + 20 + 1));
         assert_eq!(closed, 7 + 20 + 1 + 10);
         assert_eq!(game.item_count(0x14), 30);
         assert_eq!(game.re2.player.routine[2], 0);
@@ -2788,8 +2799,9 @@ mod tests {
         host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
         let action = game.room_actions[8].unwrap();
         game.fire_re2_area(action);
-        let (taken, closed) = take_through_the_window(&mut game, true);
+        let (taken, cue, closed) = take_through_the_window(&mut game, true);
         assert_eq!(taken, None);
+        assert_eq!(cue, Some(7 + 16), "the count out ends in sub 0's cue");
         assert_eq!(closed, 7 + 16 + 10);
         assert!(!game.re2.flag(ITEM_BANK, 154));
         assert_eq!(game.room_actions[8].unwrap().handler, 1);
@@ -2842,7 +2854,7 @@ mod tests {
         host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
         let action = game.room_actions[8].unwrap();
         game.fire_re2_area(action);
-        let (taken, closed) = take_through_the_window(&mut game, false);
+        let (taken, _, closed) = take_through_the_window(&mut game, false);
         assert_eq!(taken, None);
         assert_eq!(closed, 7 + 1 + 10);
         assert_eq!(game.item_count(0x14), 0);
