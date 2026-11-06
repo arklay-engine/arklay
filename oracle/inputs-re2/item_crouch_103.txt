@@ -1,0 +1,33 @@
+# room 103: shoot zombie Brad dead, walk to his body, take the key with the crouching pick-up, yes long after the question, then close (oracle/re2.md, "Items")
+356 aim
+374 aim fire
+378 aim
+404 aim fire
+408 aim
+434 aim fire
+438 aim
+464 aim fire
+468 aim
+494 aim fire
+498 aim
+524 aim fire
+528 aim
+554 aim fire
+558 aim
+584 aim fire
+588 aim
+614 aim fire
+618 aim
+644 aim fire
+648 aim
+674 aim fire
+678 aim
+704
+714 up
+806
+824 action
+828
+1100 action
+1104
+1300 action
+1304

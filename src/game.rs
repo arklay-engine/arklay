@@ -911,6 +911,11 @@ const ITEM_GET_ASK_TICK: u8 = 7;
 const ITEM_GET_TAKE_TICK: u8 = 19;
 const ITEM_GET_REFUSE_TICKS: u8 = 15;
 const ITEM_GET_CLOSE_TICKS: u8 = 10;
+/// The window's screen saves `Cut_no` and sets it to 0 on this tick of the
+/// open (`0x501CD9`), and puts it back on this tick of the close
+/// (`0x502027`).
+const ITEM_GET_CUT_TICK: u8 = 6;
+const ITEM_GET_UNCUT_TICK: u8 = 8;
 
 /// One inventory stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3190,6 +3195,13 @@ pub struct GameState {
     pub is_re2_room: bool,
     /// RE2's get-item window while it is open: it owns the session tick.
     pub re2_item_get: Option<Re2ItemGet>,
+    /// The item a crouching pick-up is for, until its crouch opens the
+    /// get-item window (`0x9888D0`, which `Sce_Item` set).
+    pub re2_crouch_item: Option<RoomAction>,
+    /// `Sce_Item` chose a crouching pick-up this tick. The original checks
+    /// the areas after `Player_move`, so the routine changes after this
+    /// tick's move.
+    pub re2_crouch_start: bool,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -3660,6 +3672,8 @@ impl Default for GameState {
             re2: Default::default(),
             is_re2_room: false,
             re2_item_get: None,
+            re2_crouch_item: None,
+            re2_crouch_start: false,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
@@ -6338,6 +6352,40 @@ impl GameState {
         }
     }
 
+    /// An RE2 area's gate and box where `Sce_at_check` tests them: moved by
+    /// the `x` and `z` of the work or object its `Super` byte names
+    /// (`0x4E9227`). A work index past the slots that hold one moves nothing.
+    pub(crate) fn re2_area_gate(
+        &self,
+        slot: usize,
+        zone: [i16; 4],
+    ) -> (crate::scd2::host::ActionGate, [i16; 4]) {
+        let gate = self.re2.gates[slot];
+        let Some(parent) = gate.parent else {
+            return (gate, zone);
+        };
+        let index = usize::from(parent & 0x3F);
+        let pos = if parent & 0x40 != 0 {
+            match index {
+                0 => Some(self.entities[0].pos),
+                1 => self.re2.characters.0[crate::scd2::host::SPLAYER_SLOT]
+                    .as_deref()
+                    .map(|character| character.body.pos),
+                n => self
+                    .re2
+                    .characters
+                    .0
+                    .get(n - 2)
+                    .and_then(|character| character.as_deref())
+                    .map(|character| character.body.pos),
+            }
+        } else {
+            self.objects.record(index).map(|record| record.pos)
+        };
+        let [x, _, z] = pos.unwrap_or_default();
+        gate.shifted(zone, [x as i16, z as i16])
+    }
+
     /// `Sce_at_check`'s enemy pass (mask 2), which the original runs after the
     /// player's on each enemy in play. An area the enemy is in, at its body or
     /// at the point ahead of it, goes in its `+0xB` (script member 9), which
@@ -6369,7 +6417,8 @@ impl GameState {
                     continue;
                 }
                 let probe = if flags & 0x40 != 0 { pos } else { reach };
-                if self.re2.gates[index].contains(room_action.zone, probe[0], probe[2], floor) {
+                let (gate, zone) = self.re2_area_gate(index, room_action.zone);
+                if gate.contains(zone, probe[0], probe[2], floor) {
                     found = Some(index);
                     let var = if flags & 0x40 != 0 {
                         crate::scd2::host::VAR_BODY_AREA
@@ -6444,12 +6493,8 @@ impl GameState {
             }
             let probe = if flags & 0x40 != 0 { entity_pos } else { reach };
             let inside = if re2 {
-                self.re2.gates[slot].contains(
-                    room_action.zone,
-                    probe[0],
-                    probe[2],
-                    crate::sca::floor_of(pos[1]),
-                )
+                let (gate, zone) = self.re2_area_gate(slot, room_action.zone);
+                gate.contains(zone, probe[0], probe[2], crate::sca::floor_of(pos[1]))
             } else {
                 room_action.contains(probe[0], probe[2])
             };
@@ -8369,12 +8414,41 @@ impl GameState {
     }
 
     /// `Sce_Item` (`0x4E96C0`): open the get-item window, which holds the
-    /// world from the next tick. The crouching pick-up (action bit 0) and
-    /// the difficulty's count changes are not ported.
+    /// world from the next tick. An item whose action has bit 0 is picked
+    /// up crouching instead: the player's routine goes to 1, 6, 0, and
+    /// `pl_mv06` opens the window when the crouch ends
+    /// ([`Self::tick_re2_crouch`]). The difficulty's count changes are not
+    /// ported.
     fn pick_up_re2_item(&mut self, action: RoomAction) {
-        if self.message.active || self.re2_item_get.is_some() {
+        if self.message.active || self.re2_item_get.is_some() || self.re2_crouch_item.is_some() {
             return;
         }
+        if action.params[4] & 1 != 0 {
+            self.re2_crouch_item = Some(action);
+            self.re2_crouch_start = true;
+            return;
+        }
+        self.open_re2_item_get(action);
+    }
+
+    /// After `Player_move`: start the crouch `Sce_Item` chose, or, at
+    /// `pl_mv06`'s sub 2 (`0x4DB035`), open the get-item window for its item.
+    /// A crouch that something else ended (a hit, a script) drops its item.
+    pub fn tick_re2_crouch(&mut self) {
+        if std::mem::take(&mut self.re2_crouch_start) {
+            let routine = &mut self.re2.player.routine;
+            routine[1] = crate::player2::MOVE_ITEM;
+            routine[2] = 0;
+        } else if std::mem::take(&mut self.re2.player.item_window) {
+            if let Some(action) = self.re2_crouch_item.take() {
+                self.open_re2_item_get(action);
+            }
+        } else if !crate::player2::crouching(&self.re2.player) {
+            self.re2_crouch_item = None;
+        }
+    }
+
+    fn open_re2_item_get(&mut self, action: RoomAction) {
         self.re2_item_get = Some(Re2ItemGet {
             action,
             phase: Re2ItemGetPhase::Open,
@@ -8434,9 +8508,10 @@ impl GameState {
                 next(Re2ItemGetPhase::Close)
             }
             Re2ItemGetPhase::Close if get.ticks == ITEM_GET_CLOSE_TICKS => {
-                // Game mode 5 hands the player back with its motion restarted.
-                self.re2.player.routine[2] = 0;
-                self.re2.player.move_cnt = 1;
+                // Game mode 3 zeroes the routines and runs `Player_move`,
+                // whose `Pl_init` hands the player back standing, from a
+                // crouch too (`0x4C000D`).
+                crate::player2::pl_init(&mut self.re2.player);
                 return None;
             }
             phase => (phase, get.ticks),
@@ -8461,6 +8536,21 @@ impl GameState {
         let [id, count] = self.re2.personal_item;
         slots.push(format!("{id:x}:{count}"));
         format!("{}/{}", slots.join(","), self.inventory_capacity())
+    }
+
+    /// `Cut_no` while the get-item window may be up: 0 from the open's
+    /// sixth tick to the close's eighth, while the room isn't drawn, so
+    /// only the trace's `cam` shows it.
+    pub fn re2_item_get_cut(&self, cut: usize) -> usize {
+        let Some(get) = self.re2_item_get else {
+            return cut;
+        };
+        let cleared = match get.phase {
+            Re2ItemGetPhase::Open => get.ticks >= ITEM_GET_CUT_TICK,
+            Re2ItemGetPhase::Close => get.ticks < ITEM_GET_UNCUT_TICK,
+            _ => true,
+        };
+        if cleared { 0 } else { cut }
     }
 
     /// The flying picture the get-item window draws this tick: from the

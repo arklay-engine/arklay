@@ -928,9 +928,36 @@ pub struct ActionGate {
     pub quad: Option<[[i16; 2]; 4]>,
     /// The floor the area is on; `None` for every floor.
     pub floor: Option<u8>,
+    /// The area's `Super` byte when its top bit is set: the area moves with
+    /// a work (`0x40`, an index into `0x98A10C`: the player, the second
+    /// player, then the enemy slots) or a room object, by that one's `x` and
+    /// `z` (`Sce_at_check`, `0x4E9227`).
+    pub parent: Option<u8>,
 }
 
 impl ActionGate {
+    /// A gate from an area's floor and `Super` bytes.
+    pub fn new(quad: Option<[[i16; 2]; 4]>, floor: u8, parent: u8) -> Self {
+        Self {
+            quad,
+            floor: (floor < 0x80).then_some(floor),
+            parent: (parent & 0x80 != 0).then_some(parent),
+        }
+    }
+
+    /// The gate and box moved by `origin`, as `Sce_at_check` adds its
+    /// parent's `x` and `z` to each corner (16-bit sums).
+    pub fn shifted(&self, zone: [i16; 4], [dx, dz]: [i16; 2]) -> (Self, [i16; 4]) {
+        let quad = self
+            .quad
+            .map(|corners| corners.map(|[x, z]| [x.wrapping_add(dx), z.wrapping_add(dz)]));
+        let [x, z, width, depth] = zone;
+        (
+            Self { quad, ..*self },
+            [x.wrapping_add(dx), z.wrapping_add(dz), width, depth],
+        )
+    }
+
     /// Whether `(x, z)` on `floor` is in the area whose box is `zone`, with
     /// RE2's signed coordinates (`Sce_at_check`).
     pub fn contains(&self, zone: [i16; 4], x: i32, z: i32, floor: u8) -> bool {
@@ -1118,8 +1145,7 @@ impl GameHost<'_> {
         self.write_area(
             at(0) as usize,
             at(1) as u8,
-            at(2) as u8,
-            at(3) as u8,
+            [at(2) as u8, at(3) as u8, at(4) as u8],
             zone,
             quad,
             params,
@@ -1160,21 +1186,20 @@ impl GameHost<'_> {
         self.write_area(
             at(0) as usize,
             sce,
-            at(2) as u8,
-            at(3) as u8,
+            [at(2) as u8, at(3) as u8, at(4) as u8],
             zone,
             quad,
             params,
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Put an area in its slot; `[sat, floor, parent]` are its `Sat`,
+    /// `nFloor` and `Super` bytes.
     fn write_area(
         &mut self,
         slot: usize,
         sce: u8,
-        sat: u8,
-        floor: u8,
+        [sat, floor, parent]: [u8; 3],
         zone: [i16; 4],
         quad: Option<[[i16; 2]; 4]>,
         params: [u8; 8],
@@ -1183,15 +1208,17 @@ impl GameHost<'_> {
             eprintln!("warning: RE2 area {slot} is past the action slots");
             return;
         }
-        self.game.re2.gates[slot] = ActionGate {
-            quad,
-            floor: (floor < 0x80).then_some(floor),
-        };
+        self.game.re2.gates[slot] = ActionGate::new(quad, floor, parent);
         self.game.doors[slot] = None;
         self.game.room_actions[slot] = Some(area_action(slot as u8, sce, sat, zone, params));
     }
 
-    /// `Aot_reset`: an existing area's kind, trigger and data change.
+    /// `Aot_reset` (`0x4E5600`): an existing area's kind, trigger and first
+    /// three data words change; its floor, `Super`, box and the rest of its
+    /// data stay. An item's data is `[item, count, flag]` as words, then the
+    /// model and action bytes, which it keeps: room 103's key turns from
+    /// Brad's enemy-only area into the player's when he dies, and stays a
+    /// crouching pick-up.
     fn reset_area(&mut self, ops: &[i64]) {
         let at = |index: usize| ops.get(index).copied().unwrap_or(0);
         let slot = at(0) as usize;
@@ -1200,7 +1227,16 @@ impl GameHost<'_> {
         };
         let data: [u8; 6] = std::array::from_fn(|index| at(3 + index) as u8);
         let mut params = [0; 8];
-        params[..6].copy_from_slice(&data);
+        if at(1) as u8 == SCE_ITEM {
+            let [model, action] = if old.kind == RoomActionKind::Item {
+                [old.params[3], old.params[4]]
+            } else {
+                [old.params[6], old.params[7]]
+            };
+            params[..5].copy_from_slice(&[data[0], data[2], data[4], model, action]);
+        } else {
+            params[..6].copy_from_slice(&data);
+        }
         self.game.room_actions[slot] = Some(area_action(
             slot as u8,
             at(1) as u8,
@@ -1580,10 +1616,7 @@ impl GameHost<'_> {
         };
         let next = |index: usize| at(rest + index);
         let flags = probe_flags(sat);
-        self.game.re2.gates[slot] = ActionGate {
-            quad,
-            floor: (floor < 0x80).then_some(floor),
-        };
+        self.game.re2.gates[slot] = ActionGate::new(quad, floor, at(4) as u8);
         self.game.room_actions[slot] = Some(RoomAction {
             slot: slot as u8,
             kind: RoomActionKind::Door,
@@ -2875,6 +2908,144 @@ mod tests {
         assert_eq!(taken, None);
         assert_eq!(closed, 7 + 1 + 10);
         assert_eq!(game.item_count(0x14), 0);
+    }
+
+    #[test]
+    fn a_crouching_pick_up_opens_the_window_when_the_crouch_ends() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        // Action bit 0, as room 103's key has.
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 1];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.re2.player.routine = [1, 0, 1, 0];
+        game.fire_re2_area(action);
+        assert!(game.re2_item_get.is_none(), "the crouch comes first");
+        // `Sce_Item` runs after this tick's `Player_move`, so the routine
+        // changes after it.
+        assert_eq!(game.re2.player.routine, [1, 0, 1, 0]);
+        game.tick_re2_crouch();
+        assert_eq!(game.re2.player.routine, [1, 6, 0, 0]);
+        // A second press while crouching does nothing.
+        game.fire_re2_area(action);
+        game.tick_re2_crouch();
+        assert_eq!(game.re2.player.routine, [1, 6, 0, 0]);
+        assert!(game.re2_item_get.is_none());
+        // `pl_mv06`'s sub 2 opens the window.
+        game.re2.player.routine[2] = 3;
+        game.re2.player.item_window = true;
+        game.tick_re2_crouch();
+        assert!(game.re2_item_get.is_some());
+        assert!(game.re2_crouch_item.is_none());
+        // The window's close runs `Pl_init`, which stands the player up.
+        game.re2.player.move_no = 6;
+        let (taken, _, _) = take_through_the_window(&mut game, false);
+        assert_eq!(taken, Some(7 + 20));
+        assert_eq!(game.re2.player.routine, [1, 0, 0, 0]);
+        assert_eq!((game.re2.player.move_no, game.re2.player.move_cnt), (2, 1));
+        assert_eq!(game.item_count(0x14), 30);
+    }
+
+    #[test]
+    fn a_crouch_that_is_cut_short_drops_its_item() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 1];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        game.tick_re2_crouch();
+        // A hit takes the player out of `pl_mv06`.
+        game.re2.player.routine = [2, 0, 0, 0];
+        game.tick_re2_crouch();
+        assert!(game.re2_crouch_item.is_none());
+        assert!(game.re2_item_get.is_none());
+    }
+
+    #[test]
+    fn the_get_item_window_clears_the_cut_while_the_room_is_hidden() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        let mut cuts = Vec::new();
+        for _ in 0..7 {
+            game.tick_re2_item_get();
+            cuts.push(game.re2_item_get_cut(3));
+        }
+        // `0x501CD9` on the sixth tick; the question shows on the seventh.
+        assert_eq!(cuts, [3, 3, 3, 3, 3, 0, 0]);
+        assert!(game.message.active);
+        game.message.active = false;
+        // The yes, the take, the "taken" message.
+        while game
+            .re2_item_get
+            .is_some_and(|get| get.phase != crate::game::Re2ItemGetPhase::Close)
+        {
+            game.tick_re2_item_get();
+            game.message.active = false;
+        }
+        let mut cuts = Vec::new();
+        while game.re2_item_get.is_some() {
+            cuts.push(game.re2_item_get_cut(3));
+            game.tick_re2_item_get();
+        }
+        // `0x502027` on the close's eighth tick.
+        assert_eq!(cuts, [0, 0, 0, 0, 0, 0, 0, 0, 3, 3]);
+        assert_eq!(game.re2_item_get_cut(3), 3);
+    }
+
+    #[test]
+    fn an_area_on_a_body_moves_with_it() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        // `Super` 0xC0: relative to the player, as room 103's key (0xC2) is
+        // to zombie Brad in enemy slot 0.
+        let ops = [
+            8, 2, 49, 0, 0xC0, -1000, -1000, 2000, 2000, 0x53, 1, 156, 255, 1,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let zone = game.room_actions[8].unwrap().zone;
+        game.entities[0].pos = [5000, 0, 5000];
+        let (gate, moved) = game.re2_area_gate(8, zone);
+        assert!(gate.contains(moved, 5500, 5500, 0));
+        assert!(!gate.contains(moved, 500, 500, 0));
+        assert_eq!(gate.parent, Some(0xC0));
+        // Without bit 0x80 the area stays where the script put it.
+        let ops = [
+            9, 2, 49, 0, 0x40, -1000, -1000, 2000, 2000, 0x53, 1, 156, 255, 1,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let zone = game.room_actions[9].unwrap().zone;
+        let (gate, moved) = game.re2_area_gate(9, zone);
+        assert_eq!(moved, zone);
+        assert!(gate.contains(moved, 500, 500, 0));
+    }
+
+    #[test]
+    fn aot_reset_gives_an_item_new_operands_and_keeps_its_action() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        // Room 103's key: the enemies' area (0x32) until Brad dies, then the
+        // player's (0x31).
+        let ops = [
+            8, 2, 50, 0, 0xC2, -1000, -1000, 2000, 2000, 0x53, 1, 156, 255, 1,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let reset = [8, 2, 49, 83, 0, 1, 0, 156, 0];
+        host.exec(0, crate::scd2::opcode::lookup(0x46).unwrap(), &reset);
+        let action = game.room_actions[8].unwrap();
+        assert_eq!(action.kind, RoomActionKind::Item);
+        assert_eq!(action.params[..5], [83, 1, 156, 255, 1]);
+        assert_eq!(game.re2.gates[8].parent, Some(0xC2));
     }
 
     #[test]
