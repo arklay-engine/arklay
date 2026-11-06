@@ -519,6 +519,9 @@ struct SceneSnapshot {
     controls_locked: bool,
     controllable: bool,
     dead: bool,
+    /// The scripted death variant is up: the escape scene's way of ending
+    /// the game, which chains the ending rather than the DIED screen.
+    ending: bool,
     /// The typewriter's save hand-off (the fade into or out of the save
     /// screen) is running.
     typewriter: bool,
@@ -1041,6 +1044,8 @@ impl SessionSnapshot {
             dead: !session.death.is_idle()
                 || game.flags[5].bit(game::MSF_PLAYER_DEAD)
                 || entity.health < 0,
+            ending: game.flags[5].bit(game::MSF2_DEATH_VARIANT)
+                && !game.flags[5].bit(game::MSF2_ATTRACT_DEMO),
             typewriter: session.typewriter_arm.is_some()
                 || session.typewriter_fade.is_some()
                 || session.typewriter_open.is_some()
@@ -2636,6 +2641,10 @@ struct BotCtx {
     uses: Rc<Vec<meta::RoomUse>>,
     /// Every room's `<holds>` facts, cached by [`BotRuntime`].
     holds: Rc<Vec<meta::RoomHolds>>,
+    /// Every room's `<fight>` facts, cached by [`BotRuntime`].
+    fights: Rc<Vec<meta::RoomFight>>,
+    /// Every room's `<ride>` facts, cached by [`BotRuntime`].
+    rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
     errands: Rc<Vec<meta::RoomErrand>>,
     /// Every room's `<door>` facts, cached by [`BotRuntime`].
@@ -2904,6 +2913,32 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
+        methods.add_method("fight_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.fights.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("enemy", entry.enemy)?;
+                row.set("bank", entry.flag.map(|(bank, _)| bank))?;
+                row.set("bit", entry.flag.map(|(_, bit)| bit))?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("ride_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.rides.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("slot", entry.fact.slot)?;
+                row.set("from", entry.fact.from.as_str())?;
+                row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
         methods.add_method("door_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.door_vias.iter() {
@@ -3083,6 +3118,7 @@ impl UserData for BotCtx {
             table.set("controls_locked", scene.controls_locked)?;
             table.set("controllable", scene.controllable)?;
             table.set("dead", scene.dead)?;
+            table.set("ending", scene.ending)?;
             table.set("typewriter", scene.typewriter)?;
             if let Some(view) = &bot.snapshot.save_screen {
                 table.set("save_screen", save_screen_table(lua, view)?)?;
@@ -3692,6 +3728,10 @@ pub struct BotRuntime {
     uses: Option<(bool, Rc<Vec<meta::RoomUse>>)>,
     /// Every room's `<holds>` facts, loaded with `uses`.
     holds: Rc<Vec<meta::RoomHolds>>,
+    /// Every room's `<fight>` facts, loaded with `uses`.
+    fights: Rc<Vec<meta::RoomFight>>,
+    /// Every room's `<ride>` facts, loaded with `uses`.
+    rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's errand facts, loaded with `uses`.
     errands: Rc<Vec<meta::RoomErrand>>,
     /// Every room's `<door>` facts, loaded with `uses`.
@@ -3730,6 +3770,8 @@ impl BotRuntime {
             meta_room: None,
             uses: None,
             holds: Rc::default(),
+            fights: Rc::default(),
+            rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
@@ -3794,6 +3836,8 @@ impl BotRuntime {
         if self.uses.as_ref().is_none_or(|(held, _)| *held != jill) {
             self.uses = Some((jill, Rc::new(meta::load_uses(pack, Some(jill))?)));
             self.holds = Rc::new(meta::load_holds(pack, Some(jill))?);
+            self.fights = Rc::new(meta::load_fights(pack, Some(jill))?);
+            self.rides = Rc::new(meta::load_rides(pack, Some(jill))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill))?);
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill))?);
         }
@@ -3824,6 +3868,8 @@ impl BotRuntime {
                 .map(|(_, uses)| uses.clone())
                 .unwrap_or_default(),
             holds: self.holds.clone(),
+            fights: self.fights.clone(),
+            rides: self.rides.clone(),
             errands: self.errands.clone(),
             door_vias: self.door_vias.clone(),
             knowledge: self.knowledge.clone(),
@@ -4130,6 +4176,8 @@ mod tests {
             "ammo_for",
             "use_facts",
             "item_facts",
+            "fight_facts",
+            "ride_facts",
             "errand_facts",
             "door_facts",
             "combine_result",
@@ -5139,6 +5187,8 @@ mod tests {
             meta: Some(Rc::new(meta)),
             uses: Rc::default(),
             holds: Rc::default(),
+            fights: Rc::default(),
+            rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
             knowledge: None,
@@ -6207,6 +6257,8 @@ mod tests {
             meta: None,
             uses: Rc::default(),
             holds: Rc::default(),
+            fights: Rc::default(),
+            rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
             knowledge: None,

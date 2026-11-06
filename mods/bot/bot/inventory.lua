@@ -12,7 +12,8 @@
 -- The policy (BotInventory.keep, .deposits, .withdrawals, .combine_pick)
 -- works on plain tables so the unit tests can drive it:
 --   keep:     the equipped item, a firearm the knowledge file fights with
---             and its ammunition (the ammo reserve), every key, every item
+--             and its ammunition (the ammo reserve), the loadout (below),
+--             every key, every item
 --             an open <use> fact needs (bot:use_facts(), done flag clear),
 --             every heal item that restores health (the row's `heals`)
 --             and one <cure> stack. Anything else may go in the box (a
@@ -33,7 +34,10 @@
 --             stack of that ammunition while the rounds are under TOP_UP
 --             times the floor, and every heal stack (the heal top-up: a
 --             boss such as 513's Tyrant is a race of heals), as long as
---             RESERVE slots stay free.
+--             RESERVE slots stay free. First of all, there, the weapon and
+--             ammunition a <fight> ahead in this stage prefers (the
+--             loadout, the knowledge file's `prefer`), into any free slot
+--             while no known pickup needs one.
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -105,6 +109,9 @@ function BotInventory.keep(row, ctx)
     if row.kind == "ammo" and ctx.ammo and ctx.ammo[item] then
         return "ammo reserve"
     end
+    if ctx.loadout and ctx.loadout[item] then
+        return "a fight ahead prefers it"
+    end
     if row.kind == "heal" and row.heals ~= false then
         return "heal"
     end
@@ -174,6 +181,19 @@ function BotInventory.soft_deposits(items, ctx, needed)
     return out
 end
 
+-- The loadout withdrawal's reason: taken at a box here only, first, and
+-- into any free slot while no known pickup needs one (else the top-ups'
+-- reserve applies).
+local LOADOUT = "loadout: a fight ahead prefers it"
+
+-- The free slots a withdrawal for `why` must leave.
+local function slots_to_leave(why, ctx)
+    if why == LOADOUT then
+        return (ctx.pickups or 0) > 0 and BotInventory.RESERVE or 0
+    end
+    return BotInventory.RESERVE
+end
+
 -- Why the box item `row` ({item, kind}) should come out, or nil.
 -- ctx adds: keys = {[id] = true} (keys remembered locked doors need),
 --           ammo_low = the equipped gun's ammunition below the floor,
@@ -195,6 +215,9 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.gun_ammo and ctx.gun_ammo[item] then
         return "ammunition for a held gun"
     end
+    if ctx.loadout and ctx.loadout[item] and not ctx.reserve_only then
+        return LOADOUT
+    end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
     end
@@ -211,19 +234,32 @@ end
 local TOP_UPS = {
     ["ammunition top-up at the box"] = true,
     ["heal top-up at the box"] = true,
+    [LOADOUT] = true,
 }
 
 -- The box rows to take back, at most `free` of them, box order.
 function BotInventory.withdrawals(box_items, ctx, free)
     local out = {}
     local heal_taken = false
+    -- The loadout first, so the heal top-up does not fill its slots.
+    local rows = {}
     for _, row in ipairs(box_items) do
+        if BotInventory.wanted_back(row, ctx) == LOADOUT then
+            rows[#rows + 1] = row
+        end
+    end
+    for _, row in ipairs(box_items) do
+        if BotInventory.wanted_back(row, ctx) ~= LOADOUT then
+            rows[#rows + 1] = row
+        end
+    end
+    for _, row in ipairs(rows) do
         if #out >= free then
             break
         end
         local why = BotInventory.wanted_back(row, ctx)
         -- A top-up takes the stacks only while the reserve stays free.
-        if TOP_UPS[why] and free - #out <= BotInventory.RESERVE then
+        if TOP_UPS[why] and free - #out <= slots_to_leave(why, ctx) then
             why = nil
         end
         -- One heal stack is enough to stop the "none held" rule.
@@ -354,6 +390,24 @@ function BotInventory.context(bot)
             end
         end
     end
+    -- The loadout: the weapon (and its ammunition) a <fight> still ahead in
+    -- this stage prefers, so a boss is met with it (513's Tyrant and the
+    -- grenade launcher). The stage is the room id's first character.
+    local here = bot:room().id
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = knowledge and knowledge.enemies[fight.enemy]
+        local prefer = entry and entry.prefer
+        local row = prefer and knowledge.weapons[prefer]
+        if row and not row.melee and fight.room:sub(1, 1) == here:sub(1, 1)
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            ctx.loadout = ctx.loadout or {}
+            ctx.loadout[prefer] = true
+            local ammo = bot:ammo_for(prefer)
+            if ammo then
+                ctx.loadout[ammo] = true
+            end
+        end
+    end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
     local weapon = bot:weapon()
     if weapon.ammo then
@@ -373,6 +427,9 @@ function BotInventory.context(bot)
     ctx.used = used_slots(menu.items or {})
     ctx.full = ctx.used >= ctx.capacity
     ctx.heal_top_up = true
+    if ctx.loadout then
+        ctx.pickups = BotInventory.pickups_needing_room(bot)
+    end
     return ctx
 end
 
@@ -481,7 +538,7 @@ function BotInventory.box_reason(bot, skip, here)
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
-            if TOP_UPS[why] and free <= BotInventory.RESERVE then
+            if TOP_UPS[why] and free <= slots_to_leave(why, ctx) then
                 why = nil
             end
             if why then

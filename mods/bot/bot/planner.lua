@@ -510,15 +510,30 @@ local function via_action(bot, door)
     return BotNav.action_by_slot(bot, fact.via)
 end
 
-local function door_passable(bot, room_id, door)
+-- Whether room `room_id`, entered from room `from`, carries the player out
+-- through its door `slot` by itself (a <ride> fact: 515's lift).
+local function rides_out(bot, room_id, slot, from)
+    for _, fact in ipairs(bot:ride_facts()) do
+        if fact.room == room_id and fact.slot == slot and fact.from == from then
+            return true
+        end
+    end
+    return false
+end
+
+-- `from`: the room the route enters `room_id` from, when known.
+local function door_passable(bot, room_id, door, from)
     if not door.present or not door.target then
         return false
     end
     -- A door zone parked at the room origin is a scripted transfer (a
     -- cutscene's exit), not a door to walk through, unless a <door via>
-    -- fact names the action that sets it around the player.
+    -- fact names the action that sets it around the player. A <ride>
+    -- passes through it on a route entering the room from its `from` room;
+    -- in the ride room itself the bot only waits for it.
     if door.x == 0 and door.z == 0 and not via_fact(bot, room_id, door.slot) then
-        return false
+        return from ~= nil and room_id ~= bot:room().id
+            and rides_out(bot, room_id, door.slot, from)
     end
     if blocked(bot, "door", room_id, door.slot, true) then
         return false
@@ -575,7 +590,7 @@ end
 
 -- Dijkstra from the bot in room `from` over the map. A node is a room
 -- entered from a given room (its arrival point). Returns the tree that
--- BotPlanner.tree_route reads. `opts.passable(room_id, door)` filters the
+-- BotPlanner.tree_route reads. `opts.passable(room_id, door, from)` filters the
 -- doors; `opts.exit_len(slot)` prices the doors of `from`.
 function BotPlanner.map_tree(world, from, opts)
     local rows = {}
@@ -600,7 +615,8 @@ function BotPlanner.map_tree(world, from, opts)
         local row = rows[node.room]
         for _, door in ipairs(row and row.doors or {}) do
             local target = door.target
-            if target and target ~= node.room and door.x and opts.passable(node.room, door) then
+            if target and target ~= node.room and door.x
+                and opts.passable(node.room, door, node.step and node.step.room) then
                 local leg
                 local from_room = node.step and node.step.room
                 local legs = opts.legs and from_room and opts.legs[node.room]
@@ -670,7 +686,7 @@ end
 -- (default: the straight line from where it stands).
 local function map_opts(bot, exit_len)
     return {
-        passable = function(id, door) return door_passable(bot, id, door) end,
+        passable = function(id, door, from) return door_passable(bot, id, door, from) end,
         exit_len = exit_len or function(slot)
             local door = BotNav.door_by_slot(bot, slot)
             return door and bot:distance(BotNav.centre(door)) or UNPLANNED_COST
@@ -708,7 +724,8 @@ local function route(bot, world, from, to)
         local room = world_room(world, id)
         for _, door in ipairs(room and room.doors or {}) do
             local target = door.target
-            if target and prev[target] == nil and door_passable(bot, id, door) then
+            if target and prev[target] == nil
+                and door_passable(bot, id, door, prev[id] and prev[id].room or nil) then
                 prev[target] = { room = id, slot = door.slot, target = target }
                 if target == to then
                     local steps = {}

@@ -547,6 +547,7 @@ pub(super) mod tests {
                 controls_locked: false,
                 controllable: true,
                 dead: false,
+                ending: false,
                 typewriter: false,
             },
             actions: Vec::new(),

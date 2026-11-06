@@ -50,6 +50,23 @@
   <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="unknown"
           headshot="3000" weak="9000" status_bit="yes"/>
 
+  <!-- Grenade launcher with explosive rounds (item 0x07, rounds 0x10:
+       the engine's weapon + 9). The round is a projectile (effect behaviour
+       43) that runs the damage pipeline from its own position, so the cone
+       values are the fire-frame detector's (Jill's DEFAULT_RANGES slot 6 =
+       900, measured from the player). Its height stages the aim byte: 0x40
+       between the player's waist and head. A hit takes 100 from every
+       enemy type's record it was measured on (DEFAULT_FIRST_RUN). Cadence
+       not measured. -->
+  <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes"/>
+  <!-- Rocket launcher (item 0x0A, Brad's drop on the heliport). The rocket
+       is a projectile (effect behaviour 45) that hits from its own
+       position with aim 0x40; the cone values are Jill's DEFAULT_RANGES
+       slot 9 (1100). A hit takes 900 (DEFAULT_FIRST_RUN). Its four
+       rockets are the clip; no ammunition item refills it. -->
+  <weapon id="0x0A" name="rocket launcher" near="0" side="1100" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes"/>
   <!-- Knife. detect_knife: a radial reach of the range (Jill's
        DEFAULT_RANGES slot 0 = 500) plus the enemy radius, measured from a
        point 380 ahead of Jill. melee: no rounds; it is held only for an enemy
@@ -167,13 +184,40 @@
        the backward walk), so the fight is a damage race: each slash takes
        12 and knocks the player 1300 to 2000 back, about every 36 ticks
        while it is close. The shotgun's eight hits win it where the
-       handgun's eleven lose it (measured in 513). Enemy bit 112 (0x70) is
-       set by its death (513's init). -->
+       handgun's eleven lose it (measured in 513). The grenade launcher's
+       round takes 100 (row 126), so three kill it: it is preferred, and the
+       box loadout brings it to the fight. The slash's 2700 is the
+       Manhattan sum of the axis gaps (web_distance), so a diagonal gap of
+       2000 is still outside it. Enemy bit 112 (0x70) is set by its death
+       (513's init). -->
   <enemy id="0x0C" name="tyrant" policy="fight" stand="torso" downed="none"
          up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="220"
-         prefer="0x03">
+         prefer="0x07">
     <keep weapon="0x02" min="3500" max="8000" damage="20"/>
     <keep weapon="0x03" min="3200" max="5000" damage="30"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="100"/>
+  </enemy>
+
+  <!-- Tyrant on the heliport (303), entity 0x10: the same machine as 0x0C
+       (enemy/10 runs enemy/0c) with health 600 and the rooftop decision
+       layer (behaviour 15): the slash inside 2700 and the swipe inside
+       2000 as in the lab, a thrust inside 7000 while it is turned away and
+       a charge from past 12000. Below 201 health it raises room flag 0x1F
+       and stays at 200, which has Brad drop the rocket launcher (303's
+       main); so does a 1800-tick timer from its entrance. Only the rocket
+       (900, row 169) finishes it: it is preferred, and the fight waits for
+       its pickup once the drop shows. Enemy bit 0x59 is set by its death
+       (303's init). The other bands are the lab's; their damages (rows 161,
+       162 and 166: 20, 30, 100) are left `unknown`, since no other gun can
+       finish it and a kill count from them would raise those guns' ammo
+       floors for the whole game. -->
+  <enemy id="0x10" name="tyrant 2" policy="fight" stand="torso" downed="none"
+         up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="600"
+         prefer="0x0A">
+    <keep weapon="0x02" min="3500" max="8000" damage="unknown"/>
+    <keep weapon="0x03" min="3200" max="5000" damage="unknown"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x0A" min="3000" max="9000" damage="900"/>
   </enemy>
 
   <!-- Black Tiger (the giant spider, 30C). enemy/04 run: 0x40 every frame,
