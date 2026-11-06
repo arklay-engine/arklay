@@ -469,6 +469,25 @@ impl Music {
         self.current = word;
     }
 
+    /// `Snd_sys_init2`'s music, as the game over ends (`Die_move_end`): every
+    /// sequence stops, its state goes to 0 and its banks are freed. The holds
+    /// and the room's word stay.
+    pub fn sys_init2(&mut self) {
+        for sequence in 0..SEQUENCES {
+            if self.sequences[sequence].state != 0 {
+                self.stop(sequence);
+                self.sequences[sequence].state = 0;
+            }
+            self.sequences[sequence].loaded = false;
+            self.sequences[sequence].fade = 0;
+        }
+        for channel in &mut self.channels {
+            channel.track = None;
+            channel.load = true;
+            channel.play = None;
+        }
+    }
+
     /// `Snd_bgm_play_ck`: the sequences the room plays on its load start.
     pub fn play_ck(&mut self) {
         for sequence in 0..SEQUENCES {
@@ -498,8 +517,12 @@ impl Music {
             self.sequences[0].volume = 0x3f;
             pan = 0x40;
         }
+        // `Seq_ctr[2]` is 0xFF only while its family has no bank at all, which
+        // `hold` already says: a sub sequence with no track of its own still
+        // takes the state (`Snd_bgm_sub` gives it the bank's bit, 0), so the
+        // game over's stop marks it stopped. `SsPlay` on it plays nothing.
         let state = self.sequences[sequence];
-        if state.hold == HOLD_NOTHING || !state.loaded {
+        if state.hold == HOLD_NOTHING {
             return;
         }
         let looping = !plays_once(target, place);
@@ -510,7 +533,9 @@ impl Music {
                 } else {
                     self.set_volume(sequence, state.volume);
                 }
-                self.play(sequence, looping);
+                if state.loaded {
+                    self.play(sequence, looping);
+                }
                 self.sequences[sequence].state = STATE_PLAYING;
             }
             2 if state.state != 0 => {
@@ -520,7 +545,9 @@ impl Music {
             }
             3 => {
                 self.set_volume(sequence, state.volume);
-                self.play(sequence, sequence == 0);
+                if state.loaded {
+                    self.play(sequence, sequence == 0);
+                }
                 self.sequences[sequence].state = STATE_PLAYING;
             }
             4 => {
@@ -970,6 +997,25 @@ mod tests {
         assert_eq!(music.channels[3].volume, 0);
         music.control([1, 0, 1, 81, 0], street());
         assert_eq!(music.channels[3].volume, 80);
+    }
+
+    #[test]
+    fn a_stop_marks_a_sub_sequence_with_no_track_stopped() {
+        let mut music = Music::default();
+        let id = (0..0x38)
+            .find(|&id| {
+                let tracks = sub_tracks(id);
+                tracks[0].is_some() && tracks[1].is_none()
+            })
+            .unwrap();
+        music.enter_room(word(0xff, id), street());
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        music.control([2, 2, 0, 0, 0], street());
+        assert_eq!(music.sequences[2].state, STATE_STOPPED);
+        assert_eq!(music.channels[4].play, None);
+        music.control([2, 1, 0, 0, 0], street());
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        assert_eq!(music.channels[4].play, None);
     }
 
     #[test]
