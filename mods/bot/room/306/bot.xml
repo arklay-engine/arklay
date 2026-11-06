@@ -7,9 +7,11 @@
      the hex crank at AOT 1 (scenario 60) slides the slab out to z 9480,
      shoving the box to z 7679, but now flush against the slab. So the box
      goes west to AOT 7's line (x 6050), south past the slab and east into
-     AOT 5, and the book is taken from the floor. -->
+     AOT 5, and the book is taken from the floor. A box left in the probe
+     stands back against the wall on the next entry, past the cranked slab,
+     so the first push's `reveals` holds the puzzle until a slot is free. -->
 <bot format="2">
-  <push object="2" slot="5" axis="x" label="the box east, under the slab"/>
+  <push object="2" slot="5" axis="x" reveals="6" label="the box east, under the slab"/>
   <use slot="1" item="0x1E" bank="0" bit="60" label="the hex crank: the slab shoves the box off the wall"/>
   <push object="2" slot="7" axis="x" after_bank="0" after_bit="60" label="the box west of the slab"/>
   <push object="2" slot="5" after_bank="0" after_bit="60" label="the box into the ledge probe"/>
