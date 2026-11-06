@@ -57,6 +57,32 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(api.game().map_or(0, |game| game.item_count(item)))
     });
 
+    // `re2_items()`: RE2's status screen as a table (`page`, `sub`,
+    // `command`, `step`, `cursor`, `target`, `tab`, `command_cursor`), or
+    // nil when it isn't up. The engine runs it; the script only draws it.
+    methods.add_method("re2_items", |lua, api, ()| {
+        let Some(page) = api.game().and_then(|game| game.re2_items) else {
+            return Ok(mlua::Value::Nil);
+        };
+        let table = lua.create_table()?;
+        table.set("page", page.page)?;
+        table.set("sub", page.sub)?;
+        table.set("command", page.command)?;
+        table.set("step", page.step)?;
+        table.set("cursor", page.cursor)?;
+        table.set("target", page.target)?;
+        table.set("tab", page.tab)?;
+        table.set("command_cursor", page.command_cursor)?;
+        Ok(mlua::Value::Table(table))
+    });
+
+    // `re2_slot(slot)`: the id and count of RE2's `Item_work` slot `slot`;
+    // 10 is the personal item.
+    methods.add_method("re2_slot", |_lua, api, slot: u8| {
+        let [id, count] = api.game().map_or([0, 0], |game| game.re2_slot(slot));
+        Ok((id, count))
+    });
+
     // ---- changes -------------------------------------------------------
     // `rand()`: the next draw of the game's shared `rand()` stream (the
     // one the room scripts use), `0..=0x7FFF`.

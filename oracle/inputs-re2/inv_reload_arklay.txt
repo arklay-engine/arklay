@@ -1,0 +1,39 @@
+# inv_reload.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Items")
+20 start
+24
+56 down
+60
+76 confirm
+80
+96 down
+100
+116 down
+120
+136 confirm
+140
+156 up
+160
+176 confirm
+180
+256 confirm
+260
+276 down
+280
+296 down
+300
+316 confirm
+320
+336 down
+340
+356 confirm
+360
+436 confirm
+440
+536 confirm
+540
+556 confirm
+560
+616 confirm
+620
+696 start
+700

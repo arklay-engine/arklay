@@ -1,0 +1,37 @@
+# room 102: CHECK the green herb, then COMBN the knife with the red herb, which don't combine (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 down
+444
+460 confirm
+464
+560 confirm
+564
+600 confirm
+604
+680 up
+684
+700 right
+704
+720 confirm
+724
+740 down
+744
+760 down
+764
+780 confirm
+784
+800 down
+804
+820 confirm
+824
+840 cancel
+844
+860 cancel
+864
+900 start
+904

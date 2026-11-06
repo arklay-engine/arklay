@@ -1,0 +1,21 @@
+# inv_mix.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Items")
+20 start
+24
+56 down
+60
+76 confirm
+80
+96 down
+100
+116 down
+120
+136 confirm
+140
+156 right
+160
+176 confirm
+180
+256 confirm
+260
+356 start
+360

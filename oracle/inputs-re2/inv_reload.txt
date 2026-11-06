@@ -1,0 +1,39 @@
+# room 102: COMBN handgun rounds into the handgun, the full handgun with the rounds, and USE on the rounds (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 down
+444
+460 down
+464
+480 confirm
+484
+500 up
+504
+520 confirm
+524
+600 confirm
+604
+620 down
+624
+640 down
+644
+660 confirm
+664
+680 down
+684
+700 confirm
+704
+780 confirm
+784
+880 confirm
+884
+900 confirm
+904
+960 confirm
+964
+1040 start
+1044

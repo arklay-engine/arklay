@@ -1404,6 +1404,7 @@ pub struct ScaVolume {
 }
 
 mod entity;
+pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
 impl Entity {
@@ -3186,6 +3187,11 @@ pub struct GameState {
     pub is_re2_room: bool,
     /// RE2's get-item window while it is open: it owns the session tick.
     pub re2_item_get: Option<Re2ItemGet>,
+    /// RE2's status screen's item page while the screen is up.
+    pub re2_items: Option<status2::ItemPage>,
+    /// The item page's bytes as the trace's `ip` shows them; like the
+    /// original's work block they stay after the screen closes.
+    pub re2_items_trace: String,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3648,6 +3654,8 @@ impl Default for GameState {
             re2: Default::default(),
             is_re2_room: false,
             re2_item_get: None,
+            re2_items: None,
+            re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,

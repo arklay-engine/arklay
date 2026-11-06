@@ -77,6 +77,8 @@ class Tick:
     sound: str | None = None
     # RE2's `inv` field: the inventory's slots and how many the player has.
     inventory: str | None = None
+    # RE2's item page: arklay's `ip`, the end of the original's `gi`.
+    item_page: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -85,7 +87,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip"}
 
 
 def normalize_room(stage: str, room: str) -> str:
@@ -107,6 +109,17 @@ def normalize_fade(text: str) -> str:
     if int(state) < 0:
         return "inactive"
     return f"{counter}:{state}"
+
+
+def item_page(fields: dict[str, str]) -> str | None:
+    """RE2's status screen item page: arklay's `ip`, or the original's `gi`
+    without the game mode, the screen's routines and the message state."""
+    if "ip" in fields:
+        return fields["ip"]
+    if "gi" not in fields:
+        return None
+    parts = fields["gi"].split(",")
+    return ",".join([parts[4]] + parts[6:])
 
 
 def parse_trace(path: str) -> list[Tick]:
@@ -156,6 +169,7 @@ def parse_trace(path: str) -> list[Tick]:
                     xa_volume=fields.get("xavol"),
                     sound=fields.get("snd"),
                     inventory=fields.get("inv"),
+                    item_page=item_page(fields),
                 )
             )
     return ticks
@@ -189,6 +203,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("snd", tick.sound))
     if tick.inventory is not None:
         items.append(("inv", tick.inventory))
+    if tick.item_page is not None:
+        items.append(("ip", tick.item_page))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):

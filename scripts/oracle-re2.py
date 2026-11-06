@@ -421,6 +421,10 @@ ITEM_SLOTS = 0x98E9A4  # how many of `ITEM_WORK`'s first ten slots the player ha
 STATUS_WORK = 0x68A204  # the status screen's work: its routines at +8 and +9
 ITEM_GET_ROUTINE = 0x691F61  # the get-item window's routine and sub-routine
 MESSAGE_STATE = 0x98504C  # the message's state: the top bit while it shows, bit 0 a question's "no"
+# The status screen's item page (`0x4F8160`): the command and its step
+# (`0x691F63`, `0x691F64`), the step's tick count, the item and target
+# cursors, the command cursor, and the condition panel's animation.
+ITEM_PAGE = [0x691F63, 0x691F64, 0x691F65, 0x691F6C, 0x691F6D, 0x691F6F, 0x691FC2]
 SCRATCH = 0x99EF00  # the unused end of the last page of `.data`
 
 
@@ -545,7 +549,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     status = game.u32(STATUS_WORK)
     fields.append(
         f"gi={game.u8(GAME_STATE)},{game.u8(status + 8)},{game.u8(status + 9)},"
-        f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x}"
+        f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x},"
+        + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()

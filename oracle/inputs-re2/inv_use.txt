@@ -1,0 +1,17 @@
+# room 102: the inventory's USE: a green herb, then the red herb, which can't be used alone (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 confirm
+444
+560 confirm
+564
+580 confirm
+584
+700 confirm
+704
+760 start
+764
