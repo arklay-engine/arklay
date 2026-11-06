@@ -15628,6 +15628,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         enemies: context.game.re2.enemies,
     };
     let old = context.player.pos;
+    crate::player2::seed_pose(&mut context.game.re2.player, context.player, &tick);
     let arrived = if crate::player2::is_held(&context.game.re2.player) {
         crate::character2::player_held(context.game, context.player, &tick);
         None

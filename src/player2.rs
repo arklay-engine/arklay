@@ -304,6 +304,8 @@ pub struct Work {
     /// stairs, slopes, climbs and drops change it, so a script that moves the
     /// player to another height leaves it behind.
     pub floor: u8,
+    /// The joints hold a pose of play ([`seed_pose`]); a door keeps it.
+    pub posed: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -775,6 +777,7 @@ impl Default for Work {
             super_matrix: None,
             tilt: [0, 0],
             floor: 0,
+            posed: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -847,6 +850,7 @@ impl Work {
         Self {
             d_life_u: self.d_life_u,
             kind: self.kind,
+            posed: self.posed,
             // The head's world position is the joints' last matrix, which a
             // room load leaves alone until the new room is drawn.
             neck: Neck {
@@ -1157,6 +1161,26 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
     }
     .place_neck();
     work.neck.body = Some(pos);
+}
+
+/// The pose on screen before the player's first tick of play: the frame its
+/// clip last showed (`Move_cnt - 1`), as the original's joints hold it. A
+/// new game's first tick is set up as already run (`Work::default`) with the
+/// joints never posed, and the clip blend that starts on the next tick eases
+/// out of this pose: the new game's idle frame. Once per player; a door keeps
+/// the last room's pose ([`Work::entering_room`]).
+pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    if std::mem::replace(&mut work.posed, true) || work.move_cnt == 0 {
+        return;
+    }
+    let (clips, keyframes) = tick.banks.get(work.bank);
+    let pose = clips
+        .get(usize::from(work.move_no))
+        .and_then(|clip| clip.frames.get(usize::from(work.move_cnt) - 1))
+        .and_then(|frame| keyframes.get(usize::from(frame.keyframe)));
+    if let Some(pose) = pose {
+        player.anim.set_applied_pose(Some(pose.clone()));
+    }
 }
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
@@ -5301,6 +5325,60 @@ mod tests {
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
+
+        /// [`seed_pose`] in this setup's banks.
+        fn seed(&mut self) {
+            let bank = (self.clips.as_slice(), self.keyframes.as_slice());
+            let tick = Tick {
+                room: &self.room,
+                skeleton: &self.skeleton,
+                banks: Banks {
+                    pld: bank,
+                    weapon: bank,
+                    room: bank,
+                    held: bank,
+                },
+                input: Input::default(),
+                options: Options::default(),
+                id: 0,
+                life: 200,
+                poisoned: false,
+                stopped: false,
+                weapon: self.weapon,
+                necks: Default::default(),
+                targets: &[],
+                neck_targets: &self.neck_targets,
+                enemies: 0,
+            };
+            seed_pose(&mut self.work, &mut self.player, &tick);
+        }
+    }
+
+    #[test]
+    fn a_new_games_joints_start_on_the_idle_frame_it_shows() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(IDLE_CLIPS[0] as usize + 1, 4, 0);
+        for (index, keyframe) in setup.keyframes.iter_mut().enumerate() {
+            keyframe.rotations = vec![[index as i16 * 10, 0, 0]; 2];
+        }
+        assert!(setup.player.anim.applied_pose().is_none());
+        setup.seed();
+        // `Work::default` has shown the idle clip's first frame (`Move_cnt` 1).
+        assert_eq!(
+            setup.player.anim.applied_pose(),
+            Some(setup.keyframes[0].clone())
+        );
+        // A door keeps the pose the last room left.
+        setup.work = setup.work.entering_room();
+        setup
+            .player
+            .anim
+            .set_applied_pose(Some(setup.keyframes[3].clone()));
+        setup.seed();
+        assert_eq!(
+            setup.player.anim.applied_pose(),
+            Some(setup.keyframes[3].clone())
+        );
     }
 
     /// Runs a dead player's hold until `done`, or panics.
