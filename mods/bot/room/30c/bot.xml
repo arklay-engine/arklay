@@ -4,8 +4,12 @@
      arms it again once the web's death flag is set. Only the knife (AOT 2,
      in this room) cuts it. Black Tiger (0x04, bit 137) bites, spits and
      poisons, and its spit knocks the bot off the web mid-cut, so it is
-     fought first, with the grenade launcher (the knowledge file's prefer). -->
+     fought first, with the grenade launcher (the knowledge file's prefer).
+     Door 1 is avoided while the web stands: the bot still saw it and
+     walked into the web, where it stood stuck until the tiger's poison
+     killed it. -->
 <bot format="2">
   <fight enemy="0x04" bank="3" bit="137" label="Black Tiger"/>
   <fight enemy="0x13" bank="3" bit="138" label="cut the web with the knife"/>
+  <avoid slot="1" bank="3" bit="138" while="clear" reason="the web covers the door to 30D"/>
 </bot>

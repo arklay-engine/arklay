@@ -173,10 +173,26 @@ function BotSurvival.fight_ready(bot, fact)
             end
         end
     end
+    -- No held firearm with rounds is no fight at all, known bands or not
+    -- (30C's Black Tiger, met with an empty handgun and shotgun, poisoned
+    -- the bot to death four times).
+    local weapon = bot:weapon()
+    local loaded = false
+    for _, row in ipairs(bot:menu().items or {}) do
+        local gun = row.kind == "weapon" and k and k.weapons[row.item]
+        if gun and not gun.melee then
+            local ammo = bot:ammo_for(row.item)
+            local rounds = row.item == weapon.equipped and (weapon.clip + weapon.reserve)
+                or row.quantity + (ammo and bot:item_count(ammo) or 0)
+            loaded = loaded or rounds > 0
+        end
+    end
+    if not loaded then
+        return false, "not ready for the fight: no firearm with rounds"
+    end
     if not entry or not entry.health or not entry.keep then
         return true
     end
-    local weapon = bot:weapon()
     local damage, known = 0, false
     for _, row in ipairs(bot:menu().items or {}) do
         local band = row.kind == "weapon" and entry.keep[row.item]
