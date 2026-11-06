@@ -21,6 +21,8 @@
 --      --bot-goal-room is entered.
 -- A death loads the latest save through the title's load screen
 -- (on_bot_screen below); without a save the run finishes "dead, no save".
+-- The scripted death variant (scene.ending) is the escape scene ending the
+-- game: the run finishes "game completed".
 -- Module tables are globals because chunks run in path order and a --watch
 -- reload re-runs them in the same Lua state. No module holds a room id, flag
 -- bit, item id, slot number or coordinate; engine rules live in
@@ -81,6 +83,10 @@ function on_bot_tick(bot)
     if signature ~= BOT_STATE.scene_sig then
         BOT_STATE.scene_sig = signature
         bot:log("scene " .. signature)
+    end
+    if scene.ending then
+        BotPlanner.finish(bot, "game completed: the ending")
+        return
     end
     if scene.dead then
         BotSave.on_death(bot)

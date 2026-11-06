@@ -4,7 +4,16 @@
      (AOT 2, item bit 0x5F) is an item zone from the start, but its model
      shows, and the room's main lets it be taken, only once the Tyrant is
      dead (enemy bit 112). The <fight> holds the room until then; the key
-     is an ordinary pickup after it. -->
+     is an ordinary pickup after it.
+
+     The death also sets room bit 3 and scenario 0x37, turns door 0 (to
+     514) into message 159 and AOT 1 into the room's control device: Yes
+     unlocks the door (SCE_DOOR again) and sets room bit 6. Room bit 3 is
+     set only on the entry the Tyrant dies in; on a later one scenario 0x37
+     leaves door 0 a door and AOT 1 a plain message. -->
 <bot format="2">
   <fight enemy="0x0C" bank="3" bit="112" label="the Tyrant"/>
+  <interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3"
+            label="the control device: unlock door 0"/>
+  <answer choice="yes" slot="1"/>
 </bot>

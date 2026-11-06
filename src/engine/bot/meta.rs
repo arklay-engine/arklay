@@ -76,6 +76,7 @@ pub struct RoomMeta {
     pub holds: Vec<Holds>,
     pub errands: Vec<Errand>,
     pub doors: Vec<DoorVia>,
+    pub rides: Vec<Ride>,
     pub keep_outs: Vec<KeepOut>,
     pub leaves: Vec<Leave>,
 }
@@ -101,6 +102,18 @@ pub struct KeepOut {
     pub slot: u8,
     pub reason: String,
     pub gate: Option<Gate>,
+}
+
+/// `<ride slot from [label]>`: the room is a ride (515's lift). Entered
+/// from room `from`, it carries the player out through door AOT `slot`, a
+/// zone parked at the room origin, by itself. Routes may pass through it
+/// that way (`bot:ride_facts()`); in the room the bot only waits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ride {
+    pub slot: u8,
+    /// The room id as `bot:room().id` spells it (uppercase).
+    pub from: String,
+    pub label: Option<String>,
 }
 
 /// `<door slot via [bank bit while] [label]>`: door AOT `slot` is parked at
@@ -397,6 +410,35 @@ pub fn load_uses(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomUse>> {
     Ok(uses)
 }
 
+/// One room's `<fight>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomFight {
+    /// The room id as `bot:room().id` spells it (`"513"`).
+    pub room: String,
+    /// The knowledge enemy id the fight is against.
+    pub enemy: u8,
+    /// The flag its death sets, when the fact names one.
+    pub flag: Option<(u8, u8)>,
+}
+
+/// Every room's `<fight>` facts, by room id then document order
+/// (`bot:fight_facts()`): the box loadout's index of the fights ahead.
+pub fn load_fights(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomFight>> {
+    let mut fights = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        for fact in meta.interacts {
+            if let Target::Fight { enemy } = fact.target {
+                fights.push(RoomFight {
+                    room: id.clone(),
+                    enemy,
+                    flag: fact.flag,
+                });
+            }
+        }
+    }
+    Ok(fights)
+}
+
 /// One room's `<holds>` fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomHolds {
@@ -416,6 +458,27 @@ pub fn load_holds(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomHolds>> {
         }));
     }
     Ok(holds)
+}
+
+/// One room's `<ride>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomRide {
+    /// The room id as `bot:room().id` spells it (`"515"`).
+    pub room: String,
+    pub fact: Ride,
+}
+
+/// Every room's `<ride>` facts, by room id then document order
+/// (`bot:ride_facts()`).
+pub fn load_rides(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomRide>> {
+    let mut rides = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        rides.extend(meta.rides.into_iter().map(|fact| RoomRide {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(rides)
 }
 
 /// One room's `<door>` fact, with the room it belongs to.
@@ -631,6 +694,12 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 let fact = parse_door(child)?;
                 if keep {
                     meta.doors.push(fact);
+                }
+            }
+            "ride" => {
+                let fact = parse_ride(child)?;
+                if keep {
+                    meta.rides.push(fact);
                 }
             }
             "keep_out" => {
@@ -851,6 +920,21 @@ fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
     })
 }
 
+fn parse_ride(node: Node<'_, '_>) -> Result<Ride> {
+    check_attributes(node, &["slot", "from", "label", "character"])?;
+    check_leaf(node)?;
+    let slot: u8 = attr(node, "slot")?;
+    let from = node
+        .attribute("from")
+        .filter(|from| !from.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("{}: <ride> needs `from`", at(node)))?;
+    Ok(Ride {
+        slot,
+        from: from.to_ascii_uppercase(),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
 fn parse_holds(node: Node<'_, '_>) -> Result<Holds> {
     check_attributes(node, &["item", "label", "character"])?;
     check_leaf(node)?;
@@ -942,7 +1026,19 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
 }
 
 fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["enemy", "bank", "bit", "label", "character"])?;
+    check_attributes(
+        node,
+        &[
+            "enemy",
+            "bank",
+            "bit",
+            "after_bank",
+            "after_bit",
+            "after_while",
+            "label",
+            "character",
+        ],
+    )?;
     check_leaf(node)?;
     Ok(Interact {
         target: Target::Fight {
@@ -950,8 +1046,8 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         },
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
-        after: None,
-        after_clear: false,
+        after: after_flag(node)?,
+        after_clear: parse_after_while(node)?,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1697,6 +1793,32 @@ mod tests {
     }
 
     #[test]
+    fn fight_takes_an_after_flag() {
+        let text = r#"<bot format="2">
+            <fight enemy="0x10" bank="3" bit="0x59" after_bank="7" after_bit="0x49"
+                   after_while="clear"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts[0].after, Some((7, 0x49)));
+        assert!(meta.interacts[0].after_clear);
+    }
+
+    #[test]
+    fn ride_names_the_room_it_is_entered_from() {
+        let text = r#"<bot format="2">
+            <ride slot="1" from="50c" label="down to 514"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.rides.len(), 1);
+        assert_eq!(meta.rides[0].slot, 1);
+        assert_eq!(meta.rides[0].from, "50C");
+        assert_eq!(meta.rides[0].label.as_deref(), Some("down to 514"));
+        let fromless = r#"<bot format="2"><ride slot="1"/></bot>"#;
+        let error = parse(fromless).unwrap_err().to_string();
+        assert!(error.contains("needs `from`"), "{error}");
+    }
+
+    #[test]
     fn wait_names_its_flag_and_an_optional_after() {
         let text = r#"<bot format="2">
             <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" label="rope"/>
@@ -1980,6 +2102,7 @@ mod tests {
                 ("301", 4, 0x1D),
                 ("301", 4, 0x1D),
                 ("302", 4, 0x27),
+                ("303", 6, 0x2A),
                 ("305", 6, 0x24),
                 ("305", 5, 0x25),
                 ("306", 1, 0x1E),
@@ -1987,6 +2110,7 @@ mod tests {
                 ("30F", 6, 0x1E),
                 ("30F", 6, 0x1E),
                 ("40A", 5, 0x3E),
+                ("501", 4, 0x27),
                 ("507", 12, 0x28),
                 ("509", 3, 0x28),
                 ("510", 3, 0x28),
