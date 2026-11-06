@@ -86,6 +86,7 @@ pub mod scd;
 pub mod scd2;
 pub mod screenshot;
 pub mod se2;
+pub mod sevenz;
 pub mod sfx;
 pub mod shadow;
 pub mod speed;

@@ -58,13 +58,27 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     });
 
     // `re2_items()`: RE2's status screen as a table (`page`, `sub`,
-    // `command`, `step`, `cursor`, `target`, `tab`, `command_cursor`), or
-    // nil when it isn't up. The engine runs it; the script only draws it.
+    // `command`, `step`, `count`, `cursor`, `target`, `tab`,
+    // `command_cursor`, `result`, `follow`, the condition panel's `panel_mode`,
+    // `panel_sweep`, `panel_cure` and `panel_done`, and whether the player
+    // is `poisoned`), or nil when it isn't up. The engine runs it; the
+    // script only draws it.
     methods.add_method("re2_items", |lua, api, ()| {
-        let Some(page) = api.game().and_then(|game| game.re2_items) else {
+        let Some((page, poisoned)) = api
+            .game()
+            .and_then(|game| Some((game.re2_items?, game.re2.player.poisoned)))
+        else {
             return Ok(mlua::Value::Nil);
         };
         let table = lua.create_table()?;
+        table.set("count", page.count)?;
+        table.set("result", page.result)?;
+        table.set("follow", page.follow)?;
+        table.set("panel_mode", page.panel.mode)?;
+        table.set("panel_sweep", page.panel.sweep)?;
+        table.set("panel_cure", page.panel.cure)?;
+        table.set("panel_done", page.panel.done)?;
+        table.set("poisoned", poisoned)?;
         table.set("page", page.page)?;
         table.set("sub", page.sub)?;
         table.set("command", page.command)?;

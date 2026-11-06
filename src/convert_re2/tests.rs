@@ -473,7 +473,9 @@ fn room_names_come_from_the_classic_rebirth_table() {
     write(&root.path.join("Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
     let mut warnings = Vec::new();
     let layout = Layout::discover(&root.path).unwrap();
-    assert!(find_room_names(&root.path, &layout.data, &mut warnings).is_empty());
+    let dll = find_ddraw(&root.path, &layout.data);
+    assert!(dll.is_none());
+    assert!(find_room_names(dll.as_ref(), &mut warnings).is_empty());
     assert!(
         warnings.iter().any(|warning| warning.contains("ddraw.dll")),
         "{warnings:?}"
@@ -598,4 +600,24 @@ fn a_corrupt_stream_costs_only_its_own_cameras() {
     let pack = Pack::open(&out).unwrap();
     assert!(pack.contains("room/1000/cut/00.bmp"));
     assert!(!pack.contains("room/1000/cut/01.bmp"));
+}
+
+/// A 16bpp TIM of `width` x 1 texels, all `texel`.
+fn tiny_tim(width: u16, texel: u8) -> Vec<u8> {
+    let mut tim = vec![0x10, 0, 0, 0, 2, 0, 0, 0];
+    tim.extend((12 + 2 * u32::from(width)).to_le_bytes());
+    tim.extend([0, 0, 0, 0]);
+    tim.extend(width.to_le_bytes());
+    tim.extend(1u16.to_le_bytes());
+    tim.extend(std::iter::repeat_n(texel, 2 * usize::from(width)));
+    tim
+}
+
+#[test]
+fn status_sheets_split_into_their_tims() {
+    let (first, second) = (tiny_tim(2, 1), tiny_tim(3, 2));
+    let sheet = [first.clone(), second.clone()].concat();
+    let tims = split_tims(&sheet).unwrap();
+    assert_eq!(tims, vec![first.as_slice(), second.as_slice()]);
+    assert!(split_tims(&sheet[..sheet.len() - 1]).is_err());
 }
