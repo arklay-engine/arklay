@@ -182,7 +182,10 @@ function BotPuzzle.next_interact(bot)
     -- A climb is not done while the player still stands on the object.
     local on_top = BotNav.on_top(bot)
     for index, fact in ipairs(interacts) do
-        if index > done and fact.bank and fact.kind ~= "push" and BotPuzzle.flag_done(bot, fact)
+        -- A reveal lasts only for the room entry (119's switch hides its
+        -- book again on the next one), so only the flag marks the sequence.
+        if index > done and fact.bank and fact.kind ~= "push"
+            and bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
             and not (fact.kind == "climb" and on_top) then
             done = index
         end

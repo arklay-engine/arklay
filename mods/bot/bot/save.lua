@@ -39,6 +39,11 @@
 --   - a bolder bot saves only below LOW_HEALTH of max health, or in a risky
 --     room: a live monster in the room, or damage taken in the last
 --     RISKY_DAMAGE ticks.
+-- A save trip (BotSave.trip_reason): a cautious bot whose milestones have
+-- gone unsaved for TRIP_GAPS milestone gaps walks to the nearest remembered
+-- typewriter (the planner's target), where the rule above saves. One trip
+-- per TRIP_GAPS gaps, so a typewriter that refuses is not walked to again
+-- at once.
 -- The latest save is tracked in bot memory (save_count, save_slot,
 -- save_room, save_tick, save_progress, save_health, save_rounds,
 -- save_heals) the tick the engine reports it.
@@ -67,6 +72,8 @@ local SCREEN_TIMEOUT = 60 * C.SECOND
 local SAVE_WAIT = 30 * C.SECOND
 -- A typewriter that failed is not tried again for this long.
 local RETRY = 60 * C.SECOND
+-- A save trip waits this many milestone gaps after the last save (or trip).
+local TRIP_GAPS = 2
 -- How often the decision is evaluated while a typewriter is in reach.
 local DECIDE_EVERY = C.SECOND
 -- Deaths on one save before the run gives up.
@@ -517,6 +524,40 @@ function BotSave.step(bot, player, critical)
         end,
     }
     return true
+end
+
+-- Why the planner should walk to a typewriter now, or nil (see the header).
+function BotSave.trip_reason(bot)
+    local risk = bot:risk() or 0.25
+    if risk > BOLD_RISK or not BotSave.can_save(bot:saves()) then
+        return nil
+    end
+    local s = state()
+    local tick = bot:tick()
+    local gap = TRIP_GAPS * BotSave.milestone_gap(risk)
+    if s.trip and tick - s.trip < gap then
+        return nil
+    end
+    local latest = BotSave.latest(bot:memory())
+    local since = latest and latest.tick and tick - latest.tick or tick
+    if since < gap then
+        return nil
+    end
+    local saved_milestones = latest and latest.milestones or s.start_milestones or 0
+    local unsaved = milestones(bot) - saved_milestones
+    if unsaved <= 0 then
+        return nil
+    end
+    local now = condition(bot, bot:player())
+    if BotSave.dead_end(now) and not BotSave.no_choice(latest, now) then
+        return nil
+    end
+    return string.format("%d milestone(s) unsaved for %d s", unsaved, since // C.SECOND)
+end
+
+-- The save trip reached its typewriter room: no other trip for a while.
+function BotSave.trip_arrived(bot)
+    state().trip = bot:tick()
 end
 
 -- Mark the running job as prompted the tick the save prompt appears, so the

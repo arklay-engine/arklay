@@ -269,12 +269,16 @@ Each `<weapon>` gives the cone (`near`, `side`), `cadence`, the shotgun's
 `headshot` and `weak` distances; each `<enemy>` gives `policy`
 (`fight`/`pass`/`avoid`), the poses (`stand`, `downed`, `up`), `reach`,
 `crawl_reach`, `grabs`, `outrun`, `speed`, `health`, the optional `parts`
-and one `<keep>` band per weapon. Every entry has a comment saying how it was
+and `prefer`, and one `<keep>` band per weapon. Every entry has a comment saying how it was
 measured. `parts="yes"` marks a monster made of several entities (Plant 42's
 body and vines): a hit holds only the part it struck, so the bot fires on
 while its target is still reacting instead of waiting for the reaction to
 end. A `<fight>` step's target is preferred over the nearest monster
 (`BotTactics.focus`, cleared on a room change).
+`prefer="0x03"` names the weapon to fight that monster with whenever it is
+held with the rounds for a kill, over the equipped gun (`BotTactics.pick_gun`;
+the hunter takes the shotgun). A fight against a monster closing in that
+cannot be outrun is not given up for low health.
 Each `<cure item poison heals>` names an item that clears a poison
 (`poison`: the `0x02` status, `serious`: `0x20`) and whether it also
 restores health (`yes`/`no`); a unit test checks the rows against the item

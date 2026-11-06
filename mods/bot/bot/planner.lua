@@ -49,6 +49,9 @@
 --               the planner can reach, a pickup it has not given up on or
 --               the remembered box)
 --             - USE_BONUS for a route to a held item's <use> room
+--             - BOX_BONUS for a route to a remembered typewriter when a
+--               save trip is due (BotSave.trip_reason), picked like a
+--               remote box
 --             - BOX_BONUS for a route to a remembered item box when a box
 --               visit is due (BotInventory.box_reason); a remote box's whole
 --               cost is its walking distance over the mental map instead
@@ -1107,6 +1110,12 @@ local function target_goal(bot, world, t)
         end
         return nil
     end
+    if t.kind == "save" then
+        if BotSave.trip_reason(bot) then
+            return { kind = "save", room = t.room, slot = t.slot }
+        end
+        return nil
+    end
     if t.kind == "use" then
         if bot:has_item(t.item) and not bot:flag(t.bank, t.bit)
             and not blocked(bot, "use", t.room, t.slot, true) then
@@ -1245,7 +1254,7 @@ function BotPlanner.pick_remote_box(world, from, opts)
     local best = nil
     for _, r in ipairs(world.rooms) do
         for _, action in ipairs(r.id ~= from and r.actions or {}) do
-            if action.kind == "item_box" and action.x and not (action.x == 0 and action.z == 0)
+            if action.kind == (opts.kind or "item_box") and action.x and not (action.x == 0 and action.z == 0)
                 and opts.usable_box(r.id, action) then
                 local cost, steps = BotPlanner.tree_route(tree, r.id, action)
                 if steps and steps[1] and (not best or cost < best.cost) then
@@ -1675,6 +1684,12 @@ local function choose(bot)
             p.target = nil
             goal = nil
         end
+        if goal and goal.kind == "save" and goal.room == room then
+            -- Here: BotSave.step decides at the typewriter.
+            BotSave.trip_arrived(bot)
+            p.target = nil
+            goal = nil
+        end
         if goal and goal.room == room and goal.kind == "door" then
             for _, row in ipairs(doors_here) do
                 if row.door.slot == goal.slot then
@@ -1685,7 +1700,7 @@ local function choose(bot)
             end
         end
         local steps
-        if goal and goal.room ~= room and goal.kind == "box" then
+        if goal and goal.room ~= room and (goal.kind == "box" or goal.kind == "save") then
             -- A box was chosen by walking distance: keep the map's route.
             steps = map_route(bot, world, room, goal.room, map(),
                 BotPlanner.action_point(world, goal.room, goal.slot))
@@ -1877,6 +1892,29 @@ local function choose(bot)
                 why = string.format("toward %s, %d door(s)", label, #box.steps),
                 target = { kind = "box", room = box.room, slot = box.slot,
                     label = label, best = #box.steps, stalls = 0 },
+            })
+        end
+    end
+    -- A save trip is due: the remembered typewriter nearest by walking.
+    local save_why = BotSave.trip_reason(bot)
+    if save_why then
+        local opts = map_opts(bot, door_len)
+        opts.tree = map()
+        opts.kind = "typewriter"
+        opts.usable_box = function(id, action)
+            return not blocked(bot, "save", id, action.slot, true)
+        end
+        local desk = BotPlanner.pick_remote_box(world, room, opts)
+        local first = desk and BotNav.door_by_slot(bot, desk.steps[1].slot)
+        if first then
+            order = order + 1
+            local label = string.format("the typewriter in %s (%s)", desk.room, save_why)
+            consider({
+                cost = desk.cost - BOX_BONUS + route_monsters(desk.steps),
+                order = order, door = first,
+                why = string.format("toward %s, %d door(s)", label, #desk.steps),
+                target = { kind = "save", room = desk.room, slot = desk.slot,
+                    label = label, best = #desk.steps, stalls = 0 },
             })
         end
     end
