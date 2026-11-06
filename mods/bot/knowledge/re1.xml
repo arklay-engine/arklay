@@ -243,10 +243,16 @@
        anywhere in the room; the SCD state (behavior 0x40) clears the bits
        until the room hands the fight over. The body's collision radius is
        2000. Its vines sweep and grab from above (16 or 25 a sweep, 15 or 8
-       a hold); they hit from about 6000 (observed), the reach given. It
-       never moves. A handgun hit takes 15 (observed) and holds that part's
-       hit_state about 120 ticks, during which a shot hits the next free
-       part nearest the aim: parts="yes" lets the bot fire on through it.
+       a hold); they hit from about 6400 (observed), so the reach is 6500
+       and the band 6800 to 7600 stands outside it: the vines never touch
+       the bot there, and only the acid dripping from the ceiling is left to
+       step out of. Past about 8800 the shotgun's pellets take half (10, not
+       20). It never moves. A handgun hit takes 15 (observed) and holds that
+       part's hit_state about 120 ticks, during which a shot hits the next
+       free part nearest the aim. The body takes no hit (hit_state 1) while
+       more than one vine lives: each vine hit counts the shared pool down.
+       parts="yes" makes the bot hold fire while every part is reacting (a
+       shot then hits nothing) and fire at the first free one.
        Enemy bit 96 is the body's (40C's init, enemy index 0).
        DEFAULT_FIRST_RUN rows 81, 82 and 86: handgun 15, shotgun 20, grenade
        launcher 50 on paper, but no launcher round has ever hit the body:
@@ -259,10 +265,10 @@
        rounds for all of them (11 handgun rounds met it and ran dry on the
        vines, four deaths). -->
   <enemy id="0x08" name="plant 42" policy="fight" stand="torso" downed="none"
-         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="340" parts="yes"
+         up="yes" reach="6500" grabs="yes" outrun="no" speed="0" health="340" parts="yes"
          prefer="0x03">
-    <keep weapon="0x02" min="3000" max="5500" damage="15"/>
-    <keep weapon="0x03" min="3000" max="5500" damage="20"/>
+    <keep weapon="0x02" min="6800" max="7600" damage="15"/>
+    <keep weapon="0x03" min="6800" max="7600" damage="20"/>
   </enemy>
 
   <!-- Tyrant (the lab encounter, 513). enemy/0c: state 1 sets status 0x40

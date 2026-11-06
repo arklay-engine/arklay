@@ -796,10 +796,32 @@ end
 -- the tactics layer engages only what is in front. Returns "done" or
 -- "busy"; the planner's job.timeout ends it.
 local FIGHT_RANGE = C.FIGHT_RANGE
+
+-- Whether knowledge enemy `entry` never attacks: no reach, no speed and no
+-- grab (30C's web).
+function BotNav.harmless(entry)
+    return entry ~= nil and entry.reach == nil and entry.speed == 0 and entry.grabs ~= true
+end
+
 function BotNav.hold_fight(bot, job)
     if job.done(bot) then
         return "done"
     end
+    -- Hurt with no poison while the fight's enemy never attacks: the dead
+    -- Black Tiger's web threads (its death shoots them when other rounds
+    -- than flame kill it) chased the bot through 6000 ticks of knife
+    -- swings at 30C's web, down to 1 health. The threads live in the
+    -- room's arena, which an entry resets: the step fails for this entry
+    -- (an "approach" mark lifts on the next one) and the bot steps out.
+    local player = bot:player()
+    local fk = bot:knowledge()
+    if job.health and player.health < job.health and not player.poisoned
+        and not player.seriously_poisoned and BotNav.harmless(fk and fk.enemies[job.enemy]) then
+        job.reason = "hurt on the approach by something unseen: step out and back in"
+        job.reenter = true
+        return "failed"
+    end
+    job.health = player.health
     -- The enemy's preferred weapon showed here as a pickup (Brad's rocket
     -- launcher on 303's deck): the goal ends so the item frontier takes it,
     -- and the step holds until then (BotPuzzle.next_interact).

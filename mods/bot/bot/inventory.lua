@@ -548,7 +548,14 @@ function BotInventory.context(bot)
             -- deposit for 30A's hex crank, and the run ended there; but one
             -- explosive round left counted as held, the acid and flame
             -- rounds went into 30E's box, and the bot met the lab with one.
-            local own = ammo and bot:item_count(ammo) >= OWN_ROUNDS
+            -- In the fight's own stage the bar is doubled: the lab's
+            -- zombies and hunters spent six explosive rounds before 513's
+            -- Tyrant, with the acid and flame ones left in the box at 502.
+            local floor = OWN_ROUNDS
+            if fight.room:sub(1, 1) == here:sub(1, 1) or fight.stage == here:sub(1, 1) then
+                floor = 2 * OWN_ROUNDS
+            end
+            local own = ammo and bot:item_count(ammo) >= floor
             for id, gun in pairs(knowledge.weapons) do
                 if gun.variant_of == prefer then
                     local other = bot:ammo_for(id)
