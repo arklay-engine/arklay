@@ -171,12 +171,12 @@ function BotSurvival.fight_ready(bot, fact)
         end
         return true
     end
+    local boxed_heal
     if #heal_rows(bot) == 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             if kind == "heal" and heals ~= false then
-                return false, string.format(
-                    "not ready for the fight: no heal held and the box holds 0x%02X", item)
+                boxed_heal = item
             end
         end
     end
@@ -197,7 +197,14 @@ function BotSurvival.fight_ready(bot, fact)
     if not loaded then
         return false, "not ready for the fight: no firearm with rounds"
     end
+    local function heal_first()
+        return false, string.format(
+            "not ready for the fight: no heal held and the box holds 0x%02X", boxed_heal)
+    end
     if not entry or not entry.health or not entry.keep then
+        if boxed_heal then
+            return heal_first()
+        end
         return true
     end
     local damage, known = 0, false
@@ -218,6 +225,16 @@ function BotSurvival.fight_ready(bot, fact)
     if known and damage < entry.health then
         return false, string.format("not ready for the fight: rounds for %d of %d health",
             damage, entry.health)
+    end
+    -- The heal in the box is fetched first, unless a monster here already
+    -- hurt the bot (every walk in costs that hit again) and the bot comes
+    -- in at full health (the rounds for the kill are held, above): 30C's
+    -- Black Tiger spat on the bot at each of three entries, two of them
+    -- spent turning back for the box six doors away, poisoned.
+    local player = bot:player()
+    if boxed_heal and not (BotTactics.hurt_count(fact.room or bot:room().id) > 0
+        and player.health >= player.max_health) then
+        return heal_first()
     end
     return true
 end
