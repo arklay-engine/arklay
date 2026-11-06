@@ -144,8 +144,10 @@ Priorities, highest first:
    fact names, since a script may start the climb from an event. One press
    per slot per room entry, nearest first.
 6. The way out. A pursued target keeps its course: the bot takes the first
-   door of the route to it until it is reached, real progress re-ranks, or
-   the loop rule drops it (`pursuing ...`). Otherwise one ranking by
+   door of the route to it until it is reached, real progress (a room
+   entered for the first time, an item taken, a door unlocked or newly made a
+   door by a room event, the inventory changed) re-ranks, or the loop rule
+   drops it (`pursuing ...`). Otherwise one ranking by
    distance cost over the doors here and the first door of the route
    (breadth-first over the remembered doors) to each remote frontier item or
    door, and to each room whose `<use>` fact (`bot:use_facts()`) needs a
@@ -753,10 +755,12 @@ files. The checked-in facts:
 | 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
 | 11B | `<climb object="0" slot="3" bank="7" bit="35" done="clear">`: the square crank lies on a shelf over the crate's corner; room main keeps its pickup an item only while the player stands on the crate (`FG_STATUS` 24 clear). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
-| 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. |
-| 302 | `<avoid slot="7">`: the elevator call on the platform the 301 door lands on; it rides straight back up to 301. |
+| 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. `<avoid slot="7">`: the elevator call back down to 302 on the landing the 302 door brings you to. |
+| 302 | `<avoid slot="7">`: the elevator call on the platform the 301 door lands on; it rides straight back up to 301. `<avoid slot="0" bank="0" bit="0x32" while="clear">`: door 0 to 300 is the north elevator's far end, called only with the power on (scenario `0x32`). |
+| 402 | `<interact slot="3" bank="0" bit="0x43">`: pulling the bath plug makes AOT 1 the key `0x3B` (to 411). |
 | 406 | `<push object="1" slot="5" direction="north" clear="full">` (the west crate deep into the recess behind it), `<push object="0" slot="5" direction="west">` (the east crate off the hatch, pushed from the 335-unit strip beside it), then `<interact slot="5" bank="0" bit="0x45">` and `<answer choice="yes" slot="5">`: Yes opens the ladder door down to 40D, whose init sets scenario `0x45`. |
 | 40D | Six `<push>` steps make the bridge over the water to 40E. Objects 3 and 1 go `direction="south"` into AOT 2's edge zone (done flags scenario `0x39`, then `0x38`; the second clears the first). Object 2 stands against the room's north wall: `axis="x"` onto the ladder corridor's AOT 10, `south` `until="stop"`, `east` `until="stop"`, then `south` into the water. Bit `0x39` is set again only by the third crate. |
+| 411 | `<interact slot="1" bank="0" bit="0x23">` with `<answer choice="yes" slot="1">`: the drain switch empties the aqua ring (40E/40F/411 load dry). Then `<interact slot="2" bank="2" bit="36">` with `<answer choice="yes" slot="2">`: the lock switch, which turns 40E's door 2 to 410 into a door. |
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
 | 20D | Jill: `<deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62">`: poisoned Richard waits (`0x62`) for the serum; walking into camera 3 with it hands it over and sets `0x61` (so does his death after 420 seconds). Until then the door to 20E is a message. |
 | 100 | Jill: `<fetch slot="5" item="0x42" bank="1" bit="0x23">`: the serum on the shelf, offered once Richard's scene sets `0x23`. |
