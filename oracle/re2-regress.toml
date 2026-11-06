@@ -1,0 +1,701 @@
+# Regression runs for scripts/re2-regress.py (see "The regression runner" in oracle/re2.md).
+#
+# A run plays `input` in arklay and compares it with the stored recording of the original.
+# `ticks` are the reference's; arklay runs `ticks - offset` of them, from the state the
+# original has at its tick `offset`. `expect` is "match" or a known first divergence, as
+# { tick = reference tick, fields = [...], note = "..." }. `record` is the rest of the
+# `scripts/oracle-re2.py record` command that makes the reference (`--input`, `--ticks`,
+# `--trace`, `--sound` and, when the run has frames, `--shot-dir` and `--shot-every 1` are
+# added). Setup scripts and inputs are in oracle/inputs-re2/.
+
+[defaults]
+room = "102"
+player = 0
+character = 0
+sound = true
+offset = 344
+
+[fields]
+item = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd"
+inv = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd"
+
+[[run]]
+name = "item_take"
+setup_script = "item_102.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+frames = [360, 999]
+frame_max_mean = 0.8
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+[[run]]
+name = "item_mash"
+setup_script = "item_102.lua"
+input = "item_mash_102_arklay.txt"
+ticks = 1000
+fields = "item"
+frames = [360, 999]
+frame_max_mean = 0.3
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+[[run]]
+name = "item_refuse"
+setup_script = "item_102.lua"
+input = "item_refuse_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+[[run]]
+name = "item_full"
+setup_script = "item_full.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x26:1 --give 3:0x26:1 --give 4:0x26:1 --give 5:0x26:1 --give 6:0x26:1 --give 7:0x26:1"
+
+[[run]]
+name = "item_merge"
+setup_script = "item_merge.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x14:230 --give 3:0x14:220"
+
+[[run]]
+name = "inv_use"
+setup_script = "inv_use.lua"
+input = "inv_use_arklay.txt"
+ticks = 800
+fields = "inv"
+frames = [360, 800]
+frame_max_mean = 0.85
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x26:1 --give 3:0x27:1 --life 100"
+
+[[run]]
+name = "inv_herbs"
+setup_script = "inv_herbs.lua"
+input = "inv_use_arklay.txt"
+ticks = 800
+fields = "inv"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x26:1 --give 3:0x27:1 --life 200"
+
+[[run]]
+name = "inv_check"
+setup_script = "inv_herbs.lua"
+input = "inv_check_arklay.txt"
+ticks = 1000
+fields = "inv"
+frames = [360, 1000]
+frame_max_mean = 0.8
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x26:1 --give 3:0x27:1 --life 200"
+
+[[run]]
+name = "inv_mix"
+setup_script = "inv_mix.lua"
+input = "inv_mix_arklay.txt"
+ticks = 800
+fields = "inv"
+frames = [360, 800]
+frame_max_mean = 0.75
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x26:1 --give 3:0x27:1 --give 4:0x14:30 --life 200"
+
+[[run]]
+name = "inv_reload"
+setup_script = "inv_reload.lua"
+input = "inv_reload_arklay.txt"
+ticks = 1100
+fields = "inv"
+frames = [360, 1100]
+frame_max_mean = 0.95
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 0:2:5 --give 2:0x14:30 --life 200"
+
+[[run]]
+name = "status_map"
+setup_script = "status_102.lua"
+input = "status_map_arklay.txt"
+ticks = 1000
+fields = "inv"
+frames = [360, 999]
+frame_max_mean = 0.5
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200"
+
+[[run]]
+name = "status_file"
+setup_script = "status_102.lua"
+input = "status_file_arklay.txt"
+ticks = 1000
+fields = "inv"
+frames = [360, 999]
+frame_max_mean = 0.9
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200"
+
+[[run]]
+name = "weapon_handgun"
+setup_script = "weapon_handgun.lua"
+input = "weapon_handgun_arklay.txt"
+ticks = 1800
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 2:0x14:30"
+
+[[run]]
+name = "weapon_empty"
+setup_script = "weapon_empty.lua"
+input = "weapon_empty_arklay.txt"
+ticks = 700
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 0:2:1"
+
+[[run]]
+name = "weapon_knife_wall"
+setup_script = "weapon_knife_wall.lua"
+input = "weapon_knife_wall_arklay.txt"
+ticks = 1300
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200"
+
+[[run]]
+name = "weapon_knife"
+setup_script = "weapon_knife.lua"
+input = "weapon_knife_arklay.txt"
+ticks = 1300
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-20000:0:15000:0 --life 200"
+
+[[run]]
+name = "weapon_shotgun"
+setup_script = "weapon_shotgun.lua"
+input = "weapon_shotgun_arklay.txt"
+ticks = 1500
+fields = "item"
+frames = [360, 700]
+frame_max_mean = 0.4
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 2:7:5 --give 3:0x15:10"
+
+[[run]]
+name = "run_118"
+room = "102"
+sound = false
+ticks = 2700
+input = "run_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-25067, 0, 15229], angle = 2048, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 102:-25067:0:15229:2048 --life 200"
+
+[[run]]
+name = "run_119"
+room = "118"
+sound = false
+# the zombies kill the player: both games end the room at the game over on tick 2570
+ticks = 2570
+input = "run_119.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-24617, 0, -24996], angle = 1024, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200"
+
+[[run]]
+name = "run_11a"
+room = "119"
+sound = false
+ticks = 2700
+input = "run_11a.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [12921, 0, -20194], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 119:13032:0:-19315:0 --life 200"
+
+[[run]]
+name = "run_11b"
+room = "11A"
+sound = false
+# the zombies kill the player: both games end the room at the game over on tick 2672
+ticks = 2672
+input = "run_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [9150, 0, -2600], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[6, 156], [6, 157]] }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11A:9150:0:-2600:3072 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "run_103"
+room = "11B"
+sound = false
+ticks = 2700
+input = "run_103.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [11393, 0, -15351], angle = 3072, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11B:11393:0:-15351:3072 --life 200"
+
+[[run]]
+name = "run_200"
+room = "103"
+sound = false
+ticks = 2700
+input = "run_200.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [10303, -5400, -7823], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 103:10303:-5400:-7823:0 --life 200"
+
+[[run]]
+name = "walk_11a"
+room = "119"
+sound = false
+ticks = 2700
+input = "walk_11a.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [12921, 0, -20194], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 119:13032:0:-19315:0 --life 200"
+
+[[run]]
+name = "walk_11b"
+room = "11A"
+sound = false
+# the zombies kill the player: both games end the room at the game over on tick 2227
+ticks = 2227
+input = "walk_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [9150, 0, -2600], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[6, 156], [6, 157]] }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11A:9150:0:-2600:3072 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "walk_11a_dead"
+room = "119"
+sound = false
+ticks = 2700
+input = "walk_11a.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [12921, 0, -20194], angle = 0, health = 200, rnd = 6114, camera = 0, flags = [[6, 156], [6, 157]] }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 119:13032:0:-19315:0 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "walk_11b_dead"
+room = "11A"
+sound = false
+ticks = 2700
+input = "walk_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [9150, 0, -2600], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[6, 151], [6, 152], [6, 153], [6, 154], [6, 155], [6, 163], [6, 156], [6, 157]] }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11A:9150:0:-2600:3072 --flag 6:151 --flag 6:152 --flag 6:153 --flag 6:154 --flag 6:155 --flag 6:163 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "door_102"
+room = "102"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-25067, 0, 15229], angle = 2048, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 102:-25067:0:15229:2048 --life 200"
+
+[[run]]
+name = "door_118"
+room = "118"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-24617, 0, -24996], angle = 1024, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200"
+
+[[run]]
+name = "door_119"
+room = "119"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [12921, 0, -20194], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 119:13032:0:-19315:0 --life 200"
+
+[[run]]
+name = "door_11A"
+room = "11A"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [9150, 0, -2600], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[6, 156], [6, 157]] }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11A:9150:0:-2600:3072 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "door_11B"
+room = "11B"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [11393, 0, -15351], angle = 3072, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 11B:11393:0:-15351:3072 --life 200"
+
+[[run]]
+name = "door_103"
+room = "103"
+sound = false
+ticks = 900
+input = "door_11b.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [10303, -5400, -7823], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 103:10303:-5400:-7823:0 --life 200"
+
+[[run]]
+name = "stairs_118_a"
+room = "118"
+sound = false
+ticks = 1400
+input = "stairs_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-9900, 0, -5935], angle = 1024, health = 200, rnd = 6114, camera = 0 }
+expect = "match"
+record = "--warp 118:-9900:0:-5935:1024 --life 200"
+
+[[run]]
+name = "stairs_118_b"
+room = "118"
+sound = false
+ticks = 1400
+input = "stairs_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-20776, 0, -9255], angle = 1024, health = 200, rnd = 6114, camera = 0 }
+expect = "match"
+record = "--warp 118:-20776:0:-9255:1024 --life 200"
+
+[[run]]
+name = "stairs_118_run"
+room = "118"
+sound = false
+ticks = 900
+input = "stairs_118_run.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-9900, 0, -4500], angle = 1024, health = 200, rnd = 6114, camera = 1 }
+expect = "match"
+record = "--warp 118:-9900:0:-4500:1024 --life 200"
+
+[[run]]
+name = "stairs_103_a"
+room = "103"
+sound = false
+ticks = 700
+input = "stairs_103.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-21456, -5400, -13317], angle = 0, health = 200, rnd = 6114, camera = 0 }
+expect = "match"
+record = "--warp 103:-21400:-5400:-13317:0 --life 200"
+
+[[run]]
+name = "stairs_103_b"
+room = "103"
+sound = false
+ticks = 700
+input = "stairs_103.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [16664, -5400, -13722], angle = 0, health = 200, rnd = 6114, camera = 0 }
+expect = "match"
+record = "--warp 103:16900:-5400:-13722:0 --life 200"
+
+[[run]]
+name = "stairs_200"
+room = "103"
+sound = false
+ticks = 2000
+input = "stairs_200.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [10303, -5400, -7823], angle = 0, health = 200, rnd = 6114, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 103:10303:-5400:-7823:0 --life 200"
+
+[[run]]
+name = "door_101_102"
+room = "100"
+sound = false
+offset = 780
+ticks = 3500
+setup_script = "door_101_102.lua"
+input = "door_101_102_arklay.txt"
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
+# the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
+ignore = [[790, "rng"], [790, "rseed"], [3052, "rng"], [3052, "rseed"]]
+expect = "match"
+record = "--no-enemies --no-enemies-room 0"
+
+[[run]]
+name = "walk_101"
+room = "100"
+sound = false
+offset = 780
+ticks = 4400
+setup_script = "door_101_102.lua"
+input = "walk_101_arklay.txt"
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
+# the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
+ignore = [[790, "rng"], [790, "rseed"]]
+expect = "match"
+record = "--no-enemies --no-enemies-room 0"
+
+[[run]]
+name = "run_102"
+room = "100"
+sound = false
+offset = 780
+ticks = 5400
+setup_script = "door_101_102.lua"
+input = "run_102_arklay.txt"
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
+# the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
+ignore = [[790, "rng"], [790, "rseed"], [3052, "rng"], [3052, "rseed"]]
+expect = { tick = 4700, fields = ["rng", "rseed", "zm1"], note = "room 102 zombie slot 1 takes routine 10 where the original stays in 1, with the player about 4800 units away (docs/re2-deviations.md, Player)" }
+record = "--no-enemies --no-enemies-room 0"
+
+[[run]]
+name = "first_door"
+room = "100"
+sound = false
+offset = 780
+ticks = 4500
+setup_script = "door_101_102.lua"
+input = "first_door.txt"
+input_shift = 780
+input_drop_early = true
+# no rng, mot or zombies: the original keeps only Kendo running (--keep-enemy 0), and the standing clip's speed differs (oracle/re2.md)
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,em"
+expect = "match"
+record = "--no-enemies --keep-enemy 0"
+
+[[run]]
+name = "kendo_attacked"
+room = "100"
+sound = false
+offset = 780
+ticks = 4600
+setup_script = "door_101_102.lua"
+input = "kendo_attacked.txt"
+input_shift = 780
+input_drop_early = true
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
+# the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
+ignore = [[790, "rng"], [790, "rseed"]]
+expect = "match"
+record = "--no-enemies --no-enemies-room 0"
+
+[[run]]
+name = "stand_610"
+room = "610"
+sound = false
+ticks = 1400
+setup = { pos = [-19771, 0, -26129], angle = 0, health = 200, rnd = 6114, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--warp 610:-19500:0:-27000:0 --life 200"
+
+[[run]]
+name = "stand_11b"
+room = "11B"
+sound = false
+ticks = 1400
+setup = { pos = [8000, 0, -19500], angle = 0, health = 200, rnd = 6114, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--warp 11B:8000:0:-19500:0 --life 200"
+
+[[run]]
+name = "item_crouch_103"
+room = "103"
+ticks = 1500
+setup_script = "item_crouch_103.lua"
+input = "item_crouch_103_arklay.txt"
+fields = "item"
+frames = [360, 1499]
+frame_max_mean = 0.65
+boxes = [[0, 165, 232, 240]]
+expect = "match"
+record = "--warp 103:2000:0:-14478:2048:3 --give 0:7:30 --equip 7 --life 200"
+
+[[run]]
+name = "door_101_102_snd"
+room = "100"
+ticks = 3700
+sound = true
+keep_sound_3 = true
+offset = 780
+setup_script = "door_101_102.lua"
+input = "door_101_102_arklay.txt"
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--no-enemies --no-enemies-room 0"
+
+[[run]]
+name = "door_102_snd"
+room = "102"
+ticks = 1000
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [-25067, 0, 15229], angle = 2048, health = 200, rnd = 6114, camera = 0 }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 102:-25067:0:15229:2048 --life 200"
+
+[[run]]
+name = "door_118_snd"
+room = "118"
+ticks = 1000
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [-24617, 0, -24996], angle = 1024, health = 200, rnd = 6114, camera = 0 }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200"
+
+[[run]]
+name = "door_119_snd"
+room = "119"
+ticks = 1000
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [12921, 0, -20194], angle = 0, health = 200, rnd = 6114, camera = 0 }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 119:13032:0:-19315:0 --life 200"
+
+[[run]]
+name = "door_11A_snd"
+room = "11A"
+ticks = 1300
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [9150, 0, -2600], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[6, 156], [6, 157]] }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 11A:9150:0:-2600:3072 --flag 6:156 --flag 6:157 --life 200"
+
+[[run]]
+name = "door_11B_snd"
+room = "11B"
+ticks = 1000
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [11393, 0, -15351], angle = 3072, health = 200, rnd = 6114, camera = 0 }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 11B:11393:0:-15351:3072 --life 200"
+
+[[run]]
+name = "door_103_snd"
+room = "103"
+ticks = 1000
+sound = true
+keep_sound_3 = true
+input = "door_11b.txt"
+input_shift = 344
+setup = { pos = [10303, -5400, -7823], angle = 0, health = 200, rnd = 6114, camera = 0 }
+fields = "room,bgm,xavol,snd"
+expect = "match"
+record = "--warp 103:10303:-5400:-7823:0 --life 200"
+
