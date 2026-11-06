@@ -29,6 +29,19 @@ local function meta(bot)
     return bot:room_meta() or { interacts = {}, uses = {}, answers = {}, avoids = {} }
 end
 
+-- A <use> fact's done flag reads done: set, or clear with done="clear".
+function BotPuzzle.use_done(bot, fact)
+    return bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
+end
+
+-- A <use> fact is open: not done, its `after` flag (if any) set and its
+-- `until` flag (if any) clear.
+function BotPuzzle.use_open(bot, fact)
+    return not BotPuzzle.use_done(bot, fact)
+        and (fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit))
+        and (fact.until_bank == nil or not bot:flag(fact.until_bank, fact.until_bit))
+end
+
 -- The <use> facts that apply now, in document order: the item is held, the
 -- done flag is clear, and the slot is a live use-item probe (a room deletes
 -- the probe until its step applies, as 10F does before the gold pickup).
@@ -36,7 +49,7 @@ function BotPuzzle.uses(bot)
     local out = {}
     for _, fact in ipairs(meta(bot).uses or {}) do
         local action = BotNav.action_by_slot(bot, fact.slot)
-        if bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
+        if bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
             and action and action.kind == "flag_bank_set" then
             out[#out + 1] = { fact = fact, action = action }
         end
@@ -65,7 +78,7 @@ function BotPuzzle.use_pending(bot, zone, anywhere)
     end
     for _, fact in ipairs(meta(bot).uses or {}) do
         local action = BotNav.action_by_slot(bot, fact.slot)
-        if bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
+        if bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
             and action and action.kind ~= "flag_bank_set"
             and (anywhere or BotPuzzle.zones_overlap(action, zone)) then
             return fact

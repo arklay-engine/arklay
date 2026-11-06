@@ -717,6 +717,18 @@ impl ItemBoxView {
     }
 }
 
+/// A `<use>` row's done sense and its `after`/`until` gates, as the
+/// interact rows spell them (`done_clear`, `after_bank`/`after_bit`) plus
+/// `until_bank`/`until_bit`.
+fn set_use_gates(row: &Table, fact: &meta::Use) -> mlua::Result<()> {
+    row.set("done_clear", fact.done_clear)?;
+    row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+    row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+    row.set("until_bank", fact.until.map(|(bank, _)| bank))?;
+    row.set("until_bit", fact.until.map(|(_, bit)| bit))?;
+    Ok(())
+}
+
 /// The submenu labels the RE1 menu script draws (`draw_submenu`): the first
 /// option is EQUIP for a weapon and USE otherwise; MOVE is the combine.
 fn menu_options(equippable: bool) -> Vec<&'static str> {
@@ -2720,6 +2732,7 @@ impl UserData for BotCtx {
                 row.set("item", fact.item)?;
                 row.set("bank", fact.flag.0)?;
                 row.set("bit", fact.flag.1)?;
+                set_use_gates(&row, fact)?;
                 row.set("label", fact.label.as_deref())?;
                 uses.push(row)?;
             }
@@ -2772,6 +2785,7 @@ impl UserData for BotCtx {
                 row.set("item", entry.fact.item)?;
                 row.set("bank", entry.fact.flag.0)?;
                 row.set("bit", entry.fact.flag.1)?;
+                set_use_gates(&row, &entry.fact)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -2797,6 +2811,9 @@ impl UserData for BotCtx {
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
                 row.set("via", entry.fact.via)?;
+                row.set("gate_bank", entry.fact.gate.map(|gate| gate.flag.0))?;
+                row.set("gate_bit", entry.fact.gate.map(|gate| gate.flag.1))?;
+                row.set("gate_set", entry.fact.gate.map(|gate| gate.set))?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
