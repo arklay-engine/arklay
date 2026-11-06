@@ -135,10 +135,13 @@ pub enum Target {
     /// zone, or, with a `direction`, push it that way until it no longer
     /// covers that zone (done by position, or once the optional flag is set:
     /// a zone event that takes the object away, like 202's falling statue).
+    /// With `clear_full` the trailing face must pass the zone's far edge, not
+    /// just its far quarter (406's west crate, out of the east crate's way).
     Push {
         object: u8,
         slot: u8,
         direction: Option<Direction>,
+        clear_full: bool,
     },
     /// Push room object `object` under AOT `slot`'s item zone until it
     /// covers the zone, climb it, take the item from on top and climb down
@@ -610,6 +613,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "object",
             "slot",
             "direction",
+            "clear",
             "bank",
             "bit",
             "label",
@@ -636,11 +640,18 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             at(node)
         ),
     };
+    let clear_full = match node.attribute("clear") {
+        None => false,
+        Some("full") if direction.is_some() => true,
+        Some("full") => bail!("{}: <push> `clear` needs a `direction`", at(node)),
+        Some(other) => bail!("{}: <push> `clear` must be `full`, not `{other}`", at(node)),
+    };
     Ok(Interact {
         target: Target::Push {
             object: attr(node, "object")?,
             slot: attr(node, "slot")?,
             direction,
+            clear_full,
         },
         flag,
         done_clear: false,
@@ -1119,6 +1130,7 @@ mod tests {
                         object: 1,
                         slot: 2,
                         direction: None,
+                        clear_full: false,
                     },
                     flag: None,
                     done_clear: false,
@@ -1129,6 +1141,7 @@ mod tests {
                         object: 3,
                         slot: 5,
                         direction: Some(Direction::East),
+                        clear_full: false,
                     },
                     flag: None,
                     done_clear: false,
@@ -1217,6 +1230,7 @@ mod tests {
                     object: 0,
                     slot: 3,
                     direction: None,
+                    clear_full: false,
                 },
                 flag: Some((0, 0x0B)),
                 done_clear: false,
@@ -1245,6 +1259,27 @@ mod tests {
         let camera = r#"<bot format="2"><camera cut="1" bank="1" bit="2" done="clear"/></bot>"#;
         let error = parse(camera).unwrap_err().to_string();
         assert!(error.contains("unknown attribute `done`"), "{error}");
+    }
+
+    #[test]
+    fn push_clear_full_needs_a_direction() {
+        let text =
+            r#"<bot format="2"><push object="1" slot="5" direction="north" clear="full"/></bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.interacts[0].target,
+            Target::Push {
+                object: 1,
+                slot: 5,
+                direction: Some(Direction::North),
+                clear_full: true,
+            }
+        );
+        let bare = r#"<bot format="2"><push object="1" slot="5" clear="full"/></bot>"#;
+        assert!(parse(bare).is_err());
+        let bad =
+            r#"<bot format="2"><push object="1" slot="5" direction="north" clear="half"/></bot>"#;
+        assert!(parse(bad).is_err());
     }
 
     #[test]

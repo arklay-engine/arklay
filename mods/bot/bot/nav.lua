@@ -426,7 +426,7 @@ end
 -- A push with a direction (`dir = {x, z}`, a compass step from the fact)
 -- clears the zone instead: the object goes that way only, until its
 -- trailing face has passed the far quarter of the zone on that axis (a
--- shelf moved off the item it hides).
+-- shelf moved off the item it hides), or with `dir.full` its far edge.
 
 function BotNav.object_by_slot(bot, slot)
     for _, object in ipairs(bot:objects()) do
@@ -450,14 +450,16 @@ local function band_error(value, lo, span)
 end
 
 -- How far the trailing face (centre `value`, half size `half`) is from
--- passing the far quarter of [lo, lo + span] going in `step` (+1 or -1).
-local function clear_error(value, half, lo, span, step)
+-- passing the far quarter (with `full`, the far edge) of [lo, lo + span]
+-- going in `step` (+1 or -1).
+local function clear_error(value, half, lo, span, step, full)
+    local margin = full and 0 or span // 4
     if step > 0 then
-        local goal = lo + span - span // 4
+        local goal = lo + span - margin
         local face = value - half
         return face < goal and goal - face or 0
     end
-    local goal = lo + span // 4
+    local goal = lo + margin
     local face = value + half
     return face > goal and goal - face or 0
 end
@@ -466,8 +468,10 @@ end
 -- with `dir`, how far its trailing face is from clearing the zone that way.
 function BotNav.push_error(object, zone, dir)
     if dir then
-        local ex = dir.x ~= 0 and clear_error(object.x, object.half_x, zone.x, zone.width, dir.x) or 0
-        local ez = dir.z ~= 0 and clear_error(object.z, object.half_z, zone.z, zone.depth, dir.z) or 0
+        local ex = dir.x ~= 0
+            and clear_error(object.x, object.half_x, zone.x, zone.width, dir.x, dir.full) or 0
+        local ez = dir.z ~= 0
+            and clear_error(object.z, object.half_z, zone.z, zone.depth, dir.z, dir.full) or 0
         return ex, ez
     end
     return band_error(object.x, zone.x, zone.width), band_error(object.z, zone.z, zone.depth)
@@ -480,8 +484,9 @@ local PUSH_STALL = 4 * C.SECOND
 local PUSH_TRIES = 2
 -- How far behind the object's face to stand, nearest last: forward then
 -- walks the player into the face. A wall close behind the object leaves
--- room only for the nearer points (the probe reaches 470 ahead).
-local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3 }
+-- room only for the nearer points (the probe reaches 470 ahead; 406's
+-- crate has a strip only 335 deep beside it).
+local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3, C.APPROACH }
 -- Where along the face to stand, in thirds of the object's half size across
 -- the push: the middle first, then either side (a wall band over one end).
 local PUSH_LATERALS = { 0, -1, 1 }

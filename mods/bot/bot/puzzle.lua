@@ -178,12 +178,13 @@ end
 
 -- A <push> step is done while its object's centre sits in the middle half
 -- of its zone (the room's object probe tests the object's position). A push
--- with a direction is done once the object has cleared the zone that way,
+-- with a direction is done once the object has cleared the zone that way
+-- (past its far edge with clear="full"),
 -- or once the zone is gone or its item was taken (the item it hid). A push
 -- with a flag is also done once the flag is set.
 function BotPuzzle.push_dir(fact)
     if fact.direction then
-        return { x = fact.dx, z = fact.dz }
+        return { x = fact.dx, z = fact.dz, full = fact.clear_full == true }
     end
     return nil
 end
