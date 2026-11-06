@@ -80,6 +80,10 @@ not run it after every edit.
   is the verdict (`all green` or `FAILED at: ...`), and its exit status is
   non-zero on failure. The full logs are in `target/check-logs/`. Do not run
   it a second time to see what the first run printed.
+- **For RE 2 changes, also run the regression runner** (once, before pushing, after the session tier):
+  `scripts/re2-regress.py --out DIR` (about 6 minutes; `DIR` is not under `/tmp`),
+  which checks arklay against the stored recordings of the original. See
+  "The regression runner" in `oracle/re2.md`.
 - Leave the debug test build, `--no-default-features`, the fuzz compile check,
   docs, Windows, MSRV and the artifact smoke to CI.
 - **Never run `--full`, `--soak` or the perf tests unless the task asks for

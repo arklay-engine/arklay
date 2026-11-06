@@ -248,6 +248,25 @@ mode). With those off, `patches` shows no changes to `Pl_move`, the weapon
 routines or `Game_loop`. What remains in the player, door, room and enemy code is
 calls redirected for loading files, drawing and sound.
 
+## The regression runner
+
+The original is deterministic, so a recording of it is made once and kept. `scripts/re2-regress.py` plays the runs in `oracle/re2-regress.toml` in arklay and compares each with its stored recording, with no Wine and no new recording. Run it for any change to RE 2's play, and read the lines it prints:
+
+```sh
+cargo build --profile test-release
+scripts/re2-regress.py --out target/re2-regress              # every run, 3 at a time
+scripts/re2-regress.py --out target/re2-regress item_take inv_mix   # named runs
+scripts/re2-regress.py --out DIR --list                             # the runs and whether their references exist
+```
+
+`--out` is required and must not be under `/tmp`, a small RAM disk on the machines this runs on. The binary is `target/test-release/arklay` unless `--arklay` says otherwise. The pack is `--pack`, or else converted once into the output dir from `--game` or `ARKLAY_RE2_ROOT` (about 25 seconds). The references are in `--refs`, else `ARKLAY_RE2_REFS`, else `~/.local/share/arklay/re2-refs`: one folder per recording, with `ref.trace` and, where the run compares pictures, `frames/` (PNG, boot frames first), and a `meta.txt` with the input's checksum, the record command and the date. `--jobs` sets the parallelism (3 by default). arklay's frames and traces are deleted after the comparison unless `--keep` is given.
+
+Each run prints one line: the trace verdict (`MATCH` and the number of ticks compared, or the number of matching ticks and the reference tick and fields of the first difference), the frames' mean error and three worst ticks when the run has frames (and the mean with the message box blanked, where the run has one), and `[ok]` or `[UNEXPECTED: ...]`. The last line is a summary, and the exit status is non-zero when any run is unexpected, a reference is missing (unless `--skip-missing`) or arklay fails. A run is `ok` when its trace matches the manifest's `expect`: `"match"`, or a known first divergence `{ tick, fields, note }` with the tick in the reference's numbering. `ignore = [[tick, "field"], ...]` leaves out differences that are known and one tick long, such as `rng` on a door's tick (see the doors above), so that what comes after them still counts. `frame_max_mean` fails a run whose mean frame error grows beyond it. A divergence that comes from a change is a regression: look at it with `oracle.py compare` and the `--keep`ed trace. One that is fixed makes its run `UNEXPECTED` until its `expect` is updated, which is the point: the manifest then says what is known.
+
+A run starts arklay at the original's tick 344 (`offset`), so its input is the original's moved earlier (`input_shift`, or an `_arklay` file) and its setup script, a `.lua` in `oracle/inputs-re2/` or a `setup` table of the position, angle, health, `Rnd`, camera cut and flags that the runner writes out, puts the player where the original has them. Each `3:` entry is dropped from `snd` in both traces first, as in "Weapons", unless the run sets `keep_sound_3`. The runs cover the pick-ups, the inventory, the status screen and the weapons, the doors, route walks, runs and stairs from room 100 to room 200, the zombies' stands in rooms 610 and 11B, Kendo's scene and the crouching pick-up. Marvin's scene in room 202 and room 200's entry scene have references but no run yet: the first starts a tick apart from the original (see above) and the second has no recorded arklay start.
+
+`scripts/re2-regress.py record NAME...` records a run's missing reference with `oracle-re2.py record` (it needs `--game` or `ARKLAY_RE2_ROOT`, Wine and a display, and it uses the Wine prefix under `--work`, or `wine` in `--out`), using the run's `record` arguments from the manifest and `--shot-dir` when the run has frames. It writes `ref.trace`, the sound's files and `frames/` into the refs dir and `meta.txt` beside them, and refuses to replace a reference unless `--force` is given. `--dry-run` prints the command. To add a run, add it to the manifest with its `record` arguments, record it, and run it: put the result you see, if it is a match or one of the divergences this file or `docs/re2-deviations.md` explains, in `expect`.
+
 ## Limits
 
 - Runs start from a new game in room 100. There is no way yet to boot a room or
