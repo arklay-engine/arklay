@@ -116,6 +116,24 @@
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
   </enemy>
 
+  <!-- Plant 42 (the guardhouse boss, 40C). enemy/08: one body entity (no
+       behavior bit 0; health 0x28 + 100) and its vine blocks (bit 0; 0x28)
+       hang from the ceiling at y -7000. state_check sets 0x40 every frame
+       and 0x80 inside 10000 of the player, so a torso shot hits it from
+       anywhere in the room; the SCD state (behavior 0x40) clears the bits
+       until the room hands the fight over. The body's collision radius is
+       2000. Its vines sweep and grab from above (16 or 25 a sweep, 15 or 8
+       a hold); they hit from about 6000 (observed), the reach given. It
+       never moves. A handgun hit takes 15 (observed) and holds that part's
+       hit_state about 120 ticks, during which a shot hits the next free
+       part nearest the aim: parts="yes" lets the bot fire on through it.
+       Enemy bit 96 is the body's (40C's init, enemy index 0). -->
+  <enemy id="0x08" name="plant 42" policy="fight" stand="torso" downed="none"
+         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="140" parts="yes">
+    <keep weapon="0x02" min="3000" max="5500" damage="15"/>
+    <keep weapon="0x03" min="3000" max="5500" damage="unknown"/>
+  </enemy>
+
   <!-- Poison cures, from the engine's item definitions
        (games/re1/item/<id>/item.xml effects; a unit test keeps this list
        equal to them). poison = the 0x02 health-status drain (2 health every
