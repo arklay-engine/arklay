@@ -317,7 +317,9 @@ local function progress(bot, note)
 end
 
 -- What counts as real progress: rooms entered, items taken, doors
--- unlocked and the inventory. Walking between known rooms changes none.
+-- unlocked or newly there (a room event that turns a zone into a door, as
+-- 411's lock switch does for 40E's door to 410) and the inventory. Walking
+-- between known rooms changes none.
 local function progress_sig(bot, world)
     local visited, taken, unlocked = 0, 0, 0
     for _, r in ipairs(world.rooms) do
@@ -326,6 +328,9 @@ local function progress_sig(bot, world)
         end
         for _, door in ipairs(r.doors) do
             if door.unlocked then
+                unlocked = unlocked + 1
+            end
+            if door.present and door.target then
                 unlocked = unlocked + 1
             end
         end
