@@ -2,8 +2,10 @@
 <!-- 301 courtyard pool. The square crank (0x1D) used in AOT 4's zone at the
      pool's edge runs the drain event: the crank turns, a film, and scenario
      0x2F set, which opens the walk over the empty pool to the door to 302.
-     The scene is watched, not skipped. -->
+     The scene is watched, not skipped. The elevator from 302 lands on AOT 7,
+     the call back down (event_08); the way on to 300 is back over the pool. -->
 <bot format="2">
   <use slot="4" item="0x1D" bank="0" bit="0x2F" label="square crank at the pool"/>
   <watch bank="0" bit="0x2F" label="the crank turns"/>
+  <avoid slot="7" reason="the elevator back down to 302"/>
 </bot>

@@ -2,7 +2,10 @@
 <!-- 302 courtyard below the pool. The door from 301's drained pool lands
      on the elevator platform; AOT 7 calls the elevator, which rides back up
      to 301 (scenario 0x30). The way on is the door to 304; the way back to
-     the mansion is the door to 300. -->
+     the mansion is through 301. Door 0 to 300 is the far end of the north
+     elevator, which AOT 8 calls only once the power is on (scenario 0x32, the
+     battery at AOT 4/5); until then it is no way out. -->
 <bot format="2">
   <avoid slot="7" reason="the elevator back up to 301"/>
+  <avoid slot="0" bank="0" bit="0x32" while="clear" reason="the north elevator to 300 has no power"/>
 </bot>

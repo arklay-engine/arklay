@@ -721,7 +721,7 @@ local function interact_goal(bot, fact, index, count)
             kind = "interact", slot = fact.slot, label = label,
             job = {
                 push = true, object = fact.object, zone = zone_of(action), label = label,
-                dir = BotPuzzle.push_dir(fact), axis = fact.axis, step = index,
+                dir = BotPuzzle.push_dir(fact), only_axis = fact.axis, step = index,
                 done = function(b) return BotPuzzle.push_done(b, fact) end,
             },
         }
