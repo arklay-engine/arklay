@@ -50,6 +50,8 @@
 --               the remembered box)
 --             - for a route to a held item's <use> room, HELD_USE_BONUS
 --               and no door steps: only the first door's length counts
+--             - for a route to a <fetch> of a cure for the player's
+--               poison, CURE_BONUS (twice HELD_USE_BONUS), no door steps
 --             - BOX_BONUS for a route to a remembered typewriter when a
 --               save trip is due (BotSave.trip_reason), picked like a
 --               remote box
@@ -132,6 +134,10 @@ local ERRAND_BONUS = 2 * KEY_BONUS
 -- counted (305's fountain is a dozen doors from the mansion, where Doom
 -- Book I becomes the Eagle Medal) and it outranks exploring.
 local HELD_USE_BONUS = 2 * ERRAND_BONUS
+-- A route to a <fetch> of the cure for a poison the player has (the second
+-- serum after Yawn's bite): the poison drains health the whole way, so it
+-- outranks every other target and the route's length is not counted.
+local CURE_BONUS = 2 * HELD_USE_BONUS
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
@@ -1950,8 +1956,10 @@ local function choose(bot)
                 order = order + 1
                 local label = string.format("%s 0x%02X in %s (%s)", fact.kind, fact.item,
                     fact.room, fact.label or "unnamed")
+                local cure = fact.kind == "fetch" and wanted[fact.item].cure
                 consider({
-                    cost = door_len(first.slot) + #steps * DOOR_COST - ERRAND_BONUS
+                    cost = (cure and door_len(first.slot) - CURE_BONUS
+                        or door_len(first.slot) + #steps * DOOR_COST - ERRAND_BONUS)
                         + route_monsters(steps),
                     order = order, door = first,
                     why = string.format("toward %s, %d door(s)", label, #steps),
