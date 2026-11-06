@@ -154,6 +154,22 @@
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>
   </enemy>
 
+  <!-- Yawn's first fight (entity 0x0D, the 210 attic; the enemy/0d machine,
+       the same bits as the rematch below). Its health starts at 0x0BEA
+       (3050) and it flees under 0x0AF0 (2800): health here is the 250 that
+       drives it off. Its bite takes 10 and poisons (common 0x43, the serum
+       fetch). Handgun 30, shotgun 40, grenade launcher 80 a hit
+       (DEFAULT_FIRST_RUN rows 131, 132, 136). Passing it while taking the
+       moon crest cost about 80 health in a run; fighting it with the
+       handgun cost the same 82 and 9 rounds (it bites from 1200..1400,
+       inside the 4000 its aim bit needs, so most of the fight goes
+       unaimed), so it is passed. -->
+  <enemy id="0x0D" name="yawn 1" policy="pass" stand="torso" downed="none"
+         up="no" reach="4000" grabs="no" outrun="unknown" speed="unknown" health="250">
+    <keep weapon="0x02" min="4300" max="8000" damage="30"/>
+    <keep weapon="0x03" min="4300" max="8000" damage="40"/>
+    <keep weapon="0x07" min="4300" max="8000" damage="80"/>
+  </enemy>
   <!-- Yawn's rematch (entity 0x12, 20C on the second mansion visit; enemy/12
        runs the enemy/0d machine). state_check sets 0x40 only while the
        player is 4000 or more away and never 0x80 in the juvenile form, so it

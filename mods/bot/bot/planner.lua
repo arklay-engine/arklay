@@ -76,7 +76,8 @@
 --   5. nothing left: approach and time-out marks under MAX_ATTEMPTS get one
 --      more try; then finish with the reason.
 -- A goal that fails is marked with the inventory it failed with; it is tried
--- again (at most MAX_ATTEMPTS times) once the inventory changes. A <use>
+-- again (at most MAX_ATTEMPTS times, without limit for a full inventory)
+-- once the inventory changes. A <use>
 -- that failed in its room is retried there, never travelled to.
 --
 -- The loop rule. Real progress is a change of the rooms entered, the items
@@ -300,7 +301,11 @@ local function blocked(bot, kind, room, slot, remote)
         plan().marks[mark_key(kind, room, slot)] = nil
         return false
     end
-    if m.permanent or m.attempts >= MAX_ATTEMPTS then
+    -- A full inventory is no failure of the goal: a pickup marked for it
+    -- (401's red book, three passes with every slot used) waits for the
+    -- inventory to change however often it was tried.
+    if m.permanent
+        or (m.attempts >= MAX_ATTEMPTS and not m.reason:find("inventory full", 1, true)) then
         return true
     end
     if m.hold and bot:tick() >= m.hold then
@@ -345,9 +350,14 @@ local function gave_up(goal)
 end
 
 -- Unreachable marks of this room are stale after a warp (a stair climb).
-local function clear_unreachable(bot, room)
+-- With `doors`, so are the door marks of every room: a puzzle step in one
+-- room can open the way to a door in another (301's refilled pool stops
+-- 302's waterfall, the way to its door to 307, which had used up its
+-- attempts before).
+local function clear_unreachable(bot, room, doors)
     for key, m in pairs(plan().marks) do
-        if m.room == room and m.reason:find("approach", 1, true) then
+        if (m.room == room or (doors and m.kind == "door"))
+            and m.reason:find("approach", 1, true) then
             plan().marks[key] = nil
         end
     end
@@ -2461,7 +2471,7 @@ function BotPlanner.step(bot)
             -- A room event (an object moved off an item) may open what
             -- was unreachable here.
             if goal.kind ~= "camera" then
-                clear_unreachable(bot, room)
+                clear_unreachable(bot, room, true)
             end
         else
             BotPlanner.observe_progress(bot, goal.label)
