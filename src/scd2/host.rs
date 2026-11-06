@@ -869,9 +869,13 @@ impl Re2State {
         })
     }
 
-    /// `Sce_work_clr_set`: every room starts with all of its mask groups on.
+    /// `Sce_work_clr_set` (`0x4E3E50`): every room starts with all of its mask
+    /// groups on and with `fg_room`'s first word (`0x98EB6C`) clear, so a room's
+    /// scripts never see the last room's bits, nor those of an earlier pass of
+    /// their own load.
     pub fn reset_mask_groups(&mut self) {
         self.banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
+        self.banks[usize::from(ROOM_BANK)][0] = 0;
     }
 
     /// The room's script set-up (`0x4E3F12`, from the room load's
@@ -2542,6 +2546,19 @@ mod tests {
         state.clear_tick_flags();
         assert!(!state.flag(ROOM_BANK, 33));
         assert!(state.flag(ROOM_BANK, 0));
+    }
+
+    #[test]
+    fn a_room_s_set_up_clears_the_room_bank_s_first_word() {
+        let mut state = Re2State::default();
+        state.set_flag(ROOM_BANK, 2, 1);
+        state.set_flag(ROOM_BANK, 31, 1);
+        state.set_flag(ROOM_BANK, 40, 1);
+        state.reset_mask_groups();
+        assert!(!state.flag(ROOM_BANK, 2));
+        assert!(!state.flag(ROOM_BANK, 31));
+        // The second word is `fg_tick`'s, which only the pass of the scripts clears.
+        assert!(state.flag(ROOM_BANK, 40));
     }
 
     #[test]

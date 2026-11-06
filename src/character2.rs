@@ -693,7 +693,8 @@ fn run_zombie(
     };
     let enemy_sound =
         |slot: u8| crate::se2::SoundId::decode(3 << 24 | u32::from(slot + second) << 16 | 1);
-    for sound in zombie.sounds.drain(..) {
+    // Each pans from where the body was at its call, before the tick's pushes.
+    for (sound, pos) in zombie.sounds.drain(..) {
         if let Some(id) = enemy_sound(sound) {
             re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
         }

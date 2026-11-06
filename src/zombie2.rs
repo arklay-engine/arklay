@@ -508,8 +508,10 @@ pub struct Zombie {
     pub model_type: u8,
     /// `Em10_Init`'s skin, from 0: `Texture_Move`'s page.
     pub skin: u8,
-    /// `Em_Zombie`'s moans and the like this tick, as `Snd_se_enem` plays them.
-    pub sounds: Vec<u8>,
+    /// `Em_Zombie`'s moans and the like this tick, as `Snd_se_enem` plays them:
+    /// each slot with the body's position at the call, since `Snd_se_3D` pans
+    /// it there and then, before `Oba_ck_em` and `Sca_ck_em` push the body.
+    pub sounds: Vec<(u8, [i32; 3])>,
     /// What a burnt zombie's `FUN_00456780` lit: the effect, the part it's on
     /// and where on that part.
     flames: Vec<(usize, u8, [i32; 3])>,
@@ -1160,7 +1162,9 @@ impl Em<'_, '_, '_> {
         self.z.last_routine = self.work().routine;
         let seq = self.mover.now_seq();
         if seq & SEQ_SOUND != 0 {
-            self.z.sounds.push((seq >> 28) as u8);
+            self.z
+                .sounds
+                .push(((seq >> 28) as u8, self.mover.player.pos));
         }
         self.oba_ck_em();
         self.sca_ck_em();
@@ -1604,7 +1608,7 @@ impl Em<'_, '_, '_> {
                 i32::from((hand.t[2] >> 1) as i16),
             );
             arm.hold = [x, i32::from((hand.t[1] as i16).wrapping_add(200)), z];
-            self.z.sounds.push(9);
+            self.z.sounds.push((9, self.mover.player.pos));
             // `Be_flg`'s 0x200 stops the clip writing the rest of the arm from
             // the next tick on, so it stays where this tick's `Joint_move` put it.
             let part = usize::from(arm.part);
