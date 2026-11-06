@@ -1446,12 +1446,16 @@ local function choose(bot)
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
-            -- A boss fight ahead waits for health and rounds; the mark
+            -- A boss fight ahead waits for health and rounds, a hazard
+            -- (<leave>) for health; the mark
             -- lifts once the inventory changes (a heal, ammunition).
             local fight = not BotTactics.active() and BotPuzzle.fight_ahead(bot, index)
             local ready, not_ready = true, nil
             if fight then
                 ready, not_ready = BotSurvival.fight_ready(bot, fight)
+            elseif not BotTactics.active() and BotPuzzle.leave_ahead(bot) then
+                -- So do steps into a hazard that drains health (507's gas).
+                ready, not_ready = BotSurvival.health_ready(bot, "the room's hazard")
             end
             local goal, why = nil, not_ready
             if ready then

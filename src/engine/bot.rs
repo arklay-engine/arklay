@@ -6120,6 +6120,16 @@ mod tests {
         assert_eq!(offsets(0), "0");
     }
 
+    fn pick_margin_with(vm: &BotVm, guns: &str, entry: &str) -> String {
+        eval(
+            vm,
+            &format!(
+                r#"local row = BotTactics.pick_gun({{ {guns} }}, {entry}, nil, 1.5)
+                return string.format("%#04x", row.item)"#
+            ),
+        )
+    }
+
     #[test]
     fn pick_gun_switches_only_when_the_plain_pick_cannot_finish_the_kill() {
         let vm = route_vm();
@@ -6185,6 +6195,29 @@ mod tests {
             "0x02"
         );
         assert_eq!(pick(launcher, zombie, "nil"), "0x07");
+        // A reserve gun (the launcher's scarce rounds) is a switch only when
+        // no other gun covers the bare kill: nine handgun rounds cover a
+        // zombie (9) though not with the margin, so the launcher stays put.
+        let hunter =
+            "{ health = 99, keep = { [0x02] = { damage = 12 }, [0x07] = { damage = 100 } } }";
+        let held_launcher = "{ item = 0x07, rounds = 6, equipped = false, reserve = true }";
+        let nine_rounds = "{ item = 0x02, rounds = 9, equipped = true }";
+        assert_eq!(
+            pick_margin_with(&vm, &format!("{nine_rounds}, {held_launcher}"), hunter),
+            "0x02"
+        );
+        // Five handgun rounds do not: the launcher is spent.
+        assert_eq!(
+            pick_margin_with(&vm, &format!("{short}, {held_launcher}"), hunter),
+            "0x07"
+        );
+        // Equipped, it gives way to a gun that covers the kill.
+        let equipped_launcher = "{ item = 0x07, rounds = 6, equipped = true, reserve = true }";
+        let full_handgun = "{ item = 0x02, rounds = 45, equipped = false }";
+        assert_eq!(
+            pick_margin_with(&vm, &format!("{equipped_launcher}, {full_handgun}"), hunter),
+            "0x02"
+        );
         assert_eq!(pick("", zombie, "nil"), "none");
     }
 

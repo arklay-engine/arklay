@@ -105,7 +105,10 @@ Priorities, highest first:
    ([Ammunition](#ammunition)), leaves the planner its goal and turns on
    `avoid_enemies` for its walks.
 3. A `<leave>` fact whose flag is set: out through its door before
-   anything else (507's gas drains health until the room changes). Then
+   anything else (507's gas drains health until the room changes). While
+   a `<leave>` flag is still clear (`BotPuzzle.leave_ahead`) the heal
+   threshold is `0.85 * max_health` and the puzzle waits as for a fight
+   (`not ready for the room's hazard`), so the gas finds the bot healed. Then
    the room puzzle: the next `<interact>`/`<camera>`/`<push>` fact in
    document order (walk to the zone, press, wait for the done flag; or push
    the object onto its zone, below). The sequence position
@@ -299,6 +302,8 @@ end. A `<fight>` step's target is preferred over the nearest monster
 held with the rounds for a kill, over the equipped gun (`BotTactics.pick_gun`;
 the hunter takes the shotgun). A fight against a monster closing in that
 cannot be outrun is not given up for low health.
+`staple="yes"` on a `<weapon>` marks the firearm whose ammunition is the
+most common (the handgun): a full inventory never boxes it.
 `melee="yes"` on a `<weapon>` marks a hand weapon (the knife): it has no
 rounds and never runs dry, and it is held only for a monster that `prefer`s
 it (the web over 30C's door). Such a monster is fought only as a `<fight>`
@@ -332,9 +337,13 @@ catalog's heal effects.
   finish; with none covering the margin the plain pick stands if it covers
   the bare kill. A plain pick with no `<keep>` damage against a known
   monster (the grenade launcher equipped for a boss, meeting a hunter)
-  gives way to a gun whose damage covers it.
+  gives way to a gun whose damage covers it. A `reserve="yes"` weapon (the
+  grenade and rocket launchers) is kept for the fights that prefer it: it
+  is picked only when no other gun covers even the bare kill, so hunters do
+  not spend the rounds the Tyrant needs.
 - **Fight or run** (`BotTactics.decide`). Run when the monster has no entry,
-  its policy is not `fight`, or there is no gun. A monster closing in
+  its policy is not `fight`, or there is no gun, or the gun has no `<keep>`
+  band while the entry has bands for others (`no band for this gun`). A monster closing in
   (within twice its reach, or within the far edge of the gun's `<keep>`
   band) that cannot be outrun is fought with any rounds left: a zombie
   closes about as fast as the handgun brings it down, so the fight has to
@@ -558,7 +567,8 @@ drives the box screen with pad input only.
   equipped and that no pending fight prefers. Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
   fact or a locked door needs back) do spare guns go too, fewest rounds
-  first, never one the loadout or a `<use>` needs.
+  first, never the `staple` gun (the handgun, whose ammunition is the most
+  common) or one the loadout or a `<use>` needs.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
@@ -848,7 +858,7 @@ files. The checked-in facts:
 | 307 | `<use>` the hex crank (`0x1E`) at slot 4 turns the bridge (common `0x47`), which opens door 2 to 30B. In the BioRand pack slot 3 is a handover item at the room origin. |
 | 30A | `<interact slot="2">` (Jill): the body probe in front of Enrico runs his scene (common `0x48`), which hands over the hex crank. |
 | 30B | `<interact slot="10" reveals="5">`: the corridor's west end sets a room flag that the main clears at once, so the step is done when it arms AOT 5. `<interact slot="5">` then sets the boulder rolling (scenario `0x3D`), and the init opens the way to 30C. |
-| 30C | `<fight enemy="0x13" bank="3" bit="138">`: the web over door 1 to 30D, cut with the knife picked up in the room (AOT 2). The init deletes the door while the web stands, and the main arms it again once enemy bit 138 is set. Black Tiger (`0x04`) is passed: it spits every 80 ticks or so, and the way on is only the web. |
+| 30C | `<fight enemy="0x13" bank="3" bit="138">`: the web over door 1 to 30D, cut with the knife picked up in the room (AOT 2). The init deletes the door while the web stands, and the main arms it again once enemy bit 138 is set. Before it, `<fight enemy="0x04" bank="3" bit="137" label="Black Tiger">`: the spider's knockback breaks the web cut, so it is killed first with the grenade launcher (its knowledge `prefer`). |
 | 30F | Two `<use slot="6" item="0x1E">` facts: the hex crank turns the passages one step a use, cycling scenario bits 74 and 75 through (0,0), (1,0), (0,1), (1,1). Only (1,1) joins the 30D door to door 1 (306). The first fact waits for bit 75, the second for bit 74 after 75; a use whose done flag stays clear is retried at once. `<door slot="0" via="3">`: the passage to 305 from the AOT 3 event at the east end. |
 | 500 | `<avoid slot="1">`: the lift back up to 310. The lab needs nothing from before it, and an ungated `<avoid>` on a door is marked for good, so remote planning never routes through it either. |
 | 504 | `<interact slot="7" bank="4" bit="0">`, then `<interact slot="7" bank="0" bit="102" reveals="1">`, each with `<answer choice="yes" slot="7">`: the switch lowers the first panel, then the one in front of the lab key (AOT 1). |
