@@ -75,6 +75,9 @@ BotInventory.RESERVE = 1
 -- At a box here, the equipped gun's ammunition is topped up under this many
 -- times the reserve floor.
 local TOP_UP = 2
+-- The rounds of a weapon's own loading that leave its other loadings'
+-- rounds (the launcher's acid and flame) out of the loadout.
+local OWN_ROUNDS = 6
 -- Kinds the combine may mix.
 local MIX_KINDS = { heal = 1, ammo = 2, weapon = 2 }
 
@@ -525,17 +528,19 @@ function BotInventory.context(bot)
             -- weapon (the acid one went into 100's box as a spare gun and
             -- the bot met 309's hunters without it), and so are the other
             -- rounds held for it.
-            -- The other rounds only while its own are not held: three
-            -- kinds of grenade rounds held as loadout left no slot to
-            -- deposit for 30A's hex crank, and the run ended there.
-            local own = ammo and bot:item_count(ammo) > 0
+            -- The other rounds only while its own run short (OWN_ROUNDS):
+            -- three kinds of grenade rounds held as loadout left no slot to
+            -- deposit for 30A's hex crank, and the run ended there; but one
+            -- explosive round left counted as held, the acid and flame
+            -- rounds went into 30E's box, and the bot met the lab with one.
+            local own = ammo and bot:item_count(ammo) >= OWN_ROUNDS
             for id, gun in pairs(knowledge.weapons) do
                 if gun.variant_of == prefer then
                     local other = bot:ammo_for(id)
                     if bot:has_item(id) or box[id] then
                         ctx.loadout[id] = true
                     end
-                    if other and not own and bot:item_count(other) > 0 then
+                    if other and not own and (bot:item_count(other) > 0 or box[other]) then
                         ctx.loadout[other] = true
                     end
                 end

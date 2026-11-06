@@ -84,6 +84,9 @@ pub struct Keep {
     pub max: i32,
     /// Health one hit takes off, when known.
     pub damage: Option<i32>,
+    /// Rounds of the weapon (every loading) the band leaves held: a reserve
+    /// gun opens such a fight only with more than these.
+    pub spare: Option<i32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -399,14 +402,21 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
                 child.tag_name().name()
             );
         }
-        check_attributes(child, &["weapon", "min", "max", "damage"])?;
+        check_attributes(child, &["weapon", "min", "max", "damage", "spare"])?;
         check_leaf(child)?;
         let keep = Keep {
             weapon: attr(child, "weapon")?,
             min: attr(child, "min")?,
             max: attr(child, "max")?,
             damage: distance(child, "damage")?,
+            spare: child
+                .attribute("spare")
+                .map(|_| attr(child, "spare"))
+                .transpose()?,
         };
+        if keep.spare.is_some_and(|spare| spare < 0) {
+            bail!("{}: needs spare >= 0", at(child));
+        }
         if keep.min < 0 || keep.max <= keep.min {
             bail!("{}: needs 0 <= min < max", at(child));
         }
@@ -582,6 +592,7 @@ impl Knowledge {
                 band.set("min", keep.min)?;
                 band.set("max", keep.max)?;
                 band.set("damage", keep.damage)?;
+                band.set("spare", keep.spare)?;
                 keeps.set(keep.weapon, band)?;
             }
             row.set("keep", keeps)?;
@@ -717,6 +728,15 @@ mod tests {
         assert!(parse(&text.replace("grabs=", "grab=")).is_err());
         assert!(parse(&text.replace("weapon=\"2\"", "weapon=\"3\"")).is_err());
         assert!(parse(&text.replace("min=\"1000\"", "min=\"3000\"")).is_err());
+        assert_eq!(k.enemies[0].keeps[0].spare, None);
+        let spare =
+            parse(&text.replace("damage=\"unknown\"/>", "damage=\"unknown\" spare=\"6\"/>"))
+                .unwrap();
+        assert_eq!(spare.enemies[0].keeps[0].spare, Some(6));
+        assert!(
+            parse(&text.replace("damage=\"unknown\"/>", "damage=\"unknown\" spare=\"-1\"/>"))
+                .is_err()
+        );
         assert!(!k.enemies[0].parts);
         let parts =
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"yes\">"))

@@ -25,6 +25,8 @@ local UNPLANNED_TRIES = 6
 -- action probe falls short of it (the walk keeps a skin off furniture that
 -- the collision resolver lets the player press into).
 local LEAN_TICKS = C.SECOND
+-- How long a side waits after its last press for the press to show.
+local SIDE_SETTLE = C.SECOND
 
 -- The memory key (bot:remember) a <fight> step sets once it finds its
 -- enemy in `room`.
@@ -341,7 +343,8 @@ function BotNav.press_zone(bot, job)
                 job.label, job.index, #job.points, point[1], point[2]))
         elseif result.status == "unreachable"
             and (bot:distance(point[1], point[2]) <= C.APPROACH
-                or (not job.zone.inside and BotNav.within_reach(job.zone, here.x, here.z))) then
+                or (not job.zone.inside and BotNav.within_reach(job.zone, here.x, here.z)))
+            and job.near_spot ~= here.x .. "," .. here.z then
             -- The exact point is inside grown geometry, but the player is
             -- already beside it or within a reach of the zone: press from
             -- here, leaning in if the probe falls short (a side that gets
@@ -351,6 +354,10 @@ function BotNav.press_zone(bot, job)
             job.lean = 0
             job.ticks = 0
             job.side_presses = 0
+            -- Pressed from here once: a later side that cannot be reached
+            -- either does not press from this same spot again (406's drawer
+            -- waited out five sides standing still).
+            job.near_spot = here.x .. "," .. here.z
             bot:log(string.format("%s: near approach %d/%d (%d,%d) from (%d,%d)",
                 job.label, job.index, #job.points, point[1], point[2], here.x, here.z))
         elseif result.status ~= "moving" then
@@ -403,7 +410,13 @@ function BotNav.press_zone(bot, job)
             bot:press_action()
         end
     end
-    if job.ticks > (job.side or 4 * C.SECOND) then
+    -- A side whose presses are all spent and drew nothing within
+    -- SIDE_SETTLE is done: standing out the rest of the side's time was
+    -- most of the bot's idle time (three drawers, 3300 ticks each).
+    local settled = job.pattern ~= "door" and job.pattern ~= "hold"
+        and job.side_presses >= (job.presses or 1)
+        and job.ticks - job.last_press > SIDE_SETTLE
+    if settled or job.ticks > (job.side or 4 * C.SECOND) then
         bot:log(string.format("%s: nothing on approach %d; next side",
             job.label, job.index))
         local key = zone_key(bot, job.zone)

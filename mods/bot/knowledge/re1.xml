@@ -102,12 +102,16 @@
        Jill's run 210, so it can be outrun. prefer the shotgun (all three
        zombies): a head pop inside 3000 ends it in one or two shells, where
        the handgun takes nine rounds; zombies took about 80 handgun rounds
-       of a run that ran dry in the guardhouse. -->
+       of a run that ran dry in the guardhouse. A plain grenade (row 6:
+       201) kills one in a shot: spent only while more than `spare` rounds
+       are held, as the corridor zombie the bot cannot pass (213's grabbed
+       it on six passes) is worth one, and the lab's fights the rest. -->
   <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
          up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>
@@ -117,6 +121,7 @@
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>
@@ -126,6 +131,7 @@
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>

@@ -114,6 +114,18 @@ function on_bot_tick(bot)
         return
     end
     BOT_STATE.locked_ticks = 0
+    -- Idle: in control, out of combat, and standing where the last
+    -- controllable tick left the player. Counted by the planner's goal and
+    -- reported when the run finishes (BotPlanner.finish).
+    local last = BOT_STATE.idle_pos
+    if last and last.x == player.x and last.z == player.z and not BotTactics.active() then
+        local goal = BOT_STATE.plan and BOT_STATE.plan.goal
+        local key = room.id .. " " .. (goal and goal.label or "no goal"):sub(1, 60)
+        BOT_STATE.idle = BOT_STATE.idle or {}
+        BOT_STATE.idle[key] = (BOT_STATE.idle[key] or 0) + 1
+        BOT_STATE.idle_total = (BOT_STATE.idle_total or 0) + 1
+    end
+    BOT_STATE.idle_pos = { x = player.x, z = player.z }
 
     if BotSurvival.cure(bot, player) or BotSurvival.heal(bot, player) then
         return
