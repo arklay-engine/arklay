@@ -1,19 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 513, the Tyrant room (Jill, common bit 5B clear). The entry scene
-     breaks the pod and the Tyrant (id 0x0C) kills Wesker; the master key
-     (AOT 2, item bit 0x5F) is an item zone from the start, but its model
-     shows, and the room's main lets it be taken, only once the Tyrant is
-     dead (enemy bit 112). The <fight> holds the room until then; the key
-     is an ordinary pickup after it.
+<!-- 513, the Tyrant room. The entry scene breaks the pod and the Tyrant
+     (id 0x0C) wakes; the <fight> holds the room until it is dead (enemy
+     bit 112). The init takes one of two branches on common bit 5B:
 
-     The death also sets room bit 3 and scenario 0x37, turns door 0 (to
-     514) into message 159 and AOT 1 into the room's control device: Yes
-     unlocks the door (SCE_DOOR again) and sets room bit 6. Room bit 3 is
-     set only on the entry the Tyrant dies in; on a later one scenario 0x37
-     leaves door 0 a door and AOT 1 a plain message. -->
+     Clear (Wesker's branch): the Tyrant kills Wesker; the master key (AOT 2,
+     item bit 0x5F) is an item zone from the start, but its model shows, and
+     the room's main lets it be taken, only once the Tyrant is dead. The
+     death also sets room bit 3 and scenario 0x37, turns door 0 (to 514)
+     into message 159 and AOT 1 into the room's control device: Yes unlocks
+     the door (SCE_DOOR again) and sets room bit 6. Room bit 3 is set only
+     on the entry the Tyrant dies in; on a later one scenario 0x37 leaves
+     door 0 a door and AOT 1 a plain message.
+
+     Set (Barry's branch): door 0 is message 131 and AOT 1 message 160
+     for the whole entry. The death turns AOT 3 at (4166, 6696) into
+     event_17 (Barry's scene), whose end makes door 0 a door again and sets
+     no flag. So its step is done while common 5B is clear (the other
+     branch) or once door 0 is a live door (`opens`), and the control
+     device's step is done once door 0 is a door too (the death sets room
+     bit 3 in this branch as well). -->
 <bot format="2">
   <fight enemy="0x0C" bank="3" bit="112" label="the Tyrant"/>
-  <interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3"
+  <interact slot="3" bank="1" bit="0x5B" done="clear" opens="0"
+            label="Barry's event: door 0 opens"/>
+  <interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0"
             label="the control device: unlock door 0"/>
   <answer choice="yes" slot="1"/>
 </bot>
