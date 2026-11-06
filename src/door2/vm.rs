@@ -8,8 +8,11 @@
 //! Each frame `Door_move` runs every task until it yields, then `Door_Trans`
 //! draws the ten door parts. A fresh skip press (`Door_move`'s trigger
 //! check) stops task 10 at once. Once task 10 has ended `Door_move` draws
-//! nothing more, and when fade 0 has run out `Door_exit` holds the screen
-//! black and plays sound 1 when a `door_model_set` set attribute bit `0x800`.
+//! nothing more and returns without sleeping, so `Door_main` moves on to
+//! `Door_exit` from the next frame: once fade 0 has run out it holds the
+//! screen black and plays sound 1 when a `door_model_set` set attribute bit
+//! `0x800`. A door whose fade ran out before task 10 ended exits two frames
+//! after it, not one.
 //!
 //! Only the opcodes the retail DO2s use are run (control flow, variables,
 //! `work_set`/`speed_set`/`add_speed`/`add_aspeed`, the `member_*` position
@@ -149,6 +152,9 @@ pub struct Vm {
     sfx: Vec<Sfx>,
     frame: u32,
     ended: bool,
+    /// `Door_move` has seen task 10 gone: it returns without sleeping, so
+    /// `Door_main` moves on to `Door_exit`, which runs from the next frame.
+    exiting: bool,
     /// The last step ran `Door_Trans`.
     drawn: bool,
     done: bool,
@@ -176,6 +182,7 @@ impl Vm {
             sfx: Vec::new(),
             frame: 0,
             ended: false,
+            exiting: false,
             drawn: false,
             done: false,
             faults: 0,
@@ -193,9 +200,11 @@ impl Vm {
         self.sfx.clear();
         if !self.done {
             self.drawn = !self.ended;
-            if self.ended {
-                // `Door_move` finds task 10 gone and draws nothing.
+            if self.exiting {
                 self.exit_if_faded();
+            } else if self.ended {
+                // `Door_move` finds task 10 gone and draws nothing.
+                self.exiting = true;
             } else {
                 // The art is loaded before the door starts.
                 self.vars[VAR_LOADING] = 0;
@@ -1114,6 +1123,31 @@ mod tests {
         assert!(frame.done && frame.black);
         assert_eq!(frame.sfx.len(), 1);
         assert_eq!(frame.sfx[0].id, 1);
+    }
+
+    #[test]
+    fn the_door_exits_two_frames_after_task_10_once_the_fade_is_over() {
+        // The fade runs out on the second frame; task 10 sleeps on and ends.
+        let script = [
+            model_set(0, 0x800, [0, 0, 0]),
+            vec![0x53, 0x00, 0x02, 0x07, 0x00, 0x40],
+            vec![0x09, 0x0A, 0x06, 0x00],
+            vec![0x01, 0x00],
+        ]
+        .concat();
+        let mut vm = Vm::new(&do2(&[&script]), DoorParams::default());
+        let mut frames = 0;
+        while !vm.ended {
+            vm.step();
+            frames += 1;
+            assert!(frames < 100);
+        }
+        assert!(vm.fade.state < 0);
+        // `Door_move` sees task 10 gone, then `Door_exit` runs.
+        assert!(!vm.step().done);
+        let frame = vm.step();
+        assert!(frame.done);
+        assert_eq!(frame.sfx.len(), 1);
     }
 
     #[test]
