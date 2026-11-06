@@ -666,21 +666,18 @@ pub fn floor_sound(zones: &[crate::state::FootstepZone], x: i32, z: i32, floor: 
 const WATER_FOOTSTEP: u8 = 0x1A;
 
 /// `Snd_se_walk`'s sound for a footfall, the player's or a script
-/// character's: the room bank's slot of the floor's zone (or the water's),
-/// plus the walk's or run's 0 or 1, placed in 3D from where it fell.
+/// character's: the room bank's slot of the zone on the walker's `Floor`
+/// (`+0x106`) under the foot (or the water's), plus the walk's or run's 0 or
+/// 1, placed in 3D from where it fell.
 pub fn footstep_sound(
     zones: &[crate::state::FootstepZone],
     step: &crate::player::Footstep,
+    floor: u8,
 ) -> SoundId {
     let zone = if step.water {
         WATER_FOOTSTEP
     } else {
-        floor_sound(
-            zones,
-            step.pos[0],
-            step.pos[2],
-            crate::sca::floor_of(step.pos[1]),
-        )
+        floor_sound(zones, step.pos[0], step.pos[2], floor)
     };
     SoundId {
         kind: Kind::Room,
@@ -777,7 +774,7 @@ mod tests {
             sound_type: 1,
             water: false,
         };
-        let id = footstep_sound(&[], &step);
+        let id = footstep_sound(&[], &step, 0);
         assert_eq!((id.kind, id.slot, id.positional), (Kind::Room, 0x1e, true));
         let id = footstep_sound(
             &[],
@@ -785,6 +782,7 @@ mod tests {
                 water: true,
                 ..step
             },
+            0,
         );
         assert_eq!(id.slot, 0x1b);
     }

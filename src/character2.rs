@@ -78,10 +78,12 @@ pub fn tick(
                 game.re2.raise_room_flag(flag);
             }
             sce_blood(game, &mut character);
-            // `Snd_se_walk` from the character's own walk.
+            // `Snd_se_walk` from the character's own walk. Their `Floor` isn't
+            // modelled, so the zone is the one at the step's height.
             for step in character.body.take_footsteps() {
+                let floor = crate::sca::floor_of(step.pos[1]);
                 game.re2.sounds.push(crate::scd2::host::SoundRequest {
-                    id: crate::se2::footstep_sound(&room.footstep_zones, &step),
+                    id: crate::se2::footstep_sound(&room.footstep_zones, &step, floor),
                     pos: step.pos,
                 });
             }

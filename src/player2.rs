@@ -1190,9 +1190,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
-    if mover.work.routine[0] == MODE_MOVE
-        && matches!(mover.work.routine[1], MOVE_STAIRS | MOVE_JUMP_DOWN)
-    {
+    if mover.work.routine[0] == MODE_MOVE && mover.work.routine[1] == MOVE_JUMP_DOWN {
         mover.work.floor = crate::sca::floor_of(mover.player.pos[1]);
     }
     mover.pl_neck();
@@ -1738,6 +1736,14 @@ impl Mover<'_, '_> {
             2 | 3 => {
                 if self.work.routine[2] == 2 {
                     self.work.routine[2] = 3;
+                    // `Floor` steps the whole flight here, `Timer1` floors up or
+                    // down, before the first step (`0x4DB1B7`).
+                    let flight = self.work.timer1 as u8;
+                    self.work.floor = if self.work.timer2 == 0 {
+                        self.work.floor.wrapping_add(flight)
+                    } else {
+                        self.work.floor.wrapping_sub(flight)
+                    };
                     self.work.bank = Bank::Room;
                     self.work.move_no = climb;
                     self.work.move_cnt = 0;
@@ -5630,6 +5636,31 @@ mod tests {
         assert_eq!(setup.work.routine[1], MOVE_STAIRS);
         assert_eq!(setup.work.timer0, 0x400);
         assert_eq!(setup.work.timer2, 1);
+    }
+
+    #[test]
+    fn a_climb_steps_floor_the_whole_flight_before_its_first_step() {
+        for (pos, angle, start) in [([1500, 0, 700], 0xC00, 0), ([1500, 0, 2300], 0x400, 5)] {
+            let mut setup = at_stairs(pos, angle);
+            setup.work.floor = start;
+            setup.tick(action(), 200);
+            let flight = setup.work.timer1 as u8;
+            let up = setup.work.timer2 == 0;
+            assert!(flight > 0);
+            while setup.work.routine[2] < 3 {
+                assert_eq!(setup.work.floor, start, "the turn keeps it");
+                setup.tick(Input::default(), 200);
+            }
+            let want = if up { start + flight } else { start - flight };
+            assert_eq!(setup.work.floor, want);
+            for _ in 0..200 {
+                if setup.work.routine[1] != MOVE_STAIRS {
+                    break;
+                }
+                setup.tick(Input::default(), 200);
+                assert_eq!(setup.work.floor, want, "not with the height");
+            }
+        }
     }
 
     #[test]

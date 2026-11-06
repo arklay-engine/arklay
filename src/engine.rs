@@ -13754,9 +13754,12 @@ fn play_re2_sounds(
     for request in requests {
         play(request.id, request.pos);
     }
+    // `Snd_se_walk` reads the player's `Floor`, which the stairs step at their
+    // start rather than with the height.
+    let floor = game.re2.player.floor;
     for footstep in footsteps {
         play(
-            se2::footstep_sound(&room.footstep_zones, &footstep),
+            se2::footstep_sound(&room.footstep_zones, &footstep, floor),
             footstep.pos,
         );
     }
