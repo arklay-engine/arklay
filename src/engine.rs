@@ -2995,6 +2995,7 @@ impl GameSession {
         action: bool,
     ) -> Result<()> {
         self.game.countdown_hud = None;
+        self.game.apply_re2_no_enemies();
         self.finish_menu_request(pack);
         let cut = Some((self.loaded.id, self.loaded.room.current_cut));
         let previous = self.tick_cut.filter(|(room, _)| *room == self.loaded.id);
@@ -15386,8 +15387,10 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         context.npc_models,
         context.enemy_lua.as_deref_mut(),
     );
-    // `Sce_scheduler` skips the first tick after a door: `fg_stop` is still up.
+    // `Sce_scheduler` skips the first tick after a door: `fg_stop` is still up,
+    // and it's still up for the next tick's `Pad_set`.
     if std::mem::take(&mut context.game.re2.door_settling) {
+        context.game.re2.door_key_stop = true;
         return;
     }
     // And doesn't run at all once the player's death has stopped the routines.
@@ -15763,6 +15766,7 @@ fn tick_room_timed(
     } else {
         input
     };
+    context.game.re2.door_key_stop = false;
     // The queue the ribbon submits to lasts one frame.
     context.game.tyrant.trail.quads.clear();
     // The original's `main_loop` rolls the screen-shake offset at the very top
@@ -16288,7 +16292,12 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
     let selected = if game.camera.locked && game.camera.current_cut < room.cuts.len() {
         game.camera.current_cut
     } else if let Some(pos) = pos {
-        player::camera_for_position(room, game.camera.current_cut, pos)
+        let floor = if game.is_re2_room {
+            game.re2.player.floor
+        } else {
+            crate::sca::floor_of(pos[1])
+        };
+        player::camera_for_position_on(room, game.camera.current_cut, pos, floor)
     } else {
         room.current_cut
     };

@@ -727,7 +727,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     and args.no_enemies
                     and args.no_enemies_room in (None, game.u16(ROOM))
                 ):
-                    remove_enemies(game, set(args.keep_enemy))
+                    room = (game.u16(STAGE) + 1) << 8 | game.u16(ROOM)
+                    keep = set(args.keep_enemy) | {
+                        slot for kept_room, slot in args.keep_enemy_in if kept_room == room
+                    }
+                    remove_enemies(game, keep)
                 if tick < 0:
                     if boot_tick > BOOT_TICKS:
                         raise SystemExit("the title route did not reach play")
@@ -936,6 +940,11 @@ def main() -> int:
             "--no-enemies-room", type=lambda text: int(text, 0), default=None
         )
         command.add_argument("--keep-enemy", action="append", type=int, default=[])
+        command.add_argument(
+            "--keep-enemy-in", action="append", default=[], metavar="ROOM:SLOT",
+            type=lambda text: (int(text.split(":")[0], 16), int(text.split(":")[1])),
+            help="with --no-enemies, leave this slot running in this room only (three hex digits)",
+        )
         command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
         command.add_argument(
             "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE[:CUT]",

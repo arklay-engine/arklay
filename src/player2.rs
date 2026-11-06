@@ -1191,10 +1191,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         _ => {}
     }
     if mover.work.routine[0] == MODE_MOVE
-        && matches!(
-            mover.work.routine[1],
-            MOVE_STAIRS | MOVE_CLIMB | MOVE_JUMP_DOWN
-        )
+        && matches!(mover.work.routine[1], MOVE_STAIRS | MOVE_JUMP_DOWN)
     {
         mover.work.floor = crate::sca::floor_of(mover.player.pos[1]);
     }
@@ -1569,8 +1566,11 @@ impl Mover<'_, '_> {
             (0x1D, 1000, 0x31)
         };
         let frame = self.work.move_cnt;
+        // `Floor` goes up a floor here, a dozen frames before the body does
+        // (`0x4DB79A`), and the camera's zones and collision see it from then.
         if frame == 0x11 {
             self.work.damage_cnt |= DAMAGE_LOCK;
+            self.work.floor = self.work.floor.wrapping_add(1);
         }
         if frame == lift {
             self.work.spd[0] = reach;

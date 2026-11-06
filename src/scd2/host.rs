@@ -44,6 +44,9 @@ pub struct Re2State {
     pub door_settling: bool,
     /// The same tick, as the enemy slots see it.
     pub door_stop: bool,
+    /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
+    /// `Pad_set` has masked the pad with it.
+    pub door_key_stop: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// Each task's `Speed_set`s: speeds of position and rotation, then what
@@ -474,6 +477,7 @@ impl Default for Re2State {
             pending_sca: Vec::new(),
             door_settling: false,
             door_stop: false,
+            door_key_stop: false,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
@@ -575,9 +579,13 @@ impl Re2State {
         Some(())
     }
 
-    /// Whether a script holds the player's input.
+    /// Whether a script holds the player's input, or a door has just handed
+    /// back: the original's first tick of play after a door still has
+    /// `fg_stop` at `0xEF000000`, input bit included, when `Pad_set` maps the
+    /// pad, so a direction held through the door moves the player a tick
+    /// later ([`Self::door_key_stop`]).
     pub fn input_stopped(&self) -> bool {
-        self.flag(STOP_BANK, STOP_INPUT)
+        self.flag(STOP_BANK, STOP_INPUT) || self.door_key_stop
     }
 
     /// The `em` and `es` trace fields: a character's position, facing and
@@ -2622,6 +2630,28 @@ mod tests {
         state.set_flag(STOP_BANK, STOP_INPUT, 0);
         state.set_key(CONFIRM | FORWARD);
         assert_eq!(state.key, CONFIRM | FORWARD);
+        assert_eq!(state.key_trg, 0);
+    }
+
+    #[test]
+    fn the_tick_after_a_doors_hand_back_masks_the_pad_as_a_stop() {
+        const CONFIRM: u16 = 0x1000;
+        const FORWARD: u16 = 0x0001;
+        const RUN: u16 = 0x0200;
+        // The original's `fg_stop` is `0xEF000000` at that tick's `Pad_set`.
+        let mut state = Re2State {
+            door_key_stop: true,
+            ..Default::default()
+        };
+        assert!(state.input_stopped());
+        state.set_key(CONFIRM | FORWARD | RUN);
+        assert_eq!(
+            state.key, CONFIRM,
+            "a run held through the door waits a tick"
+        );
+        state.door_key_stop = false;
+        state.set_key(CONFIRM | FORWARD | RUN);
+        assert_eq!(state.key, CONFIRM | FORWARD | RUN);
         assert_eq!(state.key_trg, 0);
     }
 

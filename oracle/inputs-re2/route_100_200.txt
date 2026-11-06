@@ -1,0 +1,345 @@
+# The route: from the new game through every real door, 100 -> 101 -> 102 -> 118 -> 119 -> 11A -> 11B -> 103 -> 200, with no enemies but Kendo (oracle/re2.md).
+0 up run
+25 right
+26 right
+27 up run
+52 up run
+65 right
+77 right
+85 up
+91 left
+103 left
+112 up run
+137 up run
+162 up run
+187 left
+188 left
+189 up run
+214 up run
+227 left
+239 left
+250 up
+256 right
+268 right
+271 up run
+288 right
+300 right
+311 up
+317 left
+329 left
+341 left
+342 up run
+367 up run
+392 left
+393 left
+394 up run
+419 left
+431 left
+443 up
+449 left
+461 left
+463 up
+469 left
+471 up
+475 left
+477 left
+478
+480 confirm
+482
+700 up
+760
+790 confirm
+792
+1300 up
+1330
+2480 down
+2482
+2490 left
+2540 up
+2680
+2685 right
+2690 up
+2895
+2900 left
+2904 up
+2980
+2985 right
+2991 up
+3036
+3038 left
+3049
+3052 action
+3054
+3396 up run
+3444
+3538 up run
+3580
+3584 up run
+3620
+3624 left
+3626
+3628 up
+3635
+3639 right
+3648
+3650 up
+3657
+3661 right
+3668
+3670 up run
+3689
+3693 left
+3695
+3697 up
+3702
+3706 right
+3720
+3722 up run
+3779
+3783 right
+3787
+3789 up run
+3799
+3803 left
+3808
+3810 up
+3814
+3818 right
+3821
+3823 up
+3833
+3843 action
+3847
+3951 left
+3956
+3958 up run
+3993
+3997 left
+4003
+4005 up run
+4022
+4026 right
+4031
+4033 up
+4039
+4043 left
+4048
+4050 up
+4062
+4066 right
+4068
+4071 confirm
+4073
+4185 up run
+4201
+4205 right
+4211
+4213 up
+4217
+4221 right
+4228
+4230 up
+4237
+4241 right
+4244
+4246 up run
+4293
+4297 left
+4300
+4302 up
+4310
+4314 right
+4325
+4327 up
+4332
+4336 right
+4342
+4345 up
+4353
+4357 confirm
+4359
+4470 left
+4472
+4474 up run
+4483
+4487 right
+4490
+4492 up
+4495
+4499 left
+4514
+4517 confirm
+4519
+4643 up
+4668
+4712 confirm
+4714
+4800 left
+4813
+4815 up run
+4903
+4907 left
+4915
+4917 up run
+4924
+4928 left
+4934
+4936 up
+4938
+4942 right
+4954
+4956 up
+4966
+4976 action
+4980
+5087 left
+5091
+5093 up run
+5111
+5115 left
+5121
+5123 up run
+5136
+5140 right
+5143
+5145 up
+5150
+5154 left
+5164
+5166 up run
+5251
+5255 left
+5260
+5262 up run
+5268
+5272 left
+5277
+5279 up
+5282
+5286 right
+5291
+5293 up
+5296
+5300 right
+5304
+5306 up
+5316
+5326 action
+5330
+5434 right
+5442
+5444 up run
+5478
+5482 right
+5491
+5493 up run
+5514
+5518 right
+5525
+5527 up
+5532
+5536 left
+5544
+5546 up run
+5587
+5591 right
+5598
+5600 up
+5609
+5613 right
+5621
+5623 up
+5633
+5643 action
+5647
+5751 left
+5764
+5766 up run
+5787
+5791 left
+5809
+5811 up run
+5834
+5838 left
+5842
+5844 up
+5850
+5854 right
+5862
+5864 up run
+5930
+5934 right
+5939
+5941 up
+5955
+5959 left
+5971
+5973 up run
+5990
+5994 up
+5999
+6003 left
+6010
+6012 up run
+6024
+6028 right
+6032
+6034 up
+6038
+6042 left
+6046
+6048 up
+6058
+6068 action
+6072
+6176 right
+6187
+6189 up run
+6198
+6202 right
+6214
+6216 up run
+6225
+6229 left
+6234
+6236 up
+6240
+6244 right
+6251
+6253 up run
+6388
+6392 right
+6394
+6396 up run
+6403
+6407 left
+6409
+6411 up
+6415
+6419 up run
+6430
+6434 left
+6438
+6440 up
+6443
+6447 left
+6452
+6454 up run
+6472
+6476 right
+6481
+6483 up
+6490
+6494 left
+6502
+6504 up run
+6544
+6548 left
+6552
+6554 up
+6561
+6565 up
+6575
+6585 action
+6589
+7300

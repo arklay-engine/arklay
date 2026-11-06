@@ -1204,6 +1204,65 @@ mod tests {
     }
 
     #[test]
+    fn no_enemies_switches_off_every_slot_but_the_kept_rooms_ones() {
+        let room = RoomId::parse("1010").unwrap();
+        let character = Character {
+            id: 0x48,
+            model: 0x48,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 3,
+            work: player2::Work::default(),
+            body: crate::player::spawn(room, &RoomState::default()),
+            kind: 0,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            zombie: None,
+        };
+        let mut game = GameState::default();
+        game.id = room;
+        game.re2.characters.0 = vec![
+            Some(Box::new(character.clone())),
+            None,
+            Some(Box::new(character)),
+        ];
+        let flags = |game: &GameState| {
+            game.re2
+                .characters
+                .0
+                .iter()
+                .map(|c| c.as_ref().map(|c| c.be_flg))
+                .collect::<Vec<_>>()
+        };
+
+        game.apply_re2_no_enemies();
+        assert_eq!(
+            flags(&game),
+            [Some(3), None, Some(3)],
+            "no setup leaves them alone"
+        );
+
+        game.re2_no_enemies = Some(vec![(0x101, 0), (0x102, 2)]);
+        game.apply_re2_no_enemies();
+        assert_eq!(
+            flags(&game),
+            [Some(3), None, Some(2)],
+            "slot 0 is kept in room 101 only"
+        );
+
+        game.id = RoomId::parse("1020").unwrap();
+        game.re2.characters.0[0].as_mut().unwrap().be_flg = 1;
+        game.re2.characters.0[2].as_mut().unwrap().be_flg = 1;
+        game.apply_re2_no_enemies();
+        assert_eq!(flags(&game), [Some(0), None, Some(1)]);
+    }
+
+    #[test]
     fn marvins_right_hand_holds_the_gun_with_type_0x800() {
         let mut character = Character {
             id: MARVIN,
