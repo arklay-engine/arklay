@@ -14939,17 +14939,20 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
                 }
             }
         }
+        // `Cut_replace`: camera `a` and camera `b` trade places in every
+        // zone's `cam_from` and `cam_to` (the gates are not touched).
         CutEdit::Replace { a, b } => {
-            let swap = |value: &mut u8| {
+            let (a, b) = (i16::from(a), i16::from(b));
+            let swap = |value: &mut i16| {
                 if *value == a {
                     *value = b;
                 } else if *value == b {
                     *value = a;
                 }
             };
-            for gate in &mut room.zone_gates {
-                swap(&mut gate.flag);
-                swap(&mut gate.floor);
+            for zone in &mut room.zones {
+                swap(&mut zone.cam_from);
+                swap(&mut zone.cam_to);
             }
         }
         CutEdit::Light { cut, index, change } => {
@@ -34290,5 +34293,24 @@ end
             trailing: Vec::new(),
         });
         assert!(scripts_raise_screen_border(&event));
+    }
+
+    #[test]
+    fn cut_replace_swaps_camera_ids_in_the_zones_and_leaves_the_gates() {
+        use crate::scd2::host::CutEdit;
+        let zone = |cam_from, cam_to| crate::state::Zone {
+            cam_from,
+            cam_to,
+            corners: [[0; 2]; 4],
+        };
+        let mut room = RoomState {
+            zones: vec![zone(1, 2), zone(2, 3), zone(4, 0), zone(3, 4)],
+            zone_gates: vec![crate::state::ZoneGate { flag: 2, floor: 4 }; 4],
+            ..RoomState::default()
+        };
+        apply_re2_cut_edit(&mut room, CutEdit::Replace { a: 2, b: 4 });
+        let ids: Vec<_> = room.zones.iter().map(|z| (z.cam_from, z.cam_to)).collect();
+        assert_eq!(ids, [(1, 4), (4, 3), (2, 0), (3, 2)]);
+        assert!(room.zone_gates.iter().all(|g| g.flag == 2 && g.floor == 4));
     }
 }
