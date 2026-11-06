@@ -55,16 +55,19 @@ end
 -- probe yet, but its zone is here and overlaps `zone`, where the last step
 -- acted. That step's room event may still be arming it (116's rack turns
 -- AOT 5 into the probe once the lift its pickup started has played). A
--- probe elsewhere in the room waits on some other step.
-function BotPuzzle.use_pending(bot, zone)
-    if not zone then
+-- probe elsewhere in the room waits on some other step. With `anywhere`
+-- (just after entering the room) any probe here counts: the room's main
+-- script may re-arm it a few ticks after the init set it as something else
+-- (40A's bookshelf, an event in the init and the red book's probe in main).
+function BotPuzzle.use_pending(bot, zone, anywhere)
+    if not zone and not anywhere then
         return nil
     end
     for _, fact in ipairs(meta(bot).uses or {}) do
         local action = BotNav.action_by_slot(bot, fact.slot)
         if bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
             and action and action.kind ~= "flag_bank_set"
-            and BotPuzzle.zones_overlap(action, zone) then
+            and (anywhere or BotPuzzle.zones_overlap(action, zone)) then
             return fact
         end
     end
@@ -144,6 +147,9 @@ end
 -- object out of an earlier step's band (40D's third crate, lined up with
 -- the ladder corridor and then pushed east).
 --
+-- A step with an `after` flag that is still clear holds the sequence: no
+-- step is offered until the flag is set.
+--
 -- A <camera> step without a flag has nothing to persist: it counts as done
 -- once its cut was entered during the current room entry (see
 -- BotPuzzle.visited), so a later entry walks it again.
@@ -178,6 +184,11 @@ function BotPuzzle.next_interact(bot)
             finished = visits[index] == true
         end
         if not finished then
+            -- A step behind an `after` flag waits for it; the sequence holds
+            -- (a <use> may set it, as 40A's red book moves the bookcase).
+            if fact.after_bank and not bot:flag(fact.after_bank, fact.after_bit) then
+                return nil, index - 1, #interacts
+            end
             return fact, index, #interacts
         end
     end

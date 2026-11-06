@@ -2674,6 +2674,8 @@ impl UserData for BotCtx {
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
                 row.set("done_clear", fact.done_clear)?;
+                row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }
@@ -5845,6 +5847,28 @@ mod tests {
         assert_eq!(pending("other", "nil", "[0x1C] = true", ""), "none");
         let touching = "{ x = 11820, z = 7340, width = 10, depth = 10 }";
         assert_eq!(pending("other", touching, "[0x1C] = true", ""), "rack");
+        // Just entered (40A): a probe anywhere in the room counts.
+        let anywhere = |kind: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local bot = {{
+                        flag = function() return false end,
+                        has_item = function(_, id) return id == 0x3E end,
+                        actions = function() return {{
+                            {{ slot = 5, kind = "{kind}", x = 11300, z = 9600, width = 1100, depth = 1700 }},
+                        }} end,
+                        room_meta = function() return {{ uses = {{
+                            {{ slot = 5, item = 0x3E, bank = 0, bit = 0x24, label = "red book" }},
+                        }} }} end,
+                    }}
+                    local fact = BotPuzzle.use_pending(bot, nil, true)
+                    return fact and fact.label or "none""#
+                ),
+            )
+        };
+        assert_eq!(anywhere("event"), "red book");
+        assert_eq!(anywhere("flag_bank_set"), "none");
     }
 
     #[test]

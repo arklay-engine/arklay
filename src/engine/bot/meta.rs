@@ -8,7 +8,8 @@
 //! Format 2 adds room facts (never coordinates or walk paths) a generic
 //! planner reads: `<interact>` (an AOT slot and the flag that shows it is
 //! done; `done="clear"` when the flag clearing shows it, as bank 7's item
-//! bits do), `<camera>` (a camera cut to enter, which starts a room scene),
+//! bits do; with `after_bank`/`after_bit`, offered only once that flag is
+//! set), `<camera>` (a camera cut to enter, which starts a room scene),
 //! `<use>` (an item to USE from the menu while standing in an AOT slot's
 //! use-item zone), `<answer>` (the choice to make at a yes/no prompt) and
 //! `<avoid>` (an AOT slot the planner should not use; with `bank`/`bit` and
@@ -121,6 +122,11 @@ pub struct Interact {
     /// not set. Bank 7 runs this way: a set bit means the room's item is
     /// still there, and taking it clears the bit.
     pub done_clear: bool,
+    /// `<interact after_bank after_bit>`: the step is offered only while
+    /// this flag is set; until then the sequence waits (and a `<use>` may
+    /// run). 40A's bookcase gap is an event only once the red book moved
+    /// the bookcase.
+    pub after: Option<(u8, u8)>,
     pub label: Option<String>,
 }
 
@@ -584,18 +590,32 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         },
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
+        after: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
 
 fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["slot", "bank", "bit", "done", "label", "character"])?;
+    check_attributes(
+        node,
+        &[
+            "slot",
+            "bank",
+            "bit",
+            "done",
+            "after_bank",
+            "after_bit",
+            "label",
+            "character",
+        ],
+    )?;
     check_leaf(node)?;
     let done_clear = parse_done(node)?;
     Ok(Interact {
         target: Target::Slot(attr(node, "slot")?),
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
+        after: after_flag(node)?,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -696,6 +716,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         },
         flag,
         done_clear: false,
+        after: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -715,6 +736,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         target: Target::Camera(attr(node, "cut")?),
         flag,
         done_clear: false,
+        after: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1071,6 +1093,7 @@ mod tests {
             target: Target::Slot(slot),
             flag: Some((bank, bit)),
             done_clear: false,
+            after: None,
             label: Some(label.to_string()),
         };
         let expected = vec![
@@ -1146,24 +1169,28 @@ mod tests {
                     target: Target::Slot(4),
                     flag: Some((1, 0x22)),
                     done_clear: false,
+                    after: None,
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
                     target: Target::Slot(5),
                     flag: Some((0, 3)),
                     done_clear: false,
+                    after: None,
                     label: None,
                 },
                 Interact {
                     target: Target::Camera(3),
                     flag: None,
                     done_clear: false,
+                    after: None,
                     label: Some("north hall".to_string()),
                 },
                 Interact {
                     target: Target::Camera(2),
                     flag: Some((1, 0x05)),
                     done_clear: false,
+                    after: None,
                     label: None,
                 },
                 Interact {
@@ -1177,6 +1204,7 @@ mod tests {
                     },
                     flag: None,
                     done_clear: false,
+                    after: None,
                     label: Some("armor onto the vent".to_string()),
                 },
                 Interact {
@@ -1190,6 +1218,7 @@ mod tests {
                     },
                     flag: None,
                     done_clear: false,
+                    after: None,
                     label: Some("shelf off the score".to_string()),
                 },
             ]
@@ -1251,6 +1280,7 @@ mod tests {
                 target: Target::Climb { object: 0, slot: 3 },
                 flag: Some((7, 35)),
                 done_clear: true,
+                after: None,
                 label: Some("the crank".to_string()),
             }]
         );
@@ -1281,6 +1311,7 @@ mod tests {
                 },
                 flag: Some((0, 0x0B)),
                 done_clear: false,
+                after: None,
                 label: Some("statue off the balcony".to_string()),
             }]
         );
@@ -1306,6 +1337,23 @@ mod tests {
         let camera = r#"<bot format="2"><camera cut="1" bank="1" bit="2" done="clear"/></bot>"#;
         let error = parse(camera).unwrap_err().to_string();
         assert!(error.contains("unknown attribute `done`"), "{error}");
+    }
+
+    #[test]
+    fn interact_may_wait_for_an_after_flag() {
+        let text = r#"<bot format="2">
+            <interact slot="7" bank="0" bit="0x44" after_bank="0" after_bit="0x25"/>
+            <interact slot="5" bank="1" bit="2"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts[0].after, Some((0, 0x25)));
+        assert_eq!(meta.interacts[1].after, None);
+        let half = r#"<bot format="2"><interact slot="7" bank="0" bit="1" after_bit="2"/></bot>"#;
+        let error = parse(half).unwrap_err().to_string();
+        assert!(
+            error.contains("both `after_bank` and `after_bit`"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -1470,6 +1518,7 @@ mod tests {
                 ("11A", 4, 0x2C),
                 ("11A", 6, 0x29),
                 ("301", 4, 0x1D),
+                ("40A", 5, 0x3E),
             ]
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));

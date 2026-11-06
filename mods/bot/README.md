@@ -113,8 +113,10 @@ Priorities, highest first:
    the zone that goal acted on (`BotPuzzle.use_pending`). The step's room
    event may still be arming the probe: 116's rack turns AOT 5 into one
    only after the lift that the shotgun pickup starts, and 10F's hollow
-   arms after the gold emblem pickup. The log line is `waiting for the use
-   probe`. Then the item errands (`BotPuzzle.errands`): a `<deliver>` here
+   arms after the gold emblem pickup. Entering a room counts as such a goal
+   done anywhere in it: 40A's init sets the bookshelf as an event and its
+   main script re-arms the red book's probe a few ticks later. The log line
+   is `waiting for the use probe`. Then the item errands (`BotPuzzle.errands`): a `<deliver>` here
    whose item is held, whose `after` flag is set and whose done flag is
    clear walks into a switch zone that cuts to camera `cut` and waits for
    the flag; then a `<fetch>` here whose done flag is set and whose item is
@@ -686,7 +688,7 @@ walk paths, have no children, and are an error in a format-1 file:
 
 | Element | Attributes | Meaning |
 | --- | --- | --- |
-| `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. |
+| `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. With an `after` flag the step is offered only while that flag is set; until then the sequence holds and no later step is offered (a `<use>` may set it). |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
@@ -760,6 +762,7 @@ files. The checked-in facts:
 | 402 | `<interact slot="3" bank="0" bit="0x43">`: pulling the bath plug makes AOT 1 the key `0x3B` (to 411). |
 | 406 | `<push object="1" slot="5" direction="north" clear="full">` (the west crate deep into the recess behind it), `<push object="0" slot="5" direction="west">` (the east crate off the hatch, pushed from the 335-unit strip beside it), then `<interact slot="5" bank="0" bit="0x45">` and `<answer choice="yes" slot="5">`: Yes opens the ladder door down to 40D, whose init sets scenario `0x45`. |
 | 40D | Six `<push>` steps make the bridge over the water to 40E. Objects 3 and 1 go `direction="south"` into AOT 2's edge zone (done flags scenario `0x39`, then `0x38`; the second clears the first). Object 2 stands against the room's north wall: `axis="x"` onto the ladder corridor's AOT 10, `south` `until="stop"`, `east` `until="stop"`, then `south` into the water. Bit `0x39` is set again only by the third crate. |
+| 40A | `<interact slot="5" bank="7" bit="0x4E" done="clear">` with `<answer choice="yes" slot="5">`: the bookshelf hands over document `0x69`. `<use>` the red book (`0x3E`, from 401) at slot 5, done flag scenario `0x24`: the bookcase slides aside (scenario `0x25`). Then `<interact slot="7" bank="0" bit="0x44" after_bank="0" after_bit="0x25">`: the gap behind it turns on door 2 to 40C, whose init sets scenario `0x44`. |
 | 411 | `<interact slot="1" bank="0" bit="0x23">` with `<answer choice="yes" slot="1">`: the drain switch empties the aqua ring (40E/40F/411 load dry). Then `<interact slot="2" bank="2" bit="36">` with `<answer choice="yes" slot="2">`: the lock switch, which turns 40E's door 2 to 410 into a door. |
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
 | 20D | Jill: `<deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62">`: poisoned Richard waits (`0x62`) for the serum; walking into camera 3 with it hands it over and sets `0x61` (so does his death after 420 seconds). Until then the door to 20E is a message. |

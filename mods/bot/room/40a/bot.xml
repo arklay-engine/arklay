@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 40A guardhouse room behind 408's door 2 (Dorm key 003, 0x3A). The
+     bookshelf (AOT 5) asks to look closer: Yes hands over document 0x69
+     (item bit 78 clears). AOT 5 is then a use-item zone for the red book
+     (0x3E, from 401): using it sets scenario 0x24, the bookcase slides
+     aside (scenario 0x25 set) and AOT 7 in the gap behind it becomes the
+     event that turns on door 2, the passage to 40C, Plant 42's room. 40C's
+     init sets scenario 0x44, which opens 408's door 3 to 40C for later. -->
+<bot format="2">
+  <interact slot="5" bank="7" bit="0x4E" done="clear" label="the bookshelf's document"/>
+  <answer choice="yes" slot="5" label="look closer at the bookshelf"/>
+  <use slot="5" item="0x3E" bank="0" bit="0x24" label="the red book on the shelf"/>
+  <interact slot="7" bank="0" bit="0x44" after_bank="0" after_bit="0x25" label="the passage behind the bookcase"/>
+</bot>
