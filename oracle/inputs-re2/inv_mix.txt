@@ -1,0 +1,21 @@
+# room 102: COMBN the green herb with the red herb and answer yes (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 down
+444
+460 down
+464
+480 confirm
+484
+500 right
+504
+520 confirm
+524
+600 confirm
+604
+700 start
+704

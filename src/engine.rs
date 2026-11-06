@@ -627,6 +627,7 @@ pub fn run_with_options(
                         re2_neck_position: None,
                         re2_xa_volume: None,
                         re2_inventory: None,
+                        re2_item_page: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -4323,6 +4324,9 @@ impl GameSession {
         }
         self.game.message_menu = true;
         self.freeze_room_frame = true;
+        if self.game.is_re2_room {
+            self.game.open_re2_items();
+        }
     }
 
     /// Run `f` on the pause-menu slot with the session's game state lent to
@@ -4393,6 +4397,7 @@ impl GameSession {
     /// [`player::PlayerState::menu_exit_restore`]).
     fn close_menu(&mut self) {
         self.menu = None;
+        self.game.close_re2_items();
         self.examine = None;
         self.item_box = None;
         if std::mem::take(&mut self.map_direct) {
@@ -5659,6 +5664,10 @@ impl GameSession {
             right: input.right,
             cancel: input.run || ui.cancel,
         };
+        if self.game.re2_items.is_some() {
+            self.tick_re2_items(pack, ui, message_input);
+            return;
+        }
         // The CHECK slide and the examine viewer own the frame, messages
         // included: the viewer waits on its own messages. The original's menu
         // task runs before the message task, so a description the viewer asks
@@ -5843,6 +5852,52 @@ impl GameSession {
             return;
         }
         self.apply_menu_event(pack, event);
+    }
+
+    /// One tick of RE2's status screen: its item page, as the original runs
+    /// it, before the message's tick (a confirm that closes a message reaches
+    /// the page on the next tick), then the menu script, which only draws.
+    fn tick_re2_items(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
+        use game::status2::{Input, Sound};
+        let input = Input {
+            up: ui.up,
+            down: ui.down,
+            left: ui.left,
+            right: ui.right,
+            confirm: ui.confirm,
+            cancel: ui.cancel,
+            start: ui.start && !ui.cancel,
+        };
+        let input = if self.game.message.active {
+            Input::default()
+        } else {
+            input
+        };
+        let Some(outcome) = self.game.tick_re2_items(input) else {
+            return;
+        };
+        if let Some(item) = outcome.describe {
+            let bytes = self.text.description(u16::from(item)).map(<[u8]>::to_vec);
+            self.game
+                .show_re2_description(item, bytes.as_deref().unwrap_or(&[0x01]));
+        }
+        let cues = outcome
+            .sounds
+            .iter()
+            .map(|sound| match sound {
+                Sound::Cursor => ui::UiCue::Cursor,
+                Sound::Decide => ui::UiCue::Decide,
+                // RE2's buzzer (`0x407`) has no cue of its own yet.
+                Sound::Cancel | Sound::Buzzer => ui::UiCue::Cancel,
+            })
+            .collect();
+        self.play_ui_cue_names(pack, cues);
+        self.game
+            .update_message(message_input, &self.loaded.room, &self.text);
+        self.tick_menu_screen(pack);
+        if outcome.close {
+            self.begin_menu_close_silent();
+        }
     }
 
     /// Apply one completed menu event.
@@ -6919,6 +6974,10 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_inventory_trace()),
+            re2_item_page: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2_items_trace.clone()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
