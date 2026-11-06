@@ -1,0 +1,55 @@
+# Room 118 entered through its door (the door_11b.txt presses from the previous room's door), then a run-heavy random walk from tick 720: runs in every direction, diagonals, backing, stops (oracle/re2.md).
+# room 11B: the player walks up to room 11A's door 1 and opens it with action (oracle/re2.md)
+344 up
+354
+364 action
+368
+720 up run left
+787 up
+810 up run left
+842 up
+877 down run
+939 up run action
+1009 down
+1055 up left
+1104 down run
+1142 down run
+1145 up run
+1151 up
+1187 up run
+1251
+1276 up run right
+1317 up run right
+1377 down
+1404 up run
+1463 up run
+1526 up run
+1536 up run
+1552 up run
+1614 up run
+1672 left run
+1700 up run right
+1717 down run left
+1742 up left
+1790 right run
+1856 up run
+1925 right run
+1929 left run
+1937 down run left
+2005 down
+2020 down run right
+2062 up
+2123
+2129 up run right
+2185 down run right
+2199 up left
+2254 up
+2292 up run left
+2355 up left
+2419 up run left
+2428 up run right
+2490 up run right
+2549 up run left
+2597 run
+2637 up run left
+2700

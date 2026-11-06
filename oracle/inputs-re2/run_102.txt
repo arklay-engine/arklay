@@ -1,0 +1,108 @@
+# door_101_102.txt, then a random walk with runs through room 102 from tick 3410 to 5400 (oracle/re2.md).
+0 up run
+25 right
+26 right
+27 up run
+52 up run
+65 right
+77 right
+85 up
+91 left
+103 left
+112 up run
+137 up run
+162 up run
+187 left
+188 left
+189 up run
+214 up run
+227 left
+239 left
+250 up
+256 right
+268 right
+271 up run
+288 right
+300 right
+311 up
+317 left
+329 left
+341 left
+342 up run
+367 up run
+392 left
+393 left
+394 up run
+419 left
+431 left
+443 up
+449 left
+461 left
+463 up
+469 left
+471 up
+475 left
+477 left
+478 
+480 confirm
+482 
+700 up
+760 
+790 confirm
+792 
+1300 up
+1330 
+2480 down
+2482 
+2490 left
+2540 up
+2680 
+2685 right
+2690 up
+2895 
+2900 left
+2904 up
+2980 
+2985 right
+2991 up
+3036
+3038 left
+3049
+3052 action
+3054
+3410 down
+3460 up right
+3489 down
+3570
+3614 down right
+3657 down
+3758 up run
+3839 up
+3946 up right
+4038 up run
+4048 down left
+4075 up left
+4175 up run right
+4204 up run left
+4295
+4382 left
+4397 up run
+4505 left
+4517 down
+4561 up run
+4663 up right
+4680
+4734
+4802 up left
+4881 right
+4891 up run
+4911 up left
+5007 up left
+5021 up run left
+5069 up right
+5156 up
+5241 left
+5272 down
+5381 up run
+5396 up run left
+5400
