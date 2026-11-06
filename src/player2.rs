@@ -1212,6 +1212,18 @@ pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
     work.neck.body = Some(pos);
 }
 
+/// `Pl_init` (`0x4D9940`), as game mode 3 runs it when the status screen
+/// closes (`0x4C000D` zeroes the routines first): the move starts again from
+/// routine 1, 0, 0, 0 and clip 2, whose first frame `Joint_move` plays, so
+/// `Move_cnt` is 1. The pose isn't redrawn here; the next tick's move poses
+/// the player.
+pub fn pl_init(work: &mut Work) {
+    work.routine = [MODE_MOVE, 0, 0, 0];
+    work.move_no = 2;
+    work.move_cnt = 1;
+    work.hokan = 0;
+}
+
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
 /// a life each time `poison_timer` runs out, never the last one.
 pub fn poison_tick(work: &mut Work, life: &mut i16) {
