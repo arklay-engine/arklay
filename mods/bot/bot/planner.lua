@@ -48,6 +48,8 @@
 --               (BotSurvival.sourcing: under the floor and no ammunition
 --               the planner can reach, a pickup it has not given up on or
 --               the remembered box)
+--             + HURT_ROOM_COST per monster that hurt the bot in each room
+--               the route enters, while it is hurt with no heal held
 --             - for a route to a held item's <use> room, HELD_USE_BONUS
 --               and no door steps: only the first door's length counts
 --             - HEAL_BONUS for a route to a heal pickup or to the box for
@@ -176,6 +178,11 @@ local STAGE_BONUS = 6 * C.REACH
 local SOURCE_BONUS = 60 * C.REACH
 local MONSTER_COST = DOOR_COST
 local MONSTER_CAP = 3
+-- Hurt with no heal held (BotSurvival.needs_heal): each monster that hurt
+-- the bot in a room the route enters (BotTactics.note_hurt, at most
+-- MONSTER_CAP a room) costs this much, so the way to a heal goes round the
+-- rooms where a cerberus already bit.
+local HURT_ROOM_COST = 2 * DOOR_COST
 -- The hurt rule: a pickup goal (an item or a drawer) that loses this share of the
 -- maximum health, on ticks the planner drives (not a fight's), is dropped
 -- and marked `hurt while trying`; the room's other pickups wait until the
@@ -1788,10 +1795,17 @@ local function choose(bot)
         p.target = nil
     end
     p.sourcing = sourcing
-    -- While sourcing, the live monsters last seen along a route.
+    -- While sourcing, the live monsters last seen along a route; while
+    -- hurt with no heal held, the monsters that hurt the bot there.
+    local hurt_now = BotSurvival.needs_heal(bot)
     local function monsters_in(id)
         local n = sourcing and p.monsters[id] or 0
-        return (n > MONSTER_CAP and MONSTER_CAP or n) * MONSTER_COST
+        local cost = (n > MONSTER_CAP and MONSTER_CAP or n) * MONSTER_COST
+        if hurt_now then
+            local h = BotTactics.hurt_count(id)
+            cost = cost + (h > MONSTER_CAP and MONSTER_CAP or h) * HURT_ROOM_COST
+        end
+        return cost
     end
     local function route_monsters(steps)
         local cost = 0
