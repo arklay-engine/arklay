@@ -680,6 +680,55 @@ function BotNav.climb_point(object, zone)
         { x = x, z = zz }, { x = x, z = object.z - sign * 4 * object.half_z }
 end
 
+-- One tick of a fight job: a <fight> step holds the room until its enemy's
+-- done flag is set (a boss killed). Walks toward the job's target (the
+-- tactics layer prefers it, BotTactics.focus) until it is FIGHT_RANGE away,
+-- inside the knowledge band where the tactics layer engages, then faces it:
+-- the tactics layer engages only what is in front. Returns "done" or
+-- "busy"; the planner's job.timeout ends it.
+local FIGHT_RANGE = C.FIGHT_RANGE
+function BotNav.hold_fight(bot, job)
+    if job.done(bot) then
+        return "done"
+    end
+    -- The target: the part first picked while it lives, else the one of
+    -- the job's id with the most health (a boss's body over its vines).
+    local target
+    for _, e in ipairs(bot:enemies()) do
+        if e.id == job.enemy and e.health > 0 then
+            if e.slot == job.slot then
+                target = e
+                break
+            end
+            if not target or e.health > target.health then
+                target = e
+            end
+        end
+    end
+    if not target then
+        return "busy"
+    end
+    if target.slot ~= job.slot then
+        job.slot = target.slot
+        BotTactics.focus(target.slot)
+        bot:log(string.format("%s: target slot %d (health %d)", job.label, target.slot,
+            target.health))
+    end
+    if target.distance > FIGHT_RANGE + C.APPROACH then
+        local p = bot:player()
+        local x = target.x + (p.x - target.x) * FIGHT_RANGE // target.distance
+        local z = target.z + (p.z - target.z) * FIGHT_RANGE // target.distance
+        local result = bot:walk_to(x, z, {
+            tolerance = C.APPROACH, face = { x = target.x, z = target.z },
+        })
+        if result.status == "moving" then
+            return "busy"
+        end
+    end
+    bot:face_to(target.x, target.z)
+    return "busy"
+end
+
 -- One tick of a climb job: an item zone (a high shelf) reachable only from
 -- on top of a pushable object. `job` fields set by the caller: object
 -- (slot), zone, label, taken(bot) (the item is gone), timeout. Push the

@@ -93,6 +93,9 @@ local GOAL_TIMEOUT = 40 * C.SECOND
 -- out and the finish) this long: the step's room event may still be arming
 -- the probe.
 local USE_ARM_TICKS = 3 * C.SECOND
+-- A <fight> step holds the room this long before it gives up: a boss takes
+-- many clips (40C's Plant 42).
+local FIGHT_TIMEOUT = 5 * 60 * C.SECOND
 -- A run with no new progress (a room, an item, a flag fact) for this long
 -- is stuck.
 local STUCK_TICKS = 5 * 60 * C.SECOND
@@ -704,6 +707,18 @@ local function interact_goal(bot, fact, index, count)
     if fact.kind == "camera" then
         return camera_goal(bot, fact, index, count)
     end
+    if fact.kind == "fight" then
+        local label = string.format("fight %d/%d enemy 0x%02X (%s)", index, count,
+            fact.enemy, fact.label or "unnamed")
+        return {
+            kind = "interact", slot = "fight" .. fact.enemy, label = label,
+            job = {
+                fight = true, enemy = fact.enemy, label = label,
+                timeout = FIGHT_TIMEOUT,
+                done = function(b) return BotPuzzle.flag_done(b, fact) end,
+            },
+        }
+    end
     local action = BotNav.action_by_slot(bot, fact.slot)
     if not action then
         return nil, string.format("interact slot %d is not a live action", fact.slot)
@@ -733,10 +748,14 @@ local function interact_goal(bot, fact, index, count)
     end
     local label = string.format("interact %d/%d slot %d (%s)", index, count,
         fact.slot, fact.label or "unnamed")
+    -- A body-probe zone fires on the player's position, not the reach point
+    -- (40C's fireplace, SAT_UNDER): stand inside it.
+    local zone = zone_of(action)
+    zone.inside = (action.flags // C.PROBE_BODY) % 2 == 1
     return {
         kind = "interact", slot = fact.slot, label = label,
         job = {
-            zone = zone_of(action), label = label, pattern = "edge",
+            zone = zone, label = label, pattern = "edge",
             presses = 2, gap = 20, side = 4 * C.SECOND,
             done = function(b) return BotPuzzle.flag_done(b, fact) end,
         },
@@ -1242,7 +1261,7 @@ local function choose(bot)
     -- 1. The room puzzle.
     local fact, index, count = BotPuzzle.next_interact(bot)
     if fact then
-        if BotPuzzle.avoided(bot, fact.slot) then
+        if fact.slot and BotPuzzle.avoided(bot, fact.slot) then
             bot:log(string.format("interact slot %d is also an <avoid>; skipped", fact.slot))
         elseif fact.kind == "climb" and inventory_full(bot) and not BotNav.on_top(bot) then
             -- The climb is for an item: no free slot, no climb. Retried
@@ -1250,12 +1269,12 @@ local function choose(bot)
             if not blocked(bot, "interact", room, fact.slot) then
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
             end
-        elseif not blocked(bot, "interact", room, fact.slot or ("camera" .. fact.cut)) then
+        elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
             local goal, why = interact_goal(bot, fact, index, count)
             if goal then
                 return goal
             end
-            mark(bot, "interact", room, fact.slot or ("camera" .. fact.cut), why)
+            mark(bot, "interact", room, BotPuzzle.step_key(fact), why)
         end
     end
 
@@ -2115,6 +2134,8 @@ function BotPlanner.step(bot)
         end
     elseif goal.job.climb then
         status = BotNav.climb_object(bot, goal.job)
+    elseif goal.job.fight then
+        status = BotNav.hold_fight(bot, goal.job)
     else
         status = BotNav.press_zone(bot, goal.job)
     end
@@ -2131,7 +2152,7 @@ function BotPlanner.step(bot)
             goal.door_message)
         goal.event = true
     end
-    if status == "busy" and bot:tick() - goal.started > GOAL_TIMEOUT * 2 then
+    if status == "busy" and bot:tick() - goal.started > (goal.job.timeout or GOAL_TIMEOUT * 2) then
         status = "failed"
         goal.job.reason = "goal timed out"
     end

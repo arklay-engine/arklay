@@ -19,7 +19,8 @@
 //! `direction`, push it that way until it clears the zone) and `<climb>`
 //! (push a room object under an AOT slot's item zone, a high shelf, climb
 //! it and take the item; its flag shows the item taken). `<interact>`,
-//! `<camera>`, `<push>` and `<climb>` share one ordered step list. `<watch>` names a
+//! `<camera>`, `<push>`, `<climb>` and `<fight>` (stay and fight an enemy
+//! id until a flag is set) share one ordered step list. `<watch>` names a
 //! scene the bot lets play instead of skipping: while its `bank`/`bit` flag
 //! is clear and, with `after_bank`/`after_bit`, that flag is set. `<holds>`
 //! says what the room holds (an item and a label): a location fact the
@@ -127,6 +128,10 @@ pub struct Interact {
     /// run). 40A's bookcase gap is an event only once the red book moved
     /// the bookcase.
     pub after: Option<(u8, u8)>,
+    /// `<interact reveals>`: the step is also done once this AOT slot is a
+    /// live item zone (40C's fireplace: pressing it after Plant 42 dies
+    /// turns slot 3 into the helmet key, and the bot then takes the key).
+    pub reveals: Option<u8>,
     pub label: Option<String>,
 }
 
@@ -159,6 +164,11 @@ pub enum Target {
     /// (11B's square crank on its shelf). Done once the item flag says so
     /// and the player is back on the floor.
     Climb { object: u8, slot: u8 },
+    /// Stay in the room and fight enemy `enemy` (an entity id) until the
+    /// step's flag is set: the planner keeps the player facing the nearest
+    /// one so the combat layer engages (40C's Plant 42, which never comes
+    /// to the player).
+    Fight { enemy: u8 },
 }
 
 /// A room axis a `<push>` lines its object up on.
@@ -477,11 +487,12 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 }
                 meta.puzzles.push(puzzle);
             }
-            "interact" | "camera" | "push" | "climb" => {
+            "interact" | "camera" | "push" | "climb" | "fight" => {
                 let fact = match name {
                     "interact" => parse_interact(child)?,
                     "camera" => parse_camera(child)?,
                     "climb" => parse_climb(child)?,
+                    "fight" => parse_fight(child)?,
                     _ => parse_push(child)?,
                 };
                 if keep {
@@ -591,6 +602,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
         after: None,
+        reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -605,6 +617,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             "done",
             "after_bank",
             "after_bit",
+            "reveals",
             "label",
             "character",
         ],
@@ -616,6 +629,10 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear,
         after: after_flag(node)?,
+        reveals: node
+            .attribute("reveals")
+            .map(|_| attr(node, "reveals"))
+            .transpose()?,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -717,6 +734,22 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         flag,
         done_clear: false,
         after: None,
+        reveals: None,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(node, &["enemy", "bank", "bit", "label", "character"])?;
+    check_leaf(node)?;
+    Ok(Interact {
+        target: Target::Fight {
+            enemy: attr(node, "enemy")?,
+        },
+        flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        done_clear: false,
+        after: None,
+        reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -737,6 +770,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         flag,
         done_clear: false,
         after: None,
+        reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1094,6 +1128,7 @@ mod tests {
             flag: Some((bank, bit)),
             done_clear: false,
             after: None,
+            reveals: None,
             label: Some(label.to_string()),
         };
         let expected = vec![
@@ -1170,6 +1205,7 @@ mod tests {
                     flag: Some((1, 0x22)),
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
@@ -1177,6 +1213,7 @@ mod tests {
                     flag: Some((0, 3)),
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: None,
                 },
                 Interact {
@@ -1184,6 +1221,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: Some("north hall".to_string()),
                 },
                 Interact {
@@ -1191,6 +1229,7 @@ mod tests {
                     flag: Some((1, 0x05)),
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: None,
                 },
                 Interact {
@@ -1205,6 +1244,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: Some("armor onto the vent".to_string()),
                 },
                 Interact {
@@ -1219,6 +1259,7 @@ mod tests {
                     flag: None,
                     done_clear: false,
                     after: None,
+                    reveals: None,
                     label: Some("shelf off the score".to_string()),
                 },
             ]
@@ -1281,6 +1322,7 @@ mod tests {
                 flag: Some((7, 35)),
                 done_clear: true,
                 after: None,
+                reveals: None,
                 label: Some("the crank".to_string()),
             }]
         );
@@ -1312,6 +1354,7 @@ mod tests {
                 flag: Some((0, 0x0B)),
                 done_clear: false,
                 after: None,
+                reveals: None,
                 label: Some("statue off the balcony".to_string()),
             }]
         );
@@ -1337,6 +1380,31 @@ mod tests {
         let camera = r#"<bot format="2"><camera cut="1" bank="1" bit="2" done="clear"/></bot>"#;
         let error = parse(camera).unwrap_err().to_string();
         assert!(error.contains("unknown attribute `done`"), "{error}");
+    }
+
+    #[test]
+    fn fight_names_an_enemy_and_its_done_flag() {
+        let text = r#"<bot format="2">
+            <fight enemy="0x08" bank="3" bit="96" label="Plant 42"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts[0].target, Target::Fight { enemy: 0x08 });
+        assert_eq!(meta.interacts[0].flag, Some((3, 96)));
+        let flagless = r#"<bot format="2"><fight enemy="0x08"/></bot>"#;
+        assert!(parse(flagless).is_err());
+    }
+
+    #[test]
+    fn interact_may_name_the_item_slot_it_reveals() {
+        let text = r#"<bot format="2">
+            <interact slot="2" bank="7" bit="0x58" done="clear" reveals="3"/>
+            <interact slot="5" bank="1" bit="2"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts[0].reveals, Some(3));
+        assert_eq!(meta.interacts[1].reveals, None);
+        let bad = r#"<bot format="2"><interact slot="2" bank="1" bit="2" reveals="x"/></bot>"#;
+        assert!(parse(bad).is_err());
     }
 
     #[test]

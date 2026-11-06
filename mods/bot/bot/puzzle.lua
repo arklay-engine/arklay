@@ -74,6 +74,18 @@ function BotPuzzle.use_pending(bot, zone, anywhere)
     return nil
 end
 
+-- The key a sequence step's marks go under: its AOT slot, its camera cut,
+-- or its enemy for a <fight>.
+function BotPuzzle.step_key(fact)
+    if fact.slot then
+        return fact.slot
+    end
+    if fact.cut then
+        return "camera" .. fact.cut
+    end
+    return "fight" .. tostring(fact.enemy)
+end
+
 -- Whether AOT `slot` is named by any fact of this room.
 function BotPuzzle.is_fact_slot(bot, slot)
     local m = meta(bot)
@@ -131,8 +143,17 @@ function BotPuzzle.watching(bot)
 end
 
 -- Whether a step's done flag reads done: set, or clear for done="clear"
--- (bank 7's item bits clear when the item is taken).
+-- (bank 7's item bits clear when the item is taken). A step that names
+-- the item slot it `reveals` is also done once that slot is a live item
+-- zone: the item frontier takes it from there (40C's fireplace, which
+-- turns slot 3 into the helmet key).
 function BotPuzzle.flag_done(bot, fact)
+    if fact.reveals then
+        local action = BotNav.action_by_slot(bot, fact.reveals)
+        if action and action.kind == "item" then
+            return true
+        end
+    end
     return bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
 end
 
