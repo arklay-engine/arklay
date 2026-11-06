@@ -526,7 +526,9 @@ local function choose(bot, s, k, enemies, player)
             elseif enemy.visible
                 and (abs(angle_delta(enemy.bearing, player.angle)) <= arc
                     or enemy.distance <= 2 * (entry.reach or C.REACH)) then
-                if not best or enemy.distance < best.distance then
+                local focused = best and best.slot == s.focus
+                if enemy.slot == s.focus or (not focused
+                        and (not best or enemy.distance < best.distance)) then
                     best = enemy
                     best.why = why
                 end
@@ -534,6 +536,13 @@ local function choose(bot, s, k, enemies, player)
         end
     end
     return best, gun
+end
+
+-- Prefer monster `slot` (nil: none) over nearer ones when it is fought:
+-- a <fight> step's target, a boss's body among its vines. Cleared on a
+-- room change.
+function BotTactics.focus(slot)
+    state().focus = slot
 end
 
 function BotTactics.step(bot, scene, player)
@@ -559,6 +568,7 @@ function BotTactics.step(bot, scene, player)
         s.run_logs = {}
         s.no_aim = {}
         s.avoid_until = nil
+        s.focus = nil
     end
     if bot:tick() < (s.calm_until or 0) and not s.active then
         return false
@@ -779,7 +789,10 @@ function BotTactics.step(bot, scene, player)
     -- Keep turning onto the target while the aim is up.
     local face = bot:face_to(target.x, target.z)
     local locked = weapon.target ~= nil
-    if not pose or weapon.behavior ~= C.HOLD_BEHAVIOR or target.hit_state ~= 0
+    -- A monster of parts (Plant 42) takes the shot on its next free part
+    -- while the target's own hit reaction runs.
+    local reacting = target.hit_state ~= 0 and not (entry and entry.parts)
+    if not pose or weapon.behavior ~= C.HOLD_BEHAVIOR or reacting
         or (not locked and s.aim_ticks < AIM_SETTLE)
         or abs(face.angle_error) > FACE_BAND * 2 then
         if s.aim_ticks > LOCK_WAIT * 3 then

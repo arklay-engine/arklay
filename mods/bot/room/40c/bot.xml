@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 40C Plant 42's room, reached from 40A's bookcase passage. With
+     scenario 19 and 41 clear (V-JOLT not made) the init takes Barry's
+     branch: Plant 42 (id 0x08) hangs from the ceiling, its body in slot 1
+     with five vines. Once the vines are shot Barry's event plays: the plant
+     grabs Jill and Barry burns it, and its death sets enemy bit 96. The
+     <fight> step holds the room and faces the plant until the bit is set;
+     the tactics layer shoots.
+     The helmet key (item bit 0x58) is in the fireplace. The main script
+     turns AOT 3 into its item zone only on the frame the player searches
+     AOT 2 (system bit 62) with enemy bit 96 set, so the <interact> presses
+     AOT 2 after the fight, and is done once slot 3 is a live item. -->
+<bot format="2">
+  <fight enemy="0x08" bank="3" bit="96" label="Plant 42"/>
+  <interact slot="2" bank="7" bit="0x58" done="clear" after_bank="3" after_bit="96"
+            reveals="3" label="search the fireplace"/>
+</bot>

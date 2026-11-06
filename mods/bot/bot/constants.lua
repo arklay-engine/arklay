@@ -16,6 +16,9 @@ BotConst.SECOND = 30
 BotConst.REACH = 600
 -- Stand half a reach outside a zone so the probe lands inside it.
 BotConst.APPROACH = 300
+-- How close a <fight> step walks to an enemy that never comes to the player
+-- (40C's Plant 42): inside the handgun's firing band.
+BotConst.FIGHT_RANGE = 4500
 -- walk_to walks the last 400 units; a shorter run overshoots the goal.
 BotConst.RUN_MIN_DISTANCE = 600
 -- Climbing an object (a crate): the vault lifts the player off the floor

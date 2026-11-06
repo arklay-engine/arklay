@@ -2670,12 +2670,17 @@ impl UserData for BotCtx {
                         row.set("object", object)?;
                         row.set("slot", slot)?;
                     }
+                    meta::Target::Fight { enemy } => {
+                        row.set("kind", "fight")?;
+                        row.set("enemy", enemy)?;
+                    }
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
                 row.set("done_clear", fact.done_clear)?;
                 row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("reveals", fact.reveals)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }
@@ -6004,11 +6009,12 @@ mod tests {
     #[test]
     fn ammo_floor_scales_with_risk_and_the_hardest_kill() {
         let vm = tactics_vm();
-        // The handgun's hardest `fight` kill in re1.xml: a zombie, 99
-        // health at 12 a hit, is 9 shots (a cerberus 5, a hunter 8).
+        // The handgun's hardest `fight` kill in re1.xml: Plant 42's body,
+        // 140 health at 15 a hit, is 10 shots (a zombie 9, a cerberus 5,
+        // a hunter 8).
         assert_eq!(
             eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 2)"),
-            9
+            10
         );
         // The shotgun: the cerberus (122 at 40) and the hunter (111 at 32)
         // are 4 shots.

@@ -107,6 +107,10 @@ pub struct Enemy {
     /// Its chase speed, units a tick.
     pub speed: Option<i32>,
     pub health: Option<i32>,
+    /// A boss made of parts (Plant 42's body and vines): a shot hits the
+    /// free part nearest the aim, so the bot fires on through its target's
+    /// own hit reaction (optional attribute, default no).
+    pub parts: bool,
     pub keeps: Vec<Keep>,
 }
 
@@ -328,6 +332,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             "outrun",
             "speed",
             "health",
+            "parts",
         ],
     )?;
     let policy = match attr_text(node, "policy")? {
@@ -390,6 +395,10 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         outrun: yes_no(node, "outrun")?,
         speed: distance(node, "speed")?,
         health: distance(node, "health")?,
+        parts: match node.attribute("parts") {
+            Some(_) => yes_no(node, "parts")? == Some(true),
+            None => false,
+        },
         keeps,
     })
 }
@@ -474,6 +483,7 @@ impl Knowledge {
             row.set("outrun", enemy.outrun)?;
             row.set("speed", enemy.speed)?;
             row.set("health", enemy.health)?;
+            row.set("parts", enemy.parts)?;
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
                 let band = lua.create_table()?;
@@ -605,5 +615,14 @@ mod tests {
         assert!(parse(&text.replace("grabs=", "grab=")).is_err());
         assert!(parse(&text.replace("weapon=\"2\"", "weapon=\"3\"")).is_err());
         assert!(parse(&text.replace("min=\"1000\"", "min=\"3000\"")).is_err());
+        assert!(!k.enemies[0].parts);
+        let parts =
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"yes\">"))
+                .unwrap();
+        assert!(parts.enemies[0].parts);
+        assert!(
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"maybe\">"))
+                .is_err()
+        );
     }
 }
