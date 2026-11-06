@@ -200,7 +200,8 @@ end
 --
 -- A step with an `after` flag that is still clear holds the sequence: no
 -- step is offered until the flag is set. So does a <fight> whose enemy is
--- fought with a hand weapon the bot does not hold.
+-- fought with a hand weapon the bot does not hold, or whose preferred
+-- weapon lies in the room as a pickup.
 --
 -- A <camera> step without a flag has nothing to persist: it counts as done
 -- once its cut was entered during the current room entry (see
@@ -215,6 +216,24 @@ function BotPuzzle.hand_weapon_missing(bot, id)
         return entry.prefer
     end
     return nil
+end
+
+-- Whether the weapon enemy `id` prefers lies as a known pickup in this room
+-- while the bot does not hold it (303's rocket launcher, dropped mid-fight).
+function BotPuzzle.preferred_pickup(bot, id)
+    local k = bot:knowledge() or {}
+    local entry = k.enemies and k.enemies[id]
+    local prefer = entry and entry.prefer
+    if not prefer or bot:has_item(prefer) then
+        return false
+    end
+    local room = bot:room().id
+    for _, goal in ipairs(bot:world().frontier or {}) do
+        if goal.kind == "item" and goal.room == room and goal.item == prefer then
+            return true
+        end
+    end
+    return false
 end
 
 function BotPuzzle.next_interact(bot)
@@ -262,6 +281,10 @@ function BotPuzzle.next_interact(bot)
             -- weapon is not held: the item frontier takes it first (30C's
             -- knife for the web).
             if fact.kind == "fight" and BotPuzzle.hand_weapon_missing(bot, fact.enemy) then
+                return nil, index - 1, #interacts
+            end
+            -- And one whose preferred weapon lies here to be picked up.
+            if fact.kind == "fight" and BotPuzzle.preferred_pickup(bot, fact.enemy) then
                 return nil, index - 1, #interacts
             end
             return fact, index, #interacts

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 515, the lift between 50C and 514. Both doors are parked at the room
+     origin: entered from 50C the lift rides down and its event turns on
+     door 1 to 514; entered from 514 it rides up and turns on door 0 to
+     50C (on_enter / on_enter_2). -->
+<bot format="2">
+  <ride slot="0" from="514" label="up to 50C"/>
+  <ride slot="1" from="50C" label="down to 514"/>
+</bot>

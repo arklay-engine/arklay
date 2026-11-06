@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 501, the hall to the escape lift. Door 1 to 50D is a message (9)
+     while common bit 0x46 is clear: the lift's battery is pulled out
+     (AOT 5's event says so). The battery lies at AOT 2 in this room;
+     used at AOT 4 its event sets common 0x46, and on the next entry door 1
+     is a door. -->
+<bot format="2">
+  <use slot="4" item="0x27" bank="1" bit="0x46" label="the battery for the escape lift"/>
+  <avoid slot="5" reason="the pulled-out battery message: the use at AOT 4 is the way on"/>
+</bot>
