@@ -29,6 +29,7 @@
 use super::GameState;
 use crate::scd2::host::item_max;
 
+pub mod binders;
 pub mod map;
 
 /// `Item_work`'s eleventh slot: the personal item.

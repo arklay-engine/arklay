@@ -115,6 +115,47 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         Ok(loaded(result))
     });
 
+    // `re2_binders_model()`: RE 2's FILE binders (`ui/status/st_file.ts`);
+    // nil and a message when the pack has none.
+    methods.add_method_mut("re2_binders_model", |_lua, api, ()| {
+        let pack: &Pack = api.cx.pack;
+        Ok(loaded(api.host.assets.load(
+            "re2-binders".to_owned(),
+            || {
+                use crate::game::status2::binders;
+                let bytes = pack.read(binders::ENTRY)?;
+                let model = binders::parse(&bytes)?;
+                Ok(Asset::Model(Arc::new(model), bytes.len()))
+            },
+        )))
+    });
+
+    // `draw_re2_binders(model, front, sub, command, top)`: FILE's three
+    // binders as the original draws them, with binder `front` in front,
+    // FILE's `sub` `command` ticks in, and the panel's top at `top`
+    // ([`crate::game::status2::binders::polygons`]).
+    methods.add_method_mut(
+        "draw_re2_binders",
+        |_lua, api, (handle, front, sub, command, top): (usize, u8, u8, u8, i32)| {
+            use crate::game::status2::binders;
+            let Api {
+                host, framebuffer, ..
+            } = api;
+            let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
+            let model = host.assets.model(handle)?;
+            let turn = binders::turn(sub, command);
+            let polygons = model
+                .objects
+                .first()
+                .map(|binder| binders::polygons(binder, front, turn, top))
+                .unwrap_or_default();
+            // The page has a CLUT row per binder, so a replacement of one
+            // row's colours doesn't apply.
+            framebuffer.draw_screen_polygons(model, &polygons, None);
+            Ok(())
+        },
+    );
+
     // `model_objects(model)`: the number of objects a model carries.
     methods.add_method("model_objects", |_lua, api, handle: usize| {
         Ok(api.host.assets.model(handle)?.objects.len())

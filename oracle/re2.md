@@ -178,14 +178,14 @@ The MAP and FILE runs (`status_map.txt`, `status_file.txt`) use the inventory ru
 - `status_map.txt`: the decide key on MAP at 460 (4:6) loads the map; it slides in from 461 and shows at 475 with cue 4:9. Up at 520, down at 560 and left at 600 do nothing (the floor has no other). The cancel key at 620 (4:5) slides it out, back on the tab bar at 634. MAP again at 680, shown at 695, out at 740 and back at 754; START closes the screen at 800. All 656 ticks match.
 - `status_file.txt`: the decide key on FILE at 480 (4:6); the binders slide in from 481 and show at 493. Left at 540 and 580 and right at 620 turn them, each with cue 4:a, for 13 ticks. The decide key at 660 does nothing (no binder holds a file). The cancel key at 700 (4:5) slides them out, back on the tab bar at 713; START closes the screen at 760. All 656 ticks match.
 
-The frames compare as the inventory runs' do (see "Items"), from 360 to 999. The map's pictures are `ui/status/map<nn>_<k>.tim` (`Common/file/map<nn>.adt`). FILE's binders are 3D models that arklay doesn't draw (`docs/re2-deviations.md`, "MAP and FILE"), so FILE is also given with the panel's inside, (12, 74) to (213, 224), blanked on both sides:
+The frames compare as the inventory runs' do (see "Items"), from 360 to 999. The map's pictures are `ui/status/map<nn>_<k>.tim` (`Common/file/map<nn>.adt`). FILE's binders are 3D models (`ui/status/st_file.ts`, `src/game/status2/binders.rs`), so FILE is also given with the panel's inside, (12, 74) to (213, 224), blanked on both sides:
 
 | Run | Frames | Mean error | Without the message box | Without the binders | Without both |
 |---|---|---|---|---|---|
 | `status_map` | 640 | 0.42 | 0.34 | | |
-| `status_file` | 640 | 5.38 | 4.14 | 0.51 | 0.46 |
+| `status_file` | 640 | 0.82 | 0.65 | 0.48 | 0.46 |
 
-MAP's worst frames are the item page's message text before MAP opens (1.63 at 394 to 399, the port's font); while the map is up every frame is within 0.81, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory"). FILE's worst are the binders, up to 16.93 at 549; without them its worst is 3.92, at 705 to 708 and 489, while the panel slides with the binders moving inside its edge.
+MAP's worst frames are the item page's message text before MAP opens (1.63 at 394 to 399, the port's font); while the map is up every frame is within 0.81, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory"). FILE's worst frames are the message text and the turns (1.73 at 629, 1.72 at 549); without the message box the worst is 1.45, during the turns, and the binders line up with the original's on every frame (the best shift is none), the rest being the art's colours. Without the panel's inside its worst is 0.98, at 705 and 490, while the panel slides.
 
 ## Weapons
 
