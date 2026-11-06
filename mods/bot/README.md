@@ -332,7 +332,10 @@ Each `<weapon>` gives the cone (`near`, `side`), `cadence`, the shotgun's
 `headshot` and `weak` distances; each `<enemy>` gives `policy`
 (`fight`/`pass`/`avoid`), the poses (`stand`, `downed`, `up`), `reach`,
 `crawl_reach`, `grabs`, `outrun`, `speed`, `health`, the optional `parts`
-and `prefer`, and one `<keep>` band per weapon. Every entry has a comment saying how it was
+and `prefer`, and one `<keep>` band per weapon. A band's optional `spare`
+is the rounds of that weapon (every loading) it leaves held: a reserve gun
+opens the fight only with more (a zombie gets one grenade only while six
+more are held). Every entry has a comment saying how it was
 measured. `parts="yes"` marks a monster made of several entities (Plant 42's
 body and vines): a hit holds only the part it struck, so the bot fires on
 while its target is still reacting instead of waiting for the reaction to
