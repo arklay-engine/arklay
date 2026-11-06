@@ -95,6 +95,14 @@ BotConst.BACK_SPEED = 0x40
 BotConst.HOLD_BEHAVIOR = 0x13
 -- Weapon behaviour 0x18 is the reload running.
 BotConst.RELOAD_BEHAVIOR = 0x18
+-- Sixteen compass directions as unit vectors scaled by the first entry's
+-- x (the bot Lua has no math library): the ring BotNav.stand_near searches.
+BotConst.RING = {
+    { 1000, 0 }, { 924, 383 }, { 707, 707 }, { 383, 924 },
+    { 0, 1000 }, { -383, 924 }, { -707, 707 }, { -924, 383 },
+    { -1000, 0 }, { -924, -383 }, { -707, -707 }, { -383, -924 },
+    { 0, -1000 }, { 383, -924 }, { 707, -707 }, { 924, -383 },
+}
 -- The save/load screen lists eight numbered slots (rows 0..7), then the
 -- load mode's autosave rows, then the exit row (ui/save_load.lua).
 BotConst.SAVE_SLOTS = 8
