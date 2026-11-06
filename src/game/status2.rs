@@ -608,7 +608,7 @@ impl GameState {
     /// Show item `item`'s description (message `0x10 + item`), from the
     /// pack's `ITEM_<id>_DESCRIPTION`.
     pub fn show_re2_description(&mut self, item: u8, bytes: &[u8]) {
-        self.message.set_re2_timing();
+        self.message.set_re2_timing(true);
         if !self.begin_message(0x10 + item, 0) {
             return;
         }
