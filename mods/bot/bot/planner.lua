@@ -1529,6 +1529,21 @@ end
 -- Whether this room entry fights its <fight> ready or not (forgive_fight).
 local fight_forced
 
+-- Whether `item` is the preferred weapon of a <fight> in this room still
+-- to be won (BotPuzzle.preferred_pickup's weapon).
+function BotPlanner.preferred_here(bot, item)
+    local k = bot:knowledge()
+    local room = bot:room().id
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = k and k.enemies[fight.enemy]
+        if fight.room == room and entry and entry.prefer == item
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Pick the next goal, or nil plus the reason nothing is left.
 local function choose(bot)
     local room = bot:room().id
@@ -2587,7 +2602,10 @@ function BotPlanner.step(bot)
         goal.hurt = (goal.hurt or 0) + goal.health - me.health
     end
     goal.health = me.health
-    if goal.kind == "item" and goal.hurt >= me.max_health * HURT_SHARE then
+    -- Not a weapon a fight here prefers: that pickup is how the fight ends
+    -- (Brad's rocket launcher on 303's deck, with the Tyrant on the bot).
+    if goal.kind == "item" and goal.hurt >= me.max_health * HURT_SHARE
+        and not BotPlanner.preferred_here(bot, goal.item) then
         mark(bot, "item", room, goal.slot, string.format("hurt while trying: %d health", goal.hurt))
         p.hurt[room] = inventory_sig(bot)
         p.goal = nil

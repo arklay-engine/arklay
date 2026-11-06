@@ -285,7 +285,10 @@ An item goal that costs a quarter of the maximum health while the planner
 is trying it (`HURT_SHARE`) is dropped and marked `hurt while trying`:
 like an approach failure, remote planning does not head back for it, and
 the room's other pickups wait until the inventory changes, so the bot does
-not walk back into what hurt it.
+not walk back into what hurt it. The preferred weapon of a `<fight>` in the
+room still to be won is never dropped this way (`BotPlanner.preferred_here`):
+taking it is how the fight ends (Brad's rocket launcher, with the Tyrant on
+the bot).
 
 Approach points sit outside each side of a zone, at a quarter, a half and
 three quarters of the action reach, and a quarter reach inside the edge. On
@@ -339,6 +342,15 @@ end. A `<fight>` step's target is preferred over the nearest monster
 held with the rounds for a kill, over the equipped gun (`BotTactics.pick_gun`;
 the hunter takes the shotgun). A fight against a monster closing in that
 cannot be outrun is not given up for low health.
+While the preferred weapon lies in the room as a pickup, the monster is no
+target: combat stops (`its preferred weapon lies here: take it first`) and
+the `<fight>` goal ends, so the item frontier takes it (303's Tyrant stays
+at 200 health until Brad's rocket launcher is fired).
+`open="0x07"` names the weapon that opens the fight while the `prefer`red
+one is not held: any rounds it has go first (`BotTactics.pick_gun`), and
+the loadout takes it instead of a preferred weapon neither held nor boxed
+(303's Tyrant: four grenade hits bring it to the 200 health where Brad
+drops the rocket launcher). It needs a `<keep>` band.
 `staple="yes"` on a `<weapon>` marks the firearm whose ammunition is the
 most common (the handgun): a full inventory never boxes it.
 `melee="yes"` on a `<weapon>` marks a hand weapon (the knife): it has no
@@ -645,8 +657,9 @@ drives the box screen with pad input only.
   twice the reserve floor, and every heal stack, as long as one slot stays
   free (the top-ups; no trip is made for them).
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
-  pending `<fight>` in the current stage (the room id's first character),
-  or, for a firearm, in a room already seen (a box trip into stage 4 put
+  pending `<fight>` in the current stage (the room id's first character)
+  or in the stage its `stage` attribute names (303's Tyrant, met from the
+  lab: `stage="5"`), or, for a firearm, in a room already seen (a box trip into stage 4 put
   away the launcher and rounds 30C's Black Tiger wanted), and its
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
@@ -851,7 +864,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | Element | Attributes | Meaning |
 | --- | --- | --- |
 | `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `reveals`, optional `opens`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. A body-probe zone (flag `0x40`, which fires on the player's position) is stood in instead of pressed. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. With an `after` flag the step is offered only while that flag is set; until then the sequence holds and no later step is offered (a `<use>` may set it). With `after_while="clear"` the step waits for that flag to clear instead: 508's reader lights a lamp only once its pass code's file (a bank-7 item bit) is taken. With `reveals`, the step is also done once that AOT slot is a live item or event zone, which the item frontier or the next step then takes. With `opens`, it is also done once that AOT slot is a live door: an event that turns a door back from a message and sets no flag (513's Barry branch). |
-| `<fight>` | `enemy`, `bank`, `bit`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `label` | With an `after` flag the step holds the sequence as for `<interact>`. Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health (for an enemy with `parts="yes"`, the weakest live part: Plant 42's vines before its body), face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
+| `<fight>` | `enemy`, `bank`, `bit`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `stage`, optional `label` | With an `after` flag the step holds the sequence as for `<interact>`. With `stage` (one room-id character), the box loadout readies the fight's weapon from that stage too (303's Tyrant, reached by the lab's escape lift). Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health (for an enemy with `parts="yes"`, the weakest live part: Plant 42's vines before its body), face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
@@ -950,7 +963,7 @@ files. The checked-in facts:
 | 513 | `<fight enemy="0x0C" bank="3" bit="112" label="the Tyrant">`, then one exit per branch of common bit `0x5B`. Clear (Wesker's branch): the Tyrant's death (enemy bit 112) shows the master key (AOT 2) on the floor, and `<interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0">` with `<answer choice="yes" slot="1">` has the control device turn door 0 from a message (159) back into a door; room bit 3 is set only on the entry where the Tyrant dies. Set (Barry's branch): door 0 is message 131 and AOT 1 message 160 for the whole entry, and the death arms AOT 3 as Barry's event, whose end makes door 0 a door and sets no flag: `<interact slot="3" bank="1" bit="0x5B" done="clear" opens="0">`, ahead of the control device. The bot fights the Tyrant with the grenade launcher (`prefer`), which the loadout rule takes from 50E's box on the way. |
 | 515 | Two `<ride>` facts: the lift's doors are both at the origin. Entered from 514 it rides up to 50C (slot 0); entered from 50C, down to 514 (slot 1). |
 | 501 | `<use slot="4" item="0x27" bank="1" bit="0x46">`: the battery (from 50A) powers the escape lift; its scene starts the 180-second self-destruct countdown. `<avoid slot="5">`: the pulled-out battery's message. |
-| 303 | `<use slot="6" item="0x2A" bank="4" bit="0">`: the flare (AOT 2) used on the deck calls the helicopter. Without scenario `0x2B` (the partner's self-destruct scenes in 505/514) the helicopter takes the player away and the game ends; with it, `<fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0">`: the Tyrant comes up, Brad drops the rocket launcher (AOT 1, the knowledge `prefer` takes it first), and its death starts the ending. |
+| 303 | `<use slot="6" item="0x2A" bank="4" bit="0">`: the flare (AOT 2) used on the deck calls the helicopter. Without scenario `0x2B` (the partner's self-destruct scenes in 505/514) the helicopter takes the player away and the game ends; with it, `<fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0" stage="5">`: the Tyrant comes up; the grenade launcher (the knowledge `open`, carried up from the lab by the loadout) takes it to 200 health, Brad drops the rocket launcher (AOT 1, the knowledge `prefer`, taken while combat holds off), and its death starts the ending. The doors are locked behind the flare, so the fight is fought even when not ready (`fighting anyway`). |
 | 402 | `<interact slot="3" bank="0" bit="0x43">`: pulling the bath plug makes AOT 1 the key `0x3B` (to 411). |
 | 406 | `<push object="1" slot="5" direction="north" clear="full">` (the west crate deep into the recess behind it), `<push object="0" slot="5" direction="west">` (the east crate off the hatch, pushed from the 335-unit strip beside it), then `<interact slot="5" bank="0" bit="0x45">` and `<answer choice="yes" slot="5">`: Yes opens the ladder door down to 40D, whose init sets scenario `0x45`. `<door slot="2" via="5">`: on later entries door 2 is parked at the origin again, and the route goes down by pressing the hatch. |
 | 408 | `<avoid slot="1">`: the door to 409 is reset to message 143 on every entry (and deleted once scenario `0x21` is set), so it is never retried; each retry crossed the room's wasps. |

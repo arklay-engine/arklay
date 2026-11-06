@@ -2807,9 +2807,10 @@ impl UserData for BotCtx {
                         row.set("object", object)?;
                         row.set("slot", slot)?;
                     }
-                    meta::Target::Fight { enemy } => {
+                    meta::Target::Fight { enemy, stage } => {
                         row.set("kind", "fight")?;
                         row.set("enemy", enemy)?;
+                        row.set("stage", stage.map(|byte| char::from(byte).to_string()))?;
                     }
                     meta::Target::Wait => {
                         row.set("kind", "wait")?;
@@ -2924,6 +2925,10 @@ impl UserData for BotCtx {
                 row.set("enemy", entry.enemy)?;
                 row.set("bank", entry.flag.map(|(bank, _)| bank))?;
                 row.set("bit", entry.flag.map(|(_, bit)| bit))?;
+                row.set(
+                    "stage",
+                    entry.stage.map(|byte| char::from(byte).to_string()),
+                )?;
                 table.push(row)?;
             }
             Ok(table)

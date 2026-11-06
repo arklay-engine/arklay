@@ -787,6 +787,13 @@ function BotNav.hold_fight(bot, job)
     if job.done(bot) then
         return "done"
     end
+    -- The enemy's preferred weapon showed here as a pickup (Brad's rocket
+    -- launcher on 303's deck): the goal ends so the item frontier takes it,
+    -- and the step holds until then (BotPuzzle.next_interact).
+    if BotPuzzle.preferred_pickup(bot, job.enemy) then
+        bot:log(job.label .. ": its preferred weapon lies here; taking it first")
+        return "done"
+    end
     -- The target: the part first picked while it lives, else the one of
     -- the job's id with the most health (a boss's body over its escort).
     -- A monster of parts (knowledge parts="yes", Plant 42) is the other way
