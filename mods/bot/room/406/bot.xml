@@ -6,10 +6,13 @@
      into the recess first and the east crate then slides west into its
      place, pushed from the narrow strip beside it. Pressing the hatch asks
      "go down?": Yes makes AOT 2 a door to 40D around the player. 40D's init
-     sets scenario 0x45, which keeps the crates in their pushed places. -->
+     sets scenario 0x45, which keeps the crates in their pushed places. On
+     every later entry door 2 is parked at the room origin again, so <door>
+     tells the route to go down by pressing the hatch. -->
 <bot format="2">
   <push object="1" slot="5" direction="north" clear="full" label="west crate into the recess"/>
   <push object="0" slot="5" direction="west" label="east crate off the hatch"/>
   <interact slot="5" bank="0" bit="0x45" label="the hatch"/>
   <answer choice="yes" slot="5" label="climb down the ladder"/>
+  <door slot="2" via="5" label="down the hatch to 40D"/>
 </bot>

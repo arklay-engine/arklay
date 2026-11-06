@@ -325,7 +325,9 @@ function BotPuzzle.errands(bot)
     return bot.errand_facts and bot:errand_facts() or {}
 end
 
--- The items a wanted <deliver> needs: {[item] = the deliver fact}.
+-- The items a wanted <deliver> needs, {[item] = the deliver fact}, and a
+-- <cure> for a poison the player has while none is held, {[item] = {cure}}
+-- (the second serum on 100's shelf after Yawn's bite).
 function BotPuzzle.wanted_items(bot)
     local out = {}
     for _, fact in ipairs(BotPuzzle.errands(bot)) do
@@ -333,7 +335,28 @@ function BotPuzzle.wanted_items(bot)
             out[fact.item] = out[fact.item] or fact
         end
     end
+    local player = bot:player()
+    local cures = (bot:knowledge() or {}).cures or {}
+    local held = false
+    for _, cure in ipairs(cures) do
+        if BotPuzzle.cures(cure, player) and bot:has_item(cure.item) then
+            held = true
+        end
+    end
+    if not held then
+        for _, cure in ipairs(cures) do
+            if BotPuzzle.cures(cure, player) then
+                out[cure.item] = out[cure.item] or { cure = cure }
+            end
+        end
+    end
     return out
+end
+
+-- Whether <cure> row `cure` clears a poison `player` has.
+function BotPuzzle.cures(cure, player)
+    return (cure.poison == "poison" and player.poisoned == true)
+        or (cure.poison == "serious" and player.seriously_poisoned == true)
 end
 
 -- The <fetch> facts worth doing now: on offer, for an item a wanted
