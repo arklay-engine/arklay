@@ -1034,6 +1034,19 @@ local function combine_goal(bot, pick)
     }
 end
 
+-- A heal used through the menu to free a slot for a pickup here
+-- (BotInventory.heal_for_room).
+local function heal_room_goal(bot, item)
+    local label = string.format("use heal 0x%02X to make room", item)
+    return {
+        kind = "heal", slot = "room", label = label,
+        job = {
+            menu = "heal", label = label,
+            start = function(b) return BotMenu.use_heal(b, item, label) end,
+        },
+    }
+end
+
 -- A held doom book is opened in the menu's CHECK viewer, which turns it
 -- into its medal (Doom Book II the Wolf Medal, Doom Book I the Eagle).
 local DOOM_BOOKS = { C.DOOM_BOOK_2, C.DOOM_BOOK_2 + 1 }
@@ -1513,6 +1526,9 @@ function BotPlanner.risky_next(bot)
     return nil
 end
 
+-- Whether this room entry fights its <fight> ready or not (forgive_fight).
+local fight_forced
+
 -- Pick the next goal, or nil plus the reason nothing is left.
 local function choose(bot)
     local room = bot:room().id
@@ -1548,7 +1564,7 @@ local function choose(bot)
             -- lifts once the inventory changes (a heal, ammunition).
             local fight = not BotTactics.active() and BotPuzzle.fight_ahead(bot, index)
             local ready, not_ready = true, nil
-            if fight then
+            if fight and not fight_forced(bot, room) then
                 ready, not_ready = BotSurvival.fight_ready(bot, fight)
             elseif not BotTactics.active() and BotPuzzle.leave_ahead(bot) then
                 -- So do steps into a hazard that drains health (507's gas).
@@ -1578,12 +1594,19 @@ local function choose(bot)
         end
     end
 
-    -- 1c. Inventory room: a MOVE that empties a slot, then an item box
-    -- here when a deposit or a withdrawal is due.
+    -- 1c. Inventory room: a MOVE that empties a slot, a heal used for
+    -- one (BotInventory.heal_for_room), then an item box here when a
+    -- deposit or a withdrawal is due.
     if not blocked(bot, "combine", "inventory", "mix", true) then
         local pick = BotInventory.combine_now(bot, gave_up)
         if pick then
             return combine_goal(bot, pick)
+        end
+    end
+    if not blocked(bot, "heal", "inventory", "room", true) then
+        local heal = BotInventory.heal_for_room(bot, gave_up)
+        if heal then
+            return heal_room_goal(bot, heal)
         end
     end
     for _, book in ipairs(DOOM_BOOKS) do
@@ -2319,6 +2342,31 @@ local function forgive_approaches(bot)
     return n
 end
 
+-- Before the run finishes on an empty frontier: a fight here the bot was
+-- held back from (`not ready for the fight`) is fought now, ready or not,
+-- for the rest of this room entry (p.forced_fight). Nothing else is left
+-- to make it readier, and 303's heliport locks every door behind the
+-- flare: holding back there only ends the run. Returns whether one was.
+local function forgive_fight(bot)
+    local p = plan()
+    local room = bot:room().id
+    local forgiven = false
+    for key, m in pairs(p.marks) do
+        if m.room == room and m.reason:find("not ready for the fight", 1, true) then
+            p.marks[key] = nil
+            p.forced_fight = { room = room, entry = (p.entries or {})[room] }
+            forgiven = true
+            bot:log("frontier empty; fighting anyway: " .. key .. " (" .. m.reason .. ")")
+        end
+    end
+    return forgiven
+end
+
+fight_forced = function(bot, room)
+    local f = plan().forced_fight
+    return f ~= nil and f.room == room and f.entry == (plan().entries or {})[room]
+end
+
 -- Before the run finishes on an empty frontier: each door a room event
 -- made a message is retried. Away from its room, at once: the walk back is
 -- the wait. In its room, once it has waited EVENT_WAIT (doubled per
@@ -2499,6 +2547,9 @@ function BotPlanner.step(bot)
             elseif waiting then
                 return
             end
+        end
+        if not p.goal and forgive_fight(bot) then
+            p.goal = choose(bot)
         end
         if not p.goal and bot:tick() - (p.entered_tick or 0) < TRANSFER_WAIT then
             for _, door in ipairs(bot:doors()) do

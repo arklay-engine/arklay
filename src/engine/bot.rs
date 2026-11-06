@@ -2822,6 +2822,7 @@ impl UserData for BotCtx {
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
                 row.set("after_clear", fact.after_clear)?;
                 row.set("reveals", fact.reveals)?;
+                row.set("opens", fact.opens)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }

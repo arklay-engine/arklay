@@ -200,6 +200,10 @@ pub struct Interact {
     /// live item or event zone (40C's fireplace turns slot 3 into the helmet
     /// key; 30B's corridor end arms slot 5, the boulder's trigger).
     pub reveals: Option<u8>,
+    /// `<interact opens>`: the step is also done once this AOT slot is a
+    /// live door zone (513 in Barry's branch: the event after the Tyrant
+    /// turns door 0 from a message back into a door, and sets no flag).
+    pub opens: Option<u8>,
     pub label: Option<String>,
 }
 
@@ -805,6 +809,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         after: None,
         after_clear: false,
         reveals: None,
+        opens: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -821,6 +826,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             "after_bit",
             "after_while",
             "reveals",
+            "opens",
             "label",
             "character",
         ],
@@ -836,6 +842,10 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
         reveals: node
             .attribute("reveals")
             .map(|_| attr(node, "reveals"))
+            .transpose()?,
+        opens: node
+            .attribute("opens")
+            .map(|_| attr(node, "opens"))
             .transpose()?,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1043,6 +1053,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         after: after_flag(node)?,
         after_clear: false,
         reveals: None,
+        opens: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1071,6 +1082,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         after: after_flag(node)?,
         after_clear: parse_after_while(node)?,
         reveals: None,
+        opens: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1095,6 +1107,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
         after: after_flag(node)?,
         after_clear: false,
         reveals: None,
+        opens: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1117,6 +1130,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         after: None,
         after_clear: false,
         reveals: None,
+        opens: None,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1496,6 +1510,7 @@ mod tests {
             after: None,
             after_clear: false,
             reveals: None,
+            opens: None,
             label: Some(label.to_string()),
         };
         let expected = vec![
@@ -1574,6 +1589,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
@@ -1583,6 +1599,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: None,
                 },
                 Interact {
@@ -1592,6 +1609,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: Some("north hall".to_string()),
                 },
                 Interact {
@@ -1601,6 +1619,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: None,
                 },
                 Interact {
@@ -1617,6 +1636,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: Some("armor onto the vent".to_string()),
                 },
                 Interact {
@@ -1633,6 +1653,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     reveals: None,
+                    opens: None,
                     label: Some("shelf off the score".to_string()),
                 },
             ]
@@ -1742,6 +1763,7 @@ mod tests {
                 after: None,
                 after_clear: false,
                 reveals: None,
+                opens: None,
                 label: Some("the crank".to_string()),
             }]
         );
@@ -1775,6 +1797,7 @@ mod tests {
                 after: None,
                 after_clear: false,
                 reveals: None,
+                opens: None,
                 label: Some("statue off the balcony".to_string()),
             }]
         );
@@ -1892,11 +1915,13 @@ mod tests {
     fn interact_may_name_the_item_slot_it_reveals() {
         let text = r#"<bot format="2">
             <interact slot="2" bank="7" bit="0x58" done="clear" reveals="3"/>
-            <interact slot="5" bank="1" bit="2"/>
+            <interact slot="5" bank="1" bit="2" opens="0"/>
         </bot>"#;
         let meta = parse(text).unwrap();
         assert_eq!(meta.interacts[0].reveals, Some(3));
         assert_eq!(meta.interacts[1].reveals, None);
+        assert_eq!(meta.interacts[0].opens, None);
+        assert_eq!(meta.interacts[1].opens, Some(0));
         let bad = r#"<bot format="2"><interact slot="2" bank="1" bit="2" reveals="x"/></bot>"#;
         assert!(parse(bad).is_err());
     }

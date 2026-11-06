@@ -766,6 +766,66 @@ function BotInventory.box_reason(bot, skip, here)
     return nil
 end
 
+-- Health a heal used to free a slot must have to restore: at least this
+-- much missing, so the herb is not wasted.
+BotInventory.MAKE_ROOM_HURT = 24
+
+-- The heal item to use now to free a slot for a needed pickup in this room,
+-- or nil: every slot used, a frontier pickup here (one the planner has not
+-- given up on, `skip`) that merges into no held stack and that the run
+-- needs (a key, a <use> item, or the ammunition of a gun held or in the
+-- box), at least two heal stacks held (a cure is none), and MAKE_ROOM_HURT
+-- health missing.
+-- 219 left 12 grenade rounds for a full inventory at 56/96 health with
+-- four heal stacks held.
+function BotInventory.heal_for_room(bot, skip)
+    local ctx = BotInventory.context(bot)
+    local player = bot:player()
+    if not ctx.full or player.max_health - player.health < BotInventory.MAKE_ROOM_HURT then
+        return nil
+    end
+    local heals = {}
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.kind == "heal" and row.heals ~= false and row.quantity > 0
+            and not (ctx.cures and ctx.cures[row.item]) then
+            heals[#heals + 1] = row
+        end
+    end
+    if #heals < 2 then
+        return nil
+    end
+    local box = BotInventory.remembered(bot)
+    local guns_ammo = {}
+    for id, _ in pairs(ctx.guns) do
+        local ammo = bot:ammo_for(id)
+        if ammo and (bot:has_item(id) or box[id]) then
+            guns_ammo[ammo] = true
+        end
+    end
+    local here = bot:room().id
+    local wanted = false
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" and goal.room == here and not (skip and skip(goal)) then
+            local kind, merge = bot:item_kind(goal.item)
+            if not (merge and bot:has_item(goal.item))
+                and (kind == "key" or ctx.uses[goal.item] or guns_ammo[goal.item]) then
+                wanted = true
+            end
+        end
+    end
+    if not wanted then
+        return nil
+    end
+    -- The largest stack first, as BotSurvival.heal does.
+    table.sort(heals, function(a, b)
+        if a.quantity ~= b.quantity then
+            return a.quantity > b.quantity
+        end
+        return a.slot < b.slot
+    end)
+    return heals[1].item
+end
+
 -- Why a combine is worth doing now, and the pick, or nil.
 function BotInventory.combine_now(bot, skip)
     local ctx = BotInventory.context(bot)

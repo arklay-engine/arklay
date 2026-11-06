@@ -178,6 +178,14 @@ end
 -- fireplace, which turns slot 3 into the helmet key; 30B's corridor end,
 -- whose flag the room's main clears at once but which arms slot 5).
 function BotPuzzle.flag_done(bot, fact)
+    -- `opens`: done once that slot is a live door (513's Barry branch,
+    -- whose event turns door 0 back from a message and sets no flag).
+    if fact.opens then
+        local action = BotNav.action_by_slot(bot, fact.opens)
+        if action and action.kind == "door" then
+            return true
+        end
+    end
     if fact.reveals then
         local action = BotNav.action_by_slot(bot, fact.reveals)
         if action and (action.kind == "item" or action.kind == "event") then
