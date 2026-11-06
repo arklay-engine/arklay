@@ -57,6 +57,9 @@ local AHEAD_ARC = C.FULL_TURN // 8
 -- Player state 2 is the generic hit reaction (player_script.rs): the
 -- player is held and a raised aim or a reload is dropped.
 local HIT_STATE = 2
+-- The hunter (enemy/06) and its dodge-and-swipe behaviour.
+local HUNTER = 0x06
+local HUNTER_DODGE = 6
 
 local function state()
     BOT_STATE.tactics = BOT_STATE.tactics or {}
@@ -1173,7 +1176,12 @@ function BotTactics.step(bot, scene, player)
     -- A monster of parts (Plant 42) takes the shot on its next free part
     -- while the target's own hit reaction runs.
     local reacting = target.hit_state ~= 0 and not (entry and entry.parts)
-    if not pose or weapon.behavior ~= C.HOLD_BEHAVIOR or reacting
+    -- A hunter's dodge (enemy/06 behaviour 6) hops clear of the shot from
+    -- its first frame and swipes on landing: a round fired into the hop
+    -- missed, and its pump cost the shot at the swipe's rise (0x80, up).
+    local leaping = target.id == HUNTER and target.action_behavior == HUNTER_DODGE
+        and target.action_state <= 1
+    if not pose or leaping or weapon.behavior ~= C.HOLD_BEHAVIOR or reacting
         or (not locked and s.aim_ticks < AIM_SETTLE)
         or abs(face.angle_error) > FACE_BAND * 2 then
         if s.aim_ticks > LOCK_WAIT * 3 then
