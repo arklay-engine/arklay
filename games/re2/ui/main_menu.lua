@@ -300,7 +300,14 @@ local function refresh(api)
     api:set("ready", true)
 end
 
-function M.open(api, _args)
+function M.open(api, args)
+    -- The get-item window draws with this script's art but runs no page.
+    if args ~= nil and args.mode == "get" then
+        s.get = true
+        s.slots = api:inventory_capacity()
+        s.trace, s.trace_mode = 0, 0
+        return
+    end
     api:set("canvas", 1)
     s.slots = api:inventory_capacity()
     s.page, s.last = nil, nil
@@ -407,6 +414,16 @@ function M.animate(api, open, close)
         s.trace = 0
     else
         s.trace_mode = 0
+        s.trace = (s.trace + 1) % 0x80
+    end
+end
+
+-- One tick of the get-item window's drawing state, by the window's ticks
+-- since its first and in its close: the trace steps on the ticks its
+-- screen is drawn, as the status screen's does.
+function M.animate_get(_api, open, close)
+    s.open, s.close = open, close
+    if shown() then
         s.trace = (s.trace + 1) % 0x80
     end
 end
@@ -922,7 +939,86 @@ local function draw_map(api, d)
     end
 end
 
+-- The get-item window (`0x4FD560`'s draw list): the item page's frame,
+-- portrait, slots and trace, CHECK's panel at the window's origin with the
+-- item's still picture (`0x4FFF70`) and, while it flies, the picture's copy
+-- shrinking onto the slot, under the still. No tab is lit and no cursor or name is drawn.
+local GET_X, GET_Y = 7, 78
+local GET_PICTURE = { 0x10, 0x0A, 0x70, 0x48 }
+
+local function picture(api, d, item, x, y, w, h)
+    local pictures = d.checks
+    if pictures[item] == nil then
+        pictures[item] = api:page(("ui/status/check_%02x"):format(item)) or false
+    end
+    local handle = pictures[item]
+    if handle then
+        api:page_sprite_scaled(handle, 0, 0, 112, 72, d.ox + x, d.oy + y, w, h, 0, 255)
+    end
+end
+
+local function draw_get(api)
+    local get = api:re2_item_get()
+    if get == nil then
+        return
+    end
+    local d = art(api)
+    d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
+    api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
+    pieces(api, d, FRAME_TABS, 0, 0)
+    fill(api, d, MESSAGE_BOX[1], MESSAGE_BOX[2], MESSAGE_BOX[3], MESSAGE_BOX[4], MESSAGE_FILL)
+    pieces(api, d, MESSAGE_FRAME, 0, 0)
+    pieces(api, d, FRAME, 0, 0)
+    check_panel(api, d, GET_Y)
+    for tab = 0, 3 do
+        sprite(api, d, ST + 5, TAB_X + 49 * tab, TAB_Y, TAB_W, TAB_H, 0, TAB_H * tab, TAB_DIM)
+    end
+    for _, p in ipairs(PORTRAIT) do
+        sprite(api, d, ST + 1, p[1], p[2], p[3], p[4], p[5], p[6])
+    end
+    local page = { poisoned = get.poisoned }
+    local cond = condition(api, page)
+    sprite(api, d, ST + 4, CONDITION_X, CONDITION_Y, 46, 11, 0, 11 * cond)
+    slot_icon(api, d, PERSONAL_SLOT, PERSONAL_X, PERSONAL_Y)
+    for slot = s.slots - 1, 0, -1 do
+        slot_icon(api, d, slot, GRID_X + SLOT_W * (slot % 2), GRID_Y + SLOT_H * (slot // 2))
+    end
+    sprite(api, d, ICONS + 2, EQUIP_BOX[1], EQUIP_BOX[2], EQUIP_BOX[3], EQUIP_BOX[4], EQUIP_BOX[5], EQUIP_BOX[6])
+    local equip = equipped_slot(api)
+    if equip ~= nil then
+        local item, quantity = api:re2_slot(equip)
+        local texture, u, v = icon_cell(item)
+        if is_wide(item) then
+            sprite(api, d, texture, EQUIP_X - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+            local half, hu, hv = half_cell(item)
+            sprite(api, d, half, EQUIP_X + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
+        else
+            sprite(api, d, texture, EQUIP_X, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+        end
+        count(api, d, item, quantity, EQUIP_COUNT_X, EQUIP_COUNT_Y)
+    end
+    for slot = 0, s.slots - 1 do
+        local item, quantity = api:re2_slot(slot)
+        local at = COUNT_AT[slot]
+        if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
+            count(api, d, item, quantity, COUNT_ORIGIN_X + at[1], COUNT_ORIGIN_Y + at[2])
+        end
+    end
+    draw_trace(api, d, page, cond, 0)
+    -- The still picture covers its flying copy.
+    local fly = get.fly
+    if fly ~= nil then
+        picture(api, d, get.item, GET_X + fly.x, GET_Y + fly.y, fly.w, fly.h)
+    end
+    local p = GET_PICTURE
+    picture(api, d, get.item, GET_X + p[1], GET_Y + p[2], p[3], p[4])
+end
+
 function M.draw(api)
+    if s.get then
+        draw_get(api)
+        return
+    end
     local page = s.page or api:re2_items()
     if page == nil then
         return

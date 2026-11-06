@@ -884,6 +884,8 @@ pub struct Re2ItemGet {
     pub phase: Re2ItemGetPhase,
     /// Ticks in the phase.
     pub ticks: u8,
+    /// The item's picture on its way to the slot.
+    pub fly: item_get2::Fly,
 }
 
 /// The get-item window's steps: its routines (`0x691F61`) and routine 3's
@@ -1404,6 +1406,7 @@ pub struct ScaVolume {
 }
 
 mod entity;
+pub mod item_get2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
@@ -8376,6 +8379,7 @@ impl GameState {
             action,
             phase: Re2ItemGetPhase::Open,
             ticks: 0,
+            fly: item_get2::Fly::default(),
         });
     }
 
@@ -8402,6 +8406,9 @@ impl GameState {
             }
             Re2ItemGetPhase::Ask if !self.message.active => {
                 if self.message.menu_choice_id() & 1 == 0 {
+                    // Sub 1 starts the picture's fly to the slot the check
+                    // found (`0x4FD79A`).
+                    get.fly.start(self.re2_item_get_fly_slot(get.action));
                     next(Re2ItemGetPhase::Fly)
                 } else {
                     next(Re2ItemGetPhase::Refuse)
@@ -8410,6 +8417,12 @@ impl GameState {
             Re2ItemGetPhase::Fly if get.ticks == ITEM_GET_TAKE_TICK => {
                 self.take_re2_item(get.action);
                 next(Re2ItemGetPhase::Shown)
+            }
+            Re2ItemGetPhase::Fly => {
+                if get.ticks <= item_get2::FLY_TICKS {
+                    get.fly.step();
+                }
+                (Re2ItemGetPhase::Fly, get.ticks)
             }
             // The count out ends in sub 0 too, which plays the same cue.
             Re2ItemGetPhase::Refuse if get.ticks == ITEM_GET_REFUSE_TICKS => {
@@ -8448,6 +8461,27 @@ impl GameState {
         let [id, count] = self.re2.personal_item;
         slots.push(format!("{id:x}:{count}"));
         format!("{}/{}", slots.join(","), self.inventory_capacity())
+    }
+
+    /// The flying picture the get-item window draws this tick: from the
+    /// tick sub 1 starts it to the one before sub 2 hands over to sub 3
+    /// (`0x4FFF70` draws it only in sub 2).
+    pub fn re2_item_get_fly(&self) -> Option<item_get2::Fly> {
+        let get = self.re2_item_get?;
+        (get.phase == Re2ItemGetPhase::Fly && get.ticks < item_get2::FLY_TICKS).then_some(get.fly)
+    }
+
+    /// The slot the picture flies to: the stack it joins, or the first free
+    /// slot (`0x502620`).
+    fn re2_item_get_fly_slot(&self, action: RoomAction) -> usize {
+        match self.re2_item_get_slot(action) {
+            Some(crate::scd2::host::ItemGetSlot::Merge(index)) => index,
+            _ => self
+                .inventory
+                .iter()
+                .position(|stack| stack.id == 0)
+                .unwrap_or(self.inventory.len()),
+        }
     }
 
     /// Where the window's check (`0x4FD5C0`) puts the area's item.
