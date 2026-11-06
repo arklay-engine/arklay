@@ -112,6 +112,14 @@ function BotPuzzle.is_fact_slot(bot, slot)
             end
         end
     end
+    -- A <door>'s via zone is that door's way out (305's passage to 30F),
+    -- not a passage to check.
+    local room = bot:room().id
+    for _, fact in ipairs(bot:door_facts()) do
+        if fact.room == room and fact.via == slot then
+            return true
+        end
+    end
     return false
 end
 
