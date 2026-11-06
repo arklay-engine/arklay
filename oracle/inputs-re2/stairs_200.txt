@@ -1,0 +1,18 @@
+# Room 103's door (door_11b.txt's presses), room 200's entry scene, then down room 200's stairs, a turn round and back up them (oracle/re2.md).
+344 up
+354
+364 action
+368
+920 up
+1010 
+1020 confirm
+1022 
+1100 left
+1280 
+1290 up
+1340 
+1350 confirm
+1352 
+1550 up run
+1600 
+1700 

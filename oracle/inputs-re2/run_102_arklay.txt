@@ -1,0 +1,59 @@
+# run_102.txt 780 ticks earlier, for arklay's start in room 100 (oracle/re2.md).
+10 confirm
+12 
+520 up
+550 
+1700 down
+1702 
+1710 left
+1760 up
+1900 
+1905 right
+1910 up
+2115 
+2120 left
+2124 up
+2200 
+2205 right
+2211 up
+2256 
+2258 left
+2269 
+2272 action
+2274 
+2630 down
+2680 up right
+2709 down
+2790 
+2834 down right
+2877 down
+2978 up run
+3059 up
+3166 up right
+3258 up run
+3268 down left
+3295 up left
+3395 up run right
+3424 up run left
+3515 
+3602 left
+3617 up run
+3725 left
+3737 down
+3781 up run
+3883 up right
+3900 
+3954 
+4022 up left
+4101 right
+4111 up run
+4131 up left
+4227 up left
+4241 up run left
+4289 up right
+4376 up
+4461 left
+4492 down
+4601 up run
+4616 up run left
+4620 

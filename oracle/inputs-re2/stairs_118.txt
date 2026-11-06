@@ -1,0 +1,10 @@
+# Climb room 118's stairs (the one at x -9900 or x -20776), turn round at the top, come down and run off (oracle/re2.md).
+344 
+360 confirm
+362 
+560 left
+750 
+770 confirm
+772 
+1000 up run
+1050 
