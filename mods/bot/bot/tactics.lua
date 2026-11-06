@@ -367,7 +367,8 @@ end
 -- if it covers the bare kill, else the fewest-shot gun that does; a plain
 -- pick with no kill data gives way to a gun with data that covers it. A
 -- reserve gun (row.reserve: the launcher's scarce rounds) is a switch only
--- when no other gun covers the bare kill. So a
+-- when no other gun covers the bare kill. The enemy's `open` weapon, held
+-- with rounds, is the pick while its `prefer`red one is not held. So a
 -- stronger gun (the shotgun) is spent only on a fight the plain pick
 -- cannot finish, and a fight with no kill data keeps the plain pick.
 -- Returns the row or nil.
@@ -391,10 +392,23 @@ function BotTactics.pick_gun(guns, entry, health, margin)
     end
     -- The knowledge's preferred weapon, held with the rounds for the kill.
     local prefer = entry and entry.prefer
+    local prefer_held = false
     for _, row in ipairs(guns) do
+        prefer_held = prefer_held or row.item == prefer
         local n = row.item == prefer and shots(row)
         if n and n <= row.rounds then
             return row
+        end
+    end
+    -- Its opening weapon (`open`), while the preferred one is not held:
+    -- any rounds it has go first (303's Tyrant, taken to 200 health by the
+    -- launcher, where Brad drops the rocket launcher).
+    local open = entry and entry.open
+    if open and not prefer_held then
+        for _, row in ipairs(guns) do
+            if row.item == open then
+                return row
+            end
         end
     end
     local need = plain and shots(plain)
@@ -606,6 +620,15 @@ local function choose(bot, s, k, enemies, player)
             return focus, gun
         end
     end
+    -- An enemy whose preferred weapon lies here as a pickup is no target
+    -- until it is taken (BotTactics.step).
+    local kept = {}
+    for i = 1, #enemies do
+        if not BotPuzzle.preferred_pickup(bot, enemies[i].id) then
+            kept[#kept + 1] = enemies[i]
+        end
+    end
+    enemies = kept
     local nearest
     for i = 1, #enemies do
         local entry = k.enemies[enemies[i].id]
@@ -779,6 +802,13 @@ function BotTactics.step(bot, scene, player)
     local target = s.active and enemy_by_slot(enemies, s.target) or nil
     if s.active and not target then
         stop(bot, s, string.format("target down health=%s", tostring(s.last_health)))
+        return false
+    end
+    -- The target's preferred weapon lies here as a pickup: the planner
+    -- takes it first (303's Tyrant stays at 200 health until Brad's
+    -- rocket launcher; shooting on spent the rounds and the health).
+    if target and BotPuzzle.preferred_pickup(bot, target.id) then
+        stop(bot, s, "its preferred weapon lies here: take it first")
         return false
     end
     if not s.active then

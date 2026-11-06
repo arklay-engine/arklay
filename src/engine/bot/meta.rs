@@ -239,8 +239,10 @@ pub enum Target {
     /// Stay in the room and fight enemy `enemy` (an entity id) until the
     /// step's flag is set: the planner keeps the player facing the nearest
     /// one so the combat layer engages (40C's Plant 42, which never comes
-    /// to the player).
-    Fight { enemy: u8 },
+    /// to the player). `stage` (a room id's first character) is another
+    /// stage the box loadout readies it from (303's Tyrant, met from the
+    /// lab's escape lift: `stage="5"`).
+    Fight { enemy: u8, stage: Option<u8> },
     /// Stand still in the room until the step's flag is set: a timed room
     /// event that must play out (20C's pit, where Barry comes back with the
     /// rope after 600 frames).
@@ -423,6 +425,9 @@ pub struct RoomFight {
     pub enemy: u8,
     /// The flag its death sets, when the fact names one.
     pub flag: Option<(u8, u8)>,
+    /// The other stage the loadout readies it from (`<fight stage>`), as
+    /// the ASCII byte of the room id's first character.
+    pub stage: Option<u8>,
 }
 
 /// Every room's `<fight>` facts, by room id then document order
@@ -431,11 +436,12 @@ pub fn load_fights(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomFight>> {
     let mut fights = Vec::new();
     for (id, meta) in load_all(pack, jill)? {
         for fact in meta.interacts {
-            if let Target::Fight { enemy } = fact.target {
+            if let Target::Fight { enemy, stage } = fact.target {
                 fights.push(RoomFight {
                     room: id.clone(),
                     enemy,
                     flag: fact.flag,
+                    stage,
                 });
             }
         }
@@ -1068,14 +1074,26 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
             "after_bank",
             "after_bit",
             "after_while",
+            "stage",
             "label",
             "character",
         ],
     )?;
     check_leaf(node)?;
+    let stage = match node.attribute("stage") {
+        None => None,
+        Some(text) => match text.as_bytes() {
+            [byte] if byte.is_ascii_alphanumeric() => Some(byte.to_ascii_uppercase()),
+            _ => bail!(
+                "{}: `stage` must be one room-id character, not `{text}`",
+                at(node)
+            ),
+        },
+    };
     Ok(Interact {
         target: Target::Fight {
             enemy: attr(node, "enemy")?,
+            stage,
         },
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
@@ -1831,10 +1849,26 @@ mod tests {
             <fight enemy="0x08" bank="3" bit="96" label="Plant 42"/>
         </bot>"#;
         let meta = parse(text).unwrap();
-        assert_eq!(meta.interacts[0].target, Target::Fight { enemy: 0x08 });
+        assert_eq!(
+            meta.interacts[0].target,
+            Target::Fight {
+                enemy: 0x08,
+                stage: None
+            }
+        );
         assert_eq!(meta.interacts[0].flag, Some((3, 96)));
         let flagless = r#"<bot format="2"><fight enemy="0x08"/></bot>"#;
         assert!(parse(flagless).is_err());
+        let staged = r#"<bot format="2"><fight enemy="0x10" bank="3" bit="0x59" stage="5"/></bot>"#;
+        assert_eq!(
+            parse(staged).unwrap().interacts[0].target,
+            Target::Fight {
+                enemy: 0x10,
+                stage: Some(b'5')
+            }
+        );
+        let long = r#"<bot format="2"><fight enemy="0x10" bank="3" bit="1" stage="55"/></bot>"#;
+        assert!(parse(long).is_err());
     }
 
     #[test]

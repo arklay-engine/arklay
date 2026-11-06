@@ -489,9 +489,16 @@ function BotInventory.context(bot)
     -- this stage prefers, so a boss is met with it (513's Tyrant and the
     -- grenade launcher). The stage is the room id's first character.
     local here = bot:room().id
+    local box = BotInventory.remembered(bot)
     for _, fight in ipairs(bot:fight_facts()) do
         local entry = knowledge and knowledge.enemies[fight.enemy]
         local prefer = entry and entry.prefer
+        -- A preferred weapon neither held nor boxed (Brad's rocket
+        -- launcher, dropped mid-fight) gives way to the enemy's opening
+        -- one (`open`: the grenade launcher for 303's Tyrant).
+        if prefer and entry.open and not bot:has_item(prefer) and not box[prefer] then
+            prefer = entry.open
+        end
         local row = prefer and knowledge.weapons[prefer]
         local pending = row and not (fight.bank and bot:flag(fight.bank, fight.bit))
         -- A firearm for a fight in a room already seen counts in any
@@ -499,7 +506,10 @@ function BotInventory.context(bot)
         -- rounds that 30C's Black Tiger wanted, and the bot met the tiger
         -- with an empty handgun, twice. (A hand weapon waits for its
         -- fight's stage: the knife.)
+        -- So does a fight whose `stage` attribute names this stage (303's
+        -- Tyrant, met from the lab's escape lift).
         if pending and (fight.room:sub(1, 1) == here:sub(1, 1)
+            or fight.stage == here:sub(1, 1)
             or (not row.melee and bot:visited(fight.room))) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true

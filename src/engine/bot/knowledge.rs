@@ -115,6 +115,11 @@ pub struct Enemy {
     /// hunter takes the shotgun), over the equipped one; it must have a
     /// `<keep>` (optional attribute).
     pub prefer: Option<u8>,
+    /// The weapon that opens the fight while the `prefer`red one is not
+    /// held (303's Tyrant: the grenade launcher takes it to the 200 health
+    /// where Brad drops the rocket launcher); it must have a `<keep>`
+    /// (optional attribute).
+    pub open: Option<u8>,
     pub keeps: Vec<Keep>,
 }
 
@@ -348,6 +353,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             "health",
             "parts",
             "prefer",
+            "open",
         ],
     )?;
     let policy = match attr_text(node, "policy")? {
@@ -403,6 +409,15 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     {
         bail!("{}: `prefer` weapon {weapon:#04x} has no <keep>", at(node));
     }
+    let open: Option<u8> = node
+        .attribute("open")
+        .map(|_| attr(node, "open"))
+        .transpose()?;
+    if let Some(weapon) = open
+        && !keeps.iter().any(|keep| keep.weapon == weapon)
+    {
+        bail!("{}: `open` weapon {weapon:#04x} has no <keep>", at(node));
+    }
     Ok(Enemy {
         id: attr(node, "id")?,
         name: name_attr(node)?,
@@ -424,6 +439,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             None => false,
         },
         prefer,
+        open,
         keeps,
     })
 }
@@ -525,6 +541,7 @@ impl Knowledge {
             row.set("health", enemy.health)?;
             row.set("parts", enemy.parts)?;
             row.set("prefer", enemy.prefer)?;
+            row.set("open", enemy.open)?;
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
                 let band = lua.create_table()?;
@@ -697,6 +714,14 @@ mod tests {
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" prefer=\"3\">"))
                 .is_err(),
             "a preferred weapon needs a <keep>"
+        );
+        assert_eq!(k.enemies[0].open, None);
+        let open =
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" open=\"2\">")).unwrap();
+        assert_eq!(open.enemies[0].open, Some(2));
+        assert!(
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" open=\"3\">")).is_err(),
+            "an opening weapon needs a <keep>"
         );
     }
 }

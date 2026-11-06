@@ -14,9 +14,11 @@
          death starts the ending (from_main_6). The knowledge file's
          `prefer` has the bot take the launcher first once it shows.
      The lab's self-destruct countdown runs throughout, so nothing else
-     here is worth the time. -->
+     here is worth the time. The fight is met from the lab (50D's escape
+     lift), so `stage="5"` has the box loadout ready its weapon there: the
+     knowledge's opening weapon, the grenade launcher. -->
 <bot format="2">
   <use slot="6" item="0x2A" bank="4" bit="0" label="light the flare"/>
-  <fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0"
+  <fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0" stage="5"
          label="the Tyrant on the heliport"/>
 </bot>
