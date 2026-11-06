@@ -409,7 +409,10 @@ the bot is sourcing ammunition (`ammo low: ...; sourcing`):
 Below half health with no heal held (`BotSurvival.needs_heal`), a heal
 pickup or a box heal ranks `HEAL_BONUS` (a cure fetch less one key)
 cheaper, and the pursued target is dropped once per hurt episode
-(`target dropped: hurt with no heal held`).
+(`target dropped: hurt with no heal held`). Each monster that hurt the
+bot in a room a route enters (`BotTactics.hurt_count`, at most 3 a room)
+then adds `HURT_ROOM_COST` (two door steps), so the way to the heal goes
+round a room where a cerberus already bit.
 
 At finish the log lists every ammunition pickup the world model saw and
 its fate (`ammo account: ROOM slot N item 0x.. xQ taken|left|gone (mark)`).
@@ -594,6 +597,11 @@ drives the box screen with pad input only.
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
   step whose preferred weapon is not held waits while a frontier pickup of
   it is in the room (`BotPuzzle.preferred_pickup`), so it is taken first.
+- Rearm: while sourcing ammunition ([Ammunition](#ammunition)), a firearm
+  in the remembered box (not a `reserve` one) whose ammunition is held or
+  in the box comes out with that ammunition, the way the loadout does
+  (`rearm: the held guns are short of rounds`): the shotgun put away
+  empty is taken back once its shells are, when the handgun runs dry.
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
@@ -837,7 +845,7 @@ files. The checked-in facts:
 | Room | Facts |
 | --- | --- |
 | 105 | Jill: `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. Chris: the same at slot 8; done flag `0xA8`. The fireplace hollow's message (Jill slot 13, Chris slot 10) is avoided. |
-| 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. `<avoid slot="4" bank="1" bit="0xA9" while="clear">`: the plant fountains stand across the way to the armor key until the herbicide. |
+| 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. `<avoid slot="4" bank="1" bit="0xA9" while="clear">`: the plant fountains stand across the way to the armor key until the herbicide, and `<avoid>` slots 5..10 the same for the six herbs in their reach. |
 | 102 | `<holds item="0x1C">`: the broken shotgun lies here (the room's door from 101 takes the armor key). |
 | 210 | `<interact slot="4" bank="7" bit="0x81" done="clear">`: the moon crest has no player bit; the nest event (AOT 4) hands it over. |
 | 202 | `<push object="0" slot="3" bank="0" bit="0x0B">`: the statue along the balcony until it falls; the fall sets scenario `0x0B` and puts the blue jewel (`0x21`) in 105. |

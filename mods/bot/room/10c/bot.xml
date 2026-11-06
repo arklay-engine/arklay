@@ -6,9 +6,24 @@
 
      Until common 0xA9 is set, the six plant fountains (x 7900..8400,
      z 4700..6200) stand across the bed passage to the mansion armor key
-     (item AOT 4, x 5000..5800): the way to it runs through their reach. -->
+     (item AOT 4, x 5000..5800): the way to it runs through their reach.
+     The six herbs (item AOTs 5..10, x 6000..8900, z 2000..3000) lie in
+     their reach too: each try at one cost about 24 health, and a hurt bot
+     with no heal walked there on its last 8 health. -->
 <bot format="2">
   <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
   <avoid slot="4" bank="1" bit="0xA9" while="clear"
          reason="the plant fountains stand across the way until the herbicide (common 0xA9)"/>
+  <avoid slot="5" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <avoid slot="6" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <avoid slot="7" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <avoid slot="8" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <avoid slot="9" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <avoid slot="10" bank="1" bit="0xA9" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
 </bot>
