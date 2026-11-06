@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 30B, the boulder corridor. Its west end (AOT 10, a body probe that
+     reaches on under the boulder, so only its east end is floor) sets room
+     flag 31; the room's main clears the flag at once and arms AOT 5 as an
+     event. Walking into AOT 5 runs event_00: scenario 0x3D is set and the
+     boulder rolls east; AOT 9 by the entrance is the dodge. Afterwards the
+     init opens the way to door 1 (30C) and the item. -->
+<bot format="2">
+  <interact slot="10" bank="0" bit="0x3D" reveals="5" label="walk to the corridor's end"/>
+  <interact slot="5" bank="0" bit="0x3D" label="set the boulder rolling"/>
+</bot>

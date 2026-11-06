@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 307, the cave bridge below 302's ladder. The hex crank (0x1E) used at
+     AOT 4 (AOT 3 in this pack is a handover item at the room origin) turns
+     the bridge, sets common 0x47 and opens door 2 to 30B. -->
+<bot format="2">
+  <use slot="4" item="0x1E" bank="1" bit="0x47" label="the hex crank: turn the bridge"/>
+</bot>
