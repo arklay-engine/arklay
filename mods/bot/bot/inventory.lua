@@ -279,7 +279,11 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.gun_ammo and ctx.gun_ammo[item] then
         return "ammunition for a held gun"
     end
-    if ctx.loadout and ctx.loadout[item] then
+    -- A loadout weapon already held needs no second one: 30C's knife,
+    -- picked up there, sent the bot six doors to 403's box for the boxed
+    -- one, poisoned, and that took the slot the box's blue herb needed.
+    if ctx.loadout and ctx.loadout[item]
+        and not (row.kind == "weapon" and ctx.held_weapons and ctx.held_weapons[item]) then
         return LOADOUT
     end
     if ctx.rearm and ctx.rearm[item] then
@@ -307,17 +311,16 @@ local TOP_UPS = {
 function BotInventory.withdrawals(box_items, ctx, free)
     local out = {}
     local heal_taken = false
-    -- The loadout and the rearm first, so the heal top-up does not fill
-    -- their slots.
+    -- The cure first, then the loadout and the rearm, so the heal top-up
+    -- does not fill their slots.
     local rows = {}
-    for _, row in ipairs(box_items) do
-        if FIRST[BotInventory.wanted_back(row, ctx)] then
-            rows[#rows + 1] = row
-        end
-    end
-    for _, row in ipairs(box_items) do
-        if not FIRST[BotInventory.wanted_back(row, ctx)] then
-            rows[#rows + 1] = row
+    for pass = 1, 3 do
+        for _, row in ipairs(box_items) do
+            local why = BotInventory.wanted_back(row, ctx)
+            if (pass == 1 and why == CURE) or (pass == 2 and why ~= CURE and FIRST[why])
+                or (pass == 3 and not FIRST[why]) then
+                rows[#rows + 1] = row
+            end
         end
     end
     for _, row in ipairs(rows) do
@@ -453,6 +456,10 @@ function BotInventory.context(bot)
     for id, _ in pairs(knowledge and knowledge.weapons or {}) do
         ctx.guns[id] = true
         ctx.own_ammo[id] = bot:ammo_for(id)
+        if bot:has_item(id) then
+            ctx.held_weapons = ctx.held_weapons or {}
+            ctx.held_weapons[id] = true
+        end
         -- The reserve is kept only for a gun the bot holds: shells carried
         -- before the shotgun fill a slot a pickup needs, and the box gives
         -- them back once the gun is equipped (the reserve-floor withdrawal).
