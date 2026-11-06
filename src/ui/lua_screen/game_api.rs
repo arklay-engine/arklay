@@ -59,9 +59,9 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
 
     // `re2_items()`: RE2's status screen as a table (`page`, `sub`,
     // `command`, `step`, `count`, `cursor`, `target`, `tab`,
-    // `command_cursor`, `result`, `follow`, the condition panel's `panel_mode`,
-    // `panel_sweep`, `panel_cure` and `panel_done`, and whether the player
-    // is `poisoned`), or nil when it isn't up. The engine runs it; the
+    // `command_cursor`, `result`, `follow`, FILE's `binder`, the condition
+    // panel's `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`,
+    // and whether the player is `poisoned`), or nil when it isn't up. The engine runs it; the
     // script only draws it.
     methods.add_method("re2_items", |lua, api, ()| {
         let Some((page, poisoned)) = api
@@ -87,6 +87,52 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("target", page.target)?;
         table.set("tab", page.tab)?;
         table.set("command_cursor", page.command_cursor)?;
+        table.set("binder", page.binder)?;
+        Ok(mlua::Value::Table(table))
+    });
+
+    // `re2_map()`: what RE2's MAP page draws on the player's floor: its
+    // `map` picture's number, its `rooms` in the draw order (each `x`, `y`,
+    // `w`, `h`, an `outline` and maybe a translucent `fill`, both a
+    // `texture` slot, `u`, `v` and `clut`) and the player's `marker` (`x`,
+    // `y`, `u`, `v`), or nil without a game.
+    methods.add_method("re2_map", |lua, api, ()| {
+        let Some(view) = api.game().map(|game| game.re2_map_view()) else {
+            return Ok(mlua::Value::Nil);
+        };
+        let sprite = |sprite: crate::game::status2::map::MapSprite| -> mlua::Result<mlua::Table> {
+            let table = lua.create_table()?;
+            table.set("texture", sprite.texture)?;
+            table.set("u", sprite.u)?;
+            table.set("v", sprite.v)?;
+            table.set("clut", sprite.clut)?;
+            Ok(table)
+        };
+        let table = lua.create_table()?;
+        table.set("floor", view.floor)?;
+        table.set("map", view.map)?;
+        let rooms = lua.create_table()?;
+        for (index, room) in view.rooms.iter().enumerate() {
+            let entry = lua.create_table()?;
+            entry.set("x", room.x)?;
+            entry.set("y", room.y)?;
+            entry.set("w", room.w)?;
+            entry.set("h", room.h)?;
+            entry.set("outline", sprite(room.outline)?)?;
+            if let Some(fill) = room.fill {
+                entry.set("fill", sprite(fill)?)?;
+            }
+            rooms.set(index + 1, entry)?;
+        }
+        table.set("rooms", rooms)?;
+        if let Some(marker) = view.marker {
+            let entry = lua.create_table()?;
+            entry.set("x", marker.x)?;
+            entry.set("y", marker.y)?;
+            entry.set("u", marker.u)?;
+            entry.set("v", marker.v)?;
+            table.set("marker", entry)?;
+        }
         Ok(mlua::Value::Table(table))
     });
 

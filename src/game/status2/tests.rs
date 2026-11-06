@@ -398,3 +398,59 @@ fn the_cues_are_the_core_banks_slots_4_to_7() {
     assert_eq!(Sound::Decide.id(), 0x0406_0000);
     assert_eq!(Sound::Buzzer.id(), 0x0407_0000);
 }
+
+/// Ticks `page` with `tick` and `input` until `done`, returning the ticks
+/// it took and the sounds it played.
+fn ticks_until(
+    page: &mut ItemPage,
+    tick: fn(&mut ItemPage, Input, &mut Outcome),
+    input: Input,
+    done: impl Fn(&ItemPage) -> bool,
+) -> (u32, Vec<Sound>) {
+    let mut out = Outcome::default();
+    let mut ticks = 0;
+    while !done(page) {
+        assert!(ticks < 100, "stuck at {page:?}");
+        tick(page, if ticks == 0 { input } else { NONE }, &mut out);
+        ticks += 1;
+    }
+    (ticks, out.sounds)
+}
+
+/// `status_map`: the map loads in a tick and slides in over 14, the last
+/// with the map's cue; the cancel key slides it out over 14 more.
+#[test]
+fn the_map_slides_in_and_out_over_fourteen_ticks() {
+    let mut page = game(&[(0x02, 18)]).re2_items.unwrap();
+    page.page = PAGE_MAP;
+    page.sub = MAP_LOAD;
+    let (ticks, sounds) = ticks_until(&mut page, re2_map, NONE, |p| p.sub == MAP_SHOWN);
+    assert_eq!((ticks, sounds), (15, vec![Sound::Map]));
+    // Shown, only the cancel key does anything.
+    let (ticks, sounds) = ticks_until(&mut page, re2_map, CANCEL, |p| p.page == PAGE_TABS);
+    assert_eq!((ticks, sounds), (15, vec![Sound::Cancel]));
+}
+
+/// `status_file`: the binders slide in over 13 ticks, turn over 13 with
+/// cue 10 (wrapping 0 to 2), and slide out on the cancel key.
+#[test]
+fn the_binders_slide_in_turn_and_slide_out() {
+    let mut page = game(&[(0x02, 18)]).re2_items.unwrap();
+    page.page = PAGE_FILE;
+    page.sub = FILE_LOAD;
+    let (ticks, sounds) = ticks_until(&mut page, re2_file, NONE, |p| p.sub == FILE_SHOWN);
+    assert_eq!((ticks, sounds), (13, vec![]));
+    // The decide key does nothing: no binder holds a file.
+    re2_file(&mut page, CONFIRM, &mut Outcome::default());
+    assert_eq!(page.sub, FILE_SHOWN);
+    let left = Input { left: true, ..NONE };
+    let (ticks, sounds) = ticks_until(&mut page, re2_file, left, |p| {
+        p.sub == FILE_SHOWN && p.binder != 0
+    });
+    assert_eq!(
+        (ticks, sounds, page.binder),
+        (14, vec![Sound::Turn], BINDERS - 1)
+    );
+    let (ticks, sounds) = ticks_until(&mut page, re2_file, CANCEL, |p| p.page == PAGE_TABS);
+    assert_eq!((ticks, sounds), (14, vec![Sound::Cancel]));
+}

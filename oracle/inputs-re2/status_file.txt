@@ -1,0 +1,25 @@
+# room 102: up to the tab bar, FILE, turn the binders both ways, try to open one, back out, then close from the tab bar (oracle/re2.md, "Items")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 left
+464
+480 confirm
+484
+540 left
+544
+580 left
+584
+620 right
+624
+660 confirm
+664
+700 cancel
+704
+760 start
+764

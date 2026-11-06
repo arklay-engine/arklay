@@ -1,7 +1,8 @@
-//! RE 2's status screen, as far as its item page goes: the routine at
-//! `0x4F8160` (page 3 of the screen's work block at `0x691F60`), the tab bar
-//! above it (`0x4F8050`, page 2) and the condition panel the page animates
-//! (`0x4FFAB0`).
+//! RE 2's status screen: its item page, the routine at `0x4F8160` (page 3
+//! of the screen's work block at `0x691F60`), the tab bar above it
+//! (`0x4F8050`, page 2), the condition panel the page animates (`0x4FFAB0`),
+//! and the MAP and FILE pages' steps (`0x4FA240`, page 4, and `0x4F95B0`,
+//! page 5; the pages' table is at `0x53D9EC`).
 //!
 //! The work block's bytes are kept under the executable's own numbers, so
 //! the oracle's `gi` field compares one for one:
@@ -28,12 +29,36 @@
 use super::GameState;
 use crate::scd2::host::item_max;
 
+pub mod map;
+
 /// `Item_work`'s eleventh slot: the personal item.
 pub const PERSONAL_SLOT: u8 = 10;
 
 /// The page byte (`0x691F61`): the tab bar and the item page.
 pub const PAGE_TABS: u8 = 2;
 pub const PAGE_ITEMS: u8 = 3;
+pub const PAGE_MAP: u8 = 4;
+pub const PAGE_FILE: u8 = 5;
+
+/// The MAP page's subs (`0x4FA64C`): 0 loads the floor's map, 1 slides it in,
+/// 2 slides it out, 3 shows it and 4 loads another floor.
+pub const MAP_LOAD: u8 = 0;
+pub const MAP_IN: u8 = 1;
+pub const MAP_OUT: u8 = 2;
+pub const MAP_SHOWN: u8 = 3;
+pub const MAP_FLOOR: u8 = 4;
+/// The FILE page's subs (`0x4FA178`) as far as the binders go: 0 loads them
+/// and starts 1, the slide in; 2 slides out, 3 waits on the binders, and 4
+/// and 5 turn them left and right. Subs 6 to 18 open a binder and read its
+/// files, which no route state reaches (`docs/re2-deviations.md`).
+pub const FILE_LOAD: u8 = 0;
+pub const FILE_IN: u8 = 1;
+pub const FILE_OUT: u8 = 2;
+pub const FILE_SHOWN: u8 = 3;
+pub const FILE_LEFT: u8 = 4;
+pub const FILE_RIGHT: u8 = 5;
+/// The binders on FILE's carousel (`0x691F71` wraps 0 to 2).
+pub const BINDERS: u8 = 3;
 
 /// The item page's subs (`0x691F62`).
 pub const SUB_GRID: u8 = 0;
@@ -49,7 +74,8 @@ pub const COMMAND_USE: u8 = 3;
 
 /// The tab bar's EXIT.
 const TAB_EXIT: u8 = 3;
-/// The ITEMS tab: the page is `5 - tab`.
+/// The ITEMS tab: the page is `5 - tab`, so FILE (tab 0) is page 5 and MAP
+/// (tab 1) page 4.
 const TAB_ITEMS: u8 = 2;
 
 /// The executable's messages the page raises (`MESSAGE_<nn>` in the pack's
@@ -82,13 +108,16 @@ pub struct Input {
 
 /// The sounds the page plays: `Snd_se_on`'s core-bank cues `0x4040000`,
 /// `0x4050000`, `0x4060000` and `0x4070000` (`0x4ED950`), which play at the
-/// slot's own volume, unpanned.
+/// slot's own volume, unpanned; MAP's `0x4090000` once the map has slid in,
+/// and FILE's `0x40A0000` for a turn of the binders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {
     Cursor,
     Cancel,
     Decide,
     Buzzer,
+    Map,
+    Turn,
 }
 
 impl Sound {
@@ -99,6 +128,8 @@ impl Sound {
             Self::Cancel => 5,
             Self::Decide => 6,
             Self::Buzzer => 7,
+            Self::Map => 9,
+            Self::Turn => 10,
         };
         0x0400_0000 | slot << 16
     }
@@ -181,6 +212,8 @@ pub struct ItemPage {
     pub command_cursor: u8,
     /// COMBN's result id (`0x691F86`).
     pub result: u8,
+    /// FILE's binder (`0x691F71`), 0 to 2.
+    pub binder: u8,
     /// USE's heal, applied once the panel is done.
     pub amount: i16,
     pub panel: Panel,
@@ -201,6 +234,7 @@ impl Default for ItemPage {
             // `0x4FF060` puts it on the top entry when the menu opens.
             command_cursor: 0,
             result: 0,
+            binder: 0,
             amount: 0,
             panel: Panel::default(),
         }
@@ -395,6 +429,111 @@ fn heal(item: u8) -> Option<(Option<u8>, u8)> {
     })
 }
 
+/// One tick of the MAP page (`0x4FA240`). Sub 0 loads the floor's map and
+/// its pictures in the tick (`common\\file\\map<nn>.adt`, the floor from
+/// `0x4FAF80`); sub 1 slides it in for 14 ticks, the last of which plays
+/// cue 9 and shows it (sub 3). There the cancel key plays the cancel cue and
+/// slides it out (sub 2) for 14 ticks, back to the tab bar. Up and down
+/// change floors only on a floor with others above or below it
+/// (`0x53DA28`, `0x53DA40`) whose map the player holds, which no route
+/// room has: the route's floor, the city's map 0, has none. START does
+/// nothing on this page (`0x691F76` is 0).
+fn re2_map(page: &mut ItemPage, input: Input, out: &mut Outcome) {
+    match page.sub {
+        MAP_LOAD => {
+            page.sub = MAP_IN;
+            page.command = 0;
+        }
+        MAP_FLOOR => page.sub = MAP_SHOWN,
+        MAP_IN | MAP_OUT => {
+            let count = page.command;
+            page.command += 1;
+            if count > 12 {
+                page.command = 0;
+                if page.sub == MAP_IN {
+                    out.sounds.push(Sound::Map);
+                    page.sub = MAP_SHOWN;
+                } else {
+                    page.page = PAGE_TABS;
+                    page.sub = 0;
+                }
+            }
+        }
+        MAP_SHOWN if input.cancel => {
+            out.sounds.push(Sound::Cancel);
+            page.sub = MAP_OUT;
+        }
+        _ => {}
+    }
+}
+
+/// One tick of the FILE page (`0x4F95B0`), as far as the binders go. Sub 0
+/// loads the binders' model (`common\\data\\st_file.ts`) and runs sub 1's
+/// first tick; sub 1 slides them in for 12 ticks more and shows them (sub
+/// 3). There left and right (the keys with their repeat) turn the carousel
+/// for 13 ticks (subs 4 and 5) with cue 10, after which the next binder is
+/// in front and a key still held turns it again in the same tick. The
+/// decide key opens the binder in front only when it holds a file
+/// (`0x98EE60`), which nothing on the route gives; otherwise it does
+/// nothing. The cancel key plays the cancel cue and slides the binders out
+/// (sub 2) for 13 ticks, back to the tab bar. START does nothing here.
+fn re2_file(page: &mut ItemPage, input: Input, out: &mut Outcome) {
+    let turn = |page: &mut ItemPage, out: &mut Outcome| {
+        if input.left {
+            out.sounds.push(Sound::Turn);
+            page.sub = FILE_LEFT;
+        }
+        if input.right {
+            out.sounds.push(Sound::Turn);
+            page.sub = FILE_RIGHT;
+        }
+    };
+    match page.sub {
+        FILE_LOAD | FILE_IN | FILE_OUT => {
+            if page.sub == FILE_LOAD {
+                page.sub = FILE_IN;
+                page.command = 0;
+            }
+            let count = page.command;
+            page.command += 1;
+            if count > 11 {
+                page.command = 0;
+                if page.sub == FILE_IN {
+                    page.sub = FILE_SHOWN;
+                } else {
+                    page.page = PAGE_TABS;
+                    page.sub = 0;
+                }
+            }
+        }
+        FILE_SHOWN => {
+            turn(page, out);
+            // No binder holds a file: the decide key falls through to the
+            // cancel key's test.
+            if input.cancel {
+                out.sounds.push(Sound::Cancel);
+                page.sub = FILE_OUT;
+            }
+        }
+        FILE_LEFT | FILE_RIGHT => {
+            let count = page.command;
+            page.command += 1;
+            if count > 11 {
+                page.binder = if page.sub == FILE_LEFT {
+                    (page.binder + BINDERS - 1) % BINDERS
+                } else {
+                    (page.binder + 1) % BINDERS
+                };
+                page.sub = FILE_SHOWN;
+                page.command = 0;
+                page.step = 0;
+                turn(page, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// A cursor move on the grid (`0x4F8177`) or over COMBN's target: right,
 /// left, down and up, in that order, all in one tick. Returns whether up
 /// left the top row for the tab bar, which only the grid allows.
@@ -487,6 +626,8 @@ impl GameState {
         let mut out = Outcome::default();
         match page.page {
             PAGE_TABS => self.re2_tabs(&mut page, input, &mut out),
+            PAGE_MAP => re2_map(&mut page, input, &mut out),
+            PAGE_FILE => re2_file(&mut page, input, &mut out),
             _ => self.re2_item_page(&mut page, input, &mut out),
         }
         page.panel.tick();
@@ -513,22 +654,17 @@ impl GameState {
             out.sounds.push(Sound::Cursor);
         }
         if input.confirm {
-            match page.tab {
-                TAB_EXIT => {
-                    out.sounds.push(Sound::Cancel);
-                    out.close = true;
-                }
-                TAB_ITEMS => {
-                    // Page `5 - tab`, with the page's bytes `+2` to `+7` and
-                    // the cursor cleared.
-                    out.sounds.push(Sound::Decide);
-                    page.page = PAGE_ITEMS;
-                    page.back_to_grid();
-                    page.follow = false;
-                    page.cursor = 0;
-                }
-                // The MAP and FILE pages (4 and 5) aren't ported.
-                _ => out.sounds.push(Sound::Buzzer),
+            if page.tab == TAB_EXIT {
+                out.sounds.push(Sound::Cancel);
+                out.close = true;
+            } else {
+                // Page `5 - tab`, with the page's bytes `+2` to `+7` and the
+                // cursor cleared.
+                out.sounds.push(Sound::Decide);
+                page.page = 5 - page.tab;
+                page.back_to_grid();
+                page.follow = false;
+                page.cursor = 0;
             }
         }
         if input.cancel || input.start {

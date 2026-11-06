@@ -13,6 +13,9 @@
 //! | `Common/bin/rc2000_.adt`, `rc2168_.adt` | `room/<id>/scroll/<nn>.bmp` |
 //! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
 //! | ADT streams in `Common/bin/itemdata.bin` | `ui/status/check_<id:02x>.tim` |
+//! | `Common/file/map<nn>.adt` (TIM `k`) | `ui/status/map<nn>_<k>.tim` |
+//! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
+//! | `Common/Data/type00.adt` | `ui/type00.bmp` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -41,8 +44,8 @@
 //! ([`bgm_track`]). Sound banks are split into one WAV per slot, named as
 //! [`crate::se2`] describes. Each room's English name comes from Classic REbirth's
 //! debug room table in the install's `ddraw.dll` ([`room_names`]), and the
-//! status screen's English labels from the 7z archive in the same DLL
-//! ([`sevenz`]).
+//! status screen's English labels and the save screen's English
+//! background from the 7z archive in the same DLL ([`sevenz`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
 //! alternate takes of the six reels (three byte-identical, three differing
@@ -1318,7 +1321,8 @@ fn copy_status_art(
         .map(|archive| {
             sevenz::extract(archive, |name| {
                 let name = name.to_ascii_lowercase();
-                name.starts_with("common/data/st") && name.ends_with("_jp.tim")
+                (name.starts_with("common/data/st") && name.ends_with("_jp.tim"))
+                    || name == SAVE_BACKGROUND_7Z
             })
         })
         .transpose()
@@ -1356,6 +1360,21 @@ fn copy_status_art(
             tally.add(writer, "status", &entry, tim.to_vec())?;
         }
     }
+    copy_save_background(
+        layout,
+        english.get("TYPE00.ADT"),
+        &data_files,
+        writer,
+        tally,
+        warnings,
+    )?;
+    copy_maps(layout, writer, tally, warnings)?;
+    if let Some(path) = data_files
+        .iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, ext)| stem == "ST_FILE" && ext == "TS"))
+    {
+        tally.add(writer, "status", "ui/status/st_file.ts", read(path)?)?;
+    }
     let itemdata = files_in(layout.common(&["bin"]))?
         .into_iter()
         .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "ITEMDATA"));
@@ -1379,6 +1398,90 @@ fn copy_status_art(
         None => {}
     }
     Ok(())
+}
+
+/// The MAP page's floors, `Common/file/map<nn>.adt` (the English files carry
+/// no language letter), each decoded to its TIMs as
+/// `ui/status/map<nn>_<k>.tim`: the executable loads the stream whole and
+/// uploads its five TIMs (`0x4FA2D4`).
+fn copy_maps(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let mut found = false;
+    for path in files_in(layout.common(&["file"]))? {
+        let Some((stem, ext)) = upper_parts(&path) else {
+            continue;
+        };
+        let Some(number) = stem.strip_prefix("MAP") else {
+            continue;
+        };
+        if ext != "ADT" || number.len() != 2 || !number.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        found = true;
+        let decoded = adt::decode(&read(&path)?).with_context(|| format!("{}", path.display()))?;
+        let tims = split_tims(&decoded).with_context(|| format!("{}", path.display()))?;
+        for (index, tim) in tims.into_iter().enumerate() {
+            tally.add(
+                writer,
+                "status",
+                &format!("ui/status/map{number}_{index}.tim"),
+                tim.to_vec(),
+            )?;
+        }
+    }
+    if !found && layout.common.is_some() {
+        warnings.push("no Common/file/map<nn>.adt; the MAP page has no map".into());
+    }
+    Ok(())
+}
+
+/// The save screen's background in the 7z archive of `ddraw.dll`.
+const SAVE_BACKGROUND_7Z: &str = "common/data/type00.adt";
+
+/// The save screen's background, `Common/Data/type00.adt` (the English copy
+/// in `ddraw.dll`'s archive when there is one), as `ui/type00.bmp`: the
+/// entry RE 1's save screen draws behind its rows.
+fn copy_save_background(
+    layout: &Layout,
+    english: Option<&Vec<u8>>,
+    data_files: &[PathBuf],
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let bytes = match english {
+        Some(bytes) => bytes.clone(),
+        None => match data_files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "TYPE00"))
+        {
+            Some(path) => read(path)?,
+            None => {
+                if layout.common.is_some() {
+                    warnings.push(
+                        "no Common/Data/type00.adt; the save screen has no background".into(),
+                    );
+                }
+                return Ok(());
+            }
+        },
+    };
+    let image = save_background(&bytes).context("Common/Data/type00.adt")?;
+    tally.add(writer, "ui", "ui/type00.bmp", bmp::encode_to_vec(&image)?)?;
+    Ok(())
+}
+
+/// `type00.adt` decoded: a TIM, or a background's two pages.
+fn save_background(bytes: &[u8]) -> Result<crate::state::Image> {
+    let decoded = adt::decode(bytes)?;
+    if decoded.starts_with(&[0x10, 0, 0, 0]) {
+        return tim::decode(&decoded);
+    }
+    adt::frame_image(&decoded)
 }
 
 /// The TIMs laid end to end in `data`.
