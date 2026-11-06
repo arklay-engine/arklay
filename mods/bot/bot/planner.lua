@@ -1029,11 +1029,15 @@ local function door_goal(bot, door, why)
         -- the player (after a prompt the room's <answer> settles).
         local room_id = bot:room().id
         label = string.format("%s via slot %d", label, via.slot)
+        -- A body probe (302's elevator call) fires on the player standing
+        -- in it: walk in rather than press from its edge.
+        local zone = zone_of(via)
+        zone.inside = (via.flags // C.PROBE_BODY) % 2 == 1
         return {
             kind = "door", slot = door.slot, target = door.target, label = label,
             was_locked = false,
             job = {
-                zone = zone_of(via), label = label, pattern = "edge",
+                zone = zone, label = label, pattern = "edge",
                 presses = 2, gap = 20, side = 4 * C.SECOND, timeout = GOAL_TIMEOUT,
                 done = function(b) return b:room().id ~= room_id end,
             },
