@@ -137,6 +137,9 @@ fn segment_hits(
     to: (i32, i32),
 ) -> bool {
     let length = distance_xz(from, to);
+    if length > super::MAX_SEGMENT {
+        return true;
+    }
     let samples = ((length + 95) / 96).max(1);
     (1..=samples).any(|step| {
         let x = from.0 + (to.0 - from.0) * step / samples;
