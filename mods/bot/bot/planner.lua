@@ -1075,8 +1075,8 @@ local function menu_step(bot, job)
     if BotMenu.busy() then
         return "busy"
     end
-    local last = BotMenu.last()
-    if last and last.kind == job.menu and last.tick >= job.started then
+    local last = BotMenu.last(job.menu)
+    if last and last.tick >= job.started then
         if last.ok then
             return "done"
         end
@@ -1616,6 +1616,16 @@ local function choose(bot)
         local pick = BotInventory.combine_now(bot, gave_up)
         if pick then
             return combine_goal(bot, pick)
+        end
+    end
+    if not blocked(bot, "combine", "inventory", "load", true) then
+        local pick = BotInventory.load_now(bot)
+        if pick then
+            local goal = combine_goal(bot, pick)
+            goal.slot = "load"
+            goal.label = "load " .. goal.label
+            goal.job.label = goal.label
+            return goal
         end
     end
     if not blocked(bot, "heal", "inventory", "room", true) then
