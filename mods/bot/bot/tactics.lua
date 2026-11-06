@@ -140,6 +140,9 @@ end
 --              reach (BotSurvival.sourcing): the rounds left are for what
 --              must be fought, so a monster only in a room crossed again
 --              is run past
+--   hurt_before  it already hurt the bot (BotTactics.note_hurt): passing it
+--              again costs the same hit, so the rounds for the kill
+--              suffice, with no margin
 -- Returns "fight" or "run" and why. The rule: never fight what the file
 -- says to pass or avoid, or knows nothing about, or without a firearm;
 -- fight what is closing in (inside twice its reach, or inside the band's
@@ -155,6 +158,36 @@ local MUST_FIGHT = "closing in, cannot outrun it"
 -- The verdict for a slow monster at low health: like MUST_FIGHT, it is not
 -- given up for health.
 local SLOW_FIGHT = "low health: shoot a slow one rather than pass it"
+-- The verdict for one that hurt the bot on an earlier pass, fought with
+-- no margin of rounds.
+local HURT_FIGHT = "it hurt the bot on an earlier pass"
+
+-- Monsters that have hurt the bot, by "room:slot" (a monster's slot is
+-- fixed in its room). Kept across saves and reloads: the next pass meets
+-- the same monster in the same place.
+local function hurt_key(room, slot)
+    return room .. ":" .. slot
+end
+
+-- Record that the monster `enemy` (a bot:enemies() row, or nil) in this
+-- room hurt the bot, when it is inside twice its reach.
+function BotTactics.note_hurt(bot, enemy)
+    if not enemy then
+        return
+    end
+    local entry = bot:knowledge().enemies[enemy.id]
+    if enemy.distance > 2 * (entry and entry.reach or C.REACH) then
+        return
+    end
+    local s = state()
+    s.hurt_by = s.hurt_by or {}
+    local key = hurt_key(bot:room().id, enemy.slot)
+    if not s.hurt_by[key] then
+        bot:log(string.format("hurt by slot=%d id=%#04x: fight it on the next pass",
+            enemy.slot, enemy.id))
+    end
+    s.hurt_by[key] = true
+end
 
 function BotTactics.decide(o)
     if not o.policy then
@@ -179,25 +212,30 @@ function BotTactics.decide(o)
     end
     -- A cautious bot wants a margin of rounds: half again at risk 0.
     local margin = 1 + 0.5 * (1 - o.risk)
+    local enough = o.rounds >= o.needed * margin
+        or (o.hurt_before == true and o.rounds >= o.needed)
     if o.health <= o.max_health * (0.45 - 0.3 * o.risk) then
         -- One slower than the backward walk is shot from range when the
         -- rounds cover it: running past a zombie in a corridor ends in its
         -- grab, which low health does not survive.
-        if o.slow and o.rounds >= o.needed * margin then
+        if o.slow and enough then
             return "fight", SLOW_FIGHT
         end
         return "run", "low health"
     end
     -- One it can outrun but not bring down with a margin is outrun: a
     -- fight that ends empty-handed costs the grabs it took on the way.
-    if closing and o.sourcing and o.rounds < o.needed * margin then
+    if closing and o.sourcing and not enough then
         return "run", "closing in, too few rounds to finish it"
     end
     if closing then
         return "fight", "closing in"
     end
-    if o.rounds < o.needed * margin then
+    if not enough then
         return "run", "too few rounds"
+    end
+    if o.hurt_before and o.rounds < o.needed * margin then
+        return "fight", HURT_FIGHT
     end
     if o.crowd_needed and o.rounds < o.crowd_needed then
         return "run", "too few rounds for the crowd"
@@ -301,12 +339,17 @@ end
 -- (nil: the knowledge maximum), from `guns`: rows {item, rounds, equipped}
 -- with rounds > 0. The plain pick is the equipped gun, else the one with the
 -- most rounds. It stands unless its rounds fall short of the kill (its keep
--- band's damage against that health) while another gun's cover it: then
--- the gun that covers it in the fewest shots. So a stronger gun (the
--- shotgun) is spent only on a fight the plain pick cannot finish, and a
--- fight with no kill data keeps the plain pick. Returns the row or nil.
-function BotTactics.pick_gun(guns, entry, health)
+-- band's damage against that health) times `margin` (nil: 1; misses cost
+-- rounds) while another gun's cover that: then the gun that covers it in
+-- the fewest shots. With no gun covering the margin, the plain pick stands
+-- if it covers the bare kill, else the fewest-shot gun that does; a plain
+-- pick with no kill data gives way to a gun with data that covers it. So a
+-- stronger gun (the shotgun) is spent only on a fight the plain pick
+-- cannot finish, and a fight with no kill data keeps the plain pick.
+-- Returns the row or nil.
+function BotTactics.pick_gun(guns, entry, health, margin)
     health = health or (entry and entry.health)
+    margin = margin or 1
     local function shots(row)
         local band = entry and entry.keep and entry.keep[row.item]
         local damage = band and band.damage
@@ -331,17 +374,30 @@ function BotTactics.pick_gun(guns, entry, health)
         end
     end
     local need = plain and shots(plain)
-    if not need or need <= plain.rounds then
+    if need and need * margin <= plain.rounds then
         return plain
     end
-    local best, best_shots = plain, nil
-    for _, row in ipairs(guns) do
-        local n = shots(row)
-        if n and n <= row.rounds and (not best_shots or n < best_shots) then
-            best, best_shots = row, n
+    local function fewest(scale)
+        local best, best_shots = nil, nil
+        for _, row in ipairs(guns) do
+            local n = shots(row)
+            if n and n * scale <= row.rounds and (not best_shots or n < best_shots) then
+                best, best_shots = row, n
+            end
         end
+        return best
     end
-    return best
+    -- The plain pick has no kill data against a known enemy (the grenade
+    -- launcher equipped for a boss, meeting a hunter): a gun with data
+    -- that covers the kill replaces it.
+    local covered = fewest(margin)
+    if covered then
+        return covered
+    end
+    if need and need <= plain.rounds then
+        return plain
+    end
+    return fewest(1) or plain
 end
 
 -- The firearm to fight `enemy` (the nearest fightable monster, or nil)
@@ -380,7 +436,8 @@ local function firearm(bot, k, enemy)
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health)
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health,
+        1 + 0.5 * (1 - risk(bot)))
     if not best then
         return nil, 0
     end
@@ -570,6 +627,7 @@ local function choose(bot, s, k, enemies, player)
                 engage = far,
                 outrun = entry and entry.outrun,
                 slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.BACK_SPEED,
+                hurt_before = s.hurt_by ~= nil and s.hurt_by[hurt_key(bot:room().id, enemy.slot)] == true,
             })
             if verdict == "run" then
                 s.avoid_until = bot:tick() + RUN_HOLD
@@ -600,7 +658,7 @@ local function choose(bot, s, k, enemies, player)
                         and (not best or enemy.distance < best.distance)) then
                     best = enemy
                     best.why = why
-                    best.must = why == MUST_FIGHT or why == SLOW_FIGHT
+                    best.must = why == MUST_FIGHT or why == SLOW_FIGHT or why == HURT_FIGHT
                 end
             end
         end
@@ -613,6 +671,41 @@ end
 -- room change.
 function BotTactics.focus(slot)
     state().focus = slot
+end
+
+-- Reload the empty equipped gun in the inventory menu: a MOVE of its
+-- ammunition onto it (or of it onto the ammunition, whichever
+-- bot:combine_result applies). The menu stops the game, so a monster that
+-- hits faster than the aim-and-fire reload (a hunter's swipes, about every
+-- 50 ticks, against a 40-tick reload each hit resets) cannot keep the clip
+-- empty. One try per MENU_RELOAD_GAP; the field reload is the fallback.
+local MENU_RELOAD_GAP = 4 * C.SECOND
+local function menu_reload(bot, s, weapon)
+    if weapon.reserve <= 0 or (s.menu_reload_tick
+            and bot:tick() - s.menu_reload_tick < MENU_RELOAD_GAP) then
+        return false
+    end
+    local ammo = bot:ammo_for(weapon.equipped)
+    local gun_slot, ammo_slot
+    for i, row in ipairs(bot:menu().items or {}) do
+        if row.item == weapon.equipped and not gun_slot then
+            gun_slot = i - 1
+        elseif ammo and row.item == ammo and not ammo_slot then
+            ammo_slot = i - 1
+        end
+    end
+    if not gun_slot or not ammo_slot then
+        return false
+    end
+    s.menu_reload_tick = bot:tick()
+    local label = string.format("combat reload 0x%02X", weapon.equipped)
+    for _, pair in ipairs({ { ammo_slot, gun_slot }, { gun_slot, ammo_slot } }) do
+        local result = bot:combine_result(pair[1], pair[2])
+        if result and result.result == "applied" then
+            return BotMenu.combine(bot, pair[1], pair[2], label)
+        end
+    end
+    return false
 end
 
 function BotTactics.step(bot, scene, player)
@@ -832,6 +925,9 @@ function BotTactics.step(bot, scene, player)
         end
     end
 
+    if reloading and not s.reload_started and menu_reload(bot, s, weapon) then
+        return true
+    end
     if reloading then
         -- An empty clip with ammunition held: aim and fire reloads.
         s.reload_ticks = s.reload_ticks + 1

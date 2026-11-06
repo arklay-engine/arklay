@@ -55,8 +55,11 @@ end
 local FIGHT_HEAL_FRACTION = 0.85
 local function heal_fraction(bot)
     local fraction = 0.6 - 0.35 * risk(bot)
-    local step = not BotTactics.active() and BotPuzzle.next_interact(bot)
-    if step and step.kind == "fight" and fraction < FIGHT_HEAL_FRACTION then
+    local step, index = nil, nil
+    if not BotTactics.active() then
+        step, index = BotPuzzle.next_interact(bot)
+    end
+    if step and BotPuzzle.fight_ahead(bot, index) and fraction < FIGHT_HEAL_FRACTION then
         fraction = FIGHT_HEAL_FRACTION
     end
     return fraction
@@ -127,6 +130,48 @@ local function heal_rows(bot)
         end
     end
     return heals
+end
+
+-- Whether the bot may start the steps that lead into the room's <fight>
+-- `fact` (BotPuzzle.fight_ahead): health at FIGHT_HEAL_FRACTION or a heal
+-- held (heal_fraction spends it first), and, for a fight with firearms,
+-- the held rounds' damage (each gun's rounds times its keep band's damage)
+-- at least the enemy's knowledge health. A gun with no damage data counts
+-- nothing; a fight with no damage data for any held gun is not held back
+-- for rounds. Returns true, or false and why.
+function BotSurvival.fight_ready(bot, fact)
+    local player = bot:player()
+    if player.health < player.max_health * FIGHT_HEAL_FRACTION and #heal_rows(bot) == 0 then
+        return false, string.format("not ready for the fight: health %d/%d and no heal held",
+            player.health, player.max_health)
+    end
+    local k = bot:knowledge()
+    local entry = k and k.enemies[fact.enemy]
+    local hand = entry and entry.prefer and k.weapons[entry.prefer]
+    if not entry or not entry.health or not entry.keep or (hand and hand.melee) then
+        return true
+    end
+    local weapon = bot:weapon()
+    local damage, known = 0, false
+    for _, row in ipairs(bot:menu().items or {}) do
+        local band = row.kind == "weapon" and entry.keep[row.item]
+        if band and band.damage and band.damage > 0 then
+            local rounds
+            if row.item == weapon.equipped then
+                rounds = weapon.clip + weapon.reserve
+            else
+                local ammo = bot:ammo_for(row.item)
+                rounds = row.quantity + (ammo and bot:item_count(ammo) or 0)
+            end
+            known = true
+            damage = damage + rounds * band.damage
+        end
+    end
+    if known and damage < entry.health then
+        return false, string.format("not ready for the fight: rounds for %d of %d health",
+            damage, entry.health)
+    end
+    return true
 end
 
 -- Hurt with nothing to heal: no held stack restores health and health is

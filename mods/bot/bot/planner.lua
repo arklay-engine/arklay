@@ -510,6 +510,21 @@ local function via_fact(bot, room_id, slot)
     return nil
 end
 
+-- Whether an <avoid> fact holds door `slot` of room `room_id` shut now:
+-- an ungated one always, a gated one while its gate holds (302's north
+-- elevator before the power is on). Remote planning reads it; in the room
+-- BotPuzzle.avoided does.
+local function avoid_holds(bot, room_id, slot)
+    for _, fact in ipairs(bot:avoid_facts()) do
+        if fact.room == room_id and fact.slot == slot
+            and BotPuzzle.gate_holds(bot, { bank = fact.bank, bit = fact.bit,
+                set = fact["while"] == "set", unless_held = fact.unless_held }) then
+            return true
+        end
+    end
+    return false
+end
+
 -- The live action the bot presses to open this room's `door`: a <door via>
 -- fact names it, and the door is parked at the origin (406's hatch) or the
 -- fact's gate holds wherever the door sits (302's ladder, 301's elevator).
@@ -1431,7 +1446,17 @@ local function choose(bot)
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
-            local goal, why = interact_goal(bot, fact, index, count)
+            -- A boss fight ahead waits for health and rounds; the mark
+            -- lifts once the inventory changes (a heal, ammunition).
+            local fight = not BotTactics.active() and BotPuzzle.fight_ahead(bot, index)
+            local ready, not_ready = true, nil
+            if fight then
+                ready, not_ready = BotSurvival.fight_ready(bot, fight)
+            end
+            local goal, why = nil, not_ready
+            if ready then
+                goal, why = interact_goal(bot, fact, index, count)
+            end
             if goal then
                 return goal
             end
@@ -1728,6 +1753,7 @@ local function choose(bot)
         -- door_passable).
         return not (goal.x == 0 and goal.z == 0 and not via_fact(bot, goal.room, goal.slot))
             and not blocked(bot, "door", goal.room, goal.slot, true)
+            and not avoid_holds(bot, goal.room, goal.slot)
             and (not goal.locked or key_opens(bot, goal.key))
     end
 

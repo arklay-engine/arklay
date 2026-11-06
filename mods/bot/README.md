@@ -84,9 +84,14 @@ Priorities, highest first:
    `max_health * (0.6 - 0.35 * risk)` with the largest held stack whose menu
    row `heals`, never in a grab or a scene; a fight is paused for it (the
    menu stops the game), so a fight under the threshold does not play on
-   to the fight's low-health floor. Before a room's `<fight>` step starts
-   (no fight running yet), the threshold is `0.85 * max_health`, so the
-   bot walks into a boss fight healed. Then a save at a
+   to the fight's low-health floor. While a room's `<fight>` step is still
+   ahead (`BotPuzzle.fight_ahead`: the step or one leading into it, such as
+   20C's wake-up press; no fight running yet), the threshold is
+   `0.85 * max_health`, so the bot walks into a boss fight healed. The
+   steps that lead into it wait (`BotSurvival.fight_ready`, marked `not
+   ready for the fight`, lifted once the inventory changes) while health
+   is under that with no heal held, or while the held rounds' damage (each
+   gun's rounds times its `<keep>` damage) is under the enemy's health. Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
@@ -301,7 +306,11 @@ step's target, and only inside its band: the step waits until the weapon
 is held (the item frontier takes it first), walks to a reachable spot
 inside the band, and the combat layer swings from there. A hit reaction
 (player state 2) drops the aim and any reload; the bot waits it out and
-starts them again.
+starts them again. An empty clip with its ammunition held is reloaded in
+the inventory menu first (a MOVE of the ammunition onto the gun; the menu
+stops the game, so a hunter swiping about every 50 ticks cannot keep
+resetting the 40-tick reload), at most once every 4 seconds; the aim and
+fire reload is the fallback.
 Each `<cure item poison heals>` names an item that clears a poison
 (`poison`: the `0x02` status, `serious`: `0x20`) and whether it also
 restores health (`yes`/`no`); a unit test checks the rows against the item
@@ -317,9 +326,13 @@ catalog's heal effects.
   with rounds, else the held one with the most (clip plus the ammunition
   held for it). Against the nearest monster the knowledge file fights, it
   stands unless its rounds fall short of the kill (`<keep>` damage against
-  the monster's health) while another gun's cover it. The gun that covers
-  the kill in the fewest shots is then equipped, so the shotgun's shells go
-  to a fight the handgun cannot finish.
+  the monster's health) times the risk margin below while another gun's
+  cover that. The gun that covers the kill in the fewest shots is then
+  equipped, so the shotgun's shells go to a fight the handgun cannot
+  finish; with none covering the margin the plain pick stands if it covers
+  the bare kill. A plain pick with no `<keep>` damage against a known
+  monster (the grenade launcher equipped for a boss, meeting a hunter)
+  gives way to a gun whose damage covers it.
 - **Fight or run** (`BotTactics.decide`). Run when the monster has no entry,
   its policy is not `fight`, or there is no gun. A monster closing in
   (within twice its reach, or within the far edge of the gun's `<keep>`
@@ -334,7 +347,11 @@ catalog's heal effects.
   zero health, so a hit that leaves it at exactly 0 does not kill) or for the
   crowd; fight a monster that cannot be outrun or one in a room the
   frontier crosses again (not while sourcing ammunition); run past one that
-  is only in the way.
+  is only in the way. A monster that already hurt the bot from within twice
+  its reach (`BotTactics.note_hurt`, by room and slot, kept across reloads:
+  a zombie by a door grabs on every pass) needs only the bare kill's
+  rounds, no margin, and is fought (`it hurt the bot on an earlier
+  pass`).
 - **Spacing** (`BotTactics.spacing`). Hold and shoot inside the `<keep>`
   band and inside its near edge too: lowering the aim plays the holster,
   which drifts the player a few hundred units toward the monster, and
@@ -538,10 +555,10 @@ drives the box screen with pad input only.
   those guns (the reserve), and heal items. Everything else may go in.
 - Soft deposits, when a slot is still short: heals beyond the first stack,
   keys no remembered door needs, then held melee weapons that are not
-  equipped and that no pending fight prefers. Only when the visit swaps
-  (a `<use>` fact or a locked door needs a remembered box item back) do
-  spare guns go too, fewest rounds first, never one the loadout or a
-  `<use>` needs.
+  equipped and that no pending fight prefers. Only to make room for a key
+  or `<use>` item (one on the frontier, or a remembered box item a `<use>`
+  fact or a locked door needs back) do spare guns go too, fewest rounds
+  first, never one the loadout or a `<use>` needs.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
@@ -562,9 +579,9 @@ drives the box screen with pad input only.
   free (the top-ups; no trip is made for them).
 - Loadout: the `prefer` weapon (not a hand weapon) of each pending
   `<fight>` in the current stage (the room id's first character), and its
-  ammunition, are kept, and withdrawn first at a box in this room into
-  free slots, leaving `RESERVE` slots only while known pickups need room
-  (`loadout: a fight ahead prefers it`; no trip is made for it). A fight
+  ammunition, are kept, and withdrawn first into free slots, from any box:
+  a trip is made for them, and a full inventory makes room for them the
+  way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
   step whose preferred weapon is not held waits while a frontier pickup of
   it is in the room (`BotPuzzle.preferred_pickup`), so it is taken first.
 - Combine first, when every slot is used and a pickup needs room: the best
@@ -637,6 +654,7 @@ leaves the game session.
 | `bot:fight_facts()` | Every room's `<fight>` steps, the same way: `{room, enemy, bank, bit}` (the flag its death sets, or nil). |
 | `bot:ride_facts()` | Every room's `<ride>` facts: `{room, slot, from, label}`. |
 | `bot:door_facts()` | Every room's `<door>` facts: `{room, slot, via, label}`, plus `gate_bank`, `gate_bit` and `gate_set` for a gated one. |
+| `bot:avoid_facts()` | Every room's `<avoid>` facts: `{room, slot, reason}`, plus `bank`, `bit` and `while` for a gated one and `unless_held`. |
 | `bot:errand_facts()` | Every room's `<deliver>` and `<fetch>` facts, the same way: `{room, kind, cut, slot, item, bank, bit, after_bank, after_bit, label}`, `kind` `"deliver"` (with `cut`) or `"fetch"` (with `slot`); `after_bank`/`after_bit` are `nil` without an `after` flag. |
 | `bot:menu()` | The pause menu as the engine shows it, read-only: `{open, requested, phase, accepts_input, screen, cursor, slot, mode, option, options, selected_item, ready, closing, viewing, capacity, equipped, items}`. `phase` is `closed`, `requested`, `fade_out`, `fade_in`, `opening`, `closing`, `screen`, `message` or `input`; `screen` names a sub-screen (`pickup`, `examine`, `item_box`, `map`, `file`); `cursor` is the menu's cursor byte (`0..6` tabs, `8 + 2 * slot` items); `mode` is `navigation`, `actions` or `move`; `option` is the highlighted submenu row (0-based) and `options` its labels (`EQUIP`/`USE`, `CHECK`, `MOVE`). `items` rows are `{slot, item, quantity, kind, heals}` with the menu's 0-based `slot`; `heals` is the catalog's word that a USE restores health (false for a blue herb, the serum or a red herb alone). `move_cursor` is the MOVE cursor byte while `mode == "move"`. While the item box screen is up, `box = {mode, box_cursor, cursor, sliding, items}`: `mode` is `browse` or `armed`, `box_cursor` the box slot (0..47), `cursor` the inventory cursor byte, `sliding` true while a page slides (no input is read), and `items` the box rows `{slot, item, quantity, kind}`. While the CHECK viewer is up, `examine = {item, yaw, ready}`: the item on the turntable, its yaw (`0..0x1000`, left raises it) and whether the turntable takes the d-pad and confirm. |
 | `bot:combine_result(slot, target)` | Read-only: what a MOVE of menu slot `slot` onto `target` would do, from the engine's recipe: `{result, cursor_item, cursor_quantity, target_item, target_quantity, frees}`. `result` is `applied`, `herb` (a herb mix; the menu asks first), `no_recipe`, `herb_no_recipe` or `drug_store`; `frees` is true when the combine empties a slot. Nothing is changed. |
@@ -749,7 +767,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
-| `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
+| `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state; remote planning reads every room's avoids (`bot:avoid_facts()`) and never heads for a door one holds shut. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
 | `<push>` | `object`, `slot`, optional `direction` (and `clear="full"` or `until="stop"`) or `axis`, optional `bank` + `bit`, optional `after_bank` + `after_bit`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, 400 and 300 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter, or with `clear="full"` its far edge (an object pushed out of another one's way). With `until="stop"` it is pushed that way until it stalls against a wall, whatever the zone. Without a direction, `axis` (`x` or `z`) lines the centre up with the zone on that axis only. Such a step is also done once the zone is gone or the item it names was taken. With `bank` and `bit` (both or neither) the step is also done once that flag is set: a zone event that takes the object away (a statue that falls). A push the bot stops for a fight or a heal walks back behind the object before it measures a stall. With an `after` flag the step holds the sequence until that flag is set, as for `<interact>` (306's box waits for the crank). |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `until_bank` + `until_bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done, or clear with `done="clear"`. With an `after` flag the use is open only while that flag is set, and with an `until` flag only while that flag is clear, so one item can take one zone twice (301's crank drains the pool, then fills it after Plant 42). A use whose menu closes by itself counts as done when the item stays held: the cranks are picked up with quantity 0 and never used up. A use that goes in but leaves its done flag clear is tried again at once, up to three times, for a piece that turns one step a use (30F's crank). |
 | `<climb>` | `object`, `slot`, `bank`, `bit`, optional `done`, optional `label` | Take an item off a high shelf, or press an event zone only reachable from on top (507's air shaft): push room object `object` until it covers AOT `slot`'s zone (and has stalled against the wall at least once; an object an earlier `<push>` step of the entry left over the zone is climbed at once), stand behind its face away from the zone, press action to climb it, press facing the zone to take the item, then face away and press to climb down. A climb whose flag is not a bank-7 item bit needs no free inventory slot. The engine's vault only starts facing along the object's yaw, so the face away from the zone must be that one. It is one step of the `<interact>` sequence, done once flag `bank`/`bit` reads done (`done="clear"` for a bank-7 item bit) and the player is off the object. |

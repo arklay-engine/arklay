@@ -103,21 +103,25 @@
        (a hold) only below 13 player health. Chase run caps at 240, above
        Jill's 210: it cannot be outrun, so it is fought. HEALTH max 122;
        handgun 20 a hit plus the 7 zombie_reaction takes off a dog for
-       Jill's handgun (its reaction is the zombie one). -->
+       Jill's handgun (its reaction is the zombie one). The grenade
+       launcher's round takes 200 (row 26). -->
   <enemy id="0x02" name="cerberus" policy="fight" stand="torso" downed="none"
          up="no" reach="1000" grabs="yes" outrun="no" speed="240" health="122">
     <keep weapon="0x02" min="1500" max="5000" damage="27"/>
     <keep weapon="0x03" min="1500" max="2800" damage="40"/>
+    <keep weapon="0x07" min="1500" max="5000" damage="200"/>
   </enemy>
 
   <!-- Web spinner. enemy/03 run: 0x40 always, 0x20 inside 4000, never 0x80;
        a ceiling spawn has no aim bit until its drop lands. Its lunge touch
        hurts but does not hold. Lunge start distance (7000/7500 pickers) is
-       the lunge, not a reach: reach unknown. HEALTH max 119. -->
+       the lunge, not a reach: reach unknown. HEALTH max 119. Grenade
+       launcher 100 a hit (DEFAULT_FIRST_RUN row 36). -->
   <enemy id="0x03" name="web spinner" policy="fight" stand="torso" downed="none"
          up="no" reach="unknown" grabs="no" outrun="unknown" speed="unknown" health="119">
     <keep weapon="0x02" min="2500" max="5000" damage="20"/>
     <keep weapon="0x03" min="1800" max="2800" damage="40"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="100"/>
   </enemy>
 
   <!-- Crow. enemy/05 rebuilds the bits from its height every frame: above
@@ -136,12 +140,15 @@
        starts under 3000 (reach test 800); the pounce from 6400 holds the
        player. HEALTH max 111; handgun 14, shotgun 32 a hit. Run speed not
        settled (0x28 chase, 0xF0 approach). It hits for 10 a swipe while a
-       handgun takes eight shots, so the shotgun (four) is preferred. -->
+       handgun takes eight shots, so the shotgun (four) is preferred. The
+       grenade launcher's 100 a hit (DEFAULT_FIRST_RUN) takes two; its band is
+       the Tyrant's. -->
   <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
          up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111"
          prefer="0x03">
     <keep weapon="0x02" min="3200" max="6000" damage="14"/>
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="100"/>
   </enemy>
 
   <!-- Yawn's rematch (entity 0x12, 20C on the second mansion visit; enemy/12
@@ -150,11 +157,12 @@
        is shot torso from outside 4000: the reach given keeps that band. The
        bite starts under 2000 and the grown form swallows (a hold). HEALTH
        0x012C (0x0190 on a second playthrough); handgun 30, shotgun 40 a hit
-       (DEFAULT_FIRST_RUN rows 181 and 182). -->
+       (DEFAULT_FIRST_RUN rows 181 and 182), grenade launcher 80 (row 186). -->
   <enemy id="0x12" name="yawn 2" policy="fight" stand="torso" downed="none"
          up="no" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400">
     <keep weapon="0x02" min="4300" max="8000" damage="30"/>
     <keep weapon="0x03" min="4300" max="8000" damage="40"/>
+    <keep weapon="0x07" min="4300" max="8000" damage="80"/>
   </enemy>
 
   <!-- Plant 42 (the guardhouse boss, 40C). enemy/08: one body entity (no
@@ -168,11 +176,16 @@
        never moves. A handgun hit takes 15 (observed) and holds that part's
        hit_state about 120 ticks, during which a shot hits the next free
        part nearest the aim: parts="yes" lets the bot fire on through it.
-       Enemy bit 96 is the body's (40C's init, enemy index 0). -->
+       Enemy bit 96 is the body's (40C's init, enemy index 0).
+       DEFAULT_FIRST_RUN rows 81, 82 and 86: handgun 15, shotgun 20, grenade
+       launcher 50, so three rounds kill it where the handgun takes ten: it
+       is preferred, and the box loadout brings it to the fight. -->
   <enemy id="0x08" name="plant 42" policy="fight" stand="torso" downed="none"
-         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="140" parts="yes">
+         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="140" parts="yes"
+         prefer="0x07">
     <keep weapon="0x02" min="3000" max="5500" damage="15"/>
-    <keep weapon="0x03" min="3000" max="5500" damage="unknown"/>
+    <keep weapon="0x03" min="3000" max="5500" damage="20"/>
+    <keep weapon="0x07" min="3200" max="5500" damage="50"/>
   </enemy>
 
   <!-- Tyrant (the lab encounter, 513). enemy/0c: state 1 sets status 0x40

@@ -34,10 +34,10 @@
 --             stack of that ammunition while the rounds are under TOP_UP
 --             times the floor, and every heal stack (the heal top-up: a
 --             boss such as 513's Tyrant is a race of heals), as long as
---             RESERVE slots stay free. First of all, there, the weapon and
---             ammunition a <fight> ahead in this stage prefers (the
---             loadout, the knowledge file's `prefer`), into any free slot
---             while no known pickup needs one.
+--             RESERVE slots stay free. First of all, from any box (a
+--             trip is made for it), the weapon and ammunition a <fight>
+--             ahead in this stage prefers (the loadout, the knowledge
+--             file's `prefer`), into any free slot.
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -152,8 +152,8 @@ BotInventory.SOFT_HEALS = 1
 -- go in, at most `needed` of them: first heal stacks past SOFT_HEALS (the
 -- last in slot order), then a key no remembered locked door needs, then a
 -- spare hand weapon (ctx.spare: held, not equipped, and no pending <fight>
--- prefers it), then, only to swap for a boxed key or <use> item
--- (ctx.swap), a held firearm other than the equipped one and the loadout,
+-- prefers it), then, only to make room for a key or <use> item, boxed or
+-- on the frontier (ctx.swap), a held firearm other than the equipped one and the loadout,
 -- fewest rounds first (ctx.spare_guns: {[id] = rounds}).
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
@@ -213,16 +213,13 @@ function BotInventory.soft_deposits(items, ctx, needed)
     return out
 end
 
--- The loadout withdrawal's reason: taken at a box here only, first, and
--- into any free slot while no known pickup needs one (else the top-ups'
--- reserve applies).
+-- The loadout withdrawal's reason: taken first, into any free slot, and
+-- worth a trip to a remote box (a full inventory makes room for it the way
+-- it does for a needed pickup).
 local LOADOUT = "loadout: a fight ahead prefers it"
 
--- The free slots a withdrawal for `why` must leave.
-local function slots_to_leave(why, ctx)
-    if why == LOADOUT then
-        return (ctx.pickups or 0) > 0 and BotInventory.RESERVE or 0
-    end
+-- The free slots a top-up withdrawal must leave.
+local function slots_to_leave()
     return BotInventory.RESERVE
 end
 
@@ -247,7 +244,7 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.gun_ammo and ctx.gun_ammo[item] then
         return "ammunition for a held gun"
     end
-    if ctx.loadout and ctx.loadout[item] and not ctx.reserve_only then
+    if ctx.loadout and ctx.loadout[item] then
         return LOADOUT
     end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
@@ -266,7 +263,6 @@ end
 local TOP_UPS = {
     ["ammunition top-up at the box"] = true,
     ["heal top-up at the box"] = true,
-    [LOADOUT] = true,
 }
 
 -- The box rows to take back, at most `free` of them, box order.
@@ -517,9 +513,12 @@ function BotInventory.pickups_needing_room(bot, skip)
 end
 
 -- Known pickups that need a free slot and that the run needs: a key, an
--- item a <use> fact needs, or the ammunition a held gun lacks.
+-- item a <use> fact needs, or the ammunition a held gun lacks. The second
+-- result counts the keys, <use> items and fetches among them: progress
+-- items worth a spare gun's slot.
 function BotInventory.needed_pickups(bot, ctx, skip)
     local n = #BotPuzzle.fetches_due(bot)
+    local progress = n
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local kind, merge = bot:item_kind(goal.item)
@@ -528,10 +527,13 @@ function BotInventory.needed_pickups(bot, ctx, skip)
                 or ctx.ammo_low == goal.item
             if needed and not (merge and bot:has_item(goal.item)) then
                 n = n + 1
+                if kind == "key" or ctx.uses[goal.item] then
+                    progress = progress + 1
+                end
             end
         end
     end
-    return n
+    return n, progress
 end
 
 -- What a deposit puts in the box: the keep rule's leftovers, else the soft
@@ -539,16 +541,20 @@ end
 function BotInventory.make_room(bot, ctx, items, skip)
     local deposits = BotInventory.deposits(items, ctx)
     if #deposits == 0 and ctx.full then
-        local needed = BotInventory.needed_pickups(bot, ctx, skip)
+        local needed, progress = BotInventory.needed_pickups(bot, ctx, skip)
+        -- A key or <use> item on the frontier is worth a spare gun's slot.
+        if progress > 0 then
+            ctx.swap = true
+        end
         -- A box item the bot needs back (a key a locked door needs, an
         -- item a <use> fact needs) is a needed pickup too: a swap.
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
             if why == "a <use> fact needs it" or why == "a locked door needs it"
-                or why == "ammunition for a held gun" then
+                or why == "ammunition for a held gun" or why == LOADOUT then
                 needed = needed + 1
-                if why ~= "ammunition for a held gun" then
+                if why ~= "ammunition for a held gun" and why ~= LOADOUT then
                     ctx.swap = true
                 end
             end
