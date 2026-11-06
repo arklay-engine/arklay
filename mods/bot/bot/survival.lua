@@ -129,6 +129,14 @@ local function heal_rows(bot)
     return heals
 end
 
+-- Hurt with nothing to heal: no held stack restores health and health is
+-- under half. The planner then puts a route to a heal first
+-- (BotPlanner's HEAL_BONUS).
+function BotSurvival.needs_heal(bot)
+    local player = bot:player()
+    return player.health < player.max_health * 0.5 and #heal_rows(bot) == 0
+end
+
 function BotSurvival.heal(bot, player)
     local s = state()
     s.heal_cooldown = (s.heal_cooldown or 0) - 1
