@@ -276,10 +276,15 @@ pub struct MessageWindow {
     /// [`MessageWindow::is_subtitle`].
     voiced: bool,
     /// Whether the window keeps `Mess_disp`'s timing (`0x4C8DCE`) rather
-    /// than RE1's: the delays doubled (the PC build's `0x98F07A` is clear), a
-    /// space costs no tick, a page break has no settle passes, the speed-up
-    /// is always on, and a yes/no takes no answer for its first 16 ticks.
+    /// than RE1's: a space costs no tick, a page break has no settle passes,
+    /// the speed-up is always on, and a yes/no takes no answer for its first
+    /// eight ticks (16 shifted).
     re2_timing: bool,
+    /// Whether `Mess_disp` shifts every delay left by one, as it does while
+    /// `0x98F07A` is clear: on the status screen and in the get-item window,
+    /// which run at 60 Hz. In play the byte is 2 and the counts are the
+    /// stream's own.
+    re2_shift: bool,
     /// Whether the yes/no's answer always plays its cue: the system and
     /// status messages (flag `0x2000` of the request). A room's question
     /// cues only by its own argument (`& 0x60`).
@@ -324,6 +329,7 @@ impl Default for MessageWindow {
             actions: Vec::new(),
             voiced: false,
             re2_timing: false,
+            re2_shift: false,
             re2_cues: false,
             answer_lock: 0,
             linger: false,
@@ -429,16 +435,18 @@ impl MessageWindow {
 
     /// Keep `Mess_disp`'s timing from now on, for a message whose yes/no
     /// always cues (`cues`, a system or status message) or only by its own
-    /// argument (a room's).
-    pub fn set_re2_timing(&mut self, cues: bool) {
+    /// argument (a room's), with its delays shifted (`shift`, a message of
+    /// the status screen or the get-item window) or not (one shown in play).
+    pub fn set_re2_timing(&mut self, cues: bool, shift: bool) {
         self.re2_timing = true;
+        self.re2_shift = shift;
         self.re2_cues = cues;
     }
 
-    /// Whether the delays are doubled: the pause menu's in RE1, and every
-    /// RE2 message (`Mess_disp`'s shift, set while `0x98F07A` is clear).
+    /// Whether the delays are doubled: the pause menu's in RE1, and an RE2
+    /// message's while `0x98F07A` is clear (`Mess_disp`'s shift).
     fn shifted(&self) -> bool {
-        self.menu || self.re2_timing
+        self.menu || (self.re2_timing && self.re2_shift)
     }
 
     /// The RE2 yes/no's argument (the byte after `0xFB`), which the
@@ -830,7 +838,11 @@ impl MessageWindow {
                 0x08 => {
                     self.phase = MessagePhase::YesNo;
                     self.yes_no_shown = false;
-                    self.answer_lock = if self.re2_timing { 8 << 1 } else { 0 };
+                    self.answer_lock = if self.re2_timing {
+                        8 << u8::from(self.re2_shift)
+                    } else {
+                        0
+                    };
                     return;
                 }
                 0xF8..=0xFA => self.ptr = skip(self.ptr),
@@ -1952,7 +1964,7 @@ mod tests {
         let ticks = |re2: bool| {
             let mut window = MessageWindow::default();
             if re2 {
-                window.set_re2_timing(true);
+                window.set_re2_timing(true, true);
             }
             assert!(window.start(0x40, 0, &bytes, false));
             let mut ticks = 0;
@@ -1975,7 +1987,7 @@ mod tests {
     fn re2_typing(source: &str, ticks: usize, held: impl Fn(usize) -> bool) -> Vec<String> {
         let (text, bytes) = latin_message(source);
         let mut window = MessageWindow::default();
-        window.set_re2_timing(true);
+        window.set_re2_timing(true, true);
         assert!(window.start(0x40, 0, &bytes, false));
         (0..ticks)
             .map(|tick| {
@@ -2000,6 +2012,47 @@ mod tests {
         assert_eq!(shown, ["", "A", "A", "Ab", "Ab", "Ab c"]);
     }
 
+    /// The updates an RE2 message takes from its request until it closes.
+    fn re2_ticks_open(source: &str, shift: bool) -> usize {
+        let (text, bytes) = latin_message(source);
+        let mut window = MessageWindow::default();
+        window.set_re2_timing(false, shift);
+        assert!(window.start(0x40, 0, &bytes, false));
+        let mut ticks = 0;
+        while window.active {
+            window.update(MessageInput::default(), &text, 0);
+            ticks += 1;
+            assert!(ticks < 1000);
+        }
+        ticks
+    }
+
+    #[test]
+    fn an_re2_message_in_play_keeps_the_streams_counts() {
+        // Room 101's first voiced line: the original's message state shows
+        // it on 20 traced ticks, and the second (`{timed 87}`) on 87.
+        // `0x98F07A` is 2 in play, so `Mess_disp` doesn't shift: the
+        // request's tick reaches the end, and the count runs out 20 ticks
+        // later.
+        assert_eq!(re2_ticks_open("{timed 20}", false), 1 + 20);
+        assert_eq!(re2_ticks_open("{timed 87}", false), 1 + 87);
+        // Shifted, as on the status screen, the request's tick waits and the
+        // count doubles.
+        assert_eq!(re2_ticks_open("{timed 20}", true), 2 + 40);
+        // Typing in play: a glyph a tick, from the request's.
+        let (text, bytes) = latin_message("Ab c{timed 0}");
+        let mut window = MessageWindow::default();
+        window.set_re2_timing(false, false);
+        assert!(window.start(0x40, 0, &bytes, false));
+        let shown: Vec<String> = (0..3)
+            .map(|_| {
+                window.update(MessageInput::default(), &text, 0);
+                window.page_lines(&text).concat()
+            })
+            .collect();
+        assert_eq!(shown, ["A", "Ab", "Ab c"]);
+    }
+
     #[test]
     fn re2_types_two_glyphs_a_tick_while_confirm_is_held() {
         // The held key takes three more off the timer; at a delay of two the
@@ -2012,7 +2065,7 @@ mod tests {
     fn re2_question(source: &str, cues: bool) -> (Text, MessageWindow) {
         let (text, bytes) = latin_message(source);
         let mut window = MessageWindow::default();
-        window.set_re2_timing(cues);
+        window.set_re2_timing(cues, true);
         assert!(window.start(0x40, 0, &bytes, false));
         run_until(&mut window, &text, |w| w.phase() == MessagePhase::YesNo);
         (text, window)
