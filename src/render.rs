@@ -1868,18 +1868,80 @@ impl Framebuffer {
             self.draw_ivm(ivm, joints, camera, light);
             return;
         }
-        let Some(visible) = self.visible([0, 0, self.width as i32, self.height as i32], true)
-        else {
-            return;
-        };
         let mut triangles: Vec<Triangle> = Vec::new();
         for (object, joint) in ivm.objects.iter().zip(joints) {
             collect_ivm_triangles(object, joint, camera, light, &mut triangles);
         }
+        triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+        self.queue_model(ivm, &triangles, page);
+    }
+
+    /// Draw polygons already on the screen through `ivm`'s page, in the
+    /// order given, each texel as stored through its polygon's CLUT row:
+    /// the PlayStation's own primitives, which the original projects itself
+    /// (RE 2's FILE binders). The texture maps affinely, as the GPU does a
+    /// primitive with no depth, and a quad draws as the GPU's two halves,
+    /// corners `(0, 1, 2)` and `(1, 3, 2)`. Under the GPU renderer they are
+    /// queued like the examine viewer's model.
+    pub fn draw_screen_polygons(
+        &mut self,
+        ivm: &std::sync::Arc<crate::ivm::Ivm>,
+        polygons: &[ScreenPolygon],
+        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
+    ) {
+        let triangles: Vec<Triangle> = polygons
+            .iter()
+            .flat_map(|polygon| {
+                let halves: &[[usize; 3]] = if polygon.count == 4 {
+                    &[[0, 1, 2], [1, 3, 2]]
+                } else {
+                    &[[0, 1, 2]]
+                };
+                halves.iter().map(|half| Triangle {
+                    raster: half.map(|corner| RasterVertex {
+                        position: polygon.corners[corner].map(|axis| axis as f32),
+                        w: 1.0,
+                        u: f32::from(polygon.uv[corner][0]),
+                        v: f32::from(polygon.uv[corner][1]),
+                        shade: [1.0; 3],
+                    }),
+                    depth: 1.0,
+                    key: triangle_depth_key(1.0),
+                    texture: 0,
+                    palette_row: polygon.palette_row,
+                    flat: None,
+                    blend: false,
+                    blend_weight: None,
+                    additive: false,
+                    uv_nudge: [0; 3],
+                })
+            })
+            .collect();
+        if self.list.is_none() {
+            let mut depth = self.depth_buffer();
+            for triangle in &triangles {
+                self.rasterize(&ivm.texture, triangle, false, &mut depth);
+            }
+            return;
+        }
+        self.queue_model(ivm, &triangles, page);
+    }
+
+    /// Queue `triangles`, drawn in order, for the GPU renderer's model pass
+    /// ([`crate::draw2d::Kind::Model`]).
+    fn queue_model(
+        &mut self,
+        ivm: &std::sync::Arc<crate::ivm::Ivm>,
+        triangles: &[Triangle],
+        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
+    ) {
+        let Some(visible) = self.visible([0, 0, self.width as i32, self.height as i32], true)
+        else {
+            return;
+        };
         if triangles.is_empty() || ivm.texture.width == 0 || ivm.texture.height == 0 {
             return;
         }
-        triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let [x0, y0, x1, y1] = visible;
         let (width, height) = ((x1 - x0) as f32, (y1 - y0) as f32);
         let vertices = triangles
@@ -3779,6 +3841,20 @@ impl EntityLight {
 pub struct EntityLightSource {
     pub dir: [i32; 3],
     pub color: [u8; 3],
+}
+
+/// A textured polygon in screen pixels, which
+/// [`Framebuffer::draw_screen_polygons`] draws.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenPolygon {
+    /// The corners, in the PlayStation's order; only `count` are used.
+    pub corners: [[i32; 2]; 4],
+    /// Each corner's texel in the page.
+    pub uv: [[u8; 2]; 4],
+    /// 3 or 4.
+    pub count: usize,
+    /// The page's CLUT row.
+    pub palette_row: usize,
 }
 
 /// The ABE (semi-transparency) bit of a primitive's CLUT word.

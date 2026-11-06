@@ -831,6 +831,18 @@ local function file_slide(page, last)
     return 0, nil
 end
 
+-- FILE's three binders (`0x500470`): 3D models from `st_file.ts`, which
+-- the engine projects as the original does, in the panel whose top is
+-- `top`. `shown` is the page whose binders these are.
+local function file_binders(api, d, shown, top)
+    if d.binders == nil then
+        d.binders = api:re2_binders_model() or false
+    end
+    if d.binders then
+        api:draw_re2_binders(d.binders, shown.binder, shown.sub, shown.command, top)
+    end
+end
+
 local function map_art(api, d, number)
     d.maps = d.maps or {}
     local pages = d.maps[number]
@@ -951,6 +963,11 @@ function M.draw(api)
     end
     local file_dy, file_top = file_slide(page, last)
     by = by + B + file_dy
+    -- The binders are in the 3D list, which draws under every sprite: the
+    -- message box covers them as it comes back up.
+    if file_top ~= nil then
+        file_binders(api, d, page.page == PAGE_FILE and page or last, file_top)
+    end
     fill(api, d, MESSAGE_BOX[1] + bx, MESSAGE_BOX[2] + by, MESSAGE_BOX[3] + bx, MESSAGE_BOX[4] + by, MESSAGE_FILL)
     pieces(api, d, MESSAGE_FRAME, bx, by)
     for index, p in ipairs(FRAME) do
