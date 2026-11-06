@@ -1927,15 +1927,31 @@ local function choose(bot)
     local ammo, rounds, floor = BotSurvival.ammo_need(bot)
     local known = 0
     if ammo then
+        -- The gun's other loadings' rounds count (the launcher's acid and
+        -- flame rounds load into it): sourcing past them in 30E's box sent
+        -- the bot into the lab with one round.
+        local ammos = { [ammo] = true }
+        local weapons = bot:knowledge().weapons
+        local held = weapons[bot:weapon().weapon]
+        local base = held and (held.variant_of or bot:weapon().weapon)
+        for id, row in pairs(base and weapons or {}) do
+            local other = (row.variant_of or id) == base and bot:ammo_for(id)
+            if other then
+                ammos[other] = true
+            end
+        end
         for _, goal in ipairs(world.frontier) do
-            if goal.kind == "item" and goal.item == ammo
+            if goal.kind == "item" and ammos[goal.item]
                 and not blocked(bot, "item", goal.room, goal.slot, true)
                 and (goal.room == room or route(bot, world, room, goal.room)) then
                 known = known + 1
             end
         end
-        if BotInventory.remembered(bot)[ammo] then
-            known = known + 1
+        local box = BotInventory.remembered(bot)
+        for id in pairs(ammos) do
+            if box[id] then
+                known = known + 1
+            end
         end
     end
     BotSurvival.note_known_ammo(known)
@@ -2317,6 +2333,16 @@ local function leftovers(bot)
 end
 
 function BotPlanner.finish(bot, reason)
+    -- Where the bot stood idle in control (on_bot_tick), longest first.
+    local idle = {}
+    for key, n in pairs(BOT_STATE.idle or {}) do
+        idle[#idle + 1] = { key = key, n = n }
+    end
+    table.sort(idle, function(a, b) return a.n > b.n end)
+    bot:log(string.format("idle total %d ticks", BOT_STATE.idle_total or 0))
+    for i = 1, #idle < 25 and #idle or 25 do
+        bot:log(string.format("idle %d %s", idle[i].n, idle[i].key))
+    end
     -- The remembered door graph, for diagnosing why the frontier ran dry.
     for _, r in ipairs(bot:world().rooms or {}) do
         local parts = {}
