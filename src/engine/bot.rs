@@ -1403,6 +1403,11 @@ fn blocked(room: &RoomState, x: i32, z: i32, y: i32, radius: i32, flags: u8) -> 
     )
 }
 
+/// The longest segment a sampled walk check looks at: the span of a 16-bit
+/// room. A longer one comes from a garbage position, is never walkable, and
+/// sampling it every 96 units would take billions of steps.
+const MAX_SEGMENT: i32 = 0x10000;
+
 /// Whether a straight segment is clear enough to walk, sampled every 96 units.
 fn line_clear(
     room: &RoomState,
@@ -1413,6 +1418,9 @@ fn line_clear(
     flags: u8,
 ) -> bool {
     let length = distance_xz(from, to);
+    if length > MAX_SEGMENT {
+        return false;
+    }
     let samples = ((length + 95) / 96).max(1);
     for step in 1..=samples {
         let x = from.0 + (to.0 - from.0) * step / samples;
