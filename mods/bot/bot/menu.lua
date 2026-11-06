@@ -128,9 +128,10 @@ local function start(bot, kind, item, label, extra)
         end
     else
         -- An empty gun still takes a clip in a combine, and an uncounted
-        -- item (the cranks, quantity 0) is used without being used up.
+        -- item (the cranks, quantity 0) is used without being used up. A
+        -- doom book out of the box has quantity 0 too and still opens.
         if row.quantity <= 0 and not (kind == "combine" and row.kind == "weapon")
-            and not (kind == "use" and row.kind ~= "heal") then
+            and not ((kind == "use" or kind == "examine") and row.kind ~= "heal") then
             log(bot, string.format("%s 0x%02X refused: the stack is empty", kind, item))
             return false
         end
@@ -284,7 +285,7 @@ local function result_seen(bot, job)
         return used_slots(bot:menu()) < job.before_used
     end
     if job.kind == "examine" then
-        return bot:item_count(examine_result(job)) > 0
+        return bot:has_item(examine_result(job))
     end
     return bot:item_count(job.item) < job.before_count
 end
