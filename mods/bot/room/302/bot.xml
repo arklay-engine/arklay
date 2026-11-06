@@ -4,8 +4,15 @@
      to 301 (scenario 0x30). The way on is the door to 304; the way back to
      the mansion is through 301. Door 0 to 300 is the far end of the north
      elevator, which AOT 8 calls only once the power is on (scenario 0x32, the
-     battery at AOT 4/5); until then it is no way out. -->
+     battery at AOT 4/5); until then it is no way out.
+     Door 3 to the caves (307) never fires by itself (flags 0x80). While
+     the pool is drained (scenario 0x2F set) a waterfall (object 2) covers
+     the ladder; once 301's crank fills the pool again it is gone, and
+     AOT 10 at the ladder asks to climb down: Yes runs event_0D, which turns
+     door 3 into an auto door around the player. -->
 <bot format="2">
   <avoid slot="7" reason="the elevator back up to 301"/>
   <avoid slot="0" bank="0" bit="0x32" while="clear" reason="the north elevator to 300 has no power"/>
+  <door slot="3" via="10" bank="0" bit="0x2F" while="clear" label="down the ladder to 307"/>
+  <answer choice="yes" slot="10" label="climb down the ladder"/>
 </bot>

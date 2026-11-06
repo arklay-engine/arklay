@@ -197,7 +197,7 @@ end
 local function inventory_sig(bot)
     local ids = {}
     for _, row in ipairs(bot:inventory()) do
-        if row.item ~= 0 and row.quantity > 0 then
+        if row.item ~= 0 then
             ids[#ids + 1] = string.format("%02X", row.item)
         end
     end
@@ -469,21 +469,24 @@ end
 -- the room parks at its origin until AOT `via` is pressed.
 local function via_fact(bot, room_id, slot)
     for _, fact in ipairs(bot:door_facts()) do
-        if fact.room == room_id and fact.slot == slot then
+        if fact.room == room_id and fact.slot == slot
+            and (fact.gate_bank == nil
+                or bot:flag(fact.gate_bank, fact.gate_bit) == fact.gate_set) then
             return fact
         end
     end
     return nil
 end
 
--- The live action the bot presses to open this room's `door`, when the door
--- is parked at the origin and a <door via> fact names it (406's hatch).
+-- The live action the bot presses to open this room's `door`: a <door via>
+-- fact names it, and the door is parked at the origin (406's hatch) or the
+-- fact's gate holds wherever the door sits (302's ladder, 301's elevator).
 local function via_action(bot, door)
-    if not BotNav.is_origin_zone(door) then
+    local fact = via_fact(bot, bot:room().id, door.slot)
+    if not fact or (fact.gate_bank == nil and not BotNav.is_origin_zone(door)) then
         return nil
     end
-    local fact = via_fact(bot, bot:room().id, door.slot)
-    return fact and BotNav.action_by_slot(bot, fact.via)
+    return BotNav.action_by_slot(bot, fact.via)
 end
 
 local function door_passable(bot, room_id, door)
@@ -841,7 +844,7 @@ local function use_goal(bot, fact, action)
         job = {
             zone = zone, label = label, pattern = "hold",
             side = 3 * C.SECOND, timeout = GOAL_TIMEOUT,
-            done = function(b) return b:flag(fact.bank, fact.bit) end,
+            done = function(b) return BotPuzzle.use_done(b, fact) end,
             hold = function(b, job)
                 if not job.used and b:flag(C.ITEM_USE_BANK, armed)
                     and BotMenu.use_item(b, fact.item, label) then
@@ -1117,7 +1120,7 @@ local function target_goal(bot, world, t)
         return nil
     end
     if t.kind == "use" then
-        if bot:has_item(t.item) and not bot:flag(t.bank, t.bit)
+        if bot:has_item(t.item) and BotPuzzle.use_open(bot, t.fact or t)
             and not blocked(bot, "use", t.room, t.slot, true) then
             return { kind = "use", room = t.room, slot = t.slot }
         end
@@ -1735,7 +1738,7 @@ local function choose(bot)
     local function holds_bonus(id)
         return BotPlanner.holds_bonus(id, holds, use_list,
             function(item) return bot:has_item(item) end,
-            function(fact) return bot:flag(fact.bank, fact.bit) end,
+            function(fact) return not BotPuzzle.use_open(bot, fact) end,
             function(item) return bot:item_kind(item) end, ammo, needed)
     end
     local best_way = nil
@@ -1822,7 +1825,7 @@ local function choose(bot)
 
     -- A held item with a <use> fact in another room: go there.
     for _, fact in ipairs(bot:use_facts()) do
-        if fact.room ~= room and bot:has_item(fact.item) and not bot:flag(fact.bank, fact.bit)
+        if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
             and not plan().marks[mark_key("use", fact.room, fact.slot)] then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -1836,7 +1839,7 @@ local function choose(bot)
                     order = order, door = first,
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,
-                        item = fact.item, bank = fact.bank, bit = fact.bit,
+                        item = fact.item, bank = fact.bank, bit = fact.bit, fact = fact,
                         label = label, best = #steps, stalls = 0 },
                 })
             end

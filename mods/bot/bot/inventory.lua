@@ -322,7 +322,7 @@ function BotInventory.context(bot)
         ctx.ammo[bot:ammo_for(ctx.equipped)] = true
     end
     for _, fact in ipairs(bot:use_facts()) do
-        if not bot:flag(fact.bank, fact.bit) then
+        if BotPuzzle.use_open(bot, fact) then
             ctx.uses[fact.item] = true
         end
     end

@@ -127,8 +127,10 @@ local function start(bot, kind, item, label, extra)
             return true
         end
     else
-        -- An empty gun still takes a clip in a combine.
-        if row.quantity <= 0 and not (kind == "combine" and row.kind == "weapon") then
+        -- An empty gun still takes a clip in a combine, and an uncounted
+        -- item (the cranks, quantity 0) is used without being used up.
+        if row.quantity <= 0 and not (kind == "combine" and row.kind == "weapon")
+            and not (kind == "use" and row.kind ~= "heal") then
             log(bot, string.format("%s 0x%02X refused: the stack is empty", kind, item))
             return false
         end
@@ -554,6 +556,10 @@ function BotMenu.step(bot)
         if job.ok == nil then
             if result_seen(bot, job) then
                 conclude(bot, job, true, "menu closed after the effect")
+            elseif job.kind == "use" and job.stage == "result" then
+                -- A key item used at its zone closes the menu itself; an
+                -- uncounted one (the cranks, quantity 0) stays held.
+                conclude(bot, job, true, "menu closed by the use")
             else
                 conclude(bot, job, false, "menu closed before the " .. wanted_option(job))
             end

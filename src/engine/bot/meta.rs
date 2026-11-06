@@ -72,14 +72,19 @@ pub struct RoomMeta {
     pub doors: Vec<DoorVia>,
 }
 
-/// `<door slot via [label]>`: door AOT `slot` is parked at the room origin
-/// until the player presses AOT `via`, whose event sets the door around the
-/// player (406's ladder hatch to 40D). The planner routes through such a
-/// door by pressing `via` (`bot:door_facts()`).
+/// `<door slot via [bank bit while] [label]>`: door AOT `slot` is parked at
+/// the room origin until the player presses AOT `via`, whose event sets the
+/// door around the player (406's ladder hatch to 40D). The planner routes
+/// through such a door by pressing `via` (`bot:door_facts()`). With a
+/// `bank`/`bit`/`while` gate the fact applies wherever the door sits, but
+/// only while that flag is in that state: 302's door to 307 never fires by
+/// itself, and its ladder event (AOT 10) turns it into an auto door once
+/// the waterfall is off (scenario 0x2F clear).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DoorVia {
     pub slot: u8,
     pub via: u8,
+    pub gate: Option<Gate>,
     pub label: Option<String>,
 }
 
@@ -235,12 +240,18 @@ impl Direction {
 
 /// `<use>`: stand where the room's use-item probe in AOT `slot` (a
 /// `flag_bank_set` action) arms `item`, then USE `item` from the inventory
-/// menu; the flag `bank`/`bit` set means done.
+/// menu; the flag `bank`/`bit` set means done (clear with `done="clear"`).
+/// With `after_bank`/`after_bit` it is offered only once that flag is set,
+/// with `until_bank`/`until_bit` only while that flag is clear: 301's crank
+/// drains the pool until Plant 42 dies, then refills it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Use {
     pub slot: u8,
     pub item: u8,
     pub flag: (u8, u8),
+    pub done_clear: bool,
+    pub after: Option<(u8, u8)>,
+    pub until: Option<(u8, u8)>,
     pub label: Option<String>,
 }
 
@@ -681,22 +692,89 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
 }
 
 fn parse_use(node: Node<'_, '_>) -> Result<Use> {
-    check_attributes(node, &["slot", "item", "bank", "bit", "label", "character"])?;
+    check_attributes(
+        node,
+        &[
+            "slot",
+            "item",
+            "bank",
+            "bit",
+            "done",
+            "after_bank",
+            "after_bit",
+            "until_bank",
+            "until_bit",
+            "label",
+            "character",
+        ],
+    )?;
     check_leaf(node)?;
     let item: u8 = attr(node, "item")?;
     if item == 0 {
         bail!("{}: <use> `item` must not be 0 (no item)", at(node));
     }
+    let until = match (node.attribute("until_bank"), node.attribute("until_bit")) {
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, "until_bank")?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: until_bank {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Some((bank, attr(node, "until_bit")?))
+        }
+        _ => bail!(
+            "{}: <use> needs both `until_bank` and `until_bit`, or neither",
+            at(node)
+        ),
+    };
     Ok(Use {
         slot: attr(node, "slot")?,
         item,
         flag: (bank_attr(node)?, attr(node, "bit")?),
+        done_clear: parse_done(node)?,
+        after: after_flag(node)?,
+        until,
         label: node.attribute("label").map(str::to_string),
     })
 }
 
+/// The optional `bank`/`bit`/`while` gate of an `<avoid>` or a `<door>`:
+/// all three or none.
+fn parse_gate(node: Node<'_, '_>) -> Result<Option<Gate>> {
+    let tag = node.tag_name().name();
+    match (
+        node.attribute("bank"),
+        node.attribute("bit"),
+        node.attribute("while"),
+    ) {
+        (None, None, None) => Ok(None),
+        (Some(_), Some(_), Some(state)) => Ok(Some(Gate {
+            flag: (bank_attr(node)?, attr(node, "bit")?),
+            set: match state {
+                "set" => true,
+                "clear" => false,
+                other => bail!(
+                    "{}: <{tag}> `while` value `{other}` is not `set` or `clear`",
+                    at(node)
+                ),
+            },
+        })),
+        _ => bail!(
+            "{}: <{tag}> needs all of `bank`, `bit` and `while`, or none",
+            at(node)
+        ),
+    }
+}
+
 fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
-    check_attributes(node, &["slot", "via", "label", "character"])?;
+    check_attributes(
+        node,
+        &["slot", "via", "bank", "bit", "while", "label", "character"],
+    )?;
     check_leaf(node)?;
     let slot: u8 = attr(node, "slot")?;
     let via: u8 = attr(node, "via")?;
@@ -709,6 +787,7 @@ fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
     Ok(DoorVia {
         slot,
         via,
+        gate: parse_gate(node)?,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -894,28 +973,7 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
     if reason.trim().is_empty() {
         bail!("{}: <avoid> reason must not be empty", at(node));
     }
-    let gate = match (
-        node.attribute("bank"),
-        node.attribute("bit"),
-        node.attribute("while"),
-    ) {
-        (None, None, None) => None,
-        (Some(_), Some(_), Some(state)) => Some(Gate {
-            flag: (bank_attr(node)?, attr(node, "bit")?),
-            set: match state {
-                "set" => true,
-                "clear" => false,
-                other => bail!(
-                    "{}: <avoid> `while` value `{other}` is not `set` or `clear`",
-                    at(node)
-                ),
-            },
-        }),
-        _ => bail!(
-            "{}: <avoid> needs all of `bank`, `bit` and `while`, or none",
-            at(node)
-        ),
-    };
+    let gate = parse_gate(node)?;
     let unless_held = match node.attribute("unless_held") {
         None => None,
         Some(_) => Some(attr(node, "unless_held")?),
@@ -1466,9 +1524,22 @@ mod tests {
             vec![DoorVia {
                 slot: 2,
                 via: 5,
+                gate: None,
                 label: Some("the hatch".to_string()),
             }]
         );
+        let gated = r#"<bot format="2">
+            <door slot="3" via="10" bank="0" bit="0x2F" while="clear"/>
+        </bot>"#;
+        assert_eq!(
+            parse(gated).unwrap().doors[0].gate,
+            Some(Gate {
+                flag: (0, 0x2F),
+                set: false
+            })
+        );
+        let half = r#"<bot format="2"><door slot="3" via="10" bank="0" bit="1"/></bot>"#;
+        assert!(parse(half).is_err(), "a gate needs bank, bit and while");
         let same = r#"<bot format="2"><door slot="2" via="2"/></bot>"#;
         assert!(parse(same).is_err());
         let old = r#"<bot><door slot="2" via="5"/></bot>"#;
@@ -1595,16 +1666,33 @@ mod tests {
                     slot: 2,
                     item: 0x26,
                     flag: (1, 0xA9),
+                    done_clear: false,
+                    after: None,
+                    until: None,
                     label: Some("herbicide at the pump".to_string()),
                 },
                 Use {
                     slot: 11,
                     item: 0x20,
                     flag: (0, 0x6A),
+                    done_clear: false,
+                    after: None,
+                    until: None,
                     label: None,
                 },
             ]
         );
+        let refill = r#"<bot format="2">
+            <use slot="4" item="0x1D" bank="0" bit="0x2F" done="clear"
+                 after_bank="3" after_bit="96" until_bank="0" until_bit="9"/>
+        </bot>"#;
+        let fact = &parse(refill).unwrap().uses[0];
+        assert!(fact.done_clear);
+        assert_eq!(fact.after, Some((3, 96)));
+        assert_eq!(fact.until, Some((0, 9)));
+        let half =
+            r#"<bot format="2"><use slot="4" item="0x1D" bank="0" bit="1" until_bank="0"/></bot>"#;
+        assert!(parse(half).is_err(), "until needs both halves");
     }
 
     #[test]
@@ -1668,6 +1756,7 @@ mod tests {
                 ("11A", 3, 0x2E),
                 ("11A", 4, 0x2C),
                 ("11A", 6, 0x29),
+                ("301", 4, 0x1D),
                 ("301", 4, 0x1D),
                 ("40A", 5, 0x3E),
             ]
