@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 50C. The elevator door (door 4, to 515) is an event message (129,
+     no power) until scenario 1 is set. The switch at AOT 5 asks to be
+     pushed; Yes sets scenario 1 once 511's circuit (45) and 50F's supply
+     (46) are both on. 511's step waits for 46, so this one waits for 45. -->
+<bot format="2">
+  <interact slot="5" bank="0" bit="1" after_bank="0" after_bit="45" label="the elevator switch: call it down"/>
+  <answer choice="yes" slot="5" label="push the elevator switch"/>
+</bot>

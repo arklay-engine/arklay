@@ -2809,6 +2809,7 @@ impl UserData for BotCtx {
                 row.set("done_clear", fact.done_clear)?;
                 row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("after_clear", fact.after_clear)?;
                 row.set("reveals", fact.reveals)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
@@ -5845,6 +5846,30 @@ mod tests {
         assert_eq!(top_up(2, false), "0B");
         assert_eq!(top_up(1, false), "");
         assert_eq!(top_up(4, true), "");
+        // The heal top-up at a box here: every heal stack that restores
+        // health while RESERVE slots stay free (a lone red herb stays).
+        let heal_top_up = |free: u8, remote: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ heals = 1, heal_top_up = true, reserve_only = {remote} }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x44, kind = "heal" }},
+                        {{ slot = 1, item = 0x43, kind = "heal", heals = false }},
+                        {{ slot = 2, item = 0x4A, kind = "heal" }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.withdrawals(rows, ctx, {free})) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(heal_top_up(4, false), "44,4A");
+        assert_eq!(heal_top_up(2, false), "44");
+        assert_eq!(heal_top_up(1, false), "");
+        assert_eq!(heal_top_up(4, true), "");
         // The slot reserve: deposit at a box here once no more than one slot
         // is free and more pickups than that need one.
         let reserve = |used: u8, deposits: u8, pickups: u8| -> bool {
