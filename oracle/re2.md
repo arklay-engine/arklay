@@ -171,6 +171,22 @@ The screen's frames compare the same way: record with `--shot-dir DIR --shot-eve
 
 The open, the close and the room's fade back in, the cursor's pulse, the command menu's slides, CHECK's slides, COMBN's cursor slides (`0x502B30`) and the heal's sweep differ from the original by no more than a still frame of the screen does (0.77 with no name shown). The worst frames are the item names and the messages, which are the port's font (S11): up to 6.05 in `inv_check`'s description. Outside the message box every frame is within 1.0, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory").
 
+## Status screen
+
+The MAP and FILE runs (`status_map.txt`, `status_file.txt`) use the inventory runs' warp: START at 364, up twice to the tab bar, then left to the tab. Record each with `record --sound --no-enemies --warp 102:-11378:0:-4587:0 --life 200 --ticks 1000`, adding `--shot-dir DIR --shot-every 1` for the frames, and run arklay with `--room 102 --player 0 --character 0 --sound --ticks 656 --setup-script oracle/inputs-re2/status_102.lua` and the `_arklay` input, adding `--capture-every 1 --capture-dir DIR` for the frames. `status_102.lua` is `item_102.lua` plus room 100's visited bit (bank 7, bit 0): the original's run starts a new game in room 100 before the warp, so its map has both rooms filled. Compare at `--offset 344` with `--fields room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd`, each `3:` entry dropped from `snd` in both traces first (see "Weapons"). The page is `gi`'s fourth field (4 MAP, 5 FILE) and its sub the fifth.
+
+- `status_map.txt`: the decide key on MAP at 460 (4:6) loads the map; it slides in from 461 and shows at 475 with cue 4:9. Up at 520, down at 560 and left at 600 do nothing (the floor has no other). The cancel key at 620 (4:5) slides it out, back on the tab bar at 634. MAP again at 680, shown at 695, out at 740 and back at 754; START closes the screen at 800. All 656 ticks match.
+- `status_file.txt`: the decide key on FILE at 480 (4:6); the binders slide in from 481 and show at 493. Left at 540 and 580 and right at 620 turn them, each with cue 4:a, for 13 ticks. The decide key at 660 does nothing (no binder holds a file). The cancel key at 700 (4:5) slides them out, back on the tab bar at 713; START closes the screen at 760. All 656 ticks match.
+
+The frames compare as the inventory runs' do (see "Items"), from 360 to 999. The map's pictures are `ui/status/map<nn>_<k>.tim` (`Common/file/map<nn>.adt`). FILE's binders are 3D models that arklay doesn't draw (`docs/re2-deviations.md`, "MAP and FILE"), so FILE is also given with the panel's inside, (12, 74) to (213, 224), blanked on both sides:
+
+| Run | Frames | Mean error | Without the message box | Without the binders | Without both |
+|---|---|---|---|---|---|
+| `status_map` | 640 | 0.42 | 0.34 | | |
+| `status_file` | 640 | 5.38 | 4.14 | 0.51 | 0.46 |
+
+MAP's worst frames are the item page's message text before MAP opens (1.63 at 394 to 399, the port's font); while the map is up every frame is within 0.81, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory"). FILE's worst are the binders, up to 16.93 at 549; without them its worst is 3.92, at 705 to 708 and 489, while the panel slides with the binders moving inside its edge.
+
 ## Weapons
 
 Leon A's route (100, 101, 102, 118, 119, 11A, 11B, 103, 200) has three weapons: the handgun (0x02) and the knife (0x01) from the start, and the shotgun (0x07) with five shells, which room 101's script gives on the second check of Kendo's body after the scene (its flag 15). Room 102 has 30 handgun rounds (0x14) and room 200 more. Nothing else on the route arms the player.

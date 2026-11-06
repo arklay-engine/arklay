@@ -1,0 +1,25 @@
+# room 102: up to the tab bar, MAP, try the floors, back out, MAP again, then close from the tab bar (oracle/re2.md, "Items")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 confirm
+464
+520 up
+524
+560 down
+564
+600 left
+604
+620 cancel
+624
+680 confirm
+684
+740 cancel
+744
+800 start
+804

@@ -1,0 +1,25 @@
+# status_file.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Items")
+20 start
+24
+56 up
+60
+76 up
+80
+96 left
+100
+116 left
+120
+136 confirm
+140
+196 left
+200
+236 left
+240
+276 right
+280
+316 confirm
+320
+356 cancel
+360
+416 start
+420

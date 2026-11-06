@@ -24,7 +24,7 @@ local M = {}
 
 local EVENT_NONE = 0
 local PERSONAL_SLOT = 10
-local PAGE_TABS, PAGE_ITEMS = 2, 3
+local PAGE_TABS, PAGE_ITEMS, PAGE_MAP, PAGE_FILE = 2, 3, 4, 5
 local SUB_GRID, SUB_MENU, SUB_COMMAND, SUB_OPEN, SUB_CLOSE = 0, 1, 2, 3, 4
 local COMMAND_COMBINE, COMMAND_CHECK = 1, 2
 local FIRST_AMMO = 0x14
@@ -66,6 +66,9 @@ local MESSAGE_FRAME = {
     { 322, 212, 16, 9, 80, 155 },
     { 338, 212, 16, 9, 80, 155 },
 }
+-- The first `FRAME_LEFT` pieces are the left column's, the rest the
+-- right's.
+local FRAME_LEFT = 11
 local FRAME = {
     { 11, 16, 39, 4, 56, 164 },
     { 11, 30, 39, 2, 56, 168 },
@@ -211,6 +214,52 @@ local CURE_FIRST, CURE_LAST, CURE_LEFT, CURE_RIGHT = 3, 0x23, 0x0B, 0x5C
 -- strength: half of a 320-wide column.
 local TRACE_ALPHA, TRACE_WEIGHT = 128, 3 / 4
 
+-- The MAP page (`0x4FA240`): it slides the item page's frame out over 14
+-- ticks, its pieces in four groups (the tabs up, the message box down, the
+-- left column left and the right column right, by these steps a tick),
+-- over a tiled backdrop (texture 0x13), and draws the floor's map once it
+-- is shown (`0x4FA990`).
+local MAP_IN, MAP_OUT, MAP_SHOWN, MAP_FLOOR = 1, 2, 3, 4
+local MAP_TICKS = 14
+local SLIDE_TABS, SLIDE_BOX, SLIDE_LEFT, SLIDE_RIGHT = -19, 21, -22, 21
+local TILE_U, TILE_V, TILE, TILE_COLUMNS, TILE_ROWS = 80, 22, 48, 7, 5
+-- The map's pictures by their texture slots: the five TIMs of
+-- `map<nn>.adt`, in order.
+local MAP_SLOTS = { 0x1D, 0x21, 0x20, 0x1E, 0x1F }
+local SIGNS = 0x1E
+local SIGN_PIECES = {
+    { 10, 16, 96, 32, 0, 0 },
+    { 250, 21, 32, 48, 96, 0 },
+}
+-- The player's marker (texture 0x14, translucent), its colour the blink
+-- (`0x691F88`, its way at `0x691F89`) plus 40: down by 2 a tick until
+-- under 10, then up by 2 until past 0x50, a step on each tick the shown
+-- map's logic runs. The work block keeps it between openings; the first
+-- after a new game starts at 50, going down.
+local MARKER, MARKER_SIZE, MARKER_BASE = 0x14, 12, 40
+
+-- The FILE page (`0x4F95B0`): the message box drops out of the screen as a
+-- taller panel rises over the left column's lower half, for 12 ticks in and
+-- 13 out. The panel's pieces (texture 0x12), from its top edge.
+local FILE_IN, FILE_OUT, FILE_SHOWN = 1, 2, 3
+local FILE_BOX, FILE_TOP, FILE_RISE = 182, 78, 286
+local FILE_OUT_TICKS, FILE_BOX_STEP, FILE_TOP_STEP = 13, 14, 13
+local FILE_PANEL = {
+    { 7, 0, 83, 4, 0, 147 },
+    { 90, -8, 128, 12, 0, 72 },
+    { 7, 145, 83, 4, 0, 151 },
+    { 90, 145, 128, 4, 0, 84 },
+    { 7, 4, 5, 82, 123, 92 },
+    { 213, 4, 5, 82, 123, 174 },
+    { 7, 86, 5, 59, 123, 92 },
+    { 213, 86, 5, 59, 123, 174 },
+    { 218, 132, 8, 14, 107, 242 },
+}
+for k = 0, 7 do
+    FILE_PANEL[#FILE_PANEL + 1] = { 226 + 16 * k, 134, 16, 9, 80, 155 }
+end
+local BLINK_START, BLINK_LOW, BLINK_HIGH, BLINK_STEP = 50, 10, 0x50, 2
+
 local s = {
     slots = 8,
     show_cursor = true,
@@ -229,6 +278,8 @@ local s = {
     target_shown = false,
     menu_item = 0,
     art = nil,
+    blink = BLINK_START,
+    blink_falling = true,
 }
 M.state = s
 
@@ -313,6 +364,16 @@ function M.animate(api, open, close)
         return
     end
     local page = s.page
+    local last = s.last
+    if last ~= nil and last.page == PAGE_MAP and last.sub == MAP_SHOWN then
+        if s.blink_falling then
+            s.blink_falling = s.blink >= BLINK_LOW
+            s.blink = s.blink - BLINK_STEP
+        else
+            s.blink_falling = s.blink > BLINK_HIGH
+            s.blink = s.blink + BLINK_STEP
+        end
+    end
     if draws_target(s.last) then
         s.target_shown = true
         if s.target_falling then
@@ -630,6 +691,10 @@ local function condition(api, page)
 end
 
 local function trace_line(api, d, x, y0, y1, r, g, b)
+    -- The original culls a line left of the screen.
+    if x < 0 then
+        return
+    end
     local w = TRACE_WEIGHT
     api:fill_rect(d.ox + x, d.oy + y0, 1, y1 - y0 + 1,
         floor(r * w), floor(g * w), floor(b * w), TRACE_ALPHA)
@@ -637,15 +702,16 @@ end
 
 -- The trace (`0x4FFAB0`): the idle wave's last 32 columns fading behind its
 -- head, or a heal's or a cure's sweep.
-local function draw_trace(api, d, page, cond)
+local function draw_trace(api, d, page, cond, dx)
     local mode = s.trace_mode
+    local panel_x = PANEL_X + dx
     if mode == 1 or mode == 3 then
         for i = TRACE_TAIL - 1, 0, -1 do
             local at = page.panel_sweep - i
             if at >= HEAL_FIRST and at <= HEAL_LAST then
                 local fade = 0xFF - 8 * i
                 local r = mode == 3 and fade or 0x10
-                trace_line(api, d, PANEL_X + at, PANEL_Y + HEAL_TOP, PANEL_Y + HEAL_BOTTOM, r, fade, 0x10)
+                trace_line(api, d, panel_x + at, PANEL_Y + HEAL_TOP, PANEL_Y + HEAL_BOTTOM, r, fade, 0x10)
             end
         end
         return
@@ -653,7 +719,7 @@ local function draw_trace(api, d, page, cond)
         for i = TRACE_TAIL - 1, 0, -1 do
             local at = page.panel_cure - i
             if at >= CURE_FIRST and at <= CURE_LAST then
-                api:fill_rect(d.ox + PANEL_X + CURE_LEFT, d.oy + PANEL_Y + at,
+                api:fill_rect(d.ox + panel_x + CURE_LEFT, d.oy + PANEL_Y + at,
                     CURE_RIGHT - CURE_LEFT + 1, 1,
                     floor(0x10 * TRACE_WEIGHT), floor(0x10 * TRACE_WEIGHT),
                     floor(8 * i * TRACE_WEIGHT), TRACE_ALPHA)
@@ -667,7 +733,7 @@ local function draw_trace(api, d, page, cond)
         if at >= 0 and at < TRACE_LEN then
             local y0 = wave[2 * at + 1] + PANEL_Y + 2
             local y1 = y0 + wave[2 * at + 2]
-            trace_line(api, d, PANEL_X + 12 + at, y0, y1,
+            trace_line(api, d, panel_x + 12 + at, y0, y1,
                 colour[1] - i * colour[4], colour[2] - i * colour[5], colour[3] - i * colour[6])
         end
     end
@@ -731,6 +797,118 @@ local function draw_target(api, d, slot, grey, dx, dy)
     sprite(api, d, ST + 3, x + 22, y + 2, 22, 30, 20, 0, rgb)
 end
 
+-- How far the MAP page has slid the item page's frame out, 0 to 14.
+local function map_slide(page)
+    if page.page ~= PAGE_MAP then
+        return 0
+    elseif page.sub == MAP_IN then
+        return page.command
+    elseif page.sub == MAP_SHOWN or page.sub == MAP_FLOOR then
+        return MAP_TICKS
+    elseif page.sub == MAP_OUT then
+        return MAP_TICKS - page.command
+    end
+    return 0
+end
+
+-- How far the FILE page has moved the message box down, and where its
+-- panel's top is (nil when it isn't drawn). The tick the slide out ends,
+-- back on the tab bar, still draws its last step.
+local function file_slide(page, last)
+    if page.page == PAGE_FILE then
+        local c = page.command
+        if page.sub == FILE_IN then
+            return c * c + 3 * c, FILE_RISE - c * c - 5 * c
+        elseif page.sub == FILE_OUT then
+            return FILE_BOX - FILE_BOX_STEP * c, FILE_TOP + FILE_TOP_STEP * c
+        elseif page.sub >= FILE_SHOWN then
+            return FILE_BOX, FILE_TOP
+        end
+    elseif last ~= nil and last.page == PAGE_FILE and last.sub == FILE_OUT then
+        local c = FILE_OUT_TICKS
+        return FILE_BOX - FILE_BOX_STEP * c, FILE_TOP + FILE_TOP_STEP * c
+    end
+    return 0, nil
+end
+
+local function map_art(api, d, number)
+    d.maps = d.maps or {}
+    local pages = d.maps[number]
+    if pages == nil then
+        pages = {}
+        for k, slot in ipairs(MAP_SLOTS) do
+            pages[slot] = api:page(("ui/status/map%02d_%d"):format(number, k - 1))
+        end
+        d.maps[number] = pages
+    end
+    return pages
+end
+
+-- A translucent sprite (`0x440280` with the primitive's semi-transparency
+-- on): every texel is averaged with the frame, the STP bit or not; colour
+-- 0 is clear. `rgb` modulates it.
+local function translucent(api, d, handle, row, rgb, x, y, w, h, u, v)
+    if handle == nil then
+        return
+    end
+    d.luts = d.luts or {}
+    local key = ("%d:%d:%d"):format(handle, row, rgb or 128)
+    local lut = d.luts[key]
+    if lut == nil then
+        local palette = api:page_palette(handle, row) or {}
+        local stp = api:page_stp(handle, row) or {}
+        local m = rgb or 128
+        lut = {}
+        for index = 1, 255 do
+            local c = palette[index]
+            if c ~= nil and (c ~= 0 or stp[index]) then
+                local r = min(255, ((c >> 16) & 0xFF) * m // 128)
+                local g = min(255, ((c >> 8) & 0xFF) * m // 128)
+                local b = min(255, (c & 0xFF) * m // 128)
+                lut[index] = (r << 16) | (g << 8) | b
+            end
+        end
+        d.luts[key] = lut
+    end
+    api:page_lut(handle, u, v, w, h, d.ox + x, d.oy + y, lut, false, { blend = "half" })
+end
+
+-- The floor's map (`0x4FA990`): the rooms' fills, the signs, the rooms'
+-- outlines and the player's marker, in the original's order.
+local function draw_map(api, d)
+    local view = api:re2_map()
+    if view == nil then
+        return
+    end
+    local pages = map_art(api, d, view.map)
+    for _, room in ipairs(view.rooms) do
+        local fill = room.fill
+        if fill ~= nil then
+            translucent(api, d, pages[fill.texture], fill.clut, nil,
+                room.x, room.y, room.w, room.h, fill.u, fill.v)
+        end
+    end
+    for _, p in ipairs(SIGN_PIECES) do
+        local handle = pages[SIGNS]
+        if handle ~= nil then
+            api:page_sprite_scaled(handle, p[5], p[6], p[3], p[4], d.ox + p[1], d.oy + p[2], p[3], p[4], 0, 255)
+        end
+    end
+    for _, room in ipairs(view.rooms) do
+        local o = room.outline
+        local handle = pages[o.texture]
+        if handle ~= nil then
+            api:page_sprite_scaled(handle, o.u, o.v, room.w, room.h, d.ox + room.x, d.oy + room.y,
+                room.w, room.h, o.clut, 255)
+        end
+    end
+    local marker = view.marker
+    if marker ~= nil then
+        translucent(api, d, d.pages[MARKER], 0, s.blink + MARKER_BASE,
+            marker.x, marker.y, MARKER_SIZE, MARKER_SIZE, marker.u, marker.v)
+    end
+end
+
 function M.draw(api)
     local page = s.page or api:re2_items()
     if page == nil then
@@ -740,6 +918,17 @@ function M.draw(api)
     local d = art(api)
     d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
     api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
+    -- The MAP page's backdrop, on each tick its logic runs.
+    local started = last or page
+    if started.page == PAGE_MAP then
+        for row = 0, TILE_ROWS - 1 do
+            for column = 0, TILE_COLUMNS - 1 do
+                sprite(api, d, ST + 1, TILE * column, TILE * row, TILE, TILE, TILE_U, TILE_V)
+            end
+        end
+    end
+    local k = map_slide(page)
+    local T, B, L, R = SLIDE_TABS * k, SLIDE_BOX * k, SLIDE_LEFT * k, SLIDE_RIGHT * k
     local closing = s.close ~= nil and s.close >= 1
     local on_items = page.page == PAGE_ITEMS
     -- The item page's logic draws the cursor and the name, on the page the
@@ -753,16 +942,23 @@ function M.draw(api)
     end
 
     -- The frame, the message box (moved by CHECK) and CHECK's panel.
-    pieces(api, d, FRAME_TABS, 0, 0)
+    pieces(api, d, FRAME_TABS, 0, T)
     local check = on_items and (is_check(page) or (last ~= nil and page.sub == SUB_GRID
         and is_check(last) and last.step == CHECK_DONE))
     local bx, by = 0, 0
     if on_items and is_check(page) then
         bx, by = check_box(page)
     end
+    local file_dy, file_top = file_slide(page, last)
+    by = by + B + file_dy
     fill(api, d, MESSAGE_BOX[1] + bx, MESSAGE_BOX[2] + by, MESSAGE_BOX[3] + bx, MESSAGE_BOX[4] + by, MESSAGE_FILL)
     pieces(api, d, MESSAGE_FRAME, bx, by)
-    pieces(api, d, FRAME, 0, 0)
+    for index, p in ipairs(FRAME) do
+        sprite(api, d, ST, p[1] + (index <= FRAME_LEFT and L or R), p[2], p[3], p[4], p[5], p[6])
+    end
+    if file_top ~= nil then
+        pieces(api, d, FILE_PANEL, 0, file_top)
+    end
     local panel_y = check and (is_check(page) and check_panel_y(page) or CHECK_BOTTOM) or nil
     if panel_y ~= nil then
         check_panel(api, d, panel_y)
@@ -770,46 +966,46 @@ function M.draw(api)
 
     -- The tabs.
     for tab = 0, 3 do
-        sprite(api, d, ST + 5, TAB_X + 49 * tab, TAB_Y, TAB_W, TAB_H, 0, TAB_H * tab,
+        sprite(api, d, ST + 5, TAB_X + 49 * tab, TAB_Y + T, TAB_W, TAB_H, 0, TAB_H * tab,
             tab ~= page.tab and TAB_DIM or page.page >= PAGE_ITEMS and TAB_LIT or TAB_SELECTED)
     end
 
     -- The portrait, the condition and the slots' icons.
     for _, p in ipairs(PORTRAIT) do
-        sprite(api, d, ST + 1, p[1], p[2], p[3], p[4], p[5], p[6])
+        sprite(api, d, ST + 1, p[1] + L, p[2], p[3], p[4], p[5], p[6])
     end
     local cond = condition(api, page)
-    sprite(api, d, ST + 4, CONDITION_X, CONDITION_Y, 46, 11, 0, 11 * cond)
-    slot_icon(api, d, PERSONAL_SLOT, PERSONAL_X, PERSONAL_Y)
+    sprite(api, d, ST + 4, CONDITION_X + L, CONDITION_Y, 46, 11, 0, 11 * cond)
+    slot_icon(api, d, PERSONAL_SLOT, PERSONAL_X + R, PERSONAL_Y)
     for slot = s.slots - 1, 0, -1 do
-        slot_icon(api, d, slot, GRID_X + SLOT_W * (slot % 2), GRID_Y + SLOT_H * (slot // 2))
+        slot_icon(api, d, slot, GRID_X + R + SLOT_W * (slot % 2), GRID_Y + SLOT_H * (slot // 2))
     end
 
     -- The equipped item and the counts.
-    sprite(api, d, ICONS + 2, EQUIP_BOX[1], EQUIP_BOX[2], EQUIP_BOX[3], EQUIP_BOX[4], EQUIP_BOX[5], EQUIP_BOX[6])
+    sprite(api, d, ICONS + 2, EQUIP_BOX[1] + R, EQUIP_BOX[2], EQUIP_BOX[3], EQUIP_BOX[4], EQUIP_BOX[5], EQUIP_BOX[6])
     local equip = equipped_slot(api)
     if equip ~= nil then
         local item, quantity = api:re2_slot(equip)
         local texture, u, v = icon_cell(item)
         if is_wide(item) then
-            sprite(api, d, texture, EQUIP_X - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+            sprite(api, d, texture, EQUIP_X + R - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
             local half, hu, hv = half_cell(item)
-            sprite(api, d, half, EQUIP_X + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
+            sprite(api, d, half, EQUIP_X + R + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
         else
-            sprite(api, d, texture, EQUIP_X, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+            sprite(api, d, texture, EQUIP_X + R, EQUIP_Y, SLOT_W, SLOT_H, u, v)
         end
-        count(api, d, item, quantity, EQUIP_COUNT_X, EQUIP_COUNT_Y)
+        count(api, d, item, quantity, EQUIP_COUNT_X + R, EQUIP_COUNT_Y)
     end
     for slot = 0, s.slots - 1 do
         local item, quantity = api:re2_slot(slot)
         local at = COUNT_AT[slot]
         if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
-            count(api, d, item, quantity, COUNT_ORIGIN_X + at[1], COUNT_ORIGIN_Y + at[2])
+            count(api, d, item, quantity, COUNT_ORIGIN_X + R + at[1], COUNT_ORIGIN_Y + at[2])
         end
     end
 
     -- The trace, the cursor and CHECK's picture.
-    draw_trace(api, d, page, cond)
+    draw_trace(api, d, page, cond, L)
     local cursor_shown = s.show_cursor and not closing and ran_items
     local cx, cy, tx, ty = slide(api, page)
     if cursor_shown then
@@ -835,6 +1031,12 @@ function M.draw(api)
         if item ~= 0 then
             api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item) or "")
         end
+    end
+
+    -- The shown map, on the ticks its logic leaves it shown.
+    if started.page == PAGE_MAP and started.sub == MAP_SHOWN
+        and page.page == PAGE_MAP and page.sub == MAP_SHOWN then
+        draw_map(api, d)
     end
 end
 
