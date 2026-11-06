@@ -1895,6 +1895,20 @@ fn smooth_path(
 impl BotNav {
     fn sync_room(&mut self, id: RoomId, room: &RoomState) {
         if self.room_id == Some(id) {
+            // A scripted collision rewrite (`inst_cfg`) can land after the
+            // first tick in the room: on a door entry the init's edits are
+            // applied once its scripts run. 300's elevator shaft is walled
+            // until its init opens it, so a stale copy kept the platform
+            // out of reach. Take the live boundaries again.
+            if room.collision != self.base_collision {
+                self.collision = collision_room(room);
+                self.base_collision = self.collision.collision.clone();
+                self.object_boxes.clear();
+                self.fine = RefCell::new(None);
+                self.drop_path();
+                self.unreachable_goal = None;
+                self.blocked_goal = None;
+            }
             return;
         }
         self.room_id = Some(id);
@@ -2722,6 +2736,9 @@ impl UserData for BotCtx {
                         row.set("kind", "fight")?;
                         row.set("enemy", enemy)?;
                     }
+                    meta::Target::Wait => {
+                        row.set("kind", "wait")?;
+                    }
                 }
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
@@ -2736,9 +2753,6 @@ impl UserData for BotCtx {
             let uses = lua.create_table()?;
             for fact in &meta.uses {
                 let row = lua.create_table()?;
-                    meta::Target::Wait => {
-                        row.set("kind", "wait")?;
-                    }
                 row.set("slot", fact.slot)?;
                 row.set("item", fact.item)?;
                 row.set("bank", fact.flag.0)?;
@@ -4519,6 +4533,38 @@ mod tests {
             grabbed: false,
             health_status: 0,
         }
+    }
+
+    #[test]
+    fn a_collision_edit_after_the_first_tick_reaches_the_plan() {
+        let id = RoomId {
+            stage: 3,
+            room: 0x00,
+            player_flag: 1,
+            mansion2: false,
+        };
+        let wall = crate::state::CollisionRect {
+            x_max: 9000,
+            z_max: 9000,
+            x_min: 7000,
+            z_min: 7000,
+            kind: 1,
+            flags: 0,
+        };
+        let mut room = RoomState::default();
+        for quadrant in &mut room.collision.quadrants {
+            quadrant.push(wall);
+        }
+        let mut nav = BotNav::default();
+        nav.sync_room(id, &room);
+        assert!(blocked(&nav.collision, 8000, 8000, 0, 100, 0));
+        // The init's `inst_cfg` opens the wall on a later tick in the same
+        // room (300's elevator shaft): the plan follows the live room.
+        for quadrant in &mut room.collision.quadrants {
+            quadrant.clear();
+        }
+        nav.sync_room(id, &room);
+        assert!(!blocked(&nav.collision, 8000, 8000, 0, 100, 0));
     }
 
     #[test]
