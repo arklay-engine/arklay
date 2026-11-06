@@ -1948,6 +1948,7 @@ function BotPlanner.enter_room(bot, room)
     p.last_from = p.last_room ~= room.id and p.last_room or nil
     p.last_room = room.id
     BotPuzzle.enter_room()
+    p.last_done = { room = room.id, tick = bot:tick(), anywhere = true }
     progress(bot, "entered " .. room.id)
     p.stairs[room.id] = nil
     local goal = bot:goal_room()
@@ -2027,13 +2028,14 @@ end
 -- Whether the next goal waits for a use probe: within `window` ticks of
 -- the last goal done in this room (`last_done` {room, tick, zone}), a <use>
 -- fact here has its item held and its done flag clear but no live probe
--- yet, at a zone overlapping the one that goal acted on.
+-- yet, at a zone overlapping the one that goal acted on. Entering the room
+-- counts as a goal done anywhere in it (`anywhere`).
 function BotPlanner.awaiting_use(bot, last_done, window)
     if not last_done or last_done.room ~= bot:room().id
         or bot:tick() - last_done.tick > window then
         return nil
     end
-    return BotPuzzle.use_pending(bot, last_done.zone)
+    return BotPuzzle.use_pending(bot, last_done.zone, last_done.anywhere)
 end
 
 -- One controllable planner tick.
