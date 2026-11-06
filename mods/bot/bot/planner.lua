@@ -462,13 +462,35 @@ local function world_room(world, id)
 end
 
 -- Whether a remembered door (a world row) can be walked through.
+-- The <door slot via> fact of door `slot` in room `room_id`, or nil: a door
+-- the room parks at its origin until AOT `via` is pressed.
+local function via_fact(bot, room_id, slot)
+    for _, fact in ipairs(bot:door_facts()) do
+        if fact.room == room_id and fact.slot == slot then
+            return fact
+        end
+    end
+    return nil
+end
+
+-- The live action the bot presses to open this room's `door`, when the door
+-- is parked at the origin and a <door via> fact names it (406's hatch).
+local function via_action(bot, door)
+    if not BotNav.is_origin_zone(door) then
+        return nil
+    end
+    local fact = via_fact(bot, bot:room().id, door.slot)
+    return fact and BotNav.action_by_slot(bot, fact.via)
+end
+
 local function door_passable(bot, room_id, door)
     if not door.present or not door.target then
         return false
     end
     -- A door zone parked at the room origin is a scripted transfer (a
-    -- cutscene's exit), not a door to walk through.
-    if door.x == 0 and door.z == 0 then
+    -- cutscene's exit), not a door to walk through, unless a <door via>
+    -- fact names the action that sets it around the player.
+    if door.x == 0 and door.z == 0 and not via_fact(bot, room_id, door.slot) then
         return false
     end
     if blocked(bot, "door", room_id, door.slot, true) then
@@ -960,6 +982,22 @@ end
 local function door_goal(bot, door, why)
     local label = string.format("door slot %d -> %s (%s)", door.slot,
         tostring(door.target), why)
+    local via = via_action(bot, door)
+    if via then
+        -- Press the action that opens it; its event sets the door around
+        -- the player (after a prompt the room's <answer> settles).
+        local room_id = bot:room().id
+        label = string.format("%s via slot %d", label, via.slot)
+        return {
+            kind = "door", slot = door.slot, target = door.target, label = label,
+            was_locked = false,
+            job = {
+                zone = zone_of(via), label = label, pattern = "edge",
+                presses = 2, gap = 20, side = 4 * C.SECOND, timeout = GOAL_TIMEOUT,
+                done = function(b) return b:room().id ~= room_id end,
+            },
+        }
+    end
     return {
         kind = "door", slot = door.slot, target = door.target, label = label,
         -- A locked door's press opens the key's message: not an event's.
@@ -1412,7 +1450,7 @@ local function choose(bot)
     for _, door in ipairs(bot:doors()) do
         local fresh, row = untraversed(here, door.slot)
         if fresh and door.target and door.target ~= room
-            and not BotNav.is_origin_zone(door)
+            and (not BotNav.is_origin_zone(door) or via_action(bot, door))
             and not BotPuzzle.avoided(bot, door.slot)
             and not blocked(bot, "door", room, door.slot) then
             local ok, why, permanent = true, nil, false
@@ -1429,7 +1467,7 @@ local function choose(bot)
                     plan().locked[mark_key("door", room, door.slot)] = why
                 end
             else
-                local len = BotNav.reach_length(bot, door) or UNPLANNED
+                local len = BotNav.reach_length(bot, via_action(bot, door) or door) or UNPLANNED
                 local visited = row and row.target_visited or bot:visited(door.target)
                 -- The length from where the bot stood, for remote ranking;
                 -- a door with no planned approach costs UNPLANNED_COST
@@ -1489,7 +1527,8 @@ local function choose(bot)
     local function door_len(slot)
         if lengths[slot] == nil then
             local door = BotNav.door_by_slot(bot, slot)
-            lengths[slot] = door and BotNav.reach_length(bot, door) or false
+            local zone = door and (via_action(bot, door) or door)
+            lengths[slot] = zone and BotNav.reach_length(bot, zone) or false
         end
         return lengths[slot] or UNPLANNED_COST
     end
@@ -1550,7 +1589,7 @@ local function choose(bot)
         end
         -- A door parked at the origin is a scripted transfer (see
         -- door_passable).
-        return not (goal.x == 0 and goal.z == 0)
+        return not (goal.x == 0 and goal.z == 0 and not via_fact(bot, goal.room, goal.slot))
             and not blocked(bot, "door", goal.room, goal.slot, true)
             and (not goal.locked or key_opens(bot, goal.key))
     end
