@@ -392,6 +392,10 @@ local function clear_unreachable(bot, room, doors)
         if (m.room == room or (doors and m.kind == "door"))
             and m.reason:find("approach", 1, true) then
             plan().marks[key] = nil
+        elseif doors and m.event and m.room == room then
+            -- So may a door of this room a room event had made a message:
+            -- 302's battery powers the elevator whose call showed 132.
+            plan().marks[key] = nil
         end
     end
 end
@@ -1213,11 +1217,20 @@ local function passage_goal(bot, room)
     local p = plan()
     p.stairs[room] = p.stairs[room] or {}
     local stair, stair_len = nil, nil
+    -- A slot that is a door to another room is no passage within this one
+    -- (307's ladder up to 302: the check climbed it on every entry, and
+    -- the route back down came straight back).
+    local exits = {}
+    for _, door in ipairs(bot:doors()) do
+        if door.target and door.target ~= room then
+            exits[door.slot] = true
+        end
+    end
     for _, action in ipairs(bot:actions()) do
         local passage = action.kind == "door_check" or action.kind == "stairs_zone"
             or (action.kind == "event" and action.flags >= C.ACTION_KEY
                 and not BotPuzzle.is_fact_slot(bot, action.slot))
-        if passage and not p.stairs[room][action.slot]
+        if passage and not exits[action.slot] and not p.stairs[room][action.slot]
             and not blocked(bot, "stair", room, action.slot)
             and not BotPuzzle.avoided(bot, action.slot) then
             local len = BotNav.reach_length(bot, action)
@@ -1256,7 +1269,10 @@ local function fight_due(bot, fight)
     if fight.bank and bot:flag(fight.bank, fight.bit) then
         return false
     end
-    local held_back = false
+    -- A fight step that found its enemy and left it alive counts too: the
+    -- bot left the room short of rounds or health, or a reload undid the
+    -- fight and the marks with it (40C's Plant 42 after a death in 302).
+    local held_back = bot:memory()[BotNav.fight_met_key(fight.room, fight.enemy)] ~= nil
     for _, m in pairs(plan().marks) do
         if m.kind == "interact" and m.room == fight.room
             and m.reason:find("not ready for the fight", 1, true) then
@@ -1468,9 +1484,14 @@ function BotPlanner.inventory_due_here(bot)
     return nil
 end
 
--- Puzzle steps (<interact> and <use> goals) done this run.
-function BotPlanner.steps_done()
-    return plan().steps_done or 0
+-- Puzzle steps (<interact> and <use> goals) done this run. Kept in the
+-- memory (bot:remember), which a reload puts back as it was at the save:
+-- the save rule's milestones count them, and a count in the planner's
+-- state restarted at 0 with the rebuilt VM, so no milestone after a
+-- reload beat the one saved and the bot never saved again (90k ticks lost
+-- to each later death).
+function BotPlanner.steps_done(bot)
+    return tonumber(bot:memory().steps_done or "") or 0
 end
 
 -- The room the pursued target's route enters next when a live monster was
@@ -1539,6 +1560,11 @@ local function choose(bot)
             end
             if goal then
                 return goal
+            end
+            if fight and not ready then
+                -- Held back from the fight: remembered past a reload too
+                -- (fight_due; marks live in the VM a reload rebuilds).
+                bot:remember(BotNav.fight_met_key(room, fight.enemy), "1")
             end
             mark(bot, "interact", room, BotPuzzle.step_key(fact), why)
         end
@@ -2567,7 +2593,7 @@ function BotPlanner.step(bot)
         if goal.kind == "interact" or goal.kind == "use" or goal.kind == "camera"
             or goal.kind == "deliver" or goal.kind == "fetch" then
             if goal.kind ~= "camera" then
-                p.steps_done = (p.steps_done or 0) + 1
+                bot:remember("steps_done", tostring(BotPlanner.steps_done(bot) + 1))
             end
             real_progress(bot, goal.label)
             if goal.kind == "use" then
