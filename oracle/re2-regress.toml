@@ -217,7 +217,8 @@ record = "--warp 102:-25067:0:15229:2048 --life 200"
 name = "run_119"
 room = "118"
 sound = false
-ticks = 2700
+# the zombies kill the player: both games end the room at the game over on tick 2570
+ticks = 2570
 input = "run_119.txt"
 input_shift = 344
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
@@ -245,7 +246,8 @@ record = "--warp 119:13032:0:-19315:0 --life 200"
 name = "run_11b"
 room = "11A"
 sound = false
-ticks = 2700
+# the zombies kill the player: both games end the room at the game over on tick 2672
+ticks = 2672
 input = "run_11b.txt"
 input_shift = 344
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
@@ -301,7 +303,8 @@ record = "--warp 119:13032:0:-19315:0 --life 200"
 name = "walk_11b"
 room = "11A"
 sound = false
-ticks = 2700
+# the zombies kill the player: both games end the room at the game over on tick 2227
+ticks = 2227
 input = "walk_11b.txt"
 input_shift = 344
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"

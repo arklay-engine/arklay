@@ -276,6 +276,9 @@ def run_one(run: dict, ctx: dict) -> dict:
     ref_f.unlink()
     ark_f.unlink()
     text = trace_text(cmp)
+    if cmp["ticks"] < ticks:
+        # compare_pair stops at the shorter trace, so a short one would otherwise pass.
+        result["problems"].append(f"only {cmp['ticks']} of {ticks} ticks compared (a trace ended early)")
     why = judge_trace(run, cmp)
     if why:
         result["problems"].append(why)
