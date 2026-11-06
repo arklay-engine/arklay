@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 500, the lab's first room. Door 1 is the lift up to 310: nothing in
+     the lab needs anything from before it, so the bot never goes back. -->
+<bot format="2">
+  <avoid slot="1" reason="the lift back up to 310: the lab needs nothing from before it"/>
+</bot>

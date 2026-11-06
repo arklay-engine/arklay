@@ -342,6 +342,24 @@ struct SessionSnapshot {
     item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
     /// The player stands in the guardhouse drug store, where chemicals mix.
     drug_store: bool,
+    /// The lab computer terminal, while it is up.
+    computer: Option<ComputerSnapshot>,
+}
+
+/// The lab computer terminal's state machine as its screen keeps it
+/// (`games/re1/ui/computer_lab.lua`'s `M.state`), read-only.
+#[derive(Clone, Debug, Default)]
+struct ComputerSnapshot {
+    /// `"login"`, `"menu"`, `"command"` or `"unlocked"`.
+    stage: String,
+    /// `"user"`, `"secret"`, `"rejected"` or `"accepted"`.
+    sub: String,
+    /// The keyboard cursor cell (row * 8 + column).
+    cell: i64,
+    /// The door menu's highlighted row: 0 and 1 the cell doors, 2 exit.
+    menu_row: i64,
+    /// How many chars the field being typed holds.
+    typed: usize,
 }
 
 /// The session's save facts: what the save screen reported writing, and
@@ -1161,6 +1179,15 @@ impl SessionSnapshot {
             },
             item_defs: game.item_defs.clone(),
             drug_store: game.is_drug_store(),
+            computer: session.computer.as_ref().map(|screen| ComputerSnapshot {
+                stage: screen.state_str("stage").unwrap_or_default(),
+                sub: screen.state_str("sub").unwrap_or_default(),
+                cell: screen.state_int("cell").unwrap_or(0),
+                menu_row: screen.state_int("menu_row").unwrap_or(0),
+                typed: screen
+                    .state_truthy_list("field")
+                    .map_or(0, |field| field.len()),
+            }),
         }
     }
 
@@ -1338,6 +1365,39 @@ struct NavOutcome {
     status: &'static str,
     distance: i32,
     angle_error: i32,
+}
+
+/// The zones of the room's `<keep_out>` facts whose gate holds, as centre
+/// and half extents: AOT slots the walks plan around. A slot that is not
+/// set this tick has no zone.
+fn keep_out_boxes(
+    meta: Option<&meta::RoomMeta>,
+    snapshot: &SessionSnapshot,
+) -> Vec<(i32, i32, i32, i32)> {
+    let Some(meta) = meta else {
+        return Vec::new();
+    };
+    meta.keep_outs
+        .iter()
+        .filter(|fact| {
+            fact.gate
+                .is_none_or(|gate| snapshot.flag(gate.flag.0, gate.flag.1) == gate.set)
+        })
+        .filter_map(|fact| {
+            snapshot
+                .actions
+                .iter()
+                .find(|action| action.slot == fact.slot)
+        })
+        .map(|action| {
+            (
+                action.x + action.width / 2,
+                action.z + action.depth / 2,
+                action.width / 2,
+                action.depth / 2,
+            )
+        })
+        .collect()
 }
 
 /// The options `bot:walk_to(x, z, opts)` accepts.
@@ -1944,7 +2004,10 @@ impl BotNav {
     /// side, so the narrow strip between an object and a wall (where a push
     /// stand point often lies) stays on the lattice; a walk that grazes the
     /// box edge slides off without the nine forward frames a push needs.
-    fn sync_objects(&mut self, objects: &[ObjectSnapshot]) {
+    ///
+    /// `keep_outs` (centre and half extents, from the room's `<keep_out>`
+    /// facts) are walled off whole: a trap probe the walk must not cross.
+    fn sync_objects(&mut self, objects: &[ObjectSnapshot], keep_outs: &[(i32, i32, i32, i32)]) {
         if self.collision.sca.is_some() {
             return;
         }
@@ -1961,6 +2024,7 @@ impl BotNav {
                     object.half_z - OBJECT_NAV_INSET,
                 )
             })
+            .chain(keep_outs.iter().copied())
             .collect();
         if boxes == self.object_boxes {
             return;
@@ -2798,6 +2862,16 @@ impl UserData for BotCtx {
                 watches.push(row)?;
             }
             table.set("watches", watches)?;
+            let leaves = lua.create_table()?;
+            for fact in &meta.leaves {
+                let row = lua.create_table()?;
+                row.set("slot", fact.slot)?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("label", fact.label.as_deref())?;
+                leaves.push(row)?;
+            }
+            table.set("leaves", leaves)?;
             Ok(Value::Table(table))
         });
 
@@ -3011,6 +3085,15 @@ impl UserData for BotCtx {
             table.set("typewriter", scene.typewriter)?;
             if let Some(view) = &bot.snapshot.save_screen {
                 table.set("save_screen", save_screen_table(lua, view)?)?;
+            }
+            if let Some(computer) = &bot.snapshot.computer {
+                let view = lua.create_table()?;
+                view.set("stage", computer.stage.as_str())?;
+                view.set("sub", computer.sub.as_str())?;
+                view.set("cell", computer.cell)?;
+                view.set("menu_row", computer.menu_row)?;
+                view.set("typed", computer.typed)?;
+                table.set("computer", view)?;
             }
             Ok(table)
         });
@@ -3721,7 +3804,10 @@ impl BotRuntime {
             input.reset();
             let mut nav = self.shares.nav.borrow_mut();
             nav.sync_room(session.loaded.id, &session.loaded.room);
-            nav.sync_objects(&snapshot.objects);
+            nav.sync_objects(
+                &snapshot.objects,
+                &keep_out_boxes(self.meta.as_deref(), &snapshot),
+            );
             nav.begin_tick();
             let mut memory = self.shares.memory.borrow_mut();
             memory.observe(&snapshot);
@@ -4590,7 +4676,7 @@ mod tests {
         };
         let centre = (8000, 8000);
         assert!(!blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
-        nav.sync_objects(&[object(8000, true)]);
+        nav.sync_objects(&[object(8000, true)], &[]);
         assert!(blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
         // The box is inset, so the floor just past the object's edge (inside
         // the inset plus the body) stays free.
@@ -4603,11 +4689,14 @@ mod tests {
             0
         ));
         // A pushed object moves its box; an intangible one has none.
-        nav.sync_objects(&[object(5000, true)]);
+        nav.sync_objects(&[object(5000, true)], &[]);
         assert!(!blocked(&nav.collision, centre.0, centre.1, 0, 100, 0));
         assert!(blocked(&nav.collision, 5000, 8000, 0, 100, 0));
-        nav.sync_objects(&[object(5000, false)]);
+        nav.sync_objects(&[object(5000, false)], &[]);
         assert!(!blocked(&nav.collision, 5000, 8000, 0, 100, 0));
+        // A keep-out zone blocks the floor like a solid box.
+        nav.sync_objects(&[], &[(12000, 8000, 400, 400)]);
+        assert!(blocked(&nav.collision, 12000, 8000, 0, 100, 0));
     }
 
     #[test]

@@ -44,6 +44,9 @@ BotConst.LOCK_BANK = 2
 BotConst.LOCK_LOCKED = 0x80
 -- See LOCK_BANK: lock % LOCK_SPAN is the lock flag.
 BotConst.LOCK_SPAN = 0x40
+-- The flag bank of the room pickups: a set bit means the item still lies
+-- in its room.
+BotConst.ITEM_BANK = 7
 -- Door key 0x00 on a locked door: only a room event raises the lock.
 BotConst.KEY_NONE = 0x00
 -- Door key 0xFE: "opens from the other side"; a press raises its lock flag.
@@ -112,10 +115,17 @@ BotConst.DOOM_BOOK_2 = 0x3F
 -- The medal Doom Book II becomes: item - DOOM_BOOK_2 + WOLF_MEDAL.
 BotConst.WOLF_MEDAL = 0x24
 -- A doom book opens when the turntable's yaw is near 0x400 (the examine
--- check's window is 0x270..0x590); the bot turns into this narrower band so
--- the release tick cannot leave the window.
-BotConst.EXAMINE_YAW_LOW = 0x340
--- The band's upper end (see EXAMINE_YAW_LOW).
-BotConst.EXAMINE_YAW_HIGH = 0x4C0
--- A 12-bit angle's full turn: the viewer's yaw wraps at it.
-BotConst.ANGLE_FULL = 0x1000
+-- check's window is 0x270..0x590); the bot turns into this narrower band
+-- {low, high} so the release tick cannot leave the window. Yaws wrap at
+-- FULL_TURN.
+BotConst.EXAMINE_YAW = { low = 0x340, high = 0x4C0 }
+
+-- The lab computer terminal (games/re1/ui/computer_lab.lua): the login the
+-- player reads on the lab's files (UI_LAB_PASSWORD_USER and _ENTRY), the
+-- command that releases a cell door (UI_LAB_PASSWORD_COMMAND), the
+-- keyboard's ENTER and BACKSPACE cells, and the LOCK_BANK bits the door
+-- menu's rows release (close_computer's DOOR_LOCK_BITS).
+BotConst.TERMINAL = {
+    user = "JOHN", password = "ADA", command = "MOLE",
+    enter = 0x17, backspace = 0x1D, door_bits = { 0x25, 0x26 },
+}

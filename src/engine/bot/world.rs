@@ -571,6 +571,7 @@ pub(super) mod tests {
             saves: SaveSnapshot::default(),
             item_defs: crate::item_catalog::ItemCatalog::embedded(),
             drug_store: false,
+            computer: None,
         }
     }
 
