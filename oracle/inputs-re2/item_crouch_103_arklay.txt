@@ -1,0 +1,33 @@
+# item_crouch_103.txt 344 ticks earlier, for arklay's --room 103 (oracle/re2.md, "Items")
+12 aim
+30 aim fire
+34 aim
+60 aim fire
+64 aim
+90 aim fire
+94 aim
+120 aim fire
+124 aim
+150 aim fire
+154 aim
+180 aim fire
+184 aim
+210 aim fire
+214 aim
+240 aim fire
+244 aim
+270 aim fire
+274 aim
+300 aim fire
+304 aim
+330 aim fire
+334 aim
+360
+370 up
+462
+480 action
+484
+756 action
+760
+956 action
+960

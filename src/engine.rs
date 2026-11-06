@@ -7292,7 +7292,7 @@ impl GameSession {
             rseed,
             fade_counter: fade_counter as i16,
             fade_state,
-            cam: self.loaded.room.current_cut as u8,
+            cam: self.game.re2_item_get_cut(self.loaded.room.current_cut) as u8,
             player_flags: self.game.player_flags,
             re2_player: self
                 .game
@@ -15628,6 +15628,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     } else {
         crate::player2::player_move(&mut context.game.re2.player, context.player, &tick)
     };
+    context.game.tick_re2_crouch();
     let re2 = &mut context.game.re2;
     re2.player.water_draws(&mut re2.rnd);
     if !tick.stopped {

@@ -52,6 +52,8 @@ const MOVE_RUN: u8 = 2;
 const MOVE_BACKWARD: u8 = 3;
 const MOVE_ROTATE: u8 = 4;
 const MOVE_AIM: u8 = 5;
+/// `pl_mv06`, the crouching pick-up `Sce_Item` starts.
+pub(crate) const MOVE_ITEM: u8 = 6;
 const MOVE_STAIRS: u8 = 7;
 const MOVE_CLIMB: u8 = 8;
 const MOVE_JUMP_DOWN: u8 = 9;
@@ -68,6 +70,8 @@ const FRAME_SKIPPED: u32 = 0x8000;
 
 /// A clip by health (`D_life_u`), `pl_mv_00`..`04`.
 const IDLE_CLIPS: [u8; 3] = [2, 5, 8];
+/// `pl_mv06`'s crouch, a clip of the PLD's own.
+const ITEM_CLIP: u8 = 6;
 const WALK_CLIPS: [u8; 3] = [0, 3, 6];
 const RUN_CLIPS: [u8; 3] = [1, 4, 7];
 const BACK_CLIPS: [u8; 3] = [0, 9, 9];
@@ -325,6 +329,9 @@ pub struct Work {
     /// that looks at an enemy, and the ticks until it looks again.
     back_look: bool,
     back_wait: u8,
+    /// `pl_mv06` reached sub 2 this tick: the get-item window opens
+    /// (`0x4DB035`). The game takes it.
+    pub item_window: bool,
     /// The flags of `pNow_seq`, the frame `Joint_move` played last.
     now_seq: u32,
     /// `Type`: the weapon, and the bit that stops the player being moved.
@@ -808,6 +815,7 @@ impl Default for Work {
             timer2: 0,
             back_look: false,
             back_wait: 0,
+            item_window: false,
             now_seq: 0,
             kind: 0,
             sce_flg: 0,
@@ -1411,6 +1419,7 @@ impl Mover<'_, '_> {
             MOVE_BACKWARD => self.pl_mv_backward(),
             MOVE_ROTATE => self.pl_mv_rotate(),
             MOVE_AIM => self.pl_mv_aim(key),
+            MOVE_ITEM => self.pl_mv_item(),
             MOVE_STAIRS => self.pl_mv_stairs(),
             MOVE_CLIMB => self.pl_mv_climb(),
             MOVE_JUMP_DOWN => self.pl_mv_jump_down(),
@@ -3042,6 +3051,42 @@ impl Mover<'_, '_> {
         self.footstep(0);
     }
 
+    /// `pl_mv06` (`0x4DAFF0`): the crouching pick-up. Sub 0 and 1 play the
+    /// crouch and sub 2 opens the get-item window, which the game shows
+    /// with the player held in sub 3. The window's close runs `Pl_init`, so
+    /// the stand-up in sub 4 to 6 (the crouch played backwards, then
+    /// routine 1, 0) is reached only if something sets sub 4, which the
+    /// pick-up doesn't. `pl_br06` (`0x4DBFD0`) reads no keys.
+    fn pl_mv_item(&mut self) {
+        let reverse = match self.work.routine[2] {
+            0 => {
+                self.start_motion(Bank::Pld, ITEM_CLIP);
+                self.work.spd[..2].fill(0);
+                false
+            }
+            1 => false,
+            2 => {
+                self.work.item_window = true;
+                self.work.routine[2] = 3;
+                return;
+            }
+            4 => {
+                self.start_motion(Bank::Pld, ITEM_CLIP);
+                self.work.routine[2] = 5;
+                true
+            }
+            5 => true,
+            6 => {
+                self.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+                return;
+            }
+            _ => return,
+        };
+        if self.joint_move_late_reversed(BLEND_STEP, reverse) {
+            self.work.routine[2] += 1;
+        }
+    }
+
     fn mv_quick_turn(&mut self) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, WALK_CLIPS[0]);
@@ -4669,6 +4714,11 @@ pub(crate) fn part_world(
     mover.part_matrix(part)
 }
 
+/// The player is in `pl_mv06`, the crouching pick-up.
+pub fn crouching(work: &Work) -> bool {
+    work.routine[..2] == [MODE_MOVE, MOVE_ITEM]
+}
+
 /// Whether it has no routine yet, which `_Spl` starts with `Spl_Init`.
 pub fn uninitialised(work: &Work) -> bool {
     work.routine[0] == 0
@@ -5716,6 +5766,53 @@ mod tests {
         assert!(!setup.work.reloaded);
         setup.tick(aiming(false, false), 200);
         assert!(setup.work.reloaded);
+    }
+
+    #[test]
+    fn the_crouching_pick_up_crouches_then_opens_the_window() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_ITEM, 0, 0];
+        // `pl_br06` reads no keys: a turn held through the crouch does nothing.
+        let turn = Input {
+            right: true,
+            ..Input::default()
+        };
+        let angle = setup.player.angle;
+        setup.tick(turn, 200);
+        assert_eq!(
+            (setup.work.bank, setup.work.move_no, setup.work.move_cnt),
+            (Bank::Pld, ITEM_CLIP, 1)
+        );
+        assert_eq!(setup.work.routine[2], 1);
+        // The clip's eight frames, then sub 2 opens the window on the next
+        // tick, as room 103's 25 do on the 26th.
+        let mut ticks = 1;
+        while !setup.work.item_window {
+            setup.tick(turn, 200);
+            ticks += 1;
+            assert!(ticks < 20, "the window never opened");
+        }
+        assert_eq!(ticks, 9);
+        assert_eq!(setup.work.routine, [MODE_MOVE, MOVE_ITEM, 3, 0]);
+        assert_eq!(setup.player.angle, angle);
+        assert!(crouching(&setup.work));
+        // Sub 3 holds while the window is up.
+        setup.work.item_window = false;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine, [MODE_MOVE, MOVE_ITEM, 3, 0]);
+        assert!(!setup.work.item_window);
+        // Sub 4 stands back up: the crouch backwards, then routine 1, 0.
+        setup.work.routine[2] = 4;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2], 5);
+        assert!(setup.player.anim.reverse);
+        let mut ticks = 1;
+        while crouching(&setup.work) {
+            setup.tick(Input::default(), 200);
+            ticks += 1;
+            assert!(ticks < 20, "the stand-up never ended");
+        }
+        assert_eq!(setup.work.routine, [MODE_MOVE, MOVE_IDLE, 0, 0]);
     }
 
     fn dropped(y: i32, bounces: u8) -> Work {
