@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 508. The door to 50B (door 3) is an event message until scenario 80
+     is set. The reader at AOT 4 lights one lamp per pass code taken
+     (item bits 82, 98 and 90 clear: scenario 52, 53, 54) and, with all
+     three lit, sets 80. A press before that pass code is taken lights
+     nothing and the step is marked; it is tried again later. -->
+<bot format="2">
+  <interact slot="4" bank="0" bit="52" label="the reader: pass code 01's lamp"/>
+  <interact slot="4" bank="0" bit="53" label="the reader: pass code 02's lamp"/>
+  <interact slot="4" bank="0" bit="54" label="the reader: pass code 03's lamp"/>
+  <interact slot="4" bank="0" bit="80" label="the reader: the door to 50B"/>
+</bot>

@@ -794,8 +794,10 @@ end
 -- object toward the zone until it covers the zone and stalls (against the
 -- wall under the shelf), climb it from the side away from the zone, press
 -- toward the zone until the item is taken (the scene handler answers the
--- pickup prompt), then climb down the far side. Returns "done", "busy" or
--- "failed" (with job.reason).
+-- pickup prompt), then climb down the far side. With job.placed (an earlier
+-- <push> step of the entry left the object there) an object already over
+-- the zone is climbed at once. Returns "done", "busy" or "failed" (with
+-- job.reason).
 function BotNav.climb_object(bot, job)
     job.total = (job.total or 0) + 1
     local top = BotNav.on_top(bot)
@@ -846,6 +848,10 @@ function BotNav.climb_object(bot, job)
             return "failed"
         end
         return "busy"
+    end
+    if not job.pushed and job.placed and covers(object, job.zone) then
+        job.pushed = true
+        job.walk_ticks = 0
     end
     if not job.pushed then
         job.shove = job.shove or {

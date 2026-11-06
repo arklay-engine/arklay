@@ -275,6 +275,13 @@ local function blocked(bot, kind, room, slot, remote)
         plan().marks[mark_key(kind, room, slot)] = nil
         return false
     end
+    if m.lock_bit and bot:flag(C.LOCK_BANK, m.lock_bit) then
+        -- A door locked for good from this side lifts once its lock flag
+        -- is set: opened from the far side (507's door 0 opens 505's
+        -- door 2).
+        plan().marks[mark_key(kind, room, slot)] = nil
+        return false
+    end
     if m.permanent or m.attempts >= MAX_ATTEMPTS then
         return true
     end
@@ -784,6 +791,8 @@ local function interact_goal(bot, fact, index, count)
             job = {
                 climb = true, object = fact.object, zone = zone_of(action), label = label,
                 taken = function(b) return BotPuzzle.flag_done(b, fact) end,
+                -- An earlier <push> step of this entry placed the object.
+                placed = BotPuzzle.placed_before(index),
             },
         }
     end
@@ -1198,8 +1207,9 @@ local function pickup_fits(bot, item, full)
     if not full then
         return true
     end
-    local _, merge = bot:item_kind(item)
-    return merge and bot:has_item(item)
+    local kind, merge = bot:item_kind(item)
+    -- A document goes to the FILE tab, not a slot.
+    return kind == "file" or (merge and bot:has_item(item))
 end
 
 -- A live item zone that holds the centre of a zone of the same item the
@@ -1365,14 +1375,26 @@ local function choose(bot)
     local world = bot:world()
     local here = world_room(world, room)
 
+    -- 0. A <leave> whose flag is set: out through its door first (507's
+    -- gas drains health until the room changes).
+    local leave = BotPuzzle.leave(bot)
+    if leave then
+        local door = BotNav.door_by_slot(bot, leave.slot)
+        if door and not blocked(bot, "door", room, door.slot) then
+            return door_goal(bot, door, leave.label or "leave")
+        end
+    end
+
     -- 1. The room puzzle.
     local fact, index, count = BotPuzzle.next_interact(bot)
     if fact then
         if fact.slot and BotPuzzle.avoided(bot, fact.slot) then
             bot:log(string.format("interact slot %d is also an <avoid>; skipped", fact.slot))
-        elseif fact.kind == "climb" and inventory_full(bot) and not BotNav.on_top(bot) then
+        elseif fact.kind == "climb" and fact.bank == C.ITEM_BANK and inventory_full(bot)
+            and not BotNav.on_top(bot) then
             -- The climb is for an item: no free slot, no climb. Retried
-            -- once the inventory changes (a box deposit makes room).
+            -- once the inventory changes (a box deposit makes room). A climb
+            -- to an event zone (507's duct) needs no slot.
             if not blocked(bot, "interact", room, fact.slot) then
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
             end
@@ -1523,6 +1545,12 @@ local function choose(bot)
     -- Doors of this room the planner may open, scored.
     local doors_here = {}
     for _, door in ipairs(bot:doors()) do
+        -- An ungated <avoid> on a door holds from every room: marked for
+        -- good, remote planning never heads for it either (500's lift).
+        local avoid, gate = BotPuzzle.avoided(bot, door.slot)
+        if avoid and not gate and not blocked(bot, "door", room, door.slot, true) then
+            mark(bot, "door", room, door.slot, "avoided: " .. avoid, true)
+        end
         local fresh, row = untraversed(here, door.slot)
         if fresh and door.target and door.target ~= room
             and (not BotNav.is_origin_zone(door) or via_action(bot, door))
@@ -1537,6 +1565,8 @@ local function choose(bot)
                 if permanent then
                     if not blocked(bot, "door", room, door.slot) then
                         mark(bot, "door", room, door.slot, why, true)
+                        plan().marks[mark_key("door", room, door.slot)].lock_bit =
+                            door.lock % C.LOCK_SPAN
                     end
                 else
                     plan().locked[mark_key("door", room, door.slot)] = why

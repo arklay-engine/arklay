@@ -27,7 +27,13 @@
 //! planner reads from every room (`bot:item_facts()`), so it can value a
 //! room it has not entered. `<door slot via>` names a door the room parks at
 //! its origin until AOT `via` is pressed (`bot:door_facts()`, read from
-//! every room for routing). A format-1 document may not use them.
+//! every room for routing). `<keep_out slot>` names an AOT slot's zone the
+//! bot never walks through (with a `bank`/`bit`/`while` gate, only while
+//! that flag is in that state): a floor probe that springs a trap, as
+//! 507's plate starts the gas. `<leave slot bank bit>` sends the bot out
+//! through door AOT `slot` as soon as the flag is set: a room event that
+//! keeps hurting until the player leaves (507's gas, after the air shaft).
+//! A format-1 document may not use them.
 //!
 //! Every fact element takes an optional `character="jill"|"chris"`: the fact
 //! holds only for that character (player flag bit 0: 1 Jill, 0 Chris), as
@@ -70,6 +76,31 @@ pub struct RoomMeta {
     pub holds: Vec<Holds>,
     pub errands: Vec<Errand>,
     pub doors: Vec<DoorVia>,
+    pub keep_outs: Vec<KeepOut>,
+    pub leaves: Vec<Leave>,
+}
+
+/// `<leave slot bank bit [label]>`: once flag `bank`/`bit` is set, the
+/// bot's next goal is door AOT `slot`, before anything else in the room.
+/// 507's gas drains health until the room changes, so once the air shaft
+/// has taken the player to the west half (room bit 7) the way out comes
+/// first; the computer there waits for the next entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Leave {
+    pub slot: u8,
+    pub flag: (u8, u8),
+    pub label: Option<String>,
+}
+
+/// `<keep_out slot reason [bank bit while]>`: the bot's walks plan around
+/// AOT `slot`'s zone, as if it were a wall, while the gate holds (always
+/// without one). 507's plate starts the gas when the player steps on it,
+/// and the only way to the box's far side runs past it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeepOut {
+    pub slot: u8,
+    pub reason: String,
+    pub gate: Option<Gate>,
 }
 
 /// `<door slot via [bank bit while] [label]>`: door AOT `slot` is parked at
@@ -513,6 +544,8 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 | "fight"
                 | "wait"
                 | "door"
+                | "keep_out"
+                | "leave"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -594,6 +627,18 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 let fact = parse_door(child)?;
                 if keep {
                     meta.doors.push(fact);
+                }
+            }
+            "keep_out" => {
+                let fact = parse_keep_out(child)?;
+                if keep {
+                    meta.keep_outs.push(fact);
+                }
+            }
+            "leave" => {
+                let fact = parse_leave(child)?;
+                if keep {
+                    meta.leaves.push(fact);
                 }
             }
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -1015,6 +1060,33 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
         reason,
         gate,
         unless_held,
+    })
+}
+
+fn parse_keep_out(node: Node<'_, '_>) -> Result<KeepOut> {
+    check_attributes(
+        node,
+        &["slot", "reason", "bank", "bit", "while", "character"],
+    )?;
+    check_leaf(node)?;
+    let reason = attr_text(node, "reason")?.to_string();
+    if reason.trim().is_empty() {
+        bail!("{}: <keep_out> reason must not be empty", at(node));
+    }
+    Ok(KeepOut {
+        slot: attr(node, "slot")?,
+        reason,
+        gate: parse_gate(node)?,
+    })
+}
+
+fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
+    check_attributes(node, &["slot", "bank", "bit", "label", "character"])?;
+    check_leaf(node)?;
+    Ok(Leave {
+        slot: attr(node, "slot")?,
+        flag: (bank_attr(node)?, attr(node, "bit")?),
+        label: node.attribute("label").map(str::to_string),
     })
 }
 
@@ -1461,6 +1533,51 @@ mod tests {
     }
 
     #[test]
+    fn keep_out_and_leave_name_a_zone_and_a_door() {
+        let text = r#"<bot format="2">
+            <keep_out slot="8" bank="4" bit="3" while="clear" reason="the plate"/>
+            <keep_out slot="9" reason="always"/>
+            <leave slot="0" bank="4" bit="7" label="out"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.keep_outs,
+            vec![
+                KeepOut {
+                    slot: 8,
+                    reason: "the plate".to_string(),
+                    gate: Some(Gate {
+                        flag: (4, 3),
+                        set: false
+                    }),
+                },
+                KeepOut {
+                    slot: 9,
+                    reason: "always".to_string(),
+                    gate: None,
+                },
+            ]
+        );
+        assert_eq!(
+            meta.leaves,
+            vec![Leave {
+                slot: 0,
+                flag: (4, 7),
+                label: Some("out".to_string()),
+            }]
+        );
+        for bad in [
+            r#"<bot format="2"><keep_out slot="8"/></bot>"#,
+            r#"<bot format="2"><keep_out slot="8" reason=" "/></bot>"#,
+            r#"<bot format="2"><keep_out slot="8" bank="4" bit="3" reason="x"/></bot>"#,
+            r#"<bot format="2"><leave slot="0"/></bot>"#,
+            r#"<bot format="1"><leave slot="0" bank="4" bit="7"/></bot>"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
     fn climb_names_an_object_an_item_slot_and_its_flag() {
         let text = r#"<bot format="2">
             <climb object="0" slot="3" bank="7" bit="35" done="clear" label="the crank"/>
@@ -1815,6 +1932,9 @@ mod tests {
                 ("30F", 6, 0x1E),
                 ("30F", 6, 0x1E),
                 ("40A", 5, 0x3E),
+                ("507", 12, 0x28),
+                ("509", 3, 0x28),
+                ("510", 3, 0x28),
             ]
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));

@@ -21,6 +21,11 @@
 --                                   let a scene play, not skip it, while
 --                                   the flag is clear (and the `after` flag
 --                                   set): a scene a skip would break
+--   <leave slot bank bit label>     once the flag is set, out through door
+--                                   AOT `slot` before anything else
+--   <keep_out slot [bank bit while] reason>
+--                                   (read by the engine) walks plan around
+--                                   AOT `slot`'s zone
 -- The facts carry every room number; this module holds none.
 
 BotPuzzle = BotPuzzle or {}
@@ -326,6 +331,23 @@ function BotPuzzle.pushed(_bot, index)
     if index and index > (BOT_STATE.pushed or 0) then
         BOT_STATE.pushed = index
     end
+end
+
+-- The first <leave> fact whose flag is set: the room wants the bot out
+-- through that door now. Nil when none applies.
+function BotPuzzle.leave(bot)
+    for _, fact in ipairs(meta(bot).leaves or {}) do
+        if bot:flag(fact.bank, fact.bit) then
+            return fact
+        end
+    end
+    return nil
+end
+
+-- Whether a push step before step `index` finished on this entry: the
+-- object a later step works with was placed by it.
+function BotPuzzle.placed_before(index)
+    return (BOT_STATE.pushed or 0) > 0 and BOT_STATE.pushed < index
 end
 
 -- A new room entry forgets the flagless steps and the pushes done.

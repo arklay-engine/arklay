@@ -64,6 +64,10 @@ function on_bot_tick(bot)
         enter_room(bot, room)
     end
 
+    -- The lab computer terminal owns the pad while it is up.
+    if BotTerminal.step(bot, scene) then
+        return
+    end
     -- An inventory job owns the pad until the menu is closed again.
     if BotMenu.step(bot) then
         return

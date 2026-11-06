@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 506, the computer room. AOT 1 asks to use the terminal; Yes sets
+     scenario 32, which opens the computer screen (bot/terminal.lua types
+     the login and the command). Each use releases one cell door: lock 37
+     (503 to 504), then lock 38 (508 to 509). -->
+<bot format="2">
+  <interact slot="1" bank="2" bit="37" label="the terminal: release 503's door to 504"/>
+  <interact slot="1" bank="2" bit="38" after_bank="2" after_bit="37" label="the terminal: release 508's door to 509"/>
+  <answer choice="yes" slot="1" label="use the computer"/>
+</bot>

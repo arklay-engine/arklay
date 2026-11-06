@@ -53,8 +53,8 @@ local OPEN_TIMEOUT = 5 * SECOND
 local STEP_TIMEOUT = 90
 local JOB_TIMEOUT = 40 * SECOND
 local SETTLE_TIMEOUT = 4 * SECOND
-local EXAMINE_YAW_LOW = BotConst.EXAMINE_YAW_LOW
-local EXAMINE_YAW_HIGH = BotConst.EXAMINE_YAW_HIGH
+local EXAMINE_YAW_LOW = BotConst.EXAMINE_YAW.low
+local EXAMINE_YAW_HIGH = BotConst.EXAMINE_YAW.high
 local DOOM_BOOK_2 = BotConst.DOOM_BOOK_2
 local WOLF_MEDAL = BotConst.WOLF_MEDAL
 -- A failed job for the same item and kind is not retried for this long.
@@ -434,7 +434,7 @@ local function drive_examine(bot, job, menu)
             view.yaw))
         return
     end
-    local yaw = view.yaw % BotConst.ANGLE_FULL
+    local yaw = view.yaw % BotConst.FULL_TURN
     if yaw >= EXAMINE_YAW_LOW and yaw <= EXAMINE_YAW_HIGH then
         if job.turning then
             -- One release tick, so the confirm frame turns no further.
@@ -451,8 +451,8 @@ local function drive_examine(bot, job, menu)
     -- Left raises the yaw; right lowers it. Turn the short way round to the
     -- band's middle.
     local middle = (EXAMINE_YAW_LOW + EXAMINE_YAW_HIGH) // 2
-    local ahead = (middle - yaw) % BotConst.ANGLE_FULL
-    local key = ahead < BotConst.ANGLE_FULL // 2 and "left" or "right"
+    local ahead = (middle - yaw) % BotConst.FULL_TURN
+    local key = ahead < BotConst.FULL_TURN // 2 and "left" or "right"
     bot:set_input({ [key] = true })
 end
 
