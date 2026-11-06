@@ -293,6 +293,20 @@ function BotPuzzle.next_interact(bot)
     return nil, #interacts, #interacts
 end
 
+-- The room's first <fight> step not done yet at or after step `index`
+-- (BotPuzzle.next_interact's index), or nil: the fight the steps before it
+-- lead into (20C's wake-up press, then Yawn).
+function BotPuzzle.fight_ahead(bot, index)
+    local interacts = meta(bot).interacts or {}
+    for i = index or 1, #interacts do
+        local fact = interacts[i]
+        if fact.kind == "fight" and not BotPuzzle.flag_done(bot, fact) then
+            return fact
+        end
+    end
+    return nil
+end
+
 -- A <push> step is done while its object's centre sits in the middle half
 -- of its zone (the room's object probe tests the object's position). A push
 -- with a direction is done once the object has cleared the zone that way

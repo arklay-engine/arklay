@@ -282,7 +282,10 @@ local function result_seen(bot, job)
         return bot:player().equipped == job.item
     end
     if job.kind == "combine" then
+        -- A slot freed, or the moved stack changed: a reload that leaves
+        -- part of the ammunition stack still frees no slot.
         return used_slots(bot:menu()) < job.before_used
+            or bot:item_count(job.item) ~= job.before_count
     end
     if job.kind == "examine" then
         return bot:has_item(examine_result(job))
@@ -382,7 +385,8 @@ local function drive(bot, job, menu)
             if job.kind == "equip" then
                 why = string.format("equipped 0x%02X", job.item)
             elseif job.kind == "combine" then
-                why = string.format("slots %d -> %d", job.before_used, used_slots(menu))
+                why = string.format("slots %d -> %d, count %d -> %d", job.before_used,
+                    used_slots(menu), job.before_count, bot:item_count(job.item))
             elseif job.kind == "examine" then
                 why = string.format("0x%02X became 0x%02X", job.item, examine_result(job))
             else

@@ -502,6 +502,28 @@ pub fn load_door_vias(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomDoorVia
     Ok(doors)
 }
 
+/// One room's `<avoid>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomAvoid {
+    /// The room id as `bot:room().id` spells it (`"302"`).
+    pub room: String,
+    pub fact: Avoid,
+}
+
+/// Every room's `<avoid>` facts, by room id then document order
+/// (`bot:avoid_facts()`): remote planning skips a door a gated avoid holds
+/// shut.
+pub fn load_avoids(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomAvoid>> {
+    let mut avoids = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        avoids.extend(meta.avoids.into_iter().map(|fact| RoomAvoid {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(avoids)
+}
+
 /// One room's `<deliver>` or `<fetch>` fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomErrand {

@@ -44,6 +44,7 @@ local function on_damage(bot, player)
         tostring(player.grabbed),
         nearest and string.format("slot=%d id=%#04x dist=%d", nearest.slot,
             nearest.id, nearest.distance) or "none"))
+    BotTactics.note_hurt(bot, nearest)
 end
 
 local function enter_room(bot, room)
