@@ -31,7 +31,9 @@
 --             below the reserve floor, or a heal item when none is held;
 --             only into free slots. At a box in this room, also every
 --             stack of that ammunition while the rounds are under TOP_UP
---             times the floor, as long as RESERVE slots stay free.
+--             times the floor, and every heal stack (the heal top-up: a
+--             boss such as 513's Tyrant is a race of heals), as long as
+--             RESERVE slots stay free.
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -199,8 +201,17 @@ function BotInventory.wanted_back(row, ctx)
     if row.kind == "heal" and row.heals ~= false and (ctx.heals or 0) == 0 then
         return "no heal item held"
     end
+    if row.kind == "heal" and row.heals ~= false and ctx.heal_top_up and not ctx.reserve_only then
+        return "heal top-up at the box"
+    end
     return nil
 end
+
+-- The top-ups at a box here take stacks only while RESERVE slots stay free.
+local TOP_UPS = {
+    ["ammunition top-up at the box"] = true,
+    ["heal top-up at the box"] = true,
+}
 
 -- The box rows to take back, at most `free` of them, box order.
 function BotInventory.withdrawals(box_items, ctx, free)
@@ -212,8 +223,7 @@ function BotInventory.withdrawals(box_items, ctx, free)
         end
         local why = BotInventory.wanted_back(row, ctx)
         -- A top-up takes the stacks only while the reserve stays free.
-        local top_up = why == "ammunition top-up at the box"
-        if top_up and free - #out <= BotInventory.RESERVE then
+        if TOP_UPS[why] and free - #out <= BotInventory.RESERVE then
             why = nil
         end
         -- One heal stack is enough to stop the "none held" rule.
@@ -362,6 +372,7 @@ function BotInventory.context(bot)
     ctx.capacity = menu.capacity or #(menu.items or {})
     ctx.used = used_slots(menu.items or {})
     ctx.full = ctx.used >= ctx.capacity
+    ctx.heal_top_up = true
     return ctx
 end
 
@@ -470,7 +481,7 @@ function BotInventory.box_reason(bot, skip, here)
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
-            if why == "ammunition top-up at the box" and free <= BotInventory.RESERVE then
+            if TOP_UPS[why] and free <= BotInventory.RESERVE then
                 why = nil
             end
             if why then

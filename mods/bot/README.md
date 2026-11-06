@@ -84,7 +84,9 @@ Priorities, highest first:
    `max_health * (0.6 - 0.35 * risk)` with the largest held stack whose menu
    row `heals`, never in a grab or a scene; a fight is paused for it (the
    menu stops the game), so a fight under the threshold does not play on
-   to the fight's low-health floor. Then a save at a
+   to the fight's low-health floor. Before a room's `<fight>` step starts
+   (no fight running yet), the threshold is `0.85 * max_health`, so the
+   bot walks into a boss fight healed. Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
@@ -542,8 +544,8 @@ drives the box screen with pad input only.
   under the reserve floor, or it is a heal and none is held (one stack).
   At most the free slots, after the deposits. At a box in this room, also
   every stack of the equipped gun's ammunition while its rounds are under
-  twice the reserve floor, as long as one slot stays free (the top-up; no
-  trip is made for it).
+  twice the reserve floor, and every heal stack, as long as one slot stays
+  free (the top-ups; no trip is made for them).
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
@@ -719,7 +721,7 @@ walk paths, have no children, and are an error in a format-1 file:
 
 | Element | Attributes | Meaning |
 | --- | --- | --- |
-| `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `reveals`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. A body-probe zone (flag `0x40`, which fires on the player's position) is stood in instead of pressed. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. With an `after` flag the step is offered only while that flag is set; until then the sequence holds and no later step is offered (a `<use>` may set it). With `reveals`, the step is also done once that AOT slot is a live item or event zone, which the item frontier or the next step then takes. |
+| `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `reveals`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. A body-probe zone (flag `0x40`, which fires on the player's position) is stood in instead of pressed. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. With an `after` flag the step is offered only while that flag is set; until then the sequence holds and no later step is offered (a `<use>` may set it). With `after_while="clear"` the step waits for that flag to clear instead: 508's reader lights a lamp only once its pass code's file (a bank-7 item bit) is taken. With `reveals`, the step is also done once that AOT slot is a live item or event zone, which the item frontier or the next step then takes. |
 | `<fight>` | `enemy`, `bank`, `bit`, optional `label` | Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health, face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
@@ -810,8 +812,12 @@ files. The checked-in facts:
 | 504 | `<interact slot="7" bank="4" bit="0">`, then `<interact slot="7" bank="0" bit="102" reveals="1">`, each with `<answer choice="yes" slot="7">`: the switch lowers the first panel, then the one in front of the lab key (AOT 1). |
 | 506 | Two `<interact slot="1">` facts with `<answer choice="yes" slot="1">`: the terminal releases lock 37 (503's door to 504), then lock 38 (508's door to 509). `BotTerminal` drives the screen. |
 | 507 | The gas room. `<keep_out slot="8">` while room bit 3 is clear: the plate starts the gas, and the way to the box's north face runs past it. Three `<push object="2" slot="8">` steps: south and west `until="stop"` (crates take the box's east side), then north `axis="z"` onto the plate, done at room bit 36. `<climb object="2" slot="9" bank="4" bit="7">`: AOT 9, the air shaft, is armed only while the player stands on the box (main-state bit 24); its Yes crawls through to the west half. `<leave slot="0" bank="4" bit="7">`: the gas has set the fast health drain by then, which ends with the room. `<use slot="12" item="0x28">` on the next entry from 505: the MO disk prints pass code 02. |
-| 508 | Four `<interact slot="4">` facts on scenario bits 52, 53, 54 and 80: the reader takes the three pass codes, then opens door 3 to 50B. |
+| 508 | Four `<interact slot="4">` facts on scenario bits 52, 53, 54 and 80: one press enters every pass code taken so far. Each lamp step waits, with `after_while="clear"`, for its code's file (item bits 82, 98, 90), and the last opens door 3 to 50B. |
 | 509, 510 | `<use slot="3" item="0x28" bank="7" bit="82">` (509) and `bit="90"` (510), `done="clear"`: the MO disk prints pass codes 01 and 03. The disk is used up, so the lab needs three. |
+| 50C | `<interact slot="5" bank="0" bit="1" after_bank="0" after_bit="45">` with `<answer choice="yes" slot="5">`: the switch calls the elevator once the power is on, which turns door 4 to 515 from a message (129) into a door. |
+| 50F | `<interact slot="2" bank="0" bit="46">` with `<answer choice="yes" slot="2">`: the power panel supplies the blacked-out areas. |
+| 511 | `<interact slot="1" bank="0" bit="45" after_bank="0" after_bit="46">` with `<answer choice="yes" slot="1">`: the connection switch wires the elevator's circuit. It connects without 50F's supply too; the gate makes 45 mean both halves are on, so 50C waits for 45 only. |
+| 513 | `<fight enemy="0x0C" bank="3" bit="112" label="the Tyrant">`: the Tyrant's death (enemy bit 112) shows the master key (AOT 2) on the floor. |
 | 402 | `<interact slot="3" bank="0" bit="0x43">`: pulling the bath plug makes AOT 1 the key `0x3B` (to 411). |
 | 406 | `<push object="1" slot="5" direction="north" clear="full">` (the west crate deep into the recess behind it), `<push object="0" slot="5" direction="west">` (the east crate off the hatch, pushed from the 335-unit strip beside it), then `<interact slot="5" bank="0" bit="0x45">` and `<answer choice="yes" slot="5">`: Yes opens the ladder door down to 40D, whose init sets scenario `0x45`. `<door slot="2" via="5">`: on later entries door 2 is parked at the origin again, and the route goes down by pressing the hatch. |
 | 40D | Six `<push>` steps make the bridge over the water to 40E. Objects 3 and 1 go `direction="south"` into AOT 2's edge zone (done flags scenario `0x39`, then `0x38`; the second clears the first). Object 2 stands against the room's north wall: `axis="x"` onto the ladder corridor's AOT 10, `south` `until="stop"`, `east` `until="stop"`, then `south` into the water. Bit `0x39` is set again only by the third crate. |

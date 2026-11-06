@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 513, the Tyrant room (Jill, common bit 5B clear). The entry scene
+     breaks the pod and the Tyrant (id 0x0C) kills Wesker; the master key
+     (AOT 2, item bit 0x5F) is an item zone from the start, but its model
+     shows, and the room's main lets it be taken, only once the Tyrant is
+     dead (enemy bit 112). The <fight> holds the room until then; the key
+     is an ordinary pickup after it. -->
+<bot format="2">
+  <fight enemy="0x0C" bank="3" bit="112" label="the Tyrant"/>
+</bot>

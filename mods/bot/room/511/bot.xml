@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 511. The connection switch at AOT 1 (an event while scenario 45 is
+     clear) asks to connect the elevator; Yes sets scenario 45 (0x2D), the
+     circuit half of 50C's elevator power. It connects without 50F's supply
+     too, but the step waits for 50F's panel (scenario 46), so 45 set means
+     the elevator has power. -->
+<bot format="2">
+  <interact slot="1" bank="0" bit="45" after_bank="0" after_bit="46" label="the connection switch: the elevator's circuit"/>
+  <answer choice="yes" slot="1" label="connect the elevator's power"/>
+</bot>
