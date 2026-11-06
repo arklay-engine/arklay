@@ -1,0 +1,7 @@
+# room 102: action at the handgun ammo, yes long after the question, then close (oracle/re2.md, "Items")
+364 action
+368
+600 action
+604
+800 action
+804

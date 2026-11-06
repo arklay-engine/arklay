@@ -1,0 +1,7 @@
+# item_take_102.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Items")
+20 action
+24
+256 action
+260
+456 action
+460

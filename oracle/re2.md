@@ -139,6 +139,18 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 `0x8000`, `confirm`/`action`/`fire` `0x0080`, `cancel`/`run` `0x0040`, `aim`
 `0x0008` and `start` `0x0800`.
 
+## Items
+
+The `inv` field is `Item_work` (`0x98ED34`): the ten slots and the personal item (the lighter or the lockpick), each `id:count` in hex and decimal, then the slot count (`0x98E9A4`). The original also writes `gi`, which arklay doesn't: the game mode (`0x991F80`), the status screen's two routines, the get-item window's routine and sub-step (`0x691F61`) and the message state (`0x98504C`, hex). Every run starts with `inv=2:18,1:1,0:0,0:0,0:0,0:0,0:0,0:0,0:0,0:0,2f:1/8` for Leon, as `Stage_init_item`'s table (`0x5401B8`) has it.
+
+The pick-up runs take room 102's 30 handgun rounds (Normal, so `ck 0:25` is clear). Record each with `record --no-enemies --warp 102:-11378:0:-4587:0 --ticks 1000`, and run arklay with `--room 102 --player 0 --character 0 --ticks 656 --setup-script oracle/inputs-re2/item_102.lua` and the `_arklay` input (the same, 344 ticks earlier), with a pack converted from this tree. Compare at `--offset 344` with `--fields room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv`.
+
+- `item_take_102.txt` presses at 364, answers yes at 600 and closes at 800. The world holds from 365 (`rseed` stops), the question shows at 371, the item reaches the inventory at 620, and play comes back at 812, with the player's motion restarted. All 656 ticks match.
+- `item_refuse_102.txt` moves to No at 600 and confirms at 620: the window counts out and play comes back at 647. The item stays, and the press at 800 opens the window again. All 656 ticks match.
+- The full inventory: `item_take_102.txt` with `--give 2:0x26:1` to `--give 7:0x26:1`, and on arklay's side `api:set_item_slot(slot, 0x26, 1)` for slots 2 to 7 after `item_102.lua`. "You can't carry any more items." shows at 371, the press at 600 closes it, play comes back at 612, and the press at 800 opens the window again. All 656 ticks match.
+- The merge: `item_take_102.txt` with `--give 2:0x14:230 --give 3:0x14:220`, and `api:set_item_slot(2, 0x14, 230)` and `api:set_item_slot(3, 0x14, 220)`. The 30 rounds skip the first stack, which can't take all of them, and fill the second to 250. All 656 ticks match.
+- `item_mash_102.txt` presses every four ticks. The original takes the answer at 412 and arklay at 400, since the question's typing differs (`docs/re2-deviations.md`, "Pick-ups"); from there everything is 12 ticks earlier in arklay.
+
 ## The trace
 
 | Field | Source |
@@ -157,6 +169,8 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 | `pneck` | where the player's head is in the world, the neck joint's `+0x5C`, which `Root_ck` aims at; `-` when arklay hasn't posed it. Compared only when `--fields` names it |
 | `bgm` | `Bgm`, each of the three `Seq_ctr`'s state and hold, and the tracks of the five channels (`bgm/<track>`), `-` for none; it says something only with `--sound` |
 | `xavol` | `xa_vol`'s level for the voice channel (`0x693E88`), which the next line's start gives DirectSound. Compared only when `--fields` names it |
+| `inv` | `Item_work`'s ten slots and the personal item, `id:count`, then the slot count (see "Items"). Compared only when `--fields` names it |
+| `gi` | the game mode, the status screen's routines, the get-item window's routine and sub-step and the message state; the original's only |
 | `snd` | each sound started on the tick, `type:index:volume:pan`, joined with `/`; with `--sound` only. Compared only when `--fields` names it |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade

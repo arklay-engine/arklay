@@ -874,6 +874,42 @@ pub struct FmvState {
     pub taken: u64,
 }
 
+/// RE2's get-item window (`0x4FD560`, game mode 2 from `Sce_Item`). The
+/// world holds from the tick after the pick-up until the window closes; only
+/// the window and its message run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Re2ItemGet {
+    /// The item's area, whose parameters are `[item, count, flag, model, action]`.
+    pub action: RoomAction,
+    pub phase: Re2ItemGetPhase,
+    /// Ticks in the phase.
+    pub ticks: u8,
+}
+
+/// The get-item window's steps: its routines (`0x691F61`) and routine 3's
+/// sub-steps (`0x691F62`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Re2ItemGetPhase {
+    /// Routines 0-2: the screen's fade in, then the check (`0x4FD5C0`).
+    Open,
+    /// Sub 1: the question waits for its answer.
+    Ask,
+    /// Sub 2: the item flies to the inventory, then sub 3 takes it.
+    Fly,
+    /// Subs 4-0x11: a "no" counts out.
+    Refuse,
+    /// Sub 0: the "taken" or "full" message waits to be closed.
+    Shown,
+    /// Routines 0 and 1 again: the fade back to the room.
+    Close,
+}
+
+/// The get-item window's ticks, from the oracle's room 102 pick-ups.
+const ITEM_GET_ASK_TICK: u8 = 7;
+const ITEM_GET_TAKE_TICK: u8 = 19;
+const ITEM_GET_REFUSE_TICKS: u8 = 15;
+const ITEM_GET_CLOSE_TICKS: u8 = 10;
+
 /// One inventory stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InventoryItem {
@@ -3148,6 +3184,8 @@ pub struct GameState {
     pub re2: crate::scd2::host::Re2State,
     /// The room is an RE2 room, which reads the areas through `re2`'s gates.
     pub is_re2_room: bool,
+    /// RE2's get-item window while it is open: it owns the session tick.
+    pub re2_item_get: Option<Re2ItemGet>,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3609,6 +3647,7 @@ impl Default for GameState {
             doors: [None; ROOM_ACTION_SLOTS],
             re2: Default::default(),
             is_re2_room: false,
+            re2_item_get: None,
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,
@@ -5366,16 +5405,27 @@ impl GameState {
         } else {
             self.item_defs.get(item).merge
         };
+        // RE2's stacks stop at the item table's maximum (`0x53DE28`), and
+        // what doesn't fit is the remainder (`0x4FC5B0`).
+        let cap = if self.is_re2_room {
+            crate::scd2::host::item_max(item)
+        } else {
+            items::ITEM_QUANTITY_CAP
+        };
         if merges && let Some(index) = self.inventory.iter().position(|stack| stack.id == item) {
             let merged = u16::from(self.inventory[index].quantity) + u16::from(quantity);
-            if merged <= u16::from(items::ITEM_QUANTITY_CAP) {
+            if merged <= u16::from(cap) {
                 self.inventory[index].quantity = merged as u8;
                 self.rebuild_slots();
                 return;
             }
             if self.inventory.len() < capacity {
-                self.inventory[index].quantity = items::ITEM_QUANTITY_CAP;
-                let spill = (merged as u8).wrapping_add(6);
+                self.inventory[index].quantity = cap;
+                let spill = if self.is_re2_room {
+                    (merged - u16::from(cap)) as u8
+                } else {
+                    (merged as u8).wrapping_add(6)
+                };
                 self.inventory.push(InventoryItem {
                     id: item,
                     quantity: spill,
@@ -8303,19 +8353,106 @@ impl GameState {
         }
     }
 
-    /// `sce_item`, without the pick-up screen: the item goes to the inventory
-    /// and its area dies, or a full inventory leaves it where it is.
+    /// `Sce_Item` (`0x4E96C0`): open the get-item window, which holds the
+    /// world from the next tick. The crouching pick-up (action bit 0) and
+    /// the difficulty's count changes are not ported.
     fn pick_up_re2_item(&mut self, action: RoomAction) {
-        use crate::scd2::host::{ITEM_BANK, MESSAGE_FULL, MESSAGE_PICKED_UP};
-        if self.message.active {
+        if self.message.active || self.re2_item_get.is_some() {
             return;
         }
+        self.re2_item_get = Some(Re2ItemGet {
+            action,
+            phase: Re2ItemGetPhase::Open,
+            ticks: 0,
+        });
+    }
+
+    /// One tick of the get-item window, before its message's.
+    pub fn tick_re2_item_get(&mut self) {
+        use crate::scd2::host::{MESSAGE_FULL, MESSAGE_TAKE};
+        let Some(mut get) = self.re2_item_get.take() else {
+            return;
+        };
+        get.ticks = get.ticks.saturating_add(1);
+        let item = get.action.params[0];
+        let next = |phase| (phase, 0);
+        let (phase, ticks) = match get.phase {
+            Re2ItemGetPhase::Open if get.ticks == ITEM_GET_ASK_TICK => {
+                self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
+                if self.re2_item_get_slot(get.action).is_some() {
+                    self.show_re2_global(MESSAGE_TAKE);
+                    next(Re2ItemGetPhase::Ask)
+                } else {
+                    self.show_re2_global(MESSAGE_FULL);
+                    next(Re2ItemGetPhase::Shown)
+                }
+            }
+            Re2ItemGetPhase::Ask if !self.message.active => {
+                if self.message.menu_choice_id() & 1 == 0 {
+                    next(Re2ItemGetPhase::Fly)
+                } else {
+                    next(Re2ItemGetPhase::Refuse)
+                }
+            }
+            Re2ItemGetPhase::Fly if get.ticks == ITEM_GET_TAKE_TICK => {
+                self.take_re2_item(get.action);
+                next(Re2ItemGetPhase::Shown)
+            }
+            Re2ItemGetPhase::Refuse if get.ticks == ITEM_GET_REFUSE_TICKS => {
+                next(Re2ItemGetPhase::Close)
+            }
+            Re2ItemGetPhase::Shown if !self.message.active => next(Re2ItemGetPhase::Close),
+            Re2ItemGetPhase::Close if get.ticks == ITEM_GET_CLOSE_TICKS => {
+                // Game mode 5 hands the player back with its motion restarted.
+                self.re2.player.routine[2] = 0;
+                self.re2.player.move_cnt = 1;
+                return;
+            }
+            phase => (phase, get.ticks),
+        };
+        get.phase = phase;
+        get.ticks = ticks;
+        self.re2_item_get = Some(get);
+    }
+
+    /// The oracle's `inv` field: `Item_work`'s ten slots, the personal item,
+    /// then how many slots the player has.
+    pub fn re2_inventory_trace(&self) -> String {
+        let mut slots: Vec<String> = (0..10)
+            .map(|index| {
+                self.inventory.get(index).map_or_else(
+                    || "0:0".to_string(),
+                    |stack| format!("{:x}:{}", stack.id, stack.quantity),
+                )
+            })
+            .collect();
+        let [id, count] = self.re2.personal_item;
+        slots.push(format!("{id:x}:{count}"));
+        format!("{}/{}", slots.join(","), self.inventory_capacity())
+    }
+
+    /// Where the window's check (`0x4FD5C0`) puts the area's item.
+    fn re2_item_get_slot(&self, action: RoomAction) -> Option<crate::scd2::host::ItemGetSlot> {
+        let [item, amount, ..] = action.params;
+        crate::scd2::host::item_get_slot(&self.inventory, self.inventory_capacity(), item, amount)
+    }
+
+    /// Routine 3's sub 3 (`0x4FD875`): the item joins its stack or the first
+    /// free slot (`0x502820`), its flag is set and its area and object go.
+    fn take_re2_item(&mut self, action: RoomAction) {
+        use crate::scd2::host::{ITEM_BANK, ItemGetSlot, MESSAGE_TAKEN};
         let [item, amount, flag, ..] = action.params;
-        if self.inventory.len() >= self.inventory_capacity() && !self.has_item(item) {
-            self.show_re2_global(MESSAGE_FULL);
-            return;
+        match self.re2_item_get_slot(action) {
+            Some(ItemGetSlot::Merge(index)) => {
+                let stack = &mut self.inventory[index];
+                stack.quantity = stack.quantity.saturating_add(amount);
+            }
+            Some(ItemGetSlot::New) | None => self.inventory.push(InventoryItem {
+                id: item,
+                quantity: amount,
+            }),
         }
-        self.add_item(item, amount);
+        self.rebuild_slots();
         self.re2.set_flag(ITEM_BANK, flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
@@ -8328,12 +8465,12 @@ impl GameState {
             record.be_flg = 0;
             record.flag = 0;
         }
-        self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
-        self.show_re2_global(MESSAGE_PICKED_UP);
         if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
             entry.sce = crate::scd2::host::SCE_AUTO;
             entry.handler = 0;
         }
+        self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
+        self.show_re2_global(MESSAGE_TAKEN);
     }
 
     /// A room message by its RE2 number; the language key's index keeps the

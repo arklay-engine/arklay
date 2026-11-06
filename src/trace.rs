@@ -76,6 +76,9 @@ pub struct TraceTick<'a> {
     pub re2_neck_position: Option<String>,
     /// RE2's voice-channel level, `xa_vol`'s (`0x693E88`).
     pub re2_xa_volume: Option<u8>,
+    /// RE2's `Item_work`, the oracle's `inv`: the ten slots and the personal
+    /// item as `id:count`, then the slot count.
+    pub re2_inventory: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -241,6 +244,9 @@ impl TraceWriter {
         if let Some(level) = tick.re2_xa_volume {
             write!(self.out, " xavol={level}")?;
         }
+        if let Some(inventory) = &tick.re2_inventory {
+            write!(self.out, " inv={inventory}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -354,6 +360,7 @@ mod tests {
             re2_neck: None,
             re2_neck_position: None,
             re2_xa_volume: None,
+            re2_inventory: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -403,6 +410,7 @@ mod tests {
                 re2_neck: None,
                 re2_neck_position: None,
                 re2_xa_volume: None,
+                re2_inventory: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -447,6 +455,7 @@ mod tests {
             re2_neck: None,
             re2_neck_position: None,
             re2_xa_volume: None,
+            re2_inventory: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -494,6 +503,7 @@ mod tests {
             re2_neck: Some("0,8,0,0,0".to_string()),
             re2_neck_position: Some("-".to_string()),
             re2_xa_volume: None,
+            re2_inventory: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };

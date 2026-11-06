@@ -104,10 +104,18 @@ pub(super) fn item_definitions() -> Vec<(u8, String)> {
             let xml = if let Some((_, effect)) = HEAL.iter().find(|(id, _)| *id == item) {
                 format!(r#"<item kind="heal" stack="1"><effects>{effect}</effects></item>"#)
             } else {
+                // The stacks are the item table's maximum (`0x53DE28`), and
+                // the keys the ids its byte 1 gives a door key to, with the
+                // small key.
+                let max = crate::scd2::host::item_max(item);
                 match item {
                     0x01 => r#"<item kind="weapon" />"#.to_string(),
-                    0x02..=0x13 => r#"<item kind="weapon" stack="255" />"#.to_string(),
-                    0x14..=0x1E => r#"<item kind="ammo" stack="255" merge="true" />"#.to_string(),
+                    0x02..=0x13 => format!(r#"<item kind="weapon" stack="{max}" />"#),
+                    0x14..=0x1D => format!(r#"<item kind="ammo" stack="{max}" merge="true" />"#),
+                    0x1E => format!(r#"<item kind="other" stack="{max}" merge="true" />"#),
+                    0x1F => format!(r#"<item kind="key" stack="{max}" merge="true" />"#),
+                    0x2F | 0x30 => r#"<item kind="special" />"#.to_string(),
+                    0x33 | 0x43 | 0x53 | 0x59..=0x5E => r#"<item kind="key" />"#.to_string(),
                     _ => r#"<item kind="other" />"#.to_string(),
                 }
             };
@@ -172,8 +180,17 @@ mod tests {
         assert_eq!(kind(0x02), ItemKind::Weapon);
         assert_eq!(kind(0x14), ItemKind::Ammo);
         assert_eq!(kind(0x23), ItemKind::Heal);
-        // The lighter: RE1's id means the ink ribbon.
-        assert_eq!(kind(0x2F), ItemKind::Other);
+        // The lighter, whose id is RE1's ink ribbon.
+        assert_eq!(kind(0x2F), ItemKind::Special);
+        assert_eq!(kind(0x59), ItemKind::Key);
+        assert_eq!(kind(0x1F), ItemKind::Key);
+        assert_eq!(kind(0x1E), ItemKind::Other);
+        let def =
+            |item: u8| crate::item_catalog::ItemDef::parse(&defs[usize::from(item) - 1].1).unwrap();
+        assert_eq!(def(0x14).stack, 250);
+        assert_eq!(def(0x17).stack, 100);
+        assert_eq!(def(0x02).stack, 18);
+        assert!(def(0x1E).merge && def(0x1F).merge);
     }
 
     #[test]

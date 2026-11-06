@@ -626,6 +626,7 @@ pub fn run_with_options(
                         re2_neck: None,
                         re2_neck_position: None,
                         re2_xa_volume: None,
+                        re2_inventory: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -3515,6 +3516,31 @@ impl GameSession {
             ui = UiInput::default();
             input = player::Input::default();
             action = false;
+        }
+
+        // RE2's get-item window owns the tick while it is open: the room,
+        // its scripts and the random draws hold, and only the window and its
+        // message run (`0x4FD560`, game mode 2).
+        if self.game.re2_item_get.is_some() {
+            if !action {
+                self.swallow_action = false;
+            }
+            let was_active = self.game.message.active;
+            self.game.tick_re2_item_get();
+            self.game.update_message(
+                MessageInput {
+                    action,
+                    left: input.left,
+                    right: input.right,
+                    cancel: input.run || ui.cancel,
+                },
+                &self.loaded.room,
+                &self.text,
+            );
+            if was_active && !self.game.message.active && action {
+                self.swallow_action = true;
+            }
+            return Ok(());
         }
 
         let was_active = self.game.message.active;
@@ -6889,6 +6915,10 @@ impl GameSession {
                     .map_or_else(|| "-".to_string(), |[x, y, z]| format!("{x},{y},{z}"))
             }),
             re2_xa_volume: self.game.is_re2_room.then_some(self.game.re2.xa_volume),
+            re2_inventory: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2_inventory_trace()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
