@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20C (2F), Jill on the second mansion visit: Yawn's rematch and the
+     pass number.
+
+     Until scenario 0x27 is set, Yawn 2 (entity 0x12, enemy bit 0x3E) lies
+     dormant with no aim bit. Pressing AOT 2 by the west wall (on_aot_02)
+     plays its entrance and sets 0x27; on later entries it waits by the
+     door. While it lives, the hole's AOT 3 is armed with no trigger; once
+     it is dead room main arms it for the action button. Pressing it
+     (on_aot_03) shows "It's too dark to see anything.", sets common 0x26,
+     plays Barry's scene and drops Jill into the pit at (22400,4000).
+
+     In the pit, event_1B sets room flag 0x0A after 600 frames, and room
+     main then runs from_main_2: Barry comes back with the rope, sets common
+     0x25 (the pass number for 201's keypad) and hands over the radio and
+     the pass-number file (AOT 7 and 8, zones at the origin). The timer
+     lives in the room's event task, so leaving by the ladder first loses
+     it: the bot waits for 0x25 before anything else. -->
+<bot format="2">
+  <interact slot="2" bank="0" bit="0x27" character="jill" label="wake Yawn by the west wall"/>
+  <fight enemy="0x12" bank="3" bit="0x3E" character="jill" label="Yawn 2"/>
+  <interact slot="3" bank="1" bit="0x26" character="jill" label="the dark hole"/>
+  <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" character="jill" label="Barry's rope"/>
+</bot>

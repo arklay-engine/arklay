@@ -2736,6 +2736,9 @@ impl UserData for BotCtx {
             let uses = lua.create_table()?;
             for fact in &meta.uses {
                 let row = lua.create_table()?;
+                    meta::Target::Wait => {
+                        row.set("kind", "wait")?;
+                    }
                 row.set("slot", fact.slot)?;
                 row.set("item", fact.item)?;
                 row.set("bank", fact.flag.0)?;
@@ -6098,18 +6101,18 @@ mod tests {
     #[test]
     fn ammo_floor_scales_with_risk_and_the_hardest_kill() {
         let vm = tactics_vm();
-        // The handgun's hardest `fight` kill in re1.xml: Plant 42's body,
-        // 140 health at 15 a hit, is 10 shots (a zombie 9, a cerberus 5,
-        // a hunter 8).
+        // The handgun's hardest `fight` kill in re1.xml: Yawn's rematch,
+        // 400 health at 30 a hit, is 14 shots (Plant 42's body 10, a zombie
+        // 9, a cerberus 5, a hunter 8).
         assert_eq!(
             eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 2)"),
-            10
+            14
         );
-        // The shotgun: the cerberus (122 at 40) and the hunter (111 at 32)
-        // are 4 shots.
+        // The shotgun: Yawn (400 at 40) is 11 shots; the cerberus (122 at
+        // 40) and the hunter (111 at 32) are 4.
         assert_eq!(
             eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 3)"),
-            4
+            11
         );
         // A weapon nobody fights with has no floor.
         assert!(eval::<bool>(
