@@ -150,7 +150,8 @@ pub enum CutEdit {
     BlendObject { slot: u8 },
     /// `cut_be_set`: entry `index` of camera `cut`'s zones gets gate `value`.
     SetGate { cut: u8, index: u8, value: u8 },
-    /// `cut_replace`: swap two values across every zone's gate and floor.
+    /// `cut_replace`: swap two camera ids across every zone's `cam_from` and
+    /// `cam_to`.
     Replace { a: u8, b: u8 },
     /// `light_*_set`: light `index` of camera `cut`'s record.
     Light {
