@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 300 courtyard. Door 1 to 302 is the north elevator, parked at the room
+     origin. While the elevator stands here (scenario 0x31, set by 302's
+     ride up), AOT 5 on its platform rides it down, and the ride turns door 1
+     on around the player. Without it the shaft is walled off (a collision
+     block over the platform) and AOT 13 only says so. -->
+<bot format="2">
+  <door slot="1" via="5" bank="0" bit="0x31" while="set" label="the north elevator down to 302"/>
+</bot>
