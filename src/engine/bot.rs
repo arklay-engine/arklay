@@ -2514,6 +2514,8 @@ struct BotCtx {
     holds: Rc<Vec<meta::RoomHolds>>,
     /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<door>` facts, cached by [`BotRuntime`].
+    door_vias: Rc<Vec<meta::RoomDoorVia>>,
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
@@ -2756,6 +2758,19 @@ impl UserData for BotCtx {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("item", entry.fact.item)?;
+                row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("door_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.door_vias.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("slot", entry.fact.slot)?;
+                row.set("via", entry.fact.via)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -3512,6 +3527,8 @@ pub struct BotRuntime {
     holds: Rc<Vec<meta::RoomHolds>>,
     /// Every room's errand facts, loaded with `uses`.
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<door>` facts, loaded with `uses`.
+    door_vias: Rc<Vec<meta::RoomDoorVia>>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
@@ -3547,6 +3564,7 @@ impl BotRuntime {
             uses: None,
             holds: Rc::default(),
             errands: Rc::default(),
+            door_vias: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
@@ -3610,6 +3628,7 @@ impl BotRuntime {
             self.uses = Some((jill, Rc::new(meta::load_uses(pack, Some(jill))?)));
             self.holds = Rc::new(meta::load_holds(pack, Some(jill))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill))?);
+            self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill))?);
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
@@ -3636,6 +3655,7 @@ impl BotRuntime {
                 .unwrap_or_default(),
             holds: self.holds.clone(),
             errands: self.errands.clone(),
+            door_vias: self.door_vias.clone(),
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -3941,6 +3961,7 @@ mod tests {
             "use_facts",
             "item_facts",
             "errand_facts",
+            "door_facts",
             "combine_result",
         ];
         // The bot's own memory and run bookkeeping, never the game.
@@ -4914,6 +4935,7 @@ mod tests {
             uses: Rc::default(),
             holds: Rc::default(),
             errands: Rc::default(),
+            door_vias: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -5947,6 +5969,7 @@ mod tests {
             uses: Rc::default(),
             holds: Rc::default(),
             errands: Rc::default(),
+            door_vias: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.25,

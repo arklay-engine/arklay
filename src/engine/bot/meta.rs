@@ -25,7 +25,9 @@
 //! is clear and, with `after_bank`/`after_bit`, that flag is set. `<holds>`
 //! says what the room holds (an item and a label): a location fact the
 //! planner reads from every room (`bot:item_facts()`), so it can value a
-//! room it has not entered. A format-1 document may not use them.
+//! room it has not entered. `<door slot via>` names a door the room parks at
+//! its origin until AOT `via` is pressed (`bot:door_facts()`, read from
+//! every room for routing). A format-1 document may not use them.
 //!
 //! Every fact element takes an optional `character="jill"|"chris"`: the fact
 //! holds only for that character (player flag bit 0: 1 Jill, 0 Chris), as
@@ -67,6 +69,18 @@ pub struct RoomMeta {
     pub watches: Vec<Watch>,
     pub holds: Vec<Holds>,
     pub errands: Vec<Errand>,
+    pub doors: Vec<DoorVia>,
+}
+
+/// `<door slot via [label]>`: door AOT `slot` is parked at the room origin
+/// until the player presses AOT `via`, whose event sets the door around the
+/// player (406's ladder hatch to 40D). The planner routes through such a
+/// door by pressing `via` (`bot:door_facts()`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DoorVia {
+    pub slot: u8,
+    pub via: u8,
+    pub label: Option<String>,
 }
 
 /// `<deliver>` or `<fetch>`: one end of an item errand between rooms.
@@ -353,6 +367,27 @@ pub fn load_holds(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomHolds>> {
     Ok(holds)
 }
 
+/// One room's `<door>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomDoorVia {
+    /// The room id as `bot:room().id` spells it (`"406"`).
+    pub room: String,
+    pub fact: DoorVia,
+}
+
+/// Every room's `<door>` facts, by room id then document order
+/// (`bot:door_facts()`).
+pub fn load_door_vias(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomDoorVia>> {
+    let mut doors = Vec::new();
+    for (id, meta) in load_all(pack, jill)? {
+        doors.extend(meta.doors.into_iter().map(|fact| RoomDoorVia {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(doors)
+}
+
 /// One room's `<deliver>` or `<fetch>` fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomErrand {
@@ -459,6 +494,8 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 | "holds"
                 | "deliver"
                 | "fetch"
+                | "fight"
+                | "door"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -533,6 +570,12 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 let fact = parse_errand(child)?;
                 if keep {
                     meta.errands.push(fact);
+                }
+            }
+            "door" => {
+                let fact = parse_door(child)?;
+                if keep {
+                    meta.doors.push(fact);
                 }
             }
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -648,6 +691,24 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
         slot: attr(node, "slot")?,
         item,
         flag: (bank_attr(node)?, attr(node, "bit")?),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
+    check_attributes(node, &["slot", "via", "label", "character"])?;
+    check_leaf(node)?;
+    let slot: u8 = attr(node, "slot")?;
+    let via: u8 = attr(node, "via")?;
+    if slot == via {
+        bail!(
+            "{}: <door> `via` must be another slot than `slot`",
+            at(node)
+        );
+    }
+    Ok(DoorVia {
+        slot,
+        via,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1395,6 +1456,28 @@ mod tests {
     }
 
     #[test]
+    fn door_names_the_slot_that_opens_it() {
+        let text = r#"<bot format="2">
+            <door slot="2" via="5" label="the hatch"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.doors,
+            vec![DoorVia {
+                slot: 2,
+                via: 5,
+                label: Some("the hatch".to_string()),
+            }]
+        );
+        let same = r#"<bot format="2"><door slot="2" via="2"/></bot>"#;
+        assert!(parse(same).is_err());
+        let old = r#"<bot><door slot="2" via="5"/></bot>"#;
+        assert!(parse(old).is_err());
+        let jill = r#"<bot format="2"><door slot="2" via="5" character="chris"/></bot>"#;
+        assert!(parse_for(jill, Some(true)).unwrap().doors.is_empty());
+    }
+
+    #[test]
     fn interact_may_name_the_item_slot_it_reveals() {
         let text = r#"<bot format="2">
             <interact slot="2" bank="7" bit="0x58" done="clear" reveals="3"/>
@@ -1738,6 +1821,8 @@ mod tests {
         assert_eq!(
             rooms,
             vec![
+                ("100", ErrandKind::Fetch { slot: 5 }),
+                // The shelf's second serum, the cure after Yawn's bite.
                 ("100", ErrandKind::Fetch { slot: 5 }),
                 ("20D", ErrandKind::Deliver { cut: 3 }),
             ]
