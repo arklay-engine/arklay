@@ -1,12 +1,17 @@
 //! An RE2 pack's language file: RE2's item names and the messages its
-//! executable draws, the interface strings shared with RE1, and each room's
-//! own text decoded from its English message section.
+//! executable draws, read from the executable ([`super::exe`]), the interface
+//! strings shared with RE1, and each room's own text decoded from its English
+//! message section.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 
 use crate::rdt2;
 use crate::state::RoomId;
+
+/// The system messages the language file carries as `MESSAGE_00..=10`; the
+/// rest are the item descriptions, `0x10 + id`.
+const SYSTEM_MESSAGES: usize = 0x11;
 
 /// The strings no RE2 file carries.
 const SHARED: &str = include_str!("../../games/re2/language/en-US.txt");
@@ -27,6 +32,10 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
     while let Some(byte) = bytes.next() {
         let mut operand = || bytes.next().unwrap_or(0);
         match byte {
+            // An item name's end.
+            0xF7 => break,
+            // The yes/no line's spacing, which the choice's own place covers.
+            0xF5 => {}
             0xFE => {
                 let ticks = operand();
                 if ticks != 0 {
@@ -60,6 +69,7 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
                 (0xF0, 0x09) => value.push_str("T."),
                 (0xF0, 0x0A) => value.push_str("A."),
                 (0xF0, 0x0B) => value.push_str("R."),
+                (0xEE, 0x12) => value.push('&'),
                 _ => {}
             },
             _ => match table.get(usize::from(byte)) {
@@ -124,9 +134,18 @@ pub(super) fn item_definitions() -> Vec<(u8, String)> {
         .collect()
 }
 
-/// The language file: `rooms` lists each room's id and RDT.
-pub(super) fn language_file(rooms: &[(RoomId, &[u8])]) -> String {
+/// The language file: `rooms` lists each room's id and RDT, `exe` holds the
+/// executable's English strings and `places` the save screen's name of each
+/// room with a typewriter.
+pub(super) fn language_file(
+    rooms: &[(RoomId, &[u8])],
+    exe: Option<&super::exe::ExeText>,
+    places: &HashMap<RoomId, String>,
+) -> String {
     let mut text = SHARED.to_owned();
+    if let Some(exe) = exe {
+        exe_lines(exe, &mut text);
+    }
     for line in crate::language::LANGUAGE_FILES
         .iter()
         .find(|(entry, _)| entry.eq_ignore_ascii_case("language/en-US.txt"))
@@ -150,14 +169,96 @@ pub(super) fn language_file(rooms: &[(RoomId, &[u8])]) -> String {
             let key = format!("ROOM_{:X}{:02X}_{tag}_TEXT_{index:02X}", id.stage, id.room);
             lines.insert(key, decode_message(stream));
         }
-        // The save screen's label: RE2's own place names are not read yet.
+        // The save screen's label: the place a room's typewriter names, or
+        // the room's number where it has none.
         let room = format!("{:X}{:02X}", id.stage, id.room);
-        lines.insert(format!("ROOM_{room}_NAME_SAVE"), format!("Room {room}"));
+        let label = places
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| format!("Room {room}"));
+        lines.insert(format!("ROOM_{room}_NAME_SAVE"), label);
     }
     for (key, value) in lines {
         let _ = writeln!(text, "{key} = \"{value}\"");
     }
     text
+}
+
+/// Where `sys.tex`, Classic REbirth's save-screen strings, keeps its table of
+/// `u16` string offsets.
+const SYS_TEX_OFFSETS: usize = 0x3B8;
+/// The `sys.tex` string of save place 0, "Waiting Room"; place `n` is
+/// `SYS_TEX_PLACES + n`.
+const SYS_TEX_PLACES: usize = 0x2B;
+/// The save places `sys.tex` names.
+const PLACE_COUNT: usize = 15;
+
+/// The save screen's place names by room: Classic REbirth's save list
+/// (`ddraw.dll`'s `0x10080FC0`) names a save by `sys.tex` string
+/// `0x2B + place`, where the place is the first data byte of the room's
+/// typewriter (`aot_set`, kind `Sce_Save`) as the save records it. `rooms`
+/// lists each room's id and RDT; rooms with no typewriter are left out.
+pub(super) fn save_places(sys_tex: &[u8], rooms: &[(RoomId, &[u8])]) -> HashMap<RoomId, String> {
+    let place = |index: usize| {
+        let at = SYS_TEX_OFFSETS + 2 * (SYS_TEX_PLACES + index);
+        let offset = usize::from(u16::from_le_bytes(
+            sys_tex.get(at..at + 2)?.try_into().ok()?,
+        ));
+        let tail = sys_tex.get(offset..SYS_TEX_OFFSETS)?;
+        let end = tail.iter().position(|&byte| byte == 0xFE)?;
+        Some(decode_message(&tail[..end]))
+    };
+    let names: Vec<String> = (0..PLACE_COUNT).map_while(place).collect();
+    if names.first().map(String::as_str) != Some("Waiting Room") {
+        return HashMap::new();
+    }
+    rooms
+        .iter()
+        .filter_map(|(id, rdt)| {
+            let scripts = crate::scd2::reader::parse(rdt).ok()?;
+            let place = [&scripts.init, &scripts.main]
+                .into_iter()
+                .flat_map(|list| &list.procs)
+                .flat_map(|procedure| &procedure.insns)
+                .find_map(|insn| {
+                    let ops = insn.operands();
+                    let data = match insn.op().mnemonic {
+                        "aot_set" => 9,
+                        "aot_set_4p" => 13,
+                        _ => return None,
+                    };
+                    (ops.get(1) == Some(&i64::from(crate::scd2::host::SCE_SAVE)))
+                        .then(|| ops.get(data).copied())
+                        .flatten()
+                })?;
+            let name = names.get(usize::try_from(place).ok()?)?;
+            Some((*id, name.clone()))
+        })
+        .collect()
+}
+
+/// The item names and descriptions and the system and door messages of
+/// `exe`, as language lines.
+fn exe_lines(exe: &super::exe::ExeText, text: &mut String) {
+    for (item, name) in exe.names.iter().enumerate().skip(1) {
+        let name = decode_message(name);
+        if !name.is_empty() {
+            let _ = writeln!(text, "ITEM_{item:02X}_NAME = \"{name}\"");
+        }
+    }
+    for (index, message) in exe.system.iter().enumerate() {
+        let value = decode_message(message);
+        if index < SYSTEM_MESSAGES {
+            let _ = writeln!(text, "MESSAGE_{index:02X} = \"{value}\"");
+        } else {
+            let item = index - 0x10;
+            let _ = writeln!(text, "ITEM_{item:02X}_DESCRIPTION = \"{value}\"");
+        }
+    }
+    for (index, message) in exe.door.iter().enumerate() {
+        let id = usize::from(crate::scd2::host::DOOR_MESSAGES) + index;
+        let _ = writeln!(text, "MESSAGE_{id:02X} = \"{}\"", decode_message(message));
+    }
 }
 
 #[cfg(test)]
@@ -287,6 +388,92 @@ mod tests {
     #[test]
     fn the_shared_strings_parse() {
         let rooms: [(RoomId, &[u8]); 0] = [];
-        crate::language::Language::parse(&language_file(&rooms)).unwrap();
+        crate::language::Language::parse(&language_file(&rooms, None, &HashMap::new())).unwrap();
+    }
+
+    #[test]
+    fn a_save_place_is_the_typewriters_place_in_sys_tex() {
+        let Some(root) = std::env::var_os("ARKLAY_RE2_ROOT").map(std::path::PathBuf::from) else {
+            return;
+        };
+        let ddraw = std::fs::read(root.join("ddraw.dll")).unwrap();
+        let archive = crate::sevenz::find(&ddraw).unwrap();
+        let sys_tex = crate::sevenz::extract(archive, |name| {
+            name.eq_ignore_ascii_case(super::super::SYS_TEX_7Z)
+        })
+        .unwrap()
+        .remove(0)
+        .1;
+        let rdt = |name: &str| std::fs::read(root.join("data/Pl0/Rdt").join(name)).unwrap();
+        let (hall, cabin, street) = (
+            rdt("ROOM2000.RDT"),
+            rdt("ROOM1060.RDT"),
+            rdt("ROOM1000.RDT"),
+        );
+        let id = |text: &str| RoomId::parse(text).unwrap();
+        let rooms = [
+            (id("2000"), hall.as_slice()),
+            (id("1060"), cabin.as_slice()),
+            (id("1000"), street.as_slice()),
+        ];
+        let places = save_places(&sys_tex, &rooms);
+        assert_eq!(places.get(&id("2000")).map(String::as_str), Some("Hall"));
+        assert_eq!(places.get(&id("1060")).map(String::as_str), Some("Cabin"));
+        // The street has no typewriter.
+        assert_eq!(places.get(&id("1000")), None);
+    }
+
+    #[test]
+    fn a_name_ends_at_its_terminator_and_spells_the_ampersand() {
+        // `B&D`, the end, then the next name.
+        assert_eq!(decode_message(&[0x1E, 0xEE, 0x12, 0x20, 0xF7, 0x1D]), "B&D");
+        // The yes/no line's spacing draws nothing.
+        assert_eq!(
+            decode_message(&[0xFC, 0xF5, 0xF5, 0xFB, 0x80]),
+            "\\n{branch 0 0 0}"
+        );
+    }
+
+    /// The executable of the install `ARKLAY_RE2_ROOT` names, when it is set.
+    fn installed_exe() -> Option<super::super::exe::ExeText> {
+        let root = std::path::PathBuf::from(std::env::var_os("ARKLAY_RE2_ROOT")?);
+        let exe = std::fs::read(root.join("bio2 1.10.exe")).ok()?;
+        Some(super::super::exe::ExeText::read(&exe).expect("the English tables read"))
+    }
+
+    #[test]
+    fn the_executables_names_and_messages_are_the_originals() {
+        let Some(exe) = installed_exe() else {
+            return;
+        };
+        let name = |item: usize| decode_message(&exe.names[item]);
+        assert_eq!(name(0x02), "Hand Gun");
+        assert_eq!(name(0x14), "H. Gun Bullets");
+        assert_eq!(name(0x15), "Shotgun Shells");
+        assert_eq!(name(0x23), "F. Aid Spray");
+        assert_eq!(name(0x26), "Green Herb");
+        assert_eq!(name(0x29), "Mixed Herb");
+        assert_eq!(name(0x42), "Bomb & Det.");
+        let system = |id: usize| decode_message(&exe.system[id]);
+        assert_eq!(
+            system(0),
+            "Will you take the\\n{color 1}{string 0}{color 0}?\\n{branch 0 0 0}"
+        );
+        assert_eq!(
+            system(6),
+            "You've taken the\\n{color 1}{string 0}{color 0}."
+        );
+        assert_eq!(system(7), "You don't need to\\nuse this right now.");
+        assert_eq!(system(0xB), "Will you mix \\nthe herb?\\n{branch 0 0 0}");
+        assert_eq!(
+            system(0x11),
+            "A combat knife.\\nIt could come in\\nhandy..."
+        );
+        let door = |id: usize| decode_message(&exe.door[id]);
+        assert_eq!(door(0xA), "\\nYou unlocked it.");
+        assert_eq!(door(0xC), "\\nIt's locked.");
+        let mut text = String::new();
+        exe_lines(&exe, &mut text);
+        crate::language::Language::parse(&text).unwrap();
     }
 }

@@ -150,6 +150,22 @@ pub struct FontMetrics {
     pub text_y: i32,
     /// Menu and item-name/description y.
     pub menu_y: i32,
+    /// Where a yes/no question draws its choice, when the font says
+    /// (RE2's); otherwise the message window's RE1 places.
+    pub choice: Option<ChoiceLayout>,
+}
+
+/// A yes/no question's choice drawn on the question's last line, as RE2
+/// draws it: the labels at their own x, each cursor a fixed offset left of
+/// its label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChoiceLayout {
+    /// The x of `Yes`.
+    pub yes_x: i32,
+    /// The x of `No`.
+    pub no_x: i32,
+    /// The cursor cell's x less its label's.
+    pub cursor_dx: i32,
 }
 
 /// One glyph cell's tight metrics: its left trim and advance.

@@ -390,17 +390,45 @@ pub enum ItemGetSlot {
 pub const KEY_UNLOCK: u8 = 0xFE;
 pub const KEY_LOCKED: u8 = 0xFF;
 
-/// The messages the executable draws itself; RE2's own are not read yet, so
-/// the pack's language file spells them (`MESSAGE_<nn>`).
+/// The executable's system messages (its table at `0x5324D8`), by the
+/// original's ids; the pack's language file carries message `n` as
+/// `MESSAGE_<nn>`.
 /// The get-item window's question, "Will you take the item?" with yes/no.
 pub const MESSAGE_TAKE: u8 = 0;
-pub const MESSAGE_LOCKED: u8 = 1;
-pub const MESSAGE_LOCKED_OTHER_SIDE: u8 = 2;
-pub const MESSAGE_UNLOCKED: u8 = 3;
-pub const MESSAGE_USED_KEY: u8 = 4;
-pub const MESSAGE_FULL: u8 = 5;
+/// "You can't carry any more items."
+pub const MESSAGE_FULL: u8 = 1;
 /// The get-item window's "You've taken the item."
 pub const MESSAGE_TAKEN: u8 = 6;
+
+/// The global message id of door message 0 (the executable's door table at
+/// `0x52F9B4`); door message `n` is `DOOR_MESSAGES + n`.
+pub const DOOR_MESSAGES: u8 = 0x21;
+/// `Sce_Door`'s message for a door a key just opened: "You have used the
+/// item."
+pub const DOOR_USED_KEY: u8 = 5;
+/// "You unlocked it.", for a door that unlocks from this side.
+pub const DOOR_UNLOCKED: u8 = 0xA;
+/// "It's locked from inside."
+pub const DOOR_LOCKED_OTHER_SIDE: u8 = 0xB;
+/// "It's locked.", the door messages' plain lock.
+pub const DOOR_LOCKED: u8 = 0xC;
+/// The door messages' count.
+const DOOR_MESSAGE_COUNT: u8 = 0x18;
+
+/// The global message id of door message `door`.
+pub const fn door_message(door: u8) -> u8 {
+    DOOR_MESSAGES + door
+}
+
+/// The door message `Sce_Door` shows for a locked door whose key the player
+/// lacks: `key - 0x4C`, the message that names the key's lock. A key the
+/// table has no message for shows the plain lock.
+pub fn door_locked_message(key: u8) -> u8 {
+    match key.checked_sub(0x4C) {
+        Some(door) if door < DOOR_MESSAGE_COUNT => door_message(door),
+        _ => door_message(DOOR_LOCKED),
+    }
+}
 
 /// The script variables the engine owns (`scd_var_*`).
 pub const VAR_FORWARD_AREA: usize = 0;
@@ -420,7 +448,7 @@ const SCE_EVENT: u8 = 5;
 pub const SCE_FLAG_CHANGE: u8 = 6;
 /// `Sce_Water`'s area: the player's `Water` while inside it.
 pub const SCE_WATER: u8 = 7;
-const SCE_SAVE: u8 = 9;
+pub const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
 pub const SCE_DAMAGE: u8 = 11;
 

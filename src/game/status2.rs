@@ -79,17 +79,17 @@ const TAB_EXIT: u8 = 3;
 /// (tab 1) page 4.
 const TAB_ITEMS: u8 = 2;
 
-/// The executable's messages the page raises (`MESSAGE_<nn>` in the pack's
-/// language file, whose numbering is arklay's).
+/// The executable's system messages the page raises, by the original's ids
+/// (`MESSAGE_<nn>` in the pack's language file).
 /// `0x4F8C5A`'s message 2, "It's already fully loaded."
-pub const MESSAGE_LOADED: u8 = 7;
+pub const MESSAGE_LOADED: u8 = 2;
 /// USE's message 5 for ammunition, "These bullets can't be used by
 /// themselves."
-pub const MESSAGE_BULLETS: u8 = 8;
+pub const MESSAGE_BULLETS: u8 = 5;
 /// USE's message 7, "You don't need to use this right now."
-pub const MESSAGE_NOT_NOW: u8 = 9;
+pub const MESSAGE_NOT_NOW: u8 = 7;
 /// COMBN step 11's message 0xB, "Will you mix the herb?" with yes and no.
-pub const MESSAGE_MIX: u8 = 10;
+pub const MESSAGE_MIX: u8 = 0xB;
 
 /// The first id USE doesn't equip (`0x4F8620`): ammunition from here.
 const FIRST_AMMO: u8 = 0x14;

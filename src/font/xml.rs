@@ -13,6 +13,10 @@
 //! </font>
 //! ```
 //!
+//! The optional `yesX`, `noX` and `cursorX` (given together) draw a yes/no
+//! question's choice on the question's last line: `Yes` at `yesX`, `No` at
+//! `noX`, and the cursor cell `cursorX` from its label (RE2's layout).
+//!
 //! `cell` is the left grid's index: a plain byte, or `0xEA + nn` for
 //! `0xF8 nn`; every other cell, and the whole right page, takes the default
 //! `advance` with no indent. Integers are decimal or `0x` hex. Unknown
@@ -22,7 +26,7 @@
 use anyhow::{Context, Result, bail};
 use roxmltree::{Document, Node};
 
-use super::{FontMetrics, GlyphMetric};
+use super::{ChoiceLayout, FontMetrics, GlyphMetric};
 use crate::charset::Script;
 
 /// The format version `<font format="...">` declares.
@@ -65,6 +69,9 @@ impl FontDef {
                 "margin",
                 "textY",
                 "menuY",
+                "yesX",
+                "noX",
+                "cursorX",
             ],
         )?;
         let format: u32 = attr(root, "format")?;
@@ -82,6 +89,19 @@ impl FontDef {
             left_margin: attr(root, "margin")?,
             text_y: attr(root, "textY")?,
             menu_y: attr(root, "menuY")?,
+            choice: match (
+                root.attribute("yesX"),
+                root.attribute("noX"),
+                root.attribute("cursorX"),
+            ) {
+                (None, None, None) => None,
+                (Some(_), Some(_), Some(_)) => Some(ChoiceLayout {
+                    yes_x: attr(root, "yesX")?,
+                    no_x: attr(root, "noX")?,
+                    cursor_dx: attr(root, "cursorX")?,
+                }),
+                _ => bail!("<font> needs all of `yesX`, `noX` and `cursorX`, or none"),
+            },
         };
         let mut glyphs = Vec::new();
         for node in root.children().filter(Node::is_element) {
@@ -242,6 +262,25 @@ mod tests {
             .is_err()
         );
         assert!(FontDef::parse(&base.replace("latin", "greek")).is_err());
+        let choice = base.replace("menuY", "yesX=\"100\" noX=\"150\" cursorX=\"-18\" menuY");
+        assert_eq!(
+            FontDef::parse(&format!("{choice}</font>"))
+                .unwrap()
+                .metrics
+                .choice,
+            Some(ChoiceLayout {
+                yes_x: 100,
+                no_x: 150,
+                cursor_dx: -18
+            })
+        );
+        assert!(
+            FontDef::parse(&format!(
+                "{}</font>",
+                base.replace("menuY", "yesX=\"1\" menuY")
+            ))
+            .is_err()
+        );
         assert!(FontDef::parse(&base.replace("format=\"1\"", "format=\"2\"")).is_err());
     }
 

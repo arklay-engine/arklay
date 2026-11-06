@@ -8281,8 +8281,8 @@ impl GameState {
 
     fn try_re2_door(&mut self, door: &Door) -> bool {
         use crate::scd2::host::{
-            KEY_LOCKED, KEY_UNLOCK, MESSAGE_LOCKED, MESSAGE_LOCKED_OTHER_SIDE, MESSAGE_UNLOCKED,
-            MESSAGE_USED_KEY,
+            DOOR_LOCKED_OTHER_SIDE, DOOR_UNLOCKED, DOOR_USED_KEY, KEY_LOCKED, KEY_UNLOCK,
+            door_locked_message, door_message,
         };
         let bit = door.lock & 0x3F;
         let word = usize::from(bit >> 5) & 1;
@@ -8293,18 +8293,18 @@ impl GameState {
         // `sce_door`: a locked door opens on a later press once this one has
         // unlocked it.
         match door.key {
-            KEY_UNLOCK => self.show_re2_global(MESSAGE_UNLOCKED),
+            KEY_UNLOCK => self.show_re2_global(door_message(DOOR_UNLOCKED)),
             KEY_LOCKED => {
-                self.show_re2_global(MESSAGE_LOCKED_OTHER_SIDE);
+                self.show_re2_global(door_message(DOOR_LOCKED_OTHER_SIDE));
                 return false;
             }
             key if !self.has_item(key) => {
-                self.show_re2_global(MESSAGE_LOCKED);
+                self.show_re2_global(door_locked_message(key));
                 return false;
             }
             key => {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = key;
-                self.show_re2_global(MESSAGE_USED_KEY);
+                self.show_re2_global(door_message(DOOR_USED_KEY));
             }
         }
         self.re2.door_locks[word] |= mask;

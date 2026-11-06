@@ -16,6 +16,8 @@
 //! | `Common/file/map<nn>.adt` (TIM `k`) | `ui/status/map<nn>_<k>.tim` |
 //! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
 //! | `Common/Data/type00.adt` | `ui/type00.bmp` |
+//! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
+//! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -360,6 +362,39 @@ fn find_ddraw(root: &Path, data: &Path) -> Option<(PathBuf, Vec<u8>)> {
     Some((dll, bytes))
 }
 
+/// The executable's names for the game's own program, which sits beside the
+/// data directory or above it.
+const EXE_NAMES: [&str; 2] = ["bio2 1.10.exe", "bio2.exe"];
+
+/// The English strings of the install's executable ([`exe::ExeText`]), or a
+/// warning when there is none to read.
+fn find_exe_text(root: &Path, data: &Path, warnings: &mut Vec<String>) -> Option<exe::ExeText> {
+    let Some(path) = data
+        .ancestors()
+        .take_while(|dir| dir.starts_with(root))
+        .find_map(|dir| EXE_NAMES.iter().find_map(|name| child(dir, name)))
+    else {
+        warnings.push(
+            "no bio2 1.10.exe: the pack has no item names, descriptions or system messages"
+                .to_string(),
+        );
+        return None;
+    };
+    match fs::read(&path)
+        .map_err(anyhow::Error::from)
+        .and_then(|bytes| exe::ExeText::read(&bytes))
+    {
+        Ok(text) => Some(text),
+        Err(error) => {
+            warnings.push(format!(
+                "{}: no item names or system messages: {error:#}",
+                path.display()
+            ));
+            None
+        }
+    }
+}
+
 /// The room names in Classic REbirth's debug room table in `dll`, keyed by
 /// (zero-based stage, room), trailing spaces trimmed; `None` when no copy of
 /// the first name starts a table laid out as expected.
@@ -423,6 +458,7 @@ pub(crate) fn convert(
     let rooms = scan_rooms(&layout, &mut warnings)?;
     let ddraw = find_ddraw(root, &layout.data);
     let names = find_room_names(ddraw.as_ref(), &mut warnings);
+    let exe = find_exe_text(root, &layout.data, &mut warnings);
     progress.advance("scan");
     progress.end_phase();
 
@@ -522,7 +558,15 @@ pub(crate) fn convert(
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
 
-    copy_text(&rooms, &mut writer, &mut tally, &mut warnings)?;
+    copy_text(
+        &rooms,
+        exe.as_ref(),
+        ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
+        &layout,
+        &mut writer,
+        &mut tally,
+        &mut warnings,
+    )?;
 
     progress.begin("manifest", 1);
     let text = base_manifest().render().into_bytes();
@@ -534,10 +578,14 @@ pub(crate) fn convert(
     finish_pack(writer, out, jobs, progress, &warnings, &summary, verbose)
 }
 
-/// The language file, and the Western font it draws with: RE2's own sheets are
-/// not read yet.
+/// The language file, with the executable's English strings (`exe`) and the
+/// save places of `ddraw.dll`'s archive, the Lua, and the font: RE2's own
+/// `font0.tim` converted, or Classic REbirth's Western sheet without it.
 fn copy_text(
     rooms: &[Room],
+    exe: Option<&exe::ExeText>,
+    ddraw: Option<&[u8]>,
+    layout: &Layout,
     writer: &mut PackWriter,
     tally: &mut Tally,
     warnings: &mut Vec<String>,
@@ -549,7 +597,18 @@ fn copy_text(
             Err(error) => warnings.push(format!("{}: no text: {error:#}", room.id.folder())),
         }
     }
-    let language = text::language_file(&sources);
+    let places = match ddraw
+        .and_then(sevenz::find)
+        .map(|archive| sevenz::extract(archive, |name| name.eq_ignore_ascii_case(SYS_TEX_7Z)))
+    {
+        Some(Ok(mut files)) if !files.is_empty() => text::save_places(&files.remove(0).1, &sources),
+        Some(Err(error)) => {
+            warnings.push(format!("ddraw.dll: no save places: {error:#}"));
+            std::collections::HashMap::new()
+        }
+        _ => std::collections::HashMap::new(),
+    };
+    let language = text::language_file(&sources, exe, &places);
     crate::language::Language::parse(&language).context("invalid RE2 language file")?;
     tally.add(writer, "text", "language/en-US.txt", language.into_bytes())?;
     for (entry, source) in [
@@ -674,19 +733,41 @@ fn copy_text(
             xml.into_bytes(),
         )?;
     }
+    // The original's font, or Classic REbirth's Western sheet without it.
+    let converted = match files_in(layout.common(&["Data"]))?
+        .iter()
+        .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == "FONT0" && ext == "TIM"))
+    {
+        Some(path) => match font::sheet(&read(path)?) {
+            Ok(sheet) => Some(sheet),
+            Err(error) => {
+                warnings.push(format!(
+                    "Common/Data/font0.tim: {error:#}; the text uses CR's font"
+                ));
+                None
+            }
+        },
+        None => {
+            if layout.common.is_some() {
+                warnings.push("no Common/Data/font0.tim; the text uses CR's font".to_string());
+            }
+            None
+        }
+    };
+    let (sheet, xml) = converted.unwrap_or_else(|| {
+        (
+            crate::font::WESTERN_SHEET.to_vec(),
+            crate::font::xml::WESTERN.to_owned(),
+        )
+    });
     let id = crate::font::WESTERN_ID;
     let stem = crate::font::xml::stem(id);
-    tally.add(
-        writer,
-        "text",
-        &format!("{stem}.bmp"),
-        crate::font::WESTERN_SHEET.to_vec(),
-    )?;
+    tally.add(writer, "text", &format!("{stem}.bmp"), sheet)?;
     tally.add(
         writer,
         "text",
         &crate::font::xml::entry(id),
-        crate::font::xml::WESTERN.as_bytes().to_vec(),
+        xml.into_bytes(),
     )?;
     Ok(())
 }
@@ -1442,6 +1523,10 @@ fn copy_maps(
 /// The save screen's background in the 7z archive of `ddraw.dll`.
 const SAVE_BACKGROUND_7Z: &str = "common/data/type00.adt";
 
+/// Classic REbirth's save-screen strings in `ddraw.dll`'s archive, which name
+/// the save places ([`text::save_places`]).
+const SYS_TEX_7Z: &str = "exe/sys.tex";
+
 /// The save screen's background, `Common/Data/type00.adt` (the English copy
 /// in `ddraw.dll`'s archive when there is one), as `ui/type00.bmp`: the
 /// entry RE 1's save screen draws behind its rows.
@@ -1735,6 +1820,8 @@ fn copy_demos(
     Ok(())
 }
 
+mod exe;
+mod font;
 mod text;
 
 #[cfg(test)]
