@@ -177,6 +177,12 @@ local MONSTER_EVERY = C.SECOND // 2
 -- only once nothing else is left, and not before it has waited this long
 -- (doubled per attempt): the event may clear with time, on a room entry.
 local EVENT_WAIT = 60 * C.SECOND
+
+-- A room whose only ways out are doors parked at its origin (310's lift)
+-- may carry the player through one by itself once its event ends: with
+-- nothing else to do, the bot idles this long after entering before the
+-- frontier counts as empty.
+local TRANSFER_WAIT = 30 * C.SECOND
 -- An action-key event pressed as a passage gets this long.
 local PASSAGE_TIMEOUT = 15 * C.SECOND
 
@@ -1045,7 +1051,13 @@ local function door_goal(bot, door, why)
             job = {
                 zone = zone, label = label, pattern = "edge",
                 presses = 2, gap = 20, side = 4 * C.SECOND, timeout = GOAL_TIMEOUT,
-                done = function(b) return b:room().id ~= room_id end,
+                -- Done once the room changes, or once the event took the
+                -- player to the door without leaving (305's fountain stairs
+                -- end on its floor, where the gate no longer holds): the
+                -- door is then an ordinary one.
+                done = function(b)
+                    return b:room().id ~= room_id or not via_action(b, door)
+                end,
             },
         }
     end
@@ -2088,6 +2100,8 @@ function BotPlanner.enter_room(bot, room)
     p.goal = nil
     p.entries[room.id] = (p.entries[room.id] or 0) + 1
     p.reenter = nil
+    p.entered_tick = bot:tick()
+    p.transfer_wait = nil
     -- The mental map: where the bot arrives in this room from the last one.
     if p.last_room and p.last_room ~= room.id then
         local me = bot:player()
@@ -2220,6 +2234,18 @@ function BotPlanner.step(bot)
                 p.goal = choose(bot)
             elseif waiting then
                 return
+            end
+        end
+        if not p.goal and bot:tick() - (p.entered_tick or 0) < TRANSFER_WAIT then
+            for _, door in ipairs(bot:doors()) do
+                if door.target and door.target ~= room and BotNav.is_origin_zone(door) then
+                    if not p.transfer_wait then
+                        p.transfer_wait = true
+                        bot:log(string.format("frontier empty; waiting for door slot %d -> %s at the room origin",
+                            door.slot, door.target))
+                    end
+                    return
+                end
             end
         end
         if not p.goal then
