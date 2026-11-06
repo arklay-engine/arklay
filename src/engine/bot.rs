@@ -2647,6 +2647,8 @@ struct BotCtx {
     rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<avoid>` facts, cached by [`BotRuntime`].
+    avoid_facts: Rc<Vec<meta::RoomAvoid>>,
     /// Every room's `<door>` facts, cached by [`BotRuntime`].
     door_vias: Rc<Vec<meta::RoomDoorVia>>,
     /// The game's combat knowledge file, if the pack carries one.
@@ -2950,6 +2952,28 @@ impl UserData for BotCtx {
                 row.set("gate_bit", entry.fact.gate.map(|gate| gate.flag.1))?;
                 row.set("gate_set", entry.fact.gate.map(|gate| gate.set))?;
                 row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("avoid_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.avoid_facts.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("slot", entry.fact.slot)?;
+                row.set("reason", entry.fact.reason.as_str())?;
+                row.set("bank", entry.fact.gate.map(|gate| gate.flag.0))?;
+                row.set("bit", entry.fact.gate.map(|gate| gate.flag.1))?;
+                row.set(
+                    "while",
+                    entry
+                        .fact
+                        .gate
+                        .map(|gate| if gate.set { "set" } else { "clear" }),
+                )?;
+                row.set("unless_held", entry.fact.unless_held)?;
                 table.push(row)?;
             }
             Ok(table)
@@ -3734,6 +3758,8 @@ pub struct BotRuntime {
     rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's errand facts, loaded with `uses`.
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<avoid>` facts, loaded with `uses`.
+    avoid_facts: Rc<Vec<meta::RoomAvoid>>,
     /// Every room's `<door>` facts, loaded with `uses`.
     door_vias: Rc<Vec<meta::RoomDoorVia>>,
     /// `knowledge/<game>.xml`, read with the chunks.
@@ -3774,6 +3800,7 @@ impl BotRuntime {
             rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
+            avoid_facts: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             goal_room: None,
@@ -3840,6 +3867,7 @@ impl BotRuntime {
             self.rides = Rc::new(meta::load_rides(pack, Some(jill))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill))?);
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill))?);
+            self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill))?);
         }
         let snapshot = SessionSnapshot::build(session);
         self.stats.observe_snapshot(self.tick, &snapshot);
@@ -3872,6 +3900,7 @@ impl BotRuntime {
             rides: self.rides.clone(),
             errands: self.errands.clone(),
             door_vias: self.door_vias.clone(),
+            avoid_facts: self.avoid_facts.clone(),
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -4180,6 +4209,7 @@ mod tests {
             "ride_facts",
             "errand_facts",
             "door_facts",
+            "avoid_facts",
             "combine_result",
         ];
         // The bot's own memory and run bookkeeping, never the game.
@@ -5191,6 +5221,7 @@ mod tests {
             rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
+            avoid_facts: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -5393,6 +5424,16 @@ mod tests {
         assert_eq!(
             verdict("{ health = 30, distance = 2900, outrun = 'unknown' }"),
             "fight:closing in, cannot outrun it"
+        );
+        // One that hurt the bot on an earlier pass is fought with the bare
+        // kill's rounds (5), no margin; fewer still run.
+        assert_eq!(
+            verdict("{ rounds = 5, crossing = true, hurt_before = true }"),
+            "fight:it hurt the bot on an earlier pass"
+        );
+        assert_eq!(
+            verdict("{ rounds = 4, crossing = true, hurt_before = true }"),
+            "run:too few rounds"
         );
     }
 
@@ -6121,6 +6162,29 @@ mod tests {
         );
         // No knowledge of the enemy: the plain pick.
         assert_eq!(pick(&format!("{short}, {shotgun}"), "nil", "nil"), "0x02");
+        // With a margin for misses: nine handgun rounds cover the bare kill
+        // (9) but not 1.5 times it, while two shells (3 of 7) do.
+        let nine = "{ item = 0x02, rounds = 9, equipped = true }";
+        let pick_margin = |guns: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local row = BotTactics.pick_gun({{ {guns} }}, {zombie}, nil, 1.5)
+                    return string.format("%#04x", row.item)"#
+                ),
+            )
+        };
+        assert_eq!(pick_margin(&format!("{nine}, {shotgun}")), "0x03");
+        // No gun covers the margin: the plain pick covers the bare kill.
+        assert_eq!(pick_margin(&format!("{nine}, {last_shell}")), "0x02");
+        // An equipped gun with no kill data (no keep band for this enemy)
+        // gives way to one whose band covers the kill.
+        let launcher = "{ item = 0x07, rounds = 3, equipped = true }";
+        assert_eq!(
+            pick(&format!("{launcher}, {unequipped}"), zombie, "nil"),
+            "0x02"
+        );
+        assert_eq!(pick(launcher, zombie, "nil"), "0x07");
         assert_eq!(pick("", zombie, "nil"), "none");
     }
 
@@ -6261,6 +6325,7 @@ mod tests {
             rides: Rc::default(),
             errands: Rc::default(),
             door_vias: Rc::default(),
+            avoid_facts: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.25,
