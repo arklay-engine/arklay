@@ -50,6 +50,8 @@
 --               the remembered box)
 --             - for a route to a held item's <use> room, HELD_USE_BONUS
 --               and no door steps: only the first door's length counts
+--             - HEAL_BONUS for a route to a heal pickup or to the box for
+--               one while hurt with none held (BotSurvival.needs_heal)
 --             - for a route to a <fetch> of a cure for the player's
 --               poison, CURE_BONUS (twice HELD_USE_BONUS), no door steps
 --             - BOX_BONUS for a route to a remembered typewriter when a
@@ -138,6 +140,9 @@ local HELD_USE_BONUS = 2 * ERRAND_BONUS
 -- serum after Yawn's bite): the poison drains health the whole way, so it
 -- outranks every other target and the route's length is not counted.
 local CURE_BONUS = 2 * HELD_USE_BONUS
+-- A route to a heal pickup, or to the box for one, while the bot is hurt
+-- with none held (BotSurvival.needs_heal): ahead of every target but a cure.
+local HEAL_BONUS = CURE_BONUS - KEY_BONUS
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
@@ -1263,8 +1268,12 @@ end
 -- kind `kind`): ITEM_BONUS, plus KEY_BONUS for a key that a remembered
 -- locked door needs (`needed[item]` names the door), else AMMO_BONUS for
 -- the ammunition the equipped gun needs (`ammo`). Returns the bonus and a
--- label tag (nil for a plain item). A heal item gets the plain bonus.
-function BotPlanner.item_bonus(item, kind, ammo, needed)
+-- label tag (nil for a plain item). A heal item gets the plain bonus,
+-- unless `hurt` (the item heals and the bot needs a heal): HEAL_BONUS.
+function BotPlanner.item_bonus(item, kind, ammo, needed, hurt)
+    if hurt and kind == "heal" then
+        return ITEM_BONUS + HEAL_BONUS, "heal: hurt with none held"
+    end
     if kind == "key" and needed and needed[item] then
         return ITEM_BONUS + KEY_BONUS, "key for " .. needed[item]
     end
@@ -1763,7 +1772,16 @@ local function choose(bot)
     end
 
     -- 4a. A pursued remote target keeps its course until it is reached,
-    -- real progress re-ranks, or the loop rule drops it.
+    -- real progress re-ranks, or the loop rule drops it. Getting hurt with
+    -- no heal held drops it once, so a heal can be ranked first.
+    local hurt = BotSurvival.needs_heal(bot)
+    if not hurt then
+        p.hurt_dropped = nil
+    elseif p.target and not p.target.heal and not p.hurt_dropped then
+        p.hurt_dropped = true
+        bot:log("target dropped: hurt with no heal held: " .. p.target.label)
+        p.target = nil
+    end
     if p.target then
         local t = p.target
         local goal = target_goal(bot, world, t)
@@ -1883,9 +1901,13 @@ local function choose(bot)
                         + (p.lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
                         + route_monsters(steps)
                     local why, label
+                    local heal_target = nil
                     if goal.kind == "item" then
+                        local _, _, heals = bot:item_kind(goal.item)
+                        heals = hurt and heals == true
                         local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
-                            needed)
+                            needed, heals)
+                        heal_target = heals and goal.item_kind == "heal" or nil
                         cost = cost - bonus
                         label = string.format("item 0x%02X in %s", goal.item, goal.room)
                         if tag then
@@ -1908,7 +1930,7 @@ local function choose(bot)
                     consider({
                         cost = cost, order = order, door = first, why = why,
                         target = { kind = goal.kind, room = goal.room, slot = goal.slot,
-                            label = label, best = #steps, stalls = 0 },
+                            label = label, best = #steps, stalls = 0, heal = heal_target },
                     })
                 end
             end
@@ -1983,12 +2005,13 @@ local function choose(bot)
         if first then
             order = order + 1
             local label = string.format("the item box in %s (%s)", box.room, box_why)
+            local heal = hurt and box_why:find("no heal item held", 1, true) ~= nil or nil
             consider({
-                cost = box.cost - BOX_BONUS + route_monsters(box.steps),
+                cost = box.cost - (heal and HEAL_BONUS or BOX_BONUS) + route_monsters(box.steps),
                 order = order, door = first,
                 why = string.format("toward %s, %d door(s)", label, #box.steps),
                 target = { kind = "box", room = box.room, slot = box.slot,
-                    label = label, best = #box.steps, stalls = 0 },
+                    label = label, best = #box.steps, stalls = 0, heal = heal },
             })
         end
     end

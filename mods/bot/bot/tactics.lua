@@ -135,6 +135,7 @@ end
 --   distance, reach  the target's distance and attack reach (nil unknown)
 --   engage     the far edge of the weapon's distance band (nil unknown)
 --   outrun     Jill's run beats its chase (nil unknown)
+--   slow       its chase speed is known and below the backward walk
 --   sourcing   the bot is under its ammo floor with no ammunition it can
 --              reach (BotSurvival.sourcing): the rounds left are for what
 --              must be fought, so a monster only in a room crossed again
@@ -143,13 +144,17 @@ end
 -- says to pass or avoid, or knows nothing about, or without a firearm;
 -- fight what is closing in (inside twice its reach, or inside the band's
 -- far edge) with whatever rounds are left, even at low health when it cannot be outrun (or its speed is
--- unknown); below a risk-scaled health floor run; otherwise only with the rounds
+-- unknown); below a risk-scaled health floor run (but shoot a slow one the
+-- rounds cover); otherwise only with the rounds
 -- for the target (a margin at low risk) and for the crowd, and then what
 -- cannot be outrun and anything in a room the bot must cross again;
 -- otherwise it is only in the way: run past it.
 -- The verdict for a monster closing in that the bot cannot outrun: the
 -- fight goes on at any health, since running only takes the hit anyway.
 local MUST_FIGHT = "closing in, cannot outrun it"
+-- The verdict for a slow monster at low health: like MUST_FIGHT, it is not
+-- given up for health.
+local SLOW_FIGHT = "low health: shoot a slow one rather than pass it"
 
 function BotTactics.decide(o)
     if not o.policy then
@@ -172,11 +177,17 @@ function BotTactics.decide(o)
     if closing and o.outrun ~= true then
         return "fight", MUST_FIGHT
     end
-    if o.health <= o.max_health * (0.45 - 0.3 * o.risk) then
-        return "run", "low health"
-    end
     -- A cautious bot wants a margin of rounds: half again at risk 0.
     local margin = 1 + 0.5 * (1 - o.risk)
+    if o.health <= o.max_health * (0.45 - 0.3 * o.risk) then
+        -- One slower than the backward walk is shot from range when the
+        -- rounds cover it: running past a zombie in a corridor ends in its
+        -- grab, which low health does not survive.
+        if o.slow and o.rounds >= o.needed * margin then
+            return "fight", SLOW_FIGHT
+        end
+        return "run", "low health"
+    end
     -- One it can outrun but not bring down with a margin is outrun: a
     -- fight that ends empty-handed costs the grabs it took on the way.
     if closing and o.sourcing and o.rounds < o.needed * margin then
@@ -558,6 +569,7 @@ local function choose(bot, s, k, enemies, player)
                 reach = entry and entry.reach,
                 engage = far,
                 outrun = entry and entry.outrun,
+                slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.BACK_SPEED,
             })
             if verdict == "run" then
                 s.avoid_until = bot:tick() + RUN_HOLD
@@ -588,7 +600,7 @@ local function choose(bot, s, k, enemies, player)
                         and (not best or enemy.distance < best.distance)) then
                     best = enemy
                     best.why = why
-                    best.must = why == MUST_FIGHT
+                    best.must = why == MUST_FIGHT or why == SLOW_FIGHT
                 end
             end
         end

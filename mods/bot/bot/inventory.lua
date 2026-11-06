@@ -150,7 +150,11 @@ BotInventory.SOFT_HEALS = 1
 -- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
 -- the ammunition a held gun lacks) has no slot, the softer keeps that may
 -- go in, at most `needed` of them: first heal stacks past SOFT_HEALS (the
--- last in slot order), then a key no remembered locked door needs.
+-- last in slot order), then a key no remembered locked door needs, then a
+-- spare hand weapon (ctx.spare: held, not equipped, and no pending <fight>
+-- prefers it), then, only to swap for a boxed key or <use> item
+-- (ctx.swap), a held firearm other than the equipped one and the loadout,
+-- fewest rounds first (ctx.spare_guns: {[id] = rounds}).
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
     if not ctx.full or (needed or 0) == 0 then
@@ -177,6 +181,34 @@ function BotInventory.soft_deposits(items, ctx, needed)
             and not (ctx.keys and ctx.keys[row.item]) then
             out[#out + 1] = row
         end
+    end
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and ctx.spare and ctx.spare[row.item] then
+            out[#out + 1] = row
+        end
+    end
+    local guns = {}
+    for _, row in ipairs(ctx.swap and items or {}) do
+        local rounds = row.item ~= 0 and ctx.spare_guns and ctx.spare_guns[row.item]
+        if rounds and not (ctx.loadout and ctx.loadout[row.item])
+            and not (ctx.uses and ctx.uses[row.item]) then
+            guns[#guns + 1] = { row = row, rounds = rounds }
+        end
+    end
+    table.sort(guns, function(a, b)
+        if a.rounds ~= b.rounds then
+            return a.rounds < b.rounds
+        end
+        return a.row.slot < b.row.slot
+    end)
+    for _, gun in ipairs(guns) do
+        if #out >= needed then
+            return out
+        end
+        out[#out + 1] = gun.row
     end
     return out
 end
@@ -408,6 +440,31 @@ function BotInventory.context(bot)
             end
         end
     end
+    -- A hand weapon no pending <fight> prefers is spare: the last soft keep
+    -- to go in (the knife, once 30C's web is cut).
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        if row.melee and id ~= ctx.equipped and bot:has_item(id) then
+            ctx.spare = ctx.spare or {}
+            ctx.spare[id] = true
+        end
+    end
+    -- Held firearms other than the equipped one, by rounds (the clip plus
+    -- the ammunition held): the very last soft keeps, fewest rounds first.
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        if not row.melee and id ~= ctx.equipped and bot:has_item(id) then
+            local ammo = bot:ammo_for(id)
+            ctx.spare_guns = ctx.spare_guns or {}
+            ctx.spare_guns[id] = bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
+        end
+    end
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = knowledge and knowledge.enemies[fight.enemy]
+        local prefer = entry and entry.prefer
+        if ctx.spare and prefer and ctx.spare[prefer]
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            ctx.spare[prefer] = nil
+        end
+    end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
     local weapon = bot:weapon()
     if weapon.ammo then
@@ -491,6 +548,9 @@ function BotInventory.make_room(bot, ctx, items, skip)
             if why == "a <use> fact needs it" or why == "a locked door needs it"
                 or why == "ammunition for a held gun" then
                 needed = needed + 1
+                if why ~= "ammunition for a held gun" then
+                    ctx.swap = true
+                end
             end
         end
         deposits = BotInventory.soft_deposits(items, ctx, needed)
