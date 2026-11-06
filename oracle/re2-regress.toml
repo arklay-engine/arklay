@@ -710,7 +710,7 @@ input = "route_100_200.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
 frames = [0, 7399]
 frame_max_mean = 0.8
-# the doors' own ticks, the door's second sound a tick early on five doors and room 118's stair steps (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks and room 118's stair steps (oracle/re2.md, docs/re2-deviations.md)
 ignore = [
     [790, "rng"],
     [790, "rseed"],
@@ -718,8 +718,6 @@ ignore = [
     [3052, "rseed"],
     [3843, "rng"],
     [3843, "rseed"],
-    [3959, "snd"],
-    [3960, "snd"],
     [4089, "snd"],
     [4102, "snd"],
     [4111, "snd"],
@@ -734,20 +732,12 @@ ignore = [
     [4432, "snd"],
     [4976, "rng"],
     [4976, "rseed"],
-    [5094, "snd"],
-    [5095, "snd"],
     [5326, "rng"],
     [5326, "rseed"],
-    [5445, "snd"],
-    [5446, "snd"],
     [5643, "rng"],
     [5643, "rseed"],
-    [5767, "snd"],
-    [5768, "snd"],
     [6068, "rng"],
     [6068, "rseed"],
-    [6190, "snd"],
-    [6191, "snd"],
     [6585, "rng"],
     [6585, "rseed"],
 ]
