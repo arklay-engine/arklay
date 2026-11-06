@@ -1,0 +1,9 @@
+# room 102: action at the handgun ammo, move to No, confirm, then close
+364 action
+368
+600 right
+604
+620 action
+624
+800 action
+804

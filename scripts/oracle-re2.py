@@ -417,6 +417,10 @@ EQUIPPED = 0x691F68  # three bytes, the last the weapon
 PL_WEAPON = 0x10E
 DOOR_RECORD = 0x9886F8 + 0x54 * 4  # `em_die_table[0x54]`: `Sce_Door`'s record
 GAME_STATE = 0x991F80
+ITEM_SLOTS = 0x98E9A4  # how many of `ITEM_WORK`'s first ten slots the player has
+STATUS_WORK = 0x68A204  # the status screen's work: its routines at +8 and +9
+ITEM_GET_ROUTINE = 0x691F61  # the get-item window's routine and sub-routine
+MESSAGE_STATE = 0x98504C  # the message's state: the top bit while it shows, bit 0 a question's "no"
 SCRATCH = 0x99EF00  # the unused end of the last page of `.data`
 
 
@@ -467,6 +471,13 @@ def zombie_trace(game: Game) -> str:
             f"{game.i16(pointer + ENTITY_LIFE)},{speed[0]},{speed[1]},{speed[2]}"
         )
     return "zm=" + (";".join(rows) or "-")
+
+
+def inventory_trace(game: Game) -> str:
+    """`Item_work`'s eleven slots, `id:count` (the tenth is the lighter's or the lockpick's), then the player's slot count."""
+    work = game.read(ITEM_WORK, 11 * 4)
+    slots = ",".join(f"{work[n * 4]:x}:{work[n * 4 + 1]}" for n in range(11))
+    return f"inv={slots}/{game.u8(ITEM_SLOTS)}"
 
 
 def trace_line(game: Game, tick: int, pad: int) -> str:
@@ -530,6 +541,12 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(neck_position(game))
     fields.append(music_trace(game))
     fields.append(f"xavol={game.u32(XA_VOLUME)}")
+    fields.append(inventory_trace(game))
+    status = game.u32(STATUS_WORK)
+    fields.append(
+        f"gi={game.u8(GAME_STATE)},{game.u8(status + 8)},{game.u8(status + 9)},"
+        f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x}"
+    )
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

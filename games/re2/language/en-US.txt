@@ -1,12 +1,13 @@
 # RE2's item names and the messages its executable draws itself. The converter
 # adds the interface strings shared with RE1 and each room's own text.
 
-MESSAGE_00 = "You picked up {string 0}."
+MESSAGE_00 = "Will you take the\n{string 0}?{branch 0 1 0}"
 MESSAGE_01 = "It's locked."
 MESSAGE_02 = "It's locked from the other side."
 MESSAGE_03 = "You unlocked it."
 MESSAGE_04 = "You used {string 0}."
-MESSAGE_05 = "You can't carry any more."
+MESSAGE_05 = "You can't carry any more items."
+MESSAGE_06 = "You've taken the {string 0}."
 
 UI_SAVE_CHARACTER_0_NAME = "Leon"
 UI_SAVE_CHARACTER_1_NAME = "Claire"

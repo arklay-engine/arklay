@@ -1,0 +1,167 @@
+# item_mash_102.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Items")
+20 action
+24
+28 action
+30
+32 action
+34
+36 action
+38
+40 action
+42
+44 action
+46
+48 action
+50
+52 action
+54
+56 action
+58
+60 action
+62
+64 action
+66
+68 action
+70
+72 action
+74
+76 action
+78
+80 action
+82
+84 action
+86
+88 action
+90
+92 action
+94
+96 action
+98
+100 action
+102
+104 action
+106
+108 action
+110
+112 action
+114
+116 action
+118
+120 action
+122
+124 action
+126
+128 action
+130
+132 action
+134
+136 action
+138
+140 action
+142
+144 action
+146
+148 action
+150
+152 action
+154
+156 action
+158
+160 action
+162
+164 action
+166
+168 action
+170
+172 action
+174
+176 action
+178
+180 action
+182
+184 action
+186
+188 action
+190
+192 action
+194
+196 action
+198
+200 action
+202
+204 action
+206
+208 action
+210
+212 action
+214
+216 action
+218
+220 action
+222
+224 action
+226
+228 action
+230
+232 action
+234
+236 action
+238
+240 action
+242
+244 action
+246
+248 action
+250
+252 action
+254
+256 action
+258
+260 action
+262
+264 action
+266
+268 action
+270
+272 action
+274
+276 action
+278
+280 action
+282
+284 action
+286
+288 action
+290
+292 action
+294
+296 action
+298
+300 action
+302
+304 action
+306
+308 action
+310
+312 action
+314
+316 action
+318
+320 action
+322
+324 action
+326
+328 action
+330
+332 action
+334
+336 action
+338
+340 action
+342
+344 action
+346
+348 action
+350
+352 action
+354

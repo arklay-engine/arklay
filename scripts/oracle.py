@@ -75,6 +75,8 @@ class Tick:
     xa_volume: str | None = None
     # The `snd` field: each sound effect started this tick.
     sound: str | None = None
+    # RE2's `inv` field: the inventory's slots and how many the player has.
+    inventory: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -83,7 +85,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv"}
 
 
 def normalize_room(stage: str, room: str) -> str:
@@ -153,6 +155,7 @@ def parse_trace(path: str) -> list[Tick]:
                     neck_position=fields.get("pneck"),
                     xa_volume=fields.get("xavol"),
                     sound=fields.get("snd"),
+                    inventory=fields.get("inv"),
                 )
             )
     return ticks
@@ -184,6 +187,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("xavol", tick.xa_volume))
     if tick.sound is not None:
         items.append(("snd", tick.sound))
+    if tick.inventory is not None:
+        items.append(("inv", tick.inventory))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):

@@ -465,6 +465,16 @@ mod imp {
                 },
             );
 
+            // `set_personal_item(id[, quantity])`: RE2's eleventh slot, the
+            // lighter's or the lockpick's (id 0 empties it).
+            methods.add_method_mut(
+                "set_personal_item",
+                |_lua, game, (id, quantity): (u8, Option<u8>)| {
+                    game.re2.personal_item = [id, if id == 0 { 0 } else { quantity.unwrap_or(1) }];
+                    Ok(())
+                },
+            );
+
             // `set_partner_slot(slot, id[, quantity])`: replace one of
             // Rebecca's six slots (id 0 empties it).
             methods.add_method_mut(

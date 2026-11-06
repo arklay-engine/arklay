@@ -69,6 +69,9 @@ pub struct Re2State {
     pub vm: Option<Box<super::vm::Vm>>,
     /// Scenario B (`FG_STATUS_SCENARIO`).
     pub scenario_b: bool,
+    /// `Item_work`'s eleventh slot (`0x98ED5C`): the lighter or the lockpick,
+    /// `[id, count]`, which the eight slots and their count don't see.
+    pub personal_item: [u8; 2],
     /// The room music table (`bgm_tbl`).
     pub bgm: crate::bgm2::BgmTable,
     /// The main music playing.
@@ -280,7 +283,9 @@ impl PartialEq for Characters {
 impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 5;
+const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
+/// A save from before the personal item's two bytes.
+const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN - 2;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -327,9 +332,55 @@ pub const ITEM_BANK: u8 = 8;
 /// The ink ribbon's item id.
 pub const ITEM_INK_RIBBON: u8 = 0x1E;
 
-/// Whether picked-up `item` joins a stack: the ammunition and ink ribbons.
+/// Whether picked-up `item` joins a stack: the get-item window's check
+/// (`0x4FD5C0`) merges the ammunition, the ink ribbon and the small key.
 pub fn item_stacks(item: u8) -> bool {
-    (0x14..=ITEM_INK_RIBBON).contains(&item)
+    (0x14..=0x1F).contains(&item)
+}
+
+/// The most of `item` one slot holds: byte 0 of the executable's item table
+/// (`0x53DE28`, eight bytes an id). A weapon's is its magazine.
+pub fn item_max(item: u8) -> u8 {
+    const MAX: [u8; 0x20] = [
+        0, 1, 18, 13, 18, 8, 8, 5, 7, 250, 250, 250, 18, 6, 100, 100, // 0x00
+        100, 4, 100, 15, 250, 250, 250, 100, 250, 250, 250, 100, 100, 240, 250, 250, // 0x10
+    ];
+    // Past 0x1F every id holds one, but for the two the table gives more.
+    MAX.get(usize::from(item)).copied().unwrap_or(match item {
+        0x65 => 5,
+        0x67 => 6,
+        _ => 1,
+    })
+}
+
+/// The get-item window's slot for `amount` of `item` (`0x4FD5C0`): the first
+/// stack of the same id with room for all of it, else a new slot, else
+/// `None` (the inventory is full). The pick-up never splits.
+pub fn item_get_slot(
+    inventory: &[crate::game::InventoryItem],
+    capacity: usize,
+    item: u8,
+    amount: u8,
+) -> Option<ItemGetSlot> {
+    if item_stacks(item) {
+        let room = item_max(item).saturating_sub(amount);
+        if let Some(index) = inventory
+            .iter()
+            .position(|stack| stack.id == item && stack.quantity <= room)
+        {
+            return Some(ItemGetSlot::Merge(index));
+        }
+    }
+    (inventory.len() < capacity).then_some(ItemGetSlot::New)
+}
+
+/// Where [`item_get_slot`] puts a pick-up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemGetSlot {
+    /// Onto the stack in this slot.
+    Merge(usize),
+    /// Into the first free slot (`0x502820`).
+    New,
 }
 
 /// `Sce_at`'s door lock key values.
@@ -338,12 +389,15 @@ pub const KEY_LOCKED: u8 = 0xFF;
 
 /// The messages the executable draws itself; RE2's own are not read yet, so
 /// the pack's language file spells them (`MESSAGE_<nn>`).
-pub const MESSAGE_PICKED_UP: u8 = 0;
+/// The get-item window's question, "Will you take the item?" with yes/no.
+pub const MESSAGE_TAKE: u8 = 0;
 pub const MESSAGE_LOCKED: u8 = 1;
 pub const MESSAGE_LOCKED_OTHER_SIDE: u8 = 2;
 pub const MESSAGE_UNLOCKED: u8 = 3;
 pub const MESSAGE_USED_KEY: u8 = 4;
 pub const MESSAGE_FULL: u8 = 5;
+/// The get-item window's "You've taken the item."
+pub const MESSAGE_TAKEN: u8 = 6;
 
 /// The script variables the engine owns (`scd_var_*`).
 pub const VAR_FORWARD_AREA: usize = 0;
@@ -401,6 +455,7 @@ impl Default for Re2State {
             player: crate::player2::Work::default(),
             vm: None,
             scenario_b: false,
+            personal_item: [0; 2],
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
@@ -439,6 +494,7 @@ impl Re2State {
         }
         out.extend_from_slice(&self.random.to_le_bytes());
         out.push(u8::from(self.scenario_b));
+        out.extend_from_slice(&self.personal_item);
         out
     }
 
@@ -453,7 +509,7 @@ impl Re2State {
 
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
-        if bytes.len() != SAVE_LEN {
+        if bytes.len() != SAVE_LEN && bytes.len() != SAVE_LEN_NO_PERSONAL {
             return None;
         }
         let mut words = bytes
@@ -480,6 +536,10 @@ impl Re2State {
         }
         self.random = u32::from_le_bytes(rest[..4].try_into().ok()?);
         self.scenario_b = rest[4] != 0;
+        self.personal_item = [
+            rest.get(5).copied().unwrap_or(0),
+            rest.get(6).copied().unwrap_or(0),
+        ];
         Some(())
     }
 
@@ -2615,6 +2675,7 @@ mod tests {
         let action = game.room_actions[8].unwrap();
         assert_eq!(action.kind, RoomActionKind::Item);
         game.fire_re2_area(action);
+        take_through_the_window(&mut game, false);
         assert_eq!(game.item_count(0x14), 15);
         assert!(game.re2.flag(ITEM_BANK, 3));
         assert_eq!(game.room_actions[8].unwrap().handler, 0);
@@ -2622,6 +2683,153 @@ mod tests {
         let mut host = GameHost { game: &mut game };
         host.exec(0, item, &ops);
         assert_eq!(game.room_actions[8].unwrap().handler, 0);
+    }
+
+    /// Run the get-item window to its close, answering its question as the
+    /// oracle's room 102 runs do: the window's tick, then the message's.
+    /// Returns the tick numbers (from the pick-up's) the take and the close
+    /// landed on.
+    fn take_through_the_window(game: &mut GameState, refuse: bool) -> (Option<u32>, u32) {
+        use crate::game::Re2ItemGetPhase;
+        let mut taken = None;
+        for tick in 1..400 {
+            let before = game.inventory.clone();
+            game.tick_re2_item_get();
+            if game.inventory != before {
+                taken = Some(tick);
+            }
+            let Some(get) = game.re2_item_get else {
+                return (taken, tick);
+            };
+            // The window's message, answered (or closed) the tick it shows.
+            if game.message.active
+                && matches!(get.phase, Re2ItemGetPhase::Ask | Re2ItemGetPhase::Shown)
+            {
+                if get.phase == Re2ItemGetPhase::Ask && refuse {
+                    game.message.set_menu_choice_id(1);
+                } else {
+                    game.message.set_menu_choice_id(0);
+                }
+                game.message.active = false;
+            }
+        }
+        panic!("the window never closed");
+    }
+
+    #[test]
+    fn the_get_item_window_keeps_the_originals_ticks() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.inventory = vec![crate::game::InventoryItem {
+            id: 2,
+            quantity: 18,
+        }];
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        assert_eq!(
+            game.inventory.len(),
+            1,
+            "the window takes the item, not the area"
+        );
+        // The question shows on the seventh tick and is answered on it; the
+        // take is 20 ticks after the answer, the close ten after the tick
+        // that sees the "taken" message gone, and the player restarts its
+        // motion.
+        let (taken, closed) = take_through_the_window(&mut game, false);
+        assert_eq!(taken, Some(7 + 20));
+        assert_eq!(closed, 7 + 20 + 1 + 10);
+        assert_eq!(game.item_count(0x14), 30);
+        assert_eq!(game.re2.player.routine[2], 0);
+        assert_eq!(game.re2.player.move_cnt, 1);
+        assert!(game.re2.flag(ITEM_BANK, 154));
+    }
+
+    #[test]
+    fn a_refused_item_stays_and_the_window_counts_out() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        let (taken, closed) = take_through_the_window(&mut game, true);
+        assert_eq!(taken, None);
+        assert_eq!(closed, 7 + 16 + 10);
+        assert!(!game.re2.flag(ITEM_BANK, 154));
+        assert_eq!(game.room_actions[8].unwrap().handler, 1);
+    }
+
+    #[test]
+    fn a_pick_up_merges_only_into_a_stack_with_room_for_all_of_it() {
+        use crate::game::InventoryItem;
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        // The oracle's room 102 with 230 and 220 rounds: the 30 skip the
+        // first stack, which can't take them all, and fill the second to 250.
+        let inventory = [
+            stack(2, 18),
+            stack(1, 1),
+            stack(0x14, 230),
+            stack(0x14, 220),
+        ];
+        assert_eq!(
+            item_get_slot(&inventory, 8, 0x14, 30),
+            Some(ItemGetSlot::Merge(3))
+        );
+        let full: Vec<_> = (0..8).map(|_| stack(0x14, 240)).collect();
+        assert_eq!(item_get_slot(&full, 8, 0x14, 30), None);
+        assert_eq!(
+            item_get_slot(&full, 8, 0x14, 10),
+            Some(ItemGetSlot::Merge(0))
+        );
+        // An item that doesn't stack needs a free slot.
+        assert_eq!(item_get_slot(&inventory, 4, 0x1F, 1), None);
+        assert_eq!(
+            item_get_slot(&inventory, 8, 0x59, 1),
+            Some(ItemGetSlot::New)
+        );
+        assert_eq!(item_max(0x14), 250);
+        assert_eq!(item_max(0x1D), 240);
+        assert_eq!(item_max(0x17), 100);
+        assert_eq!(item_max(0x02), 18);
+        assert_eq!(item_max(0x59), 1);
+    }
+
+    #[test]
+    fn a_full_inventory_shows_its_message_and_leaves_the_item() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.inventory = (0..8)
+            .map(|_| crate::game::InventoryItem { id: 1, quantity: 1 })
+            .collect();
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        let (taken, closed) = take_through_the_window(&mut game, false);
+        assert_eq!(taken, None);
+        assert_eq!(closed, 7 + 1 + 10);
+        assert_eq!(game.item_count(0x14), 0);
+    }
+
+    #[test]
+    fn the_personal_item_survives_a_save() {
+        let state = Re2State {
+            personal_item: [0x2F, 1],
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.personal_item, [0x2F, 1]);
+        // A save from before the slot loads with it empty.
+        let mut old = Re2State::default();
+        old.load_save_bytes(&bytes[..bytes.len() - 2]).unwrap();
+        assert_eq!(old.personal_item, [0, 0]);
     }
 
     #[test]
