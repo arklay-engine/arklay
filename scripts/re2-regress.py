@@ -247,9 +247,11 @@ def run_one(run: dict, ctx: dict) -> dict:
     want_frames = bool(run.get("frames")) and (ref_dir / "frames").is_dir()
     ark_trace = out / f"{name}.ark.trace"
     frames_dir = out / f"{name}.frames"
+    # `room = "new"` starts arklay's new game, as the original's record does, with no `--room`.
+    start = [] if run["room"] == "new" else ["--room", str(run["room"]), "--player", str(run.get("player", 0))]
     command = [
-        str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", "--room", str(run["room"]),
-        "--player", str(run.get("player", 0)), "--character", str(run.get("character", 0)),
+        str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
+        "--character", str(run.get("character", 0)),
         "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
         "--setup-script", str(setup), "--input", str(input_path),
     ]
