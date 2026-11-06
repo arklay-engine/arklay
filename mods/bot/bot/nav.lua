@@ -144,6 +144,18 @@ function BotNav.approach_points(bot, zone)
             { zone.x + zone.width // 4, cz }, { zone.x + zone.width - zone.width // 4, cz },
             { cx, zone.z + zone.depth // 4 }, { cx, zone.z + zone.depth - zone.depth // 4 },
         }
+        -- Just inside each edge too: a long zone may reach into floor
+        -- that is walled off, and only its near end is walkable (30B's
+        -- corridor end runs on under the boulder).
+        local i = C.APPROACH
+        if zone.width > 4 * i then
+            candidates[#candidates + 1] = { zone.x + i, cz }
+            candidates[#candidates + 1] = { zone.x + zone.width - i, cz }
+        end
+        if zone.depth > 4 * i then
+            candidates[#candidates + 1] = { cx, zone.z + i }
+            candidates[#candidates + 1] = { cx, zone.z + zone.depth - i }
+        end
     end
     for _, d in ipairs(offsets) do
         for _, a in ipairs(along(zone.depth)) do

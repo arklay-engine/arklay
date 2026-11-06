@@ -148,8 +148,8 @@ pub struct Interact {
     /// the bookcase.
     pub after: Option<(u8, u8)>,
     /// `<interact reveals>`: the step is also done once this AOT slot is a
-    /// live item zone (40C's fireplace: pressing it after Plant 42 dies
-    /// turns slot 3 into the helmet key, and the bot then takes the key).
+    /// live item or event zone (40C's fireplace turns slot 3 into the helmet
+    /// key; 30B's corridor end arms slot 5, the boulder's trigger).
     pub reveals: Option<u8>,
     pub label: Option<String>,
 }
@@ -1801,6 +1801,7 @@ mod tests {
                 ("301", 4, 0x1D),
                 ("301", 4, 0x1D),
                 ("302", 4, 0x27),
+                ("307", 4, 0x1E),
                 ("40A", 5, 0x3E),
             ]
         );
