@@ -1,0 +1,35 @@
+# room 102: EQUIP the shotgun from slot 2, raise it, fire at each tilt until it's empty, reload from the shells, fire again, release a shot early, lower (oracle/re2.md, "Weapons")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 confirm
+444
+480 start
+484
+540 aim
+580 aim fire
+584 aim
+640 aim up
+670 aim up fire
+674 aim up
+740 aim down
+770 aim down fire
+774 aim down
+840 aim
+870 aim fire
+874 aim
+940 aim fire
+944 aim
+1010 aim fire
+1014 aim
+1100 aim fire
+1104 aim
+1160 aim fire
+1166
+1240 aim
+1280 aim fire
+1284 aim
+1340

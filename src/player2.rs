@@ -153,6 +153,28 @@ const AIM_FOOT_CHAIN: [usize; 5] = [0, 1, 5, 6, 7];
 /// `Foot_set_pl`'s other leg, for the shotgun's stance.
 const AIM_OTHER_FOOT_CHAIN: [usize; 5] = [0, 1, 2, 3, 4];
 const AIM_LOWER_STEP: u16 = 0x100;
+/// The knife's id, and `pl_mv05_w0_t2`'s parts: the root, then the arm down
+/// to the hand that holds it.
+const KNIFE: u8 = 1;
+const KNIFE_CHAIN: [usize; 4] = [0, 9, 10, 11];
+/// The frame past which a slash with the aim let go stops.
+const KNIFE_RELEASE_FRAME: u8 = 0x14;
+/// The frames between which the blade finds a wall, and the bounce's clip,
+/// blend and step (`pl_mv05_w0_t6`).
+const KNIFE_WALL_FRAMES: std::ops::RangeInclusive<u8> = 7..=12;
+const KNIFE_BOUNCE_CLIP: u8 = 0x10;
+const KNIFE_BOUNCE_BLEND: u8 = 3;
+const KNIFE_BOUNCE_STEP: u16 = 0x400;
+/// `Sca_ck_hit`'s radius and mask for the blade's tip.
+const KNIFE_WALL_RADIUS: i32 = 10;
+const KNIFE_WALL_MASK: u16 = 0x2080;
+/// The weapon bank's slot the bounce plays (`Snd_se_on(0x1000001)`).
+const SOUND_KNIFE_WALL: u16 = 0;
+/// `Em_ck`'s reach for the knife's raise, and in the rooms with a wider one
+/// (`Stage_no` 3 room 0xA and `Stage_no` 6 room 4, by the room's digits).
+const KNIFE_REACH: u32 = 5000;
+const KNIFE_WIDE_REACH: u32 = 30000;
+const KNIFE_WIDE_ROOMS: [(u8, u8); 2] = [(4, 0xA), (7, 4)];
 /// The weapon bank's slot of an empty gun's click (`Snd_se_on(0x1010001)`).
 const SOUND_EMPTY: u16 = 1;
 /// The frame flag `pl_mv05_w1_t4` plays a sound of the weapon bank on; the
@@ -947,10 +969,16 @@ pub struct Weapon {
 }
 
 impl Weapon {
-    /// Whether [`Mover::pl_mv_aim`] handles it: the starting handguns, the
-    /// magnums and the shotguns.
+    /// Whether [`Mover::pl_mv_aim`] handles it: the knife, the starting
+    /// handguns, the magnums and the shotguns.
     fn aims(&self) -> bool {
-        matches!(self.id, 2 | 3 | 5..=8)
+        matches!(self.id, KNIFE | 2 | 3 | 5..=8)
+    }
+
+    /// `pl_mv05_tbl`'s `pl_mv05_w0` (`0x4d4b20`): the knife shares the
+    /// handguns' routines but the attack.
+    fn is_knife(&self) -> bool {
+        self.id == KNIFE
     }
 
     /// `DAT_0053A305`'s row of its three, each frame past which something is
@@ -958,6 +986,7 @@ impl Weapon {
     /// keep a bit that chooses `Foot_set_pl`'s leg.
     fn frames(&self) -> [u8; 3] {
         match self.id {
+            KNIFE => [0x85, 0x85, 0x32],
             5 => [0x85, 0x87, 25],
             6 => [0x85, 0x87, 35],
             7 => [7, 10, 28],
@@ -1914,6 +1943,7 @@ impl Mover<'_, '_> {
         match self.work.routine[2] {
             0 => self.aim_raise(key, &drawn),
             1 => self.aim_hold(key),
+            2 if self.tick.weapon.is_knife() => self.aim_slash(key),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -1922,6 +1952,7 @@ impl Mover<'_, '_> {
                 self.work.routine[2] = 1;
                 self.work.routine[3] = 0;
             }
+            6 if self.tick.weapon.is_knife() => self.knife_bounce(),
             _ => {}
         }
         if self.work.spd[0] == 0
@@ -2434,7 +2465,7 @@ impl Mover<'_, '_> {
             0 => {
                 self.aim_clip(AIM_RAISE_CLIP);
                 self.set_tilt(TILT_LEVEL);
-                self.em_ck(0);
+                self.em_ck(self.raise_reach());
                 self.work.aimed_again = false;
                 self.work.neck.flags |= 0x12;
                 self.work.spd[0] = 0;
@@ -2513,7 +2544,12 @@ impl Mover<'_, '_> {
                 _ => 0,
             };
             self.aim_clip(clip);
-            self.work.noise |= 0x18;
+            // The knife makes no noise aiming but the stance's own.
+            self.work.noise |= if self.tick.weapon.is_knife() {
+                0x08
+            } else {
+                0x18
+            };
         }
         if key & KEY_AIM == 0 {
             self.aim_stage(3);
@@ -2624,6 +2660,92 @@ impl Mover<'_, '_> {
         }
         if kicks {
             self.add_speed_xz();
+        }
+    }
+
+    /// `Em_ck`'s reach as the raise starts: none for the guns, and the knife's.
+    fn raise_reach(&self) -> u32 {
+        if !self.tick.weapon.is_knife() {
+            return 0;
+        }
+        let room = (self.tick.room.stage, self.tick.room.room);
+        if KNIFE_WIDE_ROOMS.contains(&room) {
+            KNIFE_WIDE_REACH
+        } else {
+            KNIFE_REACH
+        }
+    }
+
+    /// `pl_mv05_w0_t6` (`0x4486c0`): the blade's bounce off a wall, until its
+    /// clip ends.
+    fn knife_bounce(&mut self) {
+        if self.joint_move_late(KNIFE_BOUNCE_STEP) {
+            self.aim_stage(1);
+        }
+    }
+
+    /// `pl_mv05_w0_t2` (`0x4d4b40`): the knife's slash. It doesn't turn, spend
+    /// anything or make a noise. From the seventh frame to the twelfth the
+    /// blade's tip, ahead of the hand by what's left of the clip's 25 frames,
+    /// finds a wall through `Sca_ck_hit` and bounces off it. Its search for a
+    /// body (`0x4d7e30`), the hit's sound and blood, the splashes in water and
+    /// id 0xD's sparks aren't ported.
+    fn aim_slash(&mut self, key: u16) {
+        if self.work.routine[3] == 0 {
+            let clip = match self.work.status_flg >> 13 {
+                1 => AIM_FIRE_CLIPS[0],
+                2 => AIM_FIRE_CLIPS[1],
+                4 => AIM_FIRE_CLIPS[2],
+                _ => 0,
+            };
+            self.aim_clip(clip);
+            // `Be_flg`'s top bits take the tilt.
+            self.work.be_flg = self.work.be_flg & 0x1FFF_FFFF
+                | (u32::from(self.work.status_flg) << 16) & 0xE000_0000;
+        }
+        let held = key & KEY_AIM != 0;
+        if !held && self.work.move_cnt > self.tick.weapon.fire_cancel_frame() {
+            self.aim_stage(1);
+            return;
+        }
+        if self.joint_move() {
+            self.aim_stage(1);
+        }
+        if !held && self.work.move_cnt > KNIFE_RELEASE_FRAME {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+            return;
+        }
+        let frame = self.work.move_cnt;
+        if let (Some(hand), Some(sca)) =
+            (self.chain_matrix(&KNIFE_CHAIN), self.tick.room.sca.as_ref())
+        {
+            // `ApplyMatrixSV`: the reach along the body's facing.
+            let reach = (25 - i32::from(frame)) * 15;
+            let rotation = self.work.body_rotation(self.player.angle);
+            let ahead =
+                |axis: usize| (i32::from(rotation[axis][2]) * i32::from(reach as i16)) >> 12;
+            let tip = [
+                hand.t[0] + i32::from(ahead(0) as i16),
+                hand.t[1],
+                hand.t[2] + i32::from(ahead(2) as i16),
+            ];
+            let ground = crate::sca::ground_at(sca, tip, KNIFE_WALL_RADIUS, KNIFE_WALL_MASK);
+            if KNIFE_WALL_FRAMES.contains(&frame) && (ground.blocked || ground.under_record) {
+                self.work.routine[2] = 6;
+                self.work.routine[3] = 0;
+                self.work.move_no = KNIFE_BOUNCE_CLIP;
+                self.work.move_cnt = 0;
+                self.work.hokan = KNIFE_BOUNCE_BLEND;
+                self.joint_move_late(KNIFE_BOUNCE_STEP);
+                self.player.queue_sound(SOUND_KNIFE_WALL);
+                return;
+            }
+        }
+        // `pl_w01_t2_move` (`0x4d5930`): the frame's sound.
+        if self.work.now_seq & FRAME_SOUND != 0 {
+            self.player
+                .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
         }
     }
 
@@ -4631,8 +4753,15 @@ mod weapon_tests {
 
     #[test]
     fn each_gun_has_its_own_timing_and_leg() {
-        assert!([2, 3, 5, 6, 7, 8].iter().all(|&id| weapon(id).aims()));
-        assert!(![0, 1, 4, 9, 13].iter().any(|&id| weapon(id).aims()));
+        assert!(
+            [KNIFE, 2, 3, 5, 6, 7, 8]
+                .iter()
+                .all(|&id| weapon(id).aims())
+        );
+        assert!(![0, 4, 9, 13].iter().any(|&id| weapon(id).aims()));
+        // The knife's row: a slash let go of past frame 0x32 stops at once.
+        assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
+        assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
         assert_eq!(weapon(2).fire_cancel_frame(), 8);
         assert_eq!(weapon(7).fire_cancel_frame(), 28);
         assert_eq!(weapon(8).tilt_down_frame(), 8);

@@ -1,0 +1,10 @@
+# weapon_empty.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Weapons")
+20 aim
+56 aim fire
+60 aim
+116 aim fire
+120 aim
+156 aim fire
+160 aim
+196
+256

@@ -1,0 +1,29 @@
+# weapon_knife.txt 344 ticks earlier, for arklay's --room 102 (oracle/re2.md, "Weapons")
+20 start
+24
+56 right
+60
+76 confirm
+80
+96 confirm
+100
+136 start
+140
+176 up
+216
+256 aim
+296 aim fire
+300 aim
+376 aim up
+406 aim up fire
+410 aim up
+476 aim down
+506 aim down fire
+510 aim down
+576 aim
+606 aim fire
+618
+676 aim
+706 aim fire
+806 aim
+836

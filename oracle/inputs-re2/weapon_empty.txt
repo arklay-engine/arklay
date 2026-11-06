@@ -1,0 +1,10 @@
+# room 102: the handgun's last round, then fire with nothing to reload: the click (oracle/re2.md, "Weapons")
+364 aim
+400 aim fire
+404 aim
+460 aim fire
+464 aim
+500 aim fire
+504 aim
+540
+600
