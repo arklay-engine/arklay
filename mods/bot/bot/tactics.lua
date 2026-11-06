@@ -144,6 +144,10 @@ end
 -- for the target (a margin at low risk) and for the crowd, and then what
 -- cannot be outrun and anything in a room the bot must cross again;
 -- otherwise it is only in the way: run past it.
+-- The verdict for a monster closing in that the bot cannot outrun: the
+-- fight goes on at any health, since running only takes the hit anyway.
+local MUST_FIGHT = "closing in, cannot outrun it"
+
 function BotTactics.decide(o)
     if not o.policy then
         return "run", "not in the knowledge file"
@@ -163,7 +167,7 @@ function BotTactics.decide(o)
     local closing = o.reach and o.rounds > 0
         and (o.distance <= 2 * o.reach or o.distance <= (o.engage or 0))
     if closing and o.outrun ~= true then
-        return "fight", "closing in, cannot outrun it"
+        return "fight", MUST_FIGHT
     end
     if o.health <= o.max_health * (0.45 - 0.3 * o.risk) then
         return "run", "low health"
@@ -299,6 +303,14 @@ function BotTactics.pick_gun(guns, entry, health)
             plain = row
         end
     end
+    -- The knowledge's preferred weapon, held with the rounds for the kill.
+    local prefer = entry and entry.prefer
+    for _, row in ipairs(guns) do
+        local n = row.item == prefer and shots(row)
+        if n and n <= row.rounds then
+            return row
+        end
+    end
     local need = plain and shots(plain)
     if not need or need <= plain.rounds then
         return plain
@@ -386,6 +398,7 @@ local function reset(s)
     s.fired_tick = nil
     s.retreat_ticks = 0
     s.retreat_shots = nil
+    s.must = nil
 end
 
 local function stop(bot, s, reason, calm)
@@ -531,6 +544,7 @@ local function choose(bot, s, k, enemies, player)
                         and (not best or enemy.distance < best.distance)) then
                     best = enemy
                     best.why = why
+                    best.must = why == MUST_FIGHT
                 end
             end
         end
@@ -590,6 +604,7 @@ function BotTactics.step(bot, scene, player)
         s.active = true
         s.gun = gun
         s.target = target.slot
+        s.must = target.must
         s.last_health = target.health
         s.avoid_until = nil
         bot:log(string.format(
@@ -604,7 +619,8 @@ function BotTactics.step(bot, scene, player)
         stop(bot, s, "timeout", LOST_CALM)
         return false
     end
-    if player.health <= player.max_health * (0.45 - 0.3 * risk(bot)) then
+    -- A fight against what cannot be outrun is not given up for health.
+    if not s.must and player.health <= player.max_health * (0.45 - 0.3 * risk(bot)) then
         stop(bot, s, "low health", LOST_CALM)
         return false
     end

@@ -26,7 +26,8 @@
       crawl_reach = the same for a crawler; grabs = it holds the player;
       outrun = Jill's run (210 a tick) beats its chase; speed = its chase
       speed in units a tick; health = its largest
-      starting health. <keep> is the distance band to hold with one weapon
+      starting health; prefer (optional) = the weapon to fight it with
+      whenever it is held with the rounds for a kill. <keep> is the distance band to hold with one weapon
       (outside the reach, inside the hit range) and the health one hit takes:
       DEFAULT_FIRST_RUN's damage column (record weapon_adj + id * 10), plus
       what zombie_reaction takes off for Jill's handgun (3, or 7 on 0x02).
@@ -109,9 +110,11 @@
        the player lower; ledge jump and back step clear the bits. The swipe
        starts under 3000 (reach test 800); the pounce from 6400 holds the
        player. HEALTH max 111; handgun 14, shotgun 32 a hit. Run speed not
-       settled (0x28 chase, 0xF0 approach). -->
+       settled (0x28 chase, 0xF0 approach). It hits for 10 a swipe while a
+       handgun takes eight shots, so the shotgun (four) is preferred. -->
   <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
-         up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111">
+         up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111"
+         prefer="0x03">
     <keep weapon="0x02" min="3200" max="6000" damage="14"/>
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
   </enemy>
