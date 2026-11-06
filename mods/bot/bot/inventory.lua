@@ -507,15 +507,34 @@ function BotInventory.context(bot)
         -- with an empty handgun, twice. (A hand weapon waits for its
         -- fight's stage: the knife.)
         -- So does a fight whose `stage` attribute names this stage (303's
-        -- Tyrant, met from the lab's escape lift).
+        -- Tyrant, met from the lab's escape lift), and a firearm for a
+        -- fight not seen yet: 403's box left the launcher behind for 20C's
+        -- Yawn 2, met from the guardhouse before the bot had seen 20C, and
+        -- the handgun lost that fight four times.
         if pending and (fight.room:sub(1, 1) == here:sub(1, 1)
             or fight.stage == here:sub(1, 1)
-            or (not row.melee and bot:visited(fight.room))) then
+            or not row.melee) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
             local ammo = bot:ammo_for(prefer)
             if ammo then
                 ctx.loadout[ammo] = true
+            end
+            -- The same weapon loaded with other rounds (variant_of: the
+            -- launcher with flame rounds is 0x09), held or boxed, is that
+            -- weapon (the acid one went into 100's box as a spare gun and
+            -- the bot met 309's hunters without it), and so are the other
+            -- rounds held for it.
+            for id, gun in pairs(knowledge.weapons) do
+                if gun.variant_of == prefer then
+                    local other = bot:ammo_for(id)
+                    if bot:has_item(id) or box[id] then
+                        ctx.loadout[id] = true
+                    end
+                    if other and bot:item_count(other) > 0 then
+                        ctx.loadout[other] = true
+                    end
+                end
             end
         end
     end
@@ -791,7 +810,8 @@ BotInventory.MAKE_ROOM_HURT = 24
 function BotInventory.heal_for_room(bot, skip)
     local ctx = BotInventory.context(bot)
     local player = bot:player()
-    if not ctx.full or player.max_health - player.health < BotInventory.MAKE_ROOM_HURT then
+    local hurt = player.max_health - player.health
+    if not ctx.full or hurt <= 0 then
         return nil
     end
     local heals = {}
@@ -813,17 +833,22 @@ function BotInventory.heal_for_room(bot, skip)
         end
     end
     local here = bot:room().id
-    local wanted = false
+    local wanted, needed = false, false
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and goal.room == here and not (skip and skip(goal)) then
             local kind, merge = bot:item_kind(goal.item)
+            local book = goal.item == C.DOOM_BOOK_2 or goal.item == C.DOOM_BOOK_2 + 1
             if not (merge and bot:has_item(goal.item))
-                and (kind == "key" or ctx.uses[goal.item] or guns_ammo[goal.item]) then
+                and (kind == "key" or ctx.uses[goal.item] or book or guns_ammo[goal.item]) then
                 wanted = true
+                needed = needed or kind == "key" or ctx.uses[goal.item] or book
             end
         end
     end
-    if not wanted then
+    -- A key, a <use> item or a doom book takes a heal at any hurt: 306's
+    -- book lies in its zone only while the pushed box stands in the probe,
+    -- and the room puts the box back once the bot leaves.
+    if not wanted or (not needed and hurt < BotInventory.MAKE_ROOM_HURT) then
         return nil
     end
     -- The largest stack first, as BotSurvival.heal does.
@@ -845,6 +870,49 @@ function BotInventory.combine_now(bot, skip)
     return BotInventory.combine_pick(bot:menu().items or {}, ctx, function(a, b)
         return bot:combine_result(a, b)
     end)
+end
+
+-- An empty weapon whose own ammunition is not held, loaded with the
+-- rounds of another loading of it (knowledge variant_of: the grenade
+-- launcher's acid and flame rounds), the most held first. Loading other
+-- rounds turns it into that loading's item and loses the rounds it held,
+-- so only an empty one is loaded: the flame rounds rode along unused while
+-- hunters hit the bot with an empty launcher. Returns the combine pick
+-- ({slot, target, item, other}, 0-based menu slots) or nil.
+function BotInventory.load_now(bot)
+    local k = bot:knowledge()
+    local items = bot:menu().items or {}
+    for _, gun in ipairs(k and items or {}) do
+        local row = gun.kind == "weapon" and k.weapons[gun.item]
+        local own = row and not row.melee and bot:ammo_for(gun.item)
+        if own and gun.quantity == 0 and bot:item_count(own) == 0 then
+            local base = row.variant_of or gun.item
+            local best, best_count
+            for id, other in pairs(k.weapons) do
+                local ammo = id ~= gun.item and (id == base or other.variant_of == base)
+                    and bot:ammo_for(id)
+                local count = ammo and bot:item_count(ammo) or 0
+                if count > 0 and (not best_count or count > best_count
+                        or (count == best_count and ammo < best)) then
+                    best, best_count = ammo, count
+                end
+            end
+            for _, row_ammo in ipairs(best and items or {}) do
+                if row_ammo.item == best then
+                    for _, pair in ipairs({ { gun, row_ammo }, { row_ammo, gun } }) do
+                        local r = bot:combine_result(pair[1].slot, pair[2].slot)
+                        local loaded = r and (pair[1] == gun and r.cursor_quantity
+                            or r.target_quantity) or 0
+                        if r and r.result == "applied" and loaded > 0 then
+                            return { slot = pair[1].slot, target = pair[2].slot,
+                                item = pair[1].item, other = pair[2].item }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
 end
 
 -- ---- the box screen --------------------------------------------------------

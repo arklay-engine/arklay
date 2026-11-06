@@ -120,6 +120,15 @@ pub struct Enemy {
     /// where Brad drops the rocket launcher); it must have a `<keep>`
     /// (optional attribute).
     pub open: Option<u8>,
+    /// A torso or up shotgun hit inside the weapon's `headshot` distance
+    /// pops its head (zombie_reaction: the three zombies), so the bot walks
+    /// in for it (optional attribute).
+    pub head: bool,
+    /// Launcher rounds kept for this enemy's fight while it is undone: no
+    /// other fight spends them (303's Tyrant needs four before Brad drops
+    /// the rocket launcher, and its launcher damage is left `unknown`)
+    /// (optional attribute; needs `open`).
+    pub save: Option<i32>,
     pub keeps: Vec<Keep>,
 }
 
@@ -149,6 +158,10 @@ pub struct Weapon {
     /// is picked only for an enemy that `prefer`s it or when no other gun
     /// covers the kill.
     pub reserve: bool,
+    /// The weapon this one is another loading of (the grenade launcher
+    /// with acid or flame rounds is item 0x08 or 0x09, the explosive one
+    /// 0x07): a fight that prefers either takes the other.
+    pub variant_of: Option<u8>,
 }
 
 /// The poison a `<cure>` item clears: the engine's health-status bits.
@@ -352,8 +365,10 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             "speed",
             "health",
             "parts",
+            "head",
             "prefer",
             "open",
+            "save",
         ],
     )?;
     let policy = match attr_text(node, "policy")? {
@@ -418,6 +433,13 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     {
         bail!("{}: `open` weapon {weapon:#04x} has no <keep>", at(node));
     }
+    let save = match node.attribute("save") {
+        Some(_) => distance(node, "save")?,
+        None => None,
+    };
+    if save.is_some() && open.is_none() {
+        bail!("{}: `save` needs an `open` weapon", at(node));
+    }
     Ok(Enemy {
         id: attr(node, "id")?,
         name: name_attr(node)?,
@@ -438,8 +460,13 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             Some(_) => yes_no(node, "parts")? == Some(true),
             None => false,
         },
+        head: match node.attribute("head") {
+            Some(_) => yes_no(node, "head")? == Some(true),
+            None => false,
+        },
         prefer,
         open,
+        save,
         keeps,
     })
 }
@@ -484,6 +511,7 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             "melee",
             "staple",
             "reserve",
+            "variant_of",
         ],
     )?;
     check_leaf(node)?;
@@ -507,6 +535,10 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
         reserve: match node.attribute("reserve") {
             Some(_) => yes_no(node, "reserve")? == Some(true),
             None => false,
+        },
+        variant_of: match node.attribute("variant_of") {
+            Some(_) => Some(attr(node, "variant_of")?),
+            None => None,
         },
     })
 }
@@ -542,6 +574,8 @@ impl Knowledge {
             row.set("parts", enemy.parts)?;
             row.set("prefer", enemy.prefer)?;
             row.set("open", enemy.open)?;
+            row.set("head", enemy.head)?;
+            row.set("save", enemy.save)?;
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
                 let band = lua.create_table()?;
@@ -568,6 +602,7 @@ impl Knowledge {
             row.set("melee", weapon.melee)?;
             row.set("staple", weapon.staple)?;
             row.set("reserve", weapon.reserve)?;
+            row.set("variant_of", weapon.variant_of)?;
             weapons.set(weapon.id, row)?;
         }
         table.set("weapons", weapons)?;
@@ -687,6 +722,10 @@ mod tests {
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"yes\">"))
                 .unwrap();
         assert!(parts.enemies[0].parts);
+        assert!(!k.enemies[0].head);
+        let head = parse(&text.replace("health=\"unknown\">", "health=\"unknown\" head=\"yes\">"))
+            .unwrap();
+        assert!(head.enemies[0].head);
         assert!(!k.weapons[0].melee);
         let melee =
             parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" melee=\"yes\"")).unwrap();
@@ -701,6 +740,13 @@ mod tests {
             parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" reserve=\"yes\""))
                 .unwrap();
         assert!(reserve.weapons[0].reserve);
+        assert_eq!(k.weapons[0].variant_of, None);
+        let variant = parse(&text.replace(
+            "status_bit=\"yes\"",
+            "status_bit=\"yes\" variant_of=\"0x07\"",
+        ))
+        .unwrap();
+        assert_eq!(variant.weapons[0].variant_of, Some(0x07));
         assert!(
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"maybe\">"))
                 .is_err()
@@ -722,6 +768,17 @@ mod tests {
         assert!(
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" open=\"3\">")).is_err(),
             "an opening weapon needs a <keep>"
+        );
+        assert_eq!(open.enemies[0].save, None);
+        let save = parse(&text.replace(
+            "health=\"unknown\">",
+            "health=\"unknown\" open=\"2\" save=\"4\">",
+        ))
+        .unwrap();
+        assert_eq!(save.enemies[0].save, Some(4));
+        assert!(
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" save=\"4\">")).is_err(),
+            "rounds saved for a fight need its opening weapon"
         );
     }
 }

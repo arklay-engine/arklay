@@ -802,16 +802,26 @@ function BotNav.hold_fight(bot, job)
     -- launcher rounds in a run.
     local k = bot:knowledge()
     local entry = k and k.enemies[job.enemy]
+    -- A part with no aim bit (a vine drawn up out of reach) is passed over
+    -- while another part has one: the bot held a drawn-up vine with 10
+    -- health for 7000 ticks while the body hung there to be shot.
     local weakest = entry ~= nil and entry.parts == true
+    local function aimable(e)
+        return e.status_flags & (C.STATUS_LOW | C.STATUS_TORSO | C.STATUS_HIGH) ~= 0
+    end
     local target
     for _, e in ipairs(bot:enemies()) do
         if e.id == job.enemy and e.health > 0 then
-            if e.slot == job.slot then
+            if e.slot == job.slot and (not weakest or aimable(e)) then
                 target = e
                 break
             end
-            if not target or (weakest and e.health < target.health)
-                or (not weakest and e.health > target.health) then
+            local better = not target
+                or (weakest and aimable(e) and not aimable(target))
+                or ((not weakest or aimable(e) == aimable(target))
+                    and ((weakest and e.health < target.health)
+                        or (not weakest and e.health > target.health)))
+            if better then
                 target = e
             end
         end

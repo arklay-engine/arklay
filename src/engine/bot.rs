@@ -5323,6 +5323,8 @@ mod tests {
         assert_eq!(pose("K.enemies[0], K.weapons[3], 0xE0, 2500"), "up");
         assert_eq!(pose("K.enemies[0], K.weapons[3], 0x60, 2500"), "torso");
         assert_eq!(pose("K.enemies[0], K.weapons[3], 0xE0, 3500"), "torso");
+        // A hunter has no head to pop: the shotgun aims at its standing pose.
+        assert_eq!(pose("K.enemies[6], K.weapons[3], 0xC0, 2500"), "torso");
         // The handgun never aims up at a zombie (detect_gun refuses it).
         assert_eq!(pose("K.enemies[0], K.weapons[2], 0x80, 2000"), "nil");
         // A crow high up shows only 0x80: the handgun may aim up at it.
@@ -6445,18 +6447,18 @@ mod tests {
     #[test]
     fn ammo_floor_scales_with_risk_and_the_hardest_kill() {
         let vm = tactics_vm();
-        // The handgun's hardest `fight` kill in re1.xml: Yawn's rematch,
-        // 400 health at 30 a hit, is 14 shots (Plant 42's body 10, a zombie
-        // 9, a cerberus 5, a hunter 8).
+        // The handgun's hardest `fight` kill in re1.xml: Plant 42, its body
+        // and five vines (340 health) at 15 a hit, is 23 shots (Yawn's
+        // rematch 14, a zombie 9, a cerberus 5, a hunter 8).
         assert_eq!(
             eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 2)"),
-            14
+            23
         );
-        // The shotgun: Yawn (400 at 40) is 11 shots; the cerberus (122 at
-        // 40) and the hunter (111 at 32) are 4.
+        // The shotgun: Plant 42 (340 at 20) is 18 shots; Yawn (400 at 40)
+        // 11, the cerberus (122 at 40) and the hunter (111 at 32) 4.
         assert_eq!(
             eval::<i64>(&vm, "return BotSurvival.shots_per_kill(K, 3)"),
-            11
+            18
         );
         // A weapon nobody fights with has no floor.
         assert!(eval::<bool>(

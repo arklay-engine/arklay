@@ -151,6 +151,7 @@ local function start(bot, kind, item, label, extra)
         last_press = -SECOND,
         last_start = -SECOND,
         before_count = bot:item_count(item),
+        before_held = bot:has_item(item),
         before_equipped = bot:player().equipped,
         before_used = used_slots(menu),
         slot = extra and extra.slot or nil,
@@ -206,7 +207,12 @@ function BotMenu.busy()
     return BOT_MENU.job ~= nil
 end
 
-function BotMenu.last()
+-- The last finished job, or the last one of `kind` (a goal's combine
+-- outlives the combat equip that follows it at once).
+function BotMenu.last(kind)
+    if kind then
+        return (BOT_MENU.last_by_kind or {})[kind]
+    end
     return BOT_MENU.last
 end
 
@@ -232,6 +238,8 @@ local function finish(bot, job)
         kind = job.kind, item = job.item, ok = job.ok and true or false,
         reason = job.reason, tick = bot:tick(),
     }
+    BOT_MENU.last_by_kind = BOT_MENU.last_by_kind or {}
+    BOT_MENU.last_by_kind[job.kind] = BOT_MENU.last
     if not job.ok then
         BOT_MENU.failed[job.kind .. ":" .. job.item] = bot:tick()
     end
@@ -283,9 +291,12 @@ local function result_seen(bot, job)
     end
     if job.kind == "combine" then
         -- A slot freed, or the moved stack changed: a reload that leaves
-        -- part of the ammunition stack still frees no slot.
+        -- part of the ammunition stack still frees no slot. Or the item
+        -- turned into another: an empty launcher loaded with other rounds
+        -- (count 0 before and after).
         return used_slots(bot:menu()) < job.before_used
             or bot:item_count(job.item) ~= job.before_count
+            or bot:has_item(job.item) ~= job.before_held
     end
     if job.kind == "examine" then
         return bot:has_item(examine_result(job))

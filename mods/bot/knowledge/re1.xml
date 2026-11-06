@@ -24,7 +24,9 @@
       prefers it. staple (optional) = the firearm whose ammunition is the
       most common (the handgun): never boxed to make room. reserve
       (optional) = scarce rounds (the launchers): picked only for an enemy
-      that prefers it or when no other gun covers the kill.
+      that prefers it or when no other gun covers the kill. variant_of
+      (optional) = the weapon this is another loading of (the launcher
+      with acid or flame rounds): it counts as that weapon.
     enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
       downed = the pose for a downed or crawling enemy; up = which weapons an
       aim-up shot can hit it with; reach = the distance its attack starts at;
@@ -32,7 +34,12 @@
       outrun = Jill's run (210 a tick) beats its chase; speed = its chase
       speed in units a tick; health = its largest
       starting health; prefer (optional) = the weapon to fight it with
-      whenever it is held with the rounds for a kill. <keep> is the distance band to hold with one weapon
+      whenever it is held with the rounds for a kill; open (optional) = the
+      weapon that opens its fight while the preferred one is not held;
+      save (optional, needs open) = rounds of the open weapon no other
+      fight spends while its fight is undone; head (optional) = a torso or
+      up shotgun hit inside the weapon's headshot distance pops its head,
+      so the bot walks in for it. <keep> is the distance band to hold with one weapon
       (outside the reach, inside the hit range) and the health one hit takes:
       DEFAULT_FIRST_RUN's damage column (record weapon_adj + id * 10), plus
       what zombie_reaction takes off for Jill's handgun (3, or 7 on 0x02).
@@ -63,6 +70,17 @@
        not measured. -->
   <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="unknown"
           headshot="none" weak="none" status_bit="yes" reserve="yes"/>
+  <!-- The same launcher loaded with acid rounds (item 0x08, rounds 0x11)
+       or flame rounds (0x09, rounds 0x12): the menu's combine of other
+       rounds onto it changes its item, and the rounds it held are lost, so
+       only an empty launcher takes them (BotInventory.load_now). Acid takes
+       200 from a hunter (DEFAULT_FIRST_RUN row 67), flame 205 from the
+       Black Tiger and 150 from Plant 42 (rows 48, 88); both take 100 from
+       either Tyrant, as the explosive round does. -->
+  <weapon id="0x08" name="grenade launcher (acid)" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
+  <weapon id="0x09" name="grenade launcher (flame)" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
   <!-- Rocket launcher (item 0x0A, Brad's drop on the heliport). The rocket
        is a projectile (effect behaviour 45) that hits from its own
        position with aim 0x40; the cone values are Jill's DEFAULT_RANGES
@@ -86,21 +104,30 @@
        the handgun takes nine rounds; zombies took about 80 handgun rounds
        of a run that ran dry in the guardhouse. -->
   <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>
   <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
   <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>
   <!-- Green zombie: the same driver as 0x00. -->
   <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
   </enemy>
 
   <!-- Cerberus. enemy/02 behavior_run: 0x40 always, 0x20 inside 5000 until
@@ -116,6 +143,8 @@
     <keep weapon="0x02" min="1500" max="5000" damage="27"/>
     <keep weapon="0x03" min="1500" max="2800" damage="40"/>
     <keep weapon="0x07" min="1500" max="5000" damage="200"/>
+    <keep weapon="0x08" min="1500" max="5000" damage="100"/>
+    <keep weapon="0x09" min="1500" max="5000" damage="100"/>
   </enemy>
 
   <!-- Web spinner. enemy/03 run: 0x40 always, 0x20 inside 4000, never 0x80;
@@ -128,6 +157,8 @@
     <keep weapon="0x02" min="2500" max="5000" damage="20"/>
     <keep weapon="0x03" min="1800" max="2800" damage="40"/>
     <keep weapon="0x07" min="2500" max="5000" damage="100"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="100"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="200"/>
   </enemy>
 
   <!-- Crow. enemy/05 rebuilds the bits from its height every frame: above
@@ -146,15 +177,22 @@
        starts under 3000 (reach test 800); the pounce from 6400 holds the
        player. HEALTH max 111; handgun 14, shotgun 32 a hit. Run speed not
        settled (0x28 chase, 0xF0 approach). It hits for 10 a swipe while a
-       handgun takes eight shots, so the shotgun (four) is preferred. The
-       grenade launcher's 100 a hit (DEFAULT_FIRST_RUN) takes two; its band is
-       the Tyrant's. -->
+       handgun takes eight shots and the shotgun four, trading hits at its
+       swipe's range (two hunters in 308 took the bot from 96 to dead with
+       the shotgun out). The grenade launcher kills from past the swipe:
+       acid in one round (200), explosive or flame in two (100), and is
+       fired while the rounds the bosses need are left
+       (BotTactics.saved_rounds); its band is the Tyrant's. The shotgun
+       stays preferred: preferring the launcher sent the box loadout after
+       it from every stage and spent the bosses' rounds on hunters. -->
   <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
          up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111"
          prefer="0x03">
     <keep weapon="0x02" min="3200" max="6000" damage="14"/>
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="200"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="100"/>
   </enemy>
 
   <!-- Yawn's first fight (entity 0x0D, the 210 attic; the enemy/0d machine,
@@ -188,6 +226,8 @@
     <keep weapon="0x02" min="4300" max="8000" damage="30"/>
     <keep weapon="0x03" min="4300" max="8000" damage="40"/>
     <keep weapon="0x07" min="4300" max="8000" damage="80"/>
+    <keep weapon="0x08" min="4300" max="8000" damage="130"/>
+    <keep weapon="0x09" min="4300" max="8000" damage="50"/>
   </enemy>
 
   <!-- Plant 42 (the guardhouse boss, 40C). enemy/08: one body entity (no
@@ -203,14 +243,20 @@
        part nearest the aim: parts="yes" lets the bot fire on through it.
        Enemy bit 96 is the body's (40C's init, enemy index 0).
        DEFAULT_FIRST_RUN rows 81, 82 and 86: handgun 15, shotgun 20, grenade
-       launcher 50, so three rounds kill it where the handgun takes ten: it
-       is preferred, and the box loadout brings it to the fight. -->
+       launcher 50 on paper, but no launcher round has ever hit the body:
+       the round is a projectile that lands short of the hanging body's
+       radius (every logged launcher fight on it: 0 hits in 9 to 12 rounds),
+       and only its vines take one. The shotgun's seven hits kill it, so it
+       is preferred and the launcher's rounds are kept for the Tyrants. The
+       health given is the body's 140 and its five vines' 40 each: a shot
+       goes to whichever part it meets, so the readiness check counts the
+       rounds for all of them (11 handgun rounds met it and ran dry on the
+       vines, four deaths). -->
   <enemy id="0x08" name="plant 42" policy="fight" stand="torso" downed="none"
-         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="140" parts="yes"
-         prefer="0x07">
+         up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="340" parts="yes"
+         prefer="0x03">
     <keep weapon="0x02" min="3000" max="5500" damage="15"/>
     <keep weapon="0x03" min="3000" max="5500" damage="20"/>
-    <keep weapon="0x07" min="3200" max="5500" damage="50"/>
   </enemy>
 
   <!-- Tyrant (the lab encounter, 513). enemy/0c: state 1 sets status 0x40
@@ -234,6 +280,8 @@
     <keep weapon="0x02" min="3500" max="8000" damage="20"/>
     <keep weapon="0x03" min="3200" max="5000" damage="30"/>
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="100"/>
   </enemy>
 
   <!-- Tyrant on the heliport (303), entity 0x10: the same machine as 0x0C
@@ -252,13 +300,16 @@
        (`open`): until the drop, any explosive rounds it has go first (four
        hits take it to 200; the handgun, at 20 a hit and one slash taken
        every 70 ticks, emptied 96 health before the timer ran out), and the
-       loadout carries it up from the lab (303's `stage`). -->
+       loadout carries it up from the lab (303's `stage`). Those four
+       rounds are kept for it (`save`) from every other fight. -->
   <enemy id="0x10" name="tyrant 2" policy="fight" stand="torso" downed="none"
          up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="600"
-         prefer="0x0A" open="0x07">
+         prefer="0x0A" open="0x07" save="4">
     <keep weapon="0x02" min="3500" max="8000" damage="unknown"/>
     <keep weapon="0x03" min="3200" max="5000" damage="unknown"/>
     <keep weapon="0x07" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="unknown"/>
     <keep weapon="0x0A" min="3000" max="9000" damage="900"/>
   </enemy>
 
@@ -277,6 +328,8 @@
          up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204"
          prefer="0x07">
     <keep weapon="0x07" min="3200" max="6000" damage="60"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="60"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="205"/>
   </enemy>
 
   <!-- The spider web over 30C's door to 30D. enemy/13: state 1 sets 0x40
