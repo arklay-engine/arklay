@@ -186,11 +186,24 @@ end
 -- the ladder corridor and then pushed east).
 --
 -- A step with an `after` flag that is still clear holds the sequence: no
--- step is offered until the flag is set.
+-- step is offered until the flag is set. So does a <fight> whose enemy is
+-- fought with a hand weapon the bot does not hold.
 --
 -- A <camera> step without a flag has nothing to persist: it counts as done
 -- once its cut was entered during the current room entry (see
 -- BotPuzzle.visited), so a later entry walks it again.
+-- The hand weapon (a knowledge weapon with melee) enemy `id` prefers,
+-- when the bot does not hold it; else nil.
+function BotPuzzle.hand_weapon_missing(bot, id)
+    local k = bot:knowledge() or {}
+    local entry = k.enemies and k.enemies[id]
+    local weapon = entry and entry.prefer and k.weapons[entry.prefer]
+    if weapon and weapon.melee and not bot:has_item(entry.prefer) then
+        return entry.prefer
+    end
+    return nil
+end
+
 function BotPuzzle.next_interact(bot)
     local interacts = meta(bot).interacts or {}
     BOT_STATE.puzzle = BOT_STATE.puzzle or {}
@@ -228,6 +241,12 @@ function BotPuzzle.next_interact(bot)
             -- A step behind an `after` flag waits for it; the sequence holds
             -- (a <use> may set it, as 40A's red book moves the bookcase).
             if fact.after_bank and not bot:flag(fact.after_bank, fact.after_bit) then
+                return nil, index - 1, #interacts
+            end
+            -- So does a <fight> whose enemy is fought by hand while that
+            -- weapon is not held: the item frontier takes it first (30C's
+            -- knife for the web).
+            if fact.kind == "fight" and BotPuzzle.hand_weapon_missing(bot, fact.enemy) then
                 return nil, index - 1, #interacts
             end
             return fact, index, #interacts
