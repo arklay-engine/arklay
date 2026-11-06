@@ -326,7 +326,10 @@ catalog's heal effects.
   band) that cannot be outrun is fought with any rounds left: a zombie
   closes about as fast as the handgun brings it down, so the fight has to
   open at the band's edge to end before its grab. Otherwise run below
-  `max_health * (0.45 - 0.3 * risk)`, or with too few rounds for it
+  `max_health * (0.45 - 0.3 * risk)`, except from a monster slower than
+  the backward walk (`speed` under `BACK_SPEED`) that the rounds cover
+  with the margin below: that one is shot from range, since running past
+  a zombie in a corridor ends in its grab. Run with too few rounds for it
   (`(health // damage + 1) * (1 + 0.5 * (1 - risk))`: a monster dies below
   zero health, so a hit that leaves it at exactly 0 does not kill) or for the
   crowd; fight a monster that cannot be outrun or one in a room the
@@ -376,6 +379,11 @@ the bot is sourcing ammunition (`ammo low: ...; sourcing`):
 - with a free slot and no item box ever opened (`box_items` unset), a box
   visit is due to look in the shared box (`look in the box: ...`). In the
   vanilla re1 pack the first box holds two handgun clips.
+
+Below half health with no heal held (`BotSurvival.needs_heal`), a heal
+pickup or a box heal ranks `HEAL_BONUS` (a cure fetch less one key)
+cheaper, and the pursued target is dropped once per hurt episode
+(`target dropped: hurt with no heal held`).
 
 At finish the log lists every ammunition pickup the world model saw and
 its fate (`ammo account: ROOM slot N item 0x.. xQ taken|left|gone (mark)`).
@@ -528,6 +536,12 @@ drives the box screen with pad input only.
 - Keep (never deposit): keys, an item an open `<use>` fact needs, the
   equipped weapon, a firearm the knowledge file lists, the ammunition of
   those guns (the reserve), and heal items. Everything else may go in.
+- Soft deposits, when a slot is still short: heals beyond the first stack,
+  keys no remembered door needs, then held melee weapons that are not
+  equipped and that no pending fight prefers. Only when the visit swaps
+  (a `<use>` fact or a locked door needs a remembered box item back) do
+  spare guns go too, fewest rounds first, never one the loadout or a
+  `<use>` needs.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
