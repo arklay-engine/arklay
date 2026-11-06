@@ -934,6 +934,24 @@ impl MessageWindow {
                     );
                 }
             }
+            MessagePhase::YesNo if self.yes_no_shown && metrics.choice.is_some() => {
+                // RE2's choice, on the line the question ended on.
+                let Some(choice) = metrics.choice else {
+                    return;
+                };
+                if self.char_timer & blink != 0 {
+                    let label = if self.menu_choice & 1 == 0 {
+                        choice.yes_x
+                    } else {
+                        choice.no_x
+                    };
+                    let x = label + choice.cursor_dx;
+                    font.draw_text(framebuffer, x, y, Tint::White, 2, &[0x02], false);
+                }
+                for (x, label) in [(choice.yes_x, &YES_NO[..3]), (choice.no_x, &YES_NO[5..])] {
+                    font.draw_text(framebuffer, x, y, Tint::White, 2, label, tight);
+                }
+            }
             MessagePhase::YesNo if self.yes_no_shown => {
                 let cursor_x = if glyph_w > 8 { 0xA0 } else { 0xD0 };
                 // The label starts one cursor cell right of the first cursor,

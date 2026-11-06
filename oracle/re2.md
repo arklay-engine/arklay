@@ -151,6 +151,8 @@ The pick-up runs take room 102's 30 handgun rounds (Normal, so `ck 0:25` is clea
 - The merge: `item_take_102.txt` with `--give 2:0x14:230 --give 3:0x14:220`, and `api:set_item_slot(2, 0x14, 230)` and `api:set_item_slot(3, 0x14, 220)`. The 30 rounds skip the first stack, which can't take all of them, and fill the second to 250. All 656 ticks match.
 - `item_mash_102.txt` presses every four ticks. The original takes the answer at 412 and arklay at 400, since the question's typing differs (`docs/re2-deviations.md`, "Pick-ups"); from there everything is 12 ticks earlier in arklay.
 
+The pick-up's frames compare as the inventory runs' do (see below), from 360 to 999 of `item_take_102.txt`: mean error 20.66, and 17.26 with the message box blanked. Nearly all of it is the window's art, which arklay doesn't draw yet: the original covers the room with the item's model on blue (`docs/re2-deviations.md`, "Pick-ups"). The question, its choice and "You've taken the H. Gun Bullets." land on the original's pixels once typed.
+
 The inventory runs (`inv_*.txt`) use the same warp, with the items given by `--give` and the life by `--life`, and press START at 364 to open the status screen. Record each with `record --sound --no-enemies --warp 102:-11378:0:-4587:0`, and run arklay with `--room 102 --player 0 --character 0 --sound`, the run's setup script and its `_arklay` input, for the recording's ticks less 344. Compare at `--offset 344` with `--fields room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd`, with each `3:` entry dropped from `snd` in both traces first (see "Weapons"). In every run START plays the decide cue (4:6) at 364 and nobody moves on that tick (game mode 1); the world holds from 365, and the screen's task starts its page at 370. The press that closes the screen plays the cancel cue (4:5); ten ticks later game mode 3 restarts the player's move (routines 1, 0, 0, 0, clip 2 at frame 1, which in `inv_use` changes the clip from 5 to 2) and the world moves again on the tick after: 711 in `inv_mix`, 771 in the `inv_use` runs and 911 in `inv_check`. The page's cursor cue is 4:4 and its buzzer 4:7. Every run below matches on every tick, every field above included.
 
 - `inv_use.txt` with `--give 2:0x26:1 --give 3:0x27:1 --life 100 --ticks 800` (`inv_use.lua`): down to the green herb, the menu, USE. The condition panel sweeps for 40 ticks, the life goes from 100 to 150 at 482, the herb's slot empties at 483 and the red herb moves into it at 487, and the menu closes from 491 to 496. Then USE on the red herb: "You don't need to use this right now." from 581 until the press at 700 (after both sides finish typing it), and the menu closes; START closes the screen at 760. `inv`, `ip` and `p.hp` match on every tick.
@@ -163,13 +165,13 @@ The screen's frames compare the same way: record with `--shot-dir DIR --shot-eve
 
 | Run | Frames | Mean error | Without the message box |
 |---|---|---|---|
-| `inv_check` | 640 | 1.45 | 0.64 |
-| `inv_reload` | 740 | 1.40 | 0.74 |
-| `inv_mix` | 440 | 1.35 | 0.60 |
-| `inv_use` (life 100) | 440 | 1.77 | 0.68 |
-| `weapon_shotgun` (to 700) | 340 | 0.46 | 0.26 |
+| `inv_check` | 640 | 0.67 | 0.64 |
+| `inv_reload` | 740 | 0.81 | 0.75 |
+| `inv_mix` | 440 | 0.64 | 0.58 |
+| `inv_use` (life 100) | 440 | 0.74 | 0.68 |
+| `weapon_shotgun` (to 700) | 340 | 0.28 | 0.26 |
 
-The open, the close and the room's fade back in, the cursor's pulse, the command menu's slides, CHECK's slides, COMBN's cursor slides (`0x502B30`) and the heal's sweep differ from the original by no more than a still frame of the screen does (0.77 with no name shown). The worst frames are the item names and the messages, which are the port's font (S11): up to 6.05 in `inv_check`'s description. Outside the message box every frame is within 1.0, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory").
+The open, the close and the room's fade back in, the cursor's pulse, the command menu's slides, CHECK's slides, COMBN's cursor slides (`0x502B30`) and the heal's sweep differ from the original by no more than a still frame of the screen does (0.77 with no name shown). The names and the messages are the original's strings in the original's font, and once typed their lines land on the original's pixels. The worst frames are the messages while they type, which is RE 1's typing (S11b): up to 1.43 in `inv_reload`'s "It's already fully loaded." and 2.17 on `inv_mix`'s tick 600, where arklay's message closes a tick before the original's. Outside the message box every frame is within 1.0, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory").
 
 ## Status screen
 
@@ -182,10 +184,10 @@ The frames compare as the inventory runs' do (see "Items"), from 360 to 999. The
 
 | Run | Frames | Mean error | Without the message box | Without the binders | Without both |
 |---|---|---|---|---|---|
-| `status_map` | 640 | 0.42 | 0.34 | | |
-| `status_file` | 640 | 0.82 | 0.65 | 0.48 | 0.46 |
+| `status_map` | 640 | 0.36 | 0.34 | | |
+| `status_file` | 640 | 0.76 | 0.65 | 0.48 | 0.46 |
 
-MAP's worst frames are the item page's message text before MAP opens (1.63 at 394 to 399, the port's font); while the map is up every frame is within 0.81, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory"). FILE's worst frames are the message text and the turns (1.73 at 629, 1.72 at 549); without the message box the worst is 1.45, during the turns, and the binders line up with the original's on every frame (the best shift is none), the rest being the art's colours. Without the panel's inside its worst is 0.98, at 705 and 490, while the panel slides.
+MAP's worst frames are the slides (0.81 at 681); while the map is up every frame is within 0.81, the rest being the art's colours (`docs/re2-deviations.md`, "The inventory"). FILE's worst frames are the turns (1.73 at 629, 1.72 at 549); without the message box the worst is 1.45, during the turns, and the binders line up with the original's on every frame (the best shift is none), the rest being the art's colours. Without the panel's inside its worst is 0.98, at 705 and 490, while the panel slides.
 
 ## Weapons
 

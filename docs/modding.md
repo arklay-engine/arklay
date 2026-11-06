@@ -185,7 +185,7 @@ is exact.
 | scripted-character held weapon | `enemy/<id>/weapon/<behavior>.tmd` (entity id `20`-`2e`, the behavior byte `01`-`06`); a missing entry holds nothing | tmd | textured from the character's own page |
 | doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
 | font sheets | `font/00` (Western), `font/01` (Japanese), or a new two-digit hex id | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
-| font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`) | — |
+| font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`); the optional `yesX noX cursorX` (all three) draw a question's yes/no on its last line, as the RE2 pack's font does | — |
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
 | FILE pages | `item/<id>/file_bg` (the book backdrop), `item/<id>/file_fg_<page>_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `item/6e/file_fg_03_en-US`, where `<id>` is the document's item (`5f` + the document number); `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |

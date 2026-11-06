@@ -12,8 +12,8 @@
 -- engine calls on every tick the screen is up, its open and close fades
 -- included, as the original's draw routines run on every frame.
 --
--- The item names and the messages are drawn in the port's font, at the
--- original's place.
+-- The item names and the messages are drawn in the original's font (the
+-- pack's font 00, converted from `font0.tim`), at the original's place.
 --
 -- It keeps the engine's contract with the pause menu: `open`, `tick`,
 -- `update`, `tick_monitor`, `view_closed`, `reselect`, `move_cursor`,
@@ -160,8 +160,9 @@ local MENU_PIECES = {
 local LABEL_LIT = { 64, 64, 128 }
 local LABEL_EQUIP, LABEL_USE, LABEL_CHECK, LABEL_COMBINE = 0, 16, 32, 48
 
--- The item's name, under the message box's top edge.
-local NAME_X, NAME_Y = 15, 175
+-- The item's name, where the message box's first line starts: its ink from
+-- x 16, its cells' tops at y 175.
+local NAME_X, NAME_Y = 16, 175
 
 -- The condition panel's trace (`0x4FFAB0`), from the panel's corner.
 local PANEL_X, PANEL_Y = 58, 29
