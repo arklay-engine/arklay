@@ -875,6 +875,10 @@ local function use_goal(bot, fact, action)
                 end
                 job.waited = (job.waited or 0) + 1
                 if job.waited > USE_SETTLE then
+                    -- The item went in, so the room took it: a turning
+                    -- piece (30F's hex crank) steps once a use. Try again
+                    -- now; MAX_ATTEMPTS still bounds a use that does nothing.
+                    job.retry = true
                     return "used; the done flag stayed clear"
                 end
                 return nil
@@ -2292,6 +2296,10 @@ function BotPlanner.step(bot)
                 p.steps_done = (p.steps_done or 0) + 1
             end
             real_progress(bot, goal.label)
+            if goal.kind == "use" then
+                -- A retried turning piece (see use_goal) did its step.
+                p.marks[mark_key("use", room, goal.slot)] = nil
+            end
             -- A room event (an object moved off an item) may open what
             -- was unreachable here.
             if goal.kind ~= "camera" then
@@ -2309,6 +2317,9 @@ function BotPlanner.step(bot)
         -- A combine or a book opened is about the inventory, not the room.
         local where = (goal.kind == "combine" or goal.kind == "examine") and "inventory" or room
         mark(bot, kind, where, goal.slot, goal.job.reason or "failed", goal.job.permanent)
+        if goal.job.retry then
+            p.marks[mark_key(kind, where, goal.slot)].hold = bot:tick()
+        end
         if goal.event then
             local m = p.marks[mark_key(kind, where, goal.slot)]
             m.event = { entry = p.entries[room], tick = bot:tick(), forgiven = false }
