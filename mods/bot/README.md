@@ -434,7 +434,11 @@ cheaper, and the pursued target is dropped once per hurt episode
 (`target dropped: hurt with no heal held`). Each monster that hurt the
 bot in a room a route enters (`BotTactics.hurt_count`, at most 3 a room)
 then adds `HURT_ROOM_COST` (two door steps), so the way to the heal goes
-round a room where a cerberus already bit.
+round a room where a cerberus already bit. A route into a room whose
+`<fight>` is still ahead while the bot is not ready for it
+(`BotSurvival.fight_ready`) adds `BOSS_ROOM_COST` (a cure fetch's bonus),
+so it is taken only with no other way left: 30C's Black Tiger killed a bot
+that walked in unvisited at 5 health.
 
 At finish the log lists every ammunition pickup the world model saw and
 its fate (`ammo account: ROOM slot N item 0x.. xQ taken|left|gone (mark)`).
@@ -622,6 +626,11 @@ drives the box screen with pad input only.
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
   step whose preferred weapon is not held waits while a frontier pickup of
   it is in the room (`BotPuzzle.preferred_pickup`), so it is taken first.
+- Cure: poisoned with no cure for that poison held, the `<cure>` items
+  for it come out of the box the way the loadout does (`a cure for the
+  poison`), and the trip to a remote box for them is weighted like one for
+  a heal (`HEAL_BONUS`), and so is a route to a frontier pickup of one: a
+  run walked 17k ticks poisoned by 408's wasps past 304's blue herb.
 - Rearm: a firearm in the remembered box (not a `reserve` one) comes out
   with its ammunition, the way the loadout does
   (`rearm: a boxed gun's ammunition is at hand`), when that ammunition is
@@ -812,7 +821,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | Element | Attributes | Meaning |
 | --- | --- | --- |
 | `<interact>` | `slot`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `reveals`, optional `label` | Press AOT `slot`; flag `bank`/`bit` set means done. A body-probe zone (flag `0x40`, which fires on the player's position) is stood in instead of pressed. With `done="clear"` the flag clearing means done instead: bank 7's item bits are set while the item is in the room and clear when it is taken. With an `after` flag the step is offered only while that flag is set; until then the sequence holds and no later step is offered (a `<use>` may set it). With `after_while="clear"` the step waits for that flag to clear instead: 508's reader lights a lamp only once its pass code's file (a bank-7 item bit) is taken. With `reveals`, the step is also done once that AOT slot is a live item or event zone, which the item frontier or the next step then takes. |
-| `<fight>` | `enemy`, `bank`, `bit`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `label` | With an `after` flag the step holds the sequence as for `<interact>`. Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health, face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
+| `<fight>` | `enemy`, `bank`, `bit`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `label` | With an `after` flag the step holds the sequence as for `<interact>`. Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health (for an enemy with `parts="yes"`, the weakest live part: Plant 42's vines before its body), face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
