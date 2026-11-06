@@ -142,10 +142,11 @@ pub struct Interact {
     /// not set. Bank 7 runs this way: a set bit means the room's item is
     /// still there, and taking it clears the bit.
     pub done_clear: bool,
-    /// `<interact after_bank after_bit>`: the step is offered only while
-    /// this flag is set; until then the sequence waits (and a `<use>` may
-    /// run). 40A's bookcase gap is an event only once the red book moved
-    /// the bookcase.
+    /// `<interact after_bank after_bit>` (or `<wait>`, `<push>`): the step
+    /// is offered only while this flag is set; until then the sequence
+    /// waits (and a `<use>` may run). 40A's bookcase gap is an event only
+    /// once the red book moved the bookcase; 306's box is pushed on once
+    /// the crank's slab has shoved it off the wall.
     pub after: Option<(u8, u8)>,
     /// `<interact reveals>`: the step is also done once this AOT slot is a
     /// live item or event zone (40C's fireplace turns slot 3 into the helmet
@@ -823,6 +824,8 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "axis",
             "bank",
             "bit",
+            "after_bank",
+            "after_bit",
             "label",
             "character",
         ],
@@ -879,7 +882,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         },
         flag,
         done_clear: false,
-        after: None,
+        after: after_flag(node)?,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1612,6 +1615,10 @@ mod tests {
         let meta = parse(text).unwrap();
         assert_eq!(meta.interacts[0].after, Some((0, 0x25)));
         assert_eq!(meta.interacts[1].after, None);
+        // 306: the box is pushed on only once the crank's slab shoved it.
+        let push =
+            r#"<bot format="2"><push object="2" slot="5" after_bank="0" after_bit="60"/></bot>"#;
+        assert_eq!(parse(push).unwrap().interacts[0].after, Some((0, 60)));
         let half = r#"<bot format="2"><interact slot="7" bank="0" bit="1" after_bit="2"/></bot>"#;
         let error = parse(half).unwrap_err().to_string();
         assert!(
@@ -1801,6 +1808,7 @@ mod tests {
                 ("301", 4, 0x1D),
                 ("301", 4, 0x1D),
                 ("302", 4, 0x27),
+                ("306", 1, 0x1E),
                 ("307", 4, 0x1E),
                 ("30F", 6, 0x1E),
                 ("30F", 6, 0x1E),

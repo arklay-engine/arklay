@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 306, Doom Book II's ledge. The book's item zone (AOT 6) is live only
+     while flag bank 4 bit 35 is set: AOT 5 at (7750,3100) is an object
+     probe (0x44, not the player) that sets it while box object 2 stands in
+     it. The box starts against the north wall at (3830,9722), so it cannot
+     be pushed south from there. Pushed east under the wall slab (object 1),
+     the hex crank at AOT 1 (scenario 60) slides the slab out to z 9480,
+     shoving the box to z 7679, but now flush against the slab. So the box
+     goes west to AOT 7's line (x 6050), south past the slab and east into
+     AOT 5, and the book is taken from the floor. -->
+<bot format="2">
+  <push object="2" slot="5" axis="x" label="the box east, under the slab"/>
+  <use slot="1" item="0x1E" bank="0" bit="60" label="the hex crank: the slab shoves the box off the wall"/>
+  <push object="2" slot="7" axis="x" after_bank="0" after_bit="60" label="the box west of the slab"/>
+  <push object="2" slot="5" after_bank="0" after_bit="60" label="the box into the ledge probe"/>
+</bot>
