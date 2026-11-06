@@ -48,6 +48,12 @@ local LOST_CALM = 6 * C.SECOND
 local NEAR = 8 * C.REACH
 -- After a run decision the planner's walks avoid the monsters this long.
 local RUN_HOLD = 2 * C.SECOND
+-- A grabber straight ahead (inside AHEAD_ARC of the facing) counts as
+-- closing this much past its band: the bot's own run toward it closes the
+-- gap at the run's speed, so 10A's zombie, run past at 4600, was at 3000
+-- nine ticks later, and the handgun's last shot came after its grab.
+local AHEAD = 2 * C.REACH
+local AHEAD_ARC = C.FULL_TURN // 8
 -- Player state 2 is the generic hit reaction (player_script.rs): the
 -- player is held and a raised aim or a reload is dropped.
 local HIT_STATE = 2
@@ -142,6 +148,7 @@ end
 --              must be fought, so a monster only in a room crossed again
 --              is run past
 --   no_band    the file lists bands for it, none for this gun
+--   ahead      a grabber straight ahead: closing from AHEAD past its band
 --   hurt_before  it already hurt the bot (BotTactics.note_hurt): passing it
 --              again costs the same hit, so the rounds for the kill
 --              suffice, with no margin
@@ -228,8 +235,9 @@ function BotTactics.decide(o)
     -- twice its reach (3000) ends in its grab, while one opened at the
     -- band's edge (4000) gets the two more shots that finish it first.
     -- At low health only what the bot cannot outrun (or may not).
+    local engage = (o.engage or 0) + (o.ahead and AHEAD or 0)
     local closing = o.reach and o.rounds > 0
-        and (o.distance <= 2 * o.reach or o.distance <= (o.engage or 0))
+        and (o.distance <= 2 * o.reach or o.distance <= engage)
     if closing and o.outrun ~= true then
         return "fight", MUST_FIGHT
     end
@@ -548,8 +556,12 @@ local function firearm(bot, k, enemy)
         local row = guns[i]
         if row.reserve then
             local base = row.base or row.item
+            -- A band's `spare`: the rounds it leaves held (a zombie
+            -- gets a grenade only while the lab's fights keep theirs).
+            local band = entry and entry.keep and entry.keep[row.item]
             local spare = family_rounds(bot, k, base)
                 - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id)
+                - (band and band.spare or 0)
             if spare < row.rounds then
                 row.rounds = spare
             end
@@ -734,6 +746,8 @@ local function choose(bot, s, k, enemies, player)
     local best = nil
     for _, enemy in ipairs(near) do
         local entry = k.enemies[enemy.id]
+        -- Its band's far edge for this gun (decide's `engage`).
+        local _, far = band_of(entry, gun)
         do
             if cross == nil then
                 if not s.cross_tick or bot:tick() - s.cross_tick >= C.SECOND then
@@ -759,6 +773,8 @@ local function choose(bot, s, k, enemies, player)
                 outrun = entry and entry.outrun,
                 slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.BACK_SPEED,
                 hurt_before = s.hurt_by ~= nil and s.hurt_by[hurt_key(bot:room().id, enemy.slot)] == true,
+                ahead = entry ~= nil and entry.grabs == true
+                    and abs(angle_delta(enemy.bearing, player.angle)) <= AHEAD_ARC,
                 no_band = entry ~= nil and entry.keep ~= nil and next(entry.keep) ~= nil
                     and gun ~= nil and entry.keep[gun] == nil,
             })
