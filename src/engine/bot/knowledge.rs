@@ -134,6 +134,9 @@ pub struct Weapon {
     pub weak: Option<i32>,
     /// Whether the aim direction must match the enemy's status bit.
     pub status_bit: bool,
+    /// A hand weapon (the knife): no rounds, so it never runs dry, and it
+    /// is held only for an enemy that `prefer`s it.
+    pub melee: bool,
 }
 
 /// The poison a `<cure>` item clears: the engine's health-status bits.
@@ -455,6 +458,7 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             "headshot",
             "weak",
             "status_bit",
+            "melee",
         ],
     )?;
     check_leaf(node)?;
@@ -467,6 +471,10 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
         headshot: distance(node, "headshot")?,
         weak: distance(node, "weak")?,
         status_bit: yes_no(node, "status_bit")?.unwrap_or(true),
+        melee: match node.attribute("melee") {
+            Some(_) => yes_no(node, "melee")? == Some(true),
+            None => false,
+        },
     })
 }
 
@@ -523,6 +531,7 @@ impl Knowledge {
             row.set("headshot", weapon.headshot)?;
             row.set("weak", weapon.weak)?;
             row.set("status_bit", weapon.status_bit)?;
+            row.set("melee", weapon.melee)?;
             weapons.set(weapon.id, row)?;
         }
         table.set("weapons", weapons)?;
@@ -551,6 +560,12 @@ mod tests {
         let knowledge = parse(&text).unwrap();
         assert!(knowledge.weapons.iter().any(|w| w.name == "handgun"));
         assert!(knowledge.weapons.iter().any(|w| w.name == "shotgun"));
+        assert!(
+            knowledge
+                .weapons
+                .iter()
+                .any(|w| w.name == "knife" && w.melee)
+        );
         assert!(knowledge.enemies.len() >= 5);
     }
 
@@ -636,6 +651,10 @@ mod tests {
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"yes\">"))
                 .unwrap();
         assert!(parts.enemies[0].parts);
+        assert!(!k.weapons[0].melee);
+        let melee =
+            parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" melee=\"yes\"")).unwrap();
+        assert!(melee.weapons[0].melee);
         assert!(
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"maybe\">"))
                 .is_err()

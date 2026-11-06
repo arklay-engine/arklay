@@ -692,6 +692,27 @@ function BotNav.climb_point(object, zone)
         { x = x, z = zz }, { x = x, z = object.z - sign * 4 * object.half_z }
 end
 
+-- The reachable spot nearest the player by path between `min` and `max`
+-- from `target` ({x, z}), from rings of points around it. Nil when none is
+-- reachable.
+function BotNav.stand_near(bot, target, min, max)
+    local best, best_length
+    local inner = min + (max - min) // 3
+    for _, r in ipairs({ max - C.APPROACH, (inner + max) // 2, inner }) do
+        if r > min then
+            for _, dir in ipairs(C.RING) do
+                local x = target.x + r * dir[1] // C.RING[1][1]
+                local z = target.z + r * dir[2] // C.RING[1][1]
+                local path = bot:path(x, z)
+                if path.status == "ok" and (not best_length or path.length < best_length) then
+                    best, best_length = { x = x, z = z }, path.length
+                end
+            end
+        end
+    end
+    return best
+end
+
 -- One tick of a fight job: a <fight> step holds the room until its enemy's
 -- done flag is set (a boss killed). Walks toward the job's target (the
 -- tactics layer prefers it, BotTactics.focus) until it is FIGHT_RANGE away,
@@ -726,10 +747,36 @@ function BotNav.hold_fight(bot, job)
         bot:log(string.format("%s: target slot %d (health %d)", job.label, target.slot,
             target.health))
     end
-    if target.distance > FIGHT_RANGE + C.APPROACH then
+    -- A target fought by hand (the web, with the knife) is walked up to a
+    -- reachable spot inside the knife's band; any other from the fight
+    -- range.
+    local k = bot:knowledge() or {}
+    local entry = k.enemies and k.enemies[job.enemy]
+    local hand = entry and entry.prefer and k.weapons[entry.prefer]
+    local band = hand and hand.melee and bot:has_item(entry.prefer) and entry.keep[entry.prefer]
+    if band then
+        if target.distance > band.max then
+            job.stand = job.stand or BotNav.stand_near(bot, target, band.min, band.max)
+            if job.stand then
+                local result = bot:walk_to(job.stand.x, job.stand.z, {
+                    tolerance = C.APPROACH // 2, face = { x = target.x, z = target.z },
+                })
+                if result.status == "moving" then
+                    return "busy"
+                end
+                if result.status ~= "arrived" then
+                    job.stand = nil
+                end
+            end
+        end
+        bot:face_to(target.x, target.z)
+        return "busy"
+    end
+    local range = FIGHT_RANGE
+    if target.distance > range + C.APPROACH then
         local p = bot:player()
-        local x = target.x + (p.x - target.x) * FIGHT_RANGE // target.distance
-        local z = target.z + (p.z - target.z) * FIGHT_RANGE // target.distance
+        local x = target.x + (p.x - target.x) * range // target.distance
+        local z = target.z + (p.z - target.z) * range // target.distance
         local result = bot:walk_to(x, z, {
             tolerance = C.APPROACH, face = { x = target.x, z = target.z },
         })

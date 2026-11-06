@@ -20,6 +20,8 @@
       headshot = inside this distance a torso/up shotgun hit pops a zombie's
       head; weak = past this distance the shotgun hit may do less damage;
       status_bit = the aim direction must match the enemy's status bit.
+      melee (optional) = a hand weapon: no rounds; held only for an enemy that
+      prefers it.
     enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
       downed = the pose for a downed or crawling enemy; up = which weapons an
       aim-up shot can hit it with; reach = the distance its attack starts at;
@@ -48,6 +50,12 @@
   <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="unknown"
           headshot="3000" weak="9000" status_bit="yes"/>
 
+  <!-- Knife. detect_knife: a radial reach of the range (Jill's
+       DEFAULT_RANGES slot 0 = 500) plus the enemy radius, measured from a
+       point 380 ahead of Jill. melee: no rounds; it is held only for an enemy
+       that prefers it (the web). -->
+  <weapon id="0x01" name="knife" near="0" side="500" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" melee="yes"/>
   <!-- Zombie. lib/zombie.lua state_check: 0x40 while standing, 0x80 inside
        3000, 0x20 inside 4500; a crawler (behavior_flags & 2) or a spent
        poise has 0x20 only. chase_player attacks at angular distance 1500,
@@ -148,6 +156,34 @@
          up="yes" reach="6000" grabs="yes" outrun="no" speed="0" health="140" parts="yes">
     <keep weapon="0x02" min="3000" max="5500" damage="15"/>
     <keep weapon="0x03" min="3000" max="5500" damage="unknown"/>
+  </enemy>
+
+  <!-- Black Tiger (the giant spider, 30C). enemy/04 run: 0x40 every frame,
+       never 0x20 or 0x80 outside its attack states. The picker commits to
+       the bite inside 5000 (the reach given) and spits from anywhere it is
+       lined up inside 9000 (12 and the 0x02 poison a hit), so it cannot be
+       outrun. The bite costs 20. HEALTH 0xCC; handgun 14, shotgun 40 a hit
+       (DEFAULT_FIRST_RUN rows 41 and 42). It spits about every 80 ticks
+       and each volley knocks the aim down (measured in 30C: two shotgun hits
+       in 700 ticks for 66 health), while the room's way on is only the web:
+       pass. -->
+  <enemy id="0x04" name="black tiger" policy="pass" stand="torso" downed="none"
+         up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204">
+    <keep weapon="0x02" min="2000" max="6000" damage="14"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="40"/>
+  </enemy>
+
+  <!-- The spider web over 30C's door to 30D. enemy/13: state 1 sets 0x40
+       every frame; only the knife and the fire weapons cut it (the guns'
+       hits do nothing). Health 0x37; the knife's record takes 10 a hit
+       (combat.rs the web knife record). Its SCA radius is 500 and the knife
+       point is 380 ahead of Jill, so a swing reaches it from about 1380
+       (the band keeps a margin). It never moves or attacks. Enemy bit 138
+       is its death flag (30C's init, enemy index 1). -->
+  <enemy id="0x13" name="web" policy="fight" stand="torso" downed="none"
+         up="no" reach="unknown" grabs="no" outrun="yes" speed="0" health="55"
+         prefer="0x01">
+    <keep weapon="0x01" min="0" max="1300" damage="10"/>
   </enemy>
 
   <!-- Poison cures, from the engine's item definitions

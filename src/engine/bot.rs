@@ -5306,6 +5306,16 @@ mod tests {
             ),
             "hold:2300"
         );
+        // A hand weapon (the knife, band 0..1300) walks in from past the
+        // band to its middle and holds inside it.
+        assert_eq!(
+            space("{ distance = 2000, min = 0, max = 1300, melee = true }"),
+            "close:650"
+        );
+        assert_eq!(
+            space("{ distance = 1100, min = 0, max = 1300, melee = true }"),
+            "hold:1100"
+        );
         // Inside the reach (a hunter's swipe starts at 3000), back-offs stop.
         assert_eq!(
             space("{ distance = 1300, min = 3200, max = 6000, reach = 3000 }"),

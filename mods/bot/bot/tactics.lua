@@ -48,6 +48,9 @@ local LOST_CALM = 6 * C.SECOND
 local NEAR = 8 * C.REACH
 -- After a run decision the planner's walks avoid the monsters this long.
 local RUN_HOLD = 2 * C.SECOND
+-- Player state 2 is the generic hit reaction (player_script.rs): the
+-- player is held and a raised aim or a reload is dropped.
+local HIT_STATE = 2
 
 local function state()
     BOT_STATE.tactics = BOT_STATE.tactics or {}
@@ -201,6 +204,7 @@ function BotTactics.decide(o)
 end
 
 -- Where to stand. `o`: distance, min, max (the knowledge band), reloading,
+-- melee (a hand weapon: closes in past the band's far edge),
 -- headshot (the weapon's headshot distance or nil), crawl_reach (a downed
 -- enemy's reach or nil), reach and speed (the enemy's attack reach and
 -- chase speed, nil when unknown). Returns "back", "retreat", "close" or
@@ -248,6 +252,10 @@ function BotTactics.spacing(o)
     end
     if o.distance < min then
         return "hold", o.distance
+    end
+    -- A hand weapon reaches only inside its band: walk in.
+    if o.melee and o.distance > o.max then
+        return "close", middle
     end
     -- Close in only from outside the headshot distance: inside it the shot
     -- already pops the head, and a walk there only delays it.
@@ -328,25 +336,40 @@ end
 -- The firearm to fight `enemy` (the nearest fightable monster, or nil)
 -- with and its rounds, counting the ammunition held for each held weapon
 -- with knowledge, so an emptied gun with reserve still counts; see
--- BotTactics.pick_gun.
+-- BotTactics.pick_gun. A hand weapon (the knife) counts only for an enemy
+-- that prefers it, with rounds that never run out.
 local function firearm(bot, k, enemy)
     local weapon = bot:weapon()
+    local entry = enemy and k.enemies[enemy.id]
+    local function melee(item)
+        local row = k.weapons[item]
+        return row and row.melee
+    end
+    -- A hand weapon's rounds: enough for any kill (a hit takes at least 1).
+    local hand_rounds = (enemy and enemy.health or 0) + 1
     local guns = {}
-    if weapon.equipped and k.weapons[weapon.equipped]
-        and weapon.clip + weapon.reserve > 0 then
-        guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
-            equipped = true }
+    if weapon.equipped and k.weapons[weapon.equipped] then
+        if melee(weapon.equipped) then
+            if entry and entry.prefer == weapon.equipped then
+                guns[1] = { item = weapon.equipped, rounds = hand_rounds, equipped = true }
+            end
+        elseif weapon.clip + weapon.reserve > 0 then
+            guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
+                equipped = true }
+        end
     end
     for _, row in ipairs(bot:menu().items or {}) do
         if row.kind == "weapon" and k.weapons[row.item] and row.item ~= weapon.equipped then
             local rounds = held_rounds(bot, row)
+            if melee(row.item) then
+                rounds = entry and entry.prefer == row.item and hand_rounds or 0
+            end
             if rounds > 0 then
                 guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false }
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, enemy and k.enemies[enemy.id],
-        enemy and enemy.health)
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health)
     if not best then
         return nil, 0
     end
@@ -456,12 +479,33 @@ function BotTactics.no_aim_ticks(s, enemy, shootable)
     return s.now - row.since
 end
 
+-- Whether knowledge enemy `entry` is fought with a hand weapon (the web
+-- and the knife): it is fought only as a <fight> step's target, never with
+-- a firearm.
+local function by_hand(k, entry)
+    local weapon = entry and entry.prefer and k.weapons[entry.prefer]
+    return weapon ~= nil and weapon.melee == true
+end
+
 -- Decide every monster near the bot; returns the fight target or nil.
 local function choose(bot, s, k, enemies, player)
+    -- A <fight> step's target fought by hand is the fight once it is inside
+    -- the weapon's band, whatever else is near.
+    local focus = s.focus and enemy_by_slot(enemies, s.focus)
+    local fentry = focus and k.enemies[focus.id]
+    if focus and by_hand(k, fentry) and focus.visible then
+        local gun = firearm(bot, k, focus)
+        local band = gun and fentry.keep[gun]
+        if band and k.weapons[gun].melee and focus.distance <= band.max then
+            focus.why = MUST_FIGHT
+            focus.must = true
+            return focus, gun
+        end
+    end
     local nearest
     for i = 1, #enemies do
         local entry = k.enemies[enemies[i].id]
-        if entry and entry.policy == "fight"
+        if entry and entry.policy == "fight" and not by_hand(k, entry)
             and (not nearest or enemies[i].distance < nearest.distance) then
             nearest = enemies[i]
         end
@@ -472,7 +516,7 @@ local function choose(bot, s, k, enemies, player)
         local enemy = enemies[i]
         local entry = k.enemies[enemy.id]
         local _, far = band_of(entry, gun)
-        if enemy.distance <= (far > NEAR and far or NEAR) then
+        if not by_hand(k, entry) and enemy.distance <= (far > NEAR and far or NEAR) then
             near[#near + 1] = enemy
             if entry and entry.policy == "fight" then
                 fightable[#fightable + 1] = enemy
@@ -639,6 +683,15 @@ function BotTactics.step(bot, scene, player)
     end
     s.last_health = target.health
 
+    -- A hit reaction holds the player and drops the aim or the reload:
+    -- wait it out, then start them again.
+    if player.state == HIT_STATE then
+        s.reload_started = false
+        s.reload_ticks = 0
+        s.aim_ticks = 0
+        return true
+    end
+
     local weapon = bot:weapon()
     if weapon.equipped ~= s.gun then
         if not BotMenu.equip(bot, s.gun, "combat equip") then
@@ -646,7 +699,8 @@ function BotTactics.step(bot, scene, player)
         end
         return true
     end
-    if weapon.clip <= 0 and weapon.reserve <= 0 then
+    local melee = wrow and wrow.melee
+    if not melee and weapon.clip <= 0 and weapon.reserve <= 0 then
         stop(bot, s, "out of ammunition", LOST_CALM)
         return false
     end
@@ -668,11 +722,12 @@ function BotTactics.step(bot, scene, player)
 
     -- Spacing first: a walk drops the aim.
     local min, max = band_of(entry, s.gun)
-    local reloading = weapon.clip <= 0
+    local reloading = not melee and weapon.clip <= 0
     local move, want = BotTactics.spacing({
         distance = target.distance,
         min = min,
         max = max,
+        melee = melee,
         reloading = reloading,
         headshot = wrow and wrow.headshot,
         crawl_reach = target.status_flags & C.STATUS_TORSO == 0 and entry
