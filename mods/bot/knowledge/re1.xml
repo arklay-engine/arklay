@@ -248,10 +248,14 @@
        (303's init). The other bands are the lab's; their damages (rows 161,
        162 and 166: 20, 30, 100) are left `unknown`, since no other gun can
        finish it and a kill count from them would raise those guns' ammo
-       floors for the whole game. -->
+       floors for the whole game. The grenade launcher opens the fight
+       (`open`): until the drop, any explosive rounds it has go first (four
+       hits take it to 200; the handgun, at 20 a hit and one slash taken
+       every 70 ticks, emptied 96 health before the timer ran out), and the
+       loadout carries it up from the lab (303's `stage`). -->
   <enemy id="0x10" name="tyrant 2" policy="fight" stand="torso" downed="none"
          up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="600"
-         prefer="0x0A">
+         prefer="0x0A" open="0x07">
     <keep weapon="0x02" min="3500" max="8000" damage="unknown"/>
     <keep weapon="0x03" min="3200" max="5000" damage="unknown"/>
     <keep weapon="0x07" min="3200" max="6000" damage="unknown"/>
