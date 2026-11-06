@@ -526,7 +526,7 @@ function BotNav.push_object(bot, job)
         job.permanent = true
         return "failed"
     end
-    local ex, ez = BotNav.push_error(object, job.zone, job.dir, job.axis)
+    local ex, ez = BotNav.push_error(object, job.zone, job.dir, job.only_axis)
     job.tries = job.tries or { x = 0, z = 0 }
     local function error_on(axis)
         return axis == "x" and ex or ez
