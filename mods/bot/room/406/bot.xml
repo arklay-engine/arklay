@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 406 guardhouse room with the ladder down to the aqua ring (40D). Two
+     crates fill a gap in the north wall, the east one (object 0) over the
+     hatch, AOT 5's zone. The recess behind the west crate (object 1) is deep
+     and the one behind the east crate shallow, so the west crate goes north
+     into the recess first and the east crate then slides west into its
+     place, pushed from the narrow strip beside it. Pressing the hatch asks
+     "go down?": Yes makes AOT 2 a door to 40D around the player. 40D's init
+     sets scenario 0x45, which keeps the crates in their pushed places. -->
+<bot format="2">
+  <push object="1" slot="5" direction="north" clear="full" label="west crate into the recess"/>
+  <push object="0" slot="5" direction="west" label="east crate off the hatch"/>
+  <interact slot="5" bank="0" bit="0x45" label="the hatch"/>
+  <answer choice="yes" slot="5" label="climb down the ladder"/>
+</bot>
