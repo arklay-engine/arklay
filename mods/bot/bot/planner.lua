@@ -50,6 +50,8 @@
 --               the remembered box)
 --             + HURT_ROOM_COST per monster that hurt the bot in each room
 --               the route enters, while it is hurt with no heal held
+--             + BOSS_ROOM_COST for each room the route enters whose <fight>
+--               is still ahead while the bot is not ready for it
 --             - for a route to a held item's <use> room, HELD_USE_BONUS
 --               and no door steps: only the first door's length counts;
 --               so for a route back to a <fight> held back there as not
@@ -150,6 +152,11 @@ local CURE_BONUS = 2 * HELD_USE_BONUS
 local HEAL_BONUS = CURE_BONUS - KEY_BONUS
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
+-- A route into a room whose <fight> is still ahead while the bot is not
+-- ready for it (BotSurvival.fight_ready): a boss meets the bot on entry
+-- (30C's Black Tiger killed it walking in at 5 health), so only a route
+-- with no other way left takes it.
+local BOSS_ROOM_COST = CURE_BONUS
 -- The sort length of a goal the path planner reaches no approach to: last.
 local UNPLANNED = 1 / 0
 -- Ranks an unplanned stair check after every planned one, by distance.
@@ -1868,9 +1875,19 @@ local function choose(bot)
     -- While sourcing, the live monsters last seen along a route; while
     -- hurt with no heal held, the monsters that hurt the bot there.
     local hurt_now = BotSurvival.needs_heal(bot)
+    local boss_rooms = {}
+    for _, fight in ipairs(bot:fight_facts()) do
+        if not (fight.bank and bot:flag(fight.bank, fight.bit))
+            and not BotSurvival.fight_ready(bot, fight) then
+            boss_rooms[fight.room] = true
+        end
+    end
     local function monsters_in(id)
         local n = sourcing and p.monsters[id] or 0
         local cost = (n > MONSTER_CAP and MONSTER_CAP or n) * MONSTER_COST
+        if boss_rooms[id] then
+            cost = cost + BOSS_ROOM_COST
+        end
         if hurt_now then
             local h = BotTactics.hurt_count(id)
             cost = cost + (h > MONSTER_CAP and MONSTER_CAP or h) * HURT_ROOM_COST
@@ -1889,6 +1906,8 @@ local function choose(bot)
     -- real progress re-ranks, or the loop rule drops it. Getting hurt with
     -- no heal held drops it once, so a heal can be ranked first.
     local hurt = BotSurvival.needs_heal(bot)
+    -- Poisoned with no cure held: a cure pickup ranks like a heal.
+    local cure_now = BotInventory.context(bot).cure_now
     if not hurt then
         p.hurt_dropped = nil
     elseif p.target and not p.target.heal and not p.hurt_dropped then
@@ -2024,7 +2043,8 @@ local function choose(bot)
                     local heal_target = nil
                     if goal.kind == "item" then
                         local _, _, heals = bot:item_kind(goal.item)
-                        heals = hurt and heals == true
+                        heals = (hurt and heals == true)
+                            or (cure_now ~= nil and cure_now[goal.item] == true)
                         local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
                             needed, heals)
                         heal_target = heals and goal.item_kind == "heal" or nil
@@ -2144,7 +2164,8 @@ local function choose(bot)
         if first then
             order = order + 1
             local label = string.format("the item box in %s (%s)", box.room, box_why)
-            local heal = hurt and box_why:find("no heal item held", 1, true) ~= nil or nil
+            local heal = (hurt and box_why:find("no heal item held", 1, true) ~= nil)
+                or box_why:find(BotInventory.CURE, 1, true) ~= nil or nil
             consider({
                 cost = box.cost - (heal and HEAL_BONUS or BOX_BONUS) + route_monsters(box.steps),
                 order = order, door = first,
