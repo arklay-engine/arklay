@@ -653,6 +653,33 @@ mod imp {
                 Ok(())
             });
 
+            // `set_re2_no_enemies({"101:0", ...})`: the oracle's `--no-enemies`,
+            // switching off every enemy slot at the top of each tick (bit 0 of
+            // `be_flg`) but the kept `"ROOM:SLOT"` pairs (room in three hex
+            // digits), so a long route compares the player alone.
+            methods.add_method_mut(
+                "set_re2_no_enemies",
+                |_lua, game, keep: Option<Vec<String>>| {
+                    let mut kept = Vec::new();
+                    for pair in keep.unwrap_or_default() {
+                        let parsed = pair.split_once(':').and_then(|(room, slot)| {
+                            Some((
+                                u16::from_str_radix(room, 16).ok()?,
+                                slot.parse::<usize>().ok()?,
+                            ))
+                        });
+                        let Some((room, slot)) = parsed else {
+                            return Err(mlua::Error::RuntimeError(format!(
+                                "set_re2_no_enemies: {pair:?} is not ROOM:SLOT"
+                            )));
+                        };
+                        kept.push((room, slot));
+                    }
+                    game.re2_no_enemies = Some(kept);
+                    Ok(())
+                },
+            );
+
             // `set_re2_sce_rnd(value)`: the same for `Sce_rnd_set`'s state.
             methods.add_method_mut("set_re2_sce_rnd", |_lua, game, value: u32| {
                 game.re2.random = value;

@@ -3210,6 +3210,12 @@ pub struct GameState {
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
+    /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
+    /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
+    /// cleared, so nothing runs, draws or touches it, but for the
+    /// `(room, slot)` pairs kept (room as `0xSRR`, stage digit and room).
+    /// `None` leaves the enemies alone.
+    pub re2_no_enemies: Option<Vec<(u16, usize)>>,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3677,6 +3683,7 @@ impl Default for GameState {
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
+            re2_no_enemies: None,
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,
@@ -8429,6 +8436,22 @@ impl GameState {
             return;
         }
         self.open_re2_item_get(action);
+    }
+
+    /// The oracle's `remove_enemies`, run where its stop in `Pad_set` falls:
+    /// every enemy slot's `be_flg` bit 0 cleared but for the kept ones.
+    pub fn apply_re2_no_enemies(&mut self) {
+        let Some(keep) = self.re2_no_enemies.as_ref() else {
+            return;
+        };
+        let room = u16::from(self.id.stage) << 8 | u16::from(self.id.room);
+        for (slot, character) in self.re2.characters.0.iter_mut().enumerate() {
+            if let Some(character) = character.as_deref_mut()
+                && !keep.contains(&(room, slot))
+            {
+                character.be_flg &= !1;
+            }
+        }
     }
 
     /// After `Player_move`: start the crouch `Sce_Item` chose, or, at

@@ -2711,6 +2711,12 @@ pub fn position_blocked(room: &RoomState, pos: [i32; 3], radius: i32, collision_
 /// same `cam_from` whose quad contains the player; return its `cam_to` when it
 /// is a valid cut index, otherwise `current`.
 pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> usize {
+    camera_for_position_on(room, current, pos, crate::sca::floor_of(pos[1]))
+}
+
+/// [`camera_for_position`] for a body on `floor`: RE2's `Cut_check` gates its
+/// zones on the player's `Floor`, which a climb raises before the body rises.
+pub fn camera_for_position_on(room: &RoomState, current: usize, pos: [i32; 3], floor: u8) -> usize {
     let re2 = room.sca.is_some();
     let Some(header) = room
         .zones
@@ -2729,7 +2735,7 @@ pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> u
             // and on the player's floor.
             let gate = room.zone_gates.get(index).copied().unwrap_or_default();
             if gate.flag == 0
-                || (gate.floor != 0xFF && gate.floor != crate::sca::floor_of(pos[1]))
+                || (gate.floor != 0xFF && gate.floor != floor)
                 || !zone.contains_signed(pos[0], pos[2])
             {
                 continue;
