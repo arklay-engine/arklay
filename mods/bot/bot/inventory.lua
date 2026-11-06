@@ -14,7 +14,9 @@
 --   keep:     the equipped item, a firearm the knowledge file fights with
 --             and its ammunition (the ammo reserve), every key, every item
 --             an open <use> fact needs (bot:use_facts(), done flag clear),
---             and every heal item. Anything else may go in the box.
+--             every heal item that restores health (the row's `heals`)
+--             and one <cure> stack. Anything else may go in the box (a
+--             red herb alone).
 --   deposit:  when the inventory is at its limit and a known pickup
 --             (a frontier item that merges into no held stack) needs room,
 --             or, at a box in this room, when no more than RESERVE slots
@@ -80,7 +82,7 @@ end
 
 -- Why `row` ({item, kind, quantity}) stays in the inventory, or nil.
 -- ctx: {equipped, guns = {[id] = true}, ammo = {[id] = true},
---       uses = {[id] = true}}
+--       uses = {[id] = true}, cures = {[id] = true}}
 function BotInventory.keep(row, ctx)
     local item = row.item
     if item == 0 then
@@ -101,17 +103,29 @@ function BotInventory.keep(row, ctx)
     if row.kind == "ammo" and ctx.ammo and ctx.ammo[item] then
         return "ammo reserve"
     end
-    if row.kind == "heal" then
+    if row.kind == "heal" and row.heals ~= false then
         return "heal"
+    end
+    if row.kind == "heal" and ctx.cures and ctx.cures[item] then
+        return "cure"
     end
     return nil
 end
 
 -- The menu rows (bot:menu().items) the box should take, in slot order.
+-- One <cure> stack is kept; a second one goes in.
 function BotInventory.deposits(items, ctx)
     local out = {}
+    local cure_kept = false
     for _, row in ipairs(items) do
-        if row.item ~= 0 and not BotInventory.keep(row, ctx) then
+        local why = row.item ~= 0 and BotInventory.keep(row, ctx)
+        if why == "cure" then
+            if cure_kept then
+                why = nil
+            end
+            cure_kept = true
+        end
+        if row.item ~= 0 and not why then
             out[#out + 1] = row
         end
     end
@@ -182,7 +196,7 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
     end
-    if row.kind == "heal" and (ctx.heals or 0) == 0 then
+    if row.kind == "heal" and row.heals ~= false and (ctx.heals or 0) == 0 then
         return "no heal item held"
     end
     return nil
@@ -203,9 +217,8 @@ function BotInventory.withdrawals(box_items, ctx, free)
             why = nil
         end
         -- One heal stack is enough to stop the "none held" rule.
-        if why and not (row.kind == "heal" and heal_taken
-            and not (ctx.uses and ctx.uses[row.item])) then
-            if row.kind == "heal" then
+        if why and not (why == "no heal item held" and heal_taken) then
+            if why == "no heal item held" then
                 heal_taken = true
             end
             out[#out + 1] = row
@@ -285,9 +298,12 @@ end
 
 -- The policy context from the live state.
 function BotInventory.context(bot)
-    local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, heals = 0 }
+    local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
     ctx.equipped = bot:player().equipped
     local knowledge = bot:knowledge()
+    for _, cure in ipairs(knowledge and knowledge.cures or {}) do
+        ctx.cures[cure.item] = true
+    end
     for id, _ in pairs(knowledge and knowledge.weapons or {}) do
         ctx.guns[id] = true
         -- The reserve is kept only for a gun the bot holds: shells carried
@@ -332,7 +348,7 @@ function BotInventory.context(bot)
     end
     local menu = bot:menu()
     for _, row in ipairs(menu.items or {}) do
-        if row.kind == "heal" and row.quantity > 0 then
+        if row.kind == "heal" and row.heals ~= false and row.quantity > 0 then
             ctx.heals = ctx.heals + 1
         end
     end
@@ -395,7 +411,8 @@ function BotInventory.make_room(bot, ctx, items, skip)
         -- A box item the bot needs back (a key a locked door needs, an
         -- item a <use> fact needs) is a needed pickup too: a swap.
         for item, _ in pairs(BotInventory.remembered(bot)) do
-            local why = BotInventory.wanted_back({ item = item, kind = bot:item_kind(item) }, ctx)
+            local kind, _, heals = bot:item_kind(item)
+            local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
             if why == "a <use> fact needs it" or why == "a locked door needs it"
                 or why == "ammunition for a held gun" then
                 needed = needed + 1
@@ -444,7 +461,8 @@ function BotInventory.box_reason(bot, skip, here)
     local free = ctx.capacity - ctx.used
     if free > 0 or #deposits > 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do
-            local why = BotInventory.wanted_back({ item = item, kind = bot:item_kind(item) }, ctx)
+            local kind, _, heals = bot:item_kind(item)
+            local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
             if why == "ammunition top-up at the box" and free <= BotInventory.RESERVE then
                 why = nil
             end

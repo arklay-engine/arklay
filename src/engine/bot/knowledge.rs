@@ -111,6 +111,10 @@ pub struct Enemy {
     /// free part nearest the aim, so the bot fires on through its target's
     /// own hit reaction (optional attribute, default no).
     pub parts: bool,
+    /// The weapon to fight it with whenever it is held with rounds (a
+    /// hunter takes the shotgun), over the equipped one; it must have a
+    /// `<keep>` (optional attribute).
+    pub prefer: Option<u8>,
     pub keeps: Vec<Keep>,
 }
 
@@ -333,6 +337,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             "speed",
             "health",
             "parts",
+            "prefer",
         ],
     )?;
     let policy = match attr_text(node, "policy")? {
@@ -379,6 +384,15 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         }
         keeps.push(keep);
     }
+    let prefer: Option<u8> = node
+        .attribute("prefer")
+        .map(|_| attr(node, "prefer"))
+        .transpose()?;
+    if let Some(weapon) = prefer
+        && !keeps.iter().any(|keep| keep.weapon == weapon)
+    {
+        bail!("{}: `prefer` weapon {weapon:#04x} has no <keep>", at(node));
+    }
     Ok(Enemy {
         id: attr(node, "id")?,
         name: name_attr(node)?,
@@ -399,6 +413,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             Some(_) => yes_no(node, "parts")? == Some(true),
             None => false,
         },
+        prefer,
         keeps,
     })
 }
@@ -484,6 +499,7 @@ impl Knowledge {
             row.set("speed", enemy.speed)?;
             row.set("health", enemy.health)?;
             row.set("parts", enemy.parts)?;
+            row.set("prefer", enemy.prefer)?;
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
                 let band = lua.create_table()?;
@@ -623,6 +639,16 @@ mod tests {
         assert!(
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"maybe\">"))
                 .is_err()
+        );
+        assert_eq!(k.enemies[0].prefer, None);
+        let prefer =
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" prefer=\"2\">"))
+                .unwrap();
+        assert_eq!(prefer.enemies[0].prefer, Some(2));
+        assert!(
+            parse(&text.replace("health=\"unknown\">", "health=\"unknown\" prefer=\"3\">"))
+                .is_err(),
+            "a preferred weapon needs a <keep>"
         );
     }
 }

@@ -3079,10 +3079,13 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        // The catalog kind, and whether a pickup merges into a held stack.
+        // The catalog kind, whether a pickup merges into a held stack, and
+        // whether a USE restores health (false for a blue herb, the serum
+        // or a red herb alone).
         methods.add_method("item_kind", |_lua, bot, item: u8| {
-            let merge = bot.snapshot.item_defs.get(item).merge;
-            Ok((bot.snapshot.item_kind(item), merge))
+            let def = bot.snapshot.item_defs.get(item);
+            let heals = def.heal.amount != crate::item_catalog::HealAmount::None;
+            Ok((bot.snapshot.item_kind(item), def.merge, heals))
         });
 
         methods.add_method("ammo_for", |_lua, bot, weapon: u8| {
@@ -3136,6 +3139,11 @@ impl UserData for BotCtx {
                     row.set("item", *id)?;
                     row.set("quantity", *quantity)?;
                     row.set("kind", bot.snapshot.item_kind(*id))?;
+                    row.set(
+                        "heals",
+                        bot.snapshot.item_defs.get(*id).heal.amount
+                            != crate::item_catalog::HealAmount::None,
+                    )?;
                     slots.set(index + 1, row)?;
                 }
                 item_box.set("items", slots)?;
