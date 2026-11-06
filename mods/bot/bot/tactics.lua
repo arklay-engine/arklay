@@ -93,7 +93,8 @@ function BotTactics.pose(entry, weapon, status, distance)
     local why = "standing"
     local downed = status & C.STATUS_TORSO == 0 and status & C.STATUS_LOW ~= 0
         and status & C.STATUS_HIGH == 0
-    if weapon and weapon.headshot and distance <= weapon.headshot and up_ok then
+    if weapon and weapon.headshot and distance <= weapon.headshot and up_ok
+        and entry.head then
         why = "headshot range"
         add("up")
         add("torso")
@@ -391,11 +392,16 @@ function BotTactics.pick_gun(guns, entry, health, margin)
         end
     end
     -- The knowledge's preferred weapon, held with the rounds for the kill.
+    -- A row's `base` (knowledge variant_of: the launcher loaded with other
+    -- rounds) counts as that weapon for `prefer` and `open`.
+    local function is(row, id)
+        return id ~= nil and (row.item == id or row.base == id)
+    end
     local prefer = entry and entry.prefer
     local prefer_held = false
     for _, row in ipairs(guns) do
-        prefer_held = prefer_held or row.item == prefer
-        local n = row.item == prefer and shots(row)
+        prefer_held = prefer_held or is(row, prefer)
+        local n = is(row, prefer) and shots(row)
         if n and n <= row.rounds then
             return row
         end
@@ -406,7 +412,7 @@ function BotTactics.pick_gun(guns, entry, health, margin)
     local open = entry and entry.open
     if open and not prefer_held then
         for _, row in ipairs(guns) do
-            if row.item == open then
+            if is(row, open) then
                 return row
             end
         end
@@ -449,6 +455,54 @@ function BotTactics.pick_gun(guns, entry, health, margin)
     return fewest(1, true) or plain
 end
 
+-- Rounds of weapon `base` (every loading of it: knowledge variant_of)
+-- kept for the <fight>s of this stage still to be won that prefer or open
+-- with it (the stage is the room id's first character, or the fight's
+-- `stage`): each keeps its `save`, else the kill at its `base` band's
+-- damage. Such a fight's own enemy (`enemy_id`) spends them all (rationing
+-- 40C's Plant 42 for the later bosses killed the bot there), so it gives
+-- 0. Later stages' bosses keep nothing: their rounds are picked up on the
+-- way (219's and 309's), and a hunter left alive in the mansion hit the
+-- bot again on every pass. The hunters of 308 and 309 took the launcher's
+-- rounds 30C's Black Tiger needed.
+function BotTactics.saved_rounds(bot, k, base, enemy_id)
+    local saved = 0
+    local pending = {}
+    local here = bot:room().id:sub(1, 1)
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = k.enemies[fight.enemy]
+        if entry and (entry.prefer == base or entry.open == base)
+            and (fight.room:sub(1, 1) == here or fight.stage == here)
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            if fight.enemy == enemy_id then
+                return 0
+            end
+            pending[#pending + 1] = entry
+        end
+    end
+    for _, entry in ipairs(pending) do
+        local band = entry.keep and entry.keep[base]
+        local damage = band and band.damage
+        local kill = damage and damage > 0 and entry.health
+            and entry.health // damage + 1
+        saved = saved + (entry.save or kill or 0)
+    end
+    return saved
+end
+
+-- Every round held for weapon `base`: each loading's loaded rounds and
+-- its ammunition.
+local function family_rounds(bot, k, base)
+    local total = 0
+    for id, row in pairs(k.weapons) do
+        if id == base or row.variant_of == base then
+            local ammo = bot:ammo_for(id)
+            total = total + bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
+        end
+    end
+    return total
+end
+
 -- The firearm to fight `enemy` (the nearest fightable monster, or nil)
 -- with and its rounds, counting the ammunition held for each held weapon
 -- with knowledge, so an emptied gun with reserve still counts; see
@@ -471,7 +525,8 @@ local function firearm(bot, k, enemy)
             end
         elseif weapon.clip + weapon.reserve > 0 then
             guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
-                equipped = true, reserve = k.weapons[weapon.equipped].reserve == true }
+                equipped = true, reserve = k.weapons[weapon.equipped].reserve == true,
+                base = k.weapons[weapon.equipped].variant_of }
         end
     end
     for _, row in ipairs(bot:menu().items or {}) do
@@ -482,7 +537,24 @@ local function firearm(bot, k, enemy)
             end
             if rounds > 0 then
                 guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false,
-                    reserve = k.weapons[row.item].reserve == true }
+                    reserve = k.weapons[row.item].reserve == true,
+                    base = k.weapons[row.item].variant_of }
+            end
+        end
+    end
+    -- A reserve gun spends only the rounds the <fight>s ahead leave
+    -- (BotTactics.saved_rounds).
+    for i = #guns, 1, -1 do
+        local row = guns[i]
+        if row.reserve then
+            local base = row.base or row.item
+            local spare = family_rounds(bot, k, base)
+                - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id)
+            if spare < row.rounds then
+                row.rounds = spare
+            end
+            if row.rounds <= 0 then
+                table.remove(guns, i)
             end
         end
     end
@@ -742,9 +814,19 @@ end
 -- empty. One try per MENU_RELOAD_GAP; the field reload is the fallback.
 local MENU_RELOAD_GAP = 4 * C.SECOND
 local function menu_reload(bot, s, weapon)
-    if weapon.reserve <= 0 or (s.menu_reload_tick
-            and bot:tick() - s.menu_reload_tick < MENU_RELOAD_GAP) then
+    if s.menu_reload_tick and bot:tick() - s.menu_reload_tick < MENU_RELOAD_GAP then
         return false
+    end
+    -- No rounds of its own: the launcher takes its other rounds
+    -- (BotInventory.load_now; the gun becomes that loading's item).
+    if weapon.reserve <= 0 then
+        local pick = weapon.clip <= 0 and BotInventory.load_now(bot)
+        if not pick then
+            return false
+        end
+        s.menu_reload_tick = bot:tick()
+        return BotMenu.combine(bot, pick.slot, pick.target,
+            string.format("combat load 0x%02X onto 0x%02X", pick.item, pick.other))
     end
     local ammo = bot:ammo_for(weapon.equipped)
     local gun_slot, ammo_slot
@@ -866,6 +948,17 @@ function BotTactics.step(bot, scene, player)
     end
 
     local weapon = bot:weapon()
+    -- The gun loaded with other rounds (BotInventory.load_now) is the same
+    -- gun under that loading's item; the load leaves nothing equipped.
+    if weapon.equipped ~= s.gun and wrow and not bot:has_item(s.gun) then
+        local base = wrow.variant_of or s.gun
+        for id, row in pairs(k.weapons) do
+            if (row.variant_of or id) == base and bot:has_item(id) then
+                s.gun = id
+                wrow = row
+            end
+        end
+    end
     if weapon.equipped ~= s.gun then
         if not BotMenu.equip(bot, s.gun, "combat equip") then
             stop(bot, s, "cannot equip the firearm", LOST_CALM)
@@ -874,6 +967,9 @@ function BotTactics.step(bot, scene, player)
     end
     local melee = wrow and wrow.melee
     if not melee and weapon.clip <= 0 and weapon.reserve <= 0 then
+        if menu_reload(bot, s, weapon) then
+            return true
+        end
         stop(bot, s, "out of ammunition", LOST_CALM)
         return false
     end
@@ -902,7 +998,9 @@ function BotTactics.step(bot, scene, player)
         max = max,
         melee = melee,
         reloading = reloading,
-        headshot = wrow and wrow.headshot,
+        -- Only a head that pops is worth walking in for (a hunter's swipe
+        -- met the shotgun's walk in to the band's middle).
+        headshot = entry and entry.head and wrow and wrow.headshot or nil,
         crawl_reach = target.status_flags & C.STATUS_TORSO == 0 and entry
             and entry.crawl_reach or nil,
         reach = entry and entry.reach,
