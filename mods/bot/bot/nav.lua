@@ -437,6 +437,9 @@ function BotNav.object_by_slot(bot, slot)
     return nil
 end
 
+-- The error an until="stop" push reports: farther than any room.
+local PUSH_ONWARD = 1 << 16
+
 -- Signed distance from `value` to the middle half of [lo, lo + span]:
 -- positive means push towards +, 0 means inside.
 local function band_error(value, lo, span)
@@ -464,9 +467,14 @@ local function clear_error(value, half, lo, span, step, full)
     return face > goal and goal - face or 0
 end
 
--- How far `object`'s centre is from the middle half of `zone`, per axis;
--- with `dir`, how far its trailing face is from clearing the zone that way.
-function BotNav.push_error(object, zone, dir)
+-- How far `object`'s centre is from the middle half of `zone`, per axis
+-- (only along `axis` when given); with `dir`, how far its trailing face is
+-- from clearing the zone that way, and with `dir.until_stop` always some
+-- way further (the push runs until it stalls).
+function BotNav.push_error(object, zone, dir, axis)
+    if dir and dir.until_stop then
+        return dir.x * PUSH_ONWARD, dir.z * PUSH_ONWARD
+    end
     if dir then
         local ex = dir.x ~= 0
             and clear_error(object.x, object.half_x, zone.x, zone.width, dir.x, dir.full) or 0
@@ -474,7 +482,8 @@ function BotNav.push_error(object, zone, dir)
             and clear_error(object.z, object.half_z, zone.z, zone.depth, dir.z, dir.full) or 0
         return ex, ez
     end
-    return band_error(object.x, zone.x, zone.width), band_error(object.z, zone.z, zone.depth)
+    local ex, ez = band_error(object.x, zone.x, zone.width), band_error(object.z, zone.z, zone.depth)
+    return axis == "z" and 0 or ex, axis == "x" and 0 or ez
 end
 
 -- A push that moves the object less than this in PUSH_STALL ticks stalled.
@@ -517,7 +526,7 @@ function BotNav.push_object(bot, job)
         job.permanent = true
         return "failed"
     end
-    local ex, ez = BotNav.push_error(object, job.zone, job.dir)
+    local ex, ez = BotNav.push_error(object, job.zone, job.dir, job.axis)
     job.tries = job.tries or { x = 0, z = 0 }
     local function error_on(axis)
         return axis == "x" and ex or ez
@@ -608,6 +617,11 @@ function BotNav.push_object(bot, job)
     if BotNav.abs(along - job.mark) >= PUSH_MOVED then
         job.mark, job.mark_tick = along, bot:tick()
     elseif bot:tick() - job.mark_tick > PUSH_STALL then
+        if job.dir and job.dir.until_stop then
+            -- Pushed into a wall: the step's goal.
+            bot:log(string.format("%s: object stopped at (%d,%d)", job.label, object.x, object.z))
+            return "done"
+        end
         stalled("the object did not move")
         return "busy"
     end

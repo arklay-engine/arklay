@@ -721,7 +721,7 @@ local function interact_goal(bot, fact, index, count)
             kind = "interact", slot = fact.slot, label = label,
             job = {
                 push = true, object = fact.object, zone = zone_of(action), label = label,
-                dir = BotPuzzle.push_dir(fact),
+                dir = BotPuzzle.push_dir(fact), axis = fact.axis, step = index,
                 done = function(b) return BotPuzzle.push_done(b, fact) end,
             },
         }
@@ -2103,6 +2103,9 @@ function BotPlanner.step(bot)
         status = combine_step(bot, goal.job)
     elseif goal.job.push then
         status = BotNav.push_object(bot, goal.job)
+        if status == "done" then
+            BotPuzzle.pushed(bot, goal.job.step)
+        end
     elseif goal.job.climb then
         status = BotNav.climb_object(bot, goal.job)
     else

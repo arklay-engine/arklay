@@ -2647,6 +2647,8 @@ impl UserData for BotCtx {
                         slot,
                         direction,
                         clear_full,
+                        until_stop,
+                        axis,
                     } => {
                         row.set("kind", "push")?;
                         row.set("object", object)?;
@@ -2657,6 +2659,10 @@ impl UserData for BotCtx {
                             row.set("dx", dx)?;
                             row.set("dz", dz)?;
                             row.set("clear_full", clear_full)?;
+                            row.set("until_stop", until_stop)?;
+                        }
+                        if let Some(axis) = axis {
+                            row.set("axis", axis.name())?;
                         }
                     }
                     meta::Target::Climb { object, slot } => {

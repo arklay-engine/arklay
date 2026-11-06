@@ -136,18 +136,40 @@ pub enum Target {
     /// covers that zone (done by position, or once the optional flag is set:
     /// a zone event that takes the object away, like 202's falling statue).
     /// With `clear_full` the trailing face must pass the zone's far edge, not
-    /// just its far quarter (406's west crate, out of the east crate's way).
+    /// just its far quarter (406's west crate, out of the east crate's way);
+    /// with `until_stop` the push runs on until the object stalls against a
+    /// wall. Without a direction, `axis` lines the object up on that axis
+    /// only (40D's third crate, under the ladder corridor).
     Push {
         object: u8,
         slot: u8,
         direction: Option<Direction>,
         clear_full: bool,
+        until_stop: bool,
+        axis: Option<Axis>,
     },
     /// Push room object `object` under AOT `slot`'s item zone until it
     /// covers the zone, climb it, take the item from on top and climb down
     /// (11B's square crank on its shelf). Done once the item flag says so
     /// and the player is back on the floor.
     Climb { object: u8, slot: u8 },
+}
+
+/// A room axis a `<push>` lines its object up on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis {
+    X,
+    Z,
+}
+
+impl Axis {
+    /// The attribute spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::X => "x",
+            Self::Z => "z",
+        }
+    }
 }
 
 /// A compass direction in room coordinates: east is `+x`, north is `+z`.
@@ -614,6 +636,8 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "slot",
             "direction",
             "clear",
+            "until",
+            "axis",
             "bank",
             "bit",
             "label",
@@ -646,12 +670,29 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
         Some("full") => bail!("{}: <push> `clear` needs a `direction`", at(node)),
         Some(other) => bail!("{}: <push> `clear` must be `full`, not `{other}`", at(node)),
     };
+    let until_stop = match node.attribute("until") {
+        None => false,
+        Some("stop") if direction.is_some() => true,
+        Some("stop") => bail!("{}: <push> `until` needs a `direction`", at(node)),
+        Some(other) => bail!("{}: <push> `until` must be `stop`, not `{other}`", at(node)),
+    };
+    let axis = match node.attribute("axis") {
+        None => None,
+        Some(_) if direction.is_some() => {
+            bail!("{}: <push> takes `axis` or `direction`, not both", at(node))
+        }
+        Some("x") => Some(Axis::X),
+        Some("z") => Some(Axis::Z),
+        Some(other) => bail!("{}: <push> `axis` must be x or z, not `{other}`", at(node)),
+    };
     Ok(Interact {
         target: Target::Push {
             object: attr(node, "object")?,
             slot: attr(node, "slot")?,
             direction,
             clear_full,
+            until_stop,
+            axis,
         },
         flag,
         done_clear: false,
@@ -1131,6 +1172,8 @@ mod tests {
                         slot: 2,
                         direction: None,
                         clear_full: false,
+                        until_stop: false,
+                        axis: None,
                     },
                     flag: None,
                     done_clear: false,
@@ -1142,6 +1185,8 @@ mod tests {
                         slot: 5,
                         direction: Some(Direction::East),
                         clear_full: false,
+                        until_stop: false,
+                        axis: None,
                     },
                     flag: None,
                     done_clear: false,
@@ -1231,6 +1276,8 @@ mod tests {
                     slot: 3,
                     direction: None,
                     clear_full: false,
+                    until_stop: false,
+                    axis: None,
                 },
                 flag: Some((0, 0x0B)),
                 done_clear: false,
@@ -1273,6 +1320,8 @@ mod tests {
                 slot: 5,
                 direction: Some(Direction::North),
                 clear_full: true,
+                until_stop: false,
+                axis: None,
             }
         );
         let bare = r#"<bot format="2"><push object="1" slot="5" clear="full"/></bot>"#;
@@ -1280,6 +1329,45 @@ mod tests {
         let bad =
             r#"<bot format="2"><push object="1" slot="5" direction="north" clear="half"/></bot>"#;
         assert!(parse(bad).is_err());
+    }
+
+    #[test]
+    fn push_until_stop_needs_a_direction_and_axis_none() {
+        let text = r#"<bot format="2">
+            <push object="2" slot="10" axis="x"/>
+            <push object="2" slot="2" direction="east" until="stop"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.interacts[0].target,
+            Target::Push {
+                object: 2,
+                slot: 10,
+                direction: None,
+                clear_full: false,
+                until_stop: false,
+                axis: Some(Axis::X),
+            }
+        );
+        assert_eq!(
+            meta.interacts[1].target,
+            Target::Push {
+                object: 2,
+                slot: 2,
+                direction: Some(Direction::East),
+                clear_full: false,
+                until_stop: true,
+                axis: None,
+            }
+        );
+        for bad in [
+            r#"<bot format="2"><push object="2" slot="2" until="stop"/></bot>"#,
+            r#"<bot format="2"><push object="2" slot="2" direction="east" until="wall"/></bot>"#,
+            r#"<bot format="2"><push object="2" slot="2" direction="east" axis="x"/></bot>"#,
+            r#"<bot format="2"><push object="2" slot="2" axis="y"/></bot>"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]
