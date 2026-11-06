@@ -51,7 +51,9 @@
 --             + HURT_ROOM_COST per monster that hurt the bot in each room
 --               the route enters, while it is hurt with no heal held
 --             - for a route to a held item's <use> room, HELD_USE_BONUS
---               and no door steps: only the first door's length counts
+--               and no door steps: only the first door's length counts;
+--               so for a route back to a <fight> held back there as not
+--               ready and ready now (fight_due)
 --             - HEAL_BONUS for a route to a heal pickup or to the box for
 --               one while hurt with none held (BotSurvival.needs_heal)
 --             - for a route to a <fetch> of a cure for the player's
@@ -76,8 +78,8 @@
 --   5. nothing left: approach and time-out marks under MAX_ATTEMPTS get one
 --      more try; then finish with the reason.
 -- A goal that fails is marked with the inventory it failed with; it is tried
--- again (at most MAX_ATTEMPTS times, without limit for a full inventory)
--- once the inventory changes. A <use>
+-- again (at most MAX_ATTEMPTS times; a key or <use> item without limit for
+-- a full inventory) once the inventory changes. A <use>
 -- that failed in its room is retried there, never travelled to.
 --
 -- The loop rule. Real progress is a change of the rooms entered, the items
@@ -257,6 +259,30 @@ local function mark(bot, kind, room, slot, reason, permanent)
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
 end
 
+-- Whether an `inventory full` mark on `item` waits for the inventory to
+-- change however often it was tried, beyond a key or <use> item (m.needed):
+-- a heal while the bot is hurt with none held (408's wasps stung it to 1
+-- with the mansion's green herbs given up), or the ammunition of a gun
+-- held or in the box (35 shells were left on full inventories while the
+-- bot ran dry).
+local function full_mark_needed(bot, item)
+    local kind, _, heals = bot:item_kind(item)
+    if kind == "heal" then
+        return heals == true and BotSurvival.needs_heal(bot)
+    end
+    if kind ~= "ammo" then
+        return false
+    end
+    local k = bot:knowledge()
+    local box = BotInventory.remembered(bot)
+    for id, _ in pairs(k and k.weapons or {}) do
+        if bot:ammo_for(id) == item and (bot:has_item(id) or box[id]) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Whether a marked goal is still off limits. A goal is tried again once
 -- the inventory changes; a goal that failed on its approach is also tried
 -- again on a later entry into its room (the bot may now stand in a part of
@@ -301,11 +327,11 @@ local function blocked(bot, kind, room, slot, remote)
         plan().marks[mark_key(kind, room, slot)] = nil
         return false
     end
-    -- A full inventory is no failure of the goal: a pickup marked for it
-    -- (401's red book, three passes with every slot used) waits for the
-    -- inventory to change however often it was tried.
-    if m.permanent
-        or (m.attempts >= MAX_ATTEMPTS and not m.reason:find("inventory full", 1, true)) then
+    -- A full inventory is no failure of a needed pickup (a key or a <use>
+    -- item, m.needed: 401's red book, three passes with every slot used):
+    -- it waits for the inventory to change however often it was tried.
+    local needed = m.needed or (m.item and full_mark_needed(bot, m.item))
+    if m.permanent or (m.attempts >= MAX_ATTEMPTS and not needed) then
         return true
     end
     if m.hold and bot:tick() >= m.hold then
@@ -1213,7 +1239,33 @@ end
 -- A pursued target's goal row while it is still worth pursuing, or nil: a
 -- frontier door or item, or a <use> fact whose item is held and whose done
 -- flag is clear.
+-- Whether to head back to the room of the <fight> fact `fight`: it is
+-- still ahead, a step leading into it was held back there (an interact
+-- mark `not ready for the fight`), and the bot is ready now (a heal
+-- fetched from the box, rounds found). Fight steps are room-local, so
+-- without this a frontier emptied elsewhere never returns to them (40C's
+-- Plant 42 after its heal trip to 403).
+local function fight_due(bot, fight)
+    if fight.bank and bot:flag(fight.bank, fight.bit) then
+        return false
+    end
+    local held_back = false
+    for _, m in pairs(plan().marks) do
+        if m.kind == "interact" and m.room == fight.room
+            and m.reason:find("not ready for the fight", 1, true) then
+            held_back = true
+        end
+    end
+    return held_back and (BotSurvival.fight_ready(bot, fight))
+end
+
 local function target_goal(bot, world, t)
+    if t.kind == "fight" then
+        if fight_due(bot, t.fact) then
+            return { kind = "fight", room = t.room, slot = t.slot }
+        end
+        return nil
+    end
     if t.kind == "box" then
         if BotInventory.box_reason(bot, gave_up)
             and not blocked(bot, "box", t.room, t.slot, true) then
@@ -1598,6 +1650,14 @@ local function choose(bot)
                 -- No slot for it and no stack to merge into: retried once
                 -- the inventory changes.
                 mark(bot, "item", room, action.slot, "inventory full: " .. inventory_sig(bot))
+                -- A key or an item a <use> fact needs is never given up for
+                -- a full inventory (401's red book, passed three times).
+                local ctx = BotInventory.context(bot)
+                local m = plan().marks[mark_key("item", room, action.slot)]
+                m.item = action.item
+                if bot:item_kind(action.item) == "key" or ctx.uses[action.item] then
+                    m.needed = true
+                end
             elseif BotNav.is_origin_zone(action) then
                 mark(bot, "item", room, action.slot,
                     "zone at the room origin: a scripted handover", true)
@@ -1852,6 +1912,12 @@ local function choose(bot)
             p.target = nil
             goal = nil
         end
+        if goal and goal.kind == "fight" and goal.room == room then
+            -- Here: the room's own steps take the fight; its marks lifted
+            -- with the inventory change that made the bot ready.
+            p.target = nil
+            goal = nil
+        end
         if goal and goal.kind == "save" and goal.room == room then
             -- Here: BotSave.step decides at the typewriter.
             BotSave.trip_arrived(bot)
@@ -1875,7 +1941,7 @@ local function choose(bot)
         else
             steps = goal and goal.room ~= room
                 and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
-                    or usable(goal))
+                    or goal.kind == "fight" or usable(goal))
                 and route(bot, world, room, goal.room)
         end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -2008,6 +2074,25 @@ local function choose(bot)
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,
                         item = fact.item, bank = fact.bank, bit = fact.bit, fact = fact,
+                        label = label, best = #steps, stalls = 0 },
+                })
+            end
+        end
+    end
+    -- A boss fight held back in another room, now ready (fight_due).
+    for _, fight in ipairs(bot:fight_facts()) do
+        if fight.room ~= room and fight_due(bot, fight) then
+            local steps = route(bot, world, room, fight.room)
+            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+            if first then
+                order = order + 1
+                local label = string.format("the fight in %s (enemy 0x%02X), now ready",
+                    fight.room, fight.enemy)
+                consider({
+                    cost = door_len(first.slot) - HELD_USE_BONUS + route_monsters(steps),
+                    order = order, door = first,
+                    why = string.format("toward %s, %d door(s)", label, #steps),
+                    target = { kind = "fight", room = fight.room, slot = "fight", fact = fight,
                         label = label, best = #steps, stalls = 0 },
                 })
             end

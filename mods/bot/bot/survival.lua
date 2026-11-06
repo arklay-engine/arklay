@@ -150,6 +150,9 @@ function BotSurvival.health_ready(bot, what)
     return true
 end
 
+-- A firearm fight also waits for a heal held while the remembered box
+-- holds one (its "no heal item held" withdrawal fetches it): healed on the
+-- way in is not enough for a boss that bites for 70 (20C's Yawn 2).
 function BotSurvival.fight_ready(bot, fact)
     local ok, why = BotSurvival.health_ready(bot, "the fight")
     if not ok then
@@ -158,7 +161,19 @@ function BotSurvival.fight_ready(bot, fact)
     local k = bot:knowledge()
     local entry = k and k.enemies[fact.enemy]
     local hand = entry and entry.prefer and k.weapons[entry.prefer]
-    if not entry or not entry.health or not entry.keep or (hand and hand.melee) then
+    if hand and hand.melee then
+        return true
+    end
+    if #heal_rows(bot) == 0 then
+        for item, _ in pairs(BotInventory.remembered(bot)) do
+            local kind, _, heals = bot:item_kind(item)
+            if kind == "heal" and heals ~= false then
+                return false, string.format(
+                    "not ready for the fight: no heal held and the box holds 0x%02X", item)
+            end
+        end
+    end
+    if not entry or not entry.health or not entry.keep then
         return true
     end
     local weapon = bot:weapon()
