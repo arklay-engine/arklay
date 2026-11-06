@@ -525,13 +525,17 @@ function BotInventory.context(bot)
             -- weapon (the acid one went into 100's box as a spare gun and
             -- the bot met 309's hunters without it), and so are the other
             -- rounds held for it.
+            -- The other rounds only while its own are not held: three
+            -- kinds of grenade rounds held as loadout left no slot to
+            -- deposit for 30A's hex crank, and the run ended there.
+            local own = ammo and bot:item_count(ammo) > 0
             for id, gun in pairs(knowledge.weapons) do
                 if gun.variant_of == prefer then
                     local other = bot:ammo_for(id)
                     if bot:has_item(id) or box[id] then
                         ctx.loadout[id] = true
                     end
-                    if other and bot:item_count(other) > 0 then
+                    if other and not own and bot:item_count(other) > 0 then
                         ctx.loadout[other] = true
                     end
                 end
@@ -562,6 +566,28 @@ function BotInventory.context(bot)
                 ctx.staple_guns = ctx.staple_guns or {}
                 ctx.staple_guns[id] = true
             end
+        end
+    end
+    -- With a reserve gun (the launcher) or nothing equipped, one ordinary
+    -- firearm is not spare: the swap boxed the shotgun and then the
+    -- handgun behind the launcher, and the lab's zombies met an empty
+    -- flame launcher and the knife. A loaded one that is not the staple
+    -- (the shotgun) first, then the most rounds: kept for its rounds, the
+    -- handgun met 308's two hunters with the shotgun boxed.
+    local equipped = knowledge and ctx.equipped and knowledge.weapons[ctx.equipped]
+    if not equipped or equipped.reserve or equipped.melee then
+        local best, best_rank
+        for id, rounds in pairs(ctx.spare_guns or {}) do
+            local row = knowledge.weapons[id]
+            local rank = (rounds > 0 and not row.staple) and 1 or 0
+            if not row.reserve and (not best or rank > best_rank
+                or (rank == best_rank and (rounds > ctx.spare_guns[best]
+                    or (rounds == ctx.spare_guns[best] and id > best)))) then
+                best, best_rank = id, rank
+            end
+        end
+        if best then
+            ctx.spare_guns[best] = nil
         end
     end
     -- The loadout keeps a hand weapon a fight in this stage prefers; one

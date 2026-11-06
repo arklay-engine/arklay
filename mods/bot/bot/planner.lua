@@ -127,6 +127,9 @@ local MAX_REPEATS = 6
 -- A goal marked looping is held off this long, or until the inventory
 -- changes, whichever comes first.
 local LOOP_HOLD = 3 * 60 * C.SECOND
+-- How long an empty frontier waits before it ends the run (a won fight's
+-- scene, then the ending, can still be coming).
+local EMPTY_FRONTIER_GRACE = 40 * C.SECOND
 -- A route to the ammunition the equipped gun needs (BotSurvival.ammo_need).
 local AMMO_BONUS = 60 * C.REACH
 -- A route to a frontier item that a <use> fact needs (item_bonus).
@@ -2586,6 +2589,17 @@ function BotPlanner.step(bot)
                     end
                     return
                 end
+            end
+        end
+        -- A just-won fight's scene can still be coming (303's Tyrant falls
+        -- off the heliport, then the ending plays): an empty frontier waits
+        -- a while before it ends the run, and resets once a goal shows.
+        if p.goal then
+            p.empty_since = nil
+        else
+            p.empty_since = p.empty_since or bot:tick()
+            if bot:tick() - p.empty_since < EMPTY_FRONTIER_GRACE then
+                return
             end
         end
         if not p.goal then
