@@ -6,5 +6,8 @@
      under the shelf; from its top a press reaches the crank. Taking it
      clears item bit 35 (bank 7). The crank drains 301's pool. -->
 <bot format="2">
+  <!-- The crank off the frontier (only the climb reaches it): this tells
+       the inventory rules from other rooms that it needs a slot. -->
+  <holds item="0x1D" label="square crank on the shelf"/>
   <climb object="0" slot="3" bank="7" bit="35" done="clear" label="square crank on the shelf"/>
 </bot>

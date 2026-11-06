@@ -81,21 +81,24 @@
        poise has 0x20 only. chase_player attacks at angular distance 1500,
        pushed_back (crawler) at 2200; attack() holds the player
        (player_state 5). HEALTH table max 99. Chase walk 45 a tick against
-       Jill's run 210, so it can be outrun. -->
+       Jill's run 210, so it can be outrun. prefer the shotgun (all three
+       zombies): a head pop inside 3000 ends it in one or two shells, where
+       the handgun takes nine rounds; zombies took about 80 handgun rounds
+       of a run that ran dry in the guardhouse. -->
   <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
   </enemy>
   <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
   <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
   </enemy>
   <!-- Green zombie: the same driver as 0x00. -->
   <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
   </enemy>
@@ -176,9 +179,12 @@
        is shot torso from outside 4000: the reach given keeps that band. The
        bite starts under 2000 and the grown form swallows (a hold). HEALTH
        0x012C (0x0190 on a second playthrough); handgun 30, shotgun 40 a hit
-       (DEFAULT_FIRST_RUN rows 181 and 182), grenade launcher 80 (row 186). -->
+       (DEFAULT_FIRST_RUN rows 181 and 182), grenade launcher 80 (row 186).
+       prefer the launcher: the handgun took thirteen rounds and 70 health
+       in a run. -->
   <enemy id="0x12" name="yawn 2" policy="fight" stand="torso" downed="none"
-         up="no" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400">
+         up="no" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400"
+         prefer="0x07">
     <keep weapon="0x02" min="4300" max="8000" damage="30"/>
     <keep weapon="0x03" min="4300" max="8000" damage="40"/>
     <keep weapon="0x07" min="4300" max="8000" damage="80"/>

@@ -90,8 +90,14 @@ Priorities, highest first:
    `0.85 * max_health`, so the bot walks into a boss fight healed. The
    steps that lead into it wait (`BotSurvival.fight_ready`, marked `not
    ready for the fight`, lifted once the inventory changes) while health
-   is under that with no heal held, or while the held rounds' damage (each
-   gun's rounds times its `<keep>` damage) is under the enemy's health. Then a save at a
+   is under that with no heal held, while no heal is held and the
+   remembered box holds one (a firearm fight; the box's `no heal item
+   held` withdrawal fetches it), or while the held rounds' damage (each
+   gun's rounds times its `<keep>` damage) is under the enemy's health.
+   Fight steps are seen only in their own room, so once a held-back
+   fight is ready (a heal fetched from the box), the planner heads back
+   to its room from anywhere (`toward the fight in 40C ... now ready`,
+   weighted like a held item's `<use>`). Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
@@ -248,8 +254,13 @@ heads back to an item whose approach failed, even after the inventory
 changed. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
-full` mark: that waits for the inventory to change however often it was
-tried (401's red book, passed three times with every slot used). A done
+full` mark on a key or an item a `<use>` fact needs: that waits for the
+inventory to change however often it was tried (401's red book, passed
+three times with every slot used), one on a heal item while the bot is
+hurt with no heal held (`BotSurvival.needs_heal`: the mansion's green
+herbs, given up while the inventory was full, when 408's wasps had stung
+it to 1), and one on the ammunition of a gun held or in the box (a run
+left 35 shells on full inventories and ran dry). A done
 puzzle step (an `<interact>`, `<use>`, `<deliver>` or `<fetch>`) clears
 the approach marks of its room and the door approach marks of every room:
 301's refilled pool stops 302's waterfall, and the door to 307 beyond it
@@ -576,8 +587,10 @@ drives the box screen with pad input only.
 - Keep (never deposit): keys, an item an open `<use>` fact needs, the
   equipped weapon, a firearm the knowledge file lists, the ammunition of
   those guns (the reserve), and heal items. Everything else may go in.
-- Soft deposits, when a slot is still short: heals beyond the first stack,
-  keys no remembered door needs, then held melee weapons that are not
+- Soft deposits, when a slot is still short: heals beyond the first stack
+  (only for a key, a `<use>` item or the loadout, never for ammunition
+  alone: a first aid spray boxed for acid rounds left the bot one herb
+  for Yawn 2), keys no remembered door needs, then held melee weapons that are not
   equipped and that no pending fight prefers. Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
   fact or a locked door needs back) do spare guns go too, fewest rounds
@@ -608,11 +621,17 @@ drives the box screen with pad input only.
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
   step whose preferred weapon is not held waits while a frontier pickup of
   it is in the room (`BotPuzzle.preferred_pickup`), so it is taken first.
-- Rearm: while sourcing ammunition ([Ammunition](#ammunition)), a firearm
-  in the remembered box (not a `reserve` one) whose ammunition is held or
-  in the box comes out with that ammunition, the way the loadout does
-  (`rearm: the held guns are short of rounds`): the shotgun put away
-  empty is taken back once its shells are, when the handgun runs dry.
+- Rearm: a firearm in the remembered box (not a `reserve` one) comes out
+  with its ammunition, the way the loadout does
+  (`rearm: a boxed gun's ammunition is at hand`), when that ammunition is
+  held (it then stays held rather than going in after the gun), or when
+  it is in the box while sourcing ammunition
+  ([Ammunition](#ammunition)). So the shotgun put in to make room for a
+  key comes back once shells are picked up, and the shotgun put away
+  empty comes back with its boxed shells when the handgun runs dry. The
+  rearm counts the slots it takes (the gun, and its ammunition when
+  boxed) and waits while a key or `<use>` pickup needs the free slots;
+  otherwise the swap would put the gun straight back.
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
