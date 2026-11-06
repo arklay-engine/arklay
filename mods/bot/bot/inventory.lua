@@ -37,10 +37,10 @@
 --             RESERVE slots stay free. First of all, from any box (a
 --             trip is made for it), the weapon and ammunition a <fight>
 --             ahead in this stage prefers (the loadout, the knowledge
---             file's `prefer`), into any free slot; so is the rearm:
---             while sourcing ammunition, a firearm in the box (not a
---             `reserve` one) whose ammunition is held or in the box, with
---             that ammunition.
+--             file's `prefer`), into any free slot; so is the rearm: a
+--             firearm in the box (not a `reserve` one) whose ammunition
+--             is held, or in the box while sourcing ammunition, with that
+--             ammunition (held, it stays).
 --   combine:  only when the inventory is at its limit and a pickup needs
 --             room: a pair whose MOVE (bot:combine_result) empties a slot,
 --             of heal, ammo or weapon items only, never a key or an item
@@ -115,6 +115,9 @@ function BotInventory.keep(row, ctx)
     if ctx.loadout and ctx.loadout[item] then
         return "a fight ahead prefers it"
     end
+    if ctx.rearm and ctx.rearm[item] then
+        return "its gun comes back out of the box"
+    end
     if row.kind == "heal" and row.heals ~= false then
         return "heal"
     end
@@ -153,7 +156,10 @@ BotInventory.SOFT_HEALS = 1
 -- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
 -- the ammunition a held gun lacks) has no slot, the softer keeps that may
 -- go in, at most `needed` of them: first heal stacks past SOFT_HEALS (the
--- last in slot order), then a key no remembered locked door needs, then a
+-- last in slot order; only for a key or <use> item, ctx.swap, or the
+-- loadout, ctx.heals_may_go: ammunition alone is no reason to box a heal,
+-- the first aid spray went in for 118's acid rounds and the bot met Yawn 2
+-- with one herb), then a key no remembered locked door needs, then a
 -- spare hand weapon (ctx.spare: held, not equipped, and no pending <fight>
 -- prefers it), then, only to make room for a key or <use> item, boxed or
 -- on the frontier (ctx.swap), a held firearm other than the equipped one,
@@ -172,6 +178,9 @@ function BotInventory.soft_deposits(items, ctx, needed)
         end
     end
     for i = #heals, BotInventory.SOFT_HEALS + 1, -1 do
+        if not (ctx.swap or ctx.heals_may_go) then
+            break
+        end
         if #out >= needed then
             return out
         end
@@ -221,10 +230,10 @@ end
 -- worth a trip to a remote box (a full inventory makes room for it the way
 -- it does for a needed pickup).
 local LOADOUT = "loadout: a fight ahead prefers it"
--- The rearm withdrawal's reason, handled like the loadout's: sourcing
--- ammunition (BotSurvival.sourcing_now), a firearm in the box whose
--- ammunition is held or in the box comes out with it.
-local REARM = "rearm: the held guns are short of rounds"
+-- The rearm withdrawal's reason, handled like the loadout's: a firearm in
+-- the box whose ammunition is held, or in the box while sourcing
+-- ammunition (BotSurvival.sourcing_now), comes out with it.
+local REARM = "rearm: a boxed gun's ammunition is at hand"
 -- The reasons that take any free slot and are worth a remote trip.
 local FIRST = { [LOADOUT] = true, [REARM] = true }
 
@@ -478,19 +487,21 @@ function BotInventory.context(bot)
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
-    -- The rearm: sourcing ammunition, a firearm (not a reserve one) the
-    -- remembered box holds, with its ammunition held or in the box.
-    if knowledge and BotSurvival.sourcing_now(bot) then
+    -- The rearm: a firearm (not a reserve one) the remembered box holds,
+    -- with its ammunition held (useless without it: the shells picked up
+    -- after the shotgun went in for a key), or in the box while sourcing
+    -- ammunition. The held ammunition stays (BotInventory.keep).
+    if knowledge then
         local box = BotInventory.remembered(bot)
+        local sourcing = BotSurvival.sourcing_now(bot)
         for id, row in pairs(knowledge.weapons) do
             local ammo = bot:ammo_for(id)
+            local held = ammo and bot:item_count(ammo) > 0
             if not row.melee and not row.reserve and box[id] and not bot:has_item(id)
-                and ammo and (box[ammo] or bot:item_count(ammo) > 0) then
+                and ammo and (held or (sourcing and box[ammo])) then
                 ctx.rearm = ctx.rearm or {}
                 ctx.rearm[id] = true
-                if box[ammo] then
-                    ctx.rearm[ammo] = true
-                end
+                ctx.rearm[ammo] = true
             end
         end
     end
@@ -512,6 +523,23 @@ function BotInventory.context(bot)
     ctx.used = used_slots(menu.items or {})
     ctx.full = ctx.used >= ctx.capacity
     ctx.heal_top_up = true
+    -- The rearm takes slots (the gun, and its ammunition when boxed): it
+    -- waits while a key or <use> pickup needs the free ones (else the swap
+    -- boxes the gun again: 100's shotgun went in and out for 250k ticks).
+    if ctx.rearm then
+        local box = BotInventory.remembered(bot)
+        local slots = 0
+        for item, _ in pairs(ctx.rearm) do
+            if box[item] then
+                slots = slots + 1
+            end
+        end
+        local after = ctx.capacity - ctx.used - slots
+        local _, progress = BotInventory.needed_pickups(bot, ctx)
+        if progress > 0 and after < progress then
+            ctx.rearm = nil
+        end
+    end
     if ctx.loadout then
         ctx.pickups = BotInventory.pickups_needing_room(bot)
     end
@@ -528,11 +556,41 @@ function BotInventory.remembered(bot)
     return out
 end
 
+-- The <holds> items an open <use> fact needs that are off the frontier:
+-- not held, not in the box and not a frontier pickup. They lie where only
+-- a room-local step (a <climb>, say) reaches them, so from another room the
+-- frontier misses them (11B's crank on its shelf).
+local function held_elsewhere(bot)
+    local open = {}
+    for _, fact in ipairs(bot:use_facts()) do
+        if BotPuzzle.use_open(bot, fact) then
+            open[fact.item] = true
+        end
+    end
+    local seen = {}
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" then
+            seen[goal.item] = true
+        end
+    end
+    local box = BotInventory.remembered(bot)
+    local n = 0
+    for _, fact in ipairs(bot:item_facts()) do
+        if open[fact.item] and not seen[fact.item] and not box[fact.item]
+            and not bot:has_item(fact.item) then
+            seen[fact.item] = true
+            n = n + 1
+        end
+    end
+    return n
+end
+
 -- Known pickups that need a free slot: frontier items that merge into no
--- held stack. `skip(goal)` drops one the planner has given up on.
+-- held stack, and the off-frontier <holds> items (held_elsewhere).
+-- `skip(goal)` drops one the planner has given up on.
 function BotInventory.pickups_needing_room(bot, skip)
     -- A due <fetch> hands over an item that needs a slot too.
-    local n = #BotPuzzle.fetches_due(bot)
+    local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local _, merge = bot:item_kind(goal.item)
@@ -549,7 +607,7 @@ end
 -- result counts the keys, <use> items and fetches among them: progress
 -- items worth a spare gun's slot.
 function BotInventory.needed_pickups(bot, ctx, skip)
-    local n = #BotPuzzle.fetches_due(bot)
+    local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
     local progress = n
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
@@ -588,6 +646,9 @@ function BotInventory.make_room(bot, ctx, items, skip)
                 needed = needed + 1
                 if why ~= "ammunition for a held gun" and not FIRST[why] then
                     ctx.swap = true
+                end
+                if why == LOADOUT then
+                    ctx.heals_may_go = true
                 end
             end
         end
