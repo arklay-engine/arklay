@@ -88,13 +88,16 @@ function BotPuzzle.use_pending(bot, zone, anywhere)
 end
 
 -- The key a sequence step's marks go under: its AOT slot, its camera cut,
--- or its enemy for a <fight>.
+-- its enemy for a <fight>, or its flag for a <wait>.
 function BotPuzzle.step_key(fact)
     if fact.slot then
         return fact.slot
     end
     if fact.cut then
         return "camera" .. fact.cut
+    end
+    if fact.kind == "wait" then
+        return string.format("wait%d:%d", fact.bank, fact.bit)
     end
     return "fight" .. tostring(fact.enemy)
 end

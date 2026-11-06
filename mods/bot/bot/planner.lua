@@ -99,6 +99,8 @@ local USE_ARM_TICKS = 3 * C.SECOND
 -- A <fight> step holds the room this long before it gives up: a boss takes
 -- many clips (40C's Plant 42).
 local FIGHT_TIMEOUT = 5 * 60 * C.SECOND
+-- How long a <wait> step stands still for its room event.
+local WAIT_TIMEOUT = 60 * C.SECOND
 -- A run with no new progress (a room, an item, a flag fact) for this long
 -- is stuck.
 local STUCK_TICKS = 5 * 60 * C.SECOND
@@ -743,6 +745,17 @@ local function interact_goal(bot, fact, index, count)
             job = {
                 fight = true, enemy = fact.enemy, label = label,
                 timeout = FIGHT_TIMEOUT,
+                done = function(b) return BotPuzzle.flag_done(b, fact) end,
+            },
+        }
+    end
+    if fact.kind == "wait" then
+        local label = string.format("wait %d/%d for flag %d:0x%02X (%s)", index, count,
+            fact.bank, fact.bit, fact.label or "unnamed")
+        return {
+            kind = "interact", slot = BotPuzzle.step_key(fact), label = label,
+            job = {
+                wait = true, label = label, timeout = WAIT_TIMEOUT,
                 done = function(b) return BotPuzzle.flag_done(b, fact) end,
             },
         }
@@ -2239,6 +2252,9 @@ function BotPlanner.step(bot)
         status = BotNav.climb_object(bot, goal.job)
     elseif goal.job.fight then
         status = BotNav.hold_fight(bot, goal.job)
+    elseif goal.job.wait then
+        -- A <wait> step: stand still until a timed room event sets its flag.
+        status = goal.job.done(bot) and "done" or "busy"
     else
         status = BotNav.press_zone(bot, goal.job)
     end

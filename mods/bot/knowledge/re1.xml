@@ -119,6 +119,19 @@
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
   </enemy>
 
+  <!-- Yawn's rematch (entity 0x12, 20C on the second mansion visit; enemy/12
+       runs the enemy/0d machine). state_check sets 0x40 only while the
+       player is 4000 or more away and never 0x80 in the juvenile form, so it
+       is shot torso from outside 4000: the reach given keeps that band. The
+       bite starts under 2000 and the grown form swallows (a hold). HEALTH
+       0x012C (0x0190 on a second playthrough); handgun 30, shotgun 40 a hit
+       (DEFAULT_FIRST_RUN rows 181 and 182). -->
+  <enemy id="0x12" name="yawn 2" policy="fight" stand="torso" downed="none"
+         up="no" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400">
+    <keep weapon="0x02" min="4300" max="8000" damage="30"/>
+    <keep weapon="0x03" min="4300" max="8000" damage="40"/>
+  </enemy>
+
   <!-- Plant 42 (the guardhouse boss, 40C). enemy/08: one body entity (no
        behavior bit 0; health 0x28 + 100) and its vine blocks (bit 0; 0x28)
        hang from the ceiling at y -7000. state_check sets 0x40 every frame

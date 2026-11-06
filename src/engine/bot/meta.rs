@@ -188,6 +188,10 @@ pub enum Target {
     /// one so the combat layer engages (40C's Plant 42, which never comes
     /// to the player).
     Fight { enemy: u8 },
+    /// Stand still in the room until the step's flag is set: a timed room
+    /// event that must play out (20C's pit, where Barry comes back with the
+    /// rope after 600 frames).
+    Wait,
 }
 
 /// A room axis a `<push>` lines its object up on.
@@ -506,6 +510,7 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 | "deliver"
                 | "fetch"
                 | "fight"
+                | "wait"
                 | "door"
         );
         if fact && format < 2 {
@@ -535,12 +540,13 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 }
                 meta.puzzles.push(puzzle);
             }
-            "interact" | "camera" | "push" | "climb" | "fight" => {
+            "interact" | "camera" | "push" | "climb" | "fight" | "wait" => {
                 let fact = match name {
                     "interact" => parse_interact(child)?,
                     "camera" => parse_camera(child)?,
                     "climb" => parse_climb(child)?,
                     "fight" => parse_fight(child)?,
+                    "wait" => parse_wait(child)?,
                     _ => parse_push(child)?,
                 };
                 if keep {
@@ -889,6 +895,29 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
         after: None,
+        reveals: None,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
+    check_attributes(
+        node,
+        &[
+            "bank",
+            "bit",
+            "after_bank",
+            "after_bit",
+            "label",
+            "character",
+        ],
+    )?;
+    check_leaf(node)?;
+    Ok(Interact {
+        target: Target::Wait,
+        flag: Some((bank_attr(node)?, attr(node, "bit")?)),
+        done_clear: false,
+        after: after_flag(node)?,
         reveals: None,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1510,6 +1539,19 @@ mod tests {
         assert_eq!(meta.interacts[0].target, Target::Fight { enemy: 0x08 });
         assert_eq!(meta.interacts[0].flag, Some((3, 96)));
         let flagless = r#"<bot format="2"><fight enemy="0x08"/></bot>"#;
+        assert!(parse(flagless).is_err());
+    }
+
+    #[test]
+    fn wait_names_its_flag_and_an_optional_after() {
+        let text = r#"<bot format="2">
+            <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" label="rope"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.interacts[0].target, Target::Wait);
+        assert_eq!(meta.interacts[0].flag, Some((1, 0x25)));
+        assert_eq!(meta.interacts[0].after, Some((1, 0x26)));
+        let flagless = r#"<bot format="2"><wait label="rope"/></bot>"#;
         assert!(parse(flagless).is_err());
     }
 
