@@ -21,6 +21,11 @@
 --                                       yes/no prompt Yes; it succeeds when
 --                                       the engine's inventory holds one
 --                                       stack fewer
+--   BotMenu.examine(bot, item, label)  start a CHECK job on a doom book:
+--                                       turn the viewer's turntable to the
+--                                       angle that opens it, confirm, and
+--                                       wait for the book to become its
+--                                       medal
 --     Each returns true when the job started (or, for equip, the weapon is
 --     already equipped) and false when the item is not held, is the wrong
 --     kind, a job is already running, or the same job failed recently.
@@ -48,6 +53,10 @@ local OPEN_TIMEOUT = 5 * SECOND
 local STEP_TIMEOUT = 90
 local JOB_TIMEOUT = 40 * SECOND
 local SETTLE_TIMEOUT = 4 * SECOND
+local EXAMINE_YAW_LOW = BotConst.EXAMINE_YAW_LOW
+local EXAMINE_YAW_HIGH = BotConst.EXAMINE_YAW_HIGH
+local DOOM_BOOK_2 = BotConst.DOOM_BOOK_2
+local WOLF_MEDAL = BotConst.WOLF_MEDAL
 -- A failed job for the same item and kind is not retried for this long.
 local RETRY_COOLDOWN = 10 * SECOND
 
@@ -175,6 +184,21 @@ function BotMenu.combine(bot, slot, target, label)
     return start(bot, "combine", row.item, label, { slot = slot, target = target })
 end
 
+-- CHECK a doom book (Doom Book II 0x3F, Doom Book I 0x40) and open it: the
+-- viewer turns it into its medal.
+function BotMenu.examine(bot, item, label)
+    if item ~= DOOM_BOOK_2 and item ~= DOOM_BOOK_2 + 1 then
+        log(bot, string.format("examine 0x%02X refused: not a doom book", item))
+        return false
+    end
+    return start(bot, "examine", item, label)
+end
+
+-- The item a CHECK job's book turns into.
+local function examine_result(job)
+    return job.item - DOOM_BOOK_2 + WOLF_MEDAL
+end
+
 function BotMenu.busy()
     return BOT_MENU.job ~= nil
 end
@@ -244,6 +268,9 @@ local function wanted_option(job)
     if job.kind == "combine" then
         return "MOVE"
     end
+    if job.kind == "examine" then
+        return "CHECK"
+    end
     return "USE"
 end
 
@@ -253,6 +280,9 @@ local function result_seen(bot, job)
     end
     if job.kind == "combine" then
         return used_slots(bot:menu()) < job.before_used
+    end
+    if job.kind == "examine" then
+        return bot:item_count(examine_result(job)) > 0
     end
     return bot:item_count(job.item) < job.before_count
 end
@@ -314,7 +344,13 @@ local function drive(bot, job, menu)
         end
         if menu.option == index then
             if pulse(bot, job, "confirm") then
-                set_stage(job, job.kind == "combine" and "move" or "result")
+                local next = "result"
+                if job.kind == "combine" then
+                    next = "move"
+                elseif job.kind == "examine" then
+                    next = "view"
+                end
+                set_stage(job, next)
             end
             return
         end
@@ -344,6 +380,8 @@ local function drive(bot, job, menu)
                 why = string.format("equipped 0x%02X", job.item)
             elseif job.kind == "combine" then
                 why = string.format("slots %d -> %d", job.before_used, used_slots(menu))
+            elseif job.kind == "examine" then
+                why = string.format("0x%02X became 0x%02X", job.item, examine_result(job))
             else
                 why = string.format("count %d -> %d", job.before_count, bot:item_count(job.item))
             end
@@ -361,6 +399,58 @@ local function drive(bot, job, menu)
         end
         pulse(bot, job, "cancel")
     end
+end
+
+-- The CHECK viewer is up for an examine job: turn the book to its angle,
+-- confirm once, and let the zoom, the message and the medal swap play.
+local function drive_examine(bot, job, menu)
+    local view = menu.examine
+    if job.ok ~= nil or not view then
+        -- Done (or failed): cancel leaves the viewer.
+        if view and view.ready then
+            pulse(bot, job, "cancel")
+        end
+        return
+    end
+    if bot:scene().message then
+        pulse(bot, job, "action")
+        return
+    end
+    if view.item == examine_result(job) or result_seen(bot, job) then
+        conclude(bot, job, true, string.format("0x%02X became 0x%02X", job.item,
+            examine_result(job)))
+        return
+    end
+    if not view.ready then
+        job.stage_ticks = 0
+        return
+    end
+    if job.confirmed then
+        -- Back on the turntable with the book unchanged: the angle missed.
+        conclude(bot, job, false, string.format("the book stayed shut at yaw 0x%03X",
+            view.yaw))
+        return
+    end
+    local yaw = view.yaw % BotConst.ANGLE_FULL
+    if yaw >= EXAMINE_YAW_LOW and yaw <= EXAMINE_YAW_HIGH then
+        if job.turning then
+            -- One release tick, so the confirm frame turns no further.
+            job.turning = false
+            return
+        end
+        if pulse(bot, job, "confirm") then
+            job.confirmed = true
+            log(bot, string.format("%s: confirm at yaw 0x%03X", job.label, yaw))
+        end
+        return
+    end
+    job.turning = true
+    -- Left raises the yaw; right lowers it. Turn the short way round to the
+    -- band's middle.
+    local middle = (EXAMINE_YAW_LOW + EXAMINE_YAW_HIGH) // 2
+    local ahead = (middle - yaw) % BotConst.ANGLE_FULL
+    local key = ahead < BotConst.ANGLE_FULL // 2 and "left" or "right"
+    bot:set_input({ [key] = true })
 end
 
 -- Run one tick of the active job. Returns true when the job owns the tick.
@@ -496,6 +586,14 @@ function BotMenu.step(bot)
     if job.refused and job.ok == nil then
         conclude(bot, job, false, string.format("the menu refused the %s",
             wanted_option(job)))
+    end
+    if job.kind == "examine" and menu.screen == "examine" then
+        drive_examine(bot, job, menu)
+        return true
+    end
+    if job.kind == "examine" and job.stage == "view" and menu.phase == "screen" then
+        -- The CHECK slide runs before the viewer starts.
+        return true
     end
     if menu.phase == "screen" then
         -- A sub-screen the job did not ask for (CHECK viewer, map): back out.
