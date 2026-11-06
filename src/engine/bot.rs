@@ -655,6 +655,30 @@ struct MenuSnapshot {
     move_cursor: Option<i64>,
     /// The item box screen, while it is up over the panel.
     item_box: Option<ItemBoxView>,
+    /// The CHECK viewer (`ui/item_view.lua`), while it is up.
+    examine: Option<ExamineView>,
+}
+
+/// The CHECK viewer as the shipped script publishes it with `api:set`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ExamineView {
+    /// The item on the turntable (a doom book becomes its medal here).
+    item: u8,
+    /// The turntable's yaw, `0..0x1000`; left raises it, right lowers it.
+    yaw: i64,
+    /// The turntable takes the d-pad and confirm (`display`/`turn`).
+    ready: bool,
+}
+
+impl ExamineView {
+    fn build(session: &GameSession) -> Option<Self> {
+        let viewer = session.examine.as_deref()?;
+        Some(Self {
+            item: viewer.value("item") as u8,
+            yaw: viewer.value("yaw"),
+            ready: viewer.value("ready") != 0,
+        })
+    }
 }
 
 /// The item box screen as a player sees it, read from the shipped script's
@@ -731,6 +755,7 @@ impl MenuSnapshot {
         };
         let requested = session.menu_request.is_some();
         let item_box = ItemBoxView::build(session);
+        let examine = ExamineView::build(session);
         let Some(menu) = session.menu.as_deref() else {
             return Self {
                 requested,
@@ -782,6 +807,7 @@ impl MenuSnapshot {
                 .then(|| menu.state_int("move_cursor"))
                 .flatten(),
             item_box,
+            examine,
         }
     }
 }
@@ -3114,6 +3140,13 @@ impl UserData for BotCtx {
                 }
                 item_box.set("items", slots)?;
                 table.set("box", item_box)?;
+            }
+            if let Some(view) = &menu.examine {
+                let examine = lua.create_table()?;
+                examine.set("item", view.item)?;
+                examine.set("yaw", view.yaw)?;
+                examine.set("ready", view.ready)?;
+                table.set("examine", examine)?;
             }
             Ok(table)
         });
