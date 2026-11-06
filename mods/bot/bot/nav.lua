@@ -199,6 +199,51 @@ function BotNav.reach_length(bot, zone)
     return point and point[6] and point[5] or nil
 end
 
+-- The sides of a zone where a press got nothing, by room and zone: a later
+-- job on the same zone tries that side's points last (401's drawer answers
+-- from one side only, and every visit used to spend its whole budget on
+-- points along the same dead side). Geometry, so it survives a reload.
+local dead_sides = {}
+
+local function zone_key(bot, zone)
+    return string.format("%s:%d,%d,%d,%d", bot:room().id, zone.x, zone.z, zone.width, zone.depth)
+end
+
+-- The side of `zone` approach point `point` stands on ("inside" within it).
+local function side_of(zone, point)
+    if point[2] > zone.z + zone.depth then
+        return "north"
+    elseif point[2] < zone.z then
+        return "south"
+    elseif point[1] < zone.x then
+        return "west"
+    elseif point[1] > zone.x + zone.width then
+        return "east"
+    end
+    return "inside"
+end
+
+-- `points` with the ones on a side a press got nothing on (dead_sides)
+-- moved last.
+local function live_first(bot, zone, points)
+    local dead = dead_sides[zone_key(bot, zone)]
+    if not dead then
+        return points
+    end
+    local live, rest = {}, {}
+    for _, point in ipairs(points) do
+        if dead[side_of(zone, point)] then
+            rest[#rest + 1] = point
+        else
+            live[#live + 1] = point
+        end
+    end
+    for _, point in ipairs(rest) do
+        live[#live + 1] = point
+    end
+    return live
+end
+
 -- One tick of a zone press job. `job` fields set by the caller:
 --   zone      {x, z, width, depth}
 --   label     log label
@@ -215,7 +260,7 @@ end
 -- Returns "done", "busy" or "failed" (with job.reason).
 function BotNav.press_zone(bot, job)
     if not job.points then
-        job.points = BotNav.approach_points(bot, job.zone)
+        job.points = live_first(bot, job.zone, BotNav.approach_points(bot, job.zone))
         job.index = 1
         job.pressing = false
         job.arrived_at = nil
@@ -355,6 +400,18 @@ function BotNav.press_zone(bot, job)
     if job.ticks > (job.side or 4 * C.SECOND) then
         bot:log(string.format("%s: nothing on approach %d; next side",
             job.label, job.index))
+        local key = zone_key(bot, job.zone)
+        dead_sides[key] = dead_sides[key] or {}
+        dead_sides[key][side_of(job.zone, point)] = true
+        -- The points still to try: the other sides first.
+        local left = {}
+        for i = job.index + 1, #job.points do
+            left[#left + 1] = job.points[i]
+        end
+        left = live_first(bot, job.zone, left)
+        for i, p in ipairs(left) do
+            job.points[job.index + i] = p
+        end
         job.index = job.index + 1
         job.pressing = false
         job.arrived_at = nil

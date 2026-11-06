@@ -247,7 +247,13 @@ room (the bot may stand in another part of it). Remote planning never
 heads back to an item whose approach failed, even after the inventory
 changed. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
-inventory change. After 3 attempts the mark holds.
+inventory change. After 3 attempts the mark holds, except an `inventory
+full` mark: that waits for the inventory to change however often it was
+tried (401's red book, passed three times with every slot used). A done
+puzzle step (an `<interact>`, `<use>`, `<deliver>` or `<fetch>`) clears
+the approach marks of its room and the door approach marks of every room:
+301's refilled pool stops 302's waterfall, and the door to 307 beyond it
+had used up its attempts before.
 
 An item goal that costs a quarter of the maximum health while the planner
 is trying it (`HURT_SHARE`) is dropped and marked `hurt while trying`:
@@ -263,7 +269,12 @@ quarter approach in from each end. A narrow zone beside a wall has its
 middle inside the wall's grown box, so only its open end can be stood at:
 102's broken shotgun (x 6500..7000) is taken from x 6575.
 Points the path planner reaches come first, by path length; then up to 6
-unplanned points by distance, each with a short walk budget.
+unplanned points by distance, each with a short walk budget. A point where
+a press got nothing (`nothing on approach N`) marks its side of the zone
+(north, south, east, west or inside) dead, by room and zone, and a later
+job on the same zone tries that side's points last: 401's drawer answers
+from one side only, and each visit used to spend its whole time budget on
+points along the same dead side.
 
 The path planner searches a 512-unit lattice first. When that finds no path
 (a corridor narrower than the lattice rows, like the 10C bed passage), it
@@ -847,7 +858,7 @@ files. The checked-in facts:
 | 105 | Jill: `<use>` the gold emblem (`0x20`) at slot 11, the fireplace; done flag bank 1 `0xAB`. Chris: the same at slot 8; done flag `0xA8`. The fireplace hollow's message (Jill slot 13, Chris slot 10) is avoided. |
 | 10C | `<use>` the herbicide (`0x26`) at slot 2, the pump; done flag bank 1 `0xA9`. `<avoid slot="4" bank="1" bit="0xA9" while="clear">`: the plant fountains stand across the way to the armor key until the herbicide, and `<avoid>` slots 5..10 the same for the six herbs in their reach. |
 | 102 | `<holds item="0x1C">`: the broken shotgun lies here (the room's door from 101 takes the armor key). |
-| 210 | `<interact slot="4" bank="7" bit="0x81" done="clear">`: the moon crest has no player bit; the nest event (AOT 4) hands it over. |
+| 210 | `<interact slot="4" bank="7" bit="0x81" done="clear">`: the moon crest has no player bit; the nest event (AOT 4) hands it over. Yawn (`0x0D`) comes for the bot while it does; it is passed (`policy="pass"`): a handgun fight cost the same 82 health as passing it, and 9 rounds. |
 | 202 | `<push object="0" slot="3" bank="0" bit="0x0B">`: the statue along the balcony until it falls; the fall sets scenario `0x0B` and puts the blue jewel (`0x21`) in 105. |
 | 10D | `<use>` the blue jewel (`0x21`) at slot 2, the tiger's eye; done flag bank 0 `0x0F` (the wind crest pickup arms). `<use>` the red jewel (`0x22`) at slot 2; done flag bank 0 `0x0E` (the magnum). |
 | 10F | `<push object="1" slot="5" direction="east">`: the bookshelf off the music score's pickup. `<use>` the music score (`0x23`) at slot 13, the piano; done flag bank 1 `0xA5` (the bar counter moves off the gold emblem). `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
