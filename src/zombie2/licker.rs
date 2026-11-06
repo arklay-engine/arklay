@@ -184,7 +184,10 @@ impl Em22<'_, '_, '_, '_> {
         if self.l.flags & FLAG_QUIET == 0 {
             let seq = self.em.mover.now_seq();
             if seq & super::SEQ_SOUND != 0 {
-                self.em.z.sounds.push((seq >> 28) as u8);
+                self.em
+                    .z
+                    .sounds
+                    .push(((seq >> 28) as u8, self.em.mover.player.pos));
             }
         }
         self.em.z.last_routine = self.em.work().routine;

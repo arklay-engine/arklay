@@ -5695,8 +5695,31 @@ impl GameSession {
                 .first()
                 .map_or(0, |player| i32::from(player.health));
             self.game.re2.player.begin_at_life(life);
+            if self.game.is_re2_room && self.game.re2.player.neck.position.is_none() {
+                self.place_re2_start_neck();
+            }
         }
         Ok(())
+    }
+
+    /// A room started on its own has no last room to keep the player's head
+    /// from, where a door keeps it until the new room's first frame. The
+    /// original reached the same room by `--warp` has it where the rest pose
+    /// puts it at the new place, so the zombies' first `Root_ck` can see it.
+    fn place_re2_start_neck(&mut self) {
+        let Some(assets) = self.loaded.player_assets.as_ref() else {
+            return;
+        };
+        let relative = &assets.emd.skeleton.relative;
+        let rest = crate::model::Keyframe {
+            offset: relative.first().copied().unwrap_or_default(),
+            vertex: [0; 3],
+            rotations: vec![[0; 3]; relative.len()],
+        };
+        let shown = self.player.anim.applied_pose();
+        self.player.anim.set_applied_pose(Some(rest));
+        self.place_re2_door_neck();
+        self.player.anim.set_applied_pose(shown);
     }
 
     /// Write the session's current state to `path` as a save block.

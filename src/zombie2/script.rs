@@ -279,7 +279,8 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("sound", |_, e, slot: i64| {
-            e.em().z.sounds.push(slot as u8);
+            let em = e.em();
+            em.z.sounds.push((slot as u8, em.mover.player.pos));
             Ok(())
         });
         methods.add_method_mut("rnd", |_, e, ()| Ok(e.em().rnd()));
@@ -1150,7 +1151,7 @@ impl UserData for Api {
             let em = e.em();
             let seq = em.mover.now_seq();
             if seq & super::SEQ_SOUND != 0 {
-                em.z.sounds.push((seq >> 28) as u8);
+                em.z.sounds.push(((seq >> 28) as u8, em.mover.player.pos));
             }
             Ok(())
         });
