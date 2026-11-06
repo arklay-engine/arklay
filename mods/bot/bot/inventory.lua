@@ -234,8 +234,11 @@ local LOADOUT = "loadout: a fight ahead prefers it"
 -- the box whose ammunition is held, or in the box while sourcing
 -- ammunition (BotSurvival.sourcing_now), comes out with it.
 local REARM = "rearm: a boxed gun's ammunition is at hand"
+-- The cure withdrawal's reason (ctx.cure_now).
+local CURE = "a cure for the poison"
+BotInventory.CURE = CURE
 -- The reasons that take any free slot and are worth a remote trip.
-local FIRST = { [LOADOUT] = true, [REARM] = true }
+local FIRST = { [LOADOUT] = true, [REARM] = true, [CURE] = true }
 
 -- The free slots a top-up withdrawal must leave.
 local function slots_to_leave()
@@ -250,6 +253,9 @@ function BotInventory.wanted_back(row, ctx)
     local item = row.item
     if item == 0 then
         return nil
+    end
+    if ctx.cure_now and ctx.cure_now[item] then
+        return CURE
     end
     if ctx.uses and ctx.uses[item] then
         return "a <use> fact needs it"
@@ -398,8 +404,21 @@ function BotInventory.context(bot)
     local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
     ctx.equipped = bot:player().equipped
     local knowledge = bot:knowledge()
+    -- Poisoned with no cure for it held: the cures for it come out of the
+    -- box first (ctx.cure_now; 408's wasps poisoned the bot and it walked
+    -- 17k ticks poisoned with a blue herb boxed).
+    local player = bot:player()
+    local cure_for, cure_held = {}, false
     for _, cure in ipairs(knowledge and knowledge.cures or {}) do
         ctx.cures[cure.item] = true
+        if (cure.poison == "poison" and player.poisoned)
+            or (cure.poison == "serious" and player.seriously_poisoned) then
+            cure_for[cure.item] = true
+            cure_held = cure_held or bot:item_count(cure.item) > 0
+        end
+    end
+    if next(cure_for) and not cure_held then
+        ctx.cure_now = cure_for
     end
     for id, _ in pairs(knowledge and knowledge.weapons or {}) do
         ctx.guns[id] = true

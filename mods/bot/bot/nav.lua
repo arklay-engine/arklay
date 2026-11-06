@@ -782,7 +782,14 @@ function BotNav.hold_fight(bot, job)
         return "done"
     end
     -- The target: the part first picked while it lives, else the one of
-    -- the job's id with the most health (a boss's body over its vines).
+    -- the job's id with the most health (a boss's body over its escort).
+    -- A monster of parts (knowledge parts="yes", Plant 42) is the other way
+    -- round: its vines first, the weakest live part, since shooting them
+    -- is what ends it (Barry burns the plant) and the body soaked up eight
+    -- launcher rounds in a run.
+    local k = bot:knowledge()
+    local entry = k and k.enemies[job.enemy]
+    local weakest = entry ~= nil and entry.parts == true
     local target
     for _, e in ipairs(bot:enemies()) do
         if e.id == job.enemy and e.health > 0 then
@@ -790,7 +797,8 @@ function BotNav.hold_fight(bot, job)
                 target = e
                 break
             end
-            if not target or e.health > target.health then
+            if not target or (weakest and e.health < target.health)
+                or (not weakest and e.health > target.health) then
                 target = e
             end
         end
