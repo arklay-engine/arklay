@@ -162,6 +162,13 @@ function BotSurvival.fight_ready(bot, fact)
     local entry = k and k.enemies[fact.enemy]
     local hand = entry and entry.prefer and k.weapons[entry.prefer]
     if hand and hand.melee then
+        -- Its hand weapon still in the box is no readiness: 30C's web read
+        -- ready from 30B, and back in 30C the knife's withdrawal won, so
+        -- the bot walked the door between them until the frontier ran out.
+        if not bot:has_item(entry.prefer) then
+            return false, string.format("not ready for the fight: 0x%02X not held",
+                entry.prefer)
+        end
         return true
     end
     if #heal_rows(bot) == 0 then

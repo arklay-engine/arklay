@@ -517,9 +517,14 @@ function BotInventory.context(bot)
         -- fight not seen yet: 403's box left the launcher behind for 20C's
         -- Yawn 2, met from the guardhouse before the bot had seen 20C, and
         -- the handgun lost that fight four times.
+        -- A hand weapon counts in any stage once its fight's room was
+        -- visited: 30C's web, met without the knife (boxed in 118 as a
+        -- spare in stage 1), sent the bot to 403's box, where stage 4
+        -- asked nothing out, and the bot walked 30C and 403 poisoned.
+        local met = bot:visited(fight.room)
         if pending and (fight.room:sub(1, 1) == here:sub(1, 1)
             or fight.stage == here:sub(1, 1)
-            or not row.melee) then
+            or not row.melee or met) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
             local ammo = bot:ammo_for(prefer)
