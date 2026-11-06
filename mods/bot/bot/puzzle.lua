@@ -138,6 +138,11 @@ end
 -- may clear an earlier step's flag (a switch chain that keeps only the last
 -- bit), so the sequence position is the furthest step whose flag was ever
 -- seen set; the next step is the first one after it whose flag is clear.
+-- A <push> flag is no sequence mark, only one more way the step reads done
+-- (40D's crates each set or clear the same two bits), and a push done on
+-- this room entry stays done for the entry: a later push may move the
+-- object out of an earlier step's band (40D's third crate, lined up with
+-- the ladder corridor and then pushed east).
 --
 -- A <camera> step without a flag has nothing to persist: it counts as done
 -- once its cut was entered during the current room entry (see
@@ -150,12 +155,15 @@ function BotPuzzle.next_interact(bot)
     -- A climb is not done while the player still stands on the object.
     local on_top = BotNav.on_top(bot)
     for index, fact in ipairs(interacts) do
-        if index > done and fact.bank and BotPuzzle.flag_done(bot, fact)
+        if index > done and fact.bank and fact.kind ~= "push" and BotPuzzle.flag_done(bot, fact)
             and not (fact.kind == "climb" and on_top) then
             done = index
         end
     end
     BOT_STATE.puzzle[room] = done
+    if (BOT_STATE.pushed or 0) > done then
+        done = BOT_STATE.pushed
+    end
     local visits = BOT_STATE.puzzle_visits or {}
     for index = done + 1, #interacts do
         local fact = interacts[index]
@@ -179,12 +187,14 @@ end
 -- A <push> step is done while its object's centre sits in the middle half
 -- of its zone (the room's object probe tests the object's position). A push
 -- with a direction is done once the object has cleared the zone that way
--- (past its far edge with clear="full"),
+-- (past its far edge with clear="full"; with until="stop" only once the push
+-- stalls against a wall, which the planner records),
 -- or once the zone is gone or its item was taken (the item it hid). A push
 -- with a flag is also done once the flag is set.
 function BotPuzzle.push_dir(fact)
     if fact.direction then
-        return { x = fact.dx, z = fact.dz, full = fact.clear_full == true }
+        return { x = fact.dx, z = fact.dz, full = fact.clear_full == true,
+            until_stop = fact.until_stop == true }
     end
     return nil
 end
@@ -219,7 +229,10 @@ function BotPuzzle.push_done(bot, fact)
     if not object or not action then
         return false
     end
-    local ex, ez = BotNav.push_error(object, action, dir)
+    if dir and dir.until_stop then
+        return false
+    end
+    local ex, ez = BotNav.push_error(object, action, dir, fact.axis)
     return ex == 0 and ez == 0
 end
 
@@ -229,9 +242,17 @@ function BotPuzzle.visited(index)
     BOT_STATE.puzzle_visits[index] = true
 end
 
--- A new room entry forgets the flagless steps.
+-- Record that push step `index` of this room finished on this entry.
+function BotPuzzle.pushed(_bot, index)
+    if index and index > (BOT_STATE.pushed or 0) then
+        BOT_STATE.pushed = index
+    end
+end
+
+-- A new room entry forgets the flagless steps and the pushes done.
 function BotPuzzle.enter_room()
     BOT_STATE.puzzle_visits = {}
+    BOT_STATE.pushed = nil
 end
 
 -- Record the slot the planner just pressed, so a prompt it opens can be
