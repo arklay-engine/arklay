@@ -21,7 +21,10 @@
       head; weak = past this distance the shotgun hit may do less damage;
       status_bit = the aim direction must match the enemy's status bit.
       melee (optional) = a hand weapon: no rounds; held only for an enemy that
-      prefers it.
+      prefers it. staple (optional) = the firearm whose ammunition is the
+      most common (the handgun): never boxed to make room. reserve
+      (optional) = scarce rounds (the launchers): picked only for an enemy
+      that prefers it or when no other gun covers the kill.
     enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
       downed = the pose for a downed or crawling enemy; up = which weapons an
       aim-up shot can hit it with; reach = the distance its attack starts at;
@@ -42,7 +45,7 @@
        return to the hold behaviour 0x13 (the bot's "cadence" log line, the
        same in every room). -->
   <weapon id="0x02" name="handgun" near="650" side="1300" cadence="23"
-          headshot="none" weak="none" status_bit="yes"/>
+          headshot="none" weak="none" status_bit="yes" staple="yes"/>
   <!-- Shotgun. near/side from the same test (slot 2 = 2600). headshot:
        zombie_reaction pops the head when displacement < 3000 with aim 0xC0
        (torso or up). weak: the shotgun post-hit gives 10 health back past
@@ -59,14 +62,14 @@
        enemy type's record it was measured on (DEFAULT_FIRST_RUN). Cadence
        not measured. -->
   <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="unknown"
-          headshot="none" weak="none" status_bit="yes"/>
+          headshot="none" weak="none" status_bit="yes" reserve="yes"/>
   <!-- Rocket launcher (item 0x0A, Brad's drop on the heliport). The rocket
        is a projectile (effect behaviour 45) that hits from its own
        position with aim 0x40; the cone values are Jill's DEFAULT_RANGES
        slot 9 (1100). A hit takes 900 (DEFAULT_FIRST_RUN). Its four
        rockets are the clip; no ammunition item refills it. -->
   <weapon id="0x0A" name="rocket launcher" near="0" side="1100" cadence="unknown"
-          headshot="none" weak="none" status_bit="yes"/>
+          headshot="none" weak="none" status_bit="yes" reserve="yes"/>
   <!-- Knife. detect_knife: a radial reach of the range (Jill's
        DEFAULT_RANGES slot 0 = 500) plus the enemy radius, measured from a
        point 380 ahead of Jill. melee: no rounds; it is held only for an enemy
@@ -240,12 +243,14 @@
        outrun. The bite costs 20. HEALTH 0xCC; handgun 14, shotgun 40 a hit
        (DEFAULT_FIRST_RUN rows 41 and 42). It spits about every 80 ticks
        and each volley knocks the aim down (measured in 30C: two shotgun hits
-       in 700 ticks for 66 health), while the room's way on is only the web:
-       pass. -->
-  <enemy id="0x04" name="black tiger" policy="pass" stand="torso" downed="none"
-         up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204">
-    <keep weapon="0x02" min="2000" max="6000" damage="14"/>
-    <keep weapon="0x03" min="1800" max="2800" damage="40"/>
+       in 700 ticks for 66 health), so the handgun and shotgun lose the race
+       and have no band here. Its spit knocks the bot off the web while the
+       knife cuts it, so it is fought first (30C's <fight>) with the grenade
+       launcher: 60 a hit (row 46), four rounds. -->
+  <enemy id="0x04" name="black tiger" policy="fight" stand="torso" downed="none"
+         up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204"
+         prefer="0x07">
+    <keep weapon="0x07" min="3200" max="6000" damage="60"/>
   </enemy>
 
   <!-- The spider web over 30C's door to 30D. enemy/13: state 1 sets 0x40

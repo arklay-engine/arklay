@@ -140,6 +140,7 @@ end
 --              reach (BotSurvival.sourcing): the rounds left are for what
 --              must be fought, so a monster only in a room crossed again
 --              is run past
+--   no_band    the file lists bands for it, none for this gun
 --   hurt_before  it already hurt the bot (BotTactics.note_hurt): passing it
 --              again costs the same hit, so the rounds for the kill
 --              suffice, with no margin
@@ -198,6 +199,12 @@ function BotTactics.decide(o)
     end
     if not o.gun then
         return "run", "no firearm with rounds"
+    end
+    -- The file gives this monster bands, none for this gun: its hits do
+    -- not tell (Black Tiger knocks the handgun's aim down), so do not open
+    -- a fight with it, closing in or not.
+    if o.no_band then
+        return "run", "no band for this gun"
     end
     -- Inside twice its reach it gets the bot anyway: shoot what is left.
     -- So is one inside the band's far edge: a zombie closes on the bot
@@ -343,7 +350,9 @@ end
 -- rounds) while another gun's cover that: then the gun that covers it in
 -- the fewest shots. With no gun covering the margin, the plain pick stands
 -- if it covers the bare kill, else the fewest-shot gun that does; a plain
--- pick with no kill data gives way to a gun with data that covers it. So a
+-- pick with no kill data gives way to a gun with data that covers it. A
+-- reserve gun (row.reserve: the launcher's scarce rounds) is a switch only
+-- when no other gun covers the bare kill. So a
 -- stronger gun (the shotgun) is spent only on a fight the plain pick
 -- cannot finish, and a fight with no kill data keeps the plain pick.
 -- Returns the row or nil.
@@ -374,14 +383,17 @@ function BotTactics.pick_gun(guns, entry, health, margin)
         end
     end
     local need = plain and shots(plain)
-    if need and need * margin <= plain.rounds then
+    local spare_plain = plain and not plain.reserve
+    if need and need * margin <= plain.rounds and spare_plain then
         return plain
     end
-    local function fewest(scale)
+    -- `spend`: a reserve gun (row.reserve, the launcher) may be picked.
+    local function fewest(scale, spend)
         local best, best_shots = nil, nil
         for _, row in ipairs(guns) do
             local n = shots(row)
-            if n and n * scale <= row.rounds and (not best_shots or n < best_shots) then
+            if n and n * scale <= row.rounds and (spend or not row.reserve)
+                and (not best_shots or n < best_shots) then
                 best, best_shots = row, n
             end
         end
@@ -390,14 +402,22 @@ function BotTactics.pick_gun(guns, entry, health, margin)
     -- The plain pick has no kill data against a known enemy (the grenade
     -- launcher equipped for a boss, meeting a hunter): a gun with data
     -- that covers the kill replaces it.
-    local covered = fewest(margin)
+    local covered = fewest(margin, false)
     if covered then
         return covered
     end
+    if need and need <= plain.rounds and spare_plain then
+        return plain
+    end
+    covered = fewest(1, false)
+    if covered then
+        return covered
+    end
+    -- Only a reserve gun covers it: the equipped one stands if it does.
     if need and need <= plain.rounds then
         return plain
     end
-    return fewest(1) or plain
+    return fewest(1, true) or plain
 end
 
 -- The firearm to fight `enemy` (the nearest fightable monster, or nil)
@@ -422,7 +442,7 @@ local function firearm(bot, k, enemy)
             end
         elseif weapon.clip + weapon.reserve > 0 then
             guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
-                equipped = true }
+                equipped = true, reserve = k.weapons[weapon.equipped].reserve == true }
         end
     end
     for _, row in ipairs(bot:menu().items or {}) do
@@ -432,7 +452,8 @@ local function firearm(bot, k, enemy)
                 rounds = entry and entry.prefer == row.item and hand_rounds or 0
             end
             if rounds > 0 then
-                guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false }
+                guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false,
+                    reserve = k.weapons[row.item].reserve == true }
             end
         end
     end
@@ -628,6 +649,8 @@ local function choose(bot, s, k, enemies, player)
                 outrun = entry and entry.outrun,
                 slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.BACK_SPEED,
                 hurt_before = s.hurt_by ~= nil and s.hurt_by[hurt_key(bot:room().id, enemy.slot)] == true,
+                no_band = entry ~= nil and entry.keep ~= nil and next(entry.keep) ~= nil
+                    and gun ~= nil and entry.keep[gun] == nil,
             })
             if verdict == "run" then
                 s.avoid_until = bot:tick() + RUN_HOLD

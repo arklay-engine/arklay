@@ -137,6 +137,13 @@ pub struct Weapon {
     /// A hand weapon (the knife): no rounds, so it never runs dry, and it
     /// is held only for an enemy that `prefer`s it.
     pub melee: bool,
+    /// The staple firearm (the handgun): its ammunition is the most common,
+    /// so a full inventory never boxes it to make room.
+    pub staple: bool,
+    /// A reserve weapon (the grenade launcher): its rounds are scarce, so it
+    /// is picked only for an enemy that `prefer`s it or when no other gun
+    /// covers the kill.
+    pub reserve: bool,
 }
 
 /// The poison a `<cure>` item clears: the engine's health-status bits.
@@ -459,6 +466,8 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             "weak",
             "status_bit",
             "melee",
+            "staple",
+            "reserve",
         ],
     )?;
     check_leaf(node)?;
@@ -473,6 +482,14 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
         status_bit: yes_no(node, "status_bit")?.unwrap_or(true),
         melee: match node.attribute("melee") {
             Some(_) => yes_no(node, "melee")? == Some(true),
+            None => false,
+        },
+        staple: match node.attribute("staple") {
+            Some(_) => yes_no(node, "staple")? == Some(true),
+            None => false,
+        },
+        reserve: match node.attribute("reserve") {
+            Some(_) => yes_no(node, "reserve")? == Some(true),
             None => false,
         },
     })
@@ -532,6 +549,8 @@ impl Knowledge {
             row.set("weak", weapon.weak)?;
             row.set("status_bit", weapon.status_bit)?;
             row.set("melee", weapon.melee)?;
+            row.set("staple", weapon.staple)?;
+            row.set("reserve", weapon.reserve)?;
             weapons.set(weapon.id, row)?;
         }
         table.set("weapons", weapons)?;
@@ -655,6 +674,16 @@ mod tests {
         let melee =
             parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" melee=\"yes\"")).unwrap();
         assert!(melee.weapons[0].melee);
+        assert!(!k.weapons[0].staple);
+        let staple =
+            parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" staple=\"yes\""))
+                .unwrap();
+        assert!(staple.weapons[0].staple);
+        assert!(!k.weapons[0].reserve);
+        let reserve =
+            parse(&text.replace("status_bit=\"yes\"", "status_bit=\"yes\" reserve=\"yes\""))
+                .unwrap();
+        assert!(reserve.weapons[0].reserve);
         assert!(
             parse(&text.replace("health=\"unknown\">", "health=\"unknown\" parts=\"maybe\">"))
                 .is_err()

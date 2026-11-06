@@ -383,6 +383,17 @@ function BotPuzzle.leave(bot)
     return nil
 end
 
+-- A <leave> fact whose flag is still clear, or nil: the room's steps lead
+-- into a hazard that drains health until the room changes (507's gas).
+function BotPuzzle.leave_ahead(bot)
+    for _, fact in ipairs(meta(bot).leaves or {}) do
+        if not bot:flag(fact.bank, fact.bit) then
+            return fact
+        end
+    end
+    return nil
+end
+
 -- Whether a push step before step `index` finished on this entry: the
 -- object a later step works with was placed by it.
 function BotPuzzle.placed_before(index)

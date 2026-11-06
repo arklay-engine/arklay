@@ -153,7 +153,8 @@ BotInventory.SOFT_HEALS = 1
 -- last in slot order), then a key no remembered locked door needs, then a
 -- spare hand weapon (ctx.spare: held, not equipped, and no pending <fight>
 -- prefers it), then, only to make room for a key or <use> item, boxed or
--- on the frontier (ctx.swap), a held firearm other than the equipped one and the loadout,
+-- on the frontier (ctx.swap), a held firearm other than the equipped one,
+-- the staple (the handgun) and the loadout,
 -- fewest rounds first (ctx.spare_guns: {[id] = rounds}).
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
@@ -444,10 +445,12 @@ function BotInventory.context(bot)
             ctx.spare[id] = true
         end
     end
-    -- Held firearms other than the equipped one, by rounds (the clip plus
-    -- the ammunition held): the very last soft keeps, fewest rounds first.
+    -- Held firearms other than the equipped one and the staple (the
+    -- handgun, whose ammunition is the most common), by rounds (the clip
+    -- plus the ammunition held): the very last soft keeps, fewest rounds
+    -- first.
     for id, row in pairs(knowledge and knowledge.weapons or {}) do
-        if not row.melee and id ~= ctx.equipped and bot:has_item(id) then
+        if not row.melee and not row.staple and id ~= ctx.equipped and bot:has_item(id) then
             local ammo = bot:ammo_for(id)
             ctx.spare_guns = ctx.spare_guns or {}
             ctx.spare_guns[id] = bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
