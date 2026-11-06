@@ -115,6 +115,9 @@ function BotInventory.keep(row, ctx)
     if row.kind == "ammo" and ctx.ammo and ctx.ammo[item] then
         return "ammo reserve"
     end
+    if ctx.ammo_alt and ctx.ammo_alt[item] then
+        return "rounds for the gun's other loading"
+    end
     if ctx.loadout and ctx.loadout[item] then
         return "a fight ahead prefers it"
     end
@@ -270,7 +273,7 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.keys and ctx.keys[item] then
         return "a locked door needs it"
     end
-    if ctx.ammo_low and ctx.ammo_low == item then
+    if ctx.ammo_low and (ctx.ammo_low == item or (ctx.ammo_alt and ctx.ammo_alt[item])) then
         return "ammunition under the reserve floor"
     end
     if ctx.gun_ammo and ctx.gun_ammo[item] then
@@ -605,10 +608,27 @@ function BotInventory.context(bot)
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
+    -- Under the floor, the gun's other loadings' rounds come out too (the
+    -- launcher's acid and flame rounds load into it, BotInventory.load_now):
+    -- the bot met 509's zombies with an empty launcher and both in 50E's box.
+    if ctx.ammo_low and knowledge then
+        local held = knowledge.weapons[bot:weapon().weapon]
+        local base = held and (held.variant_of or bot:weapon().weapon)
+        for id, row in pairs(base and knowledge.weapons or {}) do
+            local other = (row.variant_of or id) == base and bot:ammo_for(id)
+            if other and other ~= ctx.ammo_low then
+                ctx.ammo_alt = ctx.ammo_alt or {}
+                ctx.ammo_alt[other] = true
+            end
+        end
+    end
     -- The rearm: a firearm (not a reserve one) the remembered box holds,
     -- with its ammunition held (useless without it: the shells picked up
     -- after the shotgun went in for a key), or in the box while sourcing
-    -- ammunition. The held ammunition stays (BotInventory.keep).
+    -- ammunition, or while the equipped gun is under its floor (the boxed
+    -- handgun and its bullets stayed in 50E's box while the bot met 509's
+    -- zombies with an empty launcher). The held ammunition stays
+    -- (BotInventory.keep).
     if knowledge then
         local box = BotInventory.remembered(bot)
         local sourcing = BotSurvival.sourcing_now(bot)
@@ -616,7 +636,7 @@ function BotInventory.context(bot)
             local ammo = bot:ammo_for(id)
             local held = ammo and bot:item_count(ammo) > 0
             if not row.melee and not row.reserve and box[id] and not bot:has_item(id)
-                and ammo and (held or (sourcing and box[ammo])) then
+                and ammo and (held or ((sourcing or ctx.ammo_low) and box[ammo])) then
                 ctx.rearm = ctx.rearm or {}
                 ctx.rearm[id] = true
                 ctx.rearm[ammo] = true
