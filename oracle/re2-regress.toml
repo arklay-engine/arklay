@@ -707,10 +707,10 @@ offset = 0
 ticks = 7400
 setup_script = "route_100_200.lua"
 input = "route_100_200.txt"
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 7399]
 frame_max_mean = 0.8
-# the doors' own ticks and room 118's stair steps (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
 ignore = [
     [790, "rng"],
     [790, "rseed"],
@@ -718,18 +718,6 @@ ignore = [
     [3052, "rseed"],
     [3843, "rng"],
     [3843, "rseed"],
-    [4089, "snd"],
-    [4102, "snd"],
-    [4111, "snd"],
-    [4124, "snd"],
-    [4133, "snd"],
-    [4146, "snd"],
-    [4375, "snd"],
-    [4388, "snd"],
-    [4397, "snd"],
-    [4410, "snd"],
-    [4419, "snd"],
-    [4432, "snd"],
     [4976, "rng"],
     [4976, "rseed"],
     [5326, "rng"],
