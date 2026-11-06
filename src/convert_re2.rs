@@ -42,7 +42,7 @@
 //! [`crate::se2`] describes. Each room's English name comes from Classic REbirth's
 //! debug room table in the install's `ddraw.dll` ([`room_names`]), and the
 //! status screen's English labels from the 7z archive in the same DLL
-//! ([`copy_status_art`]).
+//! ([`sevenz`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
 //! alternate takes of the six reels (three byte-identical, three differing
