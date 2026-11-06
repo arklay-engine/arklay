@@ -164,8 +164,10 @@ Priorities, highest first:
    an unvisited room, 10 reach for a remote item, 70 more for a seen key
    item that a remembered locked door needs or else 60 more for the
    ammunition the gun needs ([Ammunition](#ammunition)), so a needed key
-   comes before ammunition and herbs (`BotPlanner.item_bonus`), 60 for a held
-   item's `<use>` room, the same item and `<use>` bonuses (70 reach) for a
+   comes before ammunition and herbs (`BotPlanner.item_bonus`), for a held
+   item's `<use>` room, 280 reach and none of the door steps or the remote
+   path, only the first door's length (the medal is carried across the
+   mansion to 305's fountain rather than left for a nearer frontier), the same item and `<use>` bonuses (70 reach) for a
    door into a room not yet entered whose `<holds>` fact names an item the
    bot lacks and a pending `<use>` needs, or the remote item bonus for a
    needed key or ammunition there (`BotPlanner.holds_bonus`, logged as
@@ -777,7 +779,7 @@ files. The checked-in facts:
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
 | 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
 | 11B | `<climb object="0" slot="3" bank="7" bit="35" done="clear">`: the square crank lies on a shelf over the crate's corner; room main keeps its pickup an item only while the player stands on the crate (`FG_STATUS` 24 clear). |
-| 119 | Second mansion visit only. `<interact slot="2" bank="7" bit="67" done="clear" reveals="1">` with `<answer choice="yes" slot="2">`: the init sets room bit 10 on every entry, which hides Doom Book I (AOT 1) and the magnum rounds (AOT 4); the switch's Yes clears it and both become items. The planner then opens the book in the menu's CHECK viewer (a held doom book always gets a `BotMenu.examine` job), which turns it into the Eagle Medal (`0x25`). |
+| 119 | Second mansion visit only. `<interact slot="2" bank="7" bit="67" done="clear" reveals="1">` with `<answer choice="yes" slot="2">`: the init sets room bit 10 on every entry, which hides Doom Book I (AOT 1) and the magnum rounds (AOT 4); the switch's Yes clears it and both become items. A doom book taken out of the item box has quantity 0, so it counts as held and is opened anyway. The planner then opens the book in the menu's CHECK viewer (a held doom book always gets a `BotMenu.examine` job), which turns it into the Eagle Medal (`0x25`). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
 | 300 | `<door slot="1" via="5">` while scenario `0x31` is set: the north elevator, parked at the room origin, rides down to 302 from AOT 5 on its platform; without it the shaft is walled off. |
 | 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. `<avoid slot="7" bank="0" bit="0x2F" while="set">`: the elevator call back down to 302 on the landing the 302 door brings you to. Once the north elevator stands at 300 (scenario `0x31`, after 302's battery) a second `<use>` of the crank (`done="clear"`, `after`) fills the pool again, which stops 302's waterfall; with the pool full `<door slot="1" via="7">` takes the elevator down to 302. |

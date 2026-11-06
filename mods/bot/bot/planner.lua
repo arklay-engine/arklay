@@ -48,7 +48,8 @@
 --               (BotSurvival.sourcing: under the floor and no ammunition
 --               the planner can reach, a pickup it has not given up on or
 --               the remembered box)
---             - USE_BONUS for a route to a held item's <use> room
+--             - for a route to a held item's <use> room, HELD_USE_BONUS
+--               and no door steps: only the first door's length counts
 --             - BOX_BONUS for a route to a remembered typewriter when a
 --               save trip is due (BotSave.trip_reason), picked like a
 --               remote box
@@ -117,7 +118,7 @@ local MAX_REPEATS = 6
 local LOOP_HOLD = 3 * 60 * C.SECOND
 -- A route to the ammunition the equipped gun needs (BotSurvival.ammo_need).
 local AMMO_BONUS = 60 * C.REACH
--- A route to a room whose <use> fact needs a held item (bot:use_facts()).
+-- A route to a frontier item that a <use> fact needs (item_bonus).
 local USE_BONUS = 60 * C.REACH
 -- A route to a seen key item that a remembered locked door needs: more
 -- than the ammunition bonus, so a needed key comes first.
@@ -126,6 +127,11 @@ local KEY_BONUS = 70 * C.REACH
 -- the room that wants the item may want it only for a while (a poisoned
 -- partner who dies after some minutes).
 local ERRAND_BONUS = 2 * KEY_BONUS
+-- A route to a room whose <use> fact needs a held item (bot:use_facts()):
+-- the item makes progress only there, so the route's length is not
+-- counted (305's fountain is a dozen doors from the mansion, where Doom
+-- Book I becomes the Eagle Medal) and it outranks exploring.
+local HELD_USE_BONUS = 2 * ERRAND_BONUS
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- The sort length of a goal the path planner reaches no approach to: last.
@@ -1384,7 +1390,8 @@ local function choose(bot)
         end
     end
     for _, book in ipairs(DOOM_BOOKS) do
-        if bot:item_count(book) > 0 and not blocked(bot, "examine", "inventory", book, true) then
+        -- has_item, not item_count: a book out of the box has quantity 0.
+        if bot:has_item(book) and not blocked(bot, "examine", "inventory", book, true) then
             return examine_goal(bot, book)
         end
     end
@@ -1855,8 +1862,7 @@ local function choose(bot)
                 local label = string.format("use 0x%02X in %s (%s)", fact.item, fact.room,
                     fact.label or "unnamed")
                 consider({
-                    cost = door_len(first.slot) + #steps * DOOR_COST - USE_BONUS
-                        + route_monsters(steps),
+                    cost = door_len(first.slot) - HELD_USE_BONUS + route_monsters(steps),
                     order = order, door = first,
                     why = string.format("toward %s, %d door(s)", label, #steps),
                     target = { kind = "use", room = fact.room, slot = fact.slot,

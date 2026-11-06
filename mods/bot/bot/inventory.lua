@@ -330,6 +330,13 @@ function BotInventory.context(bot)
     for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
         ctx.uses[item] = true
     end
+    -- So is a doom book whose medal a <use> wants (305's fountain): the
+    -- book becomes the medal once opened.
+    for book = C.DOOM_BOOK_2, C.DOOM_BOOK_2 + 1 do
+        if ctx.uses[book - C.DOOM_BOOK_2 + C.WOLF_MEDAL] then
+            ctx.uses[book] = true
+        end
+    end
     for _, room in ipairs(bot:world().rooms) do
         for _, door in ipairs(room.doors) do
             if door.present and door.locked and not door.unlocked and not door.traversed then
