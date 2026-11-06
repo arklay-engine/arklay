@@ -59,7 +59,8 @@ local function heal_fraction(bot)
     if not BotTactics.active() then
         step, index = BotPuzzle.next_interact(bot)
     end
-    if step and BotPuzzle.fight_ahead(bot, index) and fraction < FIGHT_HEAL_FRACTION then
+    if step and (BotPuzzle.fight_ahead(bot, index) or BotPuzzle.leave_ahead(bot))
+        and fraction < FIGHT_HEAL_FRACTION then
         fraction = FIGHT_HEAL_FRACTION
     end
     return fraction
@@ -139,11 +140,20 @@ end
 -- at least the enemy's knowledge health. A gun with no damage data counts
 -- nothing; a fight with no damage data for any held gun is not held back
 -- for rounds. Returns true, or false and why.
-function BotSurvival.fight_ready(bot, fact)
+-- The health half alone: true, or false and why, naming `what`.
+function BotSurvival.health_ready(bot, what)
     local player = bot:player()
     if player.health < player.max_health * FIGHT_HEAL_FRACTION and #heal_rows(bot) == 0 then
-        return false, string.format("not ready for the fight: health %d/%d and no heal held",
-            player.health, player.max_health)
+        return false, string.format("not ready for %s: health %d/%d and no heal held",
+            what, player.health, player.max_health)
+    end
+    return true
+end
+
+function BotSurvival.fight_ready(bot, fact)
+    local ok, why = BotSurvival.health_ready(bot, "the fight")
+    if not ok then
+        return false, why
     end
     local k = bot:knowledge()
     local entry = k and k.enemies[fact.enemy]

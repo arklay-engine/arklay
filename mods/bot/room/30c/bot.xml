@@ -2,8 +2,10 @@
 <!-- 30C, Black Tiger's cave. A web (enemy 0x13, enemy bit 138) covers door
      1 to 30D: the init deletes the door while the web stands, and the main
      arms it again once the web's death flag is set. Only the knife (AOT 2,
-     in this room) cuts it. Black Tiger (0x04, bit 137) bites and poisons;
-     the bot runs past it. -->
+     in this room) cuts it. Black Tiger (0x04, bit 137) bites, spits and
+     poisons, and its spit knocks the bot off the web mid-cut, so it is
+     fought first, with the grenade launcher (the knowledge file's prefer). -->
 <bot format="2">
+  <fight enemy="0x04" bank="3" bit="137" label="Black Tiger"/>
   <fight enemy="0x13" bank="3" bit="138" label="cut the web with the knife"/>
 </bot>
