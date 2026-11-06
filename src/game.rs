@@ -8293,18 +8293,18 @@ impl GameState {
         // `sce_door`: a locked door opens on a later press once this one has
         // unlocked it.
         match door.key {
-            KEY_UNLOCK => self.show_re2_global(door_message(DOOR_UNLOCKED)),
+            KEY_UNLOCK => self.show_re2_door_message(door_message(DOOR_UNLOCKED)),
             KEY_LOCKED => {
-                self.show_re2_global(door_message(DOOR_LOCKED_OTHER_SIDE));
+                self.show_re2_door_message(door_message(DOOR_LOCKED_OTHER_SIDE));
                 return false;
             }
             key if !self.has_item(key) => {
-                self.show_re2_global(door_locked_message(key));
+                self.show_re2_door_message(door_locked_message(key));
                 return false;
             }
             key => {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = key;
-                self.show_re2_global(door_message(DOOR_USED_KEY));
+                self.show_re2_door_message(door_message(DOOR_USED_KEY));
             }
         }
         self.re2.door_locks[word] |= mask;
@@ -8494,9 +8494,10 @@ impl GameState {
 
     /// A room message by its RE2 number; the language key's index keeps the
     /// bits past the low six in the id's high byte ([`crate::text::message_index`]).
+    /// It shows in play, where `Mess_disp` keeps the stream's counts.
     pub fn show_re2_message(&mut self, id: u8) {
         let id = u16::from(id);
-        self.message.set_re2_timing(false);
+        self.message.set_re2_timing(false, false);
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
     }
 
@@ -8535,9 +8536,17 @@ impl GameState {
         }
     }
 
-    /// One of the executable's own messages.
+    /// One of the executable's own messages, for the get-item window or the
+    /// status screen, whose delays `Mess_disp` doubles.
     fn show_re2_global(&mut self, id: u8) {
-        self.message.set_re2_timing(true);
+        self.message.set_re2_timing(true, true);
+        self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
+    }
+
+    /// One of the executable's door messages, which shows in play: its
+    /// delays are the stream's own.
+    fn show_re2_door_message(&mut self, id: u8) {
+        self.message.set_re2_timing(true, false);
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
     }
 
