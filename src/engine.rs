@@ -1862,6 +1862,13 @@ const START_MESSAGE_BITS: u16 = game::MESSAGE_FLAG_CONTROLS | 0x0040;
 /// the suspension takes hold.
 const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 
+/// RE2's status screen's close: from the tick its page goes to 0 to the tick
+/// game mode 3 restarts the player, the world moving again on the next. The
+/// fade out takes six ticks (`0x1800` a tick), page 1 sees its end on the
+/// next, and the room's return and the main task's states take three more;
+/// every recording closes in the same ten.
+const RE2_STATUS_CLOSE_TICKS: u8 = 10;
+
 /// Which of [`GameSession::render_pass`]'s variants draws the scene.
 enum ScenePass<'g> {
     /// The software rasterizer draws it into the framebuffer.
@@ -1882,7 +1889,7 @@ enum LoadRequest {
 }
 
 /// The screen a free-play press asks the end of the frame to open.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MenuRequest {
     /// START's pause menu.
     Menu,
@@ -1933,6 +1940,9 @@ struct GameSession {
     menu_fade: transition::Fade,
     /// The pause-menu fade phase; `None` means the menu accepts input.
     menu_fade_phase: MenuFadePhase,
+    /// RE2's status screen is closing: the ticks since its page went to 0
+    /// (see [`RE2_STATUS_CLOSE_TICKS`]).
+    re2_status_close: Option<u8>,
     /// The first fixed tick after arming a fade must not advance it: the frame
     /// it was armed on has not been drawn yet.
     menu_fade_pending: bool,
@@ -2658,6 +2668,7 @@ impl GameSession {
             room_boot_respawn: false,
             menu_fade: transition::Fade::inactive(),
             menu_fade_phase: MenuFadePhase::None,
+            re2_status_close: None,
             menu_fade_pending: false,
             menu_fade_draw: None,
             menu_fade_started: false,
@@ -3234,6 +3245,10 @@ impl GameSession {
         if self.system_menu_open {
             return Ok(());
         }
+        // The trace's `snd` is this tick's `SsPlay`s, whichever path plays them.
+        if self.game.is_re2_room {
+            self.re2_sounds.played.clear();
+        }
         // The attract reel owns the pad while it plays: the recorded word
         // replaces the live input exactly like the original's InputSystem
         // overwrite, and any live button ends the playback (the watchdog
@@ -3487,6 +3502,10 @@ impl GameSession {
         }
         if self.menu.is_some() {
             self.game.advance_play_timer();
+            if self.re2_status_close.is_some() {
+                self.tick_re2_status_close();
+                return Ok(());
+            }
             // The frame after the open fade finishes is the original's state-0
             // -> state-1 transition: no health-bar tick and no input yet.
             if self.menu_open_delay {
@@ -3582,6 +3601,19 @@ impl GameSession {
             if let Some(kind) = request {
                 self.menu_request = Some((kind, self.game.message_flags));
                 self.game.message_flags &= 0xFF7A;
+                // RE2's `Game_loop` takes START after the scripts: it plays
+                // the decide cue and leaves for game mode 1 before anyone
+                // moves (`0x4C0379`).
+                if self.game.is_re2_room && kind == MenuRequest::Menu {
+                    self.game.re2_status_start = true;
+                    if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id())
+                    {
+                        self.game
+                            .re2
+                            .sounds
+                            .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                    }
+                }
             }
         }
         // The port's equip buttons and weapon cycle.
@@ -5858,7 +5890,7 @@ impl GameSession {
     /// it, before the message's tick (a confirm that closes a message reaches
     /// the page on the next tick), then the menu script, which only draws.
     fn tick_re2_items(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
-        use game::status2::{Input, Sound};
+        use game::status2::Input;
         let input = Input {
             up: ui.up,
             down: ui.down,
@@ -5881,23 +5913,82 @@ impl GameSession {
             self.game
                 .show_re2_description(item, bytes.as_deref().unwrap_or(&[0x01]));
         }
-        let cues = outcome
-            .sounds
-            .iter()
-            .map(|sound| match sound {
-                Sound::Cursor => ui::UiCue::Cursor,
-                Sound::Decide => ui::UiCue::Decide,
-                // RE2's buzzer (`0x407`) has no cue of its own yet.
-                Sound::Cancel | Sound::Buzzer => ui::UiCue::Cancel,
-            })
-            .collect();
-        self.play_ui_cue_names(pack, cues);
+        self.play_re2_status_sounds(pack, &outcome.sounds);
         self.game
             .update_message(message_input, &self.loaded.room, &self.text);
+        // The yes/no ("Will you mix the herb?") plays its own cue from the
+        // message code (`0x4C9600`).
+        if let Some(cue) = self.game.message.choice_cue() {
+            use crate::message::ChoiceCue;
+            let sound = match cue {
+                ChoiceCue::Move => game::status2::Sound::Cursor,
+                ChoiceCue::Yes => game::status2::Sound::Decide,
+                ChoiceCue::No => game::status2::Sound::Cancel,
+            };
+            self.play_re2_status_sounds(pack, &[sound]);
+        }
         self.tick_menu_screen(pack);
         if outcome.close {
-            self.begin_menu_close_silent();
+            // Page 0 (`0x502130`) starts the fade out; the screen's task and
+            // `Game_loop`'s game modes take it from there.
+            self.re2_status_close = Some(0);
         }
+    }
+
+    /// The status screen's cues, through the RE2 sound path, as `Snd_se_on`
+    /// plays them.
+    fn play_re2_status_sounds(&mut self, pack: &Pack, sounds: &[game::status2::Sound]) {
+        if sounds.is_empty() {
+            return;
+        }
+        for sound in sounds {
+            if let Some(id) = crate::se2::SoundId::decode(sound.id()) {
+                self.game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+            }
+        }
+        let cut = self.sound_cut();
+        play_re2_sounds(
+            &mut self.music,
+            &mut self.sfx_cache,
+            &mut self.re2_sounds,
+            pack,
+            &self.loaded.room,
+            &mut self.game,
+            &mut self.player,
+            cut,
+        );
+    }
+
+    /// One tick of RE2's status screen's close, after the page went to 0.
+    ///
+    /// Page 0 (`0x502130`) fades out by `0x1800` a tick and page 1
+    /// (`0x502150`) waits for the fade to end; the screen's task then puts
+    /// the room back (`0x501EA0`) and ends, and the main task's states 8 and
+    /// 0xB (`0x4BFFBE`, `0x4C0006`) set game mode 3. Mode 3 (`0x4C000D`) zeroes
+    /// the player's routines and runs `Player_move` once, whose `Pl_init`
+    /// restarts the move, then sets mode 5 and fades the room in; `Game_loop`
+    /// moves the world again from the next tick. Nothing here draws `Rnd`.
+    fn tick_re2_status_close(&mut self) {
+        let Some(ticks) = self.re2_status_close.as_mut() else {
+            return;
+        };
+        *ticks += 1;
+        if *ticks < RE2_STATUS_CLOSE_TICKS {
+            return;
+        }
+        self.re2_status_close = None;
+        self.menu = None;
+        self.game.close_re2_items();
+        self.examine = None;
+        self.item_box = None;
+        if std::mem::take(&mut self.map_direct) {
+            self.map = None;
+        }
+        self.game.message_menu = false;
+        crate::player2::pl_init(&mut self.game.re2.player);
     }
 
     /// Apply one completed menu event.
@@ -15484,6 +15575,12 @@ fn tick_room_timed(
     context.player.detached_clip.spawn_hand = context.game.joint_worlds[0]
         .get(crate::weapons::WEAPON_JOINT)
         .copied();
+    // START on an RE2 tick: `Game_loop` leaves for the status screen before
+    // the enemies' and the player's moves (`0x4C03B0`), so the player keeps
+    // the frame it had.
+    if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
+        return context.game.transition.take();
+    }
     // `Game_loop` runs the enemy slots whether or not the player may move.
     if context.game.is_re2_room {
         crate::character2::tick(

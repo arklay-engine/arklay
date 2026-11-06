@@ -390,3 +390,11 @@ fn every_record_names_a_step_the_page_has() {
     assert_eq!(recipe(0x26, 0x27).map(|r| r.result), Some(0x2A));
     assert_eq!(recipe(0x01, 0x27), None);
 }
+
+#[test]
+fn the_cues_are_the_core_banks_slots_4_to_7() {
+    assert_eq!(Sound::Cursor.id(), 0x0404_0000);
+    assert_eq!(Sound::Cancel.id(), 0x0405_0000);
+    assert_eq!(Sound::Decide.id(), 0x0406_0000);
+    assert_eq!(Sound::Buzzer.id(), 0x0407_0000);
+}

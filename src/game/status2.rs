@@ -80,14 +80,28 @@ pub struct Input {
     pub start: bool,
 }
 
-/// The sounds the page plays (`0x4ED950`'s `0x404`, `0x405`, `0x406` and
-/// `0x407` cues).
+/// The sounds the page plays: `Snd_se_on`'s core-bank cues `0x4040000`,
+/// `0x4050000`, `0x4060000` and `0x4070000` (`0x4ED950`), which play at the
+/// slot's own volume, unpanned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {
     Cursor,
     Cancel,
     Decide,
     Buzzer,
+}
+
+impl Sound {
+    /// The `Snd_se_on` id.
+    pub fn id(self) -> u32 {
+        let slot = match self {
+            Self::Cursor => 4,
+            Self::Cancel => 5,
+            Self::Decide => 6,
+            Self::Buzzer => 7,
+        };
+        0x0400_0000 | slot << 16
+    }
 }
 
 /// What a tick asks of the engine.

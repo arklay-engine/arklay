@@ -3192,6 +3192,9 @@ pub struct GameState {
     /// The item page's bytes as the trace's `ip` shows them; like the
     /// original's work block they stay after the screen closes.
     pub re2_items_trace: String,
+    /// START opened RE2's status screen this tick: `Game_loop` leaves for game
+    /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
+    pub re2_status_start: bool,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3656,6 +3659,7 @@ impl Default for GameState {
             re2_item_get: None,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
+            re2_status_start: false,
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,

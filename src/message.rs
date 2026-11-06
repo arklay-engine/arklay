@@ -77,6 +77,16 @@ use crate::items;
 use crate::render::{Framebuffer, Tint};
 use crate::text::Text;
 
+/// What a yes/no did on a tick, for the cue RE2's message plays with it
+/// (`0x4C9600`): moving the choice plays the cursor cue, a yes the decide cue
+/// and a no the cancel cue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChoiceCue {
+    Move,
+    Yes,
+    No,
+}
+
 /// One tick of held inputs the window reads.
 ///
 /// The window derives the press edges itself, because the original tests both
@@ -257,6 +267,8 @@ pub struct MessageWindow {
     menu: bool,
     selected_item: u8,
     menu_choice: u8,
+    /// The yes/no's cue this tick, for RE2: the answer's or the choice's move.
+    choice_cue: Option<ChoiceCue>,
     previous: MessageInput,
     actions: Vec<MessageAction>,
     /// Whether the request was raised with a voice line playing (the
@@ -295,6 +307,7 @@ impl Default for MessageWindow {
             menu: false,
             selected_item: 0,
             menu_choice: 0,
+            choice_cue: None,
             previous: MessageInput::default(),
             actions: Vec::new(),
             voiced: false,
@@ -507,8 +520,14 @@ impl MessageWindow {
         }
     }
 
+    /// The cue the yes/no asked for on the last [`Self::update`], if any.
+    pub fn choice_cue(&self) -> Option<ChoiceCue> {
+        self.choice_cue
+    }
+
     /// Advance the window one fixed tick.
     pub fn update(&mut self, input: MessageInput, text: &Text, selected_item: u8) {
+        self.choice_cue = None;
         // The engine's door-animation adapter writes `id`/`pause`/`active`
         // directly; turn that into a real request on the next tick.
         if self.active
@@ -572,6 +591,11 @@ impl MessageWindow {
             MessagePhase::YesNo => {
                 self.yes_no_shown = true;
                 if pressed_action {
+                    self.choice_cue = Some(if self.menu_choice & 1 == 0 {
+                        ChoiceCue::Yes
+                    } else {
+                        ChoiceCue::No
+                    });
                     self.menu_choice &= 0x7F;
                     self.active = false;
                     self.phase = MessagePhase::Idle;
@@ -580,6 +604,7 @@ impl MessageWindow {
                     if pressed_left || pressed_right {
                         self.menu_choice ^= 1;
                         self.char_timer = 0;
+                        self.choice_cue = Some(ChoiceCue::Move);
                     }
                     self.char_timer = self.char_timer.wrapping_sub(1);
                 }
@@ -1389,6 +1414,7 @@ mod tests {
             0,
         );
         assert_eq!(window.menu_choice_id(), 0x81, "left selects No");
+        assert_eq!(window.choice_cue(), Some(ChoiceCue::Move));
         window.update(
             MessageInput {
                 right: true,
@@ -1409,9 +1435,11 @@ mod tests {
             0,
         );
         window.update(MessageInput::default(), &text, 0);
+        assert_eq!(window.choice_cue(), None, "a quiet tick has no cue");
         window.update(held(true), &text, 0);
         assert!(!window.active);
         assert_eq!(window.menu_choice_id(), 1);
+        assert_eq!(window.choice_cue(), Some(ChoiceCue::No));
         assert!(window.take_actions().is_empty());
     }
 
