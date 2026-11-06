@@ -591,7 +591,8 @@ drives the box screen with pad input only.
   (only for a key, a `<use>` item or the loadout, never for ammunition
   alone: a first aid spray boxed for acid rounds left the bot one herb
   for Yawn 2), keys no remembered door needs, then held melee weapons that are not
-  equipped and that no pending fight prefers. Only to make room for a key
+  equipped and that no fight in this stage prefers (the knife goes in
+  until 30C's stage, where the loadout takes it back out). Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
   fact or a locked door needs back) do spare guns go too, fewest rounds
   first, never the `staple` gun (the handgun, whose ammunition is the most
@@ -614,8 +615,8 @@ drives the box screen with pad input only.
   every stack of the equipped gun's ammunition while its rounds are under
   twice the reserve floor, and every heal stack, as long as one slot stays
   free (the top-ups; no trip is made for them).
-- Loadout: the `prefer` weapon (not a hand weapon) of each pending
-  `<fight>` in the current stage (the room id's first character), and its
+- Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
+  pending `<fight>` in the current stage (the room id's first character), and its
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight

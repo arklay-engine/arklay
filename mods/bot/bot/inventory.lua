@@ -160,7 +160,7 @@ BotInventory.SOFT_HEALS = 1
 -- loadout, ctx.heals_may_go: ammunition alone is no reason to box a heal,
 -- the first aid spray went in for 118's acid rounds and the bot met Yawn 2
 -- with one herb), then a key no remembered locked door needs, then a
--- spare hand weapon (ctx.spare: held, not equipped, and no pending <fight>
+-- spare hand weapon (ctx.spare: held, not equipped, and no <fight> in this stage
 -- prefers it), then, only to make room for a key or <use> item, boxed or
 -- on the frontier (ctx.swap), a held firearm other than the equipped one,
 -- the staple (the handgun) and the loadout,
@@ -449,7 +449,7 @@ function BotInventory.context(bot)
         local entry = knowledge and knowledge.enemies[fight.enemy]
         local prefer = entry and entry.prefer
         local row = prefer and knowledge.weapons[prefer]
-        if row and not row.melee and fight.room:sub(1, 1) == here:sub(1, 1)
+        if row and fight.room:sub(1, 1) == here:sub(1, 1)
             and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
@@ -459,8 +459,8 @@ function BotInventory.context(bot)
             end
         end
     end
-    -- A hand weapon no pending <fight> prefers is spare: the last soft keep
-    -- to go in (the knife, once 30C's web is cut).
+    -- A hand weapon no <fight> in this stage prefers is spare: the last
+    -- soft keep to go in (the knife, until the stage of 30C's web).
     for id, row in pairs(knowledge and knowledge.weapons or {}) do
         if row.melee and id ~= ctx.equipped and bot:has_item(id) then
             ctx.spare = ctx.spare or {}
@@ -478,12 +478,13 @@ function BotInventory.context(bot)
             ctx.spare_guns[id] = bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
         end
     end
-    for _, fight in ipairs(bot:fight_facts()) do
-        local entry = knowledge and knowledge.enemies[fight.enemy]
-        local prefer = entry and entry.prefer
-        if ctx.spare and prefer and ctx.spare[prefer]
-            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
-            ctx.spare[prefer] = nil
+    -- The loadout keeps a hand weapon a fight in this stage prefers; one
+    -- whose fight is in a later stage is spare until then (the knife,
+    -- held for 30C's web from the first room, took a slot the shells
+    -- needed), and the loadout takes it back out of the box there.
+    for id, _ in pairs(ctx.loadout or {}) do
+        if ctx.spare then
+            ctx.spare[id] = nil
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
