@@ -5917,18 +5917,22 @@ impl GameSession {
 
     /// A room started on its own has no last room to keep the player's head
     /// from, where a door keeps it until the new room's first frame. The
-    /// original reached the same room by `--warp` has it where the rest pose
-    /// puts it at the new place, so the zombies' first `Root_ck` can see it.
+    /// original reached the same room by `--warp` has it where `Pl_init`'s
+    /// pose, the idle's first frame, puts it at the new place, as a door does
+    /// ([`GameSession::rest_re2_player`]), so the zombies' first `Root_ck` can
+    /// see it.
     fn place_re2_start_neck(&mut self) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
         let relative = &assets.emd.skeleton.relative;
-        let rest = crate::model::Keyframe {
-            offset: relative.first().copied().unwrap_or_default(),
-            vertex: [0; 3],
-            rotations: vec![[0; 3]; relative.len()],
-        };
+        let rest = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+            .cloned()
+            .unwrap_or_else(|| crate::model::Keyframe {
+                offset: relative.first().copied().unwrap_or_default(),
+                vertex: [0; 3],
+                rotations: vec![[0; 3]; relative.len()],
+            });
         let shown = self.player.anim.applied_pose();
         self.player.anim.set_applied_pose(Some(rest));
         self.place_re2_door_neck();
@@ -6730,21 +6734,23 @@ impl GameSession {
         self.tween.reset();
     }
 
-    /// An RE2 door's load leaves the player's joints at the skeleton's rest,
-    /// every turn zeroed: the pose the next frame draws, and the one the first
-    /// blend starts from.
+    /// An RE2 door's load stands the player on `Pl_init`'s pose, the idle's
+    /// first frame ([`crate::player2::idle_pose`]): the pose the next frame
+    /// draws, and the one the first blend starts from. Without one, the
+    /// skeleton's rest, every turn zeroed.
     fn rest_re2_player(&mut self) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
         let relative = &assets.emd.skeleton.relative;
-        self.player
-            .anim
-            .set_applied_pose(Some(crate::model::Keyframe {
+        let pose = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+            .cloned()
+            .unwrap_or_else(|| crate::model::Keyframe {
                 offset: relative.first().copied().unwrap_or_default(),
                 vertex: [0; 3],
                 rotations: vec![[0; 3]; relative.len()],
-            }));
+            });
+        self.player.anim.set_applied_pose(Some(pose));
         self.re2_door_neck = true;
     }
 
