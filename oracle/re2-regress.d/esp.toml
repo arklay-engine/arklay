@@ -1,0 +1,159 @@
+# The effect pool (`esp`, oracle/re2.md, "The trace"). Each recording has three runs on one reference: the plain
+# one compares the fields its recipe in oracle/re2.md documents as matching, the `esp_` one compares the whole
+# pool, and the `esp_kinds_` one only the live count and which kinds and rows are out (`espn`, `espk`), which
+# still compares when the slots' places part. Their first divergences are in docs/internals/deviations/re2.md, "Effects".
+
+[[run]]
+name = "street_shoot"
+ref = "esp_street_shoot"
+room = "new"
+offset = 0
+sound = false
+# The game over ends at 1997; the original then returns to the title.
+ticks = 1998
+setup_script = "new_game.lua"
+input = "street_shoot.txt"
+fields = "rng,p.x,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+# slot 1's angle on the first tick (oracle/re2.md, street_shoot)
+ignore = [[0, "zm1"]]
+expect = "match"
+record = ""
+
+[[run]]
+name = "esp_street_shoot"
+room = "new"
+offset = 0
+sound = false
+ticks = 1998
+setup_script = "new_game.lua"
+input = "street_shoot.txt"
+fields = "esp"
+expect = { tick = 0, fields = ["esp90"], note = "a burning zombie's flame (kind 5, row 3), placed on the part's point a unit out in x; the blood a shot starts (kind 0) stays where it starts where the original's follows the part's matrix (docs/internals/deviations/re2.md, \"Attached effects\")" }
+record = ""
+
+[[run]]
+name = "esp_kinds_street_shoot"
+ref = "esp_street_shoot"
+room = "new"
+offset = 0
+sound = false
+ticks = 1998
+setup_script = "new_game.lua"
+input = "street_shoot.txt"
+fields = "espn,espk"
+expect = "match"
+record = ""
+
+[[run]]
+name = "water_walk_302"
+ref = "esp_water_walk_302"
+room = "302"
+sound = false
+ticks = 1400
+setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flags = [[1, 6]], camera = 0 }
+input = "water_walk.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+expect = "match"
+record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
+
+[[run]]
+name = "esp_water_walk_302"
+room = "302"
+sound = false
+ticks = 1400
+setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flags = [[1, 6]], camera = 0 }
+input = "water_walk.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 366, fields = ["esp93", "esp94", "esp95"], note = "the first footfall's three ripples (kind 0x1a, row 0), placed from part 1 on the tick's pose where the original uses the matrix its last draw left, up to 9 units out (docs/internals/deviations/re2.md, \"Footsteps\")" }
+record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
+
+[[run]]
+name = "esp_kinds_water_walk_302"
+ref = "esp_water_walk_302"
+room = "302"
+sound = false
+ticks = 1400
+setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flags = [[1, 6]], camera = 0 }
+input = "water_walk.txt"
+input_shift = 344
+fields = "espn,espk"
+expect = "match"
+record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
+
+[[run]]
+name = "spider_shots_302"
+ref = "esp_spider_shots_302"
+room = "302"
+sound = false
+ticks = 1400
+setup_script = "spider_shots_302.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+expect = "match"
+record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
+
+[[run]]
+name = "esp_spider_shots_302"
+room = "302"
+sound = false
+ticks = 1400
+setup_script = "spider_shots_302.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 362, fields = ["esp79"], note = "the first shot's flash (kind 1, row 0) at the gun, which follows the hand's matrix in the original (flag 0x0800) and stays where it starts here (docs/internals/deviations/re2.md, \"Attached effects\")" }
+record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
+
+[[run]]
+name = "esp_kinds_spider_shots_302"
+ref = "esp_spider_shots_302"
+room = "302"
+sound = false
+ticks = 1400
+setup_script = "spider_shots_302.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "espn,espk"
+expect = "match"
+record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
+
+[[run]]
+name = "licker24_fight"
+ref = "esp_licker24_fight"
+room = "605"
+sound = false
+ticks = 1800
+setup_script = "licker24_605.lua"
+input = "licker24_fight.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+expect = "match"
+record = "--warp 605:-24500:0:-24000:0 --give 0:2:200 --give 1:0x14:60 --equip 2 --life 200"
+
+[[run]]
+name = "esp_licker24_fight"
+room = "605"
+sound = false
+ticks = 1800
+setup_script = "licker24_605.lua"
+input = "licker24_fight.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 352, fields = ["esp79"], note = "a licker's first drool (kind 0, row 0x15), started from the mouth on the tick's pose where the original uses the last draw's matrix, up to 26 units out (docs/internals/deviations/re2.md, \"Attached effects\")" }
+record = "--warp 605:-24500:0:-24000:0 --give 0:2:200 --give 1:0x14:60 --equip 2 --life 200"
+
+[[run]]
+name = "esp_kinds_licker24_fight"
+ref = "esp_licker24_fight"
+room = "605"
+sound = false
+ticks = 1800
+setup_script = "licker24_605.lua"
+input = "licker24_fight.txt"
+input_shift = 344
+fields = "espn,espk"
+expect = { tick = 421, fields = ["espn", "espk"], note = "a drool lands a tick early, from its start a few units out (docs/internals/deviations/re2.md, \"Attached effects\")" }
+record = "--warp 605:-24500:0:-24000:0 --give 0:2:200 --give 1:0x14:60 --equip 2 --life 200"
