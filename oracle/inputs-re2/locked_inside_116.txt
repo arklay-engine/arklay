@@ -1,0 +1,5 @@
+# room 116: a door locked from the other side, close the message (oracle/re2.md, "Locked doors")
+364 action
+368
+500 action
+504

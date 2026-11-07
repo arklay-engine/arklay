@@ -1,0 +1,7 @@
+# room 207: the diamond key (two uses) in its door, close the message, then through the door (oracle/re2.md, "Locked doors")
+364 action
+368
+600 action
+604
+700 action
+704

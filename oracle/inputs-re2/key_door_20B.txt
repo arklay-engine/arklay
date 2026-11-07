@@ -1,0 +1,9 @@
+# room 20B: the heart key in its door, close "You have used", yes to the discard, then through the door (oracle/re2.md, "Locked doors")
+364 action
+368
+600 action
+604
+800 action
+804
+900 action
+904

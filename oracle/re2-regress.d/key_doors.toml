@@ -1,0 +1,74 @@
+# Locked and key doors past the main hall: Sce_Door's sounds, the key's use and Key_lost (oracle/re2.md, "Locked doors").
+
+[[run]]
+name = "key_door_20B"
+room = "20B"
+setup_script = "key_door_20B.lua"
+input = "key_door_20B.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+frames = [360, 999]
+frame_max_mean = 0.4
+boxes = [[0, 165, 232, 240]]
+# the door opens on tick 900 and draws the original's rseed differently, as every door does (oracle/re2.md)
+ignore = [[900, "rseed"]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 20B:-1814:0:-12103:3029 --give 2:0x5B:1 --give 3:0x14:30"
+
+[[run]]
+name = "key_door_20B_keep"
+room = "20B"
+setup_script = "key_door_20B.lua"
+input = "key_door_20B_keep.txt"
+input_shift = 344
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+expect = "match"
+record = "--no-enemies --life 200 --warp 20B:-1814:0:-12103:3029 --give 2:0x5B:1 --give 3:0x14:30"
+
+[[run]]
+name = "key_door_207"
+room = "207"
+setup_script = "key_door_207.lua"
+input = "key_door_207.txt"
+input_shift = 344
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+# the door opens on tick 700 and draws the original's rseed differently, as every door does (oracle/re2.md)
+ignore = [[700, "rseed"]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 207:-25770:0:-24897:1846 --give 2:0x5A:2"
+
+[[run]]
+name = "locked_door_20B"
+room = "20B"
+setup_script = "locked_door_20B.lua"
+input = "locked_door_20B.txt"
+input_shift = 344
+ticks = 800
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+expect = "match"
+record = "--no-enemies --life 200 --warp 20B:-1814:0:-12103:3029"
+
+[[run]]
+name = "unlock_door_20A"
+room = "20A"
+setup_script = "unlock_door_20A.lua"
+input = "unlock_door_20A.txt"
+input_shift = 344
+ticks = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+expect = "match"
+record = "--no-enemies --life 200 --warp 20A:-15554:0:-15268:1866"
+
+[[run]]
+name = "locked_inside_116"
+room = "116"
+setup_script = "locked_inside_116.lua"
+input = "locked_inside_116.txt"
+input_shift = 344
+ticks = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey"
+expect = "match"
+record = "--no-enemies --life 200 --warp 116:-26159:-7200:-25126:2048"
