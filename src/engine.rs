@@ -633,6 +633,7 @@ pub fn run_with_options(
                         re2_inventory: None,
                         re2_item_page: None,
                         re2_item_box: None,
+                        re2_scene: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -5874,7 +5875,11 @@ impl GameSession {
                 let objects = self.game.objects.records.len();
                 self.game.objects.reset(objects);
                 // Nor does a scene the first pass started run on: what it put
-                // up in `fg_stop` (room 200's entry holding the input) goes.
+                // up in `fg_stop` (room 200's entry holding the input) goes,
+                // and `run_re2_init` clears its `fg_status` bit (the bars) as
+                // `Set_room` does. That clear also drops any `fg_status` bit
+                // in indices 12 to 16 or 18 to 31 the setup set, as the
+                // original's `Set_room` drops the tracer's `--flag`s there.
                 *self.game.re2.fg_stop_mut() = 0;
             }
             run_re2_init(
@@ -7526,6 +7531,7 @@ impl GameSession {
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
+            re2_scene: self.game.is_re2_room.then(|| self.game.scene_bars()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -15586,6 +15592,10 @@ fn run_re2_init(
     let Some(vm) = vm else {
         return;
     };
+    // `Set_room`'s case 0 clears `fg_status` on every load before anything
+    // reads it: a scene's bit, a voice line's and the camera's lock don't
+    // outlive their room.
+    game.re2.enter_room_status();
     game.re2.gates = Default::default();
     game.re2.reset_mask_groups();
     game.re2.reset_xa_volume();
@@ -35464,5 +35474,43 @@ end
                 Black,
             ]
         );
+    }
+
+    #[test]
+    fn a_rooms_load_clears_fg_status_as_set_room_does() {
+        let mut game = game::GameState::default();
+        game.re2.banks[1][0] = 0xFFFF_FFFF;
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        let status = game.re2.banks[1][0];
+        assert_eq!(status & 0x000F_BFFF, 0, "{status:#x}");
+        // `Set_room` keeps the character's and the scenario's bits too, but
+        // `run_re2_init` writes them again at once (0 in a default state), so
+        // they are not asserted here.
+        for kept in [0x4000, 0x0010_0000, 0x0400_0000, 0x0200_0000] {
+            assert_ne!(status & kept, 0, "{kept:#x} in {status:#x}");
+        }
+        assert!(!game.scene_bars());
+        assert_eq!(game.re2.scroll, 0);
+    }
+
+    #[test]
+    fn a_setup_rerun_drops_the_scene_the_first_start_began() {
+        // Room 200's shape: the entry scene starts only while 4:6 is clear.
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc main_00 { if (ck(4, 6, 0)) { set(1, 27, 1); } evt_end(0); }",
+        )
+        .unwrap();
+        let mut vm = crate::scd2::vm::Vm::new(&scripts);
+        let mut game = game::GameState::default();
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        assert!(game.scene_bars());
+        // Without 4:6 a second start raises the bit again (`scene_200`).
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        assert!(game.scene_bars());
+        // With it, the second start clears what the first one began.
+        game.re2.set_flag(4, 6, 1);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        assert!(!game.scene_bars());
     }
 }
