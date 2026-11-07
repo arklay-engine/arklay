@@ -120,35 +120,38 @@ proc init
     }
 }
 
-proc main when (JILL)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, FALSE))
+    if (JILL)
     {
-        if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_SOUTH_END, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, FALSE))
         {
-            pos_set(ENEMY_00_NEPTUNE, 0, 848, 0, 4060, 0, 15600);
-            pos_set(ENEMY_01_NEPTUNE, 0, 848, 0, 4060, 0, 16600);
-            pos_set(ENEMY_02_NEPTUNE, 0, 848, 0, 4060, 0, 17600);
-            eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
-            eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
-        }
-        if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_WEST_DOORS, TRUE))
-        {
-            dir_set(0, 0, 2048, 0, 2800, 0, 26960);
-            pos_set(ENEMY_00_NEPTUNE, 0, 2056, 0, 14136, 0, 27209);
-            pos_set(ENEMY_01_NEPTUNE, 0, 2056, 0, 15136, 0, 27209);
-            pos_set(ENEMY_02_NEPTUNE, 0, 2056, 0, 16136, 0, 27209);
-            eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
-            eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
-            evt_exec(0, TASK_07, water_tank_film);
+            if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_SOUTH_END, TRUE))
+            {
+                pos_set(ENEMY_00_NEPTUNE, 0, 848, 0, 4060, 0, 15600);
+                pos_set(ENEMY_01_NEPTUNE, 0, 848, 0, 4060, 0, 16600);
+                pos_set(ENEMY_02_NEPTUNE, 0, 848, 0, 4060, 0, 17600);
+                eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
+                eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
+                aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
+                set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
+            }
+            if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_WEST_DOORS, TRUE))
+            {
+                dir_set(0, 0, 2048, 0, 2800, 0, 26960);
+                pos_set(ENEMY_00_NEPTUNE, 0, 2056, 0, 14136, 0, 27209);
+                pos_set(ENEMY_01_NEPTUNE, 0, 2056, 0, 15136, 0, 27209);
+                pos_set(ENEMY_02_NEPTUNE, 0, 2056, 0, 16136, 0, 27209);
+                eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
+                eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
+                aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
+                set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
+                evt_exec(0, TASK_07, water_tank_film);
+            }
         }
     }
 }

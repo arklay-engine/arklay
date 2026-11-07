@@ -56,14 +56,17 @@ proc init
     obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 6320, -1410, 1770, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
-proc main when (MANSION1)
+proc main
 {
-    if (ck(FG_ITEM, F_ITEM_118_KEY_HERBICIDE_0, FALSE))
+    if (MANSION1)
     {
-        aot_delete(AOT_02_MESSAGE_GARDENING_TOOLS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-    }
-    else
-    {
-        aot_delete(AOT_02_MESSAGE_GARDENING_TOOLS, SCE_MESSAGE, 0);
+        if (ck(FG_ITEM, F_ITEM_118_KEY_HERBICIDE_0, FALSE))
+        {
+            aot_delete(AOT_02_MESSAGE_GARDENING_TOOLS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_02_MESSAGE_GARDENING_TOOLS, SCE_MESSAGE, 0);
+        }
     }
 }

@@ -130,22 +130,25 @@ proc init
     }
 }
 
-proc main when (CHRIS)
+proc main
 {
-    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+    if (CHRIS)
     {
-        set(FG_LOCK, F_LOCK_307_308, FALSE);
-        evt_exec(0, TASK_09, flamethrower_taken_or_north_door_with_barry);
-    }
-    if (testitem(IT_06_WEAPON_FLAMETHROWER))
-    {
-        set(FG_ITEM, F_ITEM_308_WEAPON_FLAMETHROWER_0, TRUE);
-        setbyte(0, 1, 0);
-        evt_exec(0, TASK_09, place_flamethrower);
-        evt_exec(0, TASK_09, place_flamethrower_model);
+        if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+        {
+            set(FG_LOCK, F_LOCK_307_308, FALSE);
+            evt_exec(0, TASK_09, flamethrower_taken_or_north_door_with_barry);
+        }
+        if (testitem(IT_06_WEAPON_FLAMETHROWER))
+        {
+            set(FG_ITEM, F_ITEM_308_WEAPON_FLAMETHROWER_0, TRUE);
+            setbyte(0, 1, 0);
+            evt_exec(0, TASK_09, place_flamethrower);
+            evt_exec(0, TASK_09, place_flamethrower_model);
+        }
     }
 }
-event barry_greets_jill when (JILL)
+event barry_greets_jill
 {
     sleep(1);
     run
@@ -166,7 +169,7 @@ event barry_greets_jill when (JILL)
     evt_finish();
 }
 
-event barry_asks_to_team_up when (JILL)
+event barry_asks_to_team_up
 {
     voice_play(VOICE_PLAY, VO_10E_00);
     sleep(15);
@@ -208,7 +211,7 @@ event barry_asks_to_team_up when (JILL)
     evt_finish();
 }
 
-event team_up when (JILL)
+event team_up
 {
     voice_play(VOICE_PLAY, VO_10E_01);
     sleep(15);
@@ -250,7 +253,7 @@ event team_up when (JILL)
     evt_finish();
 }
 
-event barry_goes_first when (JILL)
+event barry_goes_first
 {
     voice_play(VOICE_PLAY, VO_10E_03);
     sleep(15);
@@ -283,7 +286,7 @@ event barry_goes_first when (JILL)
     evt_finish();
 }
 
-event go_on_together when (JILL)
+event go_on_together
 {
     voice_play(VOICE_PLAY, VO_10E_04);
     sleep(15);
@@ -308,7 +311,7 @@ event go_on_together when (JILL)
     evt_finish();
 }
 
-event refuse_team_up when (JILL)
+event refuse_team_up
 {
     voice_play(VOICE_PLAY, VO_10E_05);
     evt_fork(TASK_09, refuse_team_up_anim_1, 0);
@@ -346,7 +349,7 @@ event refuse_team_up when (JILL)
     evt_finish();
 }
 
-event jill_waits_here when (JILL)
+event jill_waits_here
 {
     voice_play(VOICE_PLAY, VO_10E_06);
     evt_fork(TASK_09, jill_waits_here_anim_1, 0);
@@ -381,7 +384,7 @@ event jill_waits_here when (JILL)
     evt_finish();
 }
 
-event jill_goes_another_way when (JILL)
+event jill_goes_another_way
 {
     voice_play(VOICE_PLAY, VO_10E_07);
     evt_fork(TASK_09, jill_goes_another_way_anim_1, 0);
@@ -423,7 +426,7 @@ event jill_goes_another_way when (JILL)
     evt_finish();
 }
 
-event barry_talk_end when (JILL)
+event barry_talk_end
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -451,7 +454,7 @@ event barry_talk_end when (JILL)
     evt_finish();
 }
 
-event jill_talk_gesture when (JILL)
+event jill_talk_gesture
 {
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
@@ -469,7 +472,7 @@ event jill_talk_gesture when (JILL)
     evt_finish();
 }
 
-event barry_asks_anim_1 when (JILL)
+event barry_asks_anim_1
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -491,7 +494,7 @@ event barry_asks_anim_1 when (JILL)
     evt_finish();
 }
 
-event barry_asks_anim_2 when (JILL)
+event barry_asks_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -513,7 +516,7 @@ event barry_asks_anim_2 when (JILL)
     evt_finish();
 }
 
-event barry_asks_anim_3 when (JILL)
+event barry_asks_anim_3
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -529,7 +532,7 @@ event barry_asks_anim_3 when (JILL)
     evt_finish();
 }
 
-event barry_asks_anim_4 when (JILL)
+event barry_asks_anim_4
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -545,7 +548,7 @@ event barry_asks_anim_4 when (JILL)
     evt_finish();
 }
 
-event barry_waits_for_answer when (JILL)
+event barry_waits_for_answer
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
@@ -563,7 +566,7 @@ event barry_waits_for_answer when (JILL)
     evt_finish();
 }
 
-event team_up_anim_1 when (JILL)
+event team_up_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -579,7 +582,7 @@ event team_up_anim_1 when (JILL)
     evt_finish();
 }
 
-event team_up_anim_2 when (JILL)
+event team_up_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -607,7 +610,7 @@ event team_up_anim_2 when (JILL)
     evt_finish();
 }
 
-event team_up_anim_3 when (JILL)
+event team_up_anim_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -617,7 +620,7 @@ event team_up_anim_3 when (JILL)
     evt_finish();
 }
 
-event team_up_anim_4 when (JILL)
+event team_up_anim_4
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
@@ -628,7 +631,7 @@ event team_up_anim_4 when (JILL)
     evt_finish();
 }
 
-event team_up_anim_5 when (JILL)
+event team_up_anim_5
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -657,7 +660,7 @@ event team_up_anim_5 when (JILL)
     evt_finish();
 }
 
-event barry_goes_first_anim_1 when (JILL)
+event barry_goes_first_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -667,7 +670,7 @@ event barry_goes_first_anim_1 when (JILL)
     evt_finish();
 }
 
-event barry_goes_first_anim_2 when (JILL)
+event barry_goes_first_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -678,7 +681,7 @@ event barry_goes_first_anim_2 when (JILL)
     evt_finish();
 }
 
-event barry_goes_first_anim_3 when (JILL)
+event barry_goes_first_anim_3
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
@@ -695,7 +698,7 @@ event barry_goes_first_anim_3 when (JILL)
     evt_finish();
 }
 
-event barry_goes_first_walk_off when (JILL)
+event barry_goes_first_walk_off
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -713,7 +716,7 @@ event barry_goes_first_walk_off when (JILL)
     evt_finish();
 }
 
-event go_on_together_anim_1 when (JILL)
+event go_on_together_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -723,7 +726,7 @@ event go_on_together_anim_1 when (JILL)
     evt_finish();
 }
 
-event go_on_together_anim_2 when (JILL)
+event go_on_together_anim_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -739,7 +742,7 @@ event go_on_together_anim_2 when (JILL)
     evt_finish();
 }
 
-event barry_leaves_3 when (JILL)
+event barry_leaves_3
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -749,7 +752,7 @@ event barry_leaves_3 when (JILL)
     evt_finish();
 }
 
-event refuse_team_up_anim_1 when (JILL)
+event refuse_team_up_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -770,7 +773,7 @@ event refuse_team_up_anim_1 when (JILL)
     evt_finish();
 }
 
-event refuse_team_up_anim_2 when (JILL)
+event refuse_team_up_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -786,7 +789,7 @@ event refuse_team_up_anim_2 when (JILL)
     evt_finish();
 }
 
-event refuse_team_up_anim_3 when (JILL)
+event refuse_team_up_anim_3
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
@@ -797,7 +800,7 @@ event refuse_team_up_anim_3 when (JILL)
     evt_finish();
 }
 
-event refuse_team_up_anim_4 when (JILL)
+event refuse_team_up_anim_4
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -826,7 +829,7 @@ event refuse_team_up_anim_4 when (JILL)
     evt_finish();
 }
 
-event jill_waits_here_anim_1 when (JILL)
+event jill_waits_here_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -841,7 +844,7 @@ event jill_waits_here_anim_1 when (JILL)
     evt_finish();
 }
 
-event jill_waits_here_anim_2 when (JILL)
+event jill_waits_here_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -851,7 +854,7 @@ event jill_waits_here_anim_2 when (JILL)
     evt_finish();
 }
 
-event barry_leaves_1 when (JILL)
+event barry_leaves_1
 {
     run
     {
@@ -866,7 +869,7 @@ event barry_leaves_1 when (JILL)
     evt_finish();
 }
 
-event barry_leaves_2 when (JILL)
+event barry_leaves_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -877,7 +880,7 @@ event barry_leaves_2 when (JILL)
     evt_finish();
 }
 
-event barry_leaves_4 when (JILL)
+event barry_leaves_4
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -888,7 +891,7 @@ event barry_leaves_4 when (JILL)
     evt_finish();
 }
 
-event barry_leaves_5 when (JILL)
+event barry_leaves_5
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -904,7 +907,7 @@ event barry_leaves_5 when (JILL)
     evt_finish();
 }
 
-event jill_goes_another_way_anim_1 when (JILL)
+event jill_goes_another_way_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -921,7 +924,7 @@ event jill_goes_another_way_anim_1 when (JILL)
     evt_finish();
 }
 
-event jill_goes_another_way_anim_2 when (JILL)
+event jill_goes_another_way_anim_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -936,7 +939,7 @@ event jill_goes_another_way_anim_2 when (JILL)
     evt_finish();
 }
 
-event jill_goes_another_way_anim_3 when (JILL)
+event jill_goes_another_way_anim_3
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -946,7 +949,7 @@ event jill_goes_another_way_anim_3 when (JILL)
     evt_finish();
 }
 
-event barry_gunshot when (JILL)
+event barry_gunshot
 {
     run
     {
@@ -1091,7 +1094,7 @@ event flamethrower_taken_or_north_door_with_barry
     evt_finish();
 }
 
-event place_flamethrower when (CHRIS)
+event place_flamethrower
 {
     aot_delete(AOT_04_EVENT_FLAMETHROWER_HOOK, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 2200, 16700);
@@ -1190,7 +1193,7 @@ event place_flamethrower when (CHRIS)
     evt_finish();
 }
 
-event hook_raised when (CHRIS)
+event hook_raised
 {
     evt_work_set(WK_OBJ, OBJ_00_FLAMETHROWER_HOOK);
     evt_tween_begin_alt();
@@ -1198,7 +1201,7 @@ event hook_raised when (CHRIS)
     tw_finish();
 }
 
-event place_flamethrower_model when (CHRIS)
+event place_flamethrower_model
 {
     aot_delete(AOT_04_EVENT_FLAMETHROWER_HOOK, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
@@ -1321,7 +1324,7 @@ event flamethrower_hook_or_barry_follows
     evt_finish();
 }
 
-event barry_cold_feet when (JILL)
+event barry_cold_feet
 {
     run
     {
@@ -1343,7 +1346,7 @@ event barry_cold_feet when (JILL)
     evt_finish();
 }
 
-event follow_gunshot when (JILL)
+event follow_gunshot
 {
     run
     {

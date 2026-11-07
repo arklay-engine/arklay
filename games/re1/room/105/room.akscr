@@ -656,7 +656,7 @@ else
     evt_finish();
 }
 
-event barry_walks_in_barry when (JILL)
+event barry_walks_in_barry
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -715,7 +715,7 @@ event barry_walks_in_barry when (JILL)
     evt_chain(barry_shows_blood);
 }
 
-event barry_walks_in_timeout_1 when (JILL)
+event barry_walks_in_timeout_1
 {
     sleep(180);
     set(FG_ROOM, F_ROOM_J_PLAYER_AT_CAM_01, TRUE);
@@ -723,14 +723,14 @@ event barry_walks_in_timeout_1 when (JILL)
     evt_finish();
 }
 
-event barry_walks_in_timeout_2 when (JILL)
+event barry_walks_in_timeout_2
 {
     sleep(180);
     set(FG_ROOM, F_ROOM_J_BARRY_TO_FIREPLACE, TRUE);
     evt_finish();
 }
 
-event barry_shows_blood when (JILL)
+event barry_shows_blood
 {
     aot_reset(AOT_02_EVENT_REACH_BARRY_S, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, jill_walks_to_barry_s, 0);
     aot_reset(AOT_03_EVENT_REACH_BARRY_N, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, jill_walks_to_barry_n, 0);
@@ -843,7 +843,7 @@ event barry_shows_blood when (JILL)
     evt_finish();
 }
 
-event jill_walks_to_barry_s when (JILL)
+event jill_walks_to_barry_s
 {
     run
     {
@@ -897,7 +897,7 @@ event jill_walks_to_barry_s when (JILL)
     evt_finish();
 }
 
-event jill_walks_to_barry_n when (JILL)
+event jill_walks_to_barry_n
 {
     run
     {
@@ -937,7 +937,7 @@ event jill_walks_to_barry_n when (JILL)
     evt_finish();
 }
 
-event barry_door_talk when (JILL)
+event barry_door_talk
 {
     run
     {
@@ -1045,7 +1045,7 @@ event barry_door_talk when (JILL)
     evt_finish();
 }
 
-event hall_door_not_done when (JILL)
+event hall_door_not_done
 {
     run
     {
@@ -1058,7 +1058,7 @@ event hall_door_not_done when (JILL)
     evt_finish();
 }
 
-event barry_looks_around when (JILL)
+event barry_looks_around
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -1075,7 +1075,7 @@ event barry_looks_around when (JILL)
     evt_chain(barry_looks_around);
 }
 
-event jill_looks_around when (JILL)
+event jill_looks_around
 {
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
@@ -1160,7 +1160,7 @@ event place_gold_emblem
     evt_finish();
 }
 
-event barry_shoots_zombie_at_door when (JILL)
+event barry_shoots_zombie_at_door
 {
     run
     {
@@ -1395,7 +1395,7 @@ event barry_shoots_zombie_at_door when (JILL)
     evt_finish();
 }
 
-event zombie_follows_jill when (JILL)
+event zombie_follows_jill
 {
     sleep(1);
     run
@@ -1738,7 +1738,7 @@ event zombie_follows_jill when (JILL)
     evt_finish();
 }
 
-event zombie_follows_jill_dodge when (JILL)
+event zombie_follows_jill_dodge
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1780,7 +1780,7 @@ event zombie_follows_jill_dodge when (JILL)
     evt_finish();
 }
 
-event zombie_follows_jill_to_body when (JILL)
+event zombie_follows_jill_to_body
 {
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
@@ -1808,7 +1808,7 @@ event zombie_follows_jill_to_body when (JILL)
     evt_finish();
 }
 
-event zombie_follows_barry_to_body when (JILL)
+event zombie_follows_barry_to_body
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();

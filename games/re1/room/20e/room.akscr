@@ -135,15 +135,18 @@ proc init noreturn (MANSION2)
     }
 }
 
-proc main when (MANSION1)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, FALSE))
+    if (MANSION1)
     {
-        aot_delete(AOT_05_EVENT_POISON_COLLAPSE, SCE_NONE, 0);
+        if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, FALSE))
+        {
+            aot_delete(AOT_05_EVENT_POISON_COLLAPSE, SCE_NONE, 0);
+        }
     }
 }
 
-event poison_collapse when (MANSION1)
+event poison_collapse
 {
     if (CHRIS)
     {
@@ -203,7 +206,7 @@ event poison_collapse when (MANSION1)
     evt_finish();
 }
 
-event chris_poisoned_richard_saved when (CHRIS && MANSION1)
+event chris_poisoned_richard_saved
 {
     evt_fork(TASK_09, chris_walks_from_attic, 0);
     sleep(20);
@@ -211,7 +214,7 @@ event chris_poisoned_richard_saved when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_poisoned_alone when (CHRIS && MANSION1)
+event chris_poisoned_alone
 {
     evt_fork(TASK_09, player_walks_back, 0);
     sleep(40);
@@ -233,7 +236,7 @@ event chris_poisoned_alone when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_poisoned_with_rebecca when (CHRIS && MANSION1)
+event chris_poisoned_with_rebecca
 {
     evt_fork(TASK_09, chris_walks_from_attic, 0);
     sleep(20);
@@ -251,7 +254,7 @@ event chris_poisoned_with_rebecca when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_carried_to_save_room when (CHRIS && MANSION1)
+event chris_carried_to_save_room
 {
     run
     {
@@ -302,7 +305,7 @@ event chris_carried_to_save_room when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_goes_for_serum when (CHRIS && MANSION1)
+event rebecca_goes_for_serum
 {
     run
     {
@@ -368,7 +371,7 @@ event rebecca_goes_for_serum when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_returns_in_time when (CHRIS && MANSION1)
+event rebecca_returns_in_time
 {
     sleep(1);
     run
@@ -385,7 +388,7 @@ event rebecca_returns_in_time when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_cures_chris when (CHRIS && MANSION1)
+event rebecca_cures_chris
 {
     evt_fork(TASK_09, rebecca_walks_to_chris, 0);
     sleep(60);
@@ -441,7 +444,7 @@ event rebecca_cures_chris when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event jill_poisoned_alone when (JILL && MANSION1)
+event jill_poisoned_alone
 {
     evt_fork(TASK_09, player_walks_from_attic, 0);
     sleep(40);
@@ -459,7 +462,7 @@ event jill_poisoned_alone when (JILL && MANSION1)
     evt_finish();
 }
 
-event poison_scene_end when (MANSION1)
+event poison_scene_end
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -500,7 +503,7 @@ event poison_scene_end when (MANSION1)
     evt_finish();
 }
 
-event chris_clutches_bite when (CHRIS && MANSION1)
+event chris_clutches_bite
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -510,7 +513,7 @@ event chris_clutches_bite when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_staggers when (CHRIS && MANSION1)
+event chris_staggers
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -520,7 +523,7 @@ event chris_staggers when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_kneels when (CHRIS && MANSION1)
+event chris_kneels
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -531,7 +534,7 @@ event chris_kneels when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_gasps when (CHRIS && MANSION1)
+event chris_gasps
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -541,7 +544,7 @@ event chris_gasps when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_runs_to_chris when (CHRIS && MANSION1)
+event rebecca_runs_to_chris
 {
     sleep(30);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -565,7 +568,7 @@ event rebecca_runs_to_chris when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_kneels when (CHRIS && MANSION1)
+event rebecca_kneels
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -582,7 +585,7 @@ event rebecca_kneels when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_turns when (CHRIS && MANSION1)
+event rebecca_turns
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -594,7 +597,7 @@ event rebecca_turns when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_leaves_for_serum when (CHRIS && MANSION1)
+event rebecca_leaves_for_serum
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -605,7 +608,7 @@ event rebecca_leaves_for_serum when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_walks_to_chris when (CHRIS && MANSION1)
+event rebecca_walks_to_chris
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -622,7 +625,7 @@ event rebecca_walks_to_chris when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_breathes_loop when (CHRIS && MANSION1)
+event chris_breathes_loop
 {
     for (9)
     {
@@ -649,7 +652,7 @@ event chris_breathes_loop when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_falls when (CHRIS && MANSION1)
+event chris_falls
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -660,7 +663,7 @@ event chris_falls when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event collapse_fade when (CHRIS && MANSION1)
+event collapse_fade
 {
     timer_setup(LIGHT_FADE_VEIL, 163, FADE_R | FADE_G | FADE_B);
     sleep(200);
@@ -668,7 +671,7 @@ event collapse_fade when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_talk_anims when (CHRIS && MANSION1)
+event rebecca_talk_anims
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -690,7 +693,7 @@ event rebecca_talk_anims when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_steps_forward when (CHRIS && MANSION1)
+event chris_steps_forward
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -700,7 +703,7 @@ event chris_steps_forward when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_talk_anims_2 when (CHRIS && MANSION1)
+event rebecca_talk_anims_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -728,7 +731,7 @@ event rebecca_talk_anims_2 when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_walks_from_attic when (CHRIS && MANSION1)
+event chris_walks_from_attic
 {
     cut_auto(CUT_LOCKED);
     evt_work_set(WK_PLAYER, 0);
@@ -740,7 +743,7 @@ event chris_walks_from_attic when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event player_gasps when (MANSION1)
+event player_gasps
 {
     if (CHRIS)
     {
@@ -807,7 +810,7 @@ event player_gasps when (MANSION1)
     evt_finish();
 }
 
-event rebecca_gestures_or_jill_staggers when (MANSION1)
+event rebecca_gestures_or_jill_staggers
 {
     if (CHRIS)
     {
@@ -861,7 +864,7 @@ event rebecca_gestures_or_jill_staggers when (MANSION1)
     evt_finish();
 }
 
-event player_recover_anims when (MANSION1)
+event player_recover_anims
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -891,7 +894,7 @@ event player_recover_anims when (MANSION1)
     evt_finish();
 }
 
-event talk_to_rebecca_again when (MANSION1)
+event talk_to_rebecca_again
 {
     if (CHRIS)
     {
@@ -934,7 +937,7 @@ event talk_to_rebecca_again when (MANSION1)
     evt_finish();
 }
 
-event player_walks_from_attic when (MANSION1)
+event player_walks_from_attic
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -952,7 +955,7 @@ event player_walks_from_attic when (MANSION1)
     evt_finish();
 }
 
-event chris_gasps_loop when (CHRIS && MANSION1)
+event chris_gasps_loop
 {
     for (30)
     {
@@ -967,7 +970,7 @@ event chris_gasps_loop when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_gesture when (CHRIS && MANSION1)
+event rebecca_gesture
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -977,7 +980,7 @@ event rebecca_gesture when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event poison_vision_pulse when (CHRIS && MANSION1)
+event poison_vision_pulse
 {
     timer_setup(LIGHT_FADE_VEIL, 654, FADE_R | FADE_G | FADE_B);
     sleep(50);
@@ -986,7 +989,7 @@ event poison_vision_pulse when (CHRIS && MANSION1)
     timer_setup(LIGHT_FADE_VEIL, -654, FADE_R | FADE_G | FADE_B);
     evt_finish();
 }
-event jill_poisoned_barry_rescues when (JILL && MANSION1)
+event jill_poisoned_barry_rescues
 {
     evt_fork(TASK_09, rebecca_walks_in_or_jill_walks, 0);
     sleep(20);
@@ -1033,7 +1036,7 @@ event jill_poisoned_barry_rescues when (JILL && MANSION1)
     evt_finish();
 }
 
-event rebecca_pose_or_jill_clutches_bite when (MANSION1)
+event rebecca_pose_or_jill_clutches_bite
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1068,7 +1071,7 @@ event rebecca_pose_or_jill_clutches_bite when (MANSION1)
     evt_finish();
 }
 
-event player_staggers when (MANSION1)
+event player_staggers
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1085,7 +1088,7 @@ event player_staggers when (MANSION1)
     evt_finish();
 }
 
-event rebecca_too_late when (CHRIS && MANSION1)
+event rebecca_too_late
 {
     sleep(1);
     run
@@ -1099,7 +1102,7 @@ event rebecca_too_late when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_dies_of_poison when (CHRIS && MANSION1)
+event chris_dies_of_poison
 {
     voice_play(VOICE_PLAY, VO_008_10);
     evt_fork(TASK_09, rebecca_walks_in_or_jill_walks, 0);
@@ -1117,7 +1120,7 @@ event chris_dies_of_poison when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event chris_gasps_or_jill_kneels when (MANSION1)
+event chris_gasps_or_jill_kneels
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1164,7 +1167,7 @@ event chris_gasps_or_jill_kneels when (MANSION1)
     evt_finish();
 }
 
-event player_walks_back when (MANSION1)
+event player_walks_back
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1182,7 +1185,7 @@ event player_walks_back when (MANSION1)
     evt_finish();
 }
 
-event chris_breathes_or_jill_falls when (MANSION1)
+event chris_breathes_or_jill_falls
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1200,7 +1203,7 @@ event chris_breathes_or_jill_falls when (MANSION1)
     evt_finish();
 }
 
-event partner_runs_in when (MANSION1)
+event partner_runs_in
 {
     run
     {
@@ -1230,7 +1233,7 @@ event partner_runs_in when (MANSION1)
     evt_finish();
 }
 
-event collapse_fade_jill when (JILL && MANSION1)
+event collapse_fade_jill
 {
     timer_setup(LIGHT_FADE_VEIL, 163, FADE_R | FADE_G | FADE_B);
     sleep(200);
@@ -1238,7 +1241,7 @@ event collapse_fade_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event rebecca_walks_in_or_jill_walks when (MANSION1)
+event rebecca_walks_in_or_jill_walks
 {
     if (CHRIS)
     {
@@ -1271,7 +1274,7 @@ event rebecca_walks_in_or_jill_walks when (MANSION1)
     evt_finish();
 }
 
-event rebecca_anims_or_jill_gasps when (MANSION1)
+event rebecca_anims_or_jill_gasps
 {
     if (CHRIS)
     {
@@ -1323,7 +1326,7 @@ event rebecca_anims_or_jill_gasps when (MANSION1)
     evt_finish();
 }
 
-event examine_rebecca when (CHRIS && MANSION1)
+event examine_rebecca
 {
     run
     {

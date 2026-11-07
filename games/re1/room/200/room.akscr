@@ -12,23 +12,26 @@
 #define AOT_01_DOOR_21C 0x01
 #define F_ROOM_RIDE_DONE 0x18                               // The elevator ride finished; the exit door turns on.
 
-proc init when (MANSION2)
+proc init
 {
-    set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
-    door_aot_set(AOT_00_DOOR_213, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR_21C, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    dir_set(0, 0, 0, 0, 2500, 0, 3300);
-    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_213_FRONT_ELEVATOR))
+    if (MANSION2)
     {
-        evt_exec(0, TASK_09, ride_from_213);
-    }
-    else
-    {
-        evt_exec(0, TASK_09, ride_from_21c);
+        set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
+        door_aot_set(AOT_00_DOOR_213, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR_21C, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        dir_set(0, 0, 0, 0, 2500, 0, 3300);
+        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_213_FRONT_ELEVATOR))
+        {
+            evt_exec(0, TASK_09, ride_from_213);
+        }
+        else
+        {
+            evt_exec(0, TASK_09, ride_from_21c);
+        }
     }
 }
 
-event ride_from_213 when (MANSION2)
+event ride_from_213
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -46,7 +49,7 @@ event ride_from_213 when (MANSION2)
     evt_finish();
 }
 
-event ride_from_21c when (MANSION2)
+event ride_from_21c
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -64,7 +67,7 @@ event ride_from_21c when (MANSION2)
     evt_finish();
 }
 
-event elevator_ride when (MANSION2)
+event elevator_ride
 {
     bgm_play(BGM_MAIN);
     sleep(5);

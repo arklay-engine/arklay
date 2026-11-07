@@ -469,7 +469,7 @@ event rebecca_intro_or_vines_block_door
     evt_finish();
 }
 
-event barry_rescues_jill when (JILL)
+event barry_rescues_jill
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_work_set(WK_PLAYER, 0);
@@ -595,7 +595,7 @@ event barry_rescues_jill when (JILL)
     evt_finish();
 }
 
-event barry_rescues_jill_player when (JILL)
+event barry_rescues_jill_player
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -605,7 +605,7 @@ event barry_rescues_jill_player when (JILL)
     act_finish();
 }
 
-event barry_rescues_jill_plant when (JILL)
+event barry_rescues_jill_plant
 {
     evt_work_set(WK_ENEMY, ENEMY_00_PLANT_42);
     evt_actor_begin();
@@ -676,7 +676,7 @@ event plant42_wakes_actors
     act_finish();
 }
 
-event intro_rebecca_runs_in when (CHRIS)
+event intro_rebecca_runs_in
 {
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_REBECCA);
     evt_actor_begin();
@@ -698,7 +698,7 @@ event intro_rebecca_runs_in when (CHRIS)
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
-event barry_rescues_jill_barry_enters when (JILL)
+event barry_rescues_jill_barry_enters
 {
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
     evt_actor_begin();
@@ -713,7 +713,7 @@ event barry_rescues_jill_barry_enters when (JILL)
     act_finish();
 }
 
-event barry_rescues_jill_barry_fires when (JILL)
+event barry_rescues_jill_barry_fires
 {
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
     evt_actor_begin();
@@ -753,7 +753,7 @@ event barry_rescues_jill_barry_fires when (JILL)
     act_finish();
 }
 
-event barry_rescues_jill_tentacles when (JILL)
+event barry_rescues_jill_tentacles
 {
     sleep(50);
     eml_state(0, ENEMY_01_PLANT_42, EML_ACTION, AB_0D);
@@ -817,7 +817,7 @@ event rebecca_or_jill_turns
     act_finish();
 }
 
-event intro_chris_gestures when (CHRIS)
+event intro_chris_gestures
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -980,7 +980,7 @@ event rebecca_or_barry_gestures_2
     act_finish();
 }
 
-event intro_rebecca_leaves when (CHRIS)
+event intro_rebecca_leaves
 {
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_REBECCA);
     evt_actor_begin();
@@ -999,7 +999,7 @@ event intro_rebecca_leaves when (CHRIS)
     act_flag_op(EF_OR, EF_0002);
     act_finish();
 }
-event talk_to_barry when (JILL)
+event talk_to_barry
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
@@ -1035,7 +1035,7 @@ event talk_to_barry when (JILL)
     evt_finish();
 }
 
-event plant42_wakes_alone when (CHRIS)
+event plant42_wakes_alone
 {
     run
     {
@@ -1075,7 +1075,7 @@ event plant42_wakes_alone when (CHRIS)
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
-event talk_to_barry_gestures when (JILL)
+event talk_to_barry_gestures
 {
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
     evt_actor_begin();
@@ -1192,7 +1192,7 @@ event plant42_withers_or_jill_talk_gestures
     }
 }
 
-event vines_block_door when (CHRIS)
+event vines_block_door
 {
     run
     {
@@ -1215,7 +1215,7 @@ event vines_block_door when (CHRIS)
     }
     evt_finish();
 }
-event barry_idle when (JILL)
+event barry_idle
 {
     sleep(1);
     evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
@@ -1225,7 +1225,7 @@ event barry_idle when (JILL)
     act_finish();
 }
 
-event barry_rescue_bgm when (JILL)
+event barry_rescue_bgm
 {
     sleep(1);
     bgm_play(BGM_SUB_1);

@@ -191,7 +191,7 @@ proc main
     }
 }
 
-event seal_door_115_chris when (CHRIS)
+event seal_door_115_chris
 {
     evt_work_set(WK_OBJ, OBJ_00_DOOR_115);
     evt_tween_begin_alt();
@@ -442,7 +442,7 @@ event chris_radio_call_or_barry_sandwich_talk
     evt_finish();
 }
 
-event rebecca_radio_call_chris when (CHRIS)
+event rebecca_radio_call_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -466,7 +466,7 @@ event rebecca_radio_call_chris when (CHRIS)
     evt_nop();
     evt_finish();
 }
-event seal_door_115 when (JILL)
+event seal_door_115
 {
     evt_work_set(WK_OBJ, OBJ_00_DOOR_115);
     evt_tween_begin_alt();
@@ -477,7 +477,7 @@ event seal_door_115 when (JILL)
     evt_finish();
 }
 
-event rebecca_radio_call_upstairs when (CHRIS)
+event rebecca_radio_call_upstairs
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 650, 0, 5300, 0, 7160);
@@ -551,7 +551,7 @@ event rebecca_radio_call_upstairs when (CHRIS)
     set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
-event barry_sandwich_talk_both_1 when (JILL)
+event barry_sandwich_talk_both_1
 {
     if (MANSION1)
     {
@@ -579,7 +579,7 @@ event barry_sandwich_talk_both_1 when (JILL)
     act_finish();
 }
 
-event rebecca_radio_call_upstairs_chris when (CHRIS)
+event rebecca_radio_call_upstairs_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -609,7 +609,7 @@ event rebecca_radio_call_upstairs_chris when (CHRIS)
     }
     act_finish();
 }
-event barry_sandwich_talk_barry_1 when (JILL)
+event barry_sandwich_talk_barry_1
 {
     if (MANSION1)
     {
@@ -650,7 +650,7 @@ event barry_sandwich_talk_barry_1 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_jill_1 when (JILL)
+event barry_sandwich_talk_jill_1
 {
     sleep(130);
     evt_work_set(WK_PLAYER, 0);
@@ -671,7 +671,7 @@ event barry_sandwich_talk_jill_1 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_jill_2 when (JILL)
+event barry_sandwich_talk_jill_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -722,7 +722,7 @@ event barry_sandwich_talk_jill_2 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_barry_2 when (JILL)
+event barry_sandwich_talk_barry_2
 {
     if (MANSION1)
     {
@@ -776,7 +776,7 @@ event barry_sandwich_talk_barry_2 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_both_2 when (JILL)
+event barry_sandwich_talk_both_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -804,7 +804,7 @@ event barry_sandwich_talk_both_2 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_barry_3 when (JILL)
+event barry_sandwich_talk_barry_3
 {
     sleep(40);
     if (MANSION1)
@@ -827,7 +827,7 @@ event barry_sandwich_talk_barry_3 when (JILL)
     act_finish();
 }
 
-event barry_sandwich_talk_jill_3 when (JILL)
+event barry_sandwich_talk_jill_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

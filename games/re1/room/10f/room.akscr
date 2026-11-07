@@ -410,7 +410,7 @@ proc main
     }
 }
 
-event chris_listens_to_sonata when (CHRIS)
+event chris_listens_to_sonata
 {
     sleep(100);
     evt_work_set(WK_PLAYER, 0);
@@ -955,7 +955,7 @@ event give_score_to_rebecca_or_jill_reads_score
     }
 }
 
-event give_score_to_rebecca_alt when (CHRIS)
+event give_score_to_rebecca_alt
 {
     run
     {
@@ -1416,7 +1416,7 @@ event give_score_to_rebecca_alt when (CHRIS)
     evt_finish();
 }
 
-event rebecca_practises when (CHRIS)
+event rebecca_practises
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1478,7 +1478,7 @@ event rebecca_practises when (CHRIS)
     }
     evt_chain(rebecca_practice_loop);
 }
-event jill_sonata_opens_wall when (JILL)
+event jill_sonata_opens_wall
 {
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);
@@ -1499,7 +1499,7 @@ event jill_sonata_opens_wall when (JILL)
     evt_finish();
 }
 
-event rebecca_does_not_practise when (CHRIS)
+event rebecca_does_not_practise
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1557,7 +1557,7 @@ event rebecca_does_not_practise when (CHRIS)
     }
     evt_chain(rebecca_practice_loop);
 }
-event jill_gold_emblem_closes_wall when (JILL)
+event jill_gold_emblem_closes_wall
 {
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);
@@ -1594,7 +1594,7 @@ event jill_gold_emblem_closes_wall when (JILL)
     evt_finish();
 }
 
-event rebecca_practice_loop when (CHRIS)
+event rebecca_practice_loop
 {
     if (MANSION1)
     {
@@ -1685,7 +1685,7 @@ event rebecca_practice_loop when (CHRIS)
     sleep(15);
     evt_chain(rebecca_practice_loop);
 }
-event jill_wood_emblem_opens_wall when (JILL)
+event jill_wood_emblem_opens_wall
 {
     se_play_3d(SND_BANK_ROOM, SE_1B, 0, SND_AT_POINT, 0, 9424, 12173);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -1722,14 +1722,14 @@ event jill_wood_emblem_opens_wall when (JILL)
     evt_finish();
 }
 
-event rebecca_practising_on_enter when (CHRIS)
+event rebecca_practising_on_enter
 {
     pos_set(ENEMY_00_REBECCA, 0, 100, 0, 9950, 0, 8100);
     evt_chain(rebecca_practice_loop);
     evt_nop();
     evt_nop();
 }
-event jill_wall_open_on_enter when (JILL)
+event jill_wall_open_on_enter
 {
     evt_work_set(WK_OBJ, OBJ_00_HIDDEN_WALL);
     evt_tween_begin_alt();
@@ -1739,7 +1739,7 @@ event jill_wall_open_on_enter when (JILL)
     evt_finish();
 }
 
-event rebecca_calls_at_door when (CHRIS)
+event rebecca_calls_at_door
 {
     aot_delete(AOT_01_MESSAGE_REBECCA_PLAYING, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
@@ -1790,7 +1790,7 @@ event rebecca_calls_at_door when (CHRIS)
     act_reset();
     evt_finish();
 }
-event jill_place_wood_emblem when (JILL)
+event jill_place_wood_emblem
 {
     evt_work_set(WK_AOT, IMDL_00_KEY_EMBLEM_WOOD);
     evt_tween_begin_alt();
@@ -2535,7 +2535,7 @@ event rebecca_plays_sonata_or_jill_plays
     evt_finish();
 }
 
-event chris_sonata_opens_wall when (CHRIS)
+event chris_sonata_opens_wall
 {
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);
@@ -2605,7 +2605,7 @@ event chris_gold_emblem_closes_wall
     evt_finish();
 }
 
-event chris_wood_emblem_opens_wall when (CHRIS)
+event chris_wood_emblem_opens_wall
 {
     se_play_3d(SND_BANK_ROOM, SE_1B, 0, SND_AT_POINT, 0, 9424, 12173);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -2642,7 +2642,7 @@ event chris_wood_emblem_opens_wall when (CHRIS)
     evt_finish();
 }
 
-event chris_wall_open_on_enter when (CHRIS)
+event chris_wall_open_on_enter
 {
     evt_work_set(WK_OBJ, OBJ_00_HIDDEN_WALL);
     evt_tween_begin_alt();
@@ -2652,7 +2652,7 @@ event chris_wall_open_on_enter when (CHRIS)
     evt_finish();
 }
 
-event chris_place_wood_emblem when (CHRIS)
+event chris_place_wood_emblem
 {
     evt_work_set(WK_AOT, IMDL_00_KEY_EMBLEM_WOOD);
     evt_tween_begin_alt();
@@ -2671,7 +2671,7 @@ event defer_camera_switch
     evt_finish();
 }
 
-event rebecca_be_careful when (CHRIS)
+event rebecca_be_careful
 {
     run
     {
@@ -2707,7 +2707,7 @@ event rebecca_be_careful when (CHRIS)
     evt_finish();
 }
 
-event rebecca_are_you_ok when (CHRIS)
+event rebecca_are_you_ok
 {
     run
     {
@@ -2743,7 +2743,7 @@ event rebecca_are_you_ok when (CHRIS)
     evt_finish();
 }
 
-event no_time_to_play when (CHRIS)
+event no_time_to_play
 {
     run
     {

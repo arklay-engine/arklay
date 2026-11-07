@@ -88,26 +88,29 @@ proc init
     }
 }
 
-proc main when (CHRIS && MANSION2)
+proc main
 {
-    if (ck(FG_ENEMY, F_ENEMY_10A_HUNTER_0, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
+    if (CHRIS && MANSION2)
     {
-        set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
-        if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_10A_HUNTER_0, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
         {
-            setw(W_04, 0);
-            evt_exec(0, TASK_09, rebecca_radio_call);
+            set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE))
+            {
+                setw(W_04, 0);
+                evt_exec(0, TASK_09, rebecca_radio_call);
+            }
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE))
+            {
+                setw(W_04, 0);
+                evt_exec(0, TASK_09, rebecca_radio_call_upstairs);
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE))
-        {
-            setw(W_04, 0);
-            evt_exec(0, TASK_09, rebecca_radio_call_upstairs);
-        }
+        return;
     }
-    return;
 }
 
-event hunter_film when (MANSION2)
+event hunter_film
 {
     run
     {
@@ -177,7 +180,7 @@ event hunter_film when (MANSION2)
     evt_finish();
 }
 
-event hunter_film_hunter when (MANSION2)
+event hunter_film_hunter
 {
     evt_work_set(WK_ENEMY, ENEMY_00_HUNTER);
     evt_actor_begin();
@@ -185,7 +188,7 @@ event hunter_film_hunter when (MANSION2)
     act_finish();
 }
 
-event rebecca_radio_call when (CHRIS && MANSION2)
+event rebecca_radio_call
 {
     run
     {
@@ -232,7 +235,7 @@ event rebecca_radio_call when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_radio_call_chris when (CHRIS && MANSION2)
+event rebecca_radio_call_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -257,7 +260,7 @@ event rebecca_radio_call_chris when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_radio_call_upstairs when (CHRIS && MANSION2)
+event rebecca_radio_call_upstairs
 {
     run
     {
@@ -311,7 +314,7 @@ event rebecca_radio_call_upstairs when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_radio_call_upstairs_chris when (CHRIS && MANSION2)
+event rebecca_radio_call_upstairs_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -339,7 +342,7 @@ event rebecca_radio_call_upstairs_chris when (CHRIS && MANSION2)
     act_finish();
 }
 
-event hunter_film_player when (MANSION2)
+event hunter_film_player
 {
     sleep(37);
     evt_work_set(WK_PLAYER, 0);

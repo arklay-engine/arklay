@@ -110,7 +110,7 @@ proc main
     }
 }
 
-event barry_offers_acid_rounds when (JILL)
+event barry_offers_acid_rounds
 {
     evt_next();
     evt_nop();
@@ -289,7 +289,7 @@ event barry_offers_acid_rounds when (JILL)
     evt_finish();
 }
 
-event barry_gives_acid_rounds when (JILL)
+event barry_gives_acid_rounds
 {
     voice_play(VOICE_PLAY, VO_106_02);
     message(MSG_VO_106_02, 0);
@@ -497,7 +497,7 @@ event barry_gives_acid_rounds when (JILL)
     evt_finish();
 }
 
-event barry_walks_up when (JILL)
+event barry_walks_up
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -524,7 +524,7 @@ event barry_walks_up when (JILL)
     evt_finish();
 }
 
-event barry_leaves when (JILL)
+event barry_leaves
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);

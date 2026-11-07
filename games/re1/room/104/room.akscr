@@ -160,7 +160,21 @@ proc init
     }
 }
 
-proc main when (MANSION1)
+proc main
+{
+    if (MANSION1)
+    {
+        kenneth_zombie_checks();
+        if (CHRIS)
+        {
+            piano_music_volume();
+        }
+    }
+}
+
+// The first zombie film starts when the camera reaches Kenneth's body, and
+// his examine spot goes once he has been examined.
+proc kenneth_zombie_checks
 {
     if (ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, FALSE))
     {
@@ -176,43 +190,46 @@ proc main when (MANSION1)
     {
         aot_delete(AOT_04_EVENT_KENNETH, SCE_NONE, SAT_PLAYER);
     }
-    if (CHRIS)
+}
+
+// While Rebecca plays the piano in the bar (10F), its volume here follows
+// the camera.
+proc piano_music_volume
+{
+    if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
     {
-        if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE))
         {
-            if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
             {
-                if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
-                {
-                    snd_pan_vol_set(BGM_MAIN, 30, 30);
-                    snd_pan_vol_set(BGM_SUB_1, 30, 30);
-                }
-                if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
-                {
-                    snd_pan_vol_set(BGM_MAIN, 35, 35);
-                    snd_pan_vol_set(BGM_SUB_1, 35, 35);
-                }
-                if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
-                {
-                    snd_pan_vol_set(BGM_MAIN, 40, 40);
-                    snd_pan_vol_set(BGM_SUB_1, 40, 40);
-                }
-                if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
-                {
-                    snd_pan_vol_set(BGM_MAIN, 60, 60);
-                    snd_pan_vol_set(BGM_SUB_1, 60, 60);
-                }
-                if (cmpb(B_CAMERA, CMP_EQ, CAM_04_KENNETH))
-                {
-                    snd_pan_vol_set(BGM_MAIN, 30, 30);
-                    snd_pan_vol_set(BGM_SUB_1, 30, 30);
-                }
+                snd_pan_vol_set(BGM_MAIN, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+            {
+                snd_pan_vol_set(BGM_MAIN, 35, 35);
+                snd_pan_vol_set(BGM_SUB_1, 35, 35);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+            {
+                snd_pan_vol_set(BGM_MAIN, 40, 40);
+                snd_pan_vol_set(BGM_SUB_1, 40, 40);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+            {
+                snd_pan_vol_set(BGM_MAIN, 60, 60);
+                snd_pan_vol_set(BGM_SUB_1, 60, 60);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_04_KENNETH))
+            {
+                snd_pan_vol_set(BGM_MAIN, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
         }
     }
 }
 
-event examine_kenneth when (MANSION1)
+event examine_kenneth
 {
     run
     {
@@ -241,7 +258,7 @@ event examine_kenneth when (MANSION1)
     evt_finish();
 }
 
-event defer_camera_switch when (MANSION1)
+event defer_camera_switch
 {
     sleep(1);
     if (CHRIS)
@@ -258,7 +275,7 @@ event defer_camera_switch when (MANSION1)
     evt_finish();
 }
 
-event first_zombie_film when (MANSION1)
+event first_zombie_film
 {
     run
     {

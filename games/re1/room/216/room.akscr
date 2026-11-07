@@ -55,15 +55,18 @@ proc init
     set(FG_SCENARIO, F_SCENARIO_LIBRARY_ENTERED, TRUE);
 }
 
-proc main when (MANSION2)
+proc main
 {
-    if (ck(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, TRUE))
+    if (MANSION2)
     {
-        set(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, FALSE);
-        aot_delete(AOT_02_DOOR_218, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-    }
-    else
-    {
-        aot_delete(AOT_02_DOOR_218, SCE_DOOR, 0);
+        if (ck(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, FALSE);
+            aot_delete(AOT_02_DOOR_218, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_02_DOOR_218, SCE_DOOR, 0);
+        }
     }
 }

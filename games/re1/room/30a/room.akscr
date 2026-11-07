@@ -144,21 +144,24 @@ proc init
     }
 }
 
-proc main when (CHRIS)
+proc main
 {
-    if (ck(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, TRUE))
+    if (CHRIS)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        if (ck(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, TRUE))
         {
-            set(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, FALSE);
-            pos_set(ENEMY_01_HUNTER, 0, 1024, 0, 4644, 0, 8920);
-            pos_set(ENEMY_02_HUNTER, 0, 1024, 0, 5600, 0, 20000);
-            eml_state(0, ENEMY_01_HUNTER, EML_BEHAVIOUR, EB_08);
-            eml_state(0, ENEMY_02_HUNTER, EML_BEHAVIOUR, EB_02);
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+            {
+                set(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, FALSE);
+                pos_set(ENEMY_01_HUNTER, 0, 1024, 0, 4644, 0, 8920);
+                pos_set(ENEMY_02_HUNTER, 0, 1024, 0, 5600, 0, 20000);
+                eml_state(0, ENEMY_01_HUNTER, EML_BEHAVIOUR, EB_08);
+                eml_state(0, ENEMY_02_HUNTER, EML_BEHAVIOUR, EB_02);
+            }
         }
     }
 }
-event enrico_scene_jill when (JILL)
+event enrico_scene_jill
 {
     run
     {
@@ -258,7 +261,7 @@ event enrico_scene_jill when (JILL)
     evt_finish();
 }
 
-event enrico_shot_jill_alone when (JILL)
+event enrico_shot_jill_alone
 {
     run
     {
@@ -1265,7 +1268,7 @@ event enrico_shot_chris_or_with_barry
     evt_finish();
 }
 
-event enrico_scene_jill_walk when (JILL)
+event enrico_scene_jill_walk
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1352,7 +1355,7 @@ event enrico_death_anim
     evt_finish();
 }
 
-event enrico_scene_barry_idle when (JILL)
+event enrico_scene_barry_idle
 {
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
@@ -1486,7 +1489,7 @@ event search_enrico_take_rounds
     evt_finish();
 }
 
-event barry_follows when (JILL)
+event barry_follows
 {
     sleep(5);
     run
@@ -1496,7 +1499,7 @@ event barry_follows when (JILL)
     evt_finish();
 }
 
-event leave_with_barry when (JILL)
+event leave_with_barry
 {
     run
     {
@@ -1506,7 +1509,7 @@ event leave_with_barry when (JILL)
     evt_finish();
 }
 
-event barry_investigating when (JILL)
+event barry_investigating
 {
     run
     {

@@ -18,27 +18,33 @@
 #define CAM_00_WEST 0x00
 #define CAM_01_EAST 0x01
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_104, 9900, 2000, 2500, 2700, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_104_110, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR_21C, 0, 9200, 2500, 2700, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_02_5_STAIRS_WEST, 4500, 9300, 4348, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_03_5_STAIRS_EAST, 11151, 9300, 4148, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_04_EVENT_TO_EAST_STAIRS, 8030, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, enter_east_stairs, 0, 0, 0);
-    aot_set(AOT_05_EVENT_TO_WEST_STAIRS, 11049, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, enter_west_stairs, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE_ELEVATOR, 15100, 6200, 1700, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
-    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-}
-
-proc main when (MANSION2)
-{
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_00_WEST))
+    if (MANSION2)
     {
-        set(FG_MAP, F_MAP_VISITED_21E, TRUE);
+        door_aot_set(AOT_00_DOOR_104, 9900, 2000, 2500, 2700, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_104_110, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR_21C, 0, 9200, 2500, 2700, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        aot_set(AOT_02_5_STAIRS_WEST, 4500, 9300, 4348, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_5_STAIRS_EAST, 11151, 9300, 4148, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_04_EVENT_TO_EAST_STAIRS, 8030, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, enter_east_stairs, 0, 0, 0);
+        aot_set(AOT_05_EVENT_TO_WEST_STAIRS, 11049, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, enter_west_stairs, 0, 0, 0);
+        aot_set(AOT_06_MESSAGE_ELEVATOR, 15100, 6200, 1700, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     }
 }
 
-event enter_east_stairs when (MANSION2)
+proc main
+{
+    if (MANSION2)
+    {
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_00_WEST))
+        {
+            set(FG_MAP, F_MAP_VISITED_21E, TRUE);
+        }
+    }
+}
+
+event enter_east_stairs
 {
     run
     {
@@ -58,7 +64,7 @@ event enter_east_stairs when (MANSION2)
     evt_finish();
 }
 
-event enter_west_stairs when (MANSION2)
+event enter_west_stairs
 {
     run
     {

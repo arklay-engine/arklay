@@ -36,85 +36,91 @@
 #define SPR_04 0x04
 #define SPR_07 0x07
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_216, 10900, 3500, 1300, 1000, 0, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-    aot_set(AOT_01_EVENT_LIGHT_SWITCH, 400, 8200, 3200, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);
-    aot_set(AOT_02_USEITEM_SWITCH_ZONE, 3600, 8200, 1700, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
+    if (MANSION2)
     {
-        aot_set(AOT_03_EVENT_STATUE_SPOT, 3400, 14130, 100, 100, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 9, 0, statue_on_spot, 0, 0, 0);
-    }
-    else
-    {
-        aot_set(AOT_03_EVENT_STATUE_SPOT, 3400, 14130, 100, 100, SCE_EVENT, 0, 9, 0, statue_on_spot, 0, 0, 0);
-    }
-    aot_set(AOT_04_MESSAGE_STATUE_SPOT, 2900, 13700, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_05_ITEM_KEY_MO_DISK_0, 9780, 13010, 1800, 1800, IT_28_KEY_MO_DISK, 1, IMDL_00_KEY_MO_DISK, SCA_NONE, 10954, -940, 13550, 0, F_ITEM_217_KEY_MO_DISK_0, SAT_MANUAL | SAT_PLAYER, 0);
-    aot_set(AOT_07_MESSAGE_NOT_USED, 5700, 6100, 2600, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE_BOOKS, 6100, 2500, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE_BOOKS, 2100, 1500, 10000, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_0A_MESSAGE_BOOKS, 1700, 2700, 1200, 5100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_0B_MESSAGE_CHEMISTRY_BOOKS, 1700, 10100, 1200, 5900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_0C_MESSAGE_CHEMISTRY_BOOKS, 1300, 14300, 6600, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_0D_MESSAGE_NOT_USED, 8500, 11000, 2500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
-    {
-        obj(OBJ_00_STATUE, OF_ACTIVE, SCA_NONE, 5250, 0, 4910, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
-        obj(OBJ_01_BOOKSHELF, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 13440, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
-    }
-    else
-    {
-        obj(OBJ_00_STATUE, OF_ACTIVE, SCA_NONE, 3500, 0, 14210, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
-        obj(OBJ_01_BOOKSHELF, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 16150, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
-    }
-    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
-}
-
-proc main when (MANSION2)
-{
-    if (ck(FG_ROOM, F_ROOM_AT_SWITCH, TRUE))
-    {
-        aot_delete(AOT_01_EVENT_LIGHT_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-    }
-    else
-    {
-        aot_delete(AOT_01_EVENT_LIGHT_SWITCH, SCE_NONE, 0);
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, TRUE) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
-    {
-        aot_delete(AOT_04_MESSAGE_STATUE_SPOT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-    }
-    else
-    {
-        aot_delete(AOT_04_MESSAGE_STATUE_SPOT, SCE_NONE, 0);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_02) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, FALSE))
-    {
-        bank_bit(255);
-        bank_bit(7);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_04_STATUE_SPOT) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, FALSE))
-    {
-        bank_bit(255);
-        bank_bit(4);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
-    {
-        bank_bit(255);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
-    {
-        bank_bit(255);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_05_BOOKSHELF))
-    {
-        bank_bit(255);
+        door_aot_set(AOT_00_DOOR_216, 10900, 3500, 1300, 1000, 0, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+        aot_set(AOT_01_EVENT_LIGHT_SWITCH, 400, 8200, 3200, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);
+        aot_set(AOT_02_USEITEM_SWITCH_ZONE, 3600, 8200, 1700, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
+        if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
+        {
+            aot_set(AOT_03_EVENT_STATUE_SPOT, 3400, 14130, 100, 100, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 9, 0, statue_on_spot, 0, 0, 0);
+        }
+        else
+        {
+            aot_set(AOT_03_EVENT_STATUE_SPOT, 3400, 14130, 100, 100, SCE_EVENT, 0, 9, 0, statue_on_spot, 0, 0, 0);
+        }
+        aot_set(AOT_04_MESSAGE_STATUE_SPOT, 2900, 13700, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+        item_aot_set(AOT_05_ITEM_KEY_MO_DISK_0, 9780, 13010, 1800, 1800, IT_28_KEY_MO_DISK, 1, IMDL_00_KEY_MO_DISK, SCA_NONE, 10954, -940, 13550, 0, F_ITEM_217_KEY_MO_DISK_0, SAT_MANUAL | SAT_PLAYER, 0);
+        aot_set(AOT_07_MESSAGE_NOT_USED, 5700, 6100, 2600, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        aot_set(AOT_08_MESSAGE_BOOKS, 6100, 2500, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE_BOOKS, 2100, 1500, 10000, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_0A_MESSAGE_BOOKS, 1700, 2700, 1200, 5100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_0B_MESSAGE_CHEMISTRY_BOOKS, 1700, 10100, 1200, 5900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_0C_MESSAGE_CHEMISTRY_BOOKS, 1300, 14300, 6600, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_0D_MESSAGE_NOT_USED, 8500, 11000, 2500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
+        {
+            obj(OBJ_00_STATUE, OF_ACTIVE, SCA_NONE, 5250, 0, 4910, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
+            obj(OBJ_01_BOOKSHELF, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 13440, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
+        }
+        else
+        {
+            obj(OBJ_00_STATUE, OF_ACTIVE, SCA_NONE, 3500, 0, 14210, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
+            obj(OBJ_01_BOOKSHELF, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 16150, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
+        }
+        set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
     }
 }
 
-event push_light_switch when (MANSION2)
+proc main
+{
+    if (MANSION2)
+    {
+        if (ck(FG_ROOM, F_ROOM_AT_SWITCH, TRUE))
+        {
+            aot_delete(AOT_01_EVENT_LIGHT_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_01_EVENT_LIGHT_SWITCH, SCE_NONE, 0);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, TRUE) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_STATUE_PLACED, FALSE))
+        {
+            aot_delete(AOT_04_MESSAGE_STATUE_SPOT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_04_MESSAGE_STATUE_SPOT, SCE_NONE, 0);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_02) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, FALSE))
+        {
+            bank_bit(255);
+            bank_bit(7);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_04_STATUE_SPOT) && ck(FG_SCENARIO, F_SCENARIO_LIBRARY_SWITCH_ON, FALSE))
+        {
+            bank_bit(255);
+            bank_bit(4);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+        {
+            bank_bit(255);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        {
+            bank_bit(255);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_05_BOOKSHELF))
+        {
+            bank_bit(255);
+        }
+    }
+}
+
+event push_light_switch
 {
     sleep(1);
     run
@@ -147,7 +153,7 @@ event push_light_switch when (MANSION2)
     evt_finish();
 }
 
-event statue_on_spot when (MANSION2)
+event statue_on_spot
 {
     run
     {
@@ -176,7 +182,7 @@ event statue_on_spot when (MANSION2)
     evt_finish();
 }
 
-event slide_bookshelf when (MANSION2)
+event slide_bookshelf
 {
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_work_set(WK_OBJ, OBJ_01_BOOKSHELF);

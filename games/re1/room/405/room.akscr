@@ -160,7 +160,7 @@ event wesker_scene_bgm_or_voices_door
     evt_finish();
 }
 
-event wesker_rescue_jill when (JILL)
+event wesker_rescue_jill
 {
     sleep(1);
     run
@@ -2083,7 +2083,7 @@ event wesker_rescue
     evt_finish();
 }
 
-event overhear_voices_at_002_door when (JILL)
+event overhear_voices_at_002_door
 {
     sleep(1);
     run

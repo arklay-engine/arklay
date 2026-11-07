@@ -272,117 +272,120 @@ proc init
     }
 }
 
-proc main when (CHRIS && MANSION1)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_C_REBECCA_SERUM_RUN, TRUE) && ck(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, FALSE))
+    if (CHRIS && MANSION1)
     {
-        set(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, TRUE);
-        set(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE);
-    }
-    if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
-    {
-        if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_SERUM_RUN, TRUE) && ck(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, FALSE))
         {
-            set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
-            evt_exec(0, TASK_01, richard_idle);
+            set(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, TRUE);
+            set(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
         {
-            set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+            if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
             {
-                set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-                set(FG_COMMON, F_COMMON_C_RICHARD_NEEDS_SERUM, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_04_RICHARD);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, richard_poisoned_scene);
+                set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
+                evt_exec(0, TASK_01, richard_idle);
             }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
             {
-                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_05_RICHARD_CLOSEUP);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, give_richard_serum);
-                remove_item(IT_42_KEY_SERUM);
-            }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
-            {
-                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
-            }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
-            {
-                aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
+                set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    set(FG_COMMON, F_COMMON_C_RICHARD_NEEDS_SERUM, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_04_RICHARD);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, richard_poisoned_scene);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_05_RICHARD_CLOSEUP);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, give_richard_serum);
+                    remove_item(IT_42_KEY_SERUM);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+                {
+                    aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
+                }
             }
         }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE))
+        {
+            set(FG_RUN, F_RUN_0080, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
+        }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE);
+        }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE);
+        }
     }
-    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE))
+    if (JILL && MANSION1)
     {
-        set(FG_RUN, F_RUN_0080, TRUE);
-        set(FG_RUN, F_RUN_READY, TRUE);
-    }
-    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE);
-    }
-    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE);
+        if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+        {
+            if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+            {
+                set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
+                evt_exec(0, TASK_01, richard_idle_jill);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
+            {
+                set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    set(FG_COMMON, F_COMMON_J_RICHARD_NEEDS_SERUM, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_04_RICHARD);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, richard_poisoned_scene_jill);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_05_RICHARD_CLOSEUP);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, give_richard_serum_jill);
+                    remove_item(IT_42_KEY_SERUM);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+                {
+                    aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 167, 127, 0);
+                }
+            }
+        }
     }
 }
 
-proc main when (JILL && MANSION1)
-{
-    if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
-    {
-        if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
-        {
-            set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
-            evt_exec(0, TASK_01, richard_idle_jill);
-        }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
-        {
-            set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
-            {
-                set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-                set(FG_COMMON, F_COMMON_J_RICHARD_NEEDS_SERUM, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_04_RICHARD);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, richard_poisoned_scene_jill);
-            }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
-            {
-                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_05_RICHARD_CLOSEUP);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, give_richard_serum_jill);
-                remove_item(IT_42_KEY_SERUM);
-            }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
-            {
-                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
-            }
-            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
-            {
-                aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 167, 127, 0);
-            }
-        }
-    }
-}
 
-event richard_poisoned_scene when (CHRIS && MANSION1)
+event richard_poisoned_scene
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -665,7 +668,7 @@ event richard_poisoned_scene when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event give_richard_serum when (CHRIS && MANSION1)
+event give_richard_serum
 {
     set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
     evt_work_set(WK_PLAYER, 0);
@@ -956,7 +959,7 @@ event give_richard_serum when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event examine_richard when (CHRIS && MANSION1)
+event examine_richard
 {
     run
     {
@@ -1014,7 +1017,7 @@ event examine_richard when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_waits_for_serum when (CHRIS && MANSION1)
+event rebecca_waits_for_serum
 {
     run
     {
@@ -1121,7 +1124,7 @@ event rebecca_waits_for_serum when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event talk_to_rebecca when (CHRIS && MANSION1)
+event talk_to_rebecca
 {
     run
     {
@@ -1212,7 +1215,7 @@ event talk_to_rebecca when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event richard_idle when (CHRIS && MANSION1)
+event richard_idle
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
@@ -1222,7 +1225,7 @@ event richard_idle when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event richard_blood_fx when (CHRIS && MANSION1)
+event richard_blood_fx
 {
     single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3700, 0);
     sleep(20);
@@ -1243,7 +1246,7 @@ event richard_blood_fx when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_tends_richard when (CHRIS && MANSION1)
+event rebecca_tends_richard
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -1329,7 +1332,7 @@ event rebecca_tends_richard when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event rebecca_brings_serum when (CHRIS && MANSION1)
+event rebecca_brings_serum
 {
     run
     {
@@ -1341,7 +1344,7 @@ event rebecca_brings_serum when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event richard_idle_jill when (JILL && MANSION1)
+event richard_idle_jill
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
@@ -1351,7 +1354,7 @@ event richard_idle_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event richard_poisoned_scene_jill when (JILL && MANSION1)
+event richard_poisoned_scene_jill
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1610,7 +1613,7 @@ event richard_poisoned_scene_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event give_richard_serum_jill when (JILL && MANSION1)
+event give_richard_serum_jill
 {
     set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
     evt_work_set(WK_PLAYER, 0);
@@ -1756,7 +1759,7 @@ event give_richard_serum_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event richard_struggles when (MANSION1)
+event richard_struggles
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
@@ -1871,7 +1874,7 @@ event richard_struggles when (MANSION1)
     evt_finish();
 }
 
-event chris_serum_anim when (CHRIS && MANSION1)
+event chris_serum_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1884,7 +1887,7 @@ event chris_serum_anim when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event richard_serum_reaction when (MANSION1)
+event richard_serum_reaction
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
@@ -2048,7 +2051,7 @@ event richard_serum_reaction when (MANSION1)
     evt_finish();
 }
 
-event examine_richard_body when (MANSION1)
+event examine_richard_body
 {
     run
     {
@@ -2113,7 +2116,7 @@ event examine_richard_body when (MANSION1)
     evt_finish();
 }
 
-event richard_blood_fx_jill when (JILL && MANSION1)
+event richard_blood_fx_jill
 {
     sleep(20);
     single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3800, 0);
@@ -2140,7 +2143,7 @@ event richard_blood_fx_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event examine_richard_jill when (JILL && MANSION1)
+event examine_richard_jill
 {
     run
     {
@@ -2198,7 +2201,7 @@ event examine_richard_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event richard_waits_for_serum_jill when (JILL && MANSION1)
+event richard_waits_for_serum_jill
 {
     run
     {
@@ -2249,7 +2252,7 @@ event richard_waits_for_serum_jill when (JILL && MANSION1)
     evt_finish();
 }
 
-event examine_dead_richard_jill when (JILL && MANSION1)
+event examine_dead_richard_jill
 {
     run
     {

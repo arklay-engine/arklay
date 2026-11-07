@@ -138,36 +138,39 @@ proc init
     }
 }
 
-proc main when (CHRIS && MANSION2)
+proc main
 {
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, TRUE))
+    if (CHRIS && MANSION2)
     {
-        set(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, FALSE);
-        set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
-        cutnext(CAM_04);
-        evt_exec(0, TASK_09, rebecca_hunter_attack);
-    }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, FALSE);
-        set(FG_COMMON, F_COMMON_C_REBECCA_UNDER_ATTACK, FALSE);
-        set(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, TRUE);
-        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_saved_talk, 0);
-    }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, FALSE);
-        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, mourn_rebecca, 0);
-    }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, FALSE);
-        bgm_volume_ramp(BGM_MAIN, -96, 1);
-        evt_exec(0, TASK_09, hunter_dead_stop_music);
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, FALSE);
+            set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
+            cutnext(CAM_04);
+            evt_exec(0, TASK_09, rebecca_hunter_attack);
+        }
+        if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, FALSE);
+            set(FG_COMMON, F_COMMON_C_REBECCA_UNDER_ATTACK, FALSE);
+            set(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, TRUE);
+            aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_saved_talk, 0);
+        }
+        if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, FALSE);
+            aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, mourn_rebecca, 0);
+        }
+        if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, FALSE);
+            bgm_volume_ramp(BGM_MAIN, -96, 1);
+            evt_exec(0, TASK_09, hunter_dead_stop_music);
+        }
     }
 }
 
-event rebecca_hunter_attack when (CHRIS && MANSION2)
+event rebecca_hunter_attack
 {
     run
     {
@@ -204,7 +207,7 @@ event rebecca_hunter_attack when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_hunter_attack_rebecca when (CHRIS && MANSION2)
+event rebecca_hunter_attack_rebecca
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -255,7 +258,7 @@ event rebecca_hunter_attack_rebecca when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_hunter_attack_hunter when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hunter
 {
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
     evt_actor_begin();
@@ -271,7 +274,7 @@ event rebecca_hunter_attack_hunter when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_hunter_attack_chris when (CHRIS && MANSION2)
+event rebecca_hunter_attack_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -289,14 +292,14 @@ event rebecca_hunter_attack_chris when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_hunter_attack_hunter_slash when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hunter_slash
 {
     eml_state(0, ENEMY_01_HUNTER, EML_ACTION, AB_16);
     sleep(38);
     evt_finish();
 }
 
-event rebecca_saved_talk when (CHRIS && MANSION2)
+event rebecca_saved_talk
 {
     run
     {
@@ -362,7 +365,7 @@ event rebecca_saved_talk when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_saved_talk_rebecca_1 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_1
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -373,7 +376,7 @@ event rebecca_saved_talk_rebecca_1 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_chris_1 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -386,7 +389,7 @@ event rebecca_saved_talk_chris_1 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_rebecca_2 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -397,7 +400,7 @@ event rebecca_saved_talk_rebecca_2 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_chris_2 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -410,7 +413,7 @@ event rebecca_saved_talk_chris_2 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_both when (CHRIS && MANSION2)
+event rebecca_saved_talk_both
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -443,7 +446,7 @@ event rebecca_saved_talk_both when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_saved_talk_chris_3 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -464,7 +467,7 @@ event rebecca_saved_talk_chris_3 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_chris_4 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_4
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -482,7 +485,7 @@ event rebecca_saved_talk_chris_4 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_rebecca_3 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_3
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -493,7 +496,7 @@ event rebecca_saved_talk_rebecca_3 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_chris_5 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_5
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -514,7 +517,7 @@ event rebecca_saved_talk_chris_5 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_rebecca_4 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_4
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -525,7 +528,7 @@ event rebecca_saved_talk_rebecca_4 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_saved_talk_chris_6 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_6
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -540,7 +543,7 @@ event rebecca_saved_talk_chris_6 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event mourn_rebecca when (CHRIS && MANSION2)
+event mourn_rebecca
 {
     run
     {
@@ -569,7 +572,7 @@ event mourn_rebecca when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event mourn_rebecca_chris when (CHRIS && MANSION2)
+event mourn_rebecca_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -590,7 +593,7 @@ event mourn_rebecca_chris when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_ill_do_my_best when (CHRIS && MANSION2)
+event rebecca_ill_do_my_best
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
@@ -603,7 +606,7 @@ event rebecca_ill_do_my_best when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_ill_do_my_best_rebecca when (CHRIS && MANSION2)
+event rebecca_ill_do_my_best_rebecca
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -615,7 +618,7 @@ event rebecca_ill_do_my_best_rebecca when (CHRIS && MANSION2)
     act_finish();
 }
 
-event rebecca_hunter_attack_hit when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hit
 {
     sleep(8);
     se_play_3d(SND_BANK_ROOM, SE_0B, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
@@ -623,7 +626,7 @@ event rebecca_hunter_attack_hit when (CHRIS && MANSION2)
     raw(0x48, 0x0B, 0x00, 0x04, 0xFF, 0x00);
 }
 
-event rebecca_hunter_attack_footsteps when (CHRIS && MANSION2)
+event rebecca_hunter_attack_footsteps
 {
     for (5)
     {
@@ -644,7 +647,7 @@ event rebecca_hunter_attack_footsteps when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event hunter_dead_stop_music when (CHRIS && MANSION2)
+event hunter_dead_stop_music
 {
     sleep(1);
     bgm_stop(BGM_MAIN);

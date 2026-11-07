@@ -115,24 +115,27 @@ proc init
     }
 }
 
-proc main when (MANSION2)
+proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, FALSE))
+    if (MANSION2)
     {
-        if (ck(FG_ROOM, F_ROOM_ENTERED_SOUTH, TRUE) && ck(FG_ROOM, F_ROOM_SOUTH_TRIGGER_HIT, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, FALSE))
         {
-            set(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, TRUE);
-            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_08);
-        }
-        if (ck(FG_ROOM, F_ROOM_ENTERED_NORTH, TRUE) && ck(FG_ROOM, F_ROOM_NORTH_TRIGGER_HIT, TRUE))
-        {
-            set(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, TRUE);
-            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_09);
+            if (ck(FG_ROOM, F_ROOM_ENTERED_SOUTH, TRUE) && ck(FG_ROOM, F_ROOM_SOUTH_TRIGGER_HIT, TRUE))
+            {
+                set(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, TRUE);
+                eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_08);
+            }
+            if (ck(FG_ROOM, F_ROOM_ENTERED_NORTH, TRUE) && ck(FG_ROOM, F_ROOM_NORTH_TRIGGER_HIT, TRUE))
+            {
+                set(FG_SCENARIO, F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH, TRUE);
+                eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_09);
+            }
         }
     }
 }
 
-event rebecca_scream_heard when (CHRIS && MANSION2)
+event rebecca_scream_heard
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
@@ -152,7 +155,7 @@ event rebecca_scream_heard when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_scream_heard_chris when (CHRIS && MANSION2)
+event rebecca_scream_heard_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

@@ -346,7 +346,7 @@ event climb_ladder_prompt
     evt_finish();
 }
 
-event barry_dies when (JILL)
+event barry_dies
 {
     sleep(1);
     run
@@ -584,7 +584,7 @@ event barry_dies when (JILL)
     evt_finish();
 }
 
-event say_barry_unused when (JILL)
+event say_barry_unused
 {
     message(MSG_BARRY, 0); // "Barry..."
     do
@@ -595,7 +595,7 @@ event say_barry_unused when (JILL)
     evt_finish();
 }
 
-event barry_dies_barry_loop when (JILL)
+event barry_dies_barry_loop
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_2);
     evt_actor_begin();
@@ -625,7 +625,7 @@ event barry_dies_barry_loop when (JILL)
     evt_finish();
 }
 
-event barry_dies_jill_loop when (JILL)
+event barry_dies_jill_loop
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -655,7 +655,7 @@ event barry_dies_jill_loop when (JILL)
     evt_finish();
 }
 
-event barry_dies_barry_loop_2 when (JILL)
+event barry_dies_barry_loop_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_2);
     evt_actor_begin();

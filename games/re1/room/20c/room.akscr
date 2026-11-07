@@ -104,314 +104,320 @@
 #define VO_B00_01 0x5B
 #define VO_B00_02 0x5C
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_20B, 10400, 17500, 2300, 1400, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, 0, ROOM_20B_FRONT_LESSON_ROOM, 2500, 0, 7400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR_21A, 16650, 2570, 2400, 2080, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_21A_UNDER_PASSAGE_1, 28000, 0, 3550, 2048, UNLOCKED, 0);
-    if (CHRIS)
+    if (MANSION2)
     {
-        aot_set(AOT_07_EVENT_LADDER, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, descend_ladder, 0, 0, 0);
-    }
-    else
-    {
-        aot_set(AOT_0A_EVENT_LADDER, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, descend_ladder, 0, 0, 0);
-    }
-    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-    if (JILL)
-    {
-        room_bgm_state_set(6, 12, BGM_RELOAD | 1);
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
-    {
-        enemy(EM_12_YAWN_2, EB_84, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 2048, 0, 13000, 0, 11150, ENEMY_00_YAWN, ANIM_00, 0, EVAR_00);
-    }
-    else
-    {
-        enemy(EM_12_YAWN_2, EB_06, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 3072, 0, 5300, 0, 17500, ENEMY_00_YAWN, ANIM_00, 0, EVAR_00);
-        inst_cfg(COL_LIST_03, COL_02, 0, 252, 1856, 4284, 6008);
-        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
+        door_aot_set(AOT_00_DOOR_20B, 10400, 17500, 2300, 1400, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, 0, ROOM_20B_FRONT_LESSON_ROOM, 2500, 0, 7400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR_21A, 16650, 2570, 2400, 2080, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_21A_UNDER_PASSAGE_1, 28000, 0, 3550, 2048, UNLOCKED, 0);
+        if (CHRIS)
         {
-            evt_exec(0, TASK_09, yawn_bgm);
+            aot_set(AOT_07_EVENT_LADDER, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, descend_ladder, 0, 0, 0);
         }
-    }
-    if (CHRIS)
-    {
-        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
+        else
         {
-            room_bgm_state_set(6, 12, BGM_MAIN_ON);
+            aot_set(AOT_0A_EVENT_LADDER, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, descend_ladder, 0, 0, 0);
         }
-    }
-    else
-    {
-        enemy(EM_2B_NPC_BARRY_2_STARS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_0F_BARRY, ANIM_00, 0, EVAR_00);
-    }
-    aot_set(AOT_02_EVENT_YAWN_AMBUSH, 1200, 1400, 3000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, yawn_ambush, 0, 0, 0);
-    if (CHRIS)
-    {
-        aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_pit, 0, 0, 0);
-    }
-    else
-    {
-        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+        if (JILL)
+        {
+            room_bgm_state_set(6, 12, BGM_RELOAD | 1);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
+        {
+            enemy(EM_12_YAWN_2, EB_84, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 2048, 0, 13000, 0, 11150, ENEMY_00_YAWN, ANIM_00, 0, EVAR_00);
+        }
+        else
+        {
+            enemy(EM_12_YAWN_2, EB_06, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 3072, 0, 5300, 0, 17500, ENEMY_00_YAWN, ANIM_00, 0, EVAR_00);
+            inst_cfg(COL_LIST_03, COL_02, 0, 252, 1856, 4284, 6008);
+            if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
+            {
+                evt_exec(0, TASK_09, yawn_bgm);
+            }
+        }
+        if (CHRIS)
+        {
+            if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
+            {
+                room_bgm_state_set(6, 12, BGM_MAIN_ON);
+            }
+        }
+        else
+        {
+            enemy(EM_2B_NPC_BARRY_2_STARS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_0F_BARRY, ANIM_00, 0, EVAR_00);
+        }
+        aot_set(AOT_02_EVENT_YAWN_AMBUSH, 1200, 1400, 3000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, yawn_ambush, 0, 0, 0);
+        if (CHRIS)
         {
             aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_pit, 0, 0, 0);
         }
         else
         {
-            set(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, TRUE);
-            if (ck(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, TRUE))
+            if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
-                {
-                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_rope_above, 0, 0, 0);
-                }
-                else
-                {
-                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-                }
+                aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_pit, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_pit, 0, 0, 0);
+                set(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, TRUE);
+                if (ck(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, TRUE))
+                {
+                    if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
+                    {
+                        aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_rope_above, 0, 0, 0);
+                    }
+                    else
+                    {
+                        aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+                    }
+                }
+                else
+                {
+                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_pit, 0, 0, 0);
+                }
             }
         }
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
-    {
-        if (CHRIS)
-        {
-            aot_set(AOT_04_EVENT_SWITCH, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_fireplace_switch, 0, 0, 0);
-        }
-        else
-        {
-            aot_set(AOT_04_USEITEM_SWITCH, 16650, 2570, 2400, 2080, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 9, 0, 1, 0);
-        }
-    }
-    aot_set(AOT_06_USEITEM_FIREPLACE_ZONE, 19000, 2570, 1400, 2080, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
-    if (JILL)
-    {
-        item_aot_set(AOT_07_ITEM_KEY_RADIO, 0, 0, 1, 1, IT_4D_KEY_RADIO, 0, IMDL_00_BARRY_GIFT, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_KEY_RADIO_0, SAT_UNDER | SAT_PLAYER, 0);
-        item_aot_set(AOT_08_ITEM_FILE_PASS_NUMBER, 0, 0, 1, 1, IT_63_FILE_PASS_NUMBER, 0, IMDL_00_BARRY_GIFT, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_FILE_PASS_NUMBER_0, SAT_UNDER | SAT_PLAYER, 0);
-        aot_set(AOT_09_EVENT_ROPE, 23550, 2500, 1000, 2000, SCE_EVENT, 0, 9, 0, examine_rope_below, 0, 0, 0);
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
-    {
-        aot_set(AOT_0B_USEITEM_TOMBSTONE_ZONE, 13800, 1710, 2100, 3700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
-    }
-    if (CHRIS)
-    {
-        aot_set(AOT_08_MESSAGE_TOMBSTONE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
-        aot_set(AOT_09_USEITEM_HOLE_ZONE, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
-        aot_set(AOT_0A_MESSAGE_HOLE_OPENS, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
         if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
         {
-            obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 17650, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
+            if (CHRIS)
+            {
+                aot_set(AOT_04_EVENT_SWITCH, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_fireplace_switch, 0, 0, 0);
+            }
+            else
+            {
+                aot_set(AOT_04_USEITEM_SWITCH, 16650, 2570, 2400, 2080, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 9, 0, 1, 0);
+            }
+        }
+        aot_set(AOT_06_USEITEM_FIREPLACE_ZONE, 19000, 2570, 1400, 2080, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
+        if (JILL)
+        {
+            item_aot_set(AOT_07_ITEM_KEY_RADIO, 0, 0, 1, 1, IT_4D_KEY_RADIO, 0, IMDL_00_BARRY_GIFT, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_KEY_RADIO_0, SAT_UNDER | SAT_PLAYER, 0);
+            item_aot_set(AOT_08_ITEM_FILE_PASS_NUMBER, 0, 0, 1, 1, IT_63_FILE_PASS_NUMBER, 0, IMDL_00_BARRY_GIFT, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_FILE_PASS_NUMBER_0, SAT_UNDER | SAT_PLAYER, 0);
+            aot_set(AOT_09_EVENT_ROPE, 23550, 2500, 1000, 2000, SCE_EVENT, 0, 9, 0, examine_rope_below, 0, 0, 0);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
+        {
+            aot_set(AOT_0B_USEITEM_TOMBSTONE_ZONE, 13800, 1710, 2100, 3700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
+        }
+        if (CHRIS)
+        {
+            aot_set(AOT_08_MESSAGE_TOMBSTONE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
+            aot_set(AOT_09_USEITEM_HOLE_ZONE, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
+            aot_set(AOT_0A_MESSAGE_HOLE_OPENS, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
+            if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
+            {
+                obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 17650, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
+            }
+            else
+            {
+                obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 15460, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
+                set(FG_ROOM, F_ROOM_LADDER_OPEN, TRUE);
+            }
+            if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
+            {
+                msg_list(0, 26108, -5000, 3797, 60, 60, 60, LIGHT_KIND_00, 14041, 13438, -5000, 3647, 60, 60, 60, LIGHT_KIND_00, 13561, 12160, -5000, 3680, 60, 60, 60, LIGHT_KIND_00, 13315, 959, 769, 801);
+            }
         }
         else
         {
-            obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 15460, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
-            set(FG_ROOM, F_ROOM_LADDER_OPEN, TRUE);
-        }
-        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
-        {
-            msg_list(0, 26108, -5000, 3797, 60, 60, 60, LIGHT_KIND_00, 14041, 13438, -5000, 3647, 60, 60, 60, LIGHT_KIND_00, 13561, 12160, -5000, 3680, 60, 60, 60, LIGHT_KIND_00, 13315, 959, 769, 801);
-        }
-    }
-    else
-    {
-        aot_set(AOT_0C_MESSAGE_TOMBSTONE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
-        aot_set(AOT_0D_USEITEM_HOLE_ZONE, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
-        aot_set(AOT_0E_MESSAGE_HOLE_OPENS, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
-        if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
-        {
-            effect(FX_0D, FX_ROW_00, FX_AT_WORLD, 23500, -2400, 3800, 0);
-            aot_delete(AOT_09_EVENT_ROPE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        }
-        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
-        {
-            msg_list(0, 26108, -5000, 3797, 60, 60, 60, LIGHT_KIND_00, 14041, 13438, -5000, 3647, 60, 60, 60, LIGHT_KIND_00, 13561, 12160, -5000, 3680, 60, 60, 60, LIGHT_KIND_00, 13315, 959, 769, 801);
-            if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, FALSE))
+            aot_set(AOT_0C_MESSAGE_TOMBSTONE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
+            aot_set(AOT_0D_USEITEM_HOLE_ZONE, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
+            aot_set(AOT_0E_MESSAGE_HOLE_OPENS, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
+            {
+                effect(FX_0D, FX_ROW_00, FX_AT_WORLD, 23500, -2400, 3800, 0);
+                aot_delete(AOT_09_EVENT_ROPE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+            }
+            if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
+            {
+                msg_list(0, 26108, -5000, 3797, 60, 60, 60, LIGHT_KIND_00, 14041, 13438, -5000, 3647, 60, 60, 60, LIGHT_KIND_00, 13561, 12160, -5000, 3680, 60, 60, 60, LIGHT_KIND_00, 13315, 959, 769, 801);
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, FALSE))
+                {
+                    room_bgm_state_set(6, 12, BGM_MAIN_ON);
+                }
+            }
+            else if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
             {
                 room_bgm_state_set(6, 12, BGM_MAIN_ON);
             }
-        }
-        else if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
-        {
-            room_bgm_state_set(6, 12, BGM_MAIN_ON);
-        }
-        if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
-        {
-            obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 17650, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
-        }
-        else
-        {
-            obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 15460, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
-            set(FG_ROOM, F_ROOM_LADDER_OPEN, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, FALSE))
+            {
+                obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 17650, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
+            }
+            else
+            {
+                obj(OBJ_00_FIREPLACE, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 15460, 0, 3610, 0, 0, 0, 0, 0, 0, 2160, 1200, 1040);
+                set(FG_ROOM, F_ROOM_LADDER_OPEN, TRUE);
+            }
         }
     }
 }
 
-proc main when (MANSION2)
+proc main
 {
-    if (CHRIS)
+    if (MANSION2)
     {
-        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
+        if (CHRIS)
         {
-            aot_delete(AOT_03_EVENT_PIT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+            if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
+            {
+                aot_delete(AOT_03_EVENT_PIT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+            }
         }
-    }
-    else
-    {
-        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, FALSE))
+        else
         {
-            aot_delete(AOT_03_EVENT_PIT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-            set(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, TRUE);
+            if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, FALSE))
+            {
+                aot_delete(AOT_03_EVENT_PIT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                set(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, TRUE);
+            }
         }
-    }
-    if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE))
-    {
-        bgm_volume_ramp(BGM_SUB_1, -96, 30);
-        set(FG_ROOM, F_ROOM_YAWN_BGM_ON, FALSE);
-    }
-    if (ck(FG_ROOM, F_ROOM_PLAYER_AT_FIREPLACE, TRUE))
-    {
-        if (ck(FG_ROOM, F_ROOM_LADDER_OPEN, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE))
+        {
+            bgm_volume_ramp(BGM_SUB_1, -96, 30);
+            set(FG_ROOM, F_ROOM_YAWN_BGM_ON, FALSE);
+        }
+        if (ck(FG_ROOM, F_ROOM_PLAYER_AT_FIREPLACE, TRUE))
+        {
+            if (ck(FG_ROOM, F_ROOM_LADDER_OPEN, FALSE))
+            {
+                if (CHRIS)
+                {
+                    aot_delete(AOT_07_EVENT_LADDER, SCE_EVENT, 0);
+                    aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                }
+                else
+                {
+                    aot_delete(AOT_0A_EVENT_LADDER, SCE_EVENT, 0);
+                    aot_delete(AOT_04_USEITEM_SWITCH, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
+                }
+            }
+            else
+            {
+                if (CHRIS)
+                {
+                    aot_delete(AOT_07_EVENT_LADDER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, 0);
+                }
+                else
+                {
+                    aot_delete(AOT_0A_EVENT_LADDER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                    aot_delete(AOT_04_USEITEM_SWITCH, SCE_USEITEM, 0);
+                }
+            }
+        }
+        else
         {
             if (CHRIS)
             {
                 aot_delete(AOT_07_EVENT_LADDER, SCE_EVENT, 0);
-                aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, 0);
             }
             else
             {
                 aot_delete(AOT_0A_EVENT_LADDER, SCE_EVENT, 0);
-                aot_delete(AOT_04_USEITEM_SWITCH, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_04_USEITEM_SWITCH, SCE_NONE, 0);
+            }
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, TRUE))
+        {
+            if (CHRIS)
+            {
+                aot_delete(AOT_04_EVENT_SWITCH, SCE_NONE, 0);
+            }
+            else
+            {
+                aot_delete(AOT_04_USEITEM_SWITCH, SCE_NONE, 0);
+            }
+        }
+        if (JILL)
+        {
+            if (ck(FG_ROOM, F_ROOM_J_SWITCH_SPOT_USED, TRUE))
+            {
+                set(FG_ROOM, F_ROOM_J_SWITCH_SPOT_USED, FALSE);
+                if (ck(FG_ROOM, F_ROOM_J_BARRY_RETURN_STARTED, FALSE))
+                {
+                    evt_exec(0, TASK_09, examine_fireplace_switch);
+                    set(FG_ROOM, F_ROOM_J_SWITCH_EVENT_RUNNING, TRUE);
+                }
+            }
+            if (ck(FG_ROOM, F_ROOM_J_CALL_BARRY, TRUE))
+            {
+                if (ck(FG_ROOM, F_ROOM_J_SWITCH_EVENT_RUNNING, FALSE))
+                {
+                    evt_exec(0, TASK_09, barry_returns_with_rope);
+                    set(FG_ROOM, F_ROOM_J_BARRY_RETURN_STARTED, TRUE);
+                    set(FG_ROOM, F_ROOM_J_CALL_BARRY, FALSE);
+                }
+            }
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_02) && ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
+        {
+            bank_bit(255);
+            bank_bit(2);
+        }
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01) && ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
+        {
+            bank_bit(255);
+            bank_bit(3);
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, TRUE))
+        {
+            aot_delete(AOT_02_EVENT_YAWN_AMBUSH, SCE_NONE, 0);
+        }
+        if (ck(FG_ROOM, F_ROOM_PLAYER_IN_TOMBSTONE_ZONE, FALSE))
+        {
+            if (CHRIS)
+            {
+                aot_delete(AOT_08_MESSAGE_TOMBSTONE, SCE_MESSAGE, 0);
+            }
+            else
+            {
+                aot_delete(AOT_0C_MESSAGE_TOMBSTONE, SCE_MESSAGE, 0);
             }
         }
         else
         {
             if (CHRIS)
             {
-                aot_delete(AOT_07_EVENT_LADDER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, 0);
+                aot_delete(AOT_08_MESSAGE_TOMBSTONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                aot_delete(AOT_0A_EVENT_LADDER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_04_USEITEM_SWITCH, SCE_USEITEM, 0);
+                aot_delete(AOT_0C_MESSAGE_TOMBSTONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
             }
         }
-    }
-    else
-    {
-        if (CHRIS)
+        if (ck(FG_ROOM, F_ROOM_PLAYER_IN_HOLE_ZONE, FALSE))
         {
-            aot_delete(AOT_07_EVENT_LADDER, SCE_EVENT, 0);
-            aot_delete(AOT_04_EVENT_SWITCH, SCE_EVENT, 0);
-        }
-        else
-        {
-            aot_delete(AOT_0A_EVENT_LADDER, SCE_EVENT, 0);
-            aot_delete(AOT_04_USEITEM_SWITCH, SCE_NONE, 0);
-        }
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_FIREPLACE_LADDER_OPEN, TRUE))
-    {
-        if (CHRIS)
-        {
-            aot_delete(AOT_04_EVENT_SWITCH, SCE_NONE, 0);
-        }
-        else
-        {
-            aot_delete(AOT_04_USEITEM_SWITCH, SCE_NONE, 0);
-        }
-    }
-    if (JILL)
-    {
-        if (ck(FG_ROOM, F_ROOM_J_SWITCH_SPOT_USED, TRUE))
-        {
-            set(FG_ROOM, F_ROOM_J_SWITCH_SPOT_USED, FALSE);
-            if (ck(FG_ROOM, F_ROOM_J_BARRY_RETURN_STARTED, FALSE))
+            if (CHRIS)
             {
-                evt_exec(0, TASK_09, examine_fireplace_switch);
-                set(FG_ROOM, F_ROOM_J_SWITCH_EVENT_RUNNING, TRUE);
+                aot_delete(AOT_0A_MESSAGE_HOLE_OPENS, SCE_MESSAGE, 0);
             }
-        }
-        if (ck(FG_ROOM, F_ROOM_J_CALL_BARRY, TRUE))
-        {
-            if (ck(FG_ROOM, F_ROOM_J_SWITCH_EVENT_RUNNING, FALSE))
+            else
             {
-                evt_exec(0, TASK_09, barry_returns_with_rope);
-                set(FG_ROOM, F_ROOM_J_BARRY_RETURN_STARTED, TRUE);
-                set(FG_ROOM, F_ROOM_J_CALL_BARRY, FALSE);
+                aot_delete(AOT_0E_MESSAGE_HOLE_OPENS, SCE_MESSAGE, 0);
             }
         }
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_02) && ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
-    {
-        bank_bit(255);
-        bank_bit(2);
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_01) && ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, FALSE))
-    {
-        bank_bit(255);
-        bank_bit(3);
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_YAWN_2_APPEARED, TRUE))
-    {
-        aot_delete(AOT_02_EVENT_YAWN_AMBUSH, SCE_NONE, 0);
-    }
-    if (ck(FG_ROOM, F_ROOM_PLAYER_IN_TOMBSTONE_ZONE, FALSE))
-    {
-        if (CHRIS)
-        {
-            aot_delete(AOT_08_MESSAGE_TOMBSTONE, SCE_MESSAGE, 0);
-        }
         else
         {
-            aot_delete(AOT_0C_MESSAGE_TOMBSTONE, SCE_MESSAGE, 0);
+            if (CHRIS)
+            {
+                aot_delete(AOT_0A_MESSAGE_HOLE_OPENS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+            }
+            else
+            {
+                aot_delete(AOT_0E_MESSAGE_HOLE_OPENS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+            }
         }
-    }
-    else
-    {
-        if (CHRIS)
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_04_PIT_BOTTOM))
         {
-            aot_delete(AOT_08_MESSAGE_TOMBSTONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+            set(FG_MAP, F_MAP_VISITED_11F, TRUE);
         }
-        else
-        {
-            aot_delete(AOT_0C_MESSAGE_TOMBSTONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-        }
-    }
-    if (ck(FG_ROOM, F_ROOM_PLAYER_IN_HOLE_ZONE, FALSE))
-    {
-        if (CHRIS)
-        {
-            aot_delete(AOT_0A_MESSAGE_HOLE_OPENS, SCE_MESSAGE, 0);
-        }
-        else
-        {
-            aot_delete(AOT_0E_MESSAGE_HOLE_OPENS, SCE_MESSAGE, 0);
-        }
-    }
-    else
-    {
-        if (CHRIS)
-        {
-            aot_delete(AOT_0A_MESSAGE_HOLE_OPENS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-        }
-        else
-        {
-            aot_delete(AOT_0E_MESSAGE_HOLE_OPENS, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-        }
-    }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_04_PIT_BOTTOM))
-    {
-        set(FG_MAP, F_MAP_VISITED_11F, TRUE);
     }
 }
 
-event examine_pit when (MANSION2)
+event examine_pit
 {
     if (CHRIS)
     {
@@ -520,7 +526,7 @@ event examine_pit when (MANSION2)
     evt_finish();
 }
 
-event yawn_ambush when (MANSION2)
+event yawn_ambush
 {
     run
     {
@@ -564,7 +570,7 @@ event yawn_ambush when (MANSION2)
     evt_nop();
 }
 
-event yawn_ambush_player_shakes when (MANSION2)
+event yawn_ambush_player_shakes
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -578,7 +584,7 @@ event yawn_ambush_player_shakes when (MANSION2)
     act_finish();
 }
 
-event yawn_ambush_player_dodges when (MANSION2)
+event yawn_ambush_player_dodges
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -656,7 +662,7 @@ event yawn_ambush_player_dodges when (MANSION2)
     evt_finish();
 }
 
-event jump_into_pit when (MANSION2)
+event jump_into_pit
 {
     if (CHRIS)
     {
@@ -685,7 +691,7 @@ event jump_into_pit when (MANSION2)
     evt_chain(end_cutscene);
 }
 
-event crouch_until_released when (MANSION2)
+event crouch_until_released
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -706,7 +712,7 @@ event crouch_until_released when (MANSION2)
     evt_finish();
 }
 
-event fireplace_slides when (MANSION2)
+event fireplace_slides
 {
     evt_work_set(WK_OBJ, OBJ_00_FIREPLACE);
     evt_tween_begin_alt();
@@ -749,7 +755,7 @@ event fireplace_slides when (MANSION2)
     evt_finish();
 }
 
-event examine_fireplace_switch when (MANSION2)
+event examine_fireplace_switch
 {
     run
     {
@@ -802,7 +808,7 @@ event examine_fireplace_switch when (MANSION2)
     evt_finish();
 }
 
-event end_cutscene when (MANSION2)
+event end_cutscene
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -818,7 +824,7 @@ event end_cutscene when (MANSION2)
     evt_finish();
 }
 
-event push_fireplace_switch when (MANSION2)
+event push_fireplace_switch
 {
     sleep(20);
     cutnext(CAM_06_FIREPLACE);
@@ -847,14 +853,14 @@ event push_fireplace_switch when (MANSION2)
     }
 }
 
-event decline_fireplace_switch when (JILL && MANSION2)
+event decline_fireplace_switch
 {
     sleep(26);
     set(FG_ROOM, F_ROOM_J_SWITCH_EVENT_RUNNING, FALSE);
     evt_chain(end_cutscene);
 }
 
-event barry_at_pit_jill_0 when (JILL && MANSION2)
+event barry_at_pit_jill_0
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -862,7 +868,7 @@ event barry_at_pit_jill_0 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_at_pit_walk_in when (JILL && MANSION2)
+event barry_at_pit_walk_in
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -886,7 +892,7 @@ event barry_at_pit_walk_in when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_at_pit_jill_1 when (JILL && MANSION2)
+event barry_at_pit_jill_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -900,7 +906,7 @@ event barry_at_pit_jill_1 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_at_pit_barry_1 when (JILL && MANSION2)
+event barry_at_pit_barry_1
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -928,7 +934,7 @@ event barry_at_pit_barry_1 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_at_pit_jill_2 when (JILL && MANSION2)
+event barry_at_pit_jill_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -949,7 +955,7 @@ event barry_at_pit_jill_2 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_at_pit_barry_2 when (JILL && MANSION2)
+event barry_at_pit_barry_2
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -962,7 +968,7 @@ event barry_at_pit_barry_2 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_gives_radio when (JILL && MANSION2)
+event barry_gives_radio
 {
     evt_fork(TASK_09, barry_gives_radio_barry_0, 0);
     voice_play(VOICE_PLAY, VO_10D_05);
@@ -997,7 +1003,7 @@ event barry_gives_radio when (JILL && MANSION2)
     evt_chain(leave_pit_or_rope_breaks);
 }
 
-event radio_already_given when (JILL && MANSION2)
+event radio_already_given
 {
     evt_fork(TASK_09, radio_already_given_anim, 0);
     sleep(60);
@@ -1006,7 +1012,7 @@ event radio_already_given when (JILL && MANSION2)
     evt_nop();
 }
 
-event leave_pit_or_rope_breaks when (MANSION2)
+event leave_pit_or_rope_breaks
 {
     if (CHRIS)
     {
@@ -1079,7 +1085,7 @@ event leave_pit_or_rope_breaks when (MANSION2)
     }
 }
 
-event barry_gives_radio_barry_0 when (JILL && MANSION2)
+event barry_gives_radio_barry_0
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1111,7 +1117,7 @@ event barry_gives_radio_barry_0 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_gives_radio_jill when (JILL && MANSION2)
+event barry_gives_radio_jill
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1128,7 +1134,7 @@ event barry_gives_radio_jill when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_gives_radio_barry_1 when (JILL && MANSION2)
+event barry_gives_radio_barry_1
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1150,7 +1156,7 @@ event barry_gives_radio_barry_1 when (JILL && MANSION2)
     act_finish();
 }
 
-event radio_already_given_anim when (JILL && MANSION2)
+event radio_already_given_anim
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1164,7 +1170,7 @@ event radio_already_given_anim when (JILL && MANSION2)
     act_finish();
 }
 
-event rope_breaks_jill_0 when (JILL && MANSION2)
+event rope_breaks_jill_0
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1188,7 +1194,7 @@ event rope_breaks_jill_0 when (JILL && MANSION2)
     act_finish();
 }
 
-event rope_breaks_barry when (JILL && MANSION2)
+event rope_breaks_barry
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1231,7 +1237,7 @@ event rope_breaks_barry when (JILL && MANSION2)
     act_finish();
 }
 
-event rope_breaks_jill_1 when (JILL && MANSION2)
+event rope_breaks_jill_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1250,14 +1256,14 @@ event rope_breaks_jill_1 when (JILL && MANSION2)
     act_finish();
 }
 
-event rope_breaks_raw when (JILL && MANSION2)
+event rope_breaks_raw
 {
     sleep(600);
     single(4) set(FG_ROOM, 0, 0);
     raw(0x0A, 0x00, 0xFF, 0x00);
 }
 
-event barry_returns_with_rope_jill_1 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_1
 {
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
@@ -1273,7 +1279,7 @@ event barry_returns_with_rope_jill_1 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_2 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_2
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1287,7 +1293,7 @@ event barry_returns_with_rope_barry_2 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_3 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1297,7 +1303,7 @@ event barry_returns_with_rope_jill_3 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_4 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_4
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1314,7 +1320,7 @@ event barry_returns_with_rope_barry_4 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_5 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_5
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1330,7 +1336,7 @@ event barry_returns_with_rope_jill_5 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_6 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_6
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1352,7 +1358,7 @@ event barry_returns_with_rope_barry_6 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_7 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_7
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1371,7 +1377,7 @@ event barry_returns_with_rope_jill_7 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_8 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_8
 {
     sleep(80);
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
@@ -1391,7 +1397,7 @@ event barry_returns_with_rope_barry_8 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_9 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_9
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1411,7 +1417,7 @@ event barry_returns_with_rope_jill_9 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_10 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_10
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1433,7 +1439,7 @@ event barry_returns_with_rope_barry_10 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_both_11 when (JILL && MANSION2)
+event barry_returns_with_rope_both_11
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1460,7 +1466,7 @@ event barry_returns_with_rope_both_11 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_12 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_12
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1476,7 +1482,7 @@ event barry_returns_with_rope_jill_12 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_jill_13 when (JILL && MANSION2)
+event barry_returns_with_rope_jill_13
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1486,7 +1492,7 @@ event barry_returns_with_rope_jill_13 when (JILL && MANSION2)
     act_finish();
 }
 
-event barry_returns_with_rope_barry_14 when (JILL && MANSION2)
+event barry_returns_with_rope_barry_14
 {
     evt_work_set(WK_ENEMY, ENEMY_0F_BARRY);
     evt_actor_begin();
@@ -1503,7 +1509,7 @@ event barry_returns_with_rope_barry_14 when (JILL && MANSION2)
     tw_finish();
 }
 
-event examine_rope_below when (JILL && MANSION2)
+event examine_rope_below
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     message(MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a rope. Will you climb it? There's a ladder. Will you descend it? A hole opens in the fireplace."
@@ -1526,7 +1532,7 @@ event examine_rope_below when (JILL && MANSION2)
     evt_finish();
 }
 
-event climb_rope when (JILL && MANSION2)
+event climb_rope
 {
     timer_setup(LIGHT_FADE_VEIL, 700, FADE_R | FADE_G | FADE_B);
     sleep(47);
@@ -1544,7 +1550,7 @@ event climb_rope when (JILL && MANSION2)
     evt_chain(end_cutscene);
 }
 
-event examine_rope_above when (JILL && MANSION2)
+event examine_rope_above
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     message(MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a rope. Will you descend it?"
@@ -1567,7 +1573,7 @@ event examine_rope_above when (JILL && MANSION2)
     evt_finish();
 }
 
-event descend_rope when (JILL && MANSION2)
+event descend_rope
 {
     timer_setup(LIGHT_FADE_VEIL, 700, FADE_R | FADE_G | FADE_B);
     sleep(47);
@@ -1585,7 +1591,7 @@ event descend_rope when (JILL && MANSION2)
     evt_chain(end_cutscene);
 }
 
-event barry_returns_with_rope when (JILL && MANSION2)
+event barry_returns_with_rope
 {
     run
     {
@@ -1702,7 +1708,7 @@ event barry_returns_with_rope when (JILL && MANSION2)
     evt_nop();
 }
 
-event yawn_bgm when (MANSION2)
+event yawn_bgm
 {
     sleep(1);
     set(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE);
@@ -1710,14 +1716,14 @@ event yawn_bgm when (MANSION2)
     evt_finish();
 }
 
-event camera_defer_off when (JILL && MANSION2)
+event camera_defer_off
 {
     sleep(1);
     set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
     evt_finish();
 }
 
-event descend_ladder when (MANSION2)
+event descend_ladder
 {
     run
     {
@@ -1744,7 +1750,7 @@ event descend_ladder when (MANSION2)
     evt_finish();
 }
 
-event yawn_ambush_player when (MANSION2)
+event yawn_ambush_player
 {
     sleep(55);
     evt_work_set(WK_PLAYER, 0);

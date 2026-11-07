@@ -138,34 +138,37 @@ proc init
     }
 }
 
-proc main when (CHRIS && MANSION2)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, TRUE) && ck(FG_ENEMY, F_ENEMY_206_HUNTER_1, TRUE) && ck(FG_ROOM, F_ROOM_C_BODY_SPOT_ARMED, FALSE))
+    if (CHRIS && MANSION2)
     {
-        set(FG_ROOM, F_ROOM_C_BODY_SPOT_ARMED, TRUE);
-        aot_reset(AOT_04_EVENT_REBECCA_BODY, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, examine_rebecca_body, 0);
-    }
-    if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_COMMON, F_COMMON_C_LEFT_REBECCA_TO_HUNTER, FALSE) && ck(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, FALSE))
-    {
-        set(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, TRUE);
-        inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 8900, 10500, 11916, 13000);
-        evt_exec(0, TASK_00, hunter_attacks_rebecca);
-    }
-    if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_TOO_LATE, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, FALSE))
-    {
-        set(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, TRUE);
-        set(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, TRUE);
-        evt_exec(0, TASK_00, hunter_kills_rebecca);
-    }
-    if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_ENEMY, F_ENEMY_206_HUNTER_1, TRUE))
-    {
-        set(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, TRUE);
-        inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 15000, 15000, 15010, 15010);
-        evt_exec(0, TASK_00, rebecca_saved);
+        if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, TRUE) && ck(FG_ENEMY, F_ENEMY_206_HUNTER_1, TRUE) && ck(FG_ROOM, F_ROOM_C_BODY_SPOT_ARMED, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_C_BODY_SPOT_ARMED, TRUE);
+            aot_reset(AOT_04_EVENT_REBECCA_BODY, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, examine_rebecca_body, 0);
+        }
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_COMMON, F_COMMON_C_LEFT_REBECCA_TO_HUNTER, FALSE) && ck(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, TRUE);
+            inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 8900, 10500, 11916, 13000);
+            evt_exec(0, TASK_00, hunter_attacks_rebecca);
+        }
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_TOO_LATE, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, FALSE))
+        {
+            set(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, TRUE);
+            set(FG_ROOM, F_ROOM_C_HUNTER_SCENE_STARTED, TRUE);
+            evt_exec(0, TASK_00, hunter_kills_rebecca);
+        }
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, FALSE) && ck(FG_ENEMY, F_ENEMY_206_HUNTER_1, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_C_REBECCA_HUNTER_DONE, TRUE);
+            inst_cfg(COL_LIST_00, COL_04, CF_2 | CF_1, 15000, 15000, 15010, 15010);
+            evt_exec(0, TASK_00, rebecca_saved);
+        }
     }
 }
 
-event hunter_attacks_rebecca when (CHRIS && MANSION2)
+event hunter_attacks_rebecca
 {
     run
     {
@@ -221,7 +224,7 @@ event hunter_attacks_rebecca when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event hunter_attacks_rebecca_rebecca when (CHRIS && MANSION2)
+event hunter_attacks_rebecca_rebecca
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -247,7 +250,7 @@ event hunter_attacks_rebecca_rebecca when (CHRIS && MANSION2)
     act_finish();
 }
 
-event hunter_attacks_rebecca_hunter when (CHRIS && MANSION2)
+event hunter_attacks_rebecca_hunter
 {
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
     evt_actor_begin();
@@ -264,7 +267,7 @@ event hunter_attacks_rebecca_hunter when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_saved when (CHRIS && MANSION2)
+event rebecca_saved
 {
     set(FG_ROOM, F_ROOM_C_CUTSCENE, TRUE);
     sleep(25);
@@ -334,7 +337,7 @@ event rebecca_saved when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_saved_door when (CHRIS && MANSION2)
+event rebecca_saved_door
 {
     sleep(6);
     se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 10000, 12220);
@@ -472,7 +475,7 @@ event rebecca_saved_door when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event hunter_kills_rebecca when (CHRIS && MANSION2)
+event hunter_kills_rebecca
 {
     run
     {
@@ -546,7 +549,7 @@ event hunter_kills_rebecca when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event hunter_kills_rebecca_rebecca when (CHRIS && MANSION2)
+event hunter_kills_rebecca_rebecca
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -605,7 +608,7 @@ event hunter_kills_rebecca_rebecca when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event hunter_kills_rebecca_hunter when (CHRIS && MANSION2)
+event hunter_kills_rebecca_hunter
 {
     sleep(18);
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
@@ -636,7 +639,7 @@ event hunter_kills_rebecca_hunter when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_screams when (CHRIS && MANSION2)
+event rebecca_screams
 {
     for (5)
     {
@@ -646,7 +649,7 @@ event rebecca_screams when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event arranged_spot_to_document when (CHRIS && MANSION2)
+event arranged_spot_to_document
 {
     aot_on(AOT_03_MESSAGE_ARRANGED, SCE_DOCUMENT, 0);
     evt_next();
@@ -657,7 +660,7 @@ event arranged_spot_to_document when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event examine_rebecca_body when (CHRIS && MANSION2)
+event examine_rebecca_body
 {
     run
     {
@@ -711,7 +714,7 @@ event examine_rebecca_body when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event rebecca_saved_chris when (CHRIS && MANSION2)
+event rebecca_saved_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

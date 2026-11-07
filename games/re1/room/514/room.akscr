@@ -234,7 +234,7 @@ proc init
     }
 }
 
-event chris_meets_wesker when (CHRIS)
+event chris_meets_wesker
 {
     sleep(1);
     run
@@ -2075,12 +2075,12 @@ event wesker_scene_with_partner
     evt_finish();
 }
 
-event unused_empty when (JILL)
+event unused_empty
 {
     evt_finish();
 }
 
-event barry_sent_to_wait when (JILL)
+event barry_sent_to_wait
 {
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
@@ -2111,7 +2111,7 @@ event barry_sent_to_wait when (JILL)
     evt_finish();
 }
 
-event wesker_leads_jill_to_tyrant when (JILL)
+event wesker_leads_jill_to_tyrant
 {
     run
     {
@@ -4631,7 +4631,7 @@ event rebecca_vest_wakeup_or_jill_alone_with_wesker
     evt_finish();
 }
 
-event barry_after_tyrant_self_destruct when (JILL)
+event barry_after_tyrant_self_destruct
 {
     sleep(1);
     run
@@ -4817,7 +4817,7 @@ event barry_after_tyrant_self_destruct when (JILL)
     evt_finish();
 }
 
-event restore_controls when (JILL)
+event restore_controls
 {
     run
     {

@@ -419,7 +419,7 @@ event fumes_light_flicker
     evt_finish();
 }
 
-event rebecca_idle when (CHRIS)
+event rebecca_idle
 {
     sleep(1);
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
@@ -430,7 +430,7 @@ event rebecca_idle when (CHRIS)
     act_finish();
 }
 
-event rebecca_first_talk when (CHRIS)
+event rebecca_first_talk
 {
     run
     {
@@ -463,7 +463,7 @@ event rebecca_first_talk when (CHRIS)
     evt_finish();
 }
 
-event rebecca_first_talk_anim when (CHRIS)
+event rebecca_first_talk_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -510,7 +510,7 @@ event rebecca_first_talk_anim when (CHRIS)
     act_finish();
 }
 
-event rebecca_first_heal when (CHRIS)
+event rebecca_first_heal
 {
     evt_fork(TASK_09, chris_first_heal_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_01);
@@ -534,7 +534,7 @@ event rebecca_first_heal when (CHRIS)
     evt_nop();
 }
 
-event rebecca_first_heal_declined when (CHRIS)
+event rebecca_first_heal_declined
 {
     evt_fork(TASK_09, chris_first_heal_declined_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_09);
@@ -544,7 +544,7 @@ event rebecca_first_heal_declined when (CHRIS)
     evt_nop();
 }
 
-event rebecca_first_talk_end when (CHRIS)
+event rebecca_first_talk_end
 {
     evt_fork(TASK_09, rebecca_first_talk_end_anim_1, 0);
     voice_play(VOICE_PLAY, VO_A08_02);
@@ -576,7 +576,7 @@ event rebecca_first_talk_end when (CHRIS)
     evt_finish();
 }
 
-event rebecca_first_talk_end_anim_1 when (CHRIS)
+event rebecca_first_talk_end_anim_1
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -593,7 +593,7 @@ event rebecca_first_talk_end_anim_1 when (CHRIS)
     act_finish();
 }
 
-event chris_first_talk_end_anim_1 when (CHRIS)
+event chris_first_talk_end_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -606,7 +606,7 @@ event chris_first_talk_end_anim_1 when (CHRIS)
     act_finish();
 }
 
-event rebecca_first_talk_end_anim_2 when (CHRIS)
+event rebecca_first_talk_end_anim_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
@@ -628,7 +628,7 @@ event rebecca_first_talk_end_anim_2 when (CHRIS)
     act_finish();
 }
 
-event chris_first_talk_end_anim_2 when (CHRIS)
+event chris_first_talk_end_anim_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -641,7 +641,7 @@ event chris_first_talk_end_anim_2 when (CHRIS)
     act_finish();
 }
 
-event chris_first_heal_anim when (CHRIS)
+event chris_first_heal_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -664,7 +664,7 @@ event chris_first_heal_anim when (CHRIS)
     act_finish();
 }
 
-event chris_first_heal_declined_anim when (CHRIS)
+event chris_first_heal_declined_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -692,7 +692,7 @@ event chris_first_heal_declined_anim when (CHRIS)
     act_finish();
 }
 
-event rebecca_heal_offer when (CHRIS)
+event rebecca_heal_offer
 {
     run
     {
@@ -724,7 +724,7 @@ event rebecca_heal_offer when (CHRIS)
     evt_finish();
 }
 
-event rebecca_heal when (CHRIS)
+event rebecca_heal
 {
     timer_setup(LIGHT_FADE_VEIL, 256, FADE_R | FADE_G | FADE_B);
     sleep(120);
@@ -755,7 +755,7 @@ event rebecca_heal when (CHRIS)
     evt_finish();
 }
 
-event rebecca_heal_declined when (CHRIS)
+event rebecca_heal_declined
 {
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -773,7 +773,7 @@ event rebecca_heal_declined when (CHRIS)
     evt_finish();
 }
 
-event rebecca_heal_offer_anim when (CHRIS)
+event rebecca_heal_offer_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -801,7 +801,7 @@ event rebecca_heal_offer_anim when (CHRIS)
     act_finish();
 }
 
-event rebecca_after_heal_line when (CHRIS)
+event rebecca_after_heal_line
 {
     run
     {
@@ -822,7 +822,7 @@ event rebecca_after_heal_line when (CHRIS)
     evt_finish();
 }
 
-event rebecca_idle_line when (CHRIS)
+event rebecca_idle_line
 {
     run
     {
@@ -843,7 +843,7 @@ event rebecca_idle_line when (CHRIS)
     evt_finish();
 }
 
-event rebecca_line_anim when (CHRIS)
+event rebecca_line_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

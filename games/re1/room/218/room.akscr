@@ -23,36 +23,42 @@
 #define MSG_IT_IS_A_HELICOPTER_PORT 0x01
 #define MSG_I_CAN_LOOK_OVER_THE_COURTYARD 0x00
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_216, 4600, 1200, 900, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_EVENT_WINDOW, 4500, 8500, 2200, 1000, SCE_EVENT, SAT_PLAYER, 0, 0, look_at_heliport, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM_AMMO_HANDGUN_0, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 7300, -2000, 2500, 3072, F_ITEM_218_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
-    if (USA)
+    if (MANSION2)
     {
-        item_aot_set(AOT_03_ITEM_INK_1, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, IMDL_01_INK, SCA_NONE, 4760, -2000, 6000, 1024, F_ITEM_218_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
-    }
-    else
-    {
-        item_aot_set(AOT_03_ITEM_INK_1, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01_INK, SCA_NONE, 4760, -2000, 6000, 1024, F_ITEM_218_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
-    }
-    set(FG_SCENARIO, F_SCENARIO_HIDDEN_LIBRARY_ENTERED, TRUE);
-}
-
-proc main when (MANSION2)
-{
-    if (ck(FG_ITEM, F_ITEM_218_AMMO_HANDGUN_0, FALSE))
-    {
-        aot_delete(AOT_05, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_00_DOOR_216, 4600, 1200, 900, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        aot_set(AOT_01_EVENT_WINDOW, 4500, 8500, 2200, 1000, SCE_EVENT, SAT_PLAYER, 0, 0, look_at_heliport, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM_AMMO_HANDGUN_0, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 7300, -2000, 2500, 3072, F_ITEM_218_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
+        if (USA)
+        {
+            item_aot_set(AOT_03_ITEM_INK_1, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, IMDL_01_INK, SCA_NONE, 4760, -2000, 6000, 1024, F_ITEM_218_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else
+        {
+            item_aot_set(AOT_03_ITEM_INK_1, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01_INK, SCA_NONE, 4760, -2000, 6000, 1024, F_ITEM_218_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        set(FG_SCENARIO, F_SCENARIO_HIDDEN_LIBRARY_ENTERED, TRUE);
     }
 }
 
-event unused_empty when (MANSION2)
+proc main
+{
+    if (MANSION2)
+    {
+        if (ck(FG_ITEM, F_ITEM_218_AMMO_HANDGUN_0, FALSE))
+        {
+            aot_delete(AOT_05, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
+    }
+}
+
+event unused_empty
 {
     evt_finish();
 }
 
-event look_at_heliport when (MANSION2)
+event look_at_heliport
 {
     run
     {
@@ -103,7 +109,7 @@ event look_at_heliport when (MANSION2)
     evt_finish();
 }
 
-event unused_battery_message when (MANSION2)
+event unused_battery_message
 {
     run
     {

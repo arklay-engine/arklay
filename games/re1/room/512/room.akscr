@@ -746,7 +746,7 @@ event cell_rescue_first_sight
     evt_finish();
 }
 
-event after_door_talk_jill_gesture when (JILL)
+event after_door_talk_jill_gesture
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -763,7 +763,7 @@ event after_door_talk_jill_gesture when (JILL)
     evt_finish();
 }
 
-event after_door_talk_chris_walks when (JILL)
+event after_door_talk_chris_walks
 {
     evt_work_set(WK_ENEMY, ENEMY_00_CHRIS);
     evt_actor_begin();
@@ -774,7 +774,7 @@ event after_door_talk_chris_walks when (JILL)
     evt_finish();
 }
 
-event after_door_talk_jill_talk_1 when (JILL)
+event after_door_talk_jill_talk_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -796,7 +796,7 @@ event after_door_talk_jill_talk_1 when (JILL)
     evt_finish();
 }
 
-event after_door_talk_jill_talk_2 when (JILL)
+event after_door_talk_jill_talk_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_CHRIS);
     evt_actor_begin();
@@ -824,7 +824,7 @@ event after_door_talk_jill_talk_2 when (JILL)
     evt_finish();
 }
 
-event after_door_talk_jill_talk_3 when (JILL)
+event after_door_talk_jill_talk_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -858,7 +858,7 @@ event after_door_talk_jill_talk_3 when (JILL)
     evt_finish();
 }
 
-event first_sight_jill_talk_1 when (JILL)
+event first_sight_jill_talk_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -880,7 +880,7 @@ event first_sight_jill_talk_1 when (JILL)
     evt_finish();
 }
 
-event first_sight_jill_talk_2 when (JILL)
+event first_sight_jill_talk_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_CHRIS);
     evt_actor_begin();
@@ -933,7 +933,7 @@ event first_sight_jill_talk_2 when (JILL)
     evt_finish();
 }
 
-event first_sight_jill_talk_3 when (JILL)
+event first_sight_jill_talk_3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

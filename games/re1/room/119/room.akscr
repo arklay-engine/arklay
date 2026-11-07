@@ -33,35 +33,42 @@
 #define VO_00C_21 0x65
 #define VO_00C_22 0x66
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_10A, 5000, 1300, 1500, 1400, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_10A_BACK_PASSAGE, 8400, 0, 5000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, 1820, 3942, 1800, 1800, IT_40_KEY_BOOK_DOOM_1, 0, IMDL_00_KEY_BOOK_DOOM_1, SCA_NONE, 2720, -900, 4842, 0, F_ITEM_119_KEY_BOOK_DOOM_1_0, 0, 0);
-    aot_set(AOT_02_EVENT_LIGHT_SWITCH, 3270, 6862, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, light_switch, 0, 0, 0);
-    aot_set(AOT_03_MESSAGE_NOTHING_OR_DARK, 6800, 3600, 1200, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM_AMMO_MAGNUM_1, 4110, 6462, 1800, 1800, IT_0E_AMMO_MAGNUM, 6, IMDL_01_AMMO_MAGNUM, SCA_NONE, 5130, -1440, 7482, -360, F_ITEM_119_AMMO_MAGNUM_1, 0, 0);
-    aot_set(AOT_05_MESSAGE_WINDOW, 1900, 9100, 1500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
-    set(FG_ROOM, F_ROOM_LIGHTS_OFF, TRUE);
-    cut_auto(CUT_LOCKED);
-    setb(B_CAMERA, CAM_02_DARK_1, 0);
-    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+    if (MANSION2)
     {
-        if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
+        door_aot_set(AOT_00_DOOR_10A, 5000, 1300, 1500, 1400, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_10A_BACK_PASSAGE, 8400, 0, 5000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        item_aot_set(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, 1820, 3942, 1800, 1800, IT_40_KEY_BOOK_DOOM_1, 0, IMDL_00_KEY_BOOK_DOOM_1, SCA_NONE, 2720, -900, 4842, 0, F_ITEM_119_KEY_BOOK_DOOM_1_0, 0, 0);
+        aot_set(AOT_02_EVENT_LIGHT_SWITCH, 3270, 6862, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, light_switch, 0, 0, 0);
+        aot_set(AOT_03_MESSAGE_NOTHING_OR_DARK, 6800, 3600, 1200, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        item_aot_set(AOT_04_ITEM_AMMO_MAGNUM_1, 4110, 6462, 1800, 1800, IT_0E_AMMO_MAGNUM, 6, IMDL_01_AMMO_MAGNUM, SCA_NONE, 5130, -1440, 7482, -360, F_ITEM_119_AMMO_MAGNUM_1, 0, 0);
+        aot_set(AOT_05_MESSAGE_WINDOW, 1900, 9100, 1500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+        set(FG_ROOM, F_ROOM_LIGHTS_OFF, TRUE);
+        cut_auto(CUT_LOCKED);
+        setb(B_CAMERA, CAM_02_DARK_1, 0);
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
             {
-                plw_anim(PLW_02, ANIM_28, 0);
-                setw(W_04, 0);
-                evt_exec(0, TASK_09, radio_call_monsters);
+                set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE))
+                {
+                    plw_anim(PLW_02, ANIM_28, 0);
+                    setw(W_04, 0);
+                    evt_exec(0, TASK_09, radio_call_monsters);
+                }
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE))
+                {
+                    plw_anim(PLW_02, ANIM_28, 0);
+                    setw(W_04, 0);
+                    evt_exec(0, TASK_09, radio_call_rebecca_upstairs);
+                }
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, FALSE))
+                {
+                    evt_exec(0, TASK_09, return_control);
+                }
             }
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE))
-            {
-                plw_anim(PLW_02, ANIM_28, 0);
-                setw(W_04, 0);
-                evt_exec(0, TASK_09, radio_call_rebecca_upstairs);
-            }
-            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, FALSE))
+            else
             {
                 evt_exec(0, TASK_09, return_control);
             }
@@ -70,40 +77,39 @@ proc init when (MANSION2)
         {
             evt_exec(0, TASK_09, return_control);
         }
-    }
-    else
-    {
-        evt_exec(0, TASK_09, return_control);
-    }
-    if (ck(FG_SCENARIO, F_SCENARIO_STUDY_VISITED, FALSE))
-    {
-        set(FG_SCENARIO, F_SCENARIO_STUDY_VISITED, TRUE);
+        if (ck(FG_SCENARIO, F_SCENARIO_STUDY_VISITED, FALSE))
+        {
+            set(FG_SCENARIO, F_SCENARIO_STUDY_VISITED, TRUE);
+        }
     }
 }
 
-proc main when (MANSION2)
+proc main
 {
-    if (ck(FG_ROOM, F_ROOM_LIGHTS_OFF, TRUE))
+    if (MANSION2)
     {
-        aot_delete(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, SCE_NONE, 0);
-        aot_reset(AOT_03_MESSAGE_NOTHING_OR_DARK, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-        aot_delete(AOT_04_ITEM_AMMO_MAGNUM_1, SCE_NONE, 0);
-    }
-    else
-    {
-        if (ck(FG_ITEM, F_ITEM_119_KEY_BOOK_DOOM_1_0, TRUE))
+        if (ck(FG_ROOM, F_ROOM_LIGHTS_OFF, TRUE))
         {
-            aot_delete(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, SCE_NONE, 0);
+            aot_reset(AOT_03_MESSAGE_NOTHING_OR_DARK, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+            aot_delete(AOT_04_ITEM_AMMO_MAGNUM_1, SCE_NONE, 0);
         }
-        if (ck(FG_ITEM, F_ITEM_119_AMMO_MAGNUM_1, TRUE))
+        else
         {
-            aot_delete(AOT_04_ITEM_AMMO_MAGNUM_1, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            if (ck(FG_ITEM, F_ITEM_119_KEY_BOOK_DOOM_1_0, TRUE))
+            {
+                aot_delete(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            }
+            if (ck(FG_ITEM, F_ITEM_119_AMMO_MAGNUM_1, TRUE))
+            {
+                aot_delete(AOT_04_ITEM_AMMO_MAGNUM_1, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            }
+            aot_reset(AOT_03_MESSAGE_NOTHING_OR_DARK, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         }
-        aot_reset(AOT_03_MESSAGE_NOTHING_OR_DARK, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
     }
 }
 
-event light_switch when (MANSION2)
+event light_switch
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -137,7 +143,7 @@ event light_switch when (MANSION2)
     evt_finish();
 }
 
-event lights_off when (MANSION2)
+event lights_off
 {
     run
     {
@@ -148,7 +154,7 @@ event lights_off when (MANSION2)
     evt_finish();
 }
 
-event lights_on when (MANSION2)
+event lights_on
 {
     set(FG_ROOM, F_ROOM_LIGHTS_OFF, FALSE);
     timer_setup(LIGHT_FADE_VEIL, 0, 0);
@@ -172,7 +178,7 @@ event lights_on when (MANSION2)
     evt_finish();
 }
 
-event return_control when (MANSION2)
+event return_control
 {
     sleep(1);
     cut_auto(CUT_FREE);
@@ -181,7 +187,7 @@ event return_control when (MANSION2)
     evt_finish();
 }
 
-event radio_call_monsters when (MANSION2)
+event radio_call_monsters
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 5600, 0, 3246);
@@ -226,7 +232,7 @@ event radio_call_monsters when (MANSION2)
     evt_finish();
 }
 
-event radio_call_monsters_anim when (MANSION2)
+event radio_call_monsters_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -251,7 +257,7 @@ event radio_call_monsters_anim when (MANSION2)
     evt_finish();
 }
 
-event radio_call_rebecca_upstairs when (MANSION2)
+event radio_call_rebecca_upstairs
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 5600, 0, 3246);
@@ -307,7 +313,7 @@ event radio_call_rebecca_upstairs when (MANSION2)
     evt_finish();
 }
 
-event radio_call_rebecca_upstairs_anim when (MANSION2)
+event radio_call_rebecca_upstairs_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

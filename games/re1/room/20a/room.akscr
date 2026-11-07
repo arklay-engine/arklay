@@ -530,7 +530,7 @@ event aquarium_too_heavy
     evt_finish();
 }
 
-event barry_shows_researchers_will when (JILL)
+event barry_shows_researchers_will
 {
     evt_fork(TASK_01, barry_shows_researchers_will_barry_reads, 0);
     evt_next();
@@ -903,7 +903,7 @@ event barry_shows_researchers_will when (JILL)
     evt_finish();
 }
 
-event barry_shows_researchers_will_barry_reads when (JILL)
+event barry_shows_researchers_will_barry_reads
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -920,7 +920,7 @@ event barry_shows_researchers_will_barry_reads when (JILL)
     evt_finish();
 }
 
-event barry_shows_researchers_will_jill_reads when (JILL)
+event barry_shows_researchers_will_jill_reads
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

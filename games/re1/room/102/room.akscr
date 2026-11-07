@@ -58,7 +58,7 @@ proc init
     }
 }
 
-event tilt_broken_shotgun when (MANSION2)
+event tilt_broken_shotgun
 {
     evt_work_set(WK_AOT, IMDL_00_KEY_BROKEN_SHOTGUN);
     evt_tween_begin_alt();
@@ -68,7 +68,7 @@ event tilt_broken_shotgun when (MANSION2)
     evt_finish();
 }
 
-event rebecca_scream_heard when (MANSION2)
+event rebecca_scream_heard
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
@@ -88,7 +88,7 @@ event rebecca_scream_heard when (MANSION2)
     evt_finish();
 }
 
-event rebecca_scream_heard_chris when (MANSION2)
+event rebecca_scream_heard_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

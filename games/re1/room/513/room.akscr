@@ -2046,7 +2046,7 @@ event tyrant_awakens_wesker_walk
     evt_finish();
 }
 
-event tyrant_awakens_with_barry when (JILL)
+event tyrant_awakens_with_barry
 {
     evt_next();
     evt_nop();
@@ -2623,7 +2623,7 @@ event tyrant_awakens_with_barry when (JILL)
     evt_finish();
 }
 
-event tyrant_awakens_with_barry_player when (JILL)
+event tyrant_awakens_with_barry_player
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2654,7 +2654,7 @@ event tyrant_awakens_with_barry_player when (JILL)
     evt_finish();
 }
 
-event tyrant_awakens_with_barry_tyrant_walk when (JILL)
+event tyrant_awakens_with_barry_tyrant_walk
 {
     evt_work_set(WK_ENEMY, ENEMY_01_TYRANT_1);
     evt_actor_begin();
@@ -2665,12 +2665,12 @@ event tyrant_awakens_with_barry_tyrant_walk when (JILL)
     evt_finish();
 }
 
-event unused_0f when (JILL)
+event unused_0f
 {
     evt_finish();
 }
 
-event with_barry_player_walks_in when (JILL)
+event with_barry_player_walks_in
 {
     evt_next();
     evt_nop();
@@ -2705,7 +2705,7 @@ event with_barry_player_walks_in when (JILL)
     evt_finish();
 }
 
-event with_barry_player_looks_around when (JILL)
+event with_barry_player_looks_around
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2721,7 +2721,7 @@ event with_barry_player_looks_around when (JILL)
     evt_finish();
 }
 
-event with_barry_barry_walks_in when (JILL)
+event with_barry_barry_walks_in
 {
     evt_next();
     evt_nop();
@@ -2741,7 +2741,7 @@ event with_barry_barry_walks_in when (JILL)
     evt_finish();
 }
 
-event with_barry_barry_looks_around when (JILL)
+event with_barry_barry_looks_around
 {
     evt_work_set(WK_ENEMY, ENEMY_00_WESKER_OR_BARRY);
     evt_actor_begin();
@@ -2968,7 +2968,7 @@ event door_lock_device
     evt_finish();
 }
 
-event barry_talk_after_tyrant when (JILL)
+event barry_talk_after_tyrant
 {
     evt_next();
     evt_nop();

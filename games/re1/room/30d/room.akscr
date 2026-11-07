@@ -94,69 +94,72 @@ proc init
     }
 }
 
-proc main when (CHRIS)
+proc main
 {
-    if (ck(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE))
+    if (CHRIS)
     {
-        set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+        if (ck(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+            {
+                set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            }
+            else if (testitem(IT_06_WEAPON_FLAMETHROWER))
+            {
+                set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            }
+            else
+            {
+                cutcurr(0);
+                set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
+            }
+        }
         if (testpickup(IT_06_WEAPON_FLAMETHROWER))
         {
-            set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
+            evt_exec(0, TASK_09, hook_rises_door_locks);
         }
-        else if (testitem(IT_06_WEAPON_FLAMETHROWER))
+        if (testitem(IT_06_WEAPON_FLAMETHROWER))
         {
-            set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
+            set(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, TRUE);
+            setbyte(0, 1, 0);
+            evt_exec(0, TASK_09, hook_lowers_door_unlocks);
+            evt_exec(0, TASK_09, flamethrower_lowers_with_hook);
         }
-        else
+        if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
         {
-            cutcurr(0);
-            set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
-        }
-    }
-    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
-    {
-        set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
-        evt_exec(0, TASK_09, hook_rises_door_locks);
-    }
-    if (testitem(IT_06_WEAPON_FLAMETHROWER))
-    {
-        set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
-        set(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, TRUE);
-        setbyte(0, 1, 0);
-        evt_exec(0, TASK_09, hook_lowers_door_unlocks);
-        evt_exec(0, TASK_09, flamethrower_lowers_with_hook);
-    }
-    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
-    {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
-        {
-            evt_exec(0, TASK_09, flamethrower_pos_cam_00);
-            if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
             {
-                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2180, 7020);
+                evt_exec(0, TASK_09, flamethrower_pos_cam_00);
+                if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2180, 7020);
+                }
+                else
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+                }
             }
             else
             {
-                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
-            }
-        }
-        else
-        {
-            require(cmpb(B_CAMERA, CMP_EQ, CAM_01));
-            evt_exec(0, TASK_09, flamethrower_pos_cam_01);
-            if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
-            {
-                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
-            }
-            else
-            {
-                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4260, -2210, 6910);
+                require(cmpb(B_CAMERA, CMP_EQ, CAM_01));
+                evt_exec(0, TASK_09, flamethrower_pos_cam_01);
+                if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+                }
+                else
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4260, -2210, 6910);
+                }
             }
         }
     }
 }
 
-event hook_rises_door_locks when (CHRIS)
+event hook_rises_door_locks
 {
     evt_work_set(WK_OBJ, OBJ_00_HOOK);
     evt_tween_begin_alt();
@@ -266,7 +269,7 @@ event hook_rises_door_locks when (CHRIS)
     evt_finish();
 }
 
-event hook_lowers_door_unlocks when (CHRIS)
+event hook_lowers_door_unlocks
 {
     run
     {
@@ -381,7 +384,7 @@ event hook_lowers_door_unlocks when (CHRIS)
     tw_finish();
 }
 
-event flamethrower_lowers_with_hook when (CHRIS)
+event flamethrower_lowers_with_hook
 {
     aot_delete(AOT_04_EVENT_HANG_FLAMETHROWER, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
@@ -482,7 +485,7 @@ event flamethrower_lowers_with_hook when (CHRIS)
     evt_finish();
 }
 
-event hang_flamethrower when (CHRIS)
+event hang_flamethrower
 {
     run
     {
@@ -509,7 +512,7 @@ event hang_flamethrower when (CHRIS)
     evt_finish();
 }
 
-event reach_for_flamethrower when (CHRIS)
+event reach_for_flamethrower
 {
     run
     {
@@ -539,7 +542,7 @@ event reach_for_flamethrower when (CHRIS)
     tw_finish();
 }
 
-event flamethrower_pos_cam_00 when (CHRIS)
+event flamethrower_pos_cam_00
 {
     evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
@@ -547,7 +550,7 @@ event flamethrower_pos_cam_00 when (CHRIS)
     tw_finish();
 }
 
-event flamethrower_pos_cam_01 when (CHRIS)
+event flamethrower_pos_cam_01
 {
     evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
@@ -555,7 +558,7 @@ event flamethrower_pos_cam_01 when (CHRIS)
     tw_finish();
 }
 
-event examine_hook when (CHRIS)
+event examine_hook
 {
     run
     {

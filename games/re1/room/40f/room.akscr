@@ -500,7 +500,7 @@ event water_bob
     }
 }
 
-event rebecca_returns_to_plant42 when (CHRIS)
+event rebecca_returns_to_plant42
 {
     run
     {

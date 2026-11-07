@@ -294,11 +294,11 @@ event radio_call_rebecca_upstairs
     evt_finish();
 }
 
-event empty_event_mansion1 when (MANSION1)
+event empty_event_mansion1
 {
     evt_finish();
 }
-event radio_call_rebecca_upstairs_anim when (CHRIS && MANSION2)
+event radio_call_rebecca_upstairs_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -325,7 +325,7 @@ event radio_call_rebecca_upstairs_anim when (CHRIS && MANSION2)
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
-event empty_event_jill_mansion2 when (JILL && MANSION2)
+event empty_event_jill_mansion2
 {
     evt_finish();
 }

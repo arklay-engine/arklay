@@ -37,74 +37,80 @@
 #define OBJ_00_STEP 0x00                                    // Likely: the climbable step below the deer head.
 #define SE_17_SW_BTN 0x17
 
-proc init when (MANSION2)
+proc init
 {
-    door_aot_set(AOT_00_DOOR_201, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_EVENT_LIGHT_SWITCH, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);
-    aot_set(AOT_02_EVENT_DEER_HEAD, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_deer_head, 0, 0, 0);
-    item_aot_set(AOT_03_ITEM_AMMO_SHOTGUN_0, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO_SHOTGUN, SCA_NONE, 2320, -1200, 10020, 2048, F_ITEM_215_AMMO_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_04_ITEM_FILE_ORDERS_1, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, IMDL_01_FILE_ORDERS, SCA_NONE, 4850, -1210, 8180, -1100, F_ITEM_215_FILE_ORDERS_1, SAT_MANUAL | SAT_PLAYER, 0);
-    eml_rot(IMDL_01_FILE_ORDERS, 380, 2280);
-    item_aot_set(AOT_05_ITEM_KEY_JEWEL_RED_2, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, IMDL_02_KEY_JEWEL_RED, SCA_NONE, 8200, -5690, 14130, 0, F_ITEM_215_KEY_JEWEL_RED_2, SAT_MANUAL | SAT_PLAYER, 0);
-    eml_rot(IMDL_02_KEY_JEWEL_RED, 0, -1024);
-    setbyte(2, 0, 0);
-    item_aot_set(AOT_06_ITEM_AMMO_MAGNUM_3, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, IMDL_03_AMMO_MAGNUM, SCA_NONE, 2280, -1200, 9120, 0, F_ITEM_215_AMMO_MAGNUM_3, SAT_MANUAL | SAT_PLAYER, 0);
-    obj(OBJ_00_STEP, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 6720, 0, 10440, 0, 576, 0, -576, 0, 540, 900, 1000, 540);
-    if (ck(FG_COMMON, F_COMMON_STUFFED_ROOM_LIGHTS_OFF, FALSE))
+    if (MANSION2)
     {
-        cutnext(CAM_04_LIT_SWITCH);
-        evt_exec(0, TASK_09, restore_control);
-    }
-    else
-    {
-        msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
-        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
+        door_aot_set(AOT_00_DOOR_201, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        aot_set(AOT_01_EVENT_LIGHT_SWITCH, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, push_light_switch, 0, 0, 0);
+        aot_set(AOT_02_EVENT_DEER_HEAD, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_deer_head, 0, 0, 0);
+        item_aot_set(AOT_03_ITEM_AMMO_SHOTGUN_0, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO_SHOTGUN, SCA_NONE, 2320, -1200, 10020, 2048, F_ITEM_215_AMMO_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_04_ITEM_FILE_ORDERS_1, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, IMDL_01_FILE_ORDERS, SCA_NONE, 4850, -1210, 8180, -1100, F_ITEM_215_FILE_ORDERS_1, SAT_MANUAL | SAT_PLAYER, 0);
+        eml_rot(IMDL_01_FILE_ORDERS, 380, 2280);
+        item_aot_set(AOT_05_ITEM_KEY_JEWEL_RED_2, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, IMDL_02_KEY_JEWEL_RED, SCA_NONE, 8200, -5690, 14130, 0, F_ITEM_215_KEY_JEWEL_RED_2, SAT_MANUAL | SAT_PLAYER, 0);
+        eml_rot(IMDL_02_KEY_JEWEL_RED, 0, -1024);
+        setbyte(2, 0, 0);
+        item_aot_set(AOT_06_ITEM_AMMO_MAGNUM_3, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, IMDL_03_AMMO_MAGNUM, SCA_NONE, 2280, -1200, 9120, 0, F_ITEM_215_AMMO_MAGNUM_3, SAT_MANUAL | SAT_PLAYER, 0);
+        obj(OBJ_00_STEP, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 6720, 0, 10440, 0, 576, 0, -576, 0, 540, 900, 1000, 540);
+        if (ck(FG_COMMON, F_COMMON_STUFFED_ROOM_LIGHTS_OFF, FALSE))
         {
-            effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
+            cutnext(CAM_04_LIT_SWITCH);
+            evt_exec(0, TASK_09, restore_control);
+        }
+        else
+        {
+            msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
+            if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
+            {
+                effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
+            }
+        }
+        aot_set(AOT_07_MESSAGE_ROCKING_CHAIR, 5500, 5200, 1100, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+        aot_set(AOT_08_MESSAGE_NOTHING, 3600, 11500, 3500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE_TROPHY_ALIVE, 7100, 11500, 1800, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+        aot_set(AOT_0A_MESSAGE_TROPHY_MOVING, 1500, 10900, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+        aot_set(AOT_0B_MESSAGE_NOTHING, 2200, 7500, 300, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    }
+}
+
+proc main
+{
+    if (MANSION2)
+    {
+        if (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
+        {
+            aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_ITEM, 0);
+            aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_DOCUMENT, 0);
+            aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_ITEM, 0);
+        }
+        else
+        {
+            aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_EVENT, 0);
+            aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        }
+        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, FALSE))
+        {
+            aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_NONE, 0);
+        }
+        if (ck(FG_ITEM, F_ITEM_215_AMMO_SHOTGUN_0, FALSE))
+        {
+            aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_NONE, 0);
+        }
+        if (ck(FG_ITEM, F_ITEM_215_FILE_ORDERS_1, FALSE))
+        {
+            aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_NONE, 0);
+        }
+        if (ck(FG_ITEM, F_ITEM_215_AMMO_MAGNUM_3, FALSE))
+        {
+            aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_NONE, 0);
         }
     }
-    aot_set(AOT_07_MESSAGE_ROCKING_CHAIR, 5500, 5200, 1100, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE_NOTHING, 3600, 11500, 3500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE_TROPHY_ALIVE, 7100, 11500, 1800, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_0A_MESSAGE_TROPHY_MOVING, 1500, 10900, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_0B_MESSAGE_NOTHING, 2200, 7500, 300, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
 }
 
-proc main when (MANSION2)
-{
-    if (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
-    {
-        aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_ITEM, 0);
-        aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_DOCUMENT, 0);
-        aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_ITEM, 0);
-    }
-    else
-    {
-        aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_EVENT, 0);
-        aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
-    }
-    if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, FALSE))
-    {
-        aot_delete(AOT_02_EVENT_DEER_HEAD, SCE_NONE, 0);
-    }
-    if (ck(FG_ITEM, F_ITEM_215_AMMO_SHOTGUN_0, FALSE))
-    {
-        aot_delete(AOT_03_ITEM_AMMO_SHOTGUN_0, SCE_NONE, 0);
-    }
-    if (ck(FG_ITEM, F_ITEM_215_FILE_ORDERS_1, FALSE))
-    {
-        aot_delete(AOT_04_ITEM_FILE_ORDERS_1, SCE_NONE, 0);
-    }
-    if (ck(FG_ITEM, F_ITEM_215_AMMO_MAGNUM_3, FALSE))
-    {
-        aot_delete(AOT_05_ITEM_KEY_JEWEL_RED_2, SCE_NONE, 0);
-    }
-}
-
-event push_light_switch when (MANSION2)
+event push_light_switch
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -152,7 +158,7 @@ event push_light_switch when (MANSION2)
     evt_finish();
 }
 
-event lights_off when (MANSION2)
+event lights_off
 {
     run
     {
@@ -167,7 +173,7 @@ event lights_off when (MANSION2)
     evt_finish();
 }
 
-event lights_on when (MANSION2)
+event lights_on
 {
     run
     {
@@ -198,7 +204,7 @@ event lights_on when (MANSION2)
     evt_finish();
 }
 
-event restore_control when (MANSION2)
+event restore_control
 {
     sleep(5);
     run
@@ -209,7 +215,7 @@ event restore_control when (MANSION2)
     evt_finish();
 }
 
-event examine_deer_head when (MANSION2)
+event examine_deer_head
 {
     sleep(1);
     run
@@ -233,7 +239,7 @@ event examine_deer_head when (MANSION2)
     evt_finish();
 }
 
-event deer_head_nothing when (MANSION2)
+event deer_head_nothing
 {
     sleep(50);
     message(MSG_NOTHING_IMPORTANT, 0); // "...Nothing important."
@@ -255,7 +261,7 @@ event deer_head_nothing when (MANSION2)
     evt_finish();
 }
 
-event eyeball_prompt when (MANSION2)
+event eyeball_prompt
 {
     sleep(50);
     message(MSG_WILL_YOU_TRY_AND_TAKE_OUT | MSG_FAST, 0); // "Will you try and take out the eyeball? It looks as if it's alive."
@@ -278,7 +284,7 @@ event eyeball_prompt when (MANSION2)
     evt_finish();
 }
 
-event take_eyeball when (MANSION2)
+event take_eyeball
 {
     run
     {
@@ -296,7 +302,7 @@ event take_eyeball when (MANSION2)
     evt_finish();
 }
 
-event leave_deer_head when (MANSION2)
+event leave_deer_head
 {
     evt_disable(TASK_07);
     run
@@ -318,7 +324,7 @@ event leave_deer_head when (MANSION2)
     evt_finish();
 }
 
-event spin_jewel when (MANSION2)
+event spin_jewel
 {
     for (40)
     {

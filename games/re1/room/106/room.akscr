@@ -1678,7 +1678,7 @@ event intro
     evt_finish();
 }
 
-event intro_jill_look_around when (JILL)
+event intro_jill_look_around
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1696,7 +1696,7 @@ event intro_jill_look_around when (JILL)
     evt_finish();
 }
 
-event intro_barry_look_around when (JILL)
+event intro_barry_look_around
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -1714,7 +1714,7 @@ event intro_barry_look_around when (JILL)
     evt_finish();
 }
 
-event intro_wesker_look_around when (JILL)
+event intro_wesker_look_around
 {
     evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     evt_actor_begin();
@@ -2169,7 +2169,7 @@ event wesker_idle_2_or_barry_search
     evt_finish();
 }
 
-event barry_search_look_1 when (JILL)
+event barry_search_look_1
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -2189,7 +2189,7 @@ event barry_search_look_1 when (JILL)
     evt_finish();
 }
 
-event barry_search_look_2 when (JILL)
+event barry_search_look_2
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -2209,7 +2209,7 @@ event barry_search_look_2 when (JILL)
     evt_finish();
 }
 
-event barry_search_look_loop when (JILL)
+event barry_search_look_loop
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -2230,7 +2230,7 @@ event barry_search_look_loop when (JILL)
     evt_finish();
 }
 
-event barry_search_stop when (JILL)
+event barry_search_stop
 {
     evt_disable(TASK_02);
     evt_disable(TASK_01);
@@ -2645,7 +2645,7 @@ event chris_leaves_or_lockpick_bye_east
     evt_finish();
 }
 
-event lockpick_approach_east_jill_walk when (JILL)
+event lockpick_approach_east_jill_walk
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2670,7 +2670,7 @@ event lockpick_approach_east_jill_walk when (JILL)
     evt_finish();
 }
 
-event lockpick_approach_west when (JILL)
+event lockpick_approach_west
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(CUT_LOCKED);
@@ -2793,7 +2793,7 @@ event lockpick_approach_west when (JILL)
     evt_finish();
 }
 
-event lockpick_step_up_west when (JILL)
+event lockpick_step_up_west
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3132,7 +3132,7 @@ event wesker_reminder_or_lockpick_bye_west
     evt_finish();
 }
 
-event lockpick_approach_west_jill_walk when (JILL)
+event lockpick_approach_west_jill_walk
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3157,7 +3157,7 @@ event lockpick_approach_west_jill_walk when (JILL)
     evt_finish();
 }
 
-event lockpick_bye_west_jill_walk when (JILL)
+event lockpick_bye_west_jill_walk
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3508,7 +3508,7 @@ event chris_idle_3_or_lockpick_step_up_2f
     evt_finish();
 }
 
-event lockpick_bye_2f when (JILL)
+event lockpick_bye_2f
 {
     sleep(10);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
@@ -3667,7 +3667,7 @@ event lockpick_bye_2f when (JILL)
     evt_finish();
 }
 
-event lockpick_approach_2f_barry_walk when (JILL)
+event lockpick_approach_2f_barry_walk
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -4231,7 +4231,7 @@ event front_door_film_or_acid_rounds
     evt_finish();
 }
 
-event acid_rounds_handover when (JILL)
+event acid_rounds_handover
 {
     voice_play(VOICE_PLAY, VO_106_02);
     message(MSG_VO_106_02, 0);
@@ -4439,7 +4439,7 @@ event acid_rounds_handover when (JILL)
     evt_finish();
 }
 
-event acid_rounds_barry_walk when (JILL)
+event acid_rounds_barry_walk
 {
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
@@ -4466,7 +4466,7 @@ event acid_rounds_barry_walk when (JILL)
     evt_finish();
 }
 
-event acid_rounds_barry_leaves when (JILL)
+event acid_rounds_barry_leaves
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);

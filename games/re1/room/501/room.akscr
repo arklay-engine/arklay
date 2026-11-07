@@ -2212,7 +2212,7 @@ event survivor_waits
     evt_finish();
 }
 
-event barry_waits when (JILL)
+event barry_waits
 {
     sleep(5);
     run
@@ -2222,7 +2222,7 @@ event barry_waits when (JILL)
     evt_finish();
 }
 
-event barry_boards_elevator when (JILL)
+event barry_boards_elevator
 {
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();

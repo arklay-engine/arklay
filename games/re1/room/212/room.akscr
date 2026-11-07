@@ -163,7 +163,7 @@ proc init
     }
 }
 
-event examine_forest_body when (MANSION1)
+event examine_forest_body
 {
     sleep(1);
     run
@@ -235,12 +235,12 @@ event examine_forest_body when (MANSION1)
     evt_finish();
 }
 
-event unused_empty when (MANSION1)
+event unused_empty
 {
     evt_finish();
 }
 
-event barry_terrace_talk_again when (JILL && MANSION1)
+event barry_terrace_talk_again
 {
     run
     {
@@ -268,7 +268,7 @@ event barry_terrace_talk_again when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_waits_on_terrace when (JILL && MANSION1)
+event barry_waits_on_terrace
 {
     sleep(1);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -279,7 +279,7 @@ event barry_waits_on_terrace when (JILL && MANSION1)
     evt_finish();
 }
 
-event unused_forest_message when (JILL && MANSION1)
+event unused_forest_message
 {
     run
     {
@@ -301,7 +301,7 @@ event unused_forest_message when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_scene when (JILL && MANSION1)
+event barry_terrace_scene
 {
     sleep(1);
     run
@@ -323,7 +323,7 @@ event barry_terrace_scene when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_turns when (JILL && MANSION1)
+event barry_terrace_turns
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -337,7 +337,7 @@ event barry_terrace_turns when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_approaches when (JILL && MANSION1)
+event barry_terrace_jill_approaches
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -374,7 +374,7 @@ event barry_terrace_jill_approaches when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_line_1 when (JILL && MANSION1)
+event barry_terrace_line_1
 {
     sleep(5);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -393,7 +393,7 @@ event barry_terrace_line_1 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_steps when (JILL && MANSION1)
+event barry_terrace_jill_steps
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -414,7 +414,7 @@ event barry_terrace_jill_steps when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_line_2 when (JILL && MANSION1)
+event barry_terrace_line_2
 {
     sleep(4);
     voice_play(VOICE_PLAY, VO_104_01);
@@ -465,7 +465,7 @@ event barry_terrace_line_2 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_steps_back when (JILL && MANSION1)
+event barry_terrace_jill_steps_back
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -484,7 +484,7 @@ event barry_terrace_jill_steps_back when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_line when (JILL && MANSION1)
+event barry_terrace_jill_line
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -539,7 +539,7 @@ event barry_terrace_jill_line when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_reacts when (JILL && MANSION1)
+event barry_terrace_barry_reacts
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -561,7 +561,7 @@ event barry_terrace_barry_reacts when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_waits when (JILL && MANSION1)
+event barry_terrace_barry_waits
 {
     sleep(10);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -582,7 +582,7 @@ event barry_terrace_barry_waits when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_line_3 when (JILL && MANSION1)
+event barry_terrace_line_3
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -651,7 +651,7 @@ event barry_terrace_line_3 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_waits when (JILL && MANSION1)
+event barry_terrace_jill_waits
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -680,7 +680,7 @@ event barry_terrace_jill_waits when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_walks_to_forest when (JILL && MANSION1)
+event barry_terrace_barry_walks_to_forest
 {
     cutnext(CAM_02_FROM_DOOR);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -719,7 +719,7 @@ event barry_terrace_barry_walks_to_forest when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_steps when (JILL && MANSION1)
+event barry_terrace_barry_steps
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -730,7 +730,7 @@ event barry_terrace_barry_steps when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_walks_to_forest when (JILL && MANSION1)
+event barry_terrace_jill_walks_to_forest
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -755,7 +755,7 @@ event barry_terrace_jill_walks_to_forest when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_kneels when (JILL && MANSION1)
+event barry_terrace_jill_kneels
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -771,7 +771,7 @@ event barry_terrace_jill_kneels when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_forest_closeup when (JILL && MANSION1)
+event barry_terrace_forest_closeup
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -825,7 +825,7 @@ event barry_terrace_forest_closeup when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_stands when (JILL && MANSION1)
+event barry_terrace_jill_stands
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -842,7 +842,7 @@ event barry_terrace_jill_stands when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_line_4 when (JILL && MANSION1)
+event barry_terrace_line_4
 {
     voice_play(VOICE_PLAY, VO_104_05);
     sleep(15);
@@ -853,7 +853,7 @@ event barry_terrace_line_4 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_line_5 when (JILL && MANSION1)
+event barry_terrace_line_5
 {
     sleep(20);
     voice_play(VOICE_PLAY, VO_104_06);
@@ -915,7 +915,7 @@ event barry_terrace_line_5 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_turns when (JILL && MANSION1)
+event barry_terrace_jill_turns
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -937,7 +937,7 @@ event barry_terrace_jill_turns when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_steps_2 when (JILL && MANSION1)
+event barry_terrace_jill_steps_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -947,7 +947,7 @@ event barry_terrace_jill_steps_2 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_waits_2 when (JILL && MANSION1)
+event barry_terrace_barry_waits_2
 {
     sleep(30);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -966,7 +966,7 @@ event barry_terrace_barry_waits_2 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_offer_launcher when (JILL && MANSION1)
+event barry_terrace_offer_launcher
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -996,7 +996,7 @@ event barry_terrace_offer_launcher when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_take_launcher when (JILL && MANSION1)
+event barry_terrace_take_launcher
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1013,7 +1013,7 @@ event barry_terrace_take_launcher when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_launcher_line when (JILL && MANSION1)
+event barry_terrace_launcher_line
 {
     voice_play(VOICE_PLAY, VO_104_09);
     sleep(15);
@@ -1028,7 +1028,7 @@ event barry_terrace_launcher_line when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_jill_turns_2 when (JILL && MANSION1)
+event barry_terrace_jill_turns_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1039,7 +1039,7 @@ event barry_terrace_jill_turns_2 when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_hands_over when (JILL && MANSION1)
+event barry_terrace_barry_hands_over
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -1056,7 +1056,7 @@ event barry_terrace_barry_hands_over when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_steps_back when (JILL && MANSION1)
+event barry_terrace_barry_steps_back
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -1083,7 +1083,7 @@ event barry_terrace_barry_steps_back when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_give_launcher when (JILL && MANSION1)
+event barry_terrace_give_launcher
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1105,7 +1105,7 @@ event barry_terrace_give_launcher when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_end when (JILL && MANSION1)
+event barry_terrace_end
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1137,12 +1137,12 @@ event barry_terrace_end when (JILL && MANSION1)
     evt_finish();
 }
 
-event unused_empty_2 when (JILL && MANSION1)
+event unused_empty_2
 {
     evt_finish();
 }
 
-event barry_terrace_barry_turns_away when (JILL && MANSION1)
+event barry_terrace_barry_turns_away
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -1169,7 +1169,7 @@ event barry_terrace_barry_turns_away when (JILL && MANSION1)
     evt_finish();
 }
 
-event barry_terrace_barry_pose when (JILL && MANSION1)
+event barry_terrace_barry_pose
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
@@ -1181,7 +1181,7 @@ event barry_terrace_barry_pose when (JILL && MANSION1)
     evt_finish();
 }
 
-event crow_1_attacks when (MANSION1)
+event crow_1_attacks
 {
     sleep(1);
     if (CHRIS)
@@ -1211,7 +1211,7 @@ event crow_1_attacks when (MANSION1)
     evt_finish();
 }
 
-event crow_2_attacks when (MANSION1)
+event crow_2_attacks
 {
     sleep(10);
     eml_state(0, ENEMY_02_CROW, EML_BEHAVIOUR, EB_02);
@@ -1226,7 +1226,7 @@ event crow_2_attacks when (MANSION1)
     evt_finish();
 }
 
-event crow_3_attacks when (MANSION1)
+event crow_3_attacks
 {
     sleep(10);
     eml_state(0, ENEMY_03_CROW, EML_BEHAVIOUR, EB_02);

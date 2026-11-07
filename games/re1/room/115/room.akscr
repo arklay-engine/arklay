@@ -114,7 +114,7 @@ proc init
     }
 }
 
-event barry_answers_through_door when (JILL)
+event barry_answers_through_door
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -191,7 +191,7 @@ event barry_answers_through_door when (JILL)
     evt_chain(barry_kicks_door_in);
 }
 
-event barry_kicks_door_in when (JILL)
+event barry_kicks_door_in
 {
     run
     {
@@ -356,7 +356,7 @@ event barry_kicks_door_in when (JILL)
     evt_finish();
 }
 
-event jill_trap_start when (JILL)
+event jill_trap_start
 {
     evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
@@ -370,7 +370,7 @@ event jill_trap_start when (JILL)
     evt_nop();
 }
 
-event jill_trap_ceiling_starts when (JILL)
+event jill_trap_ceiling_starts
 {
     set(FG_LOCK, F_LOCK_115_TRAP, FALSE);
     sleep(15);
@@ -406,7 +406,7 @@ event jill_trap_ceiling_starts when (JILL)
     evt_nop();
 }
 
-event jill_trap_ceiling_lowers when (JILL)
+event jill_trap_ceiling_lowers
 {
     run
     {
@@ -594,7 +594,7 @@ event ceiling_trap_no_rescue
     evt_finish();
 }
 
-event jill_ceiling_lowers_unused when (JILL)
+event jill_ceiling_lowers_unused
 {
     evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
@@ -646,7 +646,7 @@ event ceiling_starts_lowering
     evt_finish();
 }
 
-event jill_pushes_ceiling when (JILL)
+event jill_pushes_ceiling
 {
     sleep(100);
     evt_work_set(WK_PLAYER, 0);
@@ -660,7 +660,7 @@ event jill_pushes_ceiling when (JILL)
     evt_chain(jill_pushes_ceiling);
 }
 
-event barry_at_door_anim when (JILL)
+event barry_at_door_anim
 {
     evt_work_set(WK_ENEMY, ENEMY_01_BARRY_AT_DOOR);
     evt_actor_begin();
@@ -793,7 +793,7 @@ event ceiling_dust_random
     evt_nop();
 }
 
-event barry_bangs_on_door when (JILL)
+event barry_bangs_on_door
 {
     sleep(10);
     se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_BARRY_OUTSIDE, 0, 0);
@@ -804,7 +804,7 @@ event barry_bangs_on_door when (JILL)
     evt_finish();
 }
 
-event jill_ceiling_starts_lowering when (JILL)
+event jill_ceiling_starts_lowering
 {
     snd_pan_vol_set(BGM_MAIN, 30, 30);
     bgm_play(BGM_SUB_1);

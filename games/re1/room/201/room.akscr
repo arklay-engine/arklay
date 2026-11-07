@@ -105,7 +105,7 @@ proc init
     }
 }
 
-event chris_hears_scream when (CHRIS && MANSION2)
+event chris_hears_scream
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
@@ -125,7 +125,7 @@ event chris_hears_scream when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event chris_hears_scream_turn when (CHRIS && MANSION2)
+event chris_hears_scream_turn
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

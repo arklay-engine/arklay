@@ -118,7 +118,7 @@ event empty_event
     evt_finish();
 }
 
-event barry_talking_alone when (JILL)
+event barry_talking_alone
 {
     sleep(2);
     run
@@ -564,7 +564,7 @@ event barry_talking_alone when (JILL)
     evt_finish();
 }
 
-event barry_talking_alone_jill_walk when (JILL)
+event barry_talking_alone_jill_walk
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -582,7 +582,7 @@ event barry_talking_alone_jill_walk when (JILL)
     evt_finish();
 }
 
-event barry_talking_alone_barry_walk when (JILL)
+event barry_talking_alone_barry_walk
 {
     sleep(45);
     evt_work_set(WK_ENEMY, ENEMY_00_BARRY);

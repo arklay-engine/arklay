@@ -95,7 +95,7 @@ proc init
     aot_set(AOT_07_MESSAGE_GENERATOR, 25600, 16400, 2000, 10100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
 }
 
-event barry_saves_jill when (JILL)
+event barry_saves_jill
 {
     sleep(1);
     run
@@ -114,7 +114,7 @@ event barry_saves_jill when (JILL)
     evt_finish();
 }
 
-event barry_saves_jill_at_north_door when (JILL)
+event barry_saves_jill_at_north_door
 {
     run
     {
@@ -316,7 +316,7 @@ event barry_saves_jill_at_north_door when (JILL)
     evt_finish();
 }
 
-event barry_saves_jill_at_30a_door when (JILL)
+event barry_saves_jill_at_30a_door
 {
     run
     {
@@ -460,7 +460,7 @@ event barry_saves_jill_at_30a_door when (JILL)
     evt_finish();
 }
 
-event north_door_with_barry when (JILL)
+event north_door_with_barry
 {
     run
     {
@@ -470,7 +470,7 @@ event north_door_with_barry when (JILL)
     evt_finish();
 }
 
-event barry_follows when (JILL)
+event barry_follows
 {
     sleep(5);
     run

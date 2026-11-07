@@ -96,68 +96,71 @@ proc init
     }
 }
 
-proc main when (MANSION1)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_L_PASSAGE_WINDOW_1_BROKEN, FALSE))
+    if (MANSION1)
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+        if (ck(FG_COMMON, F_COMMON_L_PASSAGE_WINDOW_1_BROKEN, FALSE))
         {
-            aot_switch(0, SPR_01, SPR_OFF);
-            aot_switch(0, SPR_02, SPR_OFF);
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+            {
+                aot_switch(0, SPR_01, SPR_OFF);
+                aot_switch(0, SPR_02, SPR_OFF);
+            }
         }
-    }
-    else if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
-    {
-        aot_switch(0, SPR_01, SPR_ON);
-        aot_switch(0, SPR_02, SPR_ON);
-    }
-    if (ck(FG_COMMON, F_COMMON_L_PASSAGE_WINDOW_2_BROKEN, FALSE))
-    {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        else if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
         {
-            aot_switch(0, SPR_05, SPR_OFF);
+            aot_switch(0, SPR_01, SPR_ON);
+            aot_switch(0, SPR_02, SPR_ON);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        if (ck(FG_COMMON, F_COMMON_L_PASSAGE_WINDOW_2_BROKEN, FALSE))
         {
-            aot_switch(0, SPR_04, SPR_OFF);
-            aot_switch(0, SPR_05, SPR_OFF);
-            aot_switch(0, SPR_06, SPR_OFF);
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+            {
+                aot_switch(0, SPR_05, SPR_OFF);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+            {
+                aot_switch(0, SPR_04, SPR_OFF);
+                aot_switch(0, SPR_05, SPR_OFF);
+                aot_switch(0, SPR_06, SPR_OFF);
+            }
         }
-    }
-    else
-    {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        else
         {
-            aot_switch(0, SPR_05, SPR_ON);
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+            {
+                aot_switch(0, SPR_05, SPR_ON);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+            {
+                aot_switch(0, SPR_04, SPR_ON);
+                aot_switch(0, SPR_05, SPR_ON);
+                aot_switch(0, SPR_06, SPR_ON);
+            }
         }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        if (ck(FG_ENEMY, F_ENEMY_108_CERBERUS_0, TRUE) && ck(FG_ROOM, F_ROOM_DOG_1_CHASE, TRUE))
         {
-            aot_switch(0, SPR_04, SPR_ON);
-            aot_switch(0, SPR_05, SPR_ON);
-            aot_switch(0, SPR_06, SPR_ON);
+            set(FG_ROOM, F_ROOM_DOG_1_CHASE, FALSE);
+            if (ck(FG_ROOM, F_ROOM_DOG_2_CHASE, FALSE))
+            {
+                bgm_stop(BGM_SUB_2);
+                bgm_play(BGM_MAIN);
+            }
         }
-    }
-    if (ck(FG_ENEMY, F_ENEMY_108_CERBERUS_0, TRUE) && ck(FG_ROOM, F_ROOM_DOG_1_CHASE, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_DOG_1_CHASE, FALSE);
-        if (ck(FG_ROOM, F_ROOM_DOG_2_CHASE, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_108_CERBERUS_1, TRUE) && ck(FG_ROOM, F_ROOM_DOG_2_CHASE, TRUE))
         {
-            bgm_stop(BGM_SUB_2);
-            bgm_play(BGM_MAIN);
-        }
-    }
-    if (ck(FG_ENEMY, F_ENEMY_108_CERBERUS_1, TRUE) && ck(FG_ROOM, F_ROOM_DOG_2_CHASE, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_DOG_2_CHASE, FALSE);
-        if (ck(FG_ROOM, F_ROOM_DOG_1_CHASE, FALSE))
-        {
-            bgm_stop(BGM_SUB_2);
-            bgm_play(BGM_MAIN);
+            set(FG_ROOM, F_ROOM_DOG_2_CHASE, FALSE);
+            if (ck(FG_ROOM, F_ROOM_DOG_1_CHASE, FALSE))
+            {
+                bgm_stop(BGM_SUB_2);
+                bgm_play(BGM_MAIN);
+            }
         }
     }
 }
 
-event dog_1_window_jump when (MANSION1)
+event dog_1_window_jump
 {
     run
     {
@@ -202,7 +205,7 @@ event dog_1_window_jump when (MANSION1)
     evt_finish();
 }
 
-event dog_2_window_jump when (MANSION1)
+event dog_2_window_jump
 {
     run
     {

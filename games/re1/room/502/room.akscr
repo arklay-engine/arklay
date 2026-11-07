@@ -139,7 +139,7 @@ proc init
     }
 }
 
-event barry_photo_scene when (JILL)
+event barry_photo_scene
 {
     sleep(1);
     run
@@ -860,7 +860,7 @@ event ladder_up_prompt
     evt_finish();
 }
 
-event chris_waits when (JILL)
+event chris_waits
 {
     sleep(1);
     run
