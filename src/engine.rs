@@ -7529,7 +7529,7 @@ impl GameSession {
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
             re2_doors: self.game.is_re2_room.then(|| {
                 (
-                    self.game.message.menu_choice_id(),
+                    self.game.message.message_state(),
                     self.game.re2.door_locks,
                 )
             }),

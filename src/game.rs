@@ -3245,6 +3245,9 @@ pub struct GameState {
     /// What `fg_stop` was before a message's stop word went up, until the
     /// message is dismissed ([`GameState::hold_re2_message_stop`]).
     pub re2_message_stop: Option<u32>,
+    /// A door message's stop word, which `Mess_disp`'s first pass raises
+    /// ([`GameState::update_message`]).
+    pub re2_message_stop_pending: u16,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -3745,6 +3748,7 @@ impl Default for GameState {
             re2_crouch_item: None,
             re2_crouch_start: false,
             re2_message_stop: None,
+            re2_message_stop_pending: 0,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
@@ -5283,7 +5287,11 @@ impl GameState {
         // kept; otherwise the message resets and only the BioCard menu-choice
         // byte's low bit survives.
         if !self.message.active {
+            // RE2's `fg_message` keeps its typed bit too: only `Mess_set`
+            // clears it.
+            let typed = self.message.message_state() & 0x40 != 0;
             self.message = MessageWindow::default();
+            self.message.set_typed(typed);
             let choice = self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] & 0x7F;
             self.message.set_menu_choice_id(choice);
             self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = choice;
@@ -8922,9 +8930,15 @@ impl GameState {
 
     /// One of the executable's door messages, which shows in play: its
     /// delays are the stream's own.
+    /// `Mess_set(0, 0x100, n, 0xFF000000)`: `Mess_disp`'s first pass raises
+    /// the stop word at the end of the request's tick, after the moves, and
+    /// the dismissal puts `fg_stop` back.
     fn show_re2_door_message(&mut self, id: u8) {
         self.message.set_re2_timing(true, false);
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
+        if self.message.active {
+            self.re2_message_stop_pending = 0xFF00;
+        }
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop
@@ -9142,6 +9156,8 @@ impl GameState {
             let bytes = text.message(room, id).unwrap_or(&[]).to_vec();
             self.message.feed_source(&bytes);
         }
+        let stop = std::mem::take(&mut self.re2_message_stop_pending);
+        self.hold_re2_message_stop(stop);
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
         self.message.update(input, text, selected);
         // A dismissal (input, timer or an empty source) releases the pause

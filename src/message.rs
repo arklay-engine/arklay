@@ -267,6 +267,10 @@ pub struct MessageWindow {
     menu: bool,
     selected_item: u8,
     menu_choice: u8,
+    /// RE2's `Mess_flg & 0x40` (`0x4C9189`): the message has typed a glyph.
+    /// `Mess_set` clears it and the close leaves it, so it shows in the
+    /// trace's `msg` only.
+    typed: bool,
     /// The yes/no's cue this tick, for RE2: the answer's or the choice's move.
     choice_cue: Option<ChoiceCue>,
     previous: MessageInput,
@@ -324,6 +328,7 @@ impl Default for MessageWindow {
             menu: false,
             selected_item: 0,
             menu_choice: 0,
+            typed: false,
             choice_cue: None,
             previous: MessageInput::default(),
             actions: Vec::new(),
@@ -343,6 +348,17 @@ impl MessageWindow {
     /// message is up, bit `0` the yes/no answer.
     pub fn menu_choice_id(&self) -> u8 {
         self.menu_choice
+    }
+
+    /// The whole of RE2's `fg_message` (`0x98504C`), the trace's `msg`: the
+    /// menu-choice byte and the typed bit `0x40`.
+    pub fn message_state(&self) -> u8 {
+        self.menu_choice | if self.typed { 0x40 } else { 0 }
+    }
+
+    /// Set RE2's typed bit (`fg_message & 0x40`), for a reset that keeps it.
+    pub fn set_typed(&mut self, typed: bool) {
+        self.typed = typed;
     }
 
     /// Overwrite the menu-choice byte, e.g. when a script writes state byte 5.
@@ -402,6 +418,7 @@ impl MessageWindow {
             return false;
         }
         self.menu_choice = 0x80;
+        self.typed = false;
         self.id = Some(id);
         self.id_high = 0;
         self.pause = pause;
@@ -853,6 +870,7 @@ impl MessageWindow {
                 _ => self.ptr = next(self.ptr),
             }
             // A glyph (or RE1's half-cell advance) typed.
+            self.typed = true;
             count = count.saturating_sub(1);
             if count == 0 {
                 self.char_timer = self.char_delay;
@@ -1590,6 +1608,22 @@ mod tests {
         assert_eq!(window.menu_choice_id(), 1);
         assert_eq!(window.choice_cue(), Some(ChoiceCue::No));
         assert!(window.take_actions().is_empty());
+    }
+
+    #[test]
+    fn the_message_state_keeps_its_typed_bit_until_the_next_request() {
+        let text = text();
+        let mut window = MessageWindow::default();
+        assert!(window.start(1, 0, &[0x0C, 0x01, 0x00], false));
+        assert_eq!(window.message_state(), 0x80);
+        reveal_all(&mut window, &text);
+        assert_eq!(window.message_state(), 0xC0);
+        tick(&mut window, &text, held(false));
+        tick(&mut window, &text, held(true));
+        assert!(!window.active);
+        assert_eq!(window.message_state(), 0x40);
+        assert!(window.start(1, 0, &[0x0C, 0x01, 0x00], false));
+        assert_eq!(window.message_state(), 0x80);
     }
 
     #[test]
