@@ -7883,7 +7883,7 @@ impl GameState {
                             old[2] as i16,
                         ],
                         ofs_y,
-                        at_w: crate::character2::PLAYER_WIDTH,
+                        at_w: crate::character2::player_width(self.id.player_flag),
                         at_h: crate::character2::PLAYER_HEIGHT,
                     };
                     objects::oma_ck_oba(&mut player.pos, &mut atd, &record);
