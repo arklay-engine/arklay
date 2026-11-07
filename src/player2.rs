@@ -1281,15 +1281,21 @@ pub fn pl_init(work: &mut Work) {
 /// `Pl_init`'s `Joint_move`: the joints take clip 2's first frame, which the
 /// next clip's blend then starts from, and the head is placed on it.
 pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
-    let (clips, keyframes) = tick.banks.get(Bank::Pld);
-    let pose = clips
-        .get(2)
-        .and_then(|clip| clip.frames.first())
-        .and_then(|frame| keyframes.get(usize::from(frame.keyframe)));
-    if let Some(pose) = pose {
+    let (clips, keyframes) = tick.banks.get(Bank::Weapon);
+    if let Some(pose) = idle_pose(clips, keyframes) {
         player.anim.set_applied_pose(Some(pose.clone()));
     }
     place_neck(work, player, tick);
+}
+
+/// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
+/// where `Pl_init` stands the player: at a new game, through a door and when
+/// the get-item window closes. Leon's handgun has his skeleton's own root
+/// and no turn on the parts down to the head; Claire's (`PL01W03`'s keyframe
+/// 50) stands her 14 units higher than her skeleton's root and rolls her hips.
+pub fn idle_pose<'k>(clips: &[Clip], keyframes: &'k [Keyframe]) -> Option<&'k Keyframe> {
+    let frame = clips.get(2)?.frames.first()?;
+    keyframes.get(usize::from(frame.keyframe))
 }
 
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
@@ -5293,6 +5299,66 @@ mod tests {
             mover.work.neck.position,
             Some([before[0] + 18, before[1], before[2] - 14])
         );
+    }
+
+    /// `Pl_init` stands the player on the weapon bank's idle, not the body's:
+    /// Claire's handgun's (keyframe 50) has her hips 15 units higher than
+    /// her PLD's clip 2 and rolled, which puts her head where the original's
+    /// is at a new game, through a door and after the get-item window.
+    #[test]
+    fn pl_init_poses_the_idle_of_the_weapons_bank() {
+        let mut setup = Setup::new(0);
+        setup.skeleton.relative = vec![[0; 3]; NECK_JOINT + 1];
+        setup.skeleton.relative[0] = [0, -1709, 0];
+        setup.skeleton.relative[NECK_JOINT] = [-21, -623, 0];
+        setup.skeleton.children = vec![vec![NECK_JOINT as u8]];
+        setup.player.pos = [18802, 0, -2932];
+        setup.player.angle = 2048;
+        let idle = |offset: i16, roll: i16, keyframe: u16| {
+            let mut rotations = vec![[0; 3]; NECK_JOINT + 1];
+            rotations[0] = [0, 0, roll];
+            let clip = Clip {
+                frames: vec![ClipFrame {
+                    keyframe,
+                    ..ClipFrame::default()
+                }],
+            };
+            let pose = Keyframe {
+                offset: [0, offset, 0],
+                vertex: [0; 3],
+                rotations,
+            };
+            (vec![Clip::default(), Clip::default(), clip], pose)
+        };
+        let (pld_clips, pld_pose) = idle(-1708, 4077, 0);
+        let (weapon_clips, weapon_pose) = idle(-1723, 4077, 1);
+        let keyframes = vec![pld_pose, weapon_pose.clone()];
+        assert_eq!(idle_pose(&weapon_clips, &keyframes), Some(&weapon_pose));
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: (&pld_clips, &keyframes),
+                weapon: (&weapon_clips, &keyframes),
+                room: (&pld_clips, &keyframes),
+                held: (&pld_clips, &keyframes),
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 1,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+        };
+        pose_init(&mut setup.work, &mut setup.player, &tick);
+        let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
+        // The original's at Claire's new game: 18841, -2346, -2932.
+        assert_eq!((x - 18802, y, z), (39, -2346, -2932));
     }
 
     /// `Snd_se_walk` in water: the footfall plays the water's sound, and three

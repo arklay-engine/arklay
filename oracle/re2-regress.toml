@@ -814,18 +814,6 @@ ignore = [
     [8271, "rseed"],
     [8784, "rng"],
     [8784, "rseed"],
-    # the head stands 1 to 3 units higher on the first ticks after the get-item window closes (docs/re2-deviations.md)
-    [3661, "pneck"],
-    [3662, "pneck"],
-    [3663, "pneck"],
-    [3664, "pneck"],
-    [3665, "pneck"],
-    [7321, "pneck"],
-    [7322, "pneck"],
-    [7323, "pneck"],
-    [7324, "pneck"],
-    [7325, "pneck"],
-    [7326, "pneck"],
 ]
 
 # The title from boot (oracle/re2.md, "The title"): the original reaches `Title_init` on tick 189, which is arklay's
