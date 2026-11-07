@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Turn the LuaLS definition files in docs/lua/ into the Lua API pages.
+"""Turn the LuaLS definition files in lua-types/ into the Lua API pages.
 
 The definition files are the single source of the Lua API documentation:
-editors read them for completion, and this script renders them for the book.
+the binary ships them (`arklay mod lua-types`) for editors to lint and
+complete scripts with, and this script renders them for the book.
 
     scripts/lua-api-doc.py check          every method the engine registers is
                                           documented, and nothing else is
     scripts/lua-api-doc.py render FILE    print one file's page as Markdown
     (mdbook)                              as the `lua-api` preprocessor
                                           (docs/book.toml) it expands each
-                                          `{{#lua-api FILE}}` in a chapter
+                                          `{{#lua-api FILE}}` in a chapter,
+                                          FILE naming a file in lua-types/
 
 Format, a subset of LuaLS annotations:
 
@@ -33,7 +35,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LUA_DIR = ROOT / "docs" / "lua"
+LUA_DIR = ROOT / "lua-types"
 DIRECTIVE = re.compile(r"\{\{#lua-api\s+([^}\s]+)\s*\}\}")
 FUNC = re.compile(r"^function\s+([A-Za-z_][\w]*)(?:([:.])([A-Za-z_]\w*))?\s*\(([^)]*)\)")
 LOCAL_TABLE = re.compile(r"^local\s+([A-Za-z_]\w*)\s*=")
@@ -342,7 +344,7 @@ def preprocess():
         if not ch.get("path"):
             continue
         for m in DIRECTIVE.finditer(ch["content"]):
-            lua = (src / Path(ch["path"]).parent / m.group(1)).resolve()
+            lua = LUA_DIR / m.group(1)
             pages[ch["path"]] = parse_file(lua)
     renderer = Renderer(build_index(pages))
     for ch in chapters:

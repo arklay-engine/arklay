@@ -11,9 +11,9 @@ games, decompiling and compiling again gives the same bytes.
 There are two dialects, one per game. Their instruction sets have nothing in
 common, and each dialect has its own compiler:
 
-- [RE 1 scripts](re1.md): the RE 1 command and event VMs, the include
+- [RE 1 scripts](re1/index.md): the RE 1 command and event VMs, the include
   files and names, the room variants, and the `.s` assembler.
-- [RE 2 scripts](re2.md): the RE 2 procedure lists and their block opcodes.
+- [RE 2 scripts](re2/index.md): the RE 2 procedure lists and their block opcodes.
 
 This page covers what the two dialects share: where scripts live, how they
 are built, and the common shape of the language.
@@ -54,7 +54,7 @@ an RE 2 room script yet.
 |---|---|
 | `arklay scd export ROOM.RDT --out room.akscr` | Decompile one RDT's scripts. The command detects whether the RDT is from RE 1 or RE 2 and writes that game's dialect. It also reads a standalone `.scd` container (`scd export room.scd --out room.akscr`). `--out x.s` writes the `.s` disassembly instead, and for RE 1 `--out x.bio` writes a read-only pseudo-C listing. `--list` also writes a `.lst` byte listing (RE 1 only). |
 | `arklay scd build room.akscr --out room.scd` | Compile an RE 1 script, or assemble a `.s` source, into a standalone `.scd` container. `--room 6031` builds the bytecode of a single RDT variant instead of the runtime build, and `--region jpn` picks that variant's release. The command does not build RE 2 scripts yet. |
-| `arklay scd export-rooms usa=<install> jpn=<install> eur=<install> --out games/re1/room` | Decompile every RE 1 room of one or more installs into one merged script per room, named from the include files (see [The exporter](re1.md#the-exporter)). |
+| `arklay scd export-rooms usa=<install> jpn=<install> eur=<install> --out games/re1/room` | Decompile every RE 1 room of one or more installs into one merged script per room, named from the include files (see [The exporter](re1/index.md#the-exporter)). |
 | `arklay mod build <dir> --out mod.akpak` | Build a mod source directory. Each RE 1 room script in it is compiled into its room's `room.scd`. |
 
 There is no separate check command. Compiling a script is the check: `scd

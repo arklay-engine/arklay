@@ -731,7 +731,7 @@ script is compiled the same way. A room script laid out like the checked-in
 ones (`room/103/room.akscr`) or named by three hex digits (`room/103.akscr`)
 builds the room's `room/103/room.scd`: one runtime build for every player,
 visit and region, which picks the variant's lines as it runs (see
-[RE 1 scripts](akscr/re1.md#mods)).
+[RE 1 scripts](akscr/re1/index.md#mods)).
 `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
@@ -894,16 +894,28 @@ arklay convert-mod re-hd.zip --root re1hd --base re1.akpak
 A room's init, main and event scripts are written as `.akscr` scripts, the
 structured source form of the original games' room bytecode. A mod replaces
 a room's scripts as a whole. [`.akscr` scripts](akscr/index.md) explains
-where scripts live and how they are built, and [RE 1 scripts](akscr/re1.md)
+where scripts live and how they are built, and [RE 1 scripts](akscr/re1/index.md)
 is the full reference for RE 1: the language, the room variants, the names,
 every instruction and the `.s` assembler.
 
 ## Lua scripts
 
 A pack can carry Lua for four jobs. Each has its own sandboxed API, documented
-on its own page, which is generated from the LuaLS definition files in
-[`docs/lua/`](https://github.com/arklay-engine/arklay/tree/main/docs/lua) (add
-that directory to your editor's `workspace.library` for completion):
+on its own page. The pages are generated from LuaLS definition files, which
+the engine also ships for linting and completion in an editor:
+
+```sh
+arklay mod lua-types --out ~/arklay-lua-types
+```
+
+writes them (they are also in
+[`lua-types/`](https://github.com/arklay-engine/arklay/tree/main/lua-types)
+in the repository, and next to these pages as `lua-types/*.lua`). Point the
+Lua language server at the directory in a `.luarc.json` beside the scripts:
+
+```json
+{ "workspace.library": ["~/arklay-lua-types"] }
+```
 
 - [Lua hooks](lua/hooks.md): `lua/**.lua` chunks whose `on_init`,
   `on_room_load`, `on_tick` and `on_message` functions run with the live game
