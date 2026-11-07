@@ -79,6 +79,9 @@ pub struct TraceTick<'a> {
     /// RE2's `Item_work`, the oracle's `inv`: the ten slots and the personal
     /// item as `id:count`, then the slot count.
     pub re2_inventory: Option<String>,
+    /// RE2's map banks, the oracle's `mapfg`: bank 9's first five words
+    /// (`fg_map`), then the first words of banks 32, 33 and 35, in hex.
+    pub re2_map_flags: Option<String>,
     /// RE2: the status screen's item page (`ip`), as the end of the
     /// oracle's `gi`.
     pub re2_item_page: Option<String>,
@@ -255,6 +258,9 @@ impl TraceWriter {
         if let Some(inventory) = &tick.re2_inventory {
             write!(self.out, " inv={inventory}")?;
         }
+        if let Some(flags) = &tick.re2_map_flags {
+            write!(self.out, " mapfg={flags}")?;
+        }
         if let Some(page) = &tick.re2_item_page {
             write!(self.out, " ip={page}")?;
         }
@@ -375,6 +381,7 @@ mod tests {
             re2_neck_position: None,
             re2_xa_volume: None,
             re2_inventory: None,
+            re2_map_flags: None,
             re2_item_page: None,
             re2_item_box: None,
             re2_sounds: None,
@@ -427,6 +434,7 @@ mod tests {
                 re2_neck_position: None,
                 re2_xa_volume: None,
                 re2_inventory: None,
+                re2_map_flags: None,
                 re2_item_page: None,
                 re2_item_box: None,
                 re2_sounds: None,
@@ -474,6 +482,7 @@ mod tests {
             re2_neck_position: None,
             re2_xa_volume: None,
             re2_inventory: None,
+            re2_map_flags: None,
             re2_item_page: None,
             re2_item_box: None,
             re2_sounds: None,
@@ -524,6 +533,7 @@ mod tests {
             re2_neck_position: Some("-".to_string()),
             re2_xa_volume: None,
             re2_inventory: None,
+            re2_map_flags: None,
             re2_item_page: None,
             re2_item_box: None,
             re2_sounds: Some(String::new()),

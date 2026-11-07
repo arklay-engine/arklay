@@ -612,6 +612,22 @@ def item_box_trace(game: Game) -> str:
     )
 
 
+# The MAP page's banks: `fg_map`'s five words, `fg_map_c`, `fg_map_i` and the floors' bank 35.
+MAP_FLAGS = (0x98EC04, 0x98EC08, 0x98EC0C, 0x98EC10, 0x98EC14, 0x98EC18, 0x98EC1C, 0x98EC00)
+STATUS_PAGE = 0x691F61  # the status screen's page: 4 is MAP
+MAP_FLOOR = 0x691F7A  # the floor the MAP page shows
+MAP_BLINK = 0x691F88  # the marker's blink, then its direction
+
+
+def map_flags_trace(game: Game) -> str:
+    """The MAP page's banks (`mapfg`), then the page's floor and blink while the page is MAP (`map`)."""
+    flags = ",".join(f"{game.u32(address):08x}" for address in MAP_FLAGS)
+    page = "-"
+    if game.u8(STATUS_PAGE) == 4:
+        page = f"{game.u8(MAP_FLOOR)},{game.u8(MAP_BLINK)},{game.u8(MAP_BLINK + 1)}"
+    return f"mapfg={flags} map={page}"
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -674,6 +690,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(music_trace(game))
     fields.append(f"xavol={game.u32(XA_VOLUME)}")
     fields.append(inventory_trace(game))
+    fields.append(map_flags_trace(game))
     status = game.u32(STATUS_WORK)
     fields.append(
         f"gi={game.u8(GAME_STATE)},{game.u8(status + 8)},{game.u8(status + 9)},"
