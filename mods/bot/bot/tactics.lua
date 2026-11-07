@@ -1588,11 +1588,29 @@ function BotTactics.step(bot, scene, player)
         stop(bot, s, "low health", LOST_CALM)
         return false
     end
+    -- A target the bot has fired on is finished off: out of the line of
+    -- fire it is faced with the aim up, ready for when it shows again
+    -- (MAX_TICKS without a hit still ends it). Seed 2's hunter, shot from
+    -- 79 health to 9, stepped out of sight in 201; combat ended, the calm
+    -- held the next fight off and it killed the bot 20 ticks later.
+    local engaged = s.shots > 0
     if not target.visible then
         s.unseen = s.unseen + 1
-        if s.unseen > C.SECOND then
+        if not engaged and s.unseen > C.SECOND then
             stop(bot, s, "target lost", LOST_CALM)
             return false
+        end
+        if engaged and s.unseen > C.SECOND // 2 and player.state ~= HIT_STATE
+            and bot:weapon().equipped == s.gun then
+            if s.unseen == C.SECOND // 2 + 1 then
+                bot:log(string.format("combat: slot=%d health=%d out of sight: waiting to finish it",
+                    target.slot, target.health))
+            end
+            local face = bot:face_to(target.x, target.z)
+            local err = face.angle_error or 0
+            bot:set_input({ aim = abs(err) < FACE_BAND * 4,
+                right = err > FACE_BAND, left = err < -FACE_BAND })
+            return true
         end
     else
         s.unseen = 0
