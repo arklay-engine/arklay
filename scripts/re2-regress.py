@@ -133,6 +133,28 @@ def drop_sound_3(source: Path, dest: Path) -> None:
             out.write(re.sub(r" snd=(\S+)", clean, line))
 
 
+def voice_ticks(trace: Path) -> list[int]:
+    """How long each voice line held `fg_status`'s voice bit (flag 1:26, `0x20`) in the recording, in order.
+
+    With `--sound` the original ends a line by DirectSound's clock, so a line's length in ticks follows the
+    recording's pace (`docs/re2-deviations.md`, "Voice lines"); a run with `voice_from_ref` hands arklay these."""
+    held = []
+    start = None
+    with open(trace) as lines:
+        for line in lines:
+            tick = re.match(r"t=(\d+) ", line)
+            status = re.search(r" fgstat=([0-9a-f]+)", line)
+            if not tick or not status:
+                continue
+            on = int(status.group(1), 16) & 0x20 != 0
+            if on and start is None:
+                start = int(tick.group(1))
+            elif not on and start is not None:
+                held.append(int(tick.group(1)) - start)
+                start = None
+    return held
+
+
 def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=()) -> dict:
     """Compare from `offset`, leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
     ref = oracle.parse_trace(str(ref_path))
@@ -267,6 +289,10 @@ def run_one(run: dict, ctx: dict) -> dict:
         ]
         if run.get("sound", True):
             command.append("--sound")
+            if run.get("voice_from_ref"):
+                voice = out / f"{name}.voice.txt"
+                voice.write_text("".join(f"{held}\n" for held in voice_ticks(ref_trace)))
+                command += ["--voice-ticks", str(voice)]
     if want_frames:
         frames_dir.mkdir(parents=True, exist_ok=True)
         command += ["--capture-every", "1", "--capture-dir", str(frames_dir)]

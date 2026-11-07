@@ -27,6 +27,10 @@ pub struct Re2State {
     pub random: u32,
     /// `Xa_control`'s voice line.
     pub voice: VoiceLine,
+    /// `--voice-ticks`: how long the oracle's recording held each voice line,
+    /// in its order. With sound the original ends a line by DirectSound's
+    /// clock, so its length in ticks follows the recording's pace.
+    pub voice_ticks: std::collections::VecDeque<u32>,
     /// `xa_vol`'s level for the voice channel (`0x693E88`), 0 to 127.
     pub xa_volume: u8,
     /// The camera `cut_old` returns to.
@@ -497,6 +501,7 @@ impl Default for Re2State {
             cut_old: 0,
             view_held: false,
             voice: VoiceLine::default(),
+            voice_ticks: Default::default(),
             xa_volume: XA_VOLUME,
             pending_events: Vec::new(),
             pending_damage: Vec::new(),

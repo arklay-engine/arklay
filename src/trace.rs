@@ -116,6 +116,8 @@ pub struct TraceOptions<'a> {
     pub sound: bool,
     /// Mix the run's audio and write it here as a WAV (`--sound-wav`).
     pub sound_wav: Option<&'a Path>,
+    /// Each RE2 voice line's length in ticks, in order (`--voice-ticks`).
+    pub voice_ticks: Option<&'a Path>,
 }
 
 /// The streaming oracle trace file.
