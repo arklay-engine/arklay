@@ -1153,3 +1153,45 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_shotgun_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2315
+# as g1_scene_303, but after the scene the player turns to G1 and shoots it with the shotgun every 30 ticks, with Leon's other weapons in scenario B: G1's charge kills the player and plays on through its wait, second swing and walk back, to the game over
+setup_script = "g1_shotgun_303.lua"
+input = "g1_shotgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 7 --give 0:7:200 --give 1:2:15 --give 2:5:6 --give 3:0x15:30"
+
+[[run]]
+name = "g1_magnum_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2800
+# as g1_shotgun_303 with the magnum every 20 ticks: G1 flinches, dies, gets up and hits the player, limps away and falls
+setup_script = "g1_magnum_303.lua"
+input = "g1_magnum_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 5 --give 0:5:200 --give 1:2:15 --give 2:7:5 --give 3:0x16:30"
+
+[[run]]
+name = "g1_handgun_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2230
+# as g1_shotgun_303 with the handgun every 15 ticks, to the game over
+setup_script = "g1_handgun_303.lua"
+input = "g1_handgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 2 --give 0:2:200 --give 1:5:6 --give 2:7:5 --give 3:0x14:30"

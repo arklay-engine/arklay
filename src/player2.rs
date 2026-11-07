@@ -381,6 +381,9 @@ pub struct Work {
     pub neck: Neck,
     /// The parts whose `Be_flg` `parts_set` cleared, by bit: they aren't drawn.
     pub hidden_parts: u32,
+    /// Parts placed under their parent other than the skeleton says: the
+    /// `Pos` that `Sa_parts_allmv` blends for a morphing part's children.
+    pub joint_offsets: Vec<(u8, [i16; 3])>,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
     /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
@@ -806,6 +809,7 @@ impl Default for Work {
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            joint_offsets: Vec::new(),
             parts0_y: 0x1000,
             lean: 0,
             aim_target: None,
@@ -2473,8 +2477,8 @@ impl Mover<'_, '_> {
                 let [x, y, z] = pose.offset;
                 [x, self.work.scaled_height(y), z]
             } else {
-                match skeleton.relative.get(part) {
-                    Some(t) => *t,
+                match self.relative(part) {
+                    Some(t) => t,
                     None => continue,
                 }
             };
@@ -2508,8 +2512,21 @@ impl Mover<'_, '_> {
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         Some(Matrix {
             m: rot_matrix(*pose.rotations.get(part)?),
-            t: self.tick.skeleton.relative.get(part)?.map(i32::from),
+            t: self.relative(part)?.map(i32::from),
         })
+    }
+
+    /// Where a part sits under its parent: the skeleton's, or what the work
+    /// put in its place.
+    fn relative(&self, part: usize) -> Option<[i16; 3]> {
+        let skeleton = self.tick.skeleton.relative.get(part).copied()?;
+        Some(
+            self.work
+                .joint_offsets
+                .iter()
+                .find(|(index, _)| usize::from(*index) == part)
+                .map_or(skeleton, |(_, at)| *at),
+        )
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
@@ -2524,7 +2541,7 @@ impl Mover<'_, '_> {
                 let [x, y, z] = pose.offset;
                 [x, self.work.scaled_height(y), z]
             } else {
-                *self.tick.skeleton.relative.get(part)?
+                self.relative(part)?
             };
             world = world.comp(&Matrix {
                 m: rot_matrix(*pose.rotations.get(part)?),
