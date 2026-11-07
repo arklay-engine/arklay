@@ -38,11 +38,9 @@ use sha2::{Digest, Sha256};
 
 use crate::gui::canvas::Picture;
 
-/// The hosted catalog, when no other is configured.
-///
-/// `None` until the public mods URL is settled; set `[mods] catalog` in
-/// `arklay.toml` (or `ARKLAY_MOD_CATALOG`) to a catalog meanwhile.
-pub const DEFAULT_URL: Option<&str> = None;
+/// The hosted catalog, when no other is configured: Arklay's R2 bucket.
+pub const DEFAULT_URL: Option<&str> =
+    Some("https://pub-c49dad06a9fe4f2baacb873a181858b9.r2.dev/index.json");
 
 /// The environment variable that overrides the configured catalog.
 pub const URL_ENV: &str = "ARKLAY_MOD_CATALOG";

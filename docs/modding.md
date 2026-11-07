@@ -904,7 +904,8 @@ Remove deletes the pack. A mod installed from a source folder is left alone:
 two layers may not share an id, so its details say to remove the folder first.
 
 The catalog is `ARKLAY_MOD_CATALOG`, else `[mods] catalog` in `arklay.toml`
-(a URL or a local path to an `index.json`):
+(a URL or a local path to an `index.json`), else Arklay's own hosted catalog,
+`https://pub-c49dad06a9fe4f2baacb873a181858b9.r2.dev/index.json`:
 
 ```toml
 [mods]
