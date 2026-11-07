@@ -3664,15 +3664,17 @@ impl Mover<'_, '_> {
     /// `get_null_pos`, turned by `RotMatrixY`.
     fn null_pos(&self, turn: u16) -> [i32; 3] {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
-        let frames = clips
-            .get(usize::from(self.work.move_no))
-            .map_or(&[][..], |clip| clip.frames.as_slice());
-        let frame = frames
-            .iter()
-            .skip(usize::from(self.work.move_cnt))
-            .find(|frame| frame.flags & FRAME_SKIPPED == 0);
-        let Some(keyframe) = frame.and_then(|frame| keyframes.get(usize::from(frame.keyframe)))
-        else {
+        let (move_no, move_cnt) = (self.work.move_no, self.work.move_cnt);
+        let index = match clips.get(usize::from(move_no)) {
+            Some(clip) => clip
+                .frames
+                .iter()
+                .skip(usize::from(move_cnt))
+                .find(|frame| frame.flags & FRAME_SKIPPED == 0)
+                .map(|frame| frame.keyframe),
+            None => stray_keyframe(clips, move_no, move_cnt),
+        };
+        let Some(keyframe) = index.and_then(|index| keyframes.get(usize::from(index))) else {
             return [0; 3];
         };
         let [x, y, z] = keyframe.vertex.map(i32::from);
@@ -3929,6 +3931,43 @@ impl Mover<'_, '_> {
             1 => self.em23_dragged(held),
             2 => self.em23_thrown(),
             3 => self.em23_thrown_round(),
+            _ => self.em23_killed(),
+        }
+    }
+
+    /// `FUN_0046a710`'s other `Routine_1`s: caught at the corridor's end. It
+    /// stands on its own clip until the alligator sets its `Timer0`, then
+    /// plays the alligator's clip from the base it set. `fg_stop`'s
+    /// `0x1000000` isn't ported.
+    fn em23_killed(&mut self) {
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.timers[0] = 0;
+                    self.work.routine[2] = 1;
+                }
+                self.work.bank = Bank::Weapon;
+                self.work.move_no = 2;
+                self.work.move_cnt = 0;
+                self.work.hokan = 3;
+                self.joint_move_late(0x400);
+                if self.work.timers[0] != 0 {
+                    self.work.move_no = 1;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 0;
+                    self.work.routine[2] = 2;
+                }
+            }
+            2 => {
+                self.work.bank = Bank::Held;
+                self.null_pos_set(0);
+                if self.work.move_cnt == 3 {
+                    self.work.sounds.push(0x402_0001);
+                }
+                let ended = self.joint_move_late(0x1000);
+                self.work.routine[2] += u8::from(ended);
+            }
+            3 => self.work.damage_cnt = 0x80,
             _ => {}
         }
     }
@@ -5066,6 +5105,31 @@ fn frame_past_end(clips: &[Clip], clip: usize, count: u8) -> Option<(usize, usiz
         left -= after.frames.len();
     }
     None
+}
+
+/// `get_null_pos` on a clip past the table (`Mot_play_init`'s `0xFF`): the
+/// original reads the EDD's bytes as they lie, so a frame's word is taken as
+/// the clip's count and offset. The parsed clips stand in for those bytes,
+/// laid end to end after their table as the shipped models have them.
+fn stray_keyframe(clips: &[Clip], move_no: u8, move_cnt: u8) -> Option<u16> {
+    let table = clips.len();
+    let word = |index: usize| -> Option<u32> {
+        if index < table {
+            let before: usize = clips[..index].iter().map(|clip| clip.frames.len()).sum();
+            let offset = (table + before) * 4;
+            return Some(clips[index].frames.len() as u32 | (offset as u32) << 16);
+        }
+        let frame = clips
+            .iter()
+            .flat_map(|clip| &clip.frames)
+            .nth(index - table)?;
+        Some((u32::from(frame.keyframe) | frame.flags) | u32::from(frame.timing) << 16)
+    };
+    let mut at = (word(usize::from(move_no))? >> 16) as usize / 4 + usize::from(move_cnt);
+    while word(at)? & FRAME_SKIPPED != 0 {
+        at += 1;
+    }
+    Some(word(at)? as u16 & 0xFFF)
 }
 
 pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
@@ -6872,6 +6936,35 @@ mod tests {
         assert_eq!(frame_past_end(&clips, 0, 24), Some((2, 0)));
         assert_eq!(frame_past_end(&clips, 0, 28), None, "past the last clip");
         assert_eq!(frame_past_end(&clips, 2, 4), None);
+    }
+
+    /// The alligator's kill does a `Null_pos_set` while `Mot_play_init` has
+    /// its clip at `0xFF`: the original reads a frame's word as the clip's
+    /// count and offset, and the frame it lands on skips a held frame.
+    #[test]
+    fn a_clip_past_the_table_reads_the_frames_as_its_header() {
+        let frame = |keyframe, timing, flags| ClipFrame {
+            keyframe,
+            timing,
+            flags,
+        };
+        let clips = vec![
+            Clip {
+                frames: vec![frame(10, 0, 0), frame(11, 0x10, 0), frame(12, 0, 0)],
+            },
+            Clip {
+                frames: vec![
+                    frame(20, 0, FRAME_SKIPPED),
+                    frame(42, 0, 0),
+                    frame(22, 0, 0),
+                ],
+            },
+        ];
+        // Word 3 is clip 0's frame 1: offset 0x10 is word 4, and one frame on
+        // is clip 1's held frame 0, so its frame 1.
+        assert_eq!(stray_keyframe(&clips, 3, 1), Some(42));
+        assert_eq!(stray_keyframe(&clips, 3, 0), Some(12));
+        assert_eq!(stray_keyframe(&clips, 0xFF, 0), None, "past the bytes");
     }
 
     /// `Em_25`'s death on a wall starts its 8-frame clip 1 at `Move_cnt` 9:

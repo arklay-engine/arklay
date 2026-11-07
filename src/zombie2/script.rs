@@ -1070,6 +1070,13 @@ impl UserData for Api {
         );
         methods.add_method_mut("player_floor", |_, e, ()| Ok(e.em().world.player_floor));
         // `Approach` on the player's position.
+        methods.add_method_mut("set_player_xz", |_, e, (x, z): (i32, i32)| {
+            let world = &mut *e.em().world;
+            world.player_moved = true;
+            world.player[0] = x;
+            world.player[2] = z;
+            Ok(())
+        });
         methods.add_method_mut("player_approach", |_, e, (x, z, rate): (i32, i32, i32)| {
             let world = &mut *e.em().world;
             let [old_x, _, old_z] = world.player;
