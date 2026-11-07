@@ -1,0 +1,3 @@
+-- arklay's start for route_100_200_fight.txt: the new game in room 100 as it starts, with
+-- the enemies on and no flags raised, as a plain `record` has it.
+local api = ...

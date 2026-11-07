@@ -1,0 +1,295 @@
+# The route with the enemies on, fought as a player would: from the new game through 100 -> 101 -> 102 -> 118 -> 119 -> 11A -> 11B -> 103 -> 200. Leon shoots or runs past the zombies, takes room 102's and room 11A's handgun rounds, and reaches room 200 alive (oracle/re2.md).
+0 up run
+2 up run right
+7 up run
+50 up run left
+55 up run
+98 up run left
+108 up run
+128 up run right
+138 up run
+181 up run left
+199 up run
+214 aim
+218 aim fire
+257
+258 right
+260 up run
+323
+326 right
+337 up run
+352
+356 confirm
+358
+875 up
+905
+2055 down
+2057
+2065 left
+2115 up
+2255
+2260 right
+2265 up
+2470
+2475 left
+2479 up
+2555
+2560 right
+2566 up
+2611
+2613 left
+2624
+2627 action
+2629
+2971 up run
+3019
+3113 up run
+3155
+3159 up run
+3195
+3199 left
+3201
+3203 up
+3210
+3214 right
+3223
+3225 up
+3232
+3236 right
+3243
+3245 up run
+3264
+3268 left
+3270
+3272 up
+3276 up run
+3370
+3396 up
+3408
+3411 confirm
+3413
+3480 confirm
+3482
+3530 confirm
+3532
+3650 confirm
+3652
+3990 aim
+3995 aim fire
+4366 aim
+4390 aim fire
+4394 aim
+4426
+4428 up run
+4474
+4477 aim down
+4484 aim down fire
+4488 aim down
+4520
+4600 aim
+4605 aim fire
+4663 aim
+4900 aim fire
+5005
+5008 up run
+5057
+5060 aim
+5065 aim fire
+5131 aim
+5312 aim fire
+5316 aim
+5345 aim fire
+5349 aim
+5352
+5354 right
+5363 up run
+5377 left
+5386 up run
+5450
+5455 action
+5457
+5563 left
+5568
+5570 up run
+5605
+5609 left
+5615
+5617 up run
+5634
+5638 right
+5643
+5645 up
+5651
+5655 left
+5660
+5662 up
+5674
+5678 right
+5680
+5683 confirm
+5685
+5797 up run
+5813
+5817 right
+5823
+5825 up
+5829
+5833 right
+5840
+5842 up
+5849
+5853 right
+5856
+5858 up run
+5905
+5909 left
+5912
+5914 up
+5922
+5926 right
+5937
+5939 up
+5944
+5948 right
+5954
+5957 up
+5965
+5969 confirm
+5971
+6082 left
+6084
+6086 up run
+6095
+6099 right
+6102
+6104 up
+6107
+6111 left
+6126
+6129 confirm
+6131
+6255 up
+6280
+6324 confirm
+6326
+6412 left
+6424
+6426 up run
+6488 up run left
+6495 up run
+6528
+6531 right
+6535 up
+6545
+6548 action
+6550
+6661 left
+6665
+6667 up run
+6685
+6689 left
+6695
+6697 up run
+6710
+6714 right
+6717
+6719 up
+6724
+6728 left
+6738
+6740 up run
+6825
+6829 left
+6834
+6836 up run
+6842
+6846 left
+6851
+6853 up
+6856
+6860 right
+6865
+6867 up
+6870
+6874 right
+6876
+6880 up
+6894
+6900 action
+6904
+6990 confirm
+6992
+7028 left
+7048 up
+7068
+7071 confirm
+7073
+7190 confirm
+7192
+7310 confirm
+7312
+7323 right
+7350
+7440 aim down
+7470 aim down fire
+7522 aim down
+7535
+7700 aim
+7730 aim fire
+7736 aim
+7756 aim fire
+7820
+7823 right
+7824 up run
+7916
+7918 right
+7932 up
+7952
+7954 action
+7956
+8082 confirm
+8084
+8100 left
+8111 up run
+8133 up run left
+8137 up run
+8185 up run left
+8201 up run
+8226 up run right
+8242 up run
+8251 up run left
+8269
+8271 action
+8273
+8379 right
+8390
+8392 up run
+8401
+8405 right
+8417
+8419 up run
+8428
+8432 left
+8437
+8439 up
+8443
+8447 right
+8454
+8456 up run
+8488
+8490 aim
+8495 aim fire
+8552 aim
+8559 up run left
+8562 up run
+8700
+8702 left
+8712 up run
+8733 up run left
+8735 up run
+8771 up run left
+8775 up run
+8782
+8784 action
+8786
+9580
