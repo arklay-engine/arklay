@@ -22,6 +22,12 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 # --bot-risk 0.0..1.0 (default 0.25) is how much danger the planner may accept;
 # the planner reads it as bot:risk(). Values outside the range are an error.
 
+# --bot-seed N (u32, needs --bot) seeds the game's random number generator so
+# each seed plays a different game (hunter health, enemy choices, poison).
+# The same seed, code and --bot-risk replay identically; without the flag the
+# game's own stream is untouched. A reload after a death gets a fresh stream
+# derived from the seed. Compare changes over many seeds: scripts/bot-batch.sh.
+
 # --bot-goal-room ROOM finishes the run on entering ROOM (three hex digits).
 
 # Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
