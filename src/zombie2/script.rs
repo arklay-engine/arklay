@@ -670,14 +670,22 @@ impl UserData for Api {
             "player_part_point",
             |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
                 let point = [x, y, z];
-                let at = e.em().world.pl.parts.get(part).copied().flatten().map(|matrix| {
-                    std::array::from_fn::<i32, 3, _>(|axis| {
-                        let turned: i32 = (0..3)
-                            .map(|index| i32::from(matrix.m[axis][index]) * point[index])
-                            .sum();
-                        matrix.t[axis] + (turned >> 12)
-                    })
-                });
+                let at = e
+                    .em()
+                    .world
+                    .pl
+                    .parts
+                    .get(part)
+                    .copied()
+                    .flatten()
+                    .map(|matrix| {
+                        std::array::from_fn::<i32, 3, _>(|axis| {
+                            let turned: i32 = (0..3)
+                                .map(|index| i32::from(matrix.m[axis][index]) * point[index])
+                                .sum();
+                            matrix.t[axis] + (turned >> 12)
+                        })
+                    });
                 Ok(at.map_or((None, None, None), |[x, y, z]| (Some(x), Some(y), Some(z))))
             },
         );
@@ -3100,8 +3108,16 @@ mod tests {
             })
             .unwrap(),
         );
-        set("rs_rsin", lua.create_function(|_, a: i32| Ok(player2::rsin(a))).unwrap());
-        set("rs_rcos", lua.create_function(|_, a: i32| Ok(player2::rcos(a))).unwrap());
+        set(
+            "rs_rsin",
+            lua.create_function(|_, a: i32| Ok(player2::rsin(a)))
+                .unwrap(),
+        );
+        set(
+            "rs_rcos",
+            lua.create_function(|_, a: i32| Ok(player2::rcos(a)))
+                .unwrap(),
+        );
         set(
             "rs_turn",
             lua.create_function(|_, (a, to, rate): (i64, i64, i32)| {
@@ -3111,13 +3127,17 @@ mod tests {
         );
         set(
             "rs_rotate",
-            lua.create_function(|_, (a, x, z): (i64, i32, i32)| Ok(player2::rotate(a as u16, x, z)))
-                .unwrap(),
+            lua.create_function(|_, (a, x, z): (i64, i32, i32)| {
+                Ok(player2::rotate(a as u16, x, z))
+            })
+            .unwrap(),
         );
         set(
             "rs_hypot",
             lua.create_function(|_, (x, z): (i32, i32)| {
-                Ok(square_root0(x.wrapping_mul(x).wrapping_add(z.wrapping_mul(z))))
+                Ok(square_root0(
+                    x.wrapping_mul(x).wrapping_add(z.wrapping_mul(z)),
+                ))
             })
             .unwrap(),
         );
@@ -3164,7 +3184,8 @@ mod tests {
             roach.eval("return w.be, w.hidden, drawn_count()");
         assert_eq!(be & 0x1E80_0002, 0x1E80_0002);
         assert_eq!((hidden, drawn), (0xC, 1));
-        let swarm: Vec<i64> = roach.eval("return { w.swarm[0], w.swarm[1], w.swarm[2], w.swarm[3] }");
+        let swarm: Vec<i64> =
+            roach.eval("return { w.swarm[0], w.swarm[1], w.swarm[2], w.swarm[3] }");
         assert_eq!(swarm, [0; 4]);
         let vars: Vec<i64> = roach.eval(
             "return { w.vars[1], w.vars[2], w.vars[3], w.vars[4], w.vars[5], w.vars[6],
@@ -3234,7 +3255,10 @@ mod tests {
     /// by the arc's length, toward zero.
     #[test]
     fn a_roachs_crawl_steps_along_the_pipe() {
-        let roach = spawn_roach(&[], "ROUTINES = { [0] = 1, 1, 2, 0 }; VARS = { [2] = 0x800 }");
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 1, 2, 0 }; VARS = { [2] = 0x800 }",
+        );
         let speeds: Vec<i64> = (0..9)
             .map(|_| roach.eval("tick(); return w.spd[1]"))
             .collect();
@@ -3291,7 +3315,10 @@ mod tests {
             )
             .eval("tick(); return w.pos[1]")
         };
-        assert_eq!((x(8, -7000), x(8, -28000), x(8, -9000)), (-7300, -27000, -9000));
+        assert_eq!(
+            (x(8, -7000), x(8, -28000), x(8, -9000)),
+            (-7300, -27000, -9000)
+        );
         assert_eq!((x(0, -7000), x(0, -28000)), (-7000, -28000));
     }
 
@@ -3325,8 +3352,14 @@ mod tests {
         roach.run("w.hidden = 0xC; tick()");
         let (sub, hidden, clip, faced, sounds): (i64, i64, i64, Vec<i64>, Vec<i64>) =
             roach.eval("return w.r[2], w.hidden, w.clip, w.faced, w.sounds");
-        assert_eq!((sub, hidden, clip, faced, sounds), (2, 0, 2, vec![0x800], vec![3]));
-        assert_eq!(roach.eval::<(i64, i64)>("return w.vars[3], w.be & 0x2000"), (9, 0x2000));
+        assert_eq!(
+            (sub, hidden, clip, faced, sounds),
+            (2, 0, 2, vec![0x800], vec![3])
+        );
+        assert_eq!(
+            roach.eval::<(i64, i64)>("return w.vars[3], w.be & 0x2000"),
+            (9, 0x2000)
+        );
         roach.run("PART_AT = { -12000, -500, -25200 }");
         let (speeds, climbs): (Vec<i64>, Vec<i64>) = (0..25)
             .map(|_| roach.eval::<(i64, i64)>("tick(); return w.spd[1], w.spd[2]"))
@@ -3338,8 +3371,14 @@ mod tests {
         // `Timer0` stops at 0x5A, and then it falls.
         let roach = roach_flying("POS = { -10000, -1800, -25200 }");
         roach.run("w.timers[0] = 0x59");
-        assert_eq!(roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"), (0x5A, 1));
-        assert_eq!(roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"), (0x5A, 2));
+        assert_eq!(
+            roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"),
+            (0x5A, 1)
+        );
+        assert_eq!(
+            roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"),
+            (0x5A, 2)
+        );
     }
 
     /// A roach in the flight, its point far off.
@@ -3375,7 +3414,8 @@ mod tests {
     /// player's routines (part 2 ports the rest).
     #[test]
     fn a_roach_lands_on_its_attach_point() {
-        let roach = roach_flying("POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 }");
+        let roach =
+            roach_flying("POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 }");
         roach.run("w.be = 0x2001; tick()");
         assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 0, 0]);
         let (flags, on, be): (i64, i64, i64) = roach.eval("return w.vars[3], w.swarm[1], w.be");
