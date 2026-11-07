@@ -53,6 +53,12 @@ pub const PLAYER_COLLISION_FLAGS: u8 = 0x10;
 
 /// EMD clip 0: the three-frame idle settle pose.
 const SETTLE_CLIP: usize = 0;
+/// The square and hex cranks, whose menu use starts the crank turn.
+const CRANK_SQUARE: u8 = 0x1D;
+const CRANK_HEX: u8 = 0x1E;
+/// The crank turn's room clip and the system bit its completion raises.
+const CRANK_TURN_CLIP: u8 = 0x37;
+const CRANK_DONE_BIT: u8 = 0x20;
 /// EMW clip 0: the transition from the settle pose into the breathe loop.
 const BREATHE_IN_CLIP: usize = 0;
 /// EMW clip 1: the looping breathe animation.
@@ -2656,6 +2662,28 @@ impl PlayerState {
         game: &mut crate::game::GameState,
         emd_clips: &[Clip],
     ) {
+        // A crank (0x1D square, 0x1E hex) used from the menu leaves the
+        // player in the crank turn instead (0x00463bc8): scripted behaviour
+        // 1 on room clip 0x37, whose completion raises system bit 0x20, the
+        // bit the drain and bridge events (301, 306, ...) wait on before the
+        // turns they script themselves. Without it they wait forever.
+        let used = game.state_bytes[usize::from(crate::game::STATE_BYTE_USED_ITEM)];
+        if matches!(used, CRANK_SQUARE | CRANK_HEX) {
+            let entity = &mut game.entities[0];
+            entity.unk_8c = 0;
+            entity.animation_frame_id = 0;
+            entity.unk_bf = 0;
+            entity.is_being_attacked = 0;
+            entity.attack_anim = 0;
+            entity.set_state(8);
+            entity.set_ignore(0);
+            entity.action_behavior = 1;
+            entity.action_state = 0;
+            entity.animation_id = CRANK_TURN_CLIP;
+            entity.scd_anim_param = CRANK_DONE_BIT;
+            self.locked = LockedAction::None;
+            return;
+        }
         {
             let entity = &mut game.entities[0];
             entity.unk_8c = 0;
@@ -6935,5 +6963,30 @@ mod tests {
             "toward the box holds the push"
         );
         assert!(!push([-20000, 0], false, true), "away from the box lets go");
+    }
+
+    /// A crank used from the menu leaves the player in the scripted crank
+    /// turn (0x00463bc8), whose completion raises the system bit the room's
+    /// drain event waits on; any other used item returns to pad control.
+    #[test]
+    fn a_crank_use_exits_the_menu_into_the_crank_turn() {
+        let room = RoomState::default();
+        for (item, scripted) in [(CRANK_SQUARE, true), (CRANK_HEX, true), (0x44, false)] {
+            let mut game = crate::game::GameState::new(RoomId::parse("3011").unwrap(), &room);
+            game.record_used_item(item);
+            let mut player = player_at(0, 0);
+            player.menu_exit_restore(&mut game, &clips());
+            let entity = &game.entities[0];
+            if scripted {
+                assert_eq!(entity.state(), 8, "item {item:#x}");
+                assert_eq!(entity.action_behavior, 1);
+                assert_eq!(entity.action_state, 0);
+                assert_eq!(entity.animation_id, CRANK_TURN_CLIP);
+                assert_eq!(entity.scd_anim_param, CRANK_DONE_BIT);
+            } else {
+                assert_eq!(entity.state(), 1, "item {item:#x}");
+                assert_eq!(entity.action_behavior, 0);
+            }
+        }
     }
 }
