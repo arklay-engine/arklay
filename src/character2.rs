@@ -103,13 +103,14 @@ pub fn tick(
 }
 
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
-fn player_atd(pos: [i32; 3]) -> crate::zombie2::Atd {
+fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
+    let width = player_width(game.id.player_flag);
     crate::zombie2::Atd {
         ofs_x: 0,
         ofs_y: -(PLAYER_HEIGHT as i16),
-        at_w: PLAYER_WIDTH,
+        at_w: width,
         at_h: PLAYER_HEIGHT,
-        w: PLAYER_WIDTH,
+        w: width,
         at: [pos[0], pos[1] - i32::from(PLAYER_HEIGHT), pos[2]],
     }
 }
@@ -164,7 +165,7 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
 ///
 /// `old` is where the player ended the last tick: `Old_x`, `Old_y` and `Old_z`.
 pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState, old: [i32; 3]) {
-    let mut atd = player_atd(player.pos);
+    let mut atd = player_atd(game, player.pos);
     let be_flg = game.re2.player.be_flg;
     let mut touching = 0;
     for other in slot_bodies(game) {
@@ -514,7 +515,11 @@ fn run_zombie(
     let mut bodies = vec![crate::zombie2::Oba {
         slot: crate::zombie2::PLAYER_BODY,
         be_flg: game.re2.player.be_flg,
-        atd: game.re2.player.atd.unwrap_or_else(|| player_atd(player)),
+        atd: game
+            .re2
+            .player
+            .atd
+            .unwrap_or_else(|| player_atd(game, player)),
         pos: player,
     }];
     bodies.extend(slot_bodies(game));
@@ -879,8 +884,12 @@ fn set_enemy_work(
     characters[spawn.slot] = Some(Box::new(character));
 }
 
-/// `Player_set`'s `At_w`.
-pub const PLAYER_WIDTH: u16 = 450;
+/// The player's `Atd[0]` width, `At_w` and `W`: `Player_set`'s 450, which
+/// `Pl_init` makes 350 for Claire's bodies and Sherry, as it does the radius
+/// the room's collision pushes with.
+pub fn player_width(player_flag: u8) -> u16 {
+    crate::sca::player_radius(player_flag) as u16
+}
 /// The player's `At_h`, and how far its box's `Ofs_y` lifts it.
 pub const PLAYER_HEIGHT: u16 = 0x5FA;
 /// `fg_system`'s `0x20`, easy mode's bit.
@@ -1321,6 +1330,45 @@ mod tests {
         game.re2.characters.0[2].as_mut().unwrap().be_flg = 1;
         game.apply_re2_no_enemies();
         assert_eq!(flags(&game), [Some(0), None, Some(1)]);
+    }
+
+    #[test]
+    fn claire_is_pushed_out_of_a_body_with_her_own_width() {
+        // Kendo's body in room 101 (`At_w` 450) and the player walking past it,
+        // 850 units off: Leon (450 wide) touches it, Claire (350) doesn't.
+        let room = RoomId::parse("1010").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [0, 0, 0];
+        body.radius = 450;
+        let kendo = Character {
+            id: 0x48,
+            model: 0x48,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 0x2005,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            zombie: None,
+        };
+        for (player_flag, x) in [(0, -901), (1, -850)] {
+            let mut game = GameState::default();
+            game.id = room;
+            game.id.player_flag = player_flag;
+            game.re2.characters.0 = vec![Some(Box::new(kendo.clone()))];
+            let mut player = crate::player::spawn(room, &RoomState::default());
+            player.pos = [-850, 0, 0];
+            oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
+            assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
+            assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
     }
 
     #[test]
