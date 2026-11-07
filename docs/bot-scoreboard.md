@@ -35,3 +35,10 @@ noise. From the marker on, a seed replays the same run.
 | b03-forcefight | dbcb9ad+D | D: an empty frontier walks to a fight held back elsewhere and fights it | 13/17 | 26 | 72 | 119 | 192516 | 2 | yes | accept |
 | **deterministic** | | *rows below run with bot/order.lua* | | | | | | | | |
 | b05-order | 46e36a7+F | F: deterministic pairs (sorted keys) in the bot VM | 13/17 | 25 | 72 | 119 | 192520 | 2 | yes | accept (new base) |
+| b06-ablate-C | 2d59397-C | ablation: without C (glob dodge) | 9/17 | 47 | 87 | 125 | 202753 | 4 | NO | C kept (removing it is worse) |
+| b07-ablate-D | 2d59397-D | ablation: without D (remote forced fight) | 11/17 | 26 | 65 | 119 | 196708 | 4 | yes | D kept (removing it is worse) |
+| b08-redmix | 2d59397+E | E: a boxed red herb comes out to mix with a held herb (bot:mix_result) | 12/17 | 28 | 72 | 119 | 196801.0 | 3 | yes | reject (completion 12<13, deaths 28>25) |
+| b09-rearm | 2d59397+G | G: the rearm beats the pickup reserve when no held firearm has a round | 12/17 | 27 | 72 | 106 | 193505.5 | 2 | yes | reject (completion 12<13, deaths 27>25) |
+| b10-bossgun | 2d59397+H | H: a reserve gun with rounds is the last spare gun to box (after the staple) | 11/17 | 33 | 65 | 128 | 196954 | 3 | NO | reject (completion 11<13, deaths 33>25, default fails) |
+| b11-rearm-reserve | 2d59397+J | J: rearm a boxed reserve gun when no held firearm has a round | 12/17 | 24 | 53 | 119 | 189060.5 | 3 | yes | reject (completion 12<13; deaths 24, median 53 better: retry after K) |
+| b12-yawn-up | 2d59397+K | K: Yawn 2 takes aim-up shots (grown form inside 4000) | 13/17 | 14 | 57 | 92 | 202042 | 3 | yes | accept |

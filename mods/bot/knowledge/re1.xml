@@ -221,13 +221,16 @@
        runs the enemy/0d machine). state_check sets 0x40 only while the
        player is 4000 or more away and never 0x80 in the juvenile form, so it
        is shot torso from outside 4000: the reach given keeps that band. The
+       grown form keeps 0x80 inside 4000 (status 0x91 after nine shotgun
+       hits), so an aim-up shot hits it there (up="yes"): with up="no" the
+       bot held no pose for 9000 ticks at 1800 and the run ended stuck. The
        bite starts under 2000 and the grown form swallows (a hold). HEALTH
        0x012C (0x0190 on a second playthrough); handgun 30, shotgun 40 a hit
        (DEFAULT_FIRST_RUN rows 181 and 182), grenade launcher 80 (row 186).
        prefer the launcher: the handgun took thirteen rounds and 70 health
        in a run. -->
   <enemy id="0x12" name="yawn 2" policy="fight" stand="torso" downed="none"
-         up="no" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400"
+         up="yes" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400"
          prefer="0x07">
     <keep weapon="0x02" min="4300" max="8000" damage="30"/>
     <keep weapon="0x03" min="4300" max="8000" damage="40"/>
