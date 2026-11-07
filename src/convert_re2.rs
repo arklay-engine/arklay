@@ -715,6 +715,10 @@ fn copy_text(
             include_str!("../games/re2/enemy/30/enemy.lua"),
         ),
         (
+            "enemy/31/enemy.lua",
+            include_str!("../games/re2/enemy/31/enemy.lua"),
+        ),
+        (
             "enemy/25/enemy.lua",
             include_str!("../games/re2/enemy/25/enemy.lua"),
         ),

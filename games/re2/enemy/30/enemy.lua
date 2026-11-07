@@ -933,24 +933,13 @@ local function spurt(e)
 end
 
 -- `Sa_parts_allmv` on part 4, the eye: its child, part 5, which carries the
--- arm, sits under it at a place blended from its own toward the swollen
--- eye's by the eye's weight (`em030.emd`'s `pSa_dat`, tables 0 and 1; the
--- same in `em130.emd`). The eye's own shape isn't drawn swollen.
-local EYE_CHILD <const> = 5
-local EYE_CHILD_AT <const> = { 0, 558, 0 }
-local EYE_CHILD_SWOLLEN <const> = { 0, 426, 0 }
+-- arm, moves toward its place under the swollen eye by the eye's weight (the
+-- second of its three targets), which shortens the arm's reach. The eye's
+-- own shape isn't drawn swollen.
+local EYE_PART <const> = 4
 
 local function eye_morph(e, weight)
-    if weight == 0 then
-        e:set_joint_offset(EYE_CHILD)
-        return
-    end
-    local at = {}
-    for axis = 1, 3 do
-        -- `LoadAverage12`, with 0xfff for the rest.
-        at[axis] = (EYE_CHILD_AT[axis] * (0xFFF - weight) + EYE_CHILD_SWOLLEN[axis] * weight) // 0x1000
-    end
-    e:set_joint_offset(EYE_CHILD, at[1], at[2], at[3])
+    e:morph(EYE_PART, 0, weight, 0)
 end
 
 -- `Em30_core_me_sa`: the eye swells after a hit (`HURT` 1) until its scale

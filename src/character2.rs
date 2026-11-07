@@ -1250,6 +1250,7 @@ pub fn tick_of<'a>(
     Tick {
         room,
         skeleton: &model.skeleton,
+        morphs: &model.morphs,
         banks: Banks {
             pld,
             weapon,

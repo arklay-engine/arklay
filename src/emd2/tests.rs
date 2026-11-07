@@ -446,7 +446,7 @@ fn a_part_blends_through_the_shapes_it_is_given() {
     for value in [0x1000u16, 0x2000, 0x3000, 0, 0xFFFF, 6, 0, 0] {
         put16(&mut chunk, value);
     }
-    let morphs = parse_morphs(&chunk, &mesh);
+    let morphs = parse_morphs(&chunk, &mesh, &Skeleton::default());
     assert_eq!(morphs.len(), 1);
     assert_eq!(morphs[0].part, 1);
     assert_eq!(
@@ -460,5 +460,46 @@ fn a_part_blends_through_the_shapes_it_is_given() {
     let half = morphs[0].shape(&base, &[0x800]);
     assert_eq!(half[0], [0x87F, 0x1000, 0x1800]);
     // A table that runs off the chunk gives no shapes rather than a wrong one.
-    assert!(parse_morphs(&chunk[..50], &mesh).is_empty());
+    assert!(parse_morphs(&chunk[..50], &mesh, &Skeleton::default()).is_empty());
+}
+
+#[test]
+fn a_morph_moves_the_parts_children_by_their_tables() {
+    let object = TmdObject {
+        vertices: vec![[0; 3]; 1],
+        ..TmdObject::default()
+    };
+    let mesh = Tmd {
+        objects: vec![TmdObject::default(), object],
+    };
+    let skeleton = Skeleton {
+        relative: vec![[0; 3]; 3],
+        children: vec![vec![1], vec![2], vec![]],
+    };
+    // The header names two joint tables of three joints at 40, 18 bytes
+    // apart. Part 1's block has two targets: the first on table 0, the
+    // second on table 1. Its base and targets are one padded vertex each.
+    let mut chunk = Vec::new();
+    for word in [0b10u32, 40, 18, 80, 8, 2, 0, 1 << 16] {
+        put32(&mut chunk, word);
+    }
+    chunk.resize(40, 0);
+    for value in [0i16, 0, 0, 0, 0, 0, 0, 558, 0] {
+        put16(&mut chunk, value as u16);
+    }
+    for value in [0i16, 0, 0, 0, 0, 0, 0, 426, 0] {
+        put16(&mut chunk, value as u16);
+    }
+    chunk.resize(104, 0);
+    let morphs = parse_morphs(&chunk, &mesh, &skeleton);
+    assert_eq!(morphs.len(), 1);
+    assert_eq!(morphs[0].joints, [(2, [0, 558, 0])]);
+    assert_eq!(
+        morphs[0].joint_targets,
+        [vec![[0, 558, 0]], vec![[0, 426, 0]]]
+    );
+    // No weight leaves the child at rest; `LoadAverage12` keeps 0xfff of it.
+    assert_eq!(morphs[0].joint_offsets(&[0, 0]), [(2, [0, 558, 0])]);
+    assert_eq!(morphs[0].joint_offsets(&[0, 0xC00]), [(2, [0, 458, 0])]);
+    assert_eq!(morphs[0].joint_offsets(&[0, 0x1000]), [(2, [0, 425, 0])]);
 }

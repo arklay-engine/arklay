@@ -961,6 +961,8 @@ pub struct Tick<'a> {
     pub room: &'a RoomState,
     pub banks: Banks<'a>,
     pub skeleton: &'a Skeleton,
+    /// The model's `pSa_dat` morphs, which move a part's children.
+    pub morphs: &'a [crate::model::PartMorph],
     pub input: Input,
     pub options: Options,
     /// The character id, `Id`.
@@ -5626,6 +5628,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5693,6 +5696,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: (&pld_clips, &keyframes),
                 weapon: (&weapon_clips, &keyframes),
@@ -5736,6 +5740,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5792,6 +5797,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5921,6 +5927,7 @@ mod tests {
             let tick = Tick {
                 room: &self.room,
                 skeleton: &self.skeleton,
+                morphs: &[],
                 banks: Banks {
                     pld: bank,
                     weapon: bank,
@@ -5948,6 +5955,7 @@ mod tests {
             let tick = Tick {
                 room: &self.room,
                 skeleton: &self.skeleton,
+                morphs: &[],
                 banks: Banks {
                     pld: bank,
                     weapon: bank,
@@ -6003,6 +6011,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6074,6 +6083,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: (&held_clips, &weapon_keyframes),
                 weapon: (&held_clips, &weapon_keyframes),
@@ -6810,6 +6820,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6868,6 +6879,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6994,6 +7006,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,

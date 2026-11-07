@@ -6775,6 +6775,7 @@ impl GameSession {
         let tick = crate::player2::Tick {
             room: &self.loaded.room,
             skeleton: &assets.emd.skeleton,
+            morphs: &assets.emd.morphs,
             banks: crate::player2::Banks {
                 pld: (&assets.emd.clips, &assets.emd.keyframes),
                 weapon: (&assets.emw.clips, &assets.emw.keyframes),
@@ -16002,6 +16003,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let tick = crate::player2::Tick {
         room: context.room,
         skeleton: &assets.emd.skeleton,
+        morphs: &assets.emd.morphs,
         banks: crate::player2::Banks {
             pld: (&assets.emd.clips, &assets.emd.keyframes),
             weapon: (&assets.emw.clips, &assets.emw.keyframes),
