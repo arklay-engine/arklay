@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "oracle" / "re2-regress.toml"
 INPUTS = ROOT / "oracle" / "inputs-re2"
 DEFAULT_REFS = "~/.local/share/arklay/re2-refs"
-DEFAULT_ARKLAY = ROOT / "target" / "test-release" / "arklay"
+DEFAULT_ARKLAY = ROOT / "target" / "test-release" / ("arklay.exe" if sys.platform == "win32" else "arklay")
 
 
 def load_oracle():
