@@ -340,15 +340,22 @@ local function corner_wait(e)
     end
 end
 
--- `FUN_004691c0`: at the corridor's end it takes the player under. The cut
--- is 0xE while zapping, which isn't modelled; `fg_system`'s `0x100` is
+-- Scenario B (`fg_status`'s 0x40000000) after a scenario A that raised
+-- `fg_zapping`'s 0x10 (script flag bank 29).
+local ZAPPING_BANK <const> = 29
+local function zapping(e)
+    return e:status(0x40000000) and e:flag(ZAPPING_BANK, 0x10)
+end
+
+-- `FUN_004691c0`: at the corridor's end it takes the player under, in cut 7
+-- (0xE while zapping); `fg_system`'s `0x100` is
 -- `pl_held_kill`, and its `0x4000000`, which starts `Die`, is the end of
 -- `pl_hold_back_die`.
 local function kill(e)
     local sub = e:routine(2)
     if sub == 0 then
         e:set_status(0x100)
-        e:cut_change(7)
+        e:cut_change(zapping(e) and 0xE or 7)
         e:hide_object(TANK_OBJECT)
         e:set_var(FLAGS, (e:var(FLAGS) | 2) & 0xFFFB)
         e:pl_set_routine(5, 0, 0, 0)
@@ -808,8 +815,7 @@ local function hurt_kind(e)
             e:set_var(SNAP, 0)
             e:set_var(JAW_B, 0)
             e:set_var(JAW_A, 0)
-            -- `fg_status`'s `0x40000000` with `fg_zapping`'s 0x10 isn't modelled.
-            return 2
+            return zapping(e) and 3 or 2
         elseif e:var(TURNING) == 0 and e:var(HIT_WAIT) == 0 and e:rnd() & 3 == 0 then
             e:set_var(HIT_WAIT, (e:rnd() & 0x3F) + 0x78)
             return 4
@@ -988,8 +994,7 @@ local function explode(e)
     if mot_play_sp(e, 9, 0) ~= 0 then
         if e:var(FLAGS) & 0x40 ~= 0 then
             e:set_var(FLAGS, e:var(FLAGS) & 0xBF)
-            -- 0xD while zapping, which isn't modelled.
-            e:cut_change(6)
+            e:cut_change(zapping(e) and 0xD or 6)
             e:pl_clear_be_flg(0x80400)
         end
         e:set_routine(2, e:routine(2) + 1)
@@ -1021,8 +1026,6 @@ local function explode(e)
     e:goto_angle(e:var(BLAST_DIR), 0x4B)
 end
 
--- `funcs_469D34`; going under while zapping (3, `FUN_0046a430`) isn't
--- ported.
 -- `FUN_0046a2a0`: hurt at the corridor's end, it dives. It waits out the
 -- camera's `fg_status` 0x80, turns a quarter (or, while it turns, is put at
 -- the end, facing back), and plays clip 7 in cut 9, then clip 1 five times;
@@ -1077,7 +1080,65 @@ local function dive(e)
     end
 end
 
-local HURTS <const> = { [0] = shrug, explode, dive, nil, flinch }
+-- `FUN_0046a430`: the dive while zapping. It dies (`Em_dead_flg_on`) and
+-- turns its head toward the corridor's end, holds the player's input, waits
+-- while the player aims, is put at the end if it was turning, and plays clip
+-- 8 in cut 0xE while it eases to `z` 0. Then it is back in cut 8, gone
+-- (`Type`'s 0x4000), and stays in routine 1,6, which does nothing. Its new
+-- boxes (`Atd` 1 and 3) aren't ported.
+local function zap_dive(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_died()
+        e:set_flag(STOP_BANK, STOP_INPUT, true)
+        e:set_status(0x110)
+        e:set_var(FLAGS, e:var(FLAGS) | 2)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:set_routine(3, 0)
+        e:set_neck_flags(e:neck_flags() | 4)
+        e:set_var(NECK_X, -0x2420)
+        e:set_var(NECK_Y, -0x708)
+        e:set_var(NECK_Z, 0x3CA)
+        e:set_routine(2, 1)
+        sub = 1
+    end
+    if sub == 1 then
+        if e:status(0x80) then
+            return
+        end
+        if e:var(TURNING) ~= 0 then
+            local _, y = e:pos()
+            e:set_pos(-0x4E9D, y, -0x388)
+            e:set_angle(0x1000)
+        end
+        e:pl_or_be_flg(0x80400)
+        e:cut_change(zapping(e) and 0xE or 7)
+        e:set_routine(2, 2)
+        sub = 2
+    end
+    if sub ~= 2 then
+        return
+    end
+    if e:routine(3) == 0 then
+        local x, y, z = e:pos()
+        z = approach_one(z, 0, 0x14)
+        e:set_pos(x, y, z)
+        if z == 0 then
+            e:set_routine(3, 1)
+        end
+    end
+    if mot_play_sp(e, 8, 0) ~= 0 then
+        e:set_kind(e:kind() | 0x4000)
+        e:cut_change(8)
+        e:clear_status(0x110)
+        e:set_flag(STOP_BANK, STOP_INPUT, false)
+        e:pl_clear_be_flg(0x80400)
+        set_routines(e, 0x601)
+    end
+end
+
+-- `funcs_469D34`, by `FUN_00469d40`'s pick.
+local HURTS <const> = { [0] = shrug, explode, dive, zap_dive, flinch }
 
 -- `FUN_00469cf0`: `Routine_0` 2.
 local function hurt(e)
