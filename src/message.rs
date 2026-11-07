@@ -1102,7 +1102,9 @@ impl MessageWindow {
                     );
                 }
             }
-            MessagePhase::YesNo if self.yes_no_shown && self.choice_at.or(metrics.choice).is_some() => {
+            MessagePhase::YesNo
+                if self.yes_no_shown && self.choice_at.or(metrics.choice).is_some() =>
+            {
                 // RE2's choice, on the line the question ended on.
                 let Some(choice) = self.choice_at.or(metrics.choice) else {
                     return;

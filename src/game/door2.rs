@@ -169,7 +169,10 @@ mod tests {
         // A key past the inventory's size is not found.
         let mut game = game_with(&[(0x14, 30), (0x59, 1)]);
         game.set_inventory_size(Some(1));
-        game.inventory.push(InventoryItem { id: 0x59, quantity: 1 });
+        game.inventory.push(InventoryItem {
+            id: 0x59,
+            quantity: 1,
+        });
         assert_eq!(game.re2_key_slot(0x59), None);
     }
 
@@ -212,7 +215,13 @@ mod tests {
         game.try_re2_door_for_test(&door(0x85, 0x59));
         close_message(&mut game, 0);
         game.tick_re2_key_lost();
-        assert_eq!(game.inventory[2], InventoryItem { id: 0x59, quantity: 0 });
+        assert_eq!(
+            game.inventory[2],
+            InventoryItem {
+                id: 0x59,
+                quantity: 0
+            }
+        );
         assert!(game.message.active);
         assert_eq!(game.message.id, shown(DOOR_DISCARD_KEY));
         // `Key_lost` raises the stop itself, before this tick's moves.
@@ -237,13 +246,31 @@ mod tests {
     fn the_last_use_asks_to_discard_and_yes_sorts_the_slots() {
         let game = discard(0);
         assert_eq!(game.inventory.len(), 3);
-        assert_eq!(game.inventory[2], InventoryItem { id: 0x14, quantity: 30 });
+        assert_eq!(
+            game.inventory[2],
+            InventoryItem {
+                id: 0x14,
+                quantity: 30
+            }
+        );
     }
 
     #[test]
     fn no_keeps_the_key_with_one() {
         let game = discard(1);
-        assert_eq!(game.inventory[2], InventoryItem { id: 0x59, quantity: 1 });
-        assert_eq!(game.inventory[3], InventoryItem { id: 0x14, quantity: 30 });
+        assert_eq!(
+            game.inventory[2],
+            InventoryItem {
+                id: 0x59,
+                quantity: 1
+            }
+        );
+        assert_eq!(
+            game.inventory[3],
+            InventoryItem {
+                id: 0x14,
+                quantity: 30
+            }
+        );
     }
 }

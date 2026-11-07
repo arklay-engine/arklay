@@ -7528,12 +7528,10 @@ impl GameSession {
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
-            re2_doors: self.game.is_re2_room.then(|| {
-                (
-                    self.game.message.message_state(),
-                    self.game.re2.door_locks,
-                )
-            }),
+            re2_doors: self
+                .game
+                .is_re2_room
+                .then(|| (self.game.message.message_state(), self.game.re2.door_locks)),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
