@@ -1508,6 +1508,7 @@ local KITE_DASH = C.WARP_DISTANCE * 2
 local KITE_TURN_WAIT = 2 * C.SECOND // 3
 local KITE_REACH = C.REACH + C.APPROACH // 2
 local KITE_FETCH_TICKS = 3 * C.SECOND
+local KITE_TURN_TICKS = 8
 local KITE_STEER_MAX = C.FULL_TURN // 12
 local KITE_QUICK_FROM = C.FULL_TURN * 5 // 16
 local KITE_FLANK_TURN = C.FULL_TURN // 6
@@ -1801,15 +1802,36 @@ local function kite_step(bot, s, player)
     -- the action key once the reach point is on it.
     local fetch_ok = false
     if goal and kk.mode ~= "aim" and kk.mode ~= "lower" and kk.mode ~= "turn" then
-        -- The run there (at the run's speed, the pickup pauses the room)
-        -- keeps clear of where the tyrant can walk meanwhile, and of its
-        -- line now.
+        -- The run there (at the run's speed; the pickup pauses the room),
+        -- the tyrant walking at the bot all the while: it stays out of its
+        -- reach and a step, and at the pickup out of KITE_REACH past its
+        -- reach unless it is behind (the run on is the escape: no turn).
+        -- Its walk straight to the launcher (the old test) is no chase:
+        -- that held the fetch off 1000 to 2000 ticks, and seed 4's
+        -- self-destruct timer ran out first.
         local run = bot:distance(goal.x, goal.z)
         local ticks = run / C.SPEED.run
-        local tg = ((e.x - goal.x) ^ 2 + (e.z - goal.z) ^ 2) ^ 0.5
-        local line = segment_dist2(e.x, e.z, player.x, player.z, goal.x, goal.z) ^ 0.5
-        local lead = (entry.reach or 0) + KITE_REACH
-        fetch_ok = tg - kite.speed * ticks > lead and line > lead
+        local gx, gz = norm(goal.x - player.x, goal.z - player.z)
+        local bx, bz, tx, tz = player.x, player.z, e.x, e.z
+        local reach = (entry.reach or 0) + C.APPROACH
+        local gap = ((player.x - e.x) ^ 2 + (player.z - e.z) ^ 2) ^ 0.5
+        -- Facing away, a quick turn's stand first.
+        local fx, fz = heading(player.angle)
+        local stand = (fx * gx + fz * gz < 0) and KITE_TURN_TICKS or 0
+        for t = 1, (ticks // 1) + stand do
+            if t > stand then
+                bx, bz = bx + gx * C.SPEED.run, bz + gz * C.SPEED.run
+            end
+            local cx, cz = norm(bx - tx, bz - tz)
+            tx, tz = tx + cx * kite.speed, tz + cz * kite.speed
+            local g = ((bx - tx) ^ 2 + (bz - tz) ^ 2) ^ 0.5
+            if g < gap then
+                gap = g
+            end
+        end
+        local behind = (tx - goal.x) * gx + (tz - goal.z) * gz < 0
+        local last = ((goal.x - tx) ^ 2 + (goal.z - tz) ^ 2) ^ 0.5
+        fetch_ok = gap > reach and (behind or last > (entry.reach or 0) + KITE_REACH)
             and (kk.mode == "fetch" or ticks < KITE_FETCH_TICKS)
     end
     if fetch_ok then
@@ -1968,7 +1990,14 @@ local function kite_step(bot, s, player)
             shoot_from = kite.edge
         end
     end
-    if stop and d >= shoot_from and (ab == kite.walk or ab == 0) and kk.mode == "run" then
+    -- A stop needs the run after it: room straight away from the tyrant
+    -- (a stop against the deck's edge leaves only a run past its side).
+    local function escape()
+        local ax, az = norm(player.x - e.x, player.z - e.z)
+        return kite_room(bot, player, ax, az) >= RANGE // 2
+    end
+    if stop and d >= shoot_from and (ab == kite.walk or ab == 0) and kk.mode == "run"
+        and escape() then
         kk.gun = stop
         bot:log(string.format("kite: stop with gun %s (pick %s)", tostring(kk.gun), tostring(gun)))
         if facing_err > C.FULL_TURN // 4 then
