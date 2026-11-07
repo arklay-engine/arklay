@@ -132,7 +132,33 @@ pub struct Enemy {
     /// the rocket launcher, and its launcher damage is left `unknown`)
     /// (optional attribute; needs `open`).
     pub save: Option<i32>,
+    /// A ranged attack the bot dodges ahead of time (an optional `<spit>`
+    /// element): see [`Spit`].
+    pub spit: Option<Spit>,
     pub keeps: Vec<Keep>,
+}
+
+/// A spit the bot cannot react to once it flies (30C's Black Tiger: three
+/// globs at twice the run speed, a hit from 3300 within 5 ticks), so it is
+/// dodged from a tell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Spit {
+    /// The action behaviour that spits (`spit`).
+    pub behavior: u8,
+    /// The action behaviour and sub-state that come just before a spit
+    /// (`tell="behaviour:state"`: the Black Tiger's bite recovery).
+    pub tell: (u8, u8),
+    /// The widest side glob's yaw off the aim, in 4096ths of a turn (`fan`).
+    pub fan: i32,
+    /// A glob hits the player within this of it (`hit`).
+    pub hit: i32,
+    /// The globs spawn this far ahead of the spitter (`spawn`)...
+    pub spawn: i32,
+    /// ...and fly this far a tick (`speed`).
+    pub speed: i32,
+    /// The spitter's melee keep-away: a spot this far from its centre is
+    /// out of its bite (`bite`).
+    pub bite: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -351,6 +377,42 @@ fn name_attr(node: Node<'_, '_>) -> Result<String> {
     Ok(name)
 }
 
+fn parse_spit(node: Node<'_, '_>) -> Result<Spit> {
+    check_attributes(
+        node,
+        &["behavior", "tell", "fan", "hit", "spawn", "speed", "bite"],
+    )?;
+    check_leaf(node)?;
+    let tell = attr_text(node, "tell")?;
+    let Some((b, st)) = tell.split_once(':') else {
+        bail!("{}: `tell` must be behaviour:state, not `{tell}`", at(node));
+    };
+    let number = |text: &str| -> Result<u8> {
+        let text = text.trim();
+        let value = match text.strip_prefix("0x") {
+            Some(hex) => u8::from_str_radix(hex, 16),
+            None => text.parse(),
+        };
+        value.map_err(|_| anyhow::anyhow!("{}: `tell` part `{text}` is not a byte", at(node)))
+    };
+    let spit = Spit {
+        behavior: attr(node, "behavior")?,
+        tell: (number(b)?, number(st)?),
+        fan: attr(node, "fan")?,
+        hit: attr(node, "hit")?,
+        spawn: attr(node, "spawn")?,
+        speed: attr(node, "speed")?,
+        bite: attr(node, "bite")?,
+    };
+    if spit.speed <= 0 || spit.hit <= 0 || spit.spawn < 0 || spit.bite < 0 {
+        bail!(
+            "{}: needs speed > 0, hit > 0, spawn >= 0 and bite >= 0",
+            at(node)
+        );
+    }
+    Ok(spit)
+}
+
 fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     check_attributes(
         node,
@@ -394,7 +456,15 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         ),
     };
     let mut keeps = Vec::new();
+    let mut spit = None;
     for child in elements(node) {
+        if child.tag_name().name() == "spit" {
+            if spit.is_some() {
+                bail!("{}: one <spit> per enemy", at(child));
+            }
+            spit = Some(parse_spit(child)?);
+            continue;
+        }
         if child.tag_name().name() != "keep" {
             bail!(
                 "{}: unknown <enemy> element <{}>",
@@ -477,6 +547,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         prefer,
         open,
         save,
+        spit,
         keeps,
     })
 }
@@ -586,6 +657,16 @@ impl Knowledge {
             row.set("open", enemy.open)?;
             row.set("head", enemy.head)?;
             row.set("save", enemy.save)?;
+            if let Some(spit) = enemy.spit {
+                row.set("spit_behavior", spit.behavior)?;
+                row.set("tell_behavior", spit.tell.0)?;
+                row.set("tell_state", spit.tell.1)?;
+                row.set("fan", spit.fan)?;
+                row.set("glob_hit", spit.hit)?;
+                row.set("glob_spawn", spit.spawn)?;
+                row.set("glob_speed", spit.speed)?;
+                row.set("bite_keep", spit.bite)?;
+            }
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
                 let band = lua.create_table()?;
@@ -707,6 +788,36 @@ mod tests {
         assert!(parse(&text.replace("item=\"0x42\"", "item=\"0\"")).is_err());
         assert!(parse(&text.replace("heals=\"no\"/>", "heals=\"no\" n=\"1\"/>")).is_err());
         assert!(parse(&text.replace("heals=\"no\"", "heals=\"unknown\"")).is_err());
+    }
+
+    #[test]
+    fn a_spit_parses_and_rejects_typos() {
+        let text = r#"<knowledge format="1">
+            <enemy id="4" name="tiger" policy="fight" stand="torso" downed="none"
+                up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204">
+                <spit behavior="0x0D" tell="0x0C:4" fan="0x100" hit="600" spawn="1000"
+                    speed="373" bite="2600"/>
+            </enemy>
+        </knowledge>"#;
+        let k = parse(text).unwrap();
+        assert_eq!(
+            k.enemies[0].spit,
+            Some(Spit {
+                behavior: 0x0D,
+                tell: (0x0C, 4),
+                fan: 0x100,
+                hit: 600,
+                spawn: 1000,
+                speed: 373,
+                bite: 2600,
+            })
+        );
+        assert!(parse(&text.replace("tell=\"0x0C:4\"", "tell=\"12\"")).is_err());
+        assert!(parse(&text.replace("speed=\"373\"", "speed=\"0\"")).is_err());
+        assert!(parse(&text.replace(" bite=\"2600\"", "")).is_err());
+        assert!(parse(&text.replace("bite=", "bit=")).is_err());
+        let twice = text.replace("</enemy>", "<spit behavior=\"1\" tell=\"1:1\" fan=\"1\" hit=\"1\" spawn=\"1\" speed=\"1\" bite=\"1\"/></enemy>");
+        assert!(parse(&twice).is_err());
     }
 
     #[test]

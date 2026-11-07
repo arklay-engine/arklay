@@ -241,8 +241,14 @@ pub enum Target {
     /// one so the combat layer engages (40C's Plant 42, which never comes
     /// to the player). `stage` (a room id's first character) is another
     /// stage the box loadout readies it from (303's Tyrant, met from the
-    /// lab's escape lift: `stage="5"`).
-    Fight { enemy: u8, stage: Option<u8> },
+    /// lab's escape lift: `stage="5"`). `optional` (`<fight optional="yes">`):
+    /// the sequence passes the step while no held gun has a band for the
+    /// enemy (30C's Black Tiger, dodged while the knife cuts the web).
+    Fight {
+        enemy: u8,
+        stage: Option<u8>,
+        optional: bool,
+    },
     /// Stand still in the room until the step's flag is set: a timed room
     /// event that must play out (20C's pit, where Barry comes back with the
     /// rope after 600 frames).
@@ -428,6 +434,8 @@ pub struct RoomFight {
     /// The other stage the loadout readies it from (`<fight stage>`), as
     /// the ASCII byte of the room id's first character.
     pub stage: Option<u8>,
+    /// `<fight optional="yes">`: passed while no held gun can fight it.
+    pub optional: bool,
 }
 
 /// Every room's `<fight>` facts, by room id then document order
@@ -436,12 +444,18 @@ pub fn load_fights(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomFight>> {
     let mut fights = Vec::new();
     for (id, meta) in load_all(pack, jill)? {
         for fact in meta.interacts {
-            if let Target::Fight { enemy, stage } = fact.target {
+            if let Target::Fight {
+                enemy,
+                stage,
+                optional,
+            } = fact.target
+            {
                 fights.push(RoomFight {
                     room: id.clone(),
                     enemy,
                     flag: fact.flag,
                     stage,
+                    optional,
                 });
             }
         }
@@ -1079,11 +1093,17 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
             "after_bit",
             "after_while",
             "stage",
+            "optional",
             "label",
             "character",
         ],
     )?;
     check_leaf(node)?;
+    let optional = match node.attribute("optional") {
+        None | Some("no") => false,
+        Some("yes") => true,
+        Some(text) => bail!("{}: `optional` must be yes or no, not `{text}`", at(node)),
+    };
     let stage = match node.attribute("stage") {
         None => None,
         Some(text) => match text.as_bytes() {
@@ -1098,6 +1118,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         target: Target::Fight {
             enemy: attr(node, "enemy")?,
             stage,
+            optional,
         },
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
@@ -1857,7 +1878,18 @@ mod tests {
             meta.interacts[0].target,
             Target::Fight {
                 enemy: 0x08,
-                stage: None
+                stage: None,
+                optional: false,
+            }
+        );
+        let optional =
+            r#"<bot format="2"><fight enemy="0x04" bank="3" bit="137" optional="yes"/></bot>"#;
+        assert_eq!(
+            parse(optional).unwrap().interacts[0].target,
+            Target::Fight {
+                enemy: 0x04,
+                stage: None,
+                optional: true,
             }
         );
         assert_eq!(meta.interacts[0].flag, Some((3, 96)));
@@ -1868,7 +1900,8 @@ mod tests {
             parse(staged).unwrap().interacts[0].target,
             Target::Fight {
                 enemy: 0x10,
-                stage: Some(b'5')
+                stage: Some(b'5'),
+                optional: false,
             }
         );
         let long = r#"<bot format="2"><fight enemy="0x10" bank="3" bit="1" stage="55"/></bot>"#;

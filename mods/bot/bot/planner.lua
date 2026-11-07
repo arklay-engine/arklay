@@ -1285,6 +1285,12 @@ local function fight_due(bot, fight)
     if fight.bank and bot:flag(fight.bank, fight.bit) then
         return false
     end
+    -- An optional fight the bot is not armed for is passed, not due (30C's
+    -- Black Tiger, dodged while the knife cut the web: the bot went back
+    -- from 30D to fight it with the shotgun).
+    if fight.optional and not BotPuzzle.armed_for(bot, fight.enemy) then
+        return false
+    end
     -- Forced from an empty frontier (forgive_fight): due, ready or not.
     local forced = plan().forced_fight
     if forced and forced.room == fight.room
@@ -1312,6 +1318,7 @@ local function fight_due(bot, fight)
             break
         end
         if other.room == fight.room and not (other.bank and bot:flag(other.bank, other.bit))
+            and not (other.optional and not BotPuzzle.armed_for(bot, other.enemy))
             and not BotSurvival.fight_ready(bot, other) then
             return false
         end
@@ -2633,6 +2640,16 @@ end
 function BotPlanner.leaving()
     local goal = plan().goal
     return goal ~= nil and (goal.kind == "door" or goal.kind == "stair")
+end
+
+-- A tick the goal did not get (a spit dodge held the pad): its time
+-- budget is not spent. 30C's tiger spits every few seconds, and the dodges
+-- timed the web door out while the bot stood next to it.
+function BotPlanner.hold_clock()
+    local goal = plan().goal
+    if goal and goal.started then
+        goal.started = goal.started + 1
+    end
 end
 
 function BotPlanner.drop_goal(bot)
