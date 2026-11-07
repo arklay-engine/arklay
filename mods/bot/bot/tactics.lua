@@ -173,6 +173,15 @@ local SLOW_FIGHT = "low health: shoot a slow one rather than pass it"
 -- The verdict for one that hurt the bot on an earlier pass, fought with
 -- no margin of rounds.
 local HURT_FIGHT = "it hurt the bot on an earlier pass"
+-- Live grabbers in one room that make it a death trap: in RE1 a zombie's
+-- bite stuns, the rest take their turns, and the bot rarely gets out.
+-- 509's four naked zombies, run past with the launcher's explosive rounds
+-- kept for bosses, bit it from 96 to dead. So they are fought, the
+-- reserve given up (BotTactics.trap).
+local TRAP_CROWD = 3
+local TRAP_FIGHT = "a death trap of grabbers: kill them"
+-- Shots a trap zombie that make an ordinary gun fast enough for a trap.
+local TRAP_FAST = 2
 
 -- Monsters that have hurt the bot, by "room:slot" (a monster's slot is
 -- fixed in its room). Kept across saves and reloads: the next pass meets
@@ -231,6 +240,11 @@ function BotTactics.decide(o)
     -- a fight with it, closing in or not.
     if o.no_band then
         return "run", "no band for this gun"
+    end
+    -- A death trap (BotTactics.trap: its zombies still standing) the rounds cover is
+    -- fought at any health and while sourcing: a run past it is bitten.
+    if o.trap and o.trap > 0 and o.trap_covered then
+        return "fight", TRAP_FIGHT
     end
     -- Inside twice its reach it gets the bot anyway: shoot what is left.
     -- So is one inside the band's far edge: a zombie closes on the bot
@@ -384,7 +398,7 @@ end
 -- stronger gun (the shotgun) is spent only on a fight the plain pick
 -- cannot finish, and a fight with no kill data keeps the plain pick.
 -- Returns the row or nil.
-function BotTactics.pick_gun(guns, entry, health, margin, crowd)
+function BotTactics.pick_gun(guns, entry, health, margin, crowd, trap)
     health = health or (entry and entry.health)
     margin = margin or 1
     local function shots(row)
@@ -432,8 +446,9 @@ function BotTactics.pick_gun(guns, entry, health, margin, crowd)
     -- covers the kill goes first, so the fight is short. 308's two
     -- hunters met a handgun holding the rounds for both and swiped the
     -- bot to death while it took them down seven shots each.
-    -- Only for one the bot cannot outrun: zombies are walked past.
-    if entry and entry.grabs and entry.outrun ~= true and (crowd or 0) >= 2 then
+    -- Only for one the bot cannot outrun: zombies are walked past, unless
+    -- they make a death trap (`trap`).
+    if entry and entry.grabs and (entry.outrun ~= true or trap) and (crowd or 0) >= 2 then
         for _, row in ipairs(guns) do
             local n = row.reserve and shots(row)
             if n and n <= row.rounds then
@@ -566,8 +581,19 @@ end
 -- that prefers it, with rounds that never run out. `crowd` (optional):
 -- every grabber of the same kind near the bot, `enemy` among them; an
 -- ordinary gun finishes only the rounds for all of them.
-local function firearm(bot, k, enemy, crowd)
+local function firearm(bot, k, enemy, crowd, trap)
     local weapon = bot:weapon()
+    -- A launcher whose own loading is spent counts its other loadings'
+    -- rounds: the menu reload loads them (BotInventory.load_now). 509's
+    -- launcher fired its last flame round, then ran past three zombies
+    -- holding 18 explosive rounds, "no firearm with rounds".
+    local function family(item, own)
+        local row = k.weapons[item]
+        if own > 0 or not row or row.melee then
+            return own
+        end
+        return family_rounds(bot, k, row.variant_of or item)
+    end
     local entry = enemy and k.enemies[enemy.id]
     local function melee(item)
         local row = k.weapons[item]
@@ -581,15 +607,16 @@ local function firearm(bot, k, enemy, crowd)
             if entry and entry.prefer == weapon.equipped then
                 guns[1] = { item = weapon.equipped, rounds = hand_rounds, equipped = true }
             end
-        elseif weapon.clip + weapon.reserve > 0 then
-            guns[1] = { item = weapon.equipped, rounds = weapon.clip + weapon.reserve,
+        elseif family(weapon.equipped, weapon.clip + weapon.reserve) > 0 then
+            guns[1] = { item = weapon.equipped,
+                rounds = family(weapon.equipped, weapon.clip + weapon.reserve),
                 equipped = true, reserve = k.weapons[weapon.equipped].reserve == true,
                 base = k.weapons[weapon.equipped].variant_of }
         end
     end
     for _, row in ipairs(bot:menu().items or {}) do
         if row.kind == "weapon" and k.weapons[row.item] and row.item ~= weapon.equipped then
-            local rounds = held_rounds(bot, row)
+            local rounds = family(row.item, held_rounds(bot, row))
             if melee(row.item) then
                 rounds = entry and entry.prefer == row.item and hand_rounds or 0
             end
@@ -638,6 +665,13 @@ local function firearm(bot, k, enemy, crowd)
             local spare = family_rounds(bot, k, base)
                 - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id)
                 - keep
+            -- A death trap spends everything: the bosses are no use dead.
+            -- The launcher's last flame round goes first, then the reload
+            -- loads the explosives.
+            if trap then
+                spare = family_rounds(bot, k, base)
+                row.rounds = spare
+            end
             if spare < row.rounds then
                 row.rounds = spare
             end
@@ -650,18 +684,18 @@ local function firearm(bot, k, enemy, crowd)
     -- reserve leave: 308's hunters took the rounds 513's Tyrant needed.
     local crowd_n = crowd and #crowd or 0
     for _, row in ipairs(guns) do
-        if row.reserve and crowd_n >= 2 then
+        if row.reserve and crowd_n >= 2 and not trap then
             local base = row.base or row.item
             if family_rounds(bot, k, base) - BotTactics.saved_rounds(bot, k, base) <= 0 then
                 crowd_n = 0
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin, crowd_n)
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin, crowd_n, trap)
     if not best then
-        return nil, 0
+        return nil, 0, guns
     end
-    return best.item, best.rounds
+    return best.item, best.rounds, guns
 end
 
 local function rounds_for(enemy, entry, gun)
@@ -777,6 +811,104 @@ local function by_hand(k, entry)
 end
 
 -- Decide every monster near the bot; returns the fight target or nil.
+-- Squared distance from (px, pz) to the segment (ax, az)-(bx, bz), in floats.
+local function segment_dist2(px, pz, ax, az, bx, bz)
+    local dx, dz = (bx - ax) * 1.0, (bz - az) * 1.0
+    local len2 = dx * dx + dz * dz
+    local t = 0
+    if len2 > 0 then
+        t = ((px - ax) * dx + (pz - az) * dz) / len2
+        t = t < 0 and 0 or (t > 1 and 1 or t)
+    end
+    local ex, ez = px - (ax + t * dx), pz - (az + t * dz)
+    return ex * ex + ez * ez
+end
+
+-- The death trap in this room: the live slow grabbers (knowledge grabs and
+-- outrun, the zombies: their bite stuns and the others queue for theirs),
+-- not a monster of parts, when one lies on the walk to the planner's goal
+-- and TRAP_CROWD or more lie near enough to gather on it. Once seen, the room stays
+-- a trap until its last one is down (they all come). Returns the list or nil.
+local TRAP_RECHECK = C.SECOND
+local TRAP_CONTACT = 2
+local TRAP_GATHER = 4
+function BotTactics.trap(bot, enemies)
+    local s = state()
+    local k = bot:knowledge()
+    local room = bot:room().id
+    local list = {}
+    for _, e in ipairs(enemies or bot:enemies()) do
+        local entry = k and k.enemies[e.id]
+        if entry and entry.grabs and entry.outrun == true and not entry.parts
+            and entry.policy == "fight" and not by_hand(k, entry) and (e.health or 0) >= 0 then
+            list[#list + 1] = e
+        end
+    end
+    if s.trap_room == room then
+        return #list > 0 and list or nil
+    end
+    if #list < TRAP_CROWD then
+        return nil
+    end
+    local goal = BOT_STATE.plan and BOT_STATE.plan.goal
+    local zone = goal and goal.job and goal.job.zone
+    if not zone then
+        return nil
+    end
+    -- Where the walk ends: the job's approach point, else the zone's centre
+    -- (often inside the desk or wall it is pressed from, with no path).
+    local gx, gz = BotNav.centre(zone)
+    local point = goal.job.points and goal.job.points[goal.job.index or 1]
+    if point then
+        gx, gz = point[1], point[2]
+    end
+    local now = bot:tick()
+    local cache = s.trap_path
+    if not cache or cache.room ~= room or cache.gx ~= gx or cache.gz ~= gz
+        or now - cache.tick >= TRAP_RECHECK then
+        local player = bot:player()
+        local points = { { x = player.x, z = player.z } }
+        local found = bot:path(gx, gz)
+        if found.status == "ok" then
+            for _, point in ipairs(found.points) do
+                points[#points + 1] = point
+            end
+        end
+        points[#points + 1] = { x = gx, z = gz }
+        cache = { room = room, gx = gx, gz = gz, tick = now, points = points }
+        s.trap_path = cache
+    end
+    -- One on the walk (inside TRAP_CONTACT reaches of it) bites first; the
+    -- rest gather while its bite holds the bot, from up to TRAP_GATHER
+    -- reaches away. 509's walk passed one zombie at 400 and drew two more
+    -- from 3400 and 4900 while the first bit.
+    local contact, on_path = false, 0
+    for _, e in ipairs(list) do
+        local reach = (k.enemies[e.id].reach or C.REACH) * 1.0
+        local pts = cache.points
+        local best = nil
+        for i = 1, #pts - 1 do
+            local d2 = segment_dist2(e.x, e.z, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z)
+            if not best or d2 < best then
+                best = d2
+            end
+        end
+        if best and best <= (TRAP_CONTACT * reach) ^ 2 then
+            contact = true
+        end
+        if best and best <= (TRAP_GATHER * reach) ^ 2 then
+            on_path = on_path + 1
+        end
+    end
+    if not contact or on_path < TRAP_CROWD then
+        return nil
+    end
+    s.trap_room = room
+    bot:log(string.format("death trap: %d zombies on the way to %s (%d in the room): kill them",
+        on_path, goal.label, #list))
+    return list
+end
+
 local function choose(bot, s, k, enemies, player)
     -- A <fight> step's target fought by hand is the fight once it is inside
     -- the weapon's band, whatever else is near.
@@ -820,7 +952,43 @@ local function choose(bot, s, k, enemies, player)
             end
         end
     end
-    local gun, rounds = firearm(bot, k, nearest, crowd)
+    -- A death trap: TRAP_CROWD or more live grabbers anywhere in the room
+    -- (they all come). The crowd is all of them, and the reserve gives way.
+    local trap = BotTactics.trap(bot, enemies)
+    if trap then
+        crowd = trap
+    end
+    local gun, rounds, guns = firearm(bot, k, nearest, crowd, trap ~= nil)
+    -- A trap's crowd: the gun that downs all of it, ranked an ordinary gun
+    -- that kills fast (TRAP_FAST shots a zombie: the shotgun), then the
+    -- reserve gun (the launcher: the bosses' rounds go only where nothing
+    -- else clears the crowd fast; spent on every crowd, 303's Tyrant met
+    -- an empty launcher four times), then the rest by fewest shots; else
+    -- whatever the guns cover between them.
+    local trap_covered = nil
+    if trap and gun then
+        local share, best_row, best_tier, best_need = 0, nil, nil, nil
+        for _, row in ipairs(guns or {}) do
+            local need = 0
+            for _, e in ipairs(trap) do
+                need = need + rounds_for(e, k.enemies[e.id], row.item)
+            end
+            if need > 0 then
+                share = share + row.rounds / need
+                if need <= row.rounds then
+                    local tier = row.reserve and 1 or (need <= TRAP_FAST * #trap and 0 or 2)
+                    if not best_tier or tier < best_tier
+                            or (tier == best_tier and need < best_need) then
+                        best_row, best_tier, best_need = row, tier, need
+                    end
+                end
+            end
+        end
+        if best_row then
+            gun, rounds = best_row.item, best_row.rounds
+        end
+        trap_covered = share >= 1
+    end
     local near, fightable = {}, {}
     for i = 1, #enemies do
         local enemy = enemies[i]
@@ -837,7 +1005,7 @@ local function choose(bot, s, k, enemies, player)
         return nil
     end
     local crowd_needed = 0
-    for _, enemy in ipairs(fightable) do
+    for _, enemy in ipairs(trap or fightable) do
         crowd_needed = crowd_needed + rounds_for(enemy, k.enemies[enemy.id], gun)
     end
     local cross = nil
@@ -860,7 +1028,9 @@ local function choose(bot, s, k, enemies, player)
                 gun = gun ~= nil and rounds > 0,
                 rounds = rounds,
                 needed = rounds_for(enemy, entry, gun),
-                crowd_needed = #fightable > 1 and crowd_needed or nil,
+                crowd_needed = (trap or #fightable > 1) and crowd_needed or nil,
+                trap = trap and #trap or nil,
+                trap_covered = trap_covered,
                 health = player.health,
                 max_health = player.max_health,
                 risk = risk(bot),
@@ -903,13 +1073,15 @@ local function choose(bot, s, k, enemies, player)
                 end
             elseif enemy.visible
                 and (abs(angle_delta(enemy.bearing, player.angle)) <= arc
-                    or enemy.distance <= 2 * (entry.reach or C.REACH)) then
+                    or enemy.distance <= 2 * (entry.reach or C.REACH)
+                    or why == TRAP_FIGHT) then
                 local focused = best and best.slot == s.focus
                 if enemy.slot == s.focus or (not focused
                         and (not best or enemy.distance < best.distance)) then
                     best = enemy
                     best.why = why
                     best.must = why == MUST_FIGHT or why == SLOW_FIGHT or why == HURT_FIGHT
+                        or why == TRAP_FIGHT
                 end
             end
         end
@@ -1060,6 +1232,7 @@ function BotTactics.step(bot, scene, player)
         s.no_aim = {}
         s.avoid_until = nil
         s.focus = nil
+        s.trap_room = nil
     end
     if bot:tick() < (s.calm_until or 0) and not s.active then
         return false
