@@ -1374,7 +1374,6 @@ impl GameHost<'_> {
     }
 
     /// Set the player's position or facing for `pos_set` and `dir_set`.
-    /// `Sce_se_on`: its position is its offset from the body it names.
     /// A script's write to a fade: fade 0 is the session's, for the door's own
     /// to share.
     fn fade_write(&mut self, fade: u8, write: FadeWrite) {
@@ -1388,6 +1387,7 @@ impl GameHost<'_> {
         }
     }
 
+    /// `Sce_se_on`: its position is its offset from the body it names.
     fn se_on(&mut self, at: impl Fn(usize) -> i64) {
         let (slot, positional) = (at(1) as u16 & 0xff, at(1) as u16 >> 8);
         let work = at(2) as u16;
@@ -1410,7 +1410,12 @@ impl GameHost<'_> {
             1 => player,
             2 => character(SPLAYER_SLOT).unwrap_or(player),
             3 => character(usize::from(work >> 8)).unwrap_or(player),
-            // Objects have no position here yet.
+            // `pOm[n]`'s position, as `Sce_se_on` reads it.
+            4 => self
+                .game
+                .objects
+                .record(usize::from(work >> 8))
+                .map_or(player, |object| object.pos),
             _ => player,
         };
         let offset = [at(3) as i32, at(4) as i32, at(5) as i32];
@@ -2304,6 +2309,21 @@ mod tests {
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0);
         assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn se_on_of_an_object_sounds_at_the_object() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [
+            2, 2, 0, 0, 0, 0x4000, 0, 0x10, 0, 100, -200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        exec(&mut game, "obj_model_set", &call);
+        // Room 102's gate: room slot 0x0a in 3D, at object 2 and 10 units up.
+        exec(&mut game, "se_on", &[2, 0x10A, 0x204, 0, -10, 0]);
+        let sound = game.re2.sounds.last().unwrap();
+        assert_eq!(sound.id, crate::se2::SoundId::decode(0x020A_0001).unwrap());
+        assert_eq!(sound.pos, [100, -210, 300]);
     }
 
     #[test]
