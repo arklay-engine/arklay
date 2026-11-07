@@ -1,0 +1,36 @@
+# Leon A's route on from the fought route's end: the main hall (200) to room 202, where Marvin's scene gives the Blue Card Key and walks Leon back out, then room 200's event 5 and the walk to the computer, which Leon agrees to use on tick 13800 (oracle/re2.md, "The route"). Its first 9600 ticks are route_100_200_fight's input. The voice lines end by the recording's clock, so the run takes their lengths from the reference.
+[[run]]
+name = "route_200_computer"
+room = "new"
+offset = 0
+ticks = 13900
+setup_script = "route_200_computer.lua"
+input = "route_200_computer.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
+frames = [0, 13800]
+frame_max_mean = 0.8
+expect = { tick = 13802, fields = ["cam", "mot", "rseed"], note = "room 200's computer: the original enters game mode 7 on tick 13801 and shows cut 15, its console, on 13802, which arklay doesn't port yet (docs/internals/deviations/re2.md)" }
+# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+    [10012, "rng"],
+    [10012, "rseed"],
+    [12783, "rng"],
+    [12783, "rseed"],
+]
