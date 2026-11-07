@@ -21,6 +21,8 @@
 #   -P, --param K=V      --bot-param, repeatable (BATCH_PARAMS, space-separated K=V list):
 #                        a story decision (mods/bot/params/re1.xml declares them)
 #       --no-build       skip `cargo build --profile test-release`
+#       --keep-saves     keep seed-<s>.saves/ after each run (KEEP_SAVES=1), to
+#                        --load a save of the run later
 #
 # Output: <out>/<name>/seed-<s>.log (large, ~30 MB), seed-<s>.saves/, and
 # summary.txt + summary.json. Hits are `damage health A -> B` log lines with
@@ -57,6 +59,7 @@ while [ $# -gt 0 ]; do
     --max-ticks) MAX_TICKS="${2:?}"; shift ;;
     -P|--param) PARAMS="${PARAMS:+$PARAMS }${2:?}"; shift ;;
     --no-build) BUILD=0 ;;
+    --keep-saves) KEEP_SAVES=1 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -91,7 +94,7 @@ printf 'pack=%s\nrisk=%s\nseeds=%s\nmax_ticks=%s\nparams=%s\ncommit=%s\n' \
   "$PACK" "$RISK" "$(echo $seed_list | tr ' ' ',')" "$MAX_TICKS" "$PARAMS" \
   "$(git rev-parse --short HEAD 2>/dev/null)" > "$DIR/batch.txt"
 
-export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS
+export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS KEEP_SAVES
 run_one() {
   s="$1"
   rm -rf "$DIR/seed-$s.saves"; mkdir -p "$DIR/seed-$s.saves"
@@ -106,7 +109,7 @@ run_one() {
       --save-dir "$DIR/seed-$s.saves" ) > "$DIR/seed-$s.log" 2>&1
   code=$?
   echo "exit=$code secs=$(( $(date +%s) - start ))" > "$DIR/seed-$s.exit"
-  rm -rf "$DIR/seed-$s.saves"
+  [ -n "$KEEP_SAVES" ] || rm -rf "$DIR/seed-$s.saves"
   echo "seed $s done (exit $code, $(( $(date +%s) - start ))s)"
 }
 export -f run_one
