@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 50B, the cells. Door 1 leads to 512, where entering frees Chris
+     (common 0x4B). Under chris=leave the bot keeps off it, so Chris stays
+     locked up for the Barry or Bad ending. -->
+<bot format="2">
+  <avoid slot="1" when="chris=leave" reason="512's cell: Chris stays locked up (chris=leave)"/>
+</bot>
