@@ -379,6 +379,9 @@ pub const G1_ID: u8 = 0x30;
 /// G2, William Birkin's second form, `Em_31`, whose script is
 /// `enemy/31/enemy.lua`.
 pub const G2_ID: u8 = 0x31;
+/// G3, William Birkin's third form, `Em_33`, whose script is
+/// `enemy/33/enemy.lua`.
+pub const G3_ID: u8 = 0x33;
 /// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
 /// point of `+0x21b`.
 const G1_FLAGS: usize = 3;
@@ -1124,6 +1127,24 @@ impl Em<'_, '_, '_> {
         self.z.parts = self.mover.posed_parts();
     }
 
+    /// `Em_33`, which leaves the rest to its script: unless the room is
+    /// stopped, `Damage_cnt`, the move, `Oba_ck_em` and `Sca_ck_em`
+    /// (`0x400`). Unlike G1 and G2, it has no `Root_ck`.
+    fn run_g3(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.script();
+        self.z.last_routine = self.work().routine;
+        self.oba_ck_em();
+        self.sca_ck_em();
+        self.z.parts = self.mover.posed_parts();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1239,6 +1260,10 @@ impl Em<'_, '_, '_> {
         }
         if matches!(self.mover.tick.id, G1_ID | G2_ID) {
             self.run_g1();
+            return;
+        }
+        if self.mover.tick.id == G3_ID {
+            self.run_g3();
             return;
         }
         if is_plant(self.mover.tick.id) {
