@@ -1,0 +1,97 @@
+# room 303 in scenario B: walk into cut 2 for the scene, then turn to G1 and shoot it with the shotgun every 30 ticks (oracle/re2.md)
+344 up
+380
+1128 right
+1132
+1134 aim
+1160 aim fire
+1165 aim
+1190 aim fire
+1195 aim
+1220 aim fire
+1225 aim
+1250 aim fire
+1255 aim
+1280 aim fire
+1285 aim
+1310 aim fire
+1315 aim
+1340 aim fire
+1345 aim
+1370 aim fire
+1375 aim
+1400 aim fire
+1405 aim
+1430 aim fire
+1435 aim
+1460 aim fire
+1465 aim
+1490 aim fire
+1495 aim
+1520 aim fire
+1525 aim
+1550 aim fire
+1555 aim
+1580 aim fire
+1585 aim
+1610 aim fire
+1615 aim
+1640 aim fire
+1645 aim
+1670 aim fire
+1675 aim
+1700 aim fire
+1705 aim
+1730 aim fire
+1735 aim
+1760 aim fire
+1765 aim
+1790 aim fire
+1795 aim
+1820 aim fire
+1825 aim
+1850 aim fire
+1855 aim
+1880 aim fire
+1885 aim
+1910 aim fire
+1915 aim
+1940 aim fire
+1945 aim
+1970 aim fire
+1975 aim
+2000 aim fire
+2005 aim
+2030 aim fire
+2035 aim
+2060 aim fire
+2065 aim
+2090 aim fire
+2095 aim
+2120 aim fire
+2125 aim
+2150 aim fire
+2155 aim
+2180 aim fire
+2185 aim
+2210 aim fire
+2215 aim
+2240 aim fire
+2245 aim
+2270 aim fire
+2275 aim
+2300 aim fire
+2305 aim
+2330 aim fire
+2335 aim
+2360 aim fire
+2365 aim
+2390 aim fire
+2395 aim
+2420 aim fire
+2425 aim
+2450 aim fire
+2455 aim
+2480 aim fire
+2485 aim
+2530

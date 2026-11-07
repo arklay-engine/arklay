@@ -805,6 +805,19 @@ impl UserData for Api {
             Ok(())
         });
         // Where `pSin_parts_ptr[part]` hangs from its parent.
+        // A part's place under its parent in place of the skeleton's, or the
+        // skeleton's again with no point.
+        methods.add_method_mut(
+            "set_joint_offset",
+            |_, e, (part, x, y, z): (u8, Option<i16>, Option<i16>, Option<i16>)| {
+                let offsets = &mut e.em().work().joint_offsets;
+                offsets.retain(|(index, _)| *index != part);
+                if let (Some(x), Some(y), Some(z)) = (x, y, z) {
+                    offsets.push((part, [x, y, z]));
+                }
+                Ok(())
+            },
+        );
         methods.add_method_mut("part_offset", |_, e, part: usize| {
             let [x, y, z] = e
                 .em()

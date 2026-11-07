@@ -376,6 +376,11 @@ pub const SPIDER_ID: u8 = 0x25;
 /// G1, William Birkin's first form, `Em_30`, whose script is
 /// `enemy/30/enemy.lua`.
 pub const G1_ID: u8 = 0x30;
+/// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
+/// point of `+0x21b`.
+const G1_FLAGS: usize = 3;
+const G1_ROOT_X: usize = 7;
+const G1_ROOT_Z: usize = 8;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
 /// that `Game_loop`'s `Joint_trans` left there, x and z.
 pub(crate) const SPIDER_FOOT: usize = 32;
@@ -1090,7 +1095,14 @@ impl Em<'_, '_, '_> {
     /// on every tick, then, unless the room is stopped, `Damage_cnt`, the
     /// move, `Oba_ck_em` and `Sca_ck_em` (`0x400`).
     fn run_g1(&mut self) {
-        self.root_ck();
+        // `+0x21c`'s 8 sends `Root_ck` to the point its routine 9 chose, which
+        // the script keeps in two of its fields.
+        if self.z.vars[G1_FLAGS] & 8 != 0 {
+            let [x, z] = [G1_ROOT_X, G1_ROOT_Z].map(|index| self.z.vars[index] as i16);
+            self.root_ck_to([x, z], None);
+        } else {
+            self.root_ck();
+        }
         if self.world.stopped {
             return;
         }
@@ -1099,6 +1111,8 @@ impl Em<'_, '_, '_> {
         }
         self.old_pos = self.mover.player.pos;
         self.script();
+        // `+0x1fc`, the routines a shot finds, which the hit goes back to.
+        self.z.last_routine = self.work().routine;
         self.oba_ck_em();
         self.sca_ck_em();
         // The parts as this tick's draw leaves them, which the step in's hit

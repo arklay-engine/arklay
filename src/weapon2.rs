@@ -266,6 +266,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
+        G1_ID => &G1_DAMAGE,
         // `Em_26` points at `Em_25`'s rows.
         SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
         ALLIGATOR_ID => &ALLIGATOR_DAMAGE,
@@ -406,6 +407,46 @@ const MRX_DAMAGE: [Damage; 7] = [
         damage: 0x0461_2C50,
         stun: 0x078F_1FB4,
         heights: MRX_SHOTGUN,
+    },
+];
+
+const G1_ID: u8 = crate::zombie2::G1_ID;
+/// The same rows for `Em_30` (`0x5369d0`).
+const G1_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0551_605A,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0330_DC3C,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0501_545A,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
     },
 ];
 
@@ -918,6 +959,17 @@ mod tests {
             [2, 3, 4, 5, 6, 7, 8].map(damage),
             [18, 18, 18, 200, 300, 59, 300]
         );
+    }
+
+    #[test]
+    fn g1_has_rows_of_its_own() {
+        let damage = |weapon| damage_table(G1_ID, weapon).unwrap().damage & 0x3FF;
+        assert_eq!(
+            [2, 3, 4, 5, 6, 7, 8].map(damage),
+            [16, 16, 16, 90, 100, 60, 90]
+        );
+        assert_eq!(damage_table(G1_ID, 7).unwrap().heights[1], 500);
+        assert_eq!(damage_table(G1_ID, 5).unwrap().heights[1], -2000);
     }
 
     #[test]
