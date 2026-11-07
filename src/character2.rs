@@ -661,6 +661,7 @@ fn run_zombie(
         status_and_not: 0,
         cut: None,
         objects,
+        sub1: false,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
@@ -670,6 +671,7 @@ fn run_zombie(
     let status_and_not = world.status_and_not;
     let flag_ops = std::mem::take(&mut world.flag_ops);
     let cut = world.cut;
+    let sub1 = world.sub1;
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
@@ -725,6 +727,12 @@ fn run_zombie(
         && re2.player.routine[2] == 0
         && let Some(bank) = model.banks.get(1)
     {
+        game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
+            keyframes: std::sync::Arc::new(bank.keyframes.clone()),
+            clips: std::sync::Arc::new(bank.clips.clone()),
+        }));
+    }
+    if sub1 && let Some(bank) = model.banks.get(1) {
         game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
             keyframes: std::sync::Arc::new(bank.keyframes.clone()),
             clips: std::sync::Arc::new(bank.clips.clone()),

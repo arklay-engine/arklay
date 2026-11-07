@@ -326,6 +326,9 @@ pub struct Work {
     pub spd: [i16; 3],
     pub(crate) spd_base: [i16; 3],
     timer0: u16,
+    /// `Sca_info`'s 1: whether `Sca_ck_em` pushed the player out of a wall
+    /// on the last tick, which `pl_dm02`'s slide reads.
+    pub sca_hit: bool,
     /// `Timer1` and `Timer2`: the climb's steps left and whether it goes down.
     timer1: i16,
     timer2: u8,
@@ -829,6 +832,7 @@ impl Default for Work {
             spd: [0; 3],
             spd_base: [0; 3],
             timer0: 0,
+            sca_hit: false,
             timer1: 0,
             timer2: 0,
             back_look: false,
@@ -3219,10 +3223,14 @@ impl Mover<'_, '_> {
     }
 
     /// `Pl_damage`: the hit reactions a `Sce_Damage` or an enemy starts.
-    /// `Routine_1` 4 and 5, the falls that read `pSub1`, play as the plain hit
+    /// `Routine_1` 4 and 5, the falls on `pSub1`'s clips, play as the plain
+    /// hit when no enemy has handed the player its clips
     /// (`docs/re2-deviations.md`).
     fn pl_damage(&mut self) {
+        let has_sub1 = !self.tick.banks.held.0.is_empty();
         match self.work.routine[1] {
+            4 if has_sub1 => self.pl_dm02(),
+            5 if has_sub1 => self.pl_dm03(),
             2 | 3 => {
                 let back = self.work.routine[1] & 1;
                 let speed = [
@@ -3255,6 +3263,213 @@ impl Mover<'_, '_> {
                     self.damage_joint(DAMAGE_BLEND_STEP);
                 }
             }
+        }
+    }
+
+    /// `Gacha_ch`: a button pressed this tick, which shortens a fall's wait.
+    fn gacha(&self) -> u16 {
+        u16::from(self.work.key_trg & 0x34F != 0)
+    }
+
+    /// The wait on the floor before a fall's getting up: longer the less life
+    /// is left.
+    fn floor_wait(&self) -> u16 {
+        let life = self.tick.life;
+        let mut wait: u16 = 0x1E;
+        if life < 0x96 {
+            wait = 0x3C;
+        }
+        if life < 0x46 {
+            wait += 0x32;
+        }
+        if life < 0x1E {
+            wait += 0x32;
+        }
+        if life == 0 {
+            wait += 100;
+        }
+        wait
+    }
+
+    /// Start a fall's clip on `pSub1`'s bank.
+    fn sub1_clip(&mut self, clip: u8) {
+        self.work.bank = Bank::Held;
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = DAMAGE_BLEND;
+    }
+
+    /// `pl_dm02`, `Pl_damage`'s `Routine_1` 4: knocked down backwards on the
+    /// enemy's clips (`pSub1`), sliding, onto a wall if one stops the slide
+    /// (`Sca_info`'s 1), the wait on the floor (shorter for each button
+    /// pressed) and the getting up, ending in the player's own clip 6 played
+    /// backwards.
+    fn pl_dm02(&mut self) {
+        const LATE: u16 = 0x400;
+        let mut sub = self.work.routine[2];
+        if sub == 0 {
+            self.work.spd = [-800, 0, 0];
+            self.sub1_clip(2);
+            self.work.neck.flags |= 0x12;
+            self.work.routine[2] = 1;
+            self.work.damage_cnt |= DAMAGE_LOCK;
+            self.work.sounds.push(0x401_0001);
+            self.work.be_flg &= !4;
+            sub = 1;
+        }
+        match sub {
+            1 => {
+                if self.work.hokan == 0 {
+                    self.work.routine[2] = 2;
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0x96);
+                if self.work.sca_hit {
+                    self.work.routine[2] = 5;
+                }
+            }
+            2 | 3 => {
+                if sub == 2 {
+                    self.sub1_clip(3);
+                    self.work.routine[2] = 3;
+                    self.work.sounds.push(0x22A_0001);
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0xF);
+                self.work.routine[2] += u8::from(ended);
+                if self.work.spd[0] > 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+            }
+            5 | 6 => {
+                if sub == 5 {
+                    self.sub1_clip(0);
+                    self.work.routine[2] = 6;
+                    self.work.sounds.push(0x229_0001);
+                    self.work.sounds.push(0x402_0001);
+                }
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+            }
+            7 | 8 => {
+                if sub == 7 {
+                    self.sub1_clip(4);
+                    self.work.routine[2] = 8;
+                    self.work.timer0 = self.floor_wait();
+                }
+                self.work.bank = Bank::Held;
+                self.joint_move_late_reversed(LATE, true);
+                let gacha = self.gacha();
+                self.work.timer0 = self.work.timer0.wrapping_sub(gacha * 5 + 1);
+                if (self.work.timer0 as i16) < 0 {
+                    self.work.routine[2] = 9;
+                }
+            }
+            9 | 10 => {
+                if sub == 9 {
+                    self.sub1_clip(1);
+                    self.work.routine[2] = 10;
+                    self.work.damage_cnt = 0;
+                }
+                self.work.bank = Bank::Held;
+                if self.joint_move_late(LATE) {
+                    self.work.routine[2] = 0xB;
+                    self.work.bank = Bank::Pld;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = DAMAGE_BLEND;
+                }
+            }
+            0xB => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(LATE, true) {
+                    self.work.routine[2] = 4;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `pl_dm03`, `Pl_damage`'s `Routine_1` 5: knocked down forwards on the
+    /// enemy's clips (`pSub1`), the wait on the floor (shorter for each
+    /// button pressed) and the getting up, ending in the player's own clip 6
+    /// played backwards.
+    fn pl_dm03(&mut self) {
+        const LATE: u16 = 0x400;
+        let mut sub = self.work.routine[2];
+        if sub == 0 {
+            self.work.damage_cnt |= DAMAGE_LOCK;
+            self.sub1_clip(5);
+            self.work.routine[2] = 1;
+            self.work.spd = [400, 0, 0];
+            self.work.neck.flags |= 0x12;
+            self.work.sounds.push(0x402_0001);
+            self.work.be_flg &= !4;
+            sub = 1;
+        }
+        match sub {
+            1 => {
+                if self.work.move_cnt == 5 && self.work.hokan == 3 {
+                    self.work.sounds.push(0x402_0001);
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+                let slow = if self.work.hokan == 0 { 0x32 } else { 0x14 };
+                self.work.spd[0] = self.work.spd[0].wrapping_sub(slow);
+                if self.work.spd[0] < 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            2 | 3 => {
+                if sub == 2 {
+                    self.sub1_clip(4);
+                    self.work.routine[2] = 3;
+                    self.work.timer0 = self.floor_wait();
+                }
+                self.work.bank = Bank::Held;
+                self.joint_move_late_reversed(LATE, true);
+                let gacha = self.gacha();
+                self.work.timer0 = self.work.timer0.wrapping_sub(gacha * 3 + 1);
+                if (self.work.timer0 as i16) < 0 {
+                    self.work.routine[2] = 4;
+                }
+            }
+            4 | 5 => {
+                if sub == 4 {
+                    self.sub1_clip(1);
+                    self.work.routine[2] = 5;
+                    self.work.damage_cnt = 0;
+                }
+                self.work.bank = Bank::Held;
+                if self.joint_move_late(LATE) {
+                    self.work.routine[2] = 6;
+                    self.work.bank = Bank::Pld;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = DAMAGE_BLEND;
+                }
+            }
+            6 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(LATE, true) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt = 0;
+                    self.work.neck.flags &= 0xED;
+                }
+            }
+            _ => {}
         }
     }
 

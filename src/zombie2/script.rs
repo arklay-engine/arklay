@@ -520,6 +520,19 @@ impl UserData for Api {
                 (over, ground.below.max(ground.above))
             }))
         });
+        // `Sca_ck_hit` of a point grown by `radius` without the room's
+        // objects: whether `DWORD_00695e84` is raised, by a record that
+        // holds the point or one that starts above it.
+        methods.add_method_mut(
+            "sca_struck",
+            |_, e, (x, y, z, radius, mask): (i32, i32, i32, i32, i64)| {
+                let room = e.em().mover.tick.room;
+                Ok(room.sca.as_ref().is_some_and(|sca| {
+                    let ground = crate::sca::ground_at(sca, [x, y, z], radius, mask as u16);
+                    ground.blocked || ground.under_record
+                }))
+            },
+        );
         methods.add_method_mut("init_parts", |_, e, ()| {
             let pos = e.em().mover.player.pos;
             let l = e.l()?;
@@ -588,6 +601,26 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_damage_cnt", |_, e, ()| Ok(e.em().world.pl.damage_cnt));
+        // The player's `pSub1_kan_t_ptr` and `pSub1_seq_t_ptr` become this
+        // body's (its model's second bank), for `Pl_damage`'s falls.
+        // The player's `Move_no`, `Move_cnt` and `Hokan_flg` on `pSub1`'s
+        // clips, and their speed.
+        methods.add_method_mut(
+            "pl_set_motion",
+            |_, e, (clip, count, hokan, x, y, z): (i64, i64, i64, i64, i64, i64)| {
+                let pl = &mut *e.em().world.pl;
+                pl.bank = player2::Bank::Held;
+                pl.move_no = clip as u8;
+                pl.move_cnt = count as u8;
+                pl.hokan = hokan as u8;
+                pl.spd = [x as i16, y as i16, z as i16];
+                Ok(())
+            },
+        );
+        methods.add_method_mut("pl_set_sub1", |_, e, ()| {
+            e.em().world.sub1 = true;
+            Ok(())
+        });
         methods.add_method_mut("pl_hold", |_, e, ()| {
             let world = &mut *e.em().world;
             world.pl.held_by = Some(world.slot);
