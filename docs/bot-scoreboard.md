@@ -51,3 +51,12 @@ two batches of one commit match seed for seed.
 | b14-loadout-pickup | 218c1d3+L | L: a met fight's weapon on the frontier is a needed pickup | 13/17 | 15 | 57 | 93 | 201797 | 3 | yes | reject (deaths 15>14; seed 10 still loops) |
 | b15-kite | 218c1d3+M | M: the fight job keeps away from its target when nothing held can fire | 13/17 | 16 | 57 | 91 | 202436 | 3 | yes | reject (deaths 16>14) |
 | b16-nowall | 218c1d3+N | N: a headless bot run fast-forwards a skipped cutscene without the 12 ms wall-clock bound (reloads too) | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | accept (new base: a second batch matches it seed for seed) |
+| b17-foresee | 1c3b51c+P | P: a door into an unmet, unready fight's room meets it at the doorstep | 12/17 | 30 | 70 | 108 | 202232.0 | 1 | yes | reject (completion 12<13, deaths 30>16; 30C's web and tiger foreseen) |
+| b18-foresee1 | 1c3b51c+P2 | P2: P, but only into a room with a single fight (not 30C) | 13/17 | 30 | 68 | 108 | 203457 | 1 | yes | reject (deaths 30>16; 20C's Yawn 2 foreseen in every run) |
+| b19-foresee513 | 1c3b51c+P3 | P3: foresee only fights marked foresee="yes" (513's Tyrant) - a look-ahead, against Ted's rule | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | reject (identical to b16 seed for seed; reverted) |
+| b20-tyrant-outrun | 1c3b51c+Q | Q: 513's Tyrant can be outrun (speed 113 < run 0xD2) | 12/17 | 17 | 68 | 96 | 202976.5 | 3 | yes | reject (completion 12<13; seed 8 runs from it in 513 and dies 3 times) |
+| b21-L-det | 1c3b51c+L | L (re-run on the deterministic base): a met fight's weapon on the frontier is a needed pickup | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | reject (identical to b16 seed for seed) |
+| b22-E-det | 1c3b51c+E | E (re-run): red herbs out of the box to mix with a held one | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | void: never fired (Lua `and` truncated item_kind's heals; so b08's E never fired either) |
+| b23-E2 | 1c3b51c+E2 | E2: E with the and-truncation fixed | 6/17 | 16 | 54 | 99 | 191546.0 | 8 | NO | reject (6/17: a held red herb is boxed and taken back in a loop) |
+| b24-E3 | 1c3b51c+E3 | E3: E2, and a red herb that mixes with a held herb is kept and mixed at once | 10/17 | 25 | 67 | 121 | 202462.5 | 5 | NO | reject (10/17, default stalls in 304; deaths fell in seeds 1, 2, 8, 16) |
+| b25-spareherb | 1c3b51c+F2 | F2: a second stack of a held non-healing herb stays on the floor while 2 or fewer slots are free | 11/17 | 38 | 73 | 116 | 202034 | 2 | yes | reject (11/17, deaths 38>16) |
