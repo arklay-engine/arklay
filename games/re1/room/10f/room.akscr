@@ -105,7 +105,7 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR_104, 13700, 960, 1700, 1900, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_104_10F, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_01_MESSAGE_REBECCA_PLAYING, 8800, 7200, 1500, 1700, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
@@ -114,7 +114,7 @@ proc init
         aot_set(AOT_01_NONE_UNUSED, 8800, 7200, 1500, 1700, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
     aot_set(AOT_02_MESSAGE_PIANO, 10200, 7300, 600, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
@@ -139,7 +139,7 @@ proc init
     item_aot_set(AOT_04_ITEM_KEY_EMBLEM_GOLD_1, 8100, 18800, 1500, 1000, IT_20_KEY_EMBLEM_GOLD, 1, IMDL_01_KEY_EMBLEM_GOLD, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_10F_KEY_EMBLEM_GOLD_1, SAT_MANUAL | SAT_PLAYER, 0);
     item_aot_set(AOT_05_ITEM_KEY_MUSIC_SCORE_2, 17000, 11500, 800, 1000, IT_23_KEY_MUSIC_SCORE, 0, IMDL_02_KEY_MUSIC_SCORE, SCA_NONE, 17250, -3000, 11550, 1250, F_ITEM_10F_KEY_MUSIC_SCORE_2, SAT_MANUAL | SAT_PLAYER, 0);
     aot_set(AOT_06_USEITEM_SLOT_WOOD_ALT, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 9, 0, 4, 0, 1, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_07_USEITEM_SLOT_WOOD, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 4, 0, 35, 0, 1, 0);
     }
@@ -148,7 +148,7 @@ proc init
         aot_set(AOT_07_USEITEM_SLOT_WOOD, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 4, 0, 34, 0, 1, 0);
     }
     aot_set(AOT_08_USEITEM_SLOT_GOLD_ALT, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 9, 0, 5, 0, 1, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_09_USEITEM_SLOT_GOLD, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 4, 0, 34, 0, 1, 0);
     }
@@ -159,7 +159,7 @@ proc init
     aot_set(AOT_0A_MESSAGE_EMBLEM_SLOT, 8100, 18800, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 24, 0, 255, 0, 0, 0);
     aot_set(AOT_0B_USEITEM_MAP_HIDDEN_ROOM, 7000, 14000, 3000, 1000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 8, 0, 30, 0, 1, 0);
     aot_set(AOT_0C_NONE_UNUSED, 9500, 8200, 500, 800, SCE_NONE, SAT_MANUAL, 0, 0, 0, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_0D_EVENT_TALK_REBECCA, 9500, 8200, 500, 800, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         aot_set(AOT_0E_USEITEM_PIANO_SCORE_ALT, 10200, 7300, 600, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 8, 0, 1, 0);
@@ -174,7 +174,7 @@ proc init
     }
     obj(OBJ_01, OF_ACTIVE, SCA_NONE, 17394, 0, 11190, 1024, 0, 876, 0, -876, 300, 544, 1300, 550);
     obj(OBJ_02, OF_NOT_PUSHABLE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 15000, 0, 11200, 1024, 0, 0, 0, 0, 600, 544, 900, 600);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
         {
@@ -219,7 +219,7 @@ proc main
 {
     if (testitem(IT_23_KEY_MUSIC_SCORE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_ROOM, F_ROOM_C_MUSIC_SCORE_USED, TRUE))
             {
@@ -259,7 +259,7 @@ proc main
             }
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, FALSE))
         {
@@ -436,7 +436,7 @@ event give_score_to_rebecca_or_jill_reads_score
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             remove_item(IT_23_KEY_MUSIC_SCORE);
             set(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE);
@@ -453,7 +453,7 @@ event give_score_to_rebecca_or_jill_reads_score
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
@@ -498,11 +498,11 @@ event give_score_to_rebecca_or_jill_reads_score
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             sleep(15);
         }
-        else if (EUR)
+        else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             sleep(15);
         }
@@ -511,11 +511,11 @@ event give_score_to_rebecca_or_jill_reads_score
             sleep(55);
         }
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             sleep(95);
         }
-        else if (EUR)
+        else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             sleep(95);
         }
@@ -824,11 +824,11 @@ event give_score_to_rebecca_or_jill_reads_score
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
         sleep(30);
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             sleep(20);
         }
-        else if (EUR)
+        else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             sleep(20);
         }
@@ -839,22 +839,22 @@ event give_score_to_rebecca_or_jill_reads_score
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
         sleep(22);
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             sleep(20);
             act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
         }
-        else if (EUR)
+        else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             sleep(20);
             act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
         }
         sleep(25);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
         }
-        else if (EUR)
+        else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
         }
@@ -919,7 +919,7 @@ event give_score_to_rebecca_or_jill_reads_score
         evt_chain(rebecca_plays_sonata_or_jill_plays);
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
@@ -928,7 +928,7 @@ event give_score_to_rebecca_or_jill_reads_score
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_006_08);
         message(MSG_VO_006_08, 0);
@@ -1012,11 +1012,11 @@ event give_score_to_rebecca_alt
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         sleep(15);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         sleep(15);
     }
@@ -1025,11 +1025,11 @@ event give_score_to_rebecca_alt
         sleep(55);
     }
     act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         sleep(95);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         sleep(95);
     }
@@ -1296,11 +1296,11 @@ event give_score_to_rebecca_alt
     act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(30);
     act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         sleep(20);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         sleep(20);
     }
@@ -1311,22 +1311,22 @@ event give_score_to_rebecca_alt
     act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(22);
     act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         sleep(20);
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         sleep(20);
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(25);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
@@ -1468,11 +1468,11 @@ event rebecca_practises
     evt_actor_begin();
     act_idle();
     act_reset();
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         bgm_play(BGM_SUB_1);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         bgm_play(BGM_SUB_1);
     }
@@ -1547,11 +1547,11 @@ event rebecca_does_not_practise
     evt_actor_begin();
     act_idle();
     act_reset();
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         bgm_play(BGM_SUB_1);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         bgm_play(BGM_SUB_1);
     }
@@ -1596,14 +1596,14 @@ event jill_gold_emblem_closes_wall
 
 event rebecca_practice_loop
 {
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (!JPN)
+        if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE))
         {
             bgm_play(BGM_SUB_1);
         }
     }
-    else if (!EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
     {
         bgm_play(BGM_SUB_1);
     }
@@ -1644,7 +1644,7 @@ event rebecca_practice_loop
     act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     sleep(20);
     act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         sleep(23);
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
@@ -1655,7 +1655,7 @@ event rebecca_practice_loop
         sleep(15);
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
-    else if (EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         sleep(23);
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
@@ -1670,15 +1670,15 @@ event rebecca_practice_loop
     act_reset();
     evt_nop();
     sleep(10);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (!JPN)
+        if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE))
         {
             evt_nop();
             evt_work_set(22, 1);
         }
     }
-    else if (!EUR)
+    else if (ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
     {
         bgm_stop(BGM_SUB_1);
     }
@@ -1804,7 +1804,7 @@ event jill_place_wood_emblem
 
 event rebecca_plays_sonata_or_jill_plays
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1827,7 +1827,7 @@ event rebecca_plays_sonata_or_jill_plays
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 9900, 6200, F_ROOM_PLAYER_ANIM_DONE);
         act_reset();
@@ -1840,7 +1840,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_seq(AB_02, 9950, 8100, F_ROOM_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
     }
@@ -1851,7 +1851,7 @@ event rebecca_plays_sonata_or_jill_plays
     while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 10000, 8900, F_ROOM_PLAYER_ANIM_DONE);
     }
@@ -1862,7 +1862,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_param_set(0, 100);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         bgm_stop(BGM_MAIN);
         evt_disable(TASK_01);
@@ -1876,7 +1876,7 @@ event rebecca_plays_sonata_or_jill_plays
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -1906,7 +1906,7 @@ event rebecca_plays_sonata_or_jill_plays
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_72, 0, 280, 1, 0, 0);
     }
@@ -1916,13 +1916,13 @@ event rebecca_plays_sonata_or_jill_plays
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         cut_auto(CUT_LOCKED);
     }
     cutnext(CAM_06_PIANO_CLOSEUP);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(15);
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
@@ -1932,7 +1932,7 @@ event rebecca_plays_sonata_or_jill_plays
         evt_nop();
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
         evt_actor_begin();
@@ -1953,7 +1953,7 @@ event rebecca_plays_sonata_or_jill_plays
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -1962,7 +1962,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(25);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -1971,7 +1971,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -1980,7 +1980,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -1989,7 +1989,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -1998,7 +1998,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2007,7 +2007,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2016,7 +2016,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(11);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2025,7 +2025,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2034,7 +2034,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(8);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2043,7 +2043,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2052,7 +2052,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(9);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2061,7 +2061,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(12);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2070,7 +2070,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(12);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2079,7 +2079,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2088,7 +2088,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2097,7 +2097,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2106,7 +2106,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2115,7 +2115,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(16);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2124,7 +2124,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2133,7 +2133,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2142,7 +2142,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2151,7 +2151,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(11);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2160,7 +2160,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2169,7 +2169,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(17);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2178,7 +2178,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(18);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2187,7 +2187,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2196,7 +2196,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2205,7 +2205,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(12);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2214,7 +2214,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2223,7 +2223,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2232,7 +2232,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2241,7 +2241,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2250,7 +2250,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2259,7 +2259,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2268,7 +2268,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2277,7 +2277,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(12);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2286,7 +2286,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2295,7 +2295,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2304,7 +2304,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2313,7 +2313,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(11);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2322,7 +2322,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2331,7 +2331,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(17);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2340,7 +2340,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(18);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2349,7 +2349,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2358,7 +2358,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(13);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2367,7 +2367,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_39, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(12);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2376,7 +2376,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_38, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2385,7 +2385,7 @@ event rebecca_plays_sonata_or_jill_plays
         act_anim_flags(ANIM_38, F_ROOM_PLAYER_ANIM_DONE, 0);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_39, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2396,13 +2396,13 @@ event rebecca_plays_sonata_or_jill_plays
     sleep(10);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
         act_reset();
@@ -2425,7 +2425,7 @@ event rebecca_plays_sonata_or_jill_plays
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         wait_message();
     }
@@ -2433,7 +2433,7 @@ event rebecca_plays_sonata_or_jill_plays
     cutnext(CAM_01_PIANO);
     aot_switch(0, SPR_0E, SPR_OFF);
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_09, chris_sonata_opens_wall, 0);
         sleep(60);
@@ -2446,7 +2446,7 @@ event rebecca_plays_sonata_or_jill_plays
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     }
@@ -2457,7 +2457,7 @@ event rebecca_plays_sonata_or_jill_plays
     act_param_set(0, 64512);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -2475,7 +2475,7 @@ event rebecca_plays_sonata_or_jill_plays
     act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(25);
     }
@@ -2485,7 +2485,7 @@ event rebecca_plays_sonata_or_jill_plays
     }
     cutnext(CAM_01_PIANO);
     aot_switch(0, SPR_0E, SPR_OFF);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(25);
         voice_play(VOICE_PLAY, VO_006_12);
@@ -2493,7 +2493,7 @@ event rebecca_plays_sonata_or_jill_plays
         wait_message();
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -2502,7 +2502,7 @@ event rebecca_plays_sonata_or_jill_plays
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_PIANO_PLAYED, TRUE);
         }
@@ -2515,17 +2515,17 @@ event rebecca_plays_sonata_or_jill_plays
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_MAIN_ON);
         }
         room_bgm_state_set(0, ROOM_10F_BAR, BGM_OFF);
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_MAIN_ON);
         }
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -2558,7 +2558,7 @@ event chris_sonata_opens_wall
 
 event chris_gold_emblem_closes_wall
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);

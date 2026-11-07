@@ -64,7 +64,7 @@ proc init
         obj(OBJ_00_CABINET_OVER_LADDER, OF_10 | OF_ACTIVE, SCA_NONE, 12907, 0, 8580, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
         obj(OBJ_01_CABINET, OF_10 | OF_ACTIVE, SCA_NONE, 10176, 0, 8580, 1024, 0, 300, 0, -300, 200, 1100, 1200, 600);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
@@ -94,7 +94,7 @@ proc init
         aot_delete(AOT_04_EVENT_DORMITORY_SKETCH, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         if (ck(FG_COMMON, F_COMMON_J_BARRY_002_TALK, FALSE))
         {

@@ -92,7 +92,7 @@ proc init
     {
         item_aot_set(ITEM_ALT_ROT | AOT_09_ITEM_KEY_CRANK_HEXAGONAL_1, 3330, 11130, 1000, 1000, IT_1E_KEY_CRANK_HEXAGONAL, 0, IMDL_01_KEY_CRANK_HEXAGONAL, SCA_NONE, 3830, 0, 11630, 1200, F_ITEM_30A_KEY_CRANK_HEXAGONAL_1, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6 | ITEM_REACH);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_ENRICO_SHOT, FALSE))
         {
@@ -146,7 +146,7 @@ proc init
 
 proc main
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, TRUE))
         {
@@ -500,7 +500,7 @@ event enrico_shot_jill_alone
 
 event enrico_shot_chris_or_with_barry
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -532,7 +532,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_02, F_ROOM_ANIM_DONE, 0);
     }
@@ -543,13 +543,13 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(30);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_71, 500, 0, 1, 30, 0);
     }
@@ -568,14 +568,14 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         wait_message();
     }
     run
     {
         cutnext(CAM_03);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 3480, 0, 13220, 0, 4450);
         }
@@ -584,7 +584,7 @@ event enrico_shot_chris_or_with_barry
             pos_set(ENEMY_01_NPC_BARRY, 0, 2831, 0, 14670, 0, 9220);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -598,7 +598,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_ADDITIVE | AB_02, 15450, 6260, F_ROOM_PLAYER_WALK_DONE);
         act_nop();
@@ -609,13 +609,13 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(23);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 14530, 8520, F_ROOM_C_PLAYER_WALK_2_DONE);
     }
@@ -634,7 +634,7 @@ event enrico_shot_chris_or_with_barry
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -659,7 +659,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -670,13 +670,13 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(50);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -695,7 +695,7 @@ event enrico_shot_chris_or_with_barry
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     }
@@ -704,7 +704,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_02, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -714,7 +714,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(2);
     }
@@ -722,13 +722,13 @@ event enrico_shot_chris_or_with_barry
     {
         cutnext(CAM_05);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(2);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_00D_01);
             message(MSG_VO_00D_01, 0);
@@ -739,7 +739,7 @@ event enrico_shot_chris_or_with_barry
             message(MSG_VO_10F_17, 0);
         }
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         wait_message();
         run
@@ -754,7 +754,7 @@ event enrico_shot_chris_or_with_barry
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_03, 13180, 13110, F_ROOM_PLAYER_WALK_DONE);
         act_nop();
@@ -765,7 +765,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -779,7 +779,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 10840, 16490, F_ROOM_ANIM_DONE);
         act_nop();
@@ -791,7 +791,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_07, enrico_death_anim, 0);
         sleep(35);
@@ -803,7 +803,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -816,7 +816,7 @@ event enrico_shot_chris_or_with_barry
     sleep(25);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
         act_reset();
@@ -848,13 +848,13 @@ event enrico_shot_chris_or_with_barry
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_30, F_ROOM_ANIM_DONE, 0);
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
         evt_actor_begin();
@@ -866,7 +866,7 @@ event enrico_shot_chris_or_with_barry
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             cutnext(CAM_06);
         }
@@ -875,13 +875,13 @@ event enrico_shot_chris_or_with_barry
             cutnext(CAM_05);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             se_play_3d(SND_BANK_ROOM, SE_1B_V00D_02, 0, SND_AT_PLAYER, 0, 0, 0);
         }
@@ -891,7 +891,7 @@ event enrico_shot_chris_or_with_barry
             message(MSG_VO_10F_19, 0);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(35);
         evt_work_set(WK_PLAYER, 0);
@@ -901,7 +901,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     }
@@ -911,26 +911,26 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         wait_message();
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             se_play_3d(SND_BANK_ROOM, SE_17_GUN_PF, 0, SND_AT_POINT, 0, 14570, 8460);
             effect(FX_00, FX_ROW_02, FX_AT_WORLD, 11000, -1000, 16300, 400);
         }
         cutnext(CAM_07);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(1);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_00D_04);
             message(MSG_VO_00D_04, 0);
@@ -943,7 +943,7 @@ event enrico_shot_chris_or_with_barry
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion_path(MOTION_71, 300, 0, 1, 8, 0);
         act_reset();
@@ -963,7 +963,7 @@ event enrico_shot_chris_or_with_barry
     act_reset();
     evt_nop();
     sleep(5);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1032,7 +1032,7 @@ event enrico_shot_chris_or_with_barry
     act_flag_op(EF_SET, EF_0080);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
@@ -1055,7 +1055,7 @@ event enrico_shot_chris_or_with_barry
     {
         cutnext(CAM_06);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(1);
         run
@@ -1081,7 +1081,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2F, F_ROOM_ANIM_DONE, 0);
         act_param_set(0, 2048);
@@ -1092,7 +1092,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
     }
@@ -1107,19 +1107,19 @@ event enrico_shot_chris_or_with_barry
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_71, 300, 0, 2, 60, 0);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(50);
         evt_fork(TASK_09, shooter_footsteps, 0);
     }
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1144,7 +1144,7 @@ event enrico_shot_chris_or_with_barry
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_71, 300, 0, 2, 30, 0);
     }
@@ -1155,13 +1155,13 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(80);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_05, F_ROOM_ANIM_DONE, 0);
     }
@@ -1181,7 +1181,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
@@ -1194,7 +1194,7 @@ event enrico_shot_chris_or_with_barry
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_06, F_ROOM_ANIM_DONE, 0);
         act_flag_op(EF_OR, EF_0010);
@@ -1205,7 +1205,7 @@ event enrico_shot_chris_or_with_barry
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         wait_message();
         evt_work_set(WK_PLAYER, 0);
@@ -1216,7 +1216,7 @@ event enrico_shot_chris_or_with_barry
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_05, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
         act_flag_op(EF_OR, EF_0001);
@@ -1228,7 +1228,7 @@ event enrico_shot_chris_or_with_barry
     act_reset();
     evt_nop();
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1237,7 +1237,7 @@ event enrico_shot_chris_or_with_barry
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
         act_flag_op(EF_OR, EF_0080 | EF_0001);
@@ -1253,14 +1253,14 @@ event enrico_shot_chris_or_with_barry
     evt_nop();
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_ROOM, F_ROOM_C_HUNTERS_PENDING, TRUE);
         }
         cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             aot_set(AOT_02_EVENT_BARRY_INVESTIGATING, 11000, 14000, 1500, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, barry_investigating, 0, 0, 0);
         }
@@ -1303,7 +1303,7 @@ event enrico_scene_jill_walk
 
 event enrico_death_anim
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         for (9)
         {
@@ -1390,7 +1390,7 @@ event enrico_scene_barry_idle
 
 event search_enrico
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1426,7 +1426,7 @@ event search_enrico
     evt_nop();
     message(MSG_HE_COULD_NOT_HAVE_MOVED_BECAUSE_HE_IS_HOLDING_SOMETHING_06, 0); // "He couldn't have moved because of this injury... He's holding something."
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_chain(search_enrico_take_rounds);
     }
@@ -1481,7 +1481,7 @@ event search_enrico_take_rounds
         cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_RUN, F_RUN_MONSTERS, TRUE);
         }
@@ -1571,7 +1571,7 @@ event shooter_footsteps
     {
         se_play_3d(SND_BANK_ROOM, SE_2D_FT_CAVEA, 0, SND_AT_POINT, 0, 10800, 2400);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         run

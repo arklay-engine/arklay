@@ -35,7 +35,7 @@
 
 proc init
 {
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         door_aot_set(AOT_00_DOOR_10A, 5000, 1300, 1500, 1400, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_10A_BACK_PASSAGE, 8400, 0, 5000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         item_aot_set(AOT_01_ITEM_KEY_BOOK_DOOM_1_0, 1820, 3942, 1800, 1800, IT_40_KEY_BOOK_DOOM_1, 0, IMDL_00_KEY_BOOK_DOOM_1, SCA_NONE, 2720, -900, 4842, 0, F_ITEM_119_KEY_BOOK_DOOM_1_0, 0, 0);
@@ -86,7 +86,7 @@ proc init
 
 proc main
 {
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         if (ck(FG_ROOM, F_ROOM_LIGHTS_OFF, TRUE))
         {
@@ -279,11 +279,11 @@ event radio_call_rebecca_upstairs
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(56);
     }
-    else if (JPN)
+    else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         do
         {

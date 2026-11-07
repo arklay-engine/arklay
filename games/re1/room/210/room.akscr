@@ -40,7 +40,7 @@ proc init
     {
         aot_set(AOT_04_EVENT_SNAKE_HOLE, 3712, 23040, 1792, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_YAWN_BITE, FALSE))
         {
@@ -69,7 +69,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, TRUE))
         {

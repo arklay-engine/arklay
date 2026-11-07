@@ -49,7 +49,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_JILL, ANIM_00, 0, EVAR_00);
             sys_multi(SYS_UNEQUIP);
@@ -72,7 +72,7 @@ proc init
 event cell_rescue
 {
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -115,7 +115,7 @@ event cell_rescue
 
 event cell_rescue_after_door_talk
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -145,7 +145,7 @@ event cell_rescue_after_door_talk
         evt_fork(TASK_09, after_door_talk_jill_gesture, 0);
     }
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_JILL);
         evt_actor_begin();
@@ -284,7 +284,7 @@ event cell_rescue_after_door_talk
         message(MSG_VO_119_00, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -365,18 +365,18 @@ event cell_rescue_after_door_talk
     act_param_set(0, 2048);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(45);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             cut_auto(CUT_FREE);
         }
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
             aot_on(AOT_00_DOOR_50B, SCE_DOOR, 0);
@@ -388,7 +388,7 @@ event cell_rescue_after_door_talk
             cut_auto(CUT_FREE);
         }
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(45);
     }
@@ -407,7 +407,7 @@ event cell_rescue_after_door_talk
     act_nop();
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         run
         {
@@ -421,7 +421,7 @@ event cell_rescue_after_door_talk
 
 event cell_rescue_first_sight
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -630,7 +630,7 @@ event cell_rescue_first_sight
         message(MSG_VO_119_01, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_JILL);
         evt_actor_begin();
@@ -690,14 +690,14 @@ event cell_rescue_first_sight
     act_param_set(0, 2048);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(45);
     }
     run
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
@@ -706,7 +706,7 @@ event cell_rescue_first_sight
             cutnext(CAM_00);
         }
         cut_auto(CUT_FREE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_on(AOT_00_DOOR_50B, SCE_DOOR, 0);
         }
@@ -715,7 +715,7 @@ event cell_rescue_first_sight
             pos_set(ENEMY_00_CHRIS, 0, 3072, 0, 5700, 0, 6800);
         }
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(45);
     }
@@ -734,7 +734,7 @@ event cell_rescue_first_sight
     act_nop();
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         run
         {

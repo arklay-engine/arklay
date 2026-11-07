@@ -8385,7 +8385,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let loaded = crate::room::load(pack, id)?;
     let (scripts, _) = room_scripts(pack, id, &loaded)?;
     let mut game = game::GameState::new(id, &loaded.state);
-    game.region = pack_region(pack);
+    game.set_region(pack_region(pack));
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
@@ -15252,7 +15252,7 @@ fn new_game_state(
     options: player::Options,
 ) -> game::GameState {
     let mut game = game::GameState::new(id, room);
-    game.region = pack_region(pack);
+    game.set_region(pack_region(pack));
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);

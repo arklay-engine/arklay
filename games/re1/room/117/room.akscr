@@ -69,9 +69,9 @@ proc init
 {
     door_aot_set(AOT_00_DOOR_10A, 2000, 10800, 2400, 1800, 1, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_10A_BACK_PASSAGE, 3000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_09_ITEM_KEY_CREST_STAR_0, 1300, 3300, 1100, 1600, IT_2D_KEY_CREST_STAR, 1, IMDL_00_KEY_CREST_STAR, SCA_NONE, 1530, -2870, 4060, 3200, F_ITEM_117_KEY_CREST_STAR_0, SAT_MANUAL | SAT_PLAYER, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_MAIN_ON);
         }
@@ -82,21 +82,21 @@ proc init
     }
     if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_MAIN_ON);
             evt_exec(0, TASK_09, solved_bgm);
         }
-        else if (JILL)
+        else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             evt_exec(0, TASK_09, solved_bgm);
         }
         obj(OBJ_00_FALLING_FRAME, OF_80 | OF_ACTIVE, SCA_NONE, 3440, 300, 3310, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             evt_exec(0, TASK_09, frame_fallen_on_enter);
         }
-        else if (CHRIS)
+        else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_exec(0, TASK_09, frame_fallen_on_enter);
         }
@@ -125,12 +125,12 @@ proc init
         aot_set(AOT_07_MESSAGE_PICTURE_OLD_MAN, 6000, 5700, 2500, 800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_old_man_picture, 0, 0, 0);
         aot_set(AOT_08_EVENT_PICTURE_MOURNING, 1300, 3300, 1100, 1600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_mourning_picture, 0, 0, 0);
     }
-    if (MANSION1 && JILL)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_MAIN_ON);
     }
     enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_0, SPAWN_FORCE, 2, 0, 1024, 0, 19557, -5500, 10200, ENEMY_00_CROW, ANIM_00, 0, EVAR_00);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_1, SPAWN_FORCE, 2, 0, 1024, 0, 18500, -5500, 10200, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
         enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_2, SPAWN_FORCE, 2, 0, 1024, 0, 17500, -5500, 10200, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
@@ -143,7 +143,7 @@ proc init
         enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_1, SPAWN_FORCE, 2, 0, 1024, 0, 17500, -5500, 10200, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
         enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_2, SPAWN_FORCE, 2, 0, -1024, 0, 12000, -5000, 2600, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
         enemy(EM_05_CROW, EB_00, F_ENEMY_117_CROW_3, SPAWN_FORCE, 2, 0, -1024, 0, 6000, -5000, 2600, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
             {
@@ -173,7 +173,7 @@ proc init
 
 event radio_call_monsters
 {
-    if (MANSION2 && CHRIS)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 754, 0, 3680, 0, 9970);
@@ -223,7 +223,7 @@ event radio_call_monsters
 
 event radio_call_monsters_anim
 {
-    if (MANSION2 && CHRIS)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -251,7 +251,7 @@ event radio_call_monsters_anim
 
 event radio_call_rebecca_upstairs
 {
-    if (MANSION2 && CHRIS)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 754, 0, 3680, 0, 9970);
@@ -877,7 +877,7 @@ event mourning_switch
             evt_exec(0, TASK_09, frame_falls);
             set(FG_ROOM, F_ROOM_FRAME_STEP_BUSY, TRUE);
             evt_exec(0, TASK_09, pictures_become_messages);
-            if (MANSION1)
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
                 bgm_play(BGM_MAIN);
             }
@@ -890,7 +890,7 @@ event mourning_switch
     {
         if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
             {
                 get_eml_state(ENEMY_00_CROW);
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_0, FALSE) && cmpb(B_0A, CMP_NE, 0))
@@ -909,7 +909,7 @@ event mourning_switch
     {
         if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
             {
                 get_eml_state(ENEMY_02_CROW);
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_2, FALSE) && cmpb(B_0A, CMP_NE, 0))
@@ -928,7 +928,7 @@ event mourning_switch
     {
         if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
                 get_eml_state(ENEMY_00_CROW);
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_0, FALSE) && cmpb(B_0A, CMP_NE, 0))
@@ -947,7 +947,7 @@ event mourning_switch
     {
         if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
                 get_eml_state(ENEMY_02_CROW);
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_2, FALSE) && cmpb(B_0A, CMP_NE, 0))
@@ -966,9 +966,9 @@ event mourning_switch
     {
         if (ck(FG_SCENARIO, F_SCENARIO_GALLERY_PUZZLE_SOLVED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
-                if (MANSION1)
+                if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
                 {
                     get_eml_state(ENEMY_04_CROW);
                 }
@@ -978,7 +978,7 @@ event mourning_switch
                 }
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_4, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
-                    if (MANSION1)
+                    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
                     {
                         pos_set(ENEMY_04_CROW, 0, 1024, 0, 19000, -2000, 3327);
                     }
@@ -987,7 +987,7 @@ event mourning_switch
                         pos_set(ENEMY_04_CROW, 0, 1024, 0, 19000, -2000, 3327);
                     }
                 }
-                if (MANSION1)
+                if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
                 {
                     get_eml_state(ENEMY_05_CROW);
                 }
@@ -997,7 +997,7 @@ event mourning_switch
                 }
                 if (ck(FG_ENEMY, F_ENEMY_117_CROW_5, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
-                    if (MANSION1)
+                    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
                     {
                         pos_set(ENEMY_05_CROW, 0, 2048, 0, 19000, -2000, 2897);
                     }
@@ -1013,7 +1013,7 @@ event mourning_switch
     {
         if (ck(FG_ROOM, F_ROOM_WRONG_ORDER, TRUE))
         {
-            if (MANSION1)
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
                 bgm_play(BGM_MAIN);
             }
@@ -1025,9 +1025,9 @@ event mourning_switch
                 eml_state(0, ENEMY_02_CROW, EML_ACTION, AB_0D);
                 eml_state(0, ENEMY_03_CROW, EML_ACTION, AB_0D);
             }
-            if (cmpb(B_0A, CMP_EQ, 0) && ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+            if (cmpb(B_0A, CMP_EQ, 0) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
-                if (MANSION1)
+                if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
                 {
                     eml_state(0, ENEMY_04_CROW, EML_ACTION, AB_0D);
                     eml_state(0, ENEMY_05_CROW, EML_ACTION, AB_0D);
@@ -1379,7 +1379,7 @@ event frame_fallen_on_enter
 event solved_bgm
 {
     sleep(1);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         bgm_play(BGM_MAIN);
     }

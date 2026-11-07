@@ -30,17 +30,17 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR_202, 17200, 900, 2000, 2000, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_202_DINING_ROOM_2F, 6400, 0, 14000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         door_aot_set(AOT_01_DOOR_214, 14700, 25700, 1500, 1900, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_201_214, ROOM_214_ROUGH_PASSAGE, 6400, 0, 14000, 3072, UNLOCKED, 0);
         door_aot_set(AOT_02_DOOR_215, 12900, 16500, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_201_215, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_03_DOOR_101, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
-    else if (CHRIS)
+    else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         door_aot_set(AOT_01_DOOR_214, 14700, 25700, 1500, 1900, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_201_214, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_02_DOOR_215, 12900, 16500, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_201_215, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
-        door_aot_set(AOT_03_DOOR_101, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, MANSION2_STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR_101, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -50,7 +50,7 @@ proc init
     }
     aot_set(AOT_04_MESSAGE_HOWLING, 2000, 10300, 300, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_05_EVENT_KEYPAD, 14700, 25700, 1500, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, use_keypad, 0, 0, 0);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
@@ -75,7 +75,7 @@ proc init
             }
         }
     }
-    else if (CHRIS)
+    else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         enemy(EM_06_HUNTER, EB_00, F_ENEMY_201_HUNTER_0, SPAWN_FORCE, 2, 0, 1976, 0, 15656, 0, 21372, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         enemy(EM_06_HUNTER, EB_10, F_ENEMY_201_HUNTER_1, SPAWN_FORCE, 2, 0, 1809, 0, 20872, 0, 4240, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
@@ -149,11 +149,11 @@ event use_keypad
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
     }
-    else if (CHRIS)
+    else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         message(0x04 | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
     }
@@ -179,11 +179,11 @@ event use_keypad
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
-        else if (CHRIS)
+        else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
@@ -199,7 +199,7 @@ event use_keypad
         }
         cutcurr(0);
         cut_auto(CUT_FREE);
-        if (MANSION2 && JILL)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }

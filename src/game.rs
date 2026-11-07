@@ -288,8 +288,9 @@ fn message_bank_selector(sel: u8) -> Option<(bool, u16)> {
 }
 /// Scenario flag marking the second mansion visit: a door into stage 1 or 2
 /// while it is set leads to the room's second visit
-/// ([`GameState::door_destination`]).
-pub const SCENARIO_FLAG_MANSION2: u8 = 0x00;
+/// ([`GameState::door_destination`]), and a mansion room's scripts test it
+/// for the visit ([`GameState::sync_variant_flags`]).
+pub const SCENARIO_FLAG_MANSION2: u8 = crate::scd::opcode::variant::FLAG_MANSION2;
 /// Scenario/state flag bank index.
 pub const BANK_SCENARIO: u8 = 0;
 /// Second scenario flag bank index (`g_ScenarioFlags2`).
@@ -357,7 +358,14 @@ pub const MSF_CAMERA_DEFER: u8 = 29;
 /// character's spawns. Set by the character-select hand-off (and the test
 /// hook) when Jill is chosen. Mask bit 23 of the first dword, i.e. selector
 /// 8 in the MSB-first flag bank.
-pub const MSF_CHAR_VARIANT: u8 = 8;
+pub const MSF_CHAR_VARIANT: u8 = crate::scd::opcode::variant::FLAG_JILL;
+/// `main_state_flags` bit 0x08000000, which the original never uses: the
+/// port raises it when the base pack is the Japanese release, for the room
+/// scripts' release tests ([`GameState::sync_variant_flags`]).
+pub const MSF_REGION_JPN: u8 = crate::scd::opcode::variant::FLAG_REGION_JPN;
+/// `main_state_flags` bit 0x00200000, which the original never uses: the
+/// port raises it when the base pack is a French or German release.
+pub const MSF_REGION_EUR: u8 = crate::scd::opcode::variant::FLAG_REGION_EUR;
 /// `main_state_flags` bit 0x20 (`MSF_CAMERA_REDRAW`): a deferred camera
 /// redisplay is pending and `game_loop` consumes it once, drawing the cut
 /// chosen by the previous frame's zone walk. Mask bit 5 of the first dword,
@@ -3861,6 +3869,7 @@ impl GameState {
         state.state_bytes[1] = id.room;
         state.set_camera_cut(0);
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
+        state.sync_variant_flags();
         // `GameInit` parks the special-room-light state at -1 so no overlay
         // draws until a script arms one.
         state.state_words[1] = 0xFFFF;
@@ -3873,27 +3882,34 @@ impl GameState {
         state
     }
 
-    /// The room variant the scripts' variant jumps test
-    /// ([`crate::scd::opcode::variant`]): the room's player, its mansion
-    /// visit and the release.
-    pub fn room_variant(&self) -> u8 {
-        use crate::scd::opcode::variant;
-        let player = if self.id.player_flag & 1 == 0 {
-            variant::CHRIS
-        } else {
-            variant::JILL
-        };
-        let mansion = match (self.id.is_mansion(), self.id.mansion2) {
-            (true, false) => variant::MANSION1,
-            (true, true) => variant::MANSION2,
-            (false, _) => variant::OUTSIDE,
-        };
-        let region = match self.region {
-            crate::scd::akscr::Region::Usa => variant::USA,
-            crate::scd::akscr::Region::Jpn => variant::JPN,
-            crate::scd::akscr::Region::Eur => variant::EUR,
-        };
-        player | mansion | region
+    /// Set the release the base pack was converted from, which the room
+    /// scripts test through [`MSF_REGION_JPN`] and [`MSF_REGION_EUR`].
+    pub fn set_region(&mut self, region: crate::scd::akscr::Region) {
+        self.region = region;
+        self.sync_variant_flags();
+    }
+
+    /// Raise the flags the room scripts test the room's variant with, from
+    /// the room being run: [`MSF_CHAR_VARIANT`] for Jill (the original's own
+    /// selector of her room files), in a mansion room
+    /// [`SCENARIO_FLAG_MANSION2`] for the second visit (the original's
+    /// selector of the stage 6 and 7 files, which the doors already follow),
+    /// and the port's [`MSF_REGION_JPN`] / [`MSF_REGION_EUR`] for the release.
+    /// In normal play the first two already hold; this keeps them true for a
+    /// room booted, loaded or jumped to directly.
+    pub fn sync_variant_flags(&mut self) {
+        use crate::scd::akscr::Region;
+        let mode = |on: bool| if on { 0 } else { 1 };
+        self.apply_flag(5, MSF_CHAR_VARIANT, mode(self.id.player_flag & 1 == 1));
+        if self.id.is_mansion() {
+            self.apply_flag(
+                BANK_SCENARIO,
+                SCENARIO_FLAG_MANSION2,
+                mode(self.id.mansion2),
+            );
+        }
+        self.apply_flag(5, MSF_REGION_JPN, mode(self.region == Region::Jpn));
+        self.apply_flag(5, MSF_REGION_EUR, mode(self.region == Region::Eur));
     }
 
     /// Re-resolve the room's effect sprite metadata, re-running the two-pass
@@ -5157,6 +5173,7 @@ impl GameState {
         self.id = id;
         self.mark_room_visited(id);
         self.apply_pending_player(id);
+        self.sync_variant_flags();
         // `RoomInit`'s model switch (0x00477904): the wardrobe stores model id
         // `8`, which raises the alternate-outfit bit and folds back to the
         // character id; the player's model then loads from the costume byte.
@@ -8321,36 +8338,32 @@ impl GameState {
     /// Decode a door record's destination byte relative to the room the record
     /// was read in.
     ///
-    /// Values below `0x20` name a room in `from`'s stage, on `from`'s visit;
-    /// higher values also change stage as `(dest >> 5) - 1`. A door into a
-    /// mansion stage leads to its second visit once
-    /// [`SCENARIO_FLAG_MANSION2`] is set. The original's own door data also
-    /// names the second visit directly, as its stages 6 and 7 (`0xC0`,
-    /// `0xE0`). `0xFF` names no room.
+    /// Values below `0x20` name a room in `from`'s stage; higher values also
+    /// change stage as `(dest >> 5) - 1`. A door into a mansion room leads to
+    /// its second visit exactly while [`SCENARIO_FLAG_MANSION2`] is set: the
+    /// flag is the visit. The original's door data can also name the second
+    /// visit's stages 6 and 7 (`0xC0`, `0xE0`); they read as stages 1 and 2.
+    /// `0xFF` names no room.
     pub fn door_destination(&self, from: RoomId, dest: u8) -> Option<RoomId> {
         if dest == 0xFF {
             return None;
         }
-        if dest < 0x20 {
-            Some(RoomId {
+        let mansion2 = self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
+        let target = if dest < 0x20 {
+            RoomId {
                 stage: from.stage,
                 room: dest,
                 player_flag: from.player_flag,
-                mansion2: from.mansion2,
-            })
+                mansion2: false,
+            }
         } else {
             let row = usize::from((dest >> 5) - 1);
-            let target = RoomId::from_table_row(row, dest & 0x1F);
-            let mansion2 =
-                target.mansion2 || self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
-            Some(
-                RoomId {
-                    player_flag: from.player_flag,
-                    ..target
-                }
-                .with_visit(mansion2),
-            )
-        }
+            RoomId {
+                player_flag: from.player_flag,
+                ..RoomId::from_table_row(row, dest & 0x1F)
+            }
+        };
+        Some(target.with_visit(mansion2))
     }
 
     /// Arm the transition described by `door`, decoding the destination's
@@ -9361,10 +9374,6 @@ fn action_params(handler: u8, flags: u8, operands: &[Operand], word_start: usize
 }
 
 impl ScdHost for ScdGameHost<'_> {
-    fn room_variant(&mut self) -> u8 {
-        self.state.room_variant()
-    }
-
     fn on_flow(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
         match op.op {
             0x0E | 0x32 => StepResult::Continue,
@@ -16322,13 +16331,14 @@ mod tests {
         // ... but not a door out of it.
         let to = state.door_destination(target, 0x60).unwrap();
         assert_eq!((to.stage, to.mansion2), (3, false));
-        // A door inside the second visit stays on it, flag or not, and the
-        // original's own data names the second visit as stages 6 and 7.
+        // The flag alone picks the visit: without it a door inside the
+        // second visit leads to the first, and the original's stage 6 and 7
+        // rows are stages 1 and 2.
         let state = game();
         let inside = state.door_destination(target, 0x05).unwrap();
-        assert_eq!((inside.stage, inside.room, inside.mansion2), (1, 5, true));
+        assert_eq!((inside.stage, inside.room, inside.mansion2), (1, 5, false));
         let named = state.door_destination(target, 0xE7).unwrap();
-        assert_eq!((named.stage, named.room, named.mansion2), (2, 7, true));
+        assert_eq!((named.stage, named.room, named.mansion2), (2, 7, false));
         let first = state.door_destination(state.id, 0x41).unwrap();
         assert_eq!((first.stage, first.mansion2), (2, false));
     }

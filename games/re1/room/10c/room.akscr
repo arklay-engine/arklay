@@ -62,7 +62,7 @@ proc init
     item_aot_set(AOT_09_ITEM_HEAL_HERB_GREEN_5, 8100, 2000, 800, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_05_HEAL_HERB_GREEN, SCA_NONE, 7660, 0, 1910, 1024, F_ITEM_10C_HEAL_HERB_GREEN_5, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     item_aot_set(AOT_0A_ITEM_HEAL_HERB_GREEN_6, 8100, 2000, 800, 700, IT_44_HEAL_HERB_GREEN, 1, IMDL_06_HEAL_HERB_GREEN, SCA_NONE, 8190, 0, 2510, 1024, F_ITEM_10C_HEAL_HERB_GREEN_6, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     obj(OBJ_TEX_QUEUE | OBJ_00_PUMP, OF_ACTIVE, SCA_NONE, 16850, -390, 6090, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
@@ -91,11 +91,11 @@ proc init
     effect(FX_13, FX_ROW_00, FX_AT_WORLD, 7939, -2010, 5432, 0);
     effect(FX_1B, FX_ROW_00, FX_AT_WORLD, 7940, -2070, 5450, 0);
     evt_exec(0, TASK_09, pose_armor_key);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         snd_pan_vol_set(BGM_SUB_1, 110, 110);
     }
-    else if (JPN)
+    else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         snd_pan_vol_set(BGM_SUB_1, 90, 90);
     }
@@ -103,7 +103,7 @@ proc init
     {
         snd_pan_vol_set(BGM_SUB_1, 110, 110);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_GREENHOUSE_PLANT_DEAD, FALSE))
         {
@@ -151,11 +151,11 @@ proc main
 {
     if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             snd_pan_vol_set(BGM_SUB_1, 110, 110);
         }
-        else if (JPN)
+        else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
         {
             snd_pan_vol_set(BGM_SUB_1, 90, 90);
         }
@@ -166,11 +166,11 @@ proc main
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             snd_pan_vol_set(BGM_SUB_1, 50, 50);
         }
-        else if (JPN)
+        else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
         {
             snd_pan_vol_set(BGM_SUB_1, 5, 5);
         }
@@ -181,11 +181,11 @@ proc main
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             snd_pan_vol_set(BGM_SUB_1, 50, 50);
         }
-        else if (JPN)
+        else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
         {
             snd_pan_vol_set(BGM_SUB_1, 5, 5);
         }
@@ -196,11 +196,11 @@ proc main
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             snd_pan_vol_set(BGM_SUB_1, 50, 50);
         }
-        else if (JPN)
+        else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
         {
             snd_pan_vol_set(BGM_SUB_1, 5, 5);
         }
@@ -209,7 +209,7 @@ proc main
             snd_pan_vol_set(BGM_SUB_1, 50, 50);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_GREENHOUSE_PLANT_DEAD, FALSE))
         {
@@ -273,7 +273,7 @@ event herbicide_kills_plant
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             effect_clear(0);
         }
@@ -330,7 +330,7 @@ event herbicide_kills_plant
     sleep(10);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_GREENHOUSE_PLANT_DEAD, TRUE);
         }

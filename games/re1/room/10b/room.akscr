@@ -32,19 +32,18 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR_10A, 2300, 4800, 1700, 1800, 1, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCKED | F_LOCK_10A_10B, ROOM_10A_BACK_PASSAGE, 11300, 0, 4800, 1024, LOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    door_aot_set(AOT_01_DOOR_207, 3100, 18200, 2605, 2100, 0, DOOR_SND_05_ST_WD, DOOR_17_KAI03, 96, 0, STAGE_2 | ROOM_207_2F_RIGHT_STAIRS, 8600, 2885, 19000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        door_aot_set(AOT_01_DOOR_207, 3100, 18200, 2605, 2100, 0, DOOR_SND_05_ST_WD, DOOR_17_KAI03, 96, 0, STAGE_2 | ROOM_207_2F_RIGHT_STAIRS, 8600, 2885, 19000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_02_DOOR_118, 8500, 12400, 2000, 1500, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, DOOR_LOCK_40, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        door_aot_set(AOT_01_DOOR_207, 3100, 18200, 2605, 2100, 0, DOOR_SND_05_ST_WD, DOOR_17_KAI03, 96, 0, MANSION2_STAGE_2 | ROOM_207_2F_RIGHT_STAIRS, 8600, 2885, 19000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         door_aot_set(AOT_02_DOOR_118, 8500, 12400, 2000, 1500, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     aot_set(AOT_03_MESSAGE_PICTURES, 4400, 7800, 1500, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
     item_aot_set(AOT_04_ITEM_HEAL_HERB_GREEN_0, 6762, 15568, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_00_HEAL_HERB_GREEN, SCA_NONE, 7662, 0, 16468, 0, F_ITEM_10B_HEAL_HERB_GREEN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_RIGHT_STAIRS_VISITED, FALSE))
         {
@@ -75,7 +74,7 @@ proc init
                 {
                     plw_anim(PLW_02, ANIM_28, 0);
                     setw(W_04, 0);
-                    if (CHRIS)
+                    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                     {
                         evt_exec(0, TASK_09, rebecca_radio_call);
                     }
@@ -89,7 +88,7 @@ proc init
                 {
                     plw_anim(PLW_02, ANIM_28, 0);
                     setw(W_04, 0);
-                    if (CHRIS)
+                    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                     {
                         evt_exec(0, TASK_09, rebecca_radio_call_upstairs);
                     }

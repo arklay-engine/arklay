@@ -52,7 +52,7 @@
 
 proc init
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         door_aot_set(AOT_00_DOOR_307, 200, 15900, 2100, 1500, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_307_308, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
@@ -62,7 +62,7 @@ proc init
     }
     door_aot_set(AOT_01_DOOR_309_N, 12800, 26400, 2100, 1700, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_309_DARKNESS_PASSAGE, 4100, 0, 26800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_309_S, 11100, 2800, 2100, 1500, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_309_DARKNESS_PASSAGE, 2800, 0, 4400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_03_ITEM_WEAPON_FLAMETHROWER_0, 5060, 18000, 1400, 2000, IT_06_WEAPON_FLAMETHROWER, 240, IMDL_00_WEAPON_FLAMETHROWER, SCA_NONE, 5060, -1860, 19590, 1024, F_ITEM_308_WEAPON_FLAMETHROWER_0, SAT_MANUAL | SAT_PLAYER, 0);
         swap_var(XFER_RESTORE, AOT_03_ITEM_WEAPON_FLAMETHROWER_0, B_0E);
@@ -106,7 +106,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_ENRICO_SHOT, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 5900, 0, 16500, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         }
@@ -118,7 +118,7 @@ proc init
     }
     if (ck(FG_ENEMY, F_ENEMY_308_HUNTER_0, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_06_HUNTER, EB_00, F_ENEMY_308_HUNTER_0_2, SPAWN_FORCE, 2, 0, 1024, 0, 9800, 0, 13200, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         }
@@ -132,7 +132,7 @@ proc init
 
 proc main
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (testpickup(IT_06_WEAPON_FLAMETHROWER))
         {
@@ -992,7 +992,7 @@ event barry_gunshot
 
 event flamethrower_taken_or_north_door_with_barry
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1303,18 +1303,20 @@ event place_flamethrower_model
 
 event flamethrower_hook_or_barry_follows
 {
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(5);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            require(item_ck(IT_06_WEAPON_FLAMETHROWER));
-            swap_var(XFER_HELD, AOT_03_ITEM_WEAPON_FLAMETHROWER_0, B_0E);
-            setb(B_SELECTED_ITEM, IT_06_WEAPON_FLAMETHROWER, 0);
-            set(FG_STATUS, F_STATUS_MENU_KEY_DEPLETED, TRUE);
+            if (item_ck(IT_06_WEAPON_FLAMETHROWER))
+            {
+                swap_var(XFER_HELD, AOT_03_ITEM_WEAPON_FLAMETHROWER_0, B_0E);
+                setb(B_SELECTED_ITEM, IT_06_WEAPON_FLAMETHROWER, 0);
+                set(FG_STATUS, F_STATUS_MENU_KEY_DEPLETED, TRUE);
+            }
         }
         else
         {

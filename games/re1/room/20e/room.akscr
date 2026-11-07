@@ -46,14 +46,14 @@
 #define VO_A06_00 0x0D
 #define VO_A07_00 0x0E
 
-proc init noreturn (MANSION2)
+proc init
 {
     door_aot_set(AOT_00_DOOR_20D, 500, 2500, 1700, 3800, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20D_PILLAR_PASSAGE, 11500, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_20F, 3200, 11400, 1700, 1600, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_20F_DINING, 4800, 0, 11600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         door_aot_set(AOT_02_DOOR_210, 9200, 2500, 1700, 1300, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, DOOR_LOCKED | F_LOCK_20E_210, ROOM_210_ATTIC, 6100, 0, 3600, 0, IT_35_KEY_MANSION_SHIELD, SAT_MANUAL | SAT_PLAYER);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             door_aot_set(AOT_03_DOOR_100, 0, 0, 1, 1, 5, DOOR_SND_03_DR_REB, DOOR_00_DOOR00, 64, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         }
@@ -62,14 +62,14 @@ proc init noreturn (MANSION2)
             door_aot_set(AOT_03_DOOR_100, 0, 0, 1, 1, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         }
         aot_set(AOT_04_5, 6800, 2100, 1400, 1700, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_00_NPC_REBECCA, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, FALSE))
         {
             room_bgm_state_set(1, ROOM_20E_FRONT_OF_ATTIC, BGM_OFF);
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
             }
@@ -78,7 +78,7 @@ proc init noreturn (MANSION2)
                 enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_20E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 1024, 0, 5300, 0, 5800, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
             }
         }
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, TRUE) && ck(FG_SCENARIO, F_SCENARIO_YAWN_SERUM, FALSE))
             {
@@ -137,7 +137,7 @@ proc init noreturn (MANSION2)
 
 proc main
 {
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_YAWN_POISONED, FALSE))
         {
@@ -148,7 +148,7 @@ proc main
 
 event poison_collapse
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -176,7 +176,7 @@ event poison_collapse
     sleep(20);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_C_REBECCA_MET, TRUE))
             {
@@ -485,7 +485,7 @@ event poison_scene_end
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         run
@@ -745,7 +745,7 @@ event chris_walks_from_attic
 
 event player_gasps
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_disable(TASK_07);
     }
@@ -755,7 +755,7 @@ event player_gasps
     act_reset();
     evt_nop();
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -803,7 +803,7 @@ event player_gasps
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_07, chris_breathes_loop, 0);
     }
@@ -812,7 +812,7 @@ event player_gasps
 
 event rebecca_gestures_or_jill_staggers
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
@@ -851,7 +851,7 @@ event rebecca_gestures_or_jill_staggers
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -868,7 +868,7 @@ event player_recover_anims
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
         act_reset();
@@ -896,7 +896,7 @@ event player_recover_anims
 
 event talk_to_rebecca_again
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
@@ -915,7 +915,7 @@ event talk_to_rebecca_again
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -925,7 +925,7 @@ event talk_to_rebecca_again
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -941,7 +941,7 @@ event player_walks_from_attic
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 5060, 2800, F_ROOM_ANIM_DONE);
     }
@@ -1040,7 +1040,7 @@ event rebecca_pose_or_jill_clutches_bite
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, 0);
         act_reset();
@@ -1060,7 +1060,7 @@ event rebecca_pose_or_jill_clutches_bite
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -1075,7 +1075,7 @@ event player_staggers
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_71, 400, 0, 2, 40, 0);
     }
@@ -1124,7 +1124,7 @@ event chris_gasps_or_jill_kneels
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_3B, F_ROOM_ANIM_DONE, AFL_01);
         act_reset();
@@ -1171,7 +1171,7 @@ event player_walks_back
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 4880, 2680, F_ROOM_ANIM_DONE);
     }
@@ -1189,7 +1189,7 @@ event chris_breathes_or_jill_falls
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
         act_flag_op(EF_SET, EF_0001);
@@ -1207,7 +1207,7 @@ event partner_runs_in
 {
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             pos_set(ENEMY_00_NPC_REBECCA, 0, 0, 0, 2260, 0, 3340);
         }
@@ -1217,7 +1217,7 @@ event partner_runs_in
         }
     }
     sleep(5);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     }
@@ -1243,7 +1243,7 @@ event collapse_fade_jill
 
 event rebecca_walks_in_or_jill_walks
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
@@ -1260,7 +1260,7 @@ event rebecca_walks_in_or_jill_walks
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_03, 3040, 3100, F_ROOM_ANIM_DONE);
     }
@@ -1276,7 +1276,7 @@ event rebecca_walks_in_or_jill_walks
 
 event rebecca_anims_or_jill_gasps
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
@@ -1313,7 +1313,7 @@ event rebecca_anims_or_jill_gasps
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_32, 0, 300, 4, 0, 50);
     }

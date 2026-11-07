@@ -57,7 +57,7 @@ proc init
 
 proc main
 {
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         if (ck(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, TRUE))
         {

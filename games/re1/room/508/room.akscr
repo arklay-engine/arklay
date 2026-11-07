@@ -78,7 +78,7 @@ proc init
     {
         effect(FX_0A, FX_ROW_02, FX_AT_WORLD, 2650, -3000, 5300, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
         {
@@ -105,7 +105,7 @@ proc init
         aot_reset(AOT_01_DOOR_509, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, electronic_lock, 0);
     }
     aot_reset(AOT_03_DOOR_50B, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, double_lock, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
         {
@@ -180,7 +180,7 @@ event survivor_goes_ahead
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, TRUE);
         }
@@ -191,7 +191,7 @@ event survivor_goes_ahead
     }
     sleep(20);
     cutnext(CAM_02);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -200,7 +200,7 @@ event survivor_goes_ahead
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_03, 12200, 4450, F_ROOM_SURVIVOR_ANIM_DONE);
     }
@@ -209,7 +209,7 @@ event survivor_goes_ahead
         act_anim_seq(AB_03, 18600, 4300, F_ROOM_SURVIVOR_ANIM_DONE);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(40);
         cutnext(CAM_01);
@@ -221,7 +221,7 @@ event survivor_goes_ahead
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -239,7 +239,7 @@ event survivor_goes_ahead
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -251,7 +251,7 @@ event survivor_goes_ahead
     act_motion_path(MOTION_31, 710, 0, 0, 80, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
     }
@@ -262,7 +262,7 @@ event survivor_goes_ahead
     run
     {
         message(3, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_A00_05_5B);
         }
@@ -271,7 +271,7 @@ event survivor_goes_ahead
             voice_play(VOICE_PLAY, VO_A00_04_5A);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -289,7 +289,7 @@ event survivor_goes_ahead
     }
     while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
         evt_actor_begin();
@@ -309,7 +309,7 @@ event survivor_goes_ahead
         act_reset();
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -328,7 +328,7 @@ event survivor_goes_ahead
     run
     {
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6388, 14000);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             pos_set(ENEMY_00_NPC_JILL, 0, 4056, 0, 0, 0, 0);
         }

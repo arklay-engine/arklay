@@ -114,7 +114,7 @@ proc main
     {
         aot_reset(AOT_09_EVENT_AIR_SHAFT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ROOM, F_ROOM_GAS_TRAP_SPRUNG, TRUE) && ck(FG_COMMON, F_COMMON_C_MORGUE_VENT_A_COVERED, FALSE) && ck(FG_ROOM, F_ROOM_VENT_A_GAS_ON, FALSE))
         {
@@ -325,7 +325,7 @@ event watch_vent_a_cover
         {
             if (ck(FG_ROOM, F_ROOM_VENT_A_COVERED, TRUE))
             {
-                if (CHRIS)
+                if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                 {
                     set(FG_COMMON, F_COMMON_C_MORGUE_VENT_A_COVERED, TRUE);
                 }
@@ -336,7 +336,7 @@ event watch_vent_a_cover
             }
             else
             {
-                if (CHRIS)
+                if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                 {
                     set(FG_COMMON, F_COMMON_C_MORGUE_VENT_A_COVERED, FALSE);
                 }
@@ -360,7 +360,7 @@ event watch_vent_b_cover
         {
             if (ck(FG_ROOM, F_ROOM_VENT_B_COVERED, TRUE))
             {
-                if (CHRIS)
+                if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                 {
                     set(FG_COMMON, F_COMMON_C_MORGUE_VENT_B_COVERED, TRUE);
                 }
@@ -371,7 +371,7 @@ event watch_vent_b_cover
             }
             else
             {
-                if (CHRIS)
+                if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                 {
                     set(FG_COMMON, F_COMMON_C_MORGUE_VENT_B_COVERED, FALSE);
                 }
@@ -465,7 +465,7 @@ event enter_air_shaft
     timer_setup(LIGHT_FADE_VEIL, -2000, FADE_R | FADE_G | FADE_B);
     cutnext(CAM_00);
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         se_play_3d(SND_BANK_ROOM, SE_19_CHAKUCHI, 0, SND_AT_POINT, 0, -13072, 6800);
     }

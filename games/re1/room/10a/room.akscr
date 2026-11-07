@@ -34,7 +34,7 @@
 
 proc init
 {
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     }
@@ -42,7 +42,7 @@ proc init
     door_aot_set(AOT_01_DOOR_117, 1800, 1000, 2400, 1400, 2, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, DOOR_LOCK_40, ROOM_117_LARGE_GALLERY, 2900, 0, 10000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_119, 7800, 5200, 1500, 1700, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_10A_119, ROOM_119_STUDY, 6300, 0, 2700, 3072, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_03_DOOR_10B, 10600, 5200, 2000, 1700, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCKED | F_LOCK_10A_10B, ROOM_10B_1F_RIGHT_STAIRS, 3300, 0, 6600, 3072, LOCK, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         door_aot_set(AOT_04_DOOR_11A, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_10A_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
@@ -50,7 +50,7 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             door_aot_set(AOT_04_DOOR_11A, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
             if (ck(FG_COMMON, F_COMMON_C_HUNTER_FILM_SEEN, FALSE))
@@ -90,7 +90,7 @@ proc init
 
 proc main
 {
-    if (CHRIS && MANSION2)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         if (ck(FG_ENEMY, F_ENEMY_10A_HUNTER_0, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
         {
@@ -115,7 +115,7 @@ event hunter_film
     run
     {
         aot_delete(AOT_05_EVENT_HUNTER_FILM, SCE_NONE, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_HUNTER_FILM_SEEN, TRUE);
         }
@@ -151,7 +151,7 @@ event hunter_film
     {
         pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2524, 0, 12163);
         eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_67);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 0, 0, 4880, 0, 3549);
         }
@@ -171,7 +171,7 @@ event hunter_film
         cutnext(CAM_02);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE);
         }
@@ -284,7 +284,7 @@ event rebecca_radio_call_upstairs
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
-    if (JPN)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         sleep(56);
     }

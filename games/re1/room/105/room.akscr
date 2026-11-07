@@ -111,7 +111,7 @@ proc init
 {
     door_aot_set(AOT_00_DOOR_104, 5300, 14000, 2800, 2800, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_104_TEA_ROOM, 11500, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_106, 31600, 6300, 2000, 4000, 9, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_106_MAIN_HALL, 3400, 0, 17000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_02_EVENT_HALL_DOOR_BLOCK, 31700, 6300, 2000, 4000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         item_aot_set(AOT_03_ITEM_KEY_MANSION_SHIELD_0, 17400, 14500, 1000, 1000, IT_35_KEY_MANSION_SHIELD, 1, IMDL_00_KEY_MANSION_SHIELD, SCA_NONE, 18000, -2400, 14880, 0, F_ITEM_105_KEY_MANSION_SHIELD_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
@@ -184,7 +184,7 @@ proc init
     }
     if (ck(FG_SCENARIO, F_SCENARIO_BALCONY_STATUE_PUSHED, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             item_aot_set(AOT_12_ITEM_KEY_JEWEL_BLUE_4, 12000, 4000, 1000, 1500, IT_21_KEY_JEWEL_BLUE, 1, IMDL_04_JEWEL_BLUE, SCA_NONE, 12700, 0, 4800, 3072, F_ITEM_105_KEY_JEWEL_BLUE_4, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | ITEM_REACH);
         }
@@ -193,7 +193,7 @@ proc init
             item_aot_set(AOT_17_ITEM_KEY_JEWEL_BLUE_4, 12000, 4000, 1000, 1500, IT_21_KEY_JEWEL_BLUE, 1, IMDL_04_JEWEL_BLUE, SCA_NONE, 12700, 0, 4800, 3072, F_ITEM_105_KEY_JEWEL_BLUE_4, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | ITEM_REACH);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         obj(OBJ_00_BLOOD_POOL, 0, SCA_NONE, 4100, 0, 6700, 0, 0, 0, 0, 0, 0, 500, 700, 600);
         obj(OBJ_01_BLOOD_SPLASH, 0, SCA_NONE, 5000, 0, 6900, -7800, 0, 0, 0, 0, 0, 500, 350, 300);
@@ -223,7 +223,7 @@ proc init
     {
         obj(OBJ_03_FALLEN_STATUE, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 12700, 0, 5000, 3072, 0, 0, 0, 0, 0, 544, 1300, 500);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, FALSE))
         {
@@ -316,7 +316,7 @@ proc init
     {
         snd_pan_vol_set(BGM_SUB_1, 87, 90);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_106_MAIN_HALL))
         {
@@ -338,7 +338,7 @@ proc init
 
 proc main
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_FIREPLACE_GOLD_EMBLEM, FALSE))
         {
@@ -573,7 +573,7 @@ proc main
 
 event hall_door_not_done_or_barry_walks_in
 {
-if (CHRIS)
+if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
 {
         message(MSG_THERE_MAY_BE_MORE_HERE_WORTH | MSG_FAST, RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There may be more here worth investigating."
 }
@@ -1297,12 +1297,12 @@ event barry_shoots_zombie_at_door
     }
     while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     bgm_volume_ramp(BGM_SUB_2, -95, 60);
-    if (!EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
     {
         bgm_stop(BGM_SUB_2);
     }
     sleep(60);
-    if (EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         bgm_stop(BGM_SUB_2);
     }

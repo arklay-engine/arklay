@@ -46,7 +46,7 @@ proc init
     {
         if (ck(FG_ITEM, F_ITEM_10E_AMMO_SHOTGUN_1, TRUE))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 item_aot_set(AOT_02_ITEM_AMMO_SHOTGUN_1, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
             }
@@ -57,7 +57,7 @@ proc init
         }
         if (ck(FG_ITEM, F_ITEM_10E_FILE_KEEPERS_DIARY_2, TRUE))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 item_aot_set(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02_FILE_KEEPERS_DIARY, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
             }
@@ -83,7 +83,7 @@ proc init
         aot_set(AOT_04_NONE_DUMMY, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         obj(OBJ_00_CLOSET_DOOR_0, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(OBJ_01_CLOSET_DOOR_1, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_80, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_RESTORE, 2, 0, 512, 0, 25000, -10000, 25000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
@@ -153,7 +153,7 @@ event diary_closet_zombie
         bgm_stop(BGM_MAIN);
     }
     sleep(25);
-    if (MANSION2 && CHRIS)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(25);
     }
@@ -166,7 +166,7 @@ event diary_closet_zombie
     {
         set(FG_COMMON, F_COMMON_CLOSET_ZOMBIE_RELEASED, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_STATUS, EML_STATUS_SET | 1);
         }
@@ -183,12 +183,12 @@ event diary_closet_zombie
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_17_CLST_OP, 0, SND_AT_POINT, 0, 2700, 4000);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             pos_set(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0, 2200, 0, 3950);
         }
     }
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_ZOMBIE_GROUNDSKEEPER);
         evt_tween_begin_alt();

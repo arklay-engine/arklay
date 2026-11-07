@@ -367,6 +367,19 @@ event event_00
     );
 }
 
+/// Whether flag `bit` of `bank` is set in room variant `bits`: the flags the
+/// engine keeps in step with the variant, and every other flag clear.
+fn variant_flag(bits: u8, bank: u8, bit: u8) -> bool {
+    use crate::scd::opcode::variant::*;
+    match (bank, bit) {
+        (FLAG_BANK_STATUS, FLAG_JILL) => bits & JILL != 0,
+        (FLAG_BANK_STATUS, FLAG_REGION_JPN) => bits & JPN != 0,
+        (FLAG_BANK_STATUS, FLAG_REGION_EUR) => bits & EUR != 0,
+        (FLAG_BANK_SCENARIO, FLAG_MANSION2) => bits & MANSION2 != 0,
+        _ => false,
+    }
+}
+
 /// The `nop` operands a command script's main blocks run, in order, for
 /// the room variant `bits`.
 fn main_nops(container: &[u8], bits: u8) -> Vec<i64> {
@@ -384,8 +397,8 @@ fn main_nops(container: &[u8], bits: u8) -> Vec<i64> {
             }
             StepResult::Continue
         }
-        fn room_variant(&mut self) -> u8 {
-            self.bits
+        fn flag_test(&mut self, bank: u8, bit: u8, expected: bool) -> bool {
+            variant_flag(self.bits, bank, bit) != expected
         }
     }
     let scripts = reader::parse(container).unwrap();
@@ -442,9 +455,25 @@ proc main noreturn
     assert_eq!(nops(0x1031), [1, 3, 5]);
     assert_eq!(nops(0x6030), [4]);
     assert_eq!(nops(0x7031), [4, 5]);
-    // Outside the mansion neither visit holds.
-    assert_eq!(nops(0x3001), [4, 5]);
-    // A variant's build holds only its own lines; the runtime build jumps.
+    // Outside the mansion neither visit holds in the room's own build. The
+    // runtime build reads the visit flag, which only a mansion room keeps.
+    let outside = Variant::for_room(0x3001);
+    let folded = compile_variant(text, outside)
+        .unwrap()
+        .to_container()
+        .unwrap();
+    assert_eq!(main_nops(&folded, outside.bits()), [4, 5]);
+    // A variant's build holds only its own lines; the runtime build tests
+    // the flags that tell the variant, here Jill's status bit.
+    let runtime =
+        compile("#version 1\nproc main\n{\n    if (JILL)\n    {\n        nop(1);\n    }\n}\n")
+            .unwrap()
+            .to_container()
+            .unwrap();
+    assert_eq!(
+        block_bytes(&reader::parse(&runtime).unwrap().main[0]),
+        [0x01, 0x08, 0x04, 5, 8, 0, 0x0E, 1, 0x03, 0x00, 0x00, 0x00]
+    );
     let folded = compile_variant(text, Variant::for_room(0x1030))
         .unwrap()
         .to_container()
@@ -585,6 +614,175 @@ event event_00
     // one is an error.
     let error = compile_error(
         "#version 1\nevent event_00\n{\n    if (CHRIS)\n    {\n        evt_actor_begin();\n    }\n    act_reset();\n    evt_finish();\n}\n",
+    );
+    assert!(error.contains("different event states"), "{error}");
+}
+
+/// `!USA` has no flag test of its own: the runtime build runs it as the
+/// `else` of the USA test, in an `if`, a `when` and a `noreturn`, and an
+/// event, as each variant's own build does.
+#[test]
+fn not_usa_is_the_else_of_the_usa_test() {
+    let text = "#version 1
+proc main when (!USA) noreturn (EUR)
+{
+    if (!USA)
+    {
+        nop(1);
+    }
+    else
+    {
+        nop(2);
+    }
+    if (JILL && !USA)
+    {
+        nop(3);
+    }
+    else
+    {
+        nop(4);
+    }
+    if (!USA && CHRIS)
+    {
+        nop(5);
+    }
+}
+
+proc main
+{
+    nop(6);
+}
+
+event event_00
+{
+    if (!USA)
+    {
+        nop(7);
+    }
+    else
+    {
+        nop(8);
+    }
+    evt_finish();
+}
+";
+    let mut seen = Vec::new();
+    for id in [0x1030, 0x1031] {
+        for region in [Region::Usa, Region::Jpn, Region::Eur] {
+            let variant = Variant::for_room(id).in_region(region);
+            seen.push(variant_nops(text, variant));
+        }
+    }
+    assert_eq!(
+        seen,
+        [
+            vec![6],
+            vec![1, 4, 5, 6],
+            vec![1, 4, 5],
+            vec![6],
+            vec![1, 3, 6],
+            vec![1, 3],
+        ]
+    );
+    let scripts = reader::parse(&compile(text).unwrap().to_container().unwrap()).unwrap();
+    let jill = Variant::for_room(0x1031);
+    assert_eq!(run_nops(&scripts, jill.bits(), Some(0)), [8]);
+    assert_eq!(
+        run_nops(&scripts, jill.in_region(Region::Eur).bits(), Some(0)),
+        [7]
+    );
+    // The runtime build's `when` block decompiles to the same bytes.
+    let container = compile(text).unwrap().to_container().unwrap();
+    let source = decompile(&reader::parse(&container).unwrap());
+    assert!(!source.contains("asm"), "{source}");
+    assert_eq!(
+        compile(&source).unwrap().to_container().unwrap(),
+        container,
+        "{source}"
+    );
+}
+
+/// An `if` whose body is too long for its 1-byte jump takes the long form,
+/// `if_long`/`else_long`, and runs the same.
+#[test]
+fn long_if_statements_jump_two_bytes() {
+    let body = (1..=130)
+        .map(|n| format!("        nop({n});\n"))
+        .collect::<String>();
+    let text = format!(
+        "#version 1\nproc main noreturn\n{{\n    if (JILL)\n    {{\n{body}    }}\n    else\n    {{\n{body}    }}\n    nop(200);\n}}\n"
+    );
+    let runtime = compile(&text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&runtime).unwrap();
+    let ops: Vec<u8> = scripts.main[0].insns.iter().map(|insn| insn.op).collect();
+    assert_eq!(ops[0], 0x51);
+    assert!(ops.contains(&0x52), "{ops:?}");
+    let all: Vec<i64> = (1..=130).chain([200]).collect();
+    assert_eq!(variant_nops(&text, Variant::for_room(0x1030)), all);
+    assert_eq!(variant_nops(&text, Variant::for_room(0x1031)), all);
+    // Without an `else` the long `if` resumes after its `endif`.
+    let text = format!(
+        "#version 1\nproc main noreturn\n{{\n    if (CHRIS)\n    {{\n{body}    }}\n    nop(200);\n}}\n"
+    );
+    assert_eq!(variant_nops(&text, Variant::for_room(0x1031)), [200]);
+    assert_eq!(variant_nops(&text, Variant::for_room(0x1030)), all);
+    // The disassembly names the long jumps' labels and assembles back.
+    let container = compile(&text).unwrap().to_container().unwrap();
+    let source = crate::scd::disasm::render(&reader::parse(&container).unwrap(), &container);
+    assert!(source.contains("if_long "), "{source}");
+    assert_eq!(
+        asm::assemble(&source).unwrap().to_container().unwrap(),
+        container
+    );
+}
+
+/// An event's `if` is `evt_if`: its conditions, then the body it runs when
+/// they all pass, with `evt_jump` over an `else`.
+#[test]
+fn event_if_statements_test_their_conditions() {
+    let text = "#version 1
+event event_00
+{
+    if (ck(FG_COMMON, 1, FALSE) && ck(FG_COMMON, 2, FALSE))
+    {
+        nop(1);
+    }
+    else
+    {
+        nop(2);
+    }
+    if (ck(FG_COMMON, 1, TRUE))
+    {
+        nop(3);
+    }
+    else if (JILL)
+    {
+        nop(4);
+    }
+    else
+    {
+        nop(5);
+    }
+    evt_finish();
+}
+";
+    let container = compile(text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    assert_eq!(scripts.events[0].insns[0].op, 0xF4);
+    let chris = Variant::for_room(0x1030).bits();
+    let jill = Variant::for_room(0x1031).bits();
+    assert_eq!(run_nops(&scripts, chris, Some(0)), [1, 5]);
+    assert_eq!(run_nops(&scripts, jill, Some(0)), [1, 4]);
+    let source = crate::scd::disasm::render(&scripts, &container);
+    assert!(source.contains("evt_if "), "{source}");
+    assert_eq!(
+        asm::assemble(&source).unwrap().to_container().unwrap(),
+        container
+    );
+    // Only a test of the variant's flags sends each variant down its own
+    // branch: after any other test both branches' states meet.
+    let error = compile_error(
+        "#version 1\nevent event_00\n{\n    if (ck(FG_COMMON, 1, TRUE))\n    {\n        evt_actor_begin();\n    }\n    act_reset();\n    evt_finish();\n}\n",
     );
     assert!(error.contains("different event states"), "{error}");
 }
@@ -1215,13 +1413,11 @@ fn run_nops(scripts: &Scripts, bits: u8, event: Option<u8>) -> Vec<i64> {
             }
             StepResult::Continue
         }
-        fn room_variant(&mut self) -> u8 {
-            self.bits
-        }
-        // Every flag is clear: the test passes when it asks for clear
-        // (`FALSE`, operand 1), as `GameState::flag_test` does.
-        fn flag_test(&mut self, _bank: u8, _bit: u8, expected: bool) -> bool {
-            expected
+        // Every flag but the variant's is clear: as `GameState::flag_test`
+        // does, the test passes when the flag differs from `expected` (a
+        // set flag for `TRUE`, operand 0).
+        fn flag_test(&mut self, bank: u8, bit: u8, expected: bool) -> bool {
+            variant_flag(self.bits, bank, bit) != expected
         }
     }
     let mut host = Host {
@@ -1320,6 +1516,96 @@ proc body
 ";
     let scripts = reader::parse(&compile(text).unwrap().to_container().unwrap()).unwrap();
     assert_eq!(run_nops(&scripts, 0, Some(0)), [1, 2, 3, 2]);
+}
+
+/// A port container decompiles to source: its procedures and their calls,
+/// a long `if` and the event `if`s, including one whose branches leave the
+/// event in different states for each player.
+#[test]
+fn port_containers_decompile_to_procedures_and_ifs() {
+    let body = (1..=130)
+        .map(|n| format!("        nop({n});\n"))
+        .collect::<String>();
+    let text = format!(
+        "#version 1
+proc main
+{{
+    nop(1);
+    body();
+}}
+
+proc body
+{{
+    if (ck(FG_COMMON, 3, TRUE))
+    {{
+{body}    }}
+    else
+    {{
+        nested();
+    }}
+}}
+
+proc nested
+{{
+    nop(2);
+}}
+
+event start
+{{
+    if (ck(FG_COMMON, 1, TRUE) && ck(FG_COMMON, 2, FALSE))
+    {{
+        body();
+    }}
+    else if (ck(FG_STATUS, 8, TRUE))
+    {{
+        sleep(5);
+    }}
+    else
+    {{
+        run
+        {{
+            nested();
+        }}
+    }}
+    evt_actor_begin();
+    if (ck(FG_STATUS, 8, FALSE))
+    {{
+        act_reset();
+        evt_nop();
+    }}
+    sleep(2);
+    if (ck(FG_STATUS, 8, FALSE))
+    {{
+        evt_finish();
+    }}
+    else
+    {{
+        act_finish();
+    }}
+}}
+"
+    );
+    let container = compile(&text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    assert_eq!(scripts.procs.len(), 2);
+    let source = decompile(&scripts);
+    for expected in [
+        "proc proc_00\n",
+        "proc proc_01\n",
+        "    proc_00();\n",
+        "        proc_01();\n",
+        "    if (ck(FG_COMMON, 1, TRUE) && ck(FG_COMMON, 2, FALSE))\n",
+        "    else if (ck(FG_STATUS, 8, TRUE))\n",
+        "        act_finish();\n",
+    ] {
+        assert!(source.contains(expected), "{expected:?} in\n{source}");
+    }
+    assert!(!source.contains("asm"), "{source}");
+    assert_eq!(
+        compile(&source).unwrap().to_container().unwrap(),
+        container,
+        "{source}"
+    );
 }
 
 /// The `.s` form carries the procedures as a `.procs` section, which

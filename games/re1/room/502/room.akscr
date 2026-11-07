@@ -48,12 +48,12 @@ proc init
 {
     door_aot_set(AOT_00_DOOR_500, 4700, 12000, 1300, 1300, 0, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_500_UNDER_FOUNTAIN, 4400, 0, 7600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_503, 4800, 1500, 1500, 1300, 0, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_503_STAIRS, 26000, 0, 5800, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         item_aot_set(AOT_02_ITEM_FILE_BARRYS_PICTURE, 0, 0, 1, 1, IT_6A_FILE_BARRYS_PICTURE, 0, IMDL_00_FILE_BARRYS_PICTURE, SCA_NONE, 30000, 30000, 30000, 0, F_ITEM_307_FILE_BARRYS_PICTURE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     obj(OBJ_00_ITEM_BOX, OF_10 | OF_ACTIVE, SCA_NONE, 2100, -1440, 7800, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_02_ITEMBOX_CHRIS, 1100, 6350, 3200, 2750, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 4, 0, 0, 0, 0, 0);
         if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
@@ -380,7 +380,7 @@ event barry_photo_scene
 event jill_talks_or_barry_photo_scene_with_chris
 {
     sleep(1);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_disable(TASK_07);
     }
@@ -389,7 +389,7 @@ event jill_talks_or_barry_photo_scene_with_chris
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_2);
         evt_actor_begin();
@@ -475,7 +475,7 @@ event jill_talks_or_barry_photo_scene_with_chris
     sleep(10);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_A00_05_46);
             message(MSG_VO_A00_05_46, 0);
@@ -486,7 +486,7 @@ event jill_talks_or_barry_photo_scene_with_chris
             message(MSG_VO_11A_01, 0);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -495,7 +495,7 @@ event jill_talks_or_barry_photo_scene_with_chris
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2D, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -717,7 +717,7 @@ event jill_talks_or_barry_photo_scene_with_chris
     act_param_set(0, 3072);
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(40);
         run
@@ -738,7 +738,7 @@ event jill_talks_or_barry_photo_scene_with_chris
         evt_nop();
     }
     wait_message();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -764,14 +764,14 @@ event jill_talks_or_barry_photo_scene_with_chris
     }
     run
     {
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
         }
         cutnext(CAM_00);
         cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             eml_state(0, ENEMY_00_NPC_JILL, EML_08);
         }
@@ -780,7 +780,7 @@ event jill_talks_or_barry_photo_scene_with_chris
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
@@ -790,7 +790,7 @@ event jill_talks_or_barry_photo_scene_with_chris
 
 event jill_waits_or_chris_walks_in
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(5);
         run

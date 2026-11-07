@@ -77,7 +77,7 @@ proc init
     aot_set(AOT_02_USEITEM_VINES, 9800, 16600, 2200, 1200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
     item_aot_set(AOT_03_ITEM_KEY_MANSION_HELMET_0, 9800, 17700, 2200, 1800, IT_36_KEY_MANSION_HELMET, 3, IMDL_00_KEY_MANSION_HELMET, SCA_NONE, 10550, -460, 18010, 1024, F_ITEM_40C_KEY_MANSION_HELMET_0, 0, 0);
     eml_rot(IMDL_00_KEY_MANSION_HELMET, 250, -2020);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_05_EVENT_DOOR_VINES, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, vines_block_door, 0, 0, 0);
     }
@@ -86,7 +86,7 @@ proc init
         aot_set(AOT_05_EVENT_DOOR_VINES, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, rebecca_intro_or_vines_block_door, 0, 0, 0);
     }
     aot_set(AOT_06_MESSAGE_SHINING_OUT_OF_REACH, 9800, 17200, 1700, 1100, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_MAIN_ON);
         set(FG_ROOM, F_ROOM_BOSS_BGM_ON, TRUE);
@@ -256,12 +256,12 @@ proc main
     }
     if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE))
     {
-        set(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE);
     }
     if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_BOSS_BGM_ON, TRUE) && ck(FG_ROOM, F_ROOM_BGM_FADE_STARTED, FALSE))
     {
         set(FG_ROOM, F_ROOM_BGM_FADE_STARTED, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_exec(0, TASK_09, fade_boss_bgm);
         }
@@ -273,7 +273,7 @@ proc main
     if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_SUB_BGM_ON, TRUE) && ck(FG_ROOM, F_ROOM_BGM_FADE_STARTED, FALSE))
     {
         set(FG_ROOM, F_ROOM_BGM_FADE_STARTED, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_exec(0, TASK_09, fade_sub_bgm);
         }
@@ -282,7 +282,7 @@ proc main
             evt_exec(0, TASK_09, fade_sub_bgm);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_DOOR_VINES_DONE, FALSE))
         {
@@ -332,7 +332,7 @@ proc main
 
 event rebecca_intro_or_vines_block_door
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -407,7 +407,7 @@ event rebecca_intro_or_vines_block_door
         effect(FX_0B, FX_ROW_15, FX_AT_WORLD, 12700, 0, 20600, 0);
     }
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_PLANT_42);
         evt_tween_begin_alt();
@@ -440,7 +440,7 @@ event rebecca_intro_or_vines_block_door
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             eml_state(0, ENEMY_00_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
             eml_state(0, ENEMY_01_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
@@ -455,12 +455,12 @@ event rebecca_intro_or_vines_block_door
             cutnext(CAM_00);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             set(FG_ROOM, F_ROOM_DOOR_VINES_DONE, TRUE);
         }
         cut_auto(CUT_FREE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_on(AOT_00_DOOR_408, SCE_DOOR, 0);
             setb(B_CHARACTER_MODEL, 3, 0);
@@ -618,7 +618,7 @@ event plant42_wakes_actors
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_33, 400, -300, 0, 150, 100);
         sleep(20);
@@ -635,7 +635,7 @@ event plant42_wakes_actors
         act_anim_seq(AB_05, 5862, 16164, F_ROOM_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -651,13 +651,13 @@ event plant42_wakes_actors
         }
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 10000, -6000, 10000, 100, 50);
         act_anim_seq(AB_02, 5890, 9436, F_ROOM_ANIM_DONE);
     }
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
         act_anim_seq(AB_06, 6200, 12433, F_ROOM_ANIM_DONE);
@@ -778,7 +778,7 @@ event barry_rescues_jill_tentacles
 
 event rebecca_or_jill_turns
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         evt_work_set(WK_ENEMY, ENEMY_06_NPC_REBECCA);
@@ -788,7 +788,7 @@ event rebecca_or_jill_turns
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 150, 75);
     }
@@ -799,7 +799,7 @@ event rebecca_or_jill_turns
         act_flag_op(EF_OR, EF_0001);
     }
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_10, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -840,7 +840,7 @@ event intro_chris_gestures
 
 event rebecca_or_barry_gestures
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_06_NPC_REBECCA);
     }
@@ -849,7 +849,7 @@ event rebecca_or_barry_gestures
         evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 3100, 11600, F_ROOM_ANIM_DONE);
     }
@@ -865,13 +865,13 @@ event rebecca_or_barry_gestures
 
 event chris_fires_or_jill_gestures
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_30, F_ROOM_ANIM_DONE, 0);
         act_reset();
@@ -900,7 +900,7 @@ event chris_fires_or_jill_gestures
         act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_3F, F_ROOM_ANIM_DONE, 0);
         sleep(60);
@@ -924,7 +924,7 @@ event chris_fires_or_jill_gestures
 
 event rebecca_or_barry_gestures_2
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_06_NPC_REBECCA);
     }
@@ -933,7 +933,7 @@ event rebecca_or_barry_gestures_2
         evt_work_set(WK_ENEMY, ENEMY_06_NPC_BARRY_2_STARS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -944,7 +944,7 @@ event rebecca_or_barry_gestures_2
         act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, 0);
     }
     sleep(35);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     }
@@ -953,7 +953,7 @@ event rebecca_or_barry_gestures_2
         act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     }
     act_flag_op(EF_OR, EF_0001);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(15);
         act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
@@ -1127,13 +1127,13 @@ event talk_to_barry_gestures
 
 event plant42_withers_or_jill_talk_gestures
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_3F, F_ROOM_ANIM_DONE, 0);
         act_flag_op(EF_OR, EF_0010);
@@ -1160,7 +1160,7 @@ event plant42_withers_or_jill_talk_gestures
         act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         cutnext(CAM_05);
         run

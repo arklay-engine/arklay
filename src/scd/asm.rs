@@ -902,6 +902,13 @@ enum PlannedKind {
         label: String,
         delta: i64,
     },
+    /// An `evt_if` header: the label ending its inline conditions and the
+    /// label it jumps to when one fails.
+    EvtIf {
+        src: InsnSrc,
+        body: String,
+        target: String,
+    },
     /// One `evt_block_sub` size word (or its one-byte zero terminator).
     SubBlock { size: u16 },
     /// Raw trailing bytes.
@@ -915,6 +922,7 @@ impl PlannedItem {
             PlannedKind::EvtBlock { .. }
             | PlannedKind::EvtSingle { .. }
             | PlannedKind::EvtDo { .. } => 2,
+            PlannedKind::EvtIf { .. } => 4,
             PlannedKind::SubBlock { size } => {
                 if *size == 0 {
                     1
@@ -937,6 +945,9 @@ impl PlannedItem {
             )),
             PlannedKind::EvtDo { .. } => Some(Decoded::Control(
                 event_control_op(0xFC).expect("evt_do opcode exists"),
+            )),
+            PlannedKind::EvtIf { .. } => Some(Decoded::Control(
+                event_control_op(0xF4).expect("evt_if opcode exists"),
             )),
             PlannedKind::SubBlock { size } => Some(Decoded::SubBlockHeader { size: *size }),
             PlannedKind::Db(_) => None,
@@ -1065,8 +1076,8 @@ fn plan_command_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
 /// payload structures from the surrounding items.
 fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
     let mut planned: Vec<PlannedItem> = Vec::new();
-    // The state each room variant is in, split by the variant jumps and
-    // gathered again at their targets ([`EventFlow`]).
+    // The state the event is in, carried along the `evt_if` and `evt_jump`
+    // branches and gathered again at their targets ([`EventFlow`]).
     let mut flow = EventFlow::new(state_code(EventState::Top));
     let mut targets: HashMap<String, EventFlow> = HashMap::new();
     let mut index = 0usize;
@@ -1080,52 +1091,33 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
             }
         }
         if let ItemKind::Insn(src) = &item.kind
-            && matches!(src.mnemonic.as_str(), "evt_variant_if" | "evt_jump")
+            && src.mnemonic == "evt_jump"
         {
-            let (label, mask) = match (src.mnemonic.as_str(), src.args.as_slice()) {
-                ("evt_variant_if", [mask, target]) => {
-                    let op = event_control_op(0xF4).expect("evt_variant_if exists");
-                    (target, Some(argument_int(mask, op, src)?))
-                }
-                ("evt_jump", [target]) => (target, None),
-                _ => bail!(
-                    "line {}, column {}: `{}` takes {} arguments",
+            let [target] = src.args.as_slice() else {
+                bail!(
+                    "line {}, column {}: `evt_jump` takes a label",
                     src.line,
-                    src.col,
-                    src.mnemonic,
-                    if src.mnemonic == "evt_jump" {
-                        "a label"
-                    } else {
-                        "a mask and a label"
-                    }
-                ),
+                    src.col
+                );
             };
-            let skipped = match mask {
-                Some(mask) => {
-                    let (taken, skipped) = flow.split(range_u8(mask, src.line, src.col)?);
-                    flow = taken;
-                    skipped
-                }
-                None => std::mem::replace(&mut flow, EventFlow::unreachable()),
-            };
-            if let Arg::Symbol(name) | Arg::Label(name, 0) = label {
-                targets
-                    .entry(name.clone())
-                    .or_insert_with(EventFlow::unreachable)
-                    .merge(&skipped);
-            }
+            // `evt_jump` takes the flow away from the next instruction.
+            let skipped = std::mem::replace(&mut flow, EventFlow::unreachable());
+            targets
+                .entry(label_name(target, src)?)
+                .or_insert_with(EventFlow::unreachable)
+                .merge(&skipped);
         }
         // A control op is valid in any state; every other instruction needs
-        // the one state all the variants reaching it share.
+        // the one state every branch reaching it shares.
         let control =
             matches!(&item.kind, ItemKind::Insn(src) if is_control_mnemonic(&src.mnemonic));
         let state = match flow.state() {
             Some(code) => state_of(code),
             None if control || !flow.is_reachable() => EventState::Top,
             None => bail!(
-                "line {}, column {}: the room variants reaching this instruction are in \
-                 different event states (a variant branch before it begins or ends an actor \
-                 or tween sequence the other does not); give each branch its own tail",
+                "line {}, column {}: the branches reaching this instruction are in different \
+                 event states (a branch before it begins or ends an actor or tween sequence \
+                 the other does not); give each branch its own tail",
                 item.line,
                 item.col
             ),
@@ -1159,7 +1151,7 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
                         )
                     })?;
                 // Only an instruction that moves to another state moves
-                // every variant: a control op keeps each variant's own.
+                // every branch: a control op keeps each branch's own.
                 let advance = |flow: &mut EventFlow| {
                     if !control || next_state != state {
                         flow.set(state_code(next_state));
@@ -1177,6 +1169,32 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
                     (Decoded::Control(_), 0xFC) => {
                         index = plan_evt_do(items, index, src, &mut planned)?;
                         advance(&mut flow);
+                    }
+                    (Decoded::Control(_), 0xF4) => {
+                        let first = planned.len() + 1;
+                        index = plan_evt_if(items, index, src, &mut planned)?;
+                        // Each variant goes down the branches it may take.
+                        let conditions = planned[first..]
+                            .iter()
+                            .map(|item| match &item.kind {
+                                PlannedKind::Insn { src, decoded, .. } => encode_insn(
+                                    decoded_table(decoded),
+                                    decoded_op(decoded),
+                                    src,
+                                    &OperandContext::placeholder(),
+                                ),
+                                _ => unreachable!("`evt_if` holds only condition commands"),
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+                        let (taken, skipped) = flow.branch(conditions.iter().map(Vec::as_slice));
+                        flow = taken;
+                        let PlannedKind::EvtIf { target, .. } = &planned[first - 1].kind else {
+                            unreachable!("`evt_if` plans its header first");
+                        };
+                        targets
+                            .entry(target.clone())
+                            .or_insert_with(EventFlow::unreachable)
+                            .merge(&skipped);
                     }
                     _ => {
                         let bytes = encode_insn(
@@ -1505,6 +1523,70 @@ fn plan_evt_do(
     Ok(end)
 }
 
+/// The bare name of a label operand.
+fn label_name(arg: &Arg, src: &InsnSrc) -> Result<String> {
+    match arg {
+        Arg::Symbol(name) | Arg::Label(name, 0) => Ok(name.clone()),
+        _ => bail!(
+            "line {}, column {}: `{}` needs a label reference",
+            src.line,
+            src.col,
+            src.mnemonic
+        ),
+    }
+}
+
+/// Plan an `evt_if` header and its inline condition commands, which run up
+/// to its first label.
+fn plan_evt_if(
+    items: &[Item],
+    index: usize,
+    src: &InsnSrc,
+    planned: &mut Vec<PlannedItem>,
+) -> Result<usize> {
+    let [body, target] = src.args.as_slice() else {
+        bail!(
+            "line {}, column {}: `evt_if` takes two labels",
+            src.line,
+            src.col
+        );
+    };
+    let body = label_name(body, src)?;
+    let target = label_name(target, src)?;
+    let end = (index + 1..items.len())
+        .find(|&end| items[end].labels.iter().any(|name| name == &body))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "line {}, column {}: `evt_if` body label `{body}` is not defined",
+                src.line,
+                src.col
+            )
+        })?;
+    planned.push(PlannedItem {
+        labels: items[index].labels.clone(),
+        line: src.line,
+        col: src.col,
+        kind: PlannedKind::EvtIf {
+            src: src.clone(),
+            body,
+            target,
+        },
+    });
+    for item in plan_command_items(&items[index + 1..end])? {
+        match &item.kind {
+            PlannedKind::Insn {
+                decoded: Decoded::Command(op),
+                ..
+            } if op.condition => planned.push(item),
+            _ => bail!(
+                "line {}: `evt_if` may only hold condition commands",
+                src.line
+            ),
+        }
+    }
+    Ok(end)
+}
+
 /// Validate the resolved structure of every special item.
 fn validate_structure(planned: &PlannedStream) -> Result<()> {
     for (index, item) in planned.items.iter().enumerate() {
@@ -1666,6 +1748,49 @@ fn emit_planned(planned: &PlannedStream) -> Result<Finished> {
                 }
                 body.extend_from_slice(&[0xFC, value as u8]);
             }
+            PlannedKind::EvtIf {
+                src,
+                body: label,
+                target,
+            } => {
+                let context = OperandContext {
+                    labels: Some(&planned.labels),
+                    offset,
+                };
+                let forward = |name: &str| -> Result<usize> {
+                    let at = context.resolved(name, src.line, src.col)?;
+                    at.checked_sub(offset)
+                        .filter(|&delta| delta >= 4)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "line {}, column {}: `evt_if` label `{name}` is not after the \
+                             instruction",
+                                src.line,
+                                src.col
+                            )
+                        })
+                };
+                let length = forward(label)?;
+                let jump = forward(target)?;
+                let length = u8::try_from(length).map_err(|_| {
+                    anyhow::anyhow!(
+                        "line {}, column {}: `evt_if` conditions of {length} bytes do not fit \
+                         a byte",
+                        src.line,
+                        src.col
+                    )
+                })?;
+                let jump = u16::try_from(jump).map_err(|_| {
+                    anyhow::anyhow!(
+                        "line {}, column {}: `evt_if` jump of {jump} bytes does not fit 16 bits",
+                        src.line,
+                        src.col
+                    )
+                })?;
+                body.push(0xF4);
+                body.push(length);
+                body.extend_from_slice(&jump.to_le_bytes());
+            }
             PlannedKind::SubBlock { size } => {
                 if *size == 0 {
                     body.push(0);
@@ -1767,7 +1892,8 @@ fn item_mnemonic(item: &PlannedItem) -> String {
         PlannedKind::Insn { src, .. }
         | PlannedKind::EvtBlock { src, .. }
         | PlannedKind::EvtSingle { src, .. }
-        | PlannedKind::EvtDo { src, .. } => src.mnemonic.clone(),
+        | PlannedKind::EvtDo { src, .. }
+        | PlannedKind::EvtIf { src, .. } => src.mnemonic.clone(),
         PlannedKind::SubBlock { size: 0 } => "evt_block_sub 0".to_string(),
         PlannedKind::SubBlock { .. } => "evt_block_sub".to_string(),
         PlannedKind::Db(_) => "db".to_string(),
@@ -2156,7 +2282,7 @@ fn encode_label(arg: &Arg, context: &OperandContext, src: &InsnSrc) -> Result<u8
     }
 }
 
-/// Encode a variant jump's operand as a forward `u16` delta from the start
+/// Encode a long jump's operand as a forward `u16` delta from the start
 /// of the instruction.
 fn encode_long_label(arg: &Arg, context: &OperandContext, src: &InsnSrc) -> Result<u16> {
     let (name, delta) = match arg {

@@ -76,7 +76,7 @@ event wear_strange_costume
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 setb(B_CHARACTER_MODEL, 8, 0);
             }
@@ -180,7 +180,7 @@ event wear_different_costume
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 setb(B_CHARACTER_MODEL, 8, 0);
             }

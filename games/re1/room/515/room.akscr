@@ -20,13 +20,13 @@ proc init
     set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
     door_aot_set(AOT_00_DOOR_50C, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_12_ELE01A, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_514, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_13_ELE01B, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         dir_set(0, 0, 2048, 0, 4500, 0, 4200);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_50C_FRONT_OF_ELEVATOR))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, FALSE))
             {
@@ -54,7 +54,7 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, FALSE))
             {

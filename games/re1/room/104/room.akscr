@@ -42,7 +42,7 @@ proc init
 {
     door_aot_set(AOT_00_DOOR_103, 14800, 4100, 3000, 3100, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 1, DOOR_LOCKED | F_LOCK_103_104, ROOM_103_F_PASSAGE, 3000, 0, 3000, 3072, LOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_10F, 29800, 4000, 1700, 3500, 2, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_104_10F, ROOM_10F_BAR, 14000, 0, 3000, 3072, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         door_aot_set(AOT_02_DOOR_110, 31500, 1900, 2300, 1800, 6, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_104_110, ROOM_110_1F_ELEVATOR, 0, 0, 0, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
     }
@@ -51,10 +51,10 @@ proc init
         door_aot_set(AOT_02_DOOR_110, 31500, 1900, 2300, 1800, 6, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_104_110, ROOM_110_1F_ELEVATOR, 12700, -7200, 3300, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     door_aot_set(AOT_03_DOOR_105, 10600, 0, 2800, 2300, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_105_DINING_ROOM, 6300, 0, 14100, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         aot_set(AOT_04_EVENT_KENNETH, 3300, 5600, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_kenneth, 0, 0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             item_aot_set(AOT_05_ITEM_AMMO_HANDGUN_0, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 4150, 0, 6400, 1024, F_ITEM_104_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
             aot_set(AOT_06_MESSAGE_PAINTING, 3300, 7400, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
@@ -76,7 +76,7 @@ proc init
             set(FG_COMMON, F_COMMON_J_ENTERED_TEA_ROOM, TRUE);
         }
         evt_exec(0, TASK_09, defer_camera_switch);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
             {
@@ -108,7 +108,7 @@ proc init
         {
             enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_104_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 3072, 0, 4150, 0, 5550, ENEMY_00_FIRST_ZOMBIE, ANIM_00, 0, EVAR_00);
         }
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_25_NPC_KENNETH_1, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 3550, 0, 6400, ENEMY_01_KENNETH, ANIM_00, 0, EVAR_00);
         }
@@ -130,7 +130,7 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             item_aot_set(AOT_04_ITEM_AMMO_HANDGUN_0, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 4150, 0, 6400, 1024, F_ITEM_104_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
@@ -144,7 +144,7 @@ proc init
         aot_set(AOT_05_MESSAGE_PAINTING, 3300, 7400, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
         aot_set(AOT_06_MESSAGE_NOTHING, 5500, 5700, 1000, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         aot_set(AOT_07_MESSAGE_WINDOW, 1000, 6900, 1000, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             item_aot_set(AOT_08_ITEM_AMMO_HANDGUN_1, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, IMDL_01_AMMO_HANDGUN, SCA_NONE, 4150, 0, 6400, 1024, F_ITEM_104_AMMO_HANDGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
@@ -162,10 +162,10 @@ proc init
 
 proc main
 {
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         kenneth_zombie_checks();
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             piano_music_volume();
         }
@@ -261,7 +261,7 @@ event examine_kenneth
 event defer_camera_switch
 {
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {

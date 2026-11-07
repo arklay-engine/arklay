@@ -79,16 +79,22 @@
 //!   its header says `nopad` (`event event_05 nopad`); `raw(0x.., ...);` as
 //!   the last statement gives any other trailing bytes.
 //!
-//! One merged script covers every variant of a room. `if (JILL)`,
-//! `if (MANSION2)`, `if (!JPN)` (variant names joined by `&&`, with `else`)
-//! test the player, the mansion visit and the release as the room runs, in
-//! command code and at the top of an event. The exporter marks a section
-//! only some RDTs carry with `when (...)`, so a variant's build can leave it
-//! out (the checked-in scripts test with `if` instead), and `noreturn` /
-//! `nopad` may hold for some variants only (`noreturn (MANSION2)`). The runtime build ([`Build::Runtime`])
-//! compiles the tests to variant jumps; a build for one RDT variant
-//! ([`Build::Variant`], [`compile_variant`]) folds them away. A script has no
-//! preprocessor choices of its own.
+//! One merged script covers every variant of a room. A room tells the
+//! variant as it runs from flags the engine keeps in step with it: the
+//! player's status bit `F_STATUS_PLAYER_JILL`, the second-visit scenario
+//! flag `F_SCENARIO_MANSION2` and the port's release bits
+//! `F_STATUS_REGION_JPN` / `F_STATUS_REGION_EUR`. The checked-in scripts
+//! test those with plain `if (ck(...))` statements, in command code and in
+//! events, where an `if` is the port's `evt_if`.
+//!
+//! The exporter writes the tests by variant name instead: `if (JILL)`,
+//! `if (MANSION2)`, `if (!JPN)` (names joined by `&&`, with `else`). It
+//! marks a section only some RDTs carry with `when (...)`, so a variant's
+//! build can leave it out, and `noreturn` / `nopad` may hold for some
+//! variants only (`noreturn (MANSION2)`). The runtime build
+//! ([`Build::Runtime`]) compiles a variant name to the flag tests; a build
+//! for one RDT variant ([`Build::Variant`], [`compile_variant`]) folds it
+//! away. A script has no preprocessor choices of its own.
 //! The exporter writes the older `#if CHRIS` form ([`merge`]) and
 //! [`lift`]s it into tests ([`merge_rooms`], [`merge_regions`]).
 //!

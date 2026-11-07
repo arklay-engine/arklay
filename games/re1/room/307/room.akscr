@@ -38,13 +38,13 @@ proc init
     door_aot_set(AOT_01_DOOR_308, 13800, 2300, 2100, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 2600, 0, 16500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_30B, 2400, 600, 2800, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30B_ROCK_PASSAGE, 23100, 0, 18700, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         item_aot_set(AOT_03_ITEM_FILE_BARRYS_PICTURE_0, 0, 0, 1, 1, IT_6A_FILE_BARRYS_PICTURE, 0, IMDL_00_FILE_BARRYS_PICTURE, SCA_NONE, 30000, 30000, 30000, 0, F_ITEM_307_FILE_BARRYS_PICTURE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     if (ck(FG_COMMON, F_COMMON_CAVE_BRIDGE_TURNED, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             obj(OBJ_00_BRIDGE, OF_ACTIVE, SCA_NONE, 3810, -1630, 11310, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
         }
@@ -70,7 +70,7 @@ proc init
     {
         obj(OBJ_02_HOLE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4932, 0, 11304, 0, 0, 0, 0, 0, 0, 0, 4914, 1908);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_03_USEITEM_CRANK_HOLE, 5600, 13700, 1000, 2100, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
         aot_set(AOT_04_MESSAGE_CRANK_HOLE, 5600, 13700, 1000, 2100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
@@ -123,7 +123,7 @@ event turn_crank
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 0, 0, 5250, 300, 15200);
         }
@@ -145,7 +145,7 @@ event turn_crank
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             act_anim_flags(ANIM_37, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
         }
@@ -332,7 +332,7 @@ event climb_ladder_prompt
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 setb(B_CHARACTER_MODEL, 0, 0);
             }

@@ -54,7 +54,7 @@ proc init
     door_aot_set(AOT_02_DOOR_40A, 18200, 6500, 3000, 2000, 1, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, DOOR_LOCKED | F_LOCK_408_40A, ROOM_40A_ROOM_003, 2900, 0, 2800, 0, IT_3A_KEY_GUARDHOUSE_003, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_SCENARIO, F_SCENARIO_PLANT42_ROOM_ENTERED, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             door_aot_set(AOT_03_DOOR_40C, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
         }
@@ -65,7 +65,7 @@ proc init
     }
     else
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_set(AOT_03_DOOR_40C, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 141, 0, 255, 0, 0, 0);
         }
@@ -76,10 +76,10 @@ proc init
     }
     aot_set(AOT_04_USEITEM_PANEL, 7200, 11000, 800, 800, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);
     item_aot_set(AOT_05_ITEM_KEY_GUARDHOUSE_002_0, 15000, 21700, 2000, 1000, IT_39_KEY_GUARDHOUSE_002, 1, IMDL_00_KEY_GUARDHOUSE_002, SCA_NONE, 0, 0, 0, 1024, F_ITEM_408_KEY_GUARDHOUSE_002_0, SAT_MANUAL | SAT_PLAYER, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_06_ITEM_KEY_RADIO_1, 0, 0, 1, 1, IT_4D_KEY_RADIO, 1, IMDL_01_KEY_RADIO, SCA_NONE, 0, 0, 0, 1024, F_ITEM_408_KEY_RADIO_1, SAT_MANUAL | SAT_PLAYER, 0);
-        if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
         {
             if (ck(FG_COMMON, F_COMMON_C_PLANT42_INTRO_SEEN, TRUE))
             {
@@ -100,14 +100,14 @@ proc init
     set(FG_ROOM, F_ROOM_UNUSED_1D, TRUE);
     aot_reset(AOT_01_DOOR_409, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 143, 255, 0);
     evt_exec(0, TASK_09, place_key_002);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE) && ck(FG_COMMON, F_COMMON_C_PLANT42_MAP_SHOWN, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_PLANT42_MAP_SHOWN, TRUE);
             evt_exec(0, TASK_09, plant42_map_display);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
         {
             if (ck(FG_COMMON, F_COMMON_C_PLANT42_INTRO_SEEN, TRUE))
             {
@@ -169,7 +169,7 @@ event rebecca_after_plant42
         message(0, 0);
         voice_play(VOICE_PLAY, VO_00A_20);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -190,7 +190,7 @@ event rebecca_after_plant42
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -265,7 +265,7 @@ event rebecca_after_plant42
     evt_nop();
     wait_message();
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -284,7 +284,7 @@ event rebecca_after_plant42
         voice_play(VOICE_PLAY, VO_00A_22);
     }
     sleep(8);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -328,7 +328,7 @@ event rebecca_after_plant42
     evt_nop();
     wait_message();
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -341,7 +341,7 @@ event rebecca_after_plant42
     act_reset();
     evt_nop();
     sleep(40);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -359,7 +359,7 @@ event rebecca_after_plant42
         voice_play(VOICE_PLAY, VO_00A_24);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -377,7 +377,7 @@ event rebecca_after_plant42
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -436,7 +436,7 @@ event rebecca_after_plant42
     {
         if (ck(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 evt_exec(0, TASK_09, rebecca_heads_to_drug_room);
             }
@@ -447,7 +447,7 @@ event rebecca_after_plant42
         }
         else
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 evt_exec(0, TASK_09, rebecca_gives_radio);
             }
@@ -468,7 +468,7 @@ event rebecca_heads_to_drug_room
         message(6, 0);
         voice_play(VOICE_PLAY, VO_00A_26);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -486,7 +486,7 @@ event rebecca_heads_to_drug_room
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -504,7 +504,7 @@ event rebecca_heads_to_drug_room
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -521,7 +521,7 @@ event rebecca_heads_to_drug_room
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -538,7 +538,7 @@ event rebecca_heads_to_drug_room
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -559,7 +559,7 @@ event rebecca_heads_to_drug_room
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_REBECCA, 0, 100, 0);
     }
@@ -569,7 +569,7 @@ event rebecca_heads_to_drug_room
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -587,7 +587,7 @@ event rebecca_heads_to_drug_room
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -604,7 +604,7 @@ event rebecca_heads_to_drug_room
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -628,7 +628,7 @@ event rebecca_heads_to_drug_room
         message(7, 0);
         voice_play(VOICE_PLAY, VO_00A_27);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -641,7 +641,7 @@ event rebecca_heads_to_drug_room
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -659,7 +659,7 @@ event rebecca_heads_to_drug_room
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -685,7 +685,7 @@ event rebecca_heads_to_drug_room
     sleep(10);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             pos_set(ENEMY_00_REBECCA, 0, 1024, 0, 0, 0, 0);
         }
@@ -714,7 +714,7 @@ event rebecca_gives_radio
         message(8, 0);
         voice_play(VOICE_PLAY, VO_00A_28);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -731,7 +731,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -748,7 +748,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -765,7 +765,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -788,7 +788,7 @@ event rebecca_gives_radio
         message(9, 0);
         voice_play(VOICE_PLAY, VO_00A_29);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -805,7 +805,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -823,7 +823,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -840,7 +840,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -858,7 +858,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -875,7 +875,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -893,7 +893,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -911,7 +911,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -934,7 +934,7 @@ event rebecca_gives_radio
         message(10, 0);
         voice_play(VOICE_PLAY, VO_00A_2A);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -952,7 +952,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -971,7 +971,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1041,7 +1041,7 @@ event rebecca_gives_radio
     act_reset();
     evt_nop();
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1059,7 +1059,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1130,7 +1130,7 @@ event rebecca_gives_radio
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             give_item(AOT_06_ITEM_KEY_RADIO_1, 4, 129);
         }
@@ -1147,7 +1147,7 @@ event rebecca_gives_radio
         message(12, 0);
         voice_play(VOICE_PLAY, VO_00A_2C);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1165,7 +1165,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1183,7 +1183,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1200,7 +1200,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1217,7 +1217,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1238,7 +1238,7 @@ event rebecca_gives_radio
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_REBECCA, 0, 100, 0);
     }
@@ -1248,7 +1248,7 @@ event rebecca_gives_radio
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1266,7 +1266,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1283,7 +1283,7 @@ event rebecca_gives_radio
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1307,7 +1307,7 @@ event rebecca_gives_radio
         message(7, 0);
         voice_play(VOICE_PLAY, VO_00A_27);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1320,7 +1320,7 @@ event rebecca_gives_radio
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1338,7 +1338,7 @@ event rebecca_gives_radio
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_REBECCA_ANIM_DONE, FALSE));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
@@ -1364,7 +1364,7 @@ event rebecca_gives_radio
     sleep(10);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             pos_set(ENEMY_00_REBECCA, 0, 1024, 0, 0, 0, 0);
         }

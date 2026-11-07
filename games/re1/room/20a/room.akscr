@@ -75,7 +75,7 @@ proc init
     aot_set(AOT_04_MESSAGE_BACK_OF_SHELF, 3930, 7500, 1800, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
     aot_set(AOT_05_USEITEM_SHELF_SPOT, 6200, 7000, 1530, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 32, 0, 1, 0);
     aot_set(AOT_06_USEITEM_AQUARIUM, 6800, 4000, 800, 4000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_07_ITEM_AMMO_SHOTGUN, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
@@ -87,7 +87,7 @@ proc init
     {
         aot_reset(AOT_04_MESSAGE_BACK_OF_SHELF, SCE_NONE, 0, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, FALSE))
         {
@@ -128,7 +128,7 @@ proc init
             }
         }
     }
-    if (USA)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
     {
         item_aot_set(AOT_09_ITEM_INK, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02_INK, SCA_NONE, 0, 0, 0, 0, F_ITEM_20A_INK_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
@@ -151,7 +151,7 @@ proc init
         aot_reset(AOT_02_MESSAGE_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, examine_switch, 0);
         obj(OBJ_01_AQUARIUM_WATER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7620, -1200, 5920, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         obj(OBJ_02_SHELF, OF_ACTIVE, SCA_NONE, 4995, 0, 7552, 1024, 0, 830, 0, -830, 340, 10000, 1070, 940);
     }
@@ -406,14 +406,14 @@ event push_switch
 {
     run
     {
-        if (!EUR)
+        if (ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
         {
             se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
         }
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_05_SWITCH);
         set(FG_ROOM, F_ROOM_SWITCH_PUSHED, TRUE);
-        if (EUR)
+        if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
         }
@@ -479,7 +479,7 @@ event find_researchers_will
         aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
         aot_reset(AOT_08_ITEM_FILE_RESEARCHERS_WILL, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         aot_on(AOT_08_ITEM_FILE_RESEARCHERS_WILL, SCE_DOCUMENT, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, TRUE);
         }
@@ -942,7 +942,7 @@ event drain_aquarium
     se_play_3d(SND_BANK_ROOM, SE_19_AQUARIUM, 0, SND_AT_POINT, 0, 7470, 5980);
     evt_work_set(WK_OBJ, OBJ_01_AQUARIUM_WATER);
     evt_tween_begin_alt();
-    if (EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         tw_set_pos(0, 5, 0);
         for (240)
@@ -964,7 +964,7 @@ event drain_aquarium
     set(FG_ROOM, F_ROOM_WATER_DRAINED, TRUE);
     evt_work_set(WK_OBJ, OBJ_01_AQUARIUM_WATER);
     evt_tween_begin_alt();
-    if (EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         tw_set_pos(0, 5, 0);
         for (10)

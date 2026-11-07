@@ -172,7 +172,7 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
     let mut insns = Vec::new();
     let mut pc = start;
     // The state each room variant is in: one linear state unless the port's
-    // variant jumps send the variants down branches that leave them in
+    // event `if`s send the variants down branches that leave them in
     // different states.
     let mut flow = EventFlow::new(0);
     let mut targets: HashMap<usize, EventFlow> = HashMap::new();
@@ -198,8 +198,10 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
             let finish = op_byte == 0xFF;
             let insn = make_insn(data, pc, width, control, Decoded::Control(control));
             match op_byte {
-                // A variant jump: the variants it skips continue at its
-                // target.
+                // The port's event `if` (its conditions follow it, up to
+                // its first operand) and jump: the flow also continues at
+                // the jump's target, where an `if`'s skips the body and a
+                // jump's leaves nothing running into the bytes after it.
                 0xF4 | 0xF5 => {
                     let operand = if op_byte == 0xF4 { 1 } else { 0 };
                     let Some(target) = insn.operands.get(operand).and_then(|o| o.target) else {
@@ -208,18 +210,40 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
                     if target <= pc || target > end {
                         break;
                     }
-                    let skipped = if op_byte == 0xF4 {
-                        let mask = insn.operands[0].value as u8;
-                        let (taken, skipped) = flow.split(mask);
-                        flow = taken;
-                        skipped
+                    if op_byte == 0xF5 {
+                        let to_target = std::mem::replace(&mut flow, EventFlow::unreachable());
+                        targets
+                            .entry(target)
+                            .or_insert_with(EventFlow::unreachable)
+                            .merge(&to_target);
                     } else {
-                        std::mem::replace(&mut flow, EventFlow::unreachable())
-                    };
-                    targets
-                        .entry(target)
-                        .or_insert_with(EventFlow::unreachable)
-                        .merge(&skipped);
+                        let body = insn.operands[0].target.unwrap_or(pc);
+                        if body < pc + width || body > target {
+                            break;
+                        }
+                        insns.push(insn);
+                        let first = insns.len();
+                        let mut cursor = pc + width;
+                        while cursor < body {
+                            let Some(command) = decode_command_at(data, cursor, body) else {
+                                break;
+                            };
+                            cursor += command.bytes.len();
+                            insns.push(command);
+                        }
+                        if cursor != body {
+                            break;
+                        }
+                        let conditions = insns[first..].iter().map(|insn| insn.bytes.as_slice());
+                        let (taken, skipped) = flow.branch(conditions);
+                        flow = taken;
+                        targets
+                            .entry(target)
+                            .or_insert_with(EventFlow::unreachable)
+                            .merge(&skipped);
+                        pc = body;
+                        continue;
+                    }
                 }
                 _ => {}
             }

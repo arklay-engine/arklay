@@ -68,7 +68,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_21_NPC_JILL, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 448, 0, 26600, 0, 4300, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
         }
@@ -80,7 +80,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_23_NPC_REBECCA, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_01_NPC_REBECCA, ANIM_00, 0, EVAR_00);
         }
@@ -90,7 +90,7 @@ proc init
             evt_exec(0, TASK_09, barry_waits);
         }
     }
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         set(FG_COMMON, F_COMMON_J_BEEN_TO_501, TRUE);
     }
@@ -100,7 +100,7 @@ proc main
 {
     if (testitem(IT_27_KEY_BATTERY))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_delete(AOT_04_USEITEM_BATTERY_SOCKET, SCE_NONE, 0);
             aot_delete(AOT_05_EVENT_BATTERY_SOCKET, SCE_NONE, 0);
@@ -116,7 +116,7 @@ proc main
 
 event entry_talk
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -144,7 +144,7 @@ event entry_talk
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_016_00);
             message(MSG_VO_016_00, 0);
@@ -166,7 +166,7 @@ event entry_talk
     act_motion_path(MOTION_72, 0, 300, 1, 0, 40);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
     }
@@ -191,7 +191,7 @@ event entry_talk
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_reset();
         evt_nop();
@@ -218,7 +218,7 @@ event examine_battery_socket
         cutnext(CAM_07_BATTERY_SOCKET);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         message(MSG_THE_BATTERY_IS_PULLED_OUT | MSG_FAST, 0); // "The battery is pulled out."
     }
@@ -242,7 +242,7 @@ event examine_battery_socket
 
 event battery_installed
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -281,7 +281,7 @@ event battery_installed
     run
     {
         cutnext(CAM_05);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_LOST, TRUE))
             {
@@ -296,7 +296,7 @@ event battery_installed
         {
             evt_exec(0, TASK_09, board_elevator_with_survivor);
         }
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE))
             {
@@ -344,7 +344,7 @@ event board_elevator_alone
     run
     {
         cut_auto(CUT_FREE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -368,7 +368,7 @@ event board_elevator_with_both
 {
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 2640, 0, 4360, 0, 29400);
             pos_set(ENEMY_00_NPC_JILL, 0, 2064, 0, 7540, 0, 28570);
@@ -382,7 +382,7 @@ event board_elevator_with_both
         }
     }
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -403,7 +403,7 @@ event board_elevator_with_both
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(1);
         run
@@ -424,7 +424,7 @@ event board_elevator_with_both
     }
     evt_actor_begin();
     act_anim_flags(ANIM_27, F_ROOM_ACTOR_ANIM_DONE, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_32, 0, -300, 0, 0, 30);
         act_reset();
@@ -444,7 +444,7 @@ event board_elevator_with_both
     act_nop();
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(1);
         run
@@ -465,7 +465,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
         act_nop();
@@ -483,7 +483,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         wait_message();
     }
@@ -493,7 +493,7 @@ event board_elevator_with_both
         set(FG_STATUS, F_STATUS_COUNTDOWN_ACTIVE, TRUE);
     }
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -502,7 +502,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
         act_nop();
@@ -522,7 +522,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -537,7 +537,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2D, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_motion(MOTION_10);
@@ -558,13 +558,13 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2F, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -577,14 +577,14 @@ event board_elevator_with_both
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_param_set(0, 63488);
         act_flag_op(EF_SET, EF_0002);
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(25);
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -638,7 +638,7 @@ event board_elevator_with_both
     {
         se_play_3d(SND_BANK_ROOM, SE_17_HUNTER, 0, SND_AT_POINT, 0, 7700, 24800);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
@@ -648,7 +648,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 25600, -1000, 3800, 30, 30);
         act_reset();
@@ -665,7 +665,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -674,7 +674,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2F, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -684,13 +684,13 @@ event board_elevator_with_both
         act_motion_path(MOTION_31, -600, 0, 0, 50, 0);
     }
     act_flag_op(EF_SET, EF_0002);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_param_set(0, 2348);
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
     }
@@ -719,7 +719,7 @@ event board_elevator_with_both
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -734,7 +734,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion_path(MOTION_71, 400, 0, 1, 30, 0);
         act_anim_flags(ANIM_23, F_ROOM_J_PLAYER_ANIM_DONE, 0);
@@ -754,13 +754,13 @@ event board_elevator_with_both
     act_nop();
     act_nop();
     act_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_flag_op(EF_SET, EF_0001);
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         run
@@ -777,7 +777,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2E, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_param_set(0, 1024);
@@ -790,7 +790,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(16);
     }
@@ -806,7 +806,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 5660, 29040, F_ROOM_ACTOR_ANIM_DONE);
     }
@@ -815,7 +815,7 @@ event board_elevator_with_both
         act_motion(MOTION_10);
     }
     act_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_nop();
         act_nop();
@@ -827,7 +827,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -836,7 +836,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 30, 10);
@@ -847,7 +847,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -858,7 +858,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -868,7 +868,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -879,7 +879,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -889,7 +889,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -902,7 +902,7 @@ event board_elevator_with_both
     act_anim_flags(ANIM_24, F_ROOM_ACTOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
     }
@@ -912,7 +912,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -922,7 +922,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -932,7 +932,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -942,7 +942,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -953,7 +953,7 @@ event board_elevator_with_both
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_23, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -963,7 +963,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -974,7 +974,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_10, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -984,7 +984,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -994,7 +994,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1004,7 +1004,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1015,7 +1015,7 @@ event board_elevator_with_both
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1025,7 +1025,7 @@ event board_elevator_with_both
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
     }
@@ -1035,7 +1035,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_72, 0, 300, 1, 0, 40);
     }
@@ -1054,7 +1054,7 @@ event board_elevator_with_both
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
     }
@@ -1063,7 +1063,7 @@ event board_elevator_with_both
         act_anim_seq(AB_02, 2740, 28800, F_ROOM_PLAYER_WALK_DONE);
     }
     act_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion(MOTION_10);
     }
@@ -1074,14 +1074,14 @@ event board_elevator_with_both
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 2740, 28800, F_ROOM_PLAYER_WALK_DONE);
     }
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1099,7 +1099,7 @@ event board_elevator_with_both
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_01_DOOR_50D, SCE_DOOR, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -1121,7 +1121,7 @@ event board_elevator_with_survivor
 {
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 2640, 0, 4360, 0, 29400);
             pos_set(ENEMY_00_NPC_JILL, 0, 2064, 0, 7540, 0, 28570);
@@ -1133,7 +1133,7 @@ event board_elevator_with_survivor
         }
     }
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1154,7 +1154,7 @@ event board_elevator_with_survivor
     act_reset();
     evt_nop();
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1163,7 +1163,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 0, 0);
         act_reset();
@@ -1203,7 +1203,7 @@ event board_elevator_with_survivor
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
@@ -1213,7 +1213,7 @@ event board_elevator_with_survivor
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             se_play_3d(SND_BANK_ROOM, SE_17_HUNTER, 0, SND_AT_POINT, 0, 7700, 24800);
         }
@@ -1223,13 +1223,13 @@ event board_elevator_with_survivor
             message(MSG_VO_11B_01, 0);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2F, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_param_set(0, 63488);
@@ -1242,7 +1242,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1253,7 +1253,7 @@ event board_elevator_with_survivor
     }
     evt_actor_begin();
     act_anim_flags(ANIM_2B, F_ROOM_ACTOR_ANIM_DONE, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_31, -400, 0, 0, 50, 0);
         act_flag_op(EF_SET, EF_0002);
@@ -1276,7 +1276,7 @@ event board_elevator_with_survivor
     sleep(60);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 30, 10);
     }
@@ -1287,7 +1287,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1297,7 +1297,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2B, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 30, 10);
@@ -1309,7 +1309,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         run
@@ -1324,7 +1324,7 @@ event board_elevator_with_survivor
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 5660, 29040, F_ROOM_ACTOR_ANIM_DONE);
     }
@@ -1333,7 +1333,7 @@ event board_elevator_with_survivor
         act_motion(MOTION_10);
     }
     act_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_nop();
         act_nop();
@@ -1345,7 +1345,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1354,7 +1354,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 30, 10);
@@ -1365,7 +1365,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1376,7 +1376,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -1386,7 +1386,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1397,7 +1397,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -1407,7 +1407,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -1420,7 +1420,7 @@ event board_elevator_with_survivor
     act_anim_flags(ANIM_24, F_ROOM_ACTOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
     }
@@ -1430,7 +1430,7 @@ event board_elevator_with_survivor
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -1440,7 +1440,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1450,7 +1450,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1460,7 +1460,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1471,7 +1471,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_23, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1481,7 +1481,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1492,7 +1492,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1502,7 +1502,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -1513,7 +1513,7 @@ event board_elevator_with_survivor
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -1523,7 +1523,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
     }
@@ -1533,7 +1533,7 @@ event board_elevator_with_survivor
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_72, 0, 300, 1, 0, 40);
     }
@@ -1543,7 +1543,7 @@ event board_elevator_with_survivor
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(40);
         evt_work_set(WK_PLAYER, 0);
@@ -1561,7 +1561,7 @@ event board_elevator_with_survivor
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
     }
@@ -1570,7 +1570,7 @@ event board_elevator_with_survivor
         act_anim_seq(AB_02, 2740, 28800, F_ROOM_PLAYER_WALK_DONE);
     }
     act_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion(MOTION_10);
     }
@@ -1581,14 +1581,14 @@ event board_elevator_with_survivor
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 2740, 28800, F_ROOM_PLAYER_WALK_DONE);
     }
     act_nop();
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -1606,7 +1606,7 @@ event board_elevator_with_survivor
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_01_DOOR_50D, SCE_DOOR, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -1628,7 +1628,7 @@ event board_elevator_with_barry_or_rebecca
 {
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 2640, 0, 4360, 0, 29400);
             pos_set(ENEMY_01_NPC_REBECCA, 0, 3072, 0, 7000, 0, 17050);
@@ -1640,7 +1640,7 @@ event board_elevator_with_barry_or_rebecca
         }
     }
     sleep(1);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
         evt_actor_begin();
@@ -1662,7 +1662,7 @@ event board_elevator_with_barry_or_rebecca
         voice_play(VOICE_PLAY, VO_016_06);
         message(MSG_VO_016_06, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -1675,7 +1675,7 @@ event board_elevator_with_barry_or_rebecca
     act_motion_path(MOTION_32, 0, -300, 0, 0, 30);
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
@@ -1690,7 +1690,7 @@ event board_elevator_with_barry_or_rebecca
         set(FG_STATUS, F_STATUS_COUNTDOWN_ACTIVE, TRUE);
     }
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -1699,7 +1699,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
         act_nop();
@@ -1717,7 +1717,7 @@ event board_elevator_with_barry_or_rebecca
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -1735,20 +1735,20 @@ event board_elevator_with_barry_or_rebecca
     act_nop();
     act_nop();
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_03, 7000, 27050, F_ROOM_ACTOR_ANIM_DONE);
         act_nop();
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(10);
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_016_01);
             message(MSG_VO_016_01, 0);
@@ -1758,7 +1758,7 @@ event board_elevator_with_barry_or_rebecca
             se_play_3d(SND_BANK_ROOM, SE_17_HUNTER, 0, SND_AT_POINT, 0, 7700, 24800);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
@@ -1773,7 +1773,7 @@ event board_elevator_with_barry_or_rebecca
     act_flag_op(EF_SET, EF_0002);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(35);
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -1840,7 +1840,7 @@ event board_elevator_with_barry_or_rebecca
     act_flag_op(EF_SET, EF_0002);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
         evt_work_set(WK_PLAYER, 0);
@@ -1877,7 +1877,7 @@ event board_elevator_with_barry_or_rebecca
     act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         run
@@ -1912,7 +1912,7 @@ event board_elevator_with_barry_or_rebecca
         evt_nop();
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
         evt_actor_begin();
@@ -1936,7 +1936,7 @@ event board_elevator_with_barry_or_rebecca
     act_anim_flags(ANIM_25, F_ROOM_ACTOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -1967,7 +1967,7 @@ event board_elevator_with_barry_or_rebecca
     act_anim_flags(ANIM_22, F_ROOM_ACTOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(20);
         evt_work_set(WK_PLAYER, 0);
@@ -1978,7 +1978,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_24, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -1988,7 +1988,7 @@ event board_elevator_with_barry_or_rebecca
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         evt_work_set(WK_PLAYER, 0);
@@ -1999,7 +1999,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
     }
@@ -2009,7 +2009,7 @@ event board_elevator_with_barry_or_rebecca
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -2019,7 +2019,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_23, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -2030,7 +2030,7 @@ event board_elevator_with_barry_or_rebecca
     act_reset();
     evt_nop();
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -2039,7 +2039,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_ACTOR_ANIM_DONE, AFL_01);
     }
@@ -2050,7 +2050,7 @@ event board_elevator_with_barry_or_rebecca
     act_reset();
     evt_nop();
     sleep(30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
         evt_actor_begin();
@@ -2074,7 +2074,7 @@ event board_elevator_with_barry_or_rebecca
     act_anim_flags(ANIM_26, F_ROOM_ACTOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(40);
         evt_work_set(WK_PLAYER, 0);
@@ -2091,7 +2091,7 @@ event board_elevator_with_barry_or_rebecca
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_ACTOR_ANIM_DONE, 0);
         act_reset();
@@ -2121,7 +2121,7 @@ event board_elevator_with_barry_or_rebecca
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion(MOTION_10);
         act_nop();
@@ -2143,7 +2143,7 @@ event board_elevator_with_barry_or_rebecca
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -2153,7 +2153,7 @@ event board_elevator_with_barry_or_rebecca
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_26, F_ROOM_PLAYER_WALK_DONE, AFL_01);
     }
@@ -2164,7 +2164,7 @@ event board_elevator_with_barry_or_rebecca
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(50);
     }
@@ -2177,7 +2177,7 @@ event board_elevator_with_barry_or_rebecca
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_01_DOOR_50D, SCE_DOOR, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -2200,7 +2200,7 @@ event survivor_waits
     sleep(5);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             eml_state(0, ENEMY_00_NPC_JILL, EML_08);
         }

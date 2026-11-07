@@ -63,10 +63,10 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR_211, 16800, 26400, 2200, 2200, 3, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_01_ITEM_AMMO_HANDGUN_0, 23500, 19770, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_C_212_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_FOREST_FOUND, FALSE))
             {
@@ -78,10 +78,10 @@ proc init
     {
         item_aot_set(AOT_01_ITEM_WEAPON_GL_ACID_0, 23500, 19770, 1000, 1000, IT_07_WEAPON_GL_ACID, 6, IMDL_00_WEAPON_GL_ACID, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_J_212_WEAPON_GL_ACID_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     }
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         enemy(EM_26_NPC_FORREST, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1936, 0, 25150, 0, 18700, ENEMY_00_NPC_FORREST, ANIM_00, 0, EVAR_00);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_FOREST_FOUND, FALSE))
             {
@@ -172,7 +172,7 @@ event examine_forest_body
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         bgm_stop(BGM_MAIN);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(1);
     }
@@ -183,7 +183,7 @@ event examine_forest_body
     run
     {
         set(FG_COMMON, F_COMMON_FOREST_FOUND, TRUE);
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             set(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, TRUE);
         }
@@ -1184,7 +1184,7 @@ event barry_terrace_barry_pose
 event crow_1_attacks
 {
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         eml_state(0, ENEMY_01_CROW, EML_BEHAVIOUR, EB_02);
         evt_work_set(WK_ENEMY, ENEMY_01_CROW);
@@ -1200,7 +1200,7 @@ event crow_1_attacks
     act_reset();
     evt_nop();
     sleep(100);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         eml_state(0, ENEMY_01_CROW, EML_ACTION, AB_01);
     }
@@ -1255,9 +1255,9 @@ event crow_flaps_loop_a
     se_play_3d(SND_BANK_ROOM, SE_18_RVPATA, 0, SND_AT_POINT, 0, 32000, 23000);
     sleep(400);
     se_play_3d(SND_BANK_ROOM, SE_18_RVPATA, 0, SND_AT_POINT, 0, 8000, 15000);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_chain(crow_flaps_loop_a);
         }
@@ -1287,9 +1287,9 @@ event crow_flaps_loop_b
     se_play_3d(SND_BANK_ROOM, SE_19_RVPATB, 0, SND_AT_POINT, 0, 2000, 22000);
     sleep(400);
     se_play_3d(SND_BANK_ROOM, SE_19_RVPATB, 0, SND_AT_POINT, 0, 8000, 15000);
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_chain(crow_flaps_loop_b);
         }

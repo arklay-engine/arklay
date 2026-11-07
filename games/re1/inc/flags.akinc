@@ -10,7 +10,7 @@
 //   game. A bit both games use for different things has a define for each,
 //   and each use takes the name of its player's branch.
 
-#define F_SCENARIO_STAGE_VARIANT 0x00                       // Stage changes go to the +5 stage variants while set (engine).
+#define F_SCENARIO_MANSION2 0x00                            // The second mansion visit: doors into the mansion lead to it, and a mansion room's scripts test it for the visit (engine). Set by 40C.
 #define F_SCENARIO_LAB_ELEVATOR_POWERED 0x01                // The B4 elevator switch was pushed with both power bits set (50c); the elevator to 515 works.
 #define F_SCENARIO_113_BATHTUB_DRAINED 0x02                 // Chris drained the bathtub and the desk key is out (113); Jill's bathroom has no such scene.
 #define F_SCENARIO_GALLERY_PUZZLE_SOLVED 0x03               // The large gallery's picture switches were pressed in order: the frame fell and the star crest is out (117).
@@ -444,7 +444,9 @@
 #define F_ENEMY_40B_ZOMBIE_GROUNDSKEEPER_0 0xB9
 
 #define F_STATUS_PLAYER_DEAD 0x07                           // The player is dead or an ending fade runs (msf bit 24).
+#define F_STATUS_REGION_JPN 0x04                            // The base pack is the Japanese release (port-only, msf bit 27).
 #define F_STATUS_PLAYER_JILL 0x08                           // The player is Jill: picks the room file variant (msf bit 23).
+#define F_STATUS_REGION_EUR 0x0A                            // The base pack is a French or German release (port-only, msf bit 21).
 #define F_STATUS_VOICE_PLAYING 0x0E                         // A voice line is playing (msf bit 17).
 #define F_STATUS_LETTERBOX 0x0F                             // Cutscene letterbox bars fade in while set (msf bit 16).
 #define F_STATUS_SCRIPT_ONLY_11 0x11                        // Set by stage 3 scripts; outside the menu-mode ladder, no engine reader (msf bit 14).

@@ -49,7 +49,7 @@ proc init
     obj(OBJ_00_CEILING, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_01_DOOR_109, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1760, 0, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_LOCK, F_LOCK_115_116, TRUE);
         if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE))
@@ -462,7 +462,7 @@ event ceiling_trap_no_rescue
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         snd_pan_vol_set(BGM_MAIN, 30, 30);
         bgm_play(BGM_SUB_1);
@@ -473,7 +473,7 @@ event ceiling_trap_no_rescue
     sleep(1);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE);
         }
@@ -482,7 +482,7 @@ event ceiling_trap_no_rescue
             set(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, TRUE);
         }
         set(FG_LOCK, F_LOCK_115_TRAP, FALSE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_exec(0, TASK_09, ceiling_starts_lowering);
         }
@@ -502,7 +502,7 @@ event ceiling_trap_no_rescue
     evt_nop();
     run
     {
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             dir_set(0, 0, 3072, 0, 5200, 0, 2500);
         }
@@ -612,7 +612,7 @@ event jill_ceiling_lowers_unused
 
 event ceiling_starts_lowering
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_07, ceiling_dust_corners, 0);
         evt_fork(TASK_06, ceiling_dust_wait, 0);
@@ -624,7 +624,7 @@ event ceiling_starts_lowering
     }
     evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         tw_set_pos(0, 7, 0);
     }
@@ -639,7 +639,7 @@ event ceiling_starts_lowering
     }
     tw_nop();
     tw_end();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_nop();
     }
@@ -686,7 +686,7 @@ event ceiling_dust_corners
         effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2940, 20, -3010, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_chain(ceiling_dust_corners);
     }
@@ -781,7 +781,7 @@ event ceiling_dust_random
         }
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_chain(ceiling_dust_wait);
     }

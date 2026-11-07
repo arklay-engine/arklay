@@ -583,6 +583,7 @@ mod imp {
                 game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER)] = id;
                 game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER_MODEL)] = id;
                 game.entities[0].id = id;
+                game.sync_variant_flags();
                 Ok(())
             });
 
@@ -598,6 +599,8 @@ mod imp {
                     game.id = game.id.with_visit(mansion2.unwrap_or(false));
                     game.state_bytes[0] = stage;
                     game.state_bytes[1] = room;
+                    // The scenario flag carries the visit into the save.
+                    game.sync_variant_flags();
                     Ok(())
                 },
             );

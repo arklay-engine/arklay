@@ -908,7 +908,11 @@ events are inert.
 `arklay scd export ROOM1000.RDT --out 1000.akscr` decompiles a room's scripts
 to structured code, and `arklay scd build 1000.akscr --out room/100/room.scd`
 compiles it back. Every room of the shipped game decompiles to a script that
-compiles to byte-identical init, main and event streams.
+compiles to byte-identical init, main and event streams. A container built by
+the port (`scd export room.scd --out room.akscr`) decompiles the same way,
+with the port's own forms: its user procedures as `proc proc_00`,
+`proc proc_01`, ... and their `gosub`s as calls (`proc_00();`), and its
+`if_long` and `evt_if` as `if` statements.
 
 An RE2 room's scripts export the same way: `scd export` detects the RDT's
 dialect and writes its init and main procedure lists as `.s` (`.version 1`,
@@ -921,11 +925,11 @@ Building RE2 scripts back into a room (`scd build`) and the `--list`
 listing are not supported yet.
 
 One script covers every variant of a room: both players, both mansion visits
-and every release. Where the variants differ, an `if` tests the variant as
-the room runs:
+and every release. Where the variants differ, an `if` tests the flags the
+engine keeps in step with the variant as the room runs:
 
 ```c
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_004_00);
     }
@@ -933,48 +937,60 @@ the room runs:
     {
         voice_play(VOICE_PLAY, VO_00C_12);
     }
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
         set(FG_ROOM, F_ROOM_04, FALSE);
     }
 ```
 
-The variant names are `CHRIS` and `JILL` (the player), `MANSION1` and
-`MANSION2` (the mansion visit; outside the mansion neither holds) and `USA`,
-`JPN` and `EUR` (the release the base pack was converted from, its manifest's
+| Flag | Set while |
+|---|---|
+| `F_STATUS_PLAYER_JILL` | the player is Jill (the original's own selector of her room files) |
+| `F_SCENARIO_MANSION2` | the second mansion visit: the guardhouse sets it, and a door into the mansion (stage 1 or 2) leads to the room's second visit exactly while it is set |
+| `F_STATUS_REGION_JPN` | the base pack is the Japanese release (port-only; the original never uses the bit) |
+| `F_STATUS_REGION_EUR` | the base pack is a French or German release (port-only) |
+
+The engine sets the player and release bits on every room entry, and the
+visit flag in a mansion room from the visit it boots or loads into; in normal
+play they already hold. Outside the mansion `F_SCENARIO_MANSION2` stays as
+the scenario left it, so it is not a visit test there.
+
+An `if` works in command code (`proc` sections and `run` blocks) and in an
+event, around event instructions (`sleep`, actor and tween sequences). In an
+event it is the port's `evt_if` (opcode 0xF4: the original's event VM has no
+`if`), with `evt_jump` (0xF5) over an `else`. The two branches of an event
+`if` must leave the event in the same state (both in an actor or tween
+sequence, or both out of one), unless the `if` tests only the flags above:
+then each variant goes down its own branch, and the code after it may run in
+a different state for each, as long as only the variant's own branch reaches
+each instruction that needs one. A command `if` whose body is too long for
+the original's 1-byte jump compiles to the port's `if_long` and `else_long`
+(opcodes 0x51 and 0x52, a 2-byte jump). A `return;` inside an `if` ends the
+block. A failed `require(...)` inside an `if` leaves its body: the flow goes
+on after the `if`, or into its `else` body when it has one, as a failed
+condition of the `if` would.
+
+The exporter writes the tests by variant name, which the compiler still
+reads: `CHRIS` and `JILL`, `MANSION1` and `MANSION2`, and `USA`, `JPN` and
+`EUR` (the release the base pack was converted from, its manifest's
 `region`). A test is one or more of them joined by `&&`, each with an
 optional `!` (`if (JILL && MANSION2)`, `if (!JPN)`), and holds only variant
-names: `if (JILL && ck(...))` is an error; nest the two instead. It takes
-`else` and `else if`, and works both in command code (`proc` sections and
-`run` blocks) and at the top of an event, around event instructions (`sleep`,
-actor and tween sequences). The variant does not change while a room runs:
-the player is the room's, the visit is fixed when the room loads (scenario
-flag 0, which the guardhouse sets, makes a door into the mansion lead to the
-second visit) and the release is the pack's. A test is a jump that keeps the
-`if` nesting as it was, so a `return;` or `require(...)` inside one acts as
-it would without it.
-
-A section flag that holds for only some variants takes their test:
-
-```c
-proc init noreturn (MANSION2)
-event event_05 nopad (MANSION1)
-```
-
-The exporter also marks a section only some RDTs carry with `when`
+names. The runtime build compiles each name to the flag test above (`USA` is
+neither release bit, and `!USA` is the `else` of that test). A section flag that holds for only some variants takes their
+test (`proc init noreturn (MANSION2)`, `event event_05 nopad (MANSION1)`),
+and the exporter marks a section only some RDTs carry with `when`
 (`proc main when (CHRIS && MANSION2)`, `event on_enter_jill when (JILL)`), so
-that a build for one RDT leaves the section out and matches its bytes. The
-checked-in scripts do not use it: an `if` inside the section says the same.
-In the runtime build `when` on an event changes nothing (the build carries
-every event), and on `proc init` or `proc main` it is the same as wrapping
-the body in an `if`.
+that a build for one RDT leaves the section out and matches its bytes. In the
+runtime build `when` on an event changes nothing (the build carries every
+event), and on `proc init` or `proc main` it is the same as wrapping the body
+in an `if`. The checked-in scripts use none of these.
 
 A script can split its code into procedures:
 
 ```c
 proc main
 {
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         kenneth_zombie_checks();
     }
@@ -1012,11 +1028,11 @@ reference to it follows. The scripts are checked in under `games/re1/room/`
 and are maintained by hand from there.
 
 The engine runs one build of a script for every variant: the runtime build,
-which keeps the tests. A build for one RDT variant folds them away instead:
-`arklay scd build 103/room.akscr --room 6031 --out 6031.scd` (the original's
-numbering) builds Jill's second visit, for the USA release unless asked for
-another (`--region jpn`). A script has no preprocessor choices: the
-variants are run-time tests.
+which tests the flags. A build for one RDT variant folds the tests written by
+variant name away instead: `arklay scd build 103/room.akscr --room 6031 --out
+6031.scd` (the original's numbering) builds Jill's second visit, for the USA
+release unless asked for another (`--region jpn`). A script has no
+preprocessor choices: the variants are run-time tests.
 
 The checked-in scripts are maintained as source, not as copies of the
 original bytecode: they keep the original game's behaviour, not its bytes.

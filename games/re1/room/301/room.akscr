@@ -578,7 +578,7 @@ event close_water_gate
         bgm_play(BGM_SUB_2);
     }
     sleep(3);
-    if (!JPN)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE))
     {
         run
         {

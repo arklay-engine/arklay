@@ -37,7 +37,7 @@ proc init
     aot_set(AOT_07_MESSAGE_CLOCK_DIAL, 4600, 18100, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_404_INK_1, TRUE))
     {
-        if (USA)
+        if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
         {
             item_aot_set(AOT_08_ITEM_INK_1, 0, 0, 0, 0, IT_2F_KEY_INK_RIBBON, 2, IMDL_01_INK, SCA_NONE, 11930, -1800, 5320, 0, F_ITEM_404_INK_1, 0, 0);
         }
@@ -49,7 +49,7 @@ proc init
     }
     else
     {
-        if (USA)
+        if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
         {
             item_aot_set(AOT_08_ITEM_INK_1, 10690, 5280, 1800, 1800, IT_2F_KEY_INK_RIBBON, 2, IMDL_01_INK, SCA_NONE, 11930, -1800, 5320, 0, F_ITEM_404_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
         }

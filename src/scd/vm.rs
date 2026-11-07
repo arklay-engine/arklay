@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::scd::host::{EventRequest, ScdHost, StepResult};
 use crate::scd::ir::{Block, Decoded, Insn, Operand, Scripts};
-use crate::scd::opcode::{Op, variant_matches};
+use crate::scd::opcode::Op;
 
 /// Resume-address stack depth of the command VM.
 const BRANCH_STACK_SIZE: usize = 16;
@@ -113,26 +113,28 @@ impl CommandVm {
                         self.depth = base;
                         return BlockExit::Done;
                     }
+                    // `if_long` and `else_long` are `if` and `else` with a
+                    // `u16` jump.
                     0x01 => {
                         self.push_branch(if_target(insn));
+                        self.pc = next;
+                    }
+                    0x51 => {
+                        self.push_branch(jump_target(insn, 0));
                         self.pc = next;
                     }
                     0x02 => {
                         self.pop_branch();
                         self.pc = else_target(insn);
                     }
+                    0x52 => {
+                        self.pop_branch();
+                        self.pc = jump_target(insn, 0);
+                    }
                     0x03 => {
                         self.pop_branch();
                         self.pc = next;
                     }
-                    0x51 => {
-                        self.pc = if variant_matches(operand_u8(insn, 0), host.room_variant()) {
-                            next
-                        } else {
-                            jump_target(insn, 1)
-                        };
-                    }
-                    0x52 => self.pc = jump_target(insn, 0),
                     0x54 => {
                         let scripts = Rc::clone(&self.scripts);
                         if let Some(procedure) = scripts.procs.get(usize::from(operand_u8(insn, 0)))
@@ -440,13 +442,25 @@ impl EventVm {
         let next = insn.offset + insn.bytes.len();
         match &insn.decoded {
             Decoded::Control(op) => match op.op {
+                // The port's event `if`: every condition command up to the
+                // body must pass, or the event continues at the target.
                 0xF4 => {
-                    self.slots[index].pc =
-                        if variant_matches(operand_u8(insn, 0), host.room_variant()) {
-                            next
-                        } else {
-                            jump_target(insn, 1)
+                    let body = branch_target(insn);
+                    let mut at = next;
+                    let mut passed = true;
+                    while at < body {
+                        // A condition that does not decode fails.
+                        let Some(condition) = self.insns.get(&at).cloned() else {
+                            passed = false;
+                            break;
                         };
+                        if !self.eval_condition_at(at, host) {
+                            passed = false;
+                            break;
+                        }
+                        at += condition.bytes.len().max(1);
+                    }
+                    self.slots[index].pc = if passed { body } else { jump_target(insn, 1) };
                     true
                 }
                 0xF5 => {
@@ -731,27 +745,28 @@ impl EventVm {
             let next = pc + 1;
             match op.op {
                 0x00 => return,
-                0x01 => {
-                    let target = if_target(insn);
+                0x01 | 0x51 => {
+                    let target = if op.op == 0x01 {
+                        if_target(insn)
+                    } else {
+                        jump_target(insn, 0)
+                    };
                     branch_stack.push(self.index_of(insns, target).unwrap_or(insns.len()));
                     pc = next;
                 }
-                0x02 => {
+                0x02 | 0x52 => {
                     branch_stack.pop();
-                    pc = self
-                        .index_of(insns, else_target(insn))
-                        .unwrap_or(insns.len());
+                    let target = if op.op == 0x02 {
+                        else_target(insn)
+                    } else {
+                        jump_target(insn, 0)
+                    };
+                    pc = self.index_of(insns, target).unwrap_or(insns.len());
                 }
                 0x03 => {
                     branch_stack.pop();
                     pc = next;
                 }
-                0x51 if !variant_matches(operand_u8(insn, 0), host.room_variant()) => {
-                    pc = self
-                        .index_of(insns, jump_target(insn, 1))
-                        .unwrap_or(insns.len());
-                }
-                0x51 => pc = next,
                 0x54 => {
                     if let Some(procedure) = self.procs.get(usize::from(operand_u8(insn, 0)))
                         && calls < MAX_CALL_DEPTH
@@ -759,11 +774,6 @@ impl EventVm {
                         self.run_command_flow(procedure, host, calls + 1);
                     }
                     pc = next;
-                }
-                0x52 => {
-                    pc = self
-                        .index_of(insns, jump_target(insn, 0))
-                        .unwrap_or(insns.len());
                 }
                 _ if op.condition => {
                     if eval_condition(host, insn, op) {
@@ -933,8 +943,8 @@ fn else_target(insn: &Insn) -> usize {
     branch_target(insn)
 }
 
-/// The target of a variant jump's `u16` operand `index`, from the start of
-/// the instruction.
+/// The target of a long jump's `u16` operand `index` (`if_long`,
+/// `else_long`, `evt_if`, `evt_jump`), from the start of the instruction.
 fn jump_target(insn: &Insn, index: usize) -> usize {
     let operand = insn.operands.get(index);
     if let Some(target) = operand.and_then(|operand| operand.target) {

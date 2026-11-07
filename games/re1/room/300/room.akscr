@@ -228,7 +228,7 @@ event brad_radio_call
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_00_1E);
         message(MSG_VO_009_00_1E, 0);
@@ -247,7 +247,7 @@ event brad_radio_call
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_01);
         message(MSG_VO_009_01, 0);
@@ -282,7 +282,7 @@ event brad_radio_call
     act_reset();
     evt_nop();
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_02_20);
         message(MSG_VO_009_02_20, 0);
@@ -303,7 +303,7 @@ event brad_radio_call
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_03);
         message(MSG_VO_009_03, 0);
@@ -314,7 +314,7 @@ event brad_radio_call
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
         sleep(15);
@@ -325,7 +325,7 @@ event brad_radio_call
     act_motion_path(MOTION_71, 600, 0, 1, 120, 64);
     sleep(5);
     act_anim_flags(ANIM_34, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(33);
     }
@@ -345,7 +345,7 @@ event brad_radio_call
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
         aot_reset(AOT_03_USEITEM_RADIO, SCE_NONE, 0, 0, 0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_reset(AOT_05_EVENT_ELEVATOR, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 3, ride_elevator_down, 0);
         }

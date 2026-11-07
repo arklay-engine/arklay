@@ -43,7 +43,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 enemy(EM_21_NPC_JILL, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 6100, 0, 9200, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -53,7 +53,7 @@ proc init
             }
             evt_exec(0, TASK_09, survivor_waits);
         }
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE))
             {
@@ -76,7 +76,7 @@ proc init
         {
             aot_reset(AOT_01_DOOR_310, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 255, 0);
         }
-        if (JILL)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
         {
             set(FG_COMMON, F_COMMON_J_CAME_FROM_500, TRUE);
         }
@@ -100,7 +100,7 @@ proc main
 event survivor_waits
 {
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         eml_state(0, ENEMY_00_NPC_JILL, EML_08);
     }
@@ -114,7 +114,7 @@ event survivor_waits
 event barry_waits
 {
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         eml_state(0, ENEMY_01_NPC_REBECCA, EML_08);
     }
@@ -140,7 +140,7 @@ event barry_calls_out
         voice_play(VOICE_PLAY, VO_A00_03_44);
         message(MSG_VO_A00_03_44, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     }
@@ -184,7 +184,7 @@ event barry_calls_out
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             eml_state(0, ENEMY_01_NPC_REBECCA, EML_08);
         }

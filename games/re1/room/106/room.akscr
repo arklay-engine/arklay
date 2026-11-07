@@ -118,7 +118,7 @@ proc init
     door_aot_set(AOT_00_DOOR_107, 31100, 10000, 2000, 3000, 6, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_111, 31100, 18600, 2000, 1200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_106_111, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_105, 1000, 15000, 1950, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
@@ -134,7 +134,7 @@ proc init
         aot_set(AOT_03_USEITEM_FRONT_DOOR, 14600, 800, 5200, 2200, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
     }
     door_aot_set(AOT_04_DOOR_203, 15600, 15900, 2900, 2600, 0, DOOR_SND_04_ST_WCP, DOOR_16_KAI01, 96, 0, STAGE_2 | ROOM_203_HALL_2F, 17100, 0, 25300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_C_HALL_RIBBON_TAKEN, FALSE))
         {
@@ -152,11 +152,11 @@ proc init
             aot_set(AOT_05_TYPEWRITER, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         }
     }
-    else if (MANSION1)
+    else if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_SECOND_PLAYTHROUGH, TRUE))
         {
-            if (USA)
+            if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
             {
                 item_aot_set(AOT_05_ITEM_INK_3, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03_INK, SCA_NONE, 0, 20000, 0, 0, F_ITEM_106_INK_3, SAT_MANUAL | SAT_PLAYER, 0);
             }
@@ -170,7 +170,7 @@ proc init
             aot_set(AOT_05_TYPEWRITER, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         }
     }
-    else if (JPN)
+    else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         if (ck(FG_COMMON, F_COMMON_J_HALL_RIBBON_GONE, FALSE))
         {
@@ -196,7 +196,7 @@ proc init
     {
         room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_MAIN_ON);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ITEM, F_ITEM_106_WEAPON_HANDGUN_2, TRUE) && ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, TRUE))
         {
@@ -237,7 +237,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, FALSE) && ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, TRUE);
             evt_exec(0, TASK_00, hall_empty_or_lockpick_approach_2f);
@@ -253,16 +253,16 @@ proc init
             aot_reset(AOT_05_ITEM_INK_3, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 174, 255, 0);
             cut_auto(CUT_LOCKED);
             setb(B_CAMERA, CAM_06_FRONT_FROM_EAST, 0);
-            if (MANSION1)
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
             {
                 evt_exec(0, TASK_00, chris_idle_2_or_wesker_gone);
             }
-            else if (!JPN)
+            else if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE))
             {
                 evt_exec(0, TASK_00, chris_idle_2_or_wesker_gone);
             }
             set(FG_COMMON, F_COMMON_WESKER_GONE_SEEN, TRUE);
-            if (MANSION2 && JPN)
+            if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
             {
                 evt_exec(0, TASK_00, chris_idle_2_or_wesker_gone);
             }
@@ -271,7 +271,7 @@ proc init
     }
     if (ck(FG_COMMON, F_COMMON_INTRO_SEEN, TRUE) && ck(FG_COMMON, F_COMMON_KENNETH_ZOMBIE_SEEN, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_24_NPC_WESKER, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1920, 0, 16000, 0, 9000, ENEMY_00_WESKER, ANIM_00, 0, EVAR_00);
             enemy(EM_21_NPC_JILL, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 3328, 0, 20000, 0, 11000, ENEMY_01_JILL, ANIM_00, 0, EVAR_00);
@@ -283,7 +283,7 @@ proc init
         cut_auto(CUT_LOCKED);
         setb(B_CAMERA, CAM_06_FRONT_FROM_EAST, 0);
         set(FG_COMMON, F_COMMON_HALL_EARLY_RETURN, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             evt_exec(0, TASK_00, wesker_reminder_or_lockpick_bye_west);
         }
@@ -292,7 +292,7 @@ proc init
             evt_exec(0, TASK_00, chris_idle_or_wesker_reminder);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_INTRO_SEEN, FALSE))
         {
@@ -335,7 +335,7 @@ proc init
 
 proc main
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_NE, 3))
         {
@@ -531,7 +531,7 @@ event intro
     evt_next();
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_01, chris_idle_or_wesker_reminder, 0);
         evt_fork(TASK_02, wesker_idle_or_jill_enter, 0);
@@ -542,7 +542,7 @@ event intro
     }
     sleep(10);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(50);
         cutnext(CAM_06_FRONT_FROM_EAST);
@@ -554,7 +554,7 @@ event intro
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_10, F_ROOM_C_JILL_ANIM_DONE, 0);
         act_flag_op(EF_OR, EF_0001);
@@ -565,7 +565,7 @@ event intro
         act_anim_seq(AB_ADDITIVE | AB_02, 20900, 8500, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
         voice_play(VOICE_PLAY, VO_001_00);
@@ -577,7 +577,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(5);
         act_motion_path(MOTION_71, 500, 0, 2, 160, 64);
@@ -589,7 +589,7 @@ event intro
         act_anim_seq(AB_02, 17300, 3200, F_ROOM_J_WESKER_ANIM_DONE);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
         evt_actor_begin();
@@ -626,13 +626,13 @@ event intro
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(4);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_01_JILL, 0, 80, 64);
     }
@@ -641,7 +641,7 @@ event intro
         act_anim_seq(AB_02, 24500, 12800, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
         evt_disable(TASK_02);
@@ -657,7 +657,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_01_JILL, 0, 80, 64);
     }
@@ -667,7 +667,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -677,7 +677,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         act_anim_flags(ANIM_25, F_ROOM_C_JILL_ANIM_DONE, 0);
@@ -700,7 +700,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         do
         {
@@ -717,7 +717,7 @@ event intro
         evt_disable(TASK_03);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_03, jill_idle_or_lockpick_approach_east, 0);
         wait_message();
@@ -726,7 +726,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_33, -500, 0, 0, 140, 64);
         sleep(10);
@@ -752,7 +752,7 @@ event intro
         act_anim_flags(ANIM_22, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     }
     sleep(4);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2D, F_ROOM_C_JILL_ANIM_DONE, 0);
         act_param_set(0, 64512);
@@ -762,7 +762,7 @@ event intro
         act_motion_path(MOTION_31, -700, 0, 0, 120, 40);
     }
     sleep(10);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion_path(MOTION_31, 500, 0, 0, 140, 40);
         sleep(19);
@@ -771,7 +771,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_001_01);
         message(MSG_VO_001_01, 0);
@@ -786,7 +786,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         act_motion_path(MOTION_13, 16000, -2600, 4400, 196, 64);
@@ -802,7 +802,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
@@ -812,7 +812,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 80, 64);
     }
@@ -822,7 +822,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -831,7 +831,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 80, 64);
     }
@@ -842,7 +842,7 @@ event intro
     act_reset();
     evt_nop();
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
@@ -851,7 +851,7 @@ event intro
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_C_JILL_ANIM_DONE, 0);
         act_motion_path(MOTION_33, 0, 150, 0, 80, 64);
@@ -872,7 +872,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(4);
         evt_disable(TASK_02);
@@ -882,7 +882,7 @@ event intro
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         message(2, 0);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -892,7 +892,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_C_JILL_ANIM_DONE, 0);
     }
@@ -907,7 +907,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(4);
     }
@@ -917,7 +917,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_WESKER, 0, 120, 64);
     }
@@ -929,7 +929,7 @@ event intro
         act_anim_seq(AB_03, 19000, 6300, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
         sleep(2);
@@ -940,7 +940,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_WESKER, 0, 120, 64);
     }
@@ -957,7 +957,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(5);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -967,7 +967,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_C_WESKER_ANIM_DONE, 0);
         sleep(25);
@@ -981,7 +981,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         wait_message();
         cutnext(CAM_02_EAST_DOORS);
@@ -999,7 +999,7 @@ event intro
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_C_JILL_ANIM_DONE, 0);
         sleep(2);
@@ -1013,7 +1013,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(5);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -1021,7 +1021,7 @@ event intro
         act_anim_flags(ANIM_22, F_ROOM_J_WESKER_ANIM_DONE, AFL_02 | AFL_01);
     }
     sleep(25);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -1047,7 +1047,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_01_JILL, 0, 120, 64);
     }
@@ -1065,7 +1065,7 @@ event intro
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9000, 15000);
@@ -1077,7 +1077,7 @@ event intro
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 3400, 17000);
     }
     sleep(8);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -1089,7 +1089,7 @@ event intro
     act_motion_path(MOTION_13, 1000, -3000, 19700, 196, 64);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
@@ -1102,7 +1102,7 @@ event intro
     act_reset();
     evt_nop();
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -1115,7 +1115,7 @@ event intro
     act_reset();
     evt_nop();
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_PLAYER, 0);
     }
@@ -1124,7 +1124,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2D, F_ROOM_C_JILL_ANIM_DONE, 0);
     }
@@ -1138,14 +1138,14 @@ event intro
         act_anim_flags(ANIM_2B, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     }
     act_flag_op(EF_OR, EF_0002);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_param_set(0, 64512);
     }
     act_reset();
     evt_nop();
     sleep(1);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -1154,7 +1154,7 @@ event intro
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 19650, 5000, F_ROOM_C_JILL_ANIM_DONE);
     }
@@ -1163,7 +1163,7 @@ event intro
         act_anim_seq(AB_06, 15400, 4800, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(40);
         voice_play(VOICE_PLAY, VO_101_03);
@@ -1183,7 +1183,7 @@ event intro
         act_anim_flags(ANIM_20, F_ROOM_J_WESKER_ANIM_DONE, AFL_02 | AFL_01);
     }
     sleep(15);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_anim_flags(ANIM_22, F_ROOM_J_WESKER_ANIM_DONE, AFL_02 | AFL_01);
         act_reset();
@@ -1207,7 +1207,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_03, 14300, 7800, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -1216,7 +1216,7 @@ event intro
         act_motion_path(MOTION_13, 17300, -2600, 3200, 192, 64);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
         voice_play(VOICE_PLAY, VO_001_03);
@@ -1230,7 +1230,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_C_JILL_ANIM_DONE, 0);
         sleep(18);
@@ -1244,13 +1244,13 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(15);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_WESKER, 0, 120, 64);
     }
@@ -1276,7 +1276,7 @@ event intro
         evt_nop();
     }
     sleep(2);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2E, F_ROOM_C_PLAYER_ANIM_DONE, 0);
         act_flag_op(EF_OR, EF_0002);
@@ -1298,7 +1298,7 @@ event intro
         act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, AFL_02 | AFL_01);
     }
     sleep(11);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_C_PLAYER_ANIM_DONE, 0);
     }
@@ -1318,7 +1318,7 @@ event intro
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         message(5, 0);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -1329,7 +1329,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 120, 64);
         act_anim_seq(AB_02, 16500, 6000, F_ROOM_C_WESKER_ANIM_DONE);
@@ -1362,7 +1362,7 @@ event intro
         act_anim_flags(ANIM_24, F_ROOM_J_WESKER_ANIM_DONE, AFL_02 | AFL_01);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_21, F_ROOM_C_WESKER_ANIM_DONE, 0);
     }
@@ -1371,7 +1371,7 @@ event intro
         act_anim_flags(ANIM_21, F_ROOM_J_WESKER_ANIM_DONE, AFL_02 | AFL_01);
     }
     sleep(25);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_C_WESKER_ANIM_DONE, 0);
     }
@@ -1381,7 +1381,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         wait_message();
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
@@ -1393,7 +1393,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 16500, -2600, 6000, 100, 64);
         sleep(8);
@@ -1441,7 +1441,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_fork(TASK_01, chris_leaves_or_lockpick_bye_east, 0);
         do
@@ -1460,7 +1460,7 @@ event intro
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 15500, 4000, F_ROOM_C_JILL_ANIM_DONE);
         act_nop();
@@ -1471,7 +1471,7 @@ event intro
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(14);
     }
@@ -1481,7 +1481,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 20800, -2600, 8500, 196, 64);
     }
@@ -1492,7 +1492,7 @@ event intro
         evt_nop();
     }
     sleep(2);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 9000, 14600, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -1503,7 +1503,7 @@ event intro
         act_anim_seq(AB_06, 16100, 11000, F_ROOM_J_WESKER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(12);
         wait_message();
@@ -1519,7 +1519,7 @@ event intro
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_C_JILL_ANIM_DONE, 0);
         sleep(11);
@@ -1530,7 +1530,7 @@ event intro
         act_anim_seq(AB_06, 11560, 8300, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(5);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -1542,14 +1542,14 @@ event intro
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         wait_message();
         cutcurr(0);
         aot_reset(AOT_02_DOOR_105, SCE_DOOR, SAT_PLAYER, 2, 0, 0);
     }
     sleep(10);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
         evt_actor_begin();
@@ -1560,7 +1560,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_26, F_ROOM_C_PLAYER_ANIM_DONE, 0);
         sleep(35);
@@ -1588,7 +1588,7 @@ event intro
         evt_actor_begin();
     }
     act_motion(MOTION_10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_ADDITIVE | AB_02, 5126, 16744, F_ROOM_FRONT_DOOR_BUSY);
     }
@@ -1598,7 +1598,7 @@ event intro
         act_anim_seq(AB_ADDITIVE | AB_03, 11452, 12492, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -1622,7 +1622,7 @@ event intro
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 2388, 17600, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -1631,7 +1631,7 @@ event intro
         act_anim_seq(AB_ADDITIVE | AB_03, 6428, 15831, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -1730,7 +1730,7 @@ event intro_wesker_look_around
 
 event chris_idle_or_wesker_reminder
 {
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_next();
         evt_nop();
@@ -1740,7 +1740,7 @@ event chris_idle_or_wesker_reminder
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_27, F_ROOM_C_PLAYER_ANIM_DONE_2, 0);
     }
@@ -1749,7 +1749,7 @@ event chris_idle_or_wesker_reminder
         act_anim_seq(AB_02, 12000, 12000, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(10);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -1790,7 +1790,7 @@ event chris_idle_or_wesker_reminder
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -1836,7 +1836,7 @@ event chris_idle_or_wesker_reminder
 
 event chris_idle_2_or_wesker_gone
 {
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_fork(TASK_01, wesker_idle_or_jill_enter, 0);
         evt_next();
@@ -1871,7 +1871,7 @@ event chris_idle_2_or_wesker_gone
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_28, F_ROOM_C_PLAYER_ANIM_DONE_2, 0);
     }
@@ -1891,7 +1891,7 @@ event chris_idle_2_or_wesker_gone
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -1976,7 +1976,7 @@ event chris_idle_2_or_wesker_gone
 
 event wesker_idle_or_jill_enter
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
@@ -1985,7 +1985,7 @@ event wesker_idle_or_jill_enter
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_29, F_ROOM_C_WESKER_ANIM_DONE_2, 0);
     }
@@ -2009,7 +2009,7 @@ event wesker_idle_or_jill_enter
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -2031,7 +2031,7 @@ event wesker_idle_or_jill_enter
 
 event wesker_idle_2_or_barry_search
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
@@ -2040,7 +2040,7 @@ event wesker_idle_2_or_barry_search
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2A, F_ROOM_C_WESKER_ANIM_DONE_2, 0);
     }
@@ -2068,7 +2068,7 @@ event wesker_idle_2_or_barry_search
         act_anim_seq(AB_02, 17021, 15338, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
         do
@@ -2247,7 +2247,7 @@ event barry_search_stop
 
 event jill_idle_or_lockpick_approach_east
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -2261,7 +2261,7 @@ event jill_idle_or_lockpick_approach_east
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_27, F_ROOM_C_JILL_ANIM_DONE_2, 0);
     }
@@ -2280,7 +2280,7 @@ event jill_idle_or_lockpick_approach_east
         act_anim_seq(AB_02, 25533, 10382, F_ROOM_J_BARRY_ANIM_LATCH);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(20);
         cutnext(CAM_01_FRONT_FROM_WEST);
@@ -2302,7 +2302,7 @@ event jill_idle_or_lockpick_approach_east
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -2399,7 +2399,7 @@ event jill_idle_or_lockpick_approach_east
 
 event jill_idle_2_or_lockpick_step_up_east
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
     }
@@ -2408,7 +2408,7 @@ event jill_idle_2_or_lockpick_step_up_east
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_28, F_ROOM_C_JILL_ANIM_DONE_2, 0);
         act_reset();
@@ -2441,7 +2441,7 @@ event jill_idle_2_or_lockpick_step_up_east
 
 event chris_leaves_or_lockpick_bye_east
 {
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
         evt_actor_begin();
@@ -2467,7 +2467,7 @@ event chris_leaves_or_lockpick_bye_east
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(48);
         act_anim_seq(AB_ADDITIVE | AB_02, 12440, 11734, F_ROOM_C_PLAYER_ANIM_DONE);
@@ -2477,7 +2477,7 @@ event chris_leaves_or_lockpick_bye_east
         act_anim_seq(AB_02, 20221, 11373, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -2544,7 +2544,7 @@ event chris_leaves_or_lockpick_bye_east
         dir_set(0, 0, 2189, 0, 19743, 0, 11017);
     }
     wait_message();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         cutnext(CAM_06_FRONT_FROM_EAST);
         sleep(10);
@@ -2562,7 +2562,7 @@ event chris_leaves_or_lockpick_bye_east
         sleep(10);
     }
     cutnext(CAM_05_DINING_DOOR);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         voice_play(VOICE_PLAY, VO_103_0D);
         message(MSG_VO_103_0D, 0);
@@ -2570,7 +2570,7 @@ event chris_leaves_or_lockpick_bye_east
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 8801, 13749, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -2579,7 +2579,7 @@ event chris_leaves_or_lockpick_bye_east
         act_anim_flags(ANIM_20, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -2815,7 +2815,7 @@ event lockpick_step_up_west
 
 event wesker_reminder_or_lockpick_bye_west
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_next();
         evt_nop();
@@ -2825,7 +2825,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 9000, 14000, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -2834,7 +2834,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_motion_path(MOTION_11, 8456, -2700, 14287, 160, 64);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
@@ -2846,7 +2846,7 @@ event wesker_reminder_or_lockpick_bye_west
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 9000, -2600, 14000, 192, 64);
         sleep(4);
@@ -2858,7 +2858,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_seq(AB_02, 9000, 13700, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(4);
         evt_work_set(WK_ENEMY, ENEMY_01_JILL);
@@ -2873,7 +2873,7 @@ event wesker_reminder_or_lockpick_bye_west
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 9000, -2600, 14000, 140, 64);
     }
@@ -2882,7 +2882,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_motion_path(MOTION_11, 14491, -2700, 12123, 160, 64);
     }
     sleep(6);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 16600, 14700, F_ROOM_C_JILL_ANIM_DONE);
     }
@@ -2891,7 +2891,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_seq(AB_06, 14491, 12123, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -2909,7 +2909,7 @@ event wesker_reminder_or_lockpick_bye_west
         evt_work_set(WK_PLAYER, 0);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_C_JILL_ANIM_DONE, 0);
     }
@@ -2922,7 +2922,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_seq(AB_06, 6147, 10000, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_nop();
         sleep(15);
@@ -2935,7 +2935,7 @@ event wesker_reminder_or_lockpick_bye_west
         evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     }
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_22, F_ROOM_C_WESKER_ANIM_DONE, 0);
         sleep(25);
@@ -2953,7 +2953,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     }
     sleep(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_20, F_ROOM_C_WESKER_ANIM_DONE, 0);
     }
@@ -2971,7 +2971,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
@@ -2981,7 +2981,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_25, F_ROOM_C_PLAYER_ANIM_DONE, 0);
     }
@@ -2991,7 +2991,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_flags(ANIM_21, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     }
     act_flag_op(EF_OR, EF_0002);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(15);
         act_anim_flags(ANIM_25, F_ROOM_C_PLAYER_ANIM_DONE, 0);
@@ -3004,7 +3004,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_flags(ANIM_21, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     }
     act_flag_op(EF_OR, EF_0001);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
@@ -3014,7 +3014,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_reset(AOT_02_DOOR_105, SCE_DOOR, SAT_PLAYER, 2, 0, 0);
     }
@@ -3027,7 +3027,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2F, F_ROOM_C_PLAYER_ANIM_DONE, 0);
     }
@@ -3048,7 +3048,7 @@ event wesker_reminder_or_lockpick_bye_west
     }
     act_param_set(0, 2048);
     sleep(41);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 5126, 16744, F_ROOM_FRONT_DOOR_BUSY);
         act_nop();
@@ -3060,7 +3060,7 @@ event wesker_reminder_or_lockpick_bye_west
         act_anim_seq(AB_02, 3945, 16715, F_ROOM_J_BARRY_ANIM_DONE);
     }
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         do
         {
@@ -3088,7 +3088,7 @@ event wesker_reminder_or_lockpick_bye_west
         evt_nop();
     }
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 2388, 17600, F_ROOM_C_PLAYER_ANIM_DONE);
         act_nop();
@@ -3173,12 +3173,12 @@ event hall_empty_or_lockpick_approach_2f
 {
     evt_next();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     bgm_play(BGM_MAIN);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cut_auto(CUT_LOCKED);
@@ -3186,13 +3186,13 @@ event hall_empty_or_lockpick_approach_2f
     }
     sleep(10);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(10);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_02, 10086, 12303, F_ROOM_C_PLAYER_ANIM_DONE);
         act_reset();
@@ -3230,7 +3230,7 @@ event hall_empty_or_lockpick_approach_2f
         act_anim_seq(AB_02, 16934, 12200, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_reset();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
         cutnext(CAM_06_FRONT_FROM_EAST);
@@ -3254,7 +3254,7 @@ event hall_empty_or_lockpick_approach_2f
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 22638, -2600, 4358, 192, 64);
         sleep(4);
@@ -3268,7 +3268,7 @@ event hall_empty_or_lockpick_approach_2f
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 192, 64);
     }
     sleep(4);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_seq(AB_06, 17482, 15189, F_ROOM_C_PLAYER_ANIM_DONE);
     }
@@ -3277,7 +3277,7 @@ event hall_empty_or_lockpick_approach_2f
         act_anim_seq(AB_06, 16553, 9076, F_ROOM_J_PLAYER_ANIM_DONE);
     }
     act_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_param_set(0, 80);
         do
@@ -3327,13 +3327,13 @@ event hall_empty_or_lockpick_approach_2f
         act_motion_path(MOTION_71, 700, 0, 1, 100, 64);
     }
     act_reset();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         evt_nop();
         message(22, 0);
     }
     sleep(40);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         cutnext(CAM_02_EAST_DOORS);
         do
@@ -3344,7 +3344,7 @@ event hall_empty_or_lockpick_approach_2f
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 22508, -2600, 20094, 192, 64);
         sleep(4);
@@ -3381,7 +3381,7 @@ event hall_empty_or_lockpick_approach_2f
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(35);
         voice_play(VOICE_PLAY, VO_003_01);
@@ -3413,7 +3413,7 @@ event hall_empty_or_lockpick_approach_2f
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_00, F_ROOM_C_PLAYER_ANIM_DONE, 0);
         do
@@ -3452,7 +3452,7 @@ event hall_empty_or_lockpick_approach_2f
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_idle();
         act_reset();
@@ -3477,7 +3477,7 @@ event chris_idle_3_or_lockpick_step_up_2f
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_2A, F_ROOM_C_PLAYER_ANIM_DONE_2, 0);
         act_reset();
@@ -3703,13 +3703,13 @@ event lockpick_approach_2f_barry_walk
 
 event jills_gun_or_lockpick_speech
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     else
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
             run
             {
@@ -3723,7 +3723,7 @@ event jills_gun_or_lockpick_speech
                 }
             }
         }
-        else if (JPN)
+        else if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
         {
             aot_reset(AOT_05_ITEM_INK_3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
         }
@@ -3764,7 +3764,7 @@ event jills_gun_or_lockpick_speech
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_anim_flags(ANIM_09, F_ROOM_C_PLAYER_ANIM_DONE, 0);
     }
@@ -3789,7 +3789,7 @@ event jills_gun_or_lockpick_speech
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(10);
     }
@@ -3800,7 +3800,7 @@ event jills_gun_or_lockpick_speech
         act_anim_flags(ANIM_20, F_ROOM_J_BARRY_ANIM_DONE, 0);
     }
     sleep(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         message(MSG_IT_IS_JILLS_GUN | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's Jill's gun...!"
     }
@@ -3840,7 +3840,7 @@ event jills_gun_or_lockpick_speech
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -3900,7 +3900,7 @@ event jills_gun_or_lockpick_speech
         act_reset();
     }
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -3979,7 +3979,7 @@ event jills_gun_or_lockpick_speech
 
 event lockpick_handover
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(200);
     }
@@ -4033,7 +4033,7 @@ event lockpick_handover
 
 event front_door_film_or_acid_rounds
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -4043,7 +4043,7 @@ event front_door_film_or_acid_rounds
     }
     evt_next();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         bgm_play(BGM_MAIN);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -4212,7 +4212,7 @@ event front_door_film_or_acid_rounds
     }
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             bgm_restore(0);
         }
@@ -4556,7 +4556,7 @@ event acid_rounds_barry_leaves
 
 event front_door_film
 {
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {
@@ -4581,7 +4581,7 @@ event front_door_film
     }
     evt_next();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         run
         {

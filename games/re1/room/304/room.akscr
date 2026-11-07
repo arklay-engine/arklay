@@ -50,7 +50,7 @@ proc init
     item_aot_set(AOT_04_ITEM_HEAL_HERB_GREEN_1, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_01_HEAL_HERB_GREEN, SCA_NONE, 29000, 0, 5400, 0, F_ITEM_304_HEAL_HERB_GREEN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     item_aot_set(AOT_05_ITEM_HEAL_HERB_BLUE_2, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, IMDL_02_HEAL_HERB_BLUE, SCA_NONE, 28250, 0, 2400, 0, F_ITEM_304_HEAL_HERB_BLUE_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     item_aot_set(AOT_06_ITEM_HEAL_HERB_BLUE_3, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, IMDL_03_HEAL_HERB_BLUE, SCA_NONE, 29000, 0, 2400, 0, F_ITEM_304_HEAL_HERB_BLUE_3, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
         enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_304_CERBERUS_0, SPAWN_FORCE, 2, 0, 672, 0, 25657, 0, 11984, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
         enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_304_CERBERUS_1, SPAWN_FORCE, 2, 0, 336, 0, 19483, 0, 16862, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
@@ -59,7 +59,7 @@ proc init
             enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_304_CERBERUS_2, SPAWN_FORCE, 2, 0, 3920, 0, 4200, 0, 21000, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE) && ck(FG_SCENARIO, F_SCENARIO_304_VARIANT_VISITED, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_SCENARIO, F_SCENARIO_304_VARIANT_VISITED, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE))
         {
@@ -76,7 +76,7 @@ proc init
     {
         snd_pan_vol_set(BGM_SUB_1, 35, 35);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         set(FG_COMMON, F_COMMON_C_BACK_AT_GUARDHOUSE_GATE, TRUE);
     }
@@ -137,7 +137,7 @@ event brad_radio_call
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_04_22);
         message(MSG_VO_009_04_22, 0);
@@ -157,7 +157,7 @@ event brad_radio_call
     act_reset();
     evt_nop();
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         voice_play(VOICE_PLAY, VO_009_05);
         message(MSG_VO_009_05, 0);
@@ -174,7 +174,7 @@ event brad_radio_call
     sleep(15);
     act_anim_flags(ANIM_33, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080 | EF_0010);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(65);
     }
@@ -185,7 +185,7 @@ event brad_radio_call
     act_motion_path(MOTION_71, 600, 0, 1, 120, 64);
     sleep(5);
     act_anim_flags(ANIM_34, F_ROOM_PLAYER_ANIM_DONE, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(33);
     }
