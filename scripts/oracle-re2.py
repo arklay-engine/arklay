@@ -524,6 +524,7 @@ GAME_STATE = 0x991F80
 ITEM_SLOTS = 0x98E9A4  # how many of `ITEM_WORK`'s first ten slots the player has
 STATUS_WORK = 0x68A204  # the status screen's work: its routines at +8 and +9
 ITEM_GET_ROUTINE = 0x691F61  # the get-item window's routine and sub-routine
+FG_KEY = 0x98ED2C  # `fg_key`: the doors' lock bits, two words (`Flg_ck`, MSB first)
 MESSAGE_STATE = 0x98504C  # the message's state: the top bit while it shows, bit 0 a question's "no"
 # The status screen's item page (`0x4F8160`): the command and its step
 # (`0x691F63`, `0x691F64`), the step's tick count, the item and target
@@ -681,6 +682,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
     fields.append(item_box_trace(game))
+    fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

@@ -1430,6 +1430,7 @@ pub struct ScaVolume {
     pub offset: [i16; 3],
 }
 
+pub mod door2;
 mod entity;
 pub mod item_get2;
 pub mod itembox2;
@@ -3262,6 +3263,9 @@ pub struct GameState {
     /// The lid's swing ended this tick: the box's screen opens on the next
     /// (game mode 1).
     pub re2_box_open: bool,
+    /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
+    /// saved: it is only armed while a door message holds the game.
+    pub re2_key_lost: Option<door2::KeyLost>,
     /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
     /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
     /// cleared, so nothing runs, draws or touches it, but for the
@@ -3748,6 +3752,7 @@ impl Default for GameState {
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
+            re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
             stair_zones: StairZones::default(),
@@ -5174,6 +5179,7 @@ impl GameState {
         self.special_light_masks = [0; 3];
         self.got_item_slot = None;
         self.pending_reach = None;
+        self.re2_key_lost = None;
         // The load re-centres the screen offset (`CenterScreenOrigin`).
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when
@@ -8280,10 +8286,11 @@ impl GameState {
     /// transitions on the next probe, exactly as in the original. The key is
     /// consumed logically (`g_eventItemUsedFlag` + the selected item) but the
     /// physical removal waits for the prompt's dismissal via
-    /// [`Self::check_event_item_usage`]. The locked/key-turn bank-2 cues are
-    /// queued in [`GameState::sfx_requests`]; the port has no bank mapping for
-    /// them yet, so the engine drains and drops them. Returns whether a room
-    /// transition was requested.
+    /// [`Self::check_event_item_usage`]. RE1's locked/key-turn bank-2 cues
+    /// are queued in [`GameState::sfx_requests`]; the port has no bank
+    /// mapping for them yet, so the engine drains and drops them. An RE2 door
+    /// goes to `try_re2_door`, which queues its room-bank sounds in
+    /// `re2.sounds`. Returns whether a room transition was requested.
     pub fn try_door(&mut self, slot: u8) -> bool {
         let Some(door) = self.doors.get(usize::from(slot)).copied().flatten() else {
             return false;
@@ -8462,9 +8469,10 @@ impl GameState {
         true
     }
 
-    /// `Sce_door`: an open door starts the transition. A locked one (bit
-    /// `0x80` of its lock byte, unlocked by its bit in `door_locks`) stays
-    /// shut until R8 brings the keys and their messages.
+    /// `Sce_Door` (`0x4E9460`): an open door starts the transition. A
+    /// locked one (bit `0x80` of its lock byte, unlocked by its bit in
+    /// `door_locks`) shows its message and plays its sound; a key turn or
+    /// an unlock raises the bit, and the door opens on a later press.
     #[cfg(test)]
     pub(crate) fn try_re2_door_for_test(&mut self, door: &Door) -> bool {
         self.try_re2_door(door)
@@ -8475,6 +8483,11 @@ impl GameState {
             DOOR_LOCKED_OTHER_SIDE, DOOR_UNLOCKED, DOOR_USED_KEY, KEY_LOCKED, KEY_UNLOCK,
             door_locked_message, door_message,
         };
+        use door2::{DOOR_PARTNER, SOUND_DOOR_LOCKED, SOUND_KEY_USED, SOUND_UNLOCKED};
+        if self.re2_partner_blocks_door() {
+            self.show_re2_door_message(door_message(DOOR_PARTNER));
+            return false;
+        }
         let bit = door.lock & 0x3F;
         let word = usize::from(bit >> 5) & 1;
         let mask = 0x8000_0000 >> (bit & 31);
@@ -8483,19 +8496,32 @@ impl GameState {
         }
         // `sce_door`: a locked door opens on a later press once this one has
         // unlocked it.
+        // The sound and message orders are the original's: a refused
+        // `Mess_set` (a message already up) still plays the sound.
         match door.key {
-            KEY_UNLOCK => self.show_re2_door_message(door_message(DOOR_UNLOCKED)),
+            KEY_UNLOCK => {
+                self.show_re2_door_message(door_message(DOOR_UNLOCKED));
+                self.push_re2_sound(SOUND_UNLOCKED);
+            }
             KEY_LOCKED => {
+                self.push_re2_sound(SOUND_DOOR_LOCKED);
                 self.show_re2_door_message(door_message(DOOR_LOCKED_OTHER_SIDE));
                 return false;
             }
-            key if !self.has_item(key) => {
-                self.show_re2_door_message(door_locked_message(key));
-                return false;
-            }
             key => {
+                let Some(slot) = self.re2_key_slot(key) else {
+                    self.push_re2_sound(SOUND_DOOR_LOCKED);
+                    self.show_re2_door_message(door_locked_message(key));
+                    return false;
+                };
+                // The message's `{string 0}` (`0x98504F`).
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = key;
                 self.show_re2_door_message(door_message(DOOR_USED_KEY));
+                self.push_re2_sound(SOUND_KEY_USED);
+                self.re2_key_lost = Some(door2::KeyLost {
+                    slot: slot as u8,
+                    first: true,
+                });
             }
         }
         self.re2.door_locks[word] |= mask;

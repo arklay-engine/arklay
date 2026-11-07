@@ -79,6 +79,10 @@ class Tick:
     inventory: str | None = None
     # RE2's item page: arklay's `ip`, the end of the original's `gi`.
     item_page: str | None = None
+    # RE2's message state (`fg_message`): arklay's `msg`, the original's `gi` 6th field.
+    message: str | None = None
+    # RE2's doors' lock bits (`fg_key`, two words in hex).
+    door_locks: str | None = None
     # RE2's screens' own fields: the title's (`ti`, `tlogo`, `tfade`, a `--boot` record's) and the item box's (`ib`, `box`).
     screen: dict[str, str] = field(default_factory=dict)
 
@@ -89,7 +93,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "msg", "fgkey", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box")
 
@@ -124,6 +128,15 @@ def item_page(fields: dict[str, str]) -> str | None:
         return None
     parts = fields["gi"].split(",")
     return ",".join([parts[4]] + parts[6:])
+
+
+def message_state(fields: dict[str, str]) -> str | None:
+    """RE2's message state: arklay's `msg`, or the original's `gi` 6th field."""
+    if "msg" in fields:
+        return fields["msg"]
+    if "gi" not in fields:
+        return None
+    return fields["gi"].split(",")[5]
 
 
 def parse_trace(path: str) -> list[Tick]:
@@ -174,6 +187,8 @@ def parse_trace(path: str) -> list[Tick]:
                     sound=fields.get("snd"),
                     inventory=fields.get("inv"),
                     item_page=item_page(fields),
+                    message=message_state(fields),
+                    door_locks=fields.get("fgkey"),
                     screen={key: fields[key] for key in SCREEN_FIELDS if key in fields},
                 )
             )
@@ -210,6 +225,10 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("inv", tick.inventory))
     if tick.item_page is not None:
         items.append(("ip", tick.item_page))
+    if tick.message is not None:
+        items.append(("msg", tick.message))
+    if tick.door_locks is not None:
+        items.append(("fgkey", tick.door_locks))
     items.extend(sorted(tick.screen.items()))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
