@@ -594,6 +594,17 @@ impl Ui {
                 self.run(uid, id, &action, confirm);
                 true
             }
+            Kind::List if layout::list_columns(&self.screens[s].tree, id) > 1 => {
+                let columns = layout::list_columns(&self.screens[s].tree, id) as isize;
+                let step = match key {
+                    GuiKey::Up => -columns,
+                    GuiKey::Down => columns,
+                    GuiKey::Left => -1,
+                    GuiKey::Right => 1,
+                    _ => return false,
+                };
+                self.move_focus_in_grid(s, id, step, columns)
+            }
             Kind::List => match key {
                 GuiKey::Up => self.move_focus(s, id, -1),
                 GuiKey::Down => self.move_focus(s, id, 1),
@@ -729,6 +740,42 @@ impl Ui {
             None => 0,
         };
         self.focus(s, items[next], true)
+    }
+
+    /// Move the focus `step` places through a grid `columns` wide, without
+    /// wrapping: a row step past the last row lands on the last item when
+    /// that row is below, and a side step stays in its row. Returns false
+    /// (the key passes on) at an edge.
+    fn move_focus_in_grid(
+        &mut self,
+        s: usize,
+        container: NodeId,
+        step: isize,
+        columns: isize,
+    ) -> bool {
+        let items = self.focusables(s, container);
+        if items.is_empty() {
+            return false;
+        }
+        let count = items.len() as isize;
+        let Some(at) = self.screens[s]
+            .focus
+            .and_then(|f| items.iter().position(|&i| i == f))
+        else {
+            return self.focus(s, items[0], true);
+        };
+        let at = at as isize;
+        let mut next = at + step;
+        if step.abs() == 1 && next.div_euclid(columns) != at.div_euclid(columns) {
+            return false;
+        }
+        if next >= count && step > 1 && at / columns < (count - 1) / columns {
+            next = count - 1;
+        }
+        if !(0..count).contains(&next) {
+            return false;
+        }
+        self.focus(s, items[next as usize], true)
     }
 
     /// Move the focus `step` places, stopping at the ends.
@@ -1179,6 +1226,15 @@ impl Ui {
             .and_then(|f| screen.tree.get(f))
             .map(|n| n.prop(name).clone())
             .unwrap_or_default()
+    }
+
+    /// The focused node's laid-out rectangle on the top screen.
+    pub fn focus_rect(&self) -> Option<Rect> {
+        let screen = self.screens.last()?;
+        screen
+            .focus
+            .and_then(|f| screen.tree.get(f))
+            .map(|n| n.rect)
     }
 
     /// The selected tab of every tab strip on the top screen, outermost

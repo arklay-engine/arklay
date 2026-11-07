@@ -80,6 +80,149 @@ fn keys_move_the_focus_and_change_values() {
 }
 
 #[test]
+fn a_list_with_columns_is_a_grid_of_cards() {
+    let screen = r#"<screen use="standard-screen" title="T">
+        <list columns="3" variant="cards" items="{cells}">
+          <template>
+            <item variant="card" text="{item.name}" action="pick:{item.index}">
+              <stack gap="small">
+                <image aspect="4:3" src="{item.picture}"/>
+                <text text="{item.name}" wrap="none"/>
+              </stack>
+            </item>
+          </template>
+        </list>
+      </screen>"#;
+    let mut ui = Ui::new(library(&[("test", screen)])).unwrap();
+    let picture = Value::Image(value::ImageValue {
+        colour: std::sync::Arc::new(crate::gui::canvas::Picture {
+            width: 4,
+            height: 3,
+            rgba: vec![255; 48],
+        }),
+        grey: None,
+    });
+    let cells = (0..7)
+        .map(|index| {
+            Value::map([
+                ("name", Value::from(format!("cell {index}"))),
+                ("picture", picture.clone()),
+            ])
+        })
+        .collect();
+    ui.set("cells", Value::list(cells));
+    ui.open("test").unwrap();
+    ui.draw(1280, 960);
+    let name = |ui: &Ui| ui.focus_prop("text");
+    assert_eq!(name(&ui), Value::from("cell 0"));
+    let first = ui.focus_rect().unwrap();
+    // A card is taller than a plain row: its picture is 4:3 at the cell's
+    // width.
+    assert!(first.h > first.w * 0.75, "{first:?}");
+
+    ui.handle(&[key(GuiKey::Right)]);
+    ui.draw(1280, 960);
+    assert_eq!(name(&ui), Value::from("cell 1"));
+    let second = ui.focus_rect().unwrap();
+    assert!(
+        (second.y - first.y).abs() < 0.5 && second.x > first.right(),
+        "{second:?}"
+    );
+
+    // Down steps a row; down again from the second row's middle lands on
+    // the last item, in the short third row.
+    ui.handle(&[key(GuiKey::Down)]);
+    assert_eq!(name(&ui), Value::from("cell 4"));
+    ui.handle(&[key(GuiKey::Down)]);
+    assert_eq!(name(&ui), Value::from("cell 6"));
+    // No wrapping: the bottom row and a row's ends hold the focus.
+    ui.handle(&[key(GuiKey::Down)]);
+    assert_eq!(name(&ui), Value::from("cell 6"));
+    ui.handle(&[key(GuiKey::Left)]);
+    assert_eq!(name(&ui), Value::from("cell 6"));
+    ui.handle(&[key(GuiKey::Up), key(GuiKey::Right)]);
+    assert_eq!(name(&ui), Value::from("cell 4"));
+    ui.handle(&[key(GuiKey::Right), key(GuiKey::Right)]);
+    assert_eq!(name(&ui), Value::from("cell 5"));
+
+    let out = ui.handle(&[key(GuiKey::Confirm)]);
+    assert_eq!(
+        out.iter().find_map(UiOutput::action),
+        Some(("pick", &Value::Int(5)))
+    );
+}
+
+#[test]
+fn a_reserved_footer_line_keeps_the_grid_still_when_a_warning_shows() {
+    let screen = |reserve: &str| {
+        format!(
+            r#"<screen use="standard-screen" title="T">
+        <list columns="4" variant="cards" items="{{cells}}" height="fill">
+          <template>
+            <item variant="card" text="{{item.name}}" warning="{{item.warning}}">
+              <stack gap="small">
+                <image aspect="4:3" src="{{item.picture}}"/>
+                <text text="{{item.name}}" wrap="none"/>
+              </stack>
+            </item>
+          </template>
+        </list>
+        <text slot="footer" variant="warn" text="{{focus.warning}}" wrap="none"{reserve}/>
+      </screen>"#
+        )
+    };
+    let picture = Value::Image(value::ImageValue {
+        colour: std::sync::Arc::new(crate::gui::canvas::Picture {
+            width: 4,
+            height: 3,
+            rgba: vec![255; 48],
+        }),
+        grey: None,
+    });
+    let cells: Vec<Value> = (0..8)
+        .map(|index| {
+            Value::map([
+                ("name", Value::from(format!("cell {index}"))),
+                ("picture", picture.clone()),
+                (
+                    "warning",
+                    Value::from(if index == 1 {
+                        "This pack needs a rebuild."
+                    } else {
+                        ""
+                    }),
+                ),
+            ])
+        })
+        .collect();
+    // The focused card with no warning, then its neighbour with one: the
+    // same size, on the same row, in a window of `height`.
+    let still = |reserve: &str, height: u32| {
+        let markup = screen(reserve);
+        let mut ui = Ui::new(library(&[("test", markup.as_str())])).unwrap();
+        ui.set("cells", Value::list(cells.clone()));
+        ui.open("test").unwrap();
+        ui.draw(1280, height);
+        let first = ui.focus_rect().unwrap();
+        ui.handle(&[key(GuiKey::Right)]);
+        ui.draw(1280, height);
+        let second = ui.focus_rect().unwrap();
+        (first.y, first.w, first.h) == (second.y, second.w, second.h)
+    };
+    // Some window height fits the two rows only while the footer is empty:
+    // the warning's line then overflows the grid, whose scrollbar narrows
+    // (and so shrinks) every card.
+    let height = (600..1400)
+        .step_by(3)
+        .find(|&height| !still("", height))
+        .expect("a height where the warning moves the grid");
+    assert!(still(r#" reserve="line""#, height), "at {height}");
+    for height in (600..1400).step_by(50) {
+        assert!(still(r#" reserve="line""#, height), "at {height}");
+    }
+}
+
+#[test]
 fn confirmed_actions_ask_first() {
     let screen = r#"<screen use="standard-screen" title="T">
         <list>

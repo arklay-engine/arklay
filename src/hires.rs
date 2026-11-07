@@ -1,8 +1,8 @@
-//! HD texture replacement by content hash (`htexture/`).
+//! HD texture replacement by content hash (`hires/`).
 //!
-//! A mod pack may carry any number of images anywhere under `htexture/`,
+//! A mod pack may carry any number of images anywhere under `hires/`,
 //! each named by the [`crate::hash`] CRC of the texture it replaces
-//! (`htexture/bgd/0259741A.webp`, `htexture/a/b/C5157461_3B.png`): the first
+//! (`hires/bgd/0259741A.webp`, `hires/a/b/C5157461_3B.png`): the first
 //! eight hex digits of the file stem are the hash and anything after an `_`
 //! is ignored. The directories carry no meaning, so a TeamX-style
 //! `hires/<class>/` tree can be dropped in as it is.
@@ -16,7 +16,7 @@
 //!
 //! Art that is composited per frame (the inventory icons) has no stable hash.
 //! A pack may name such a replacement by its own stem under [`ROOT`] instead,
-//! e.g. `htexture/item/0b/item.webp` for item `0x0B`'s icon; the caller supplies
+//! e.g. `hires/item/0b/item.webp` for item `0x0B`'s icon; the caller supplies
 //! the source extent the image covers ([`named_replacement`]). The named
 //! route is preferred when it exists and the content hashes remain the
 //! fallback, so a pack made before the name existed keeps working.
@@ -46,7 +46,7 @@ use crate::pack::{AssetClass, Pack};
 use crate::state::Image;
 
 /// The pack directory replacements are found under, at any depth.
-pub const ROOT: &str = "htexture/";
+pub const ROOT: &str = "hires/";
 
 /// One hash a texture may be known by, and the source-texel extent an HD
 /// replacement found by it covers, from `origin` (the top-left texel; zero
@@ -72,7 +72,7 @@ pub struct Found {
 /// A decoded replacement's file and frame.
 type DecodedKey = (String, [u32; 2]);
 
-/// The `htexture/` replacements of a pack and its mod layers, by hash.
+/// The `hires/` replacements of a pack and its mod layers, by hash.
 #[derive(Debug, Default)]
 pub struct HdTable {
     files: HashMap<u32, String>,
@@ -198,11 +198,7 @@ impl HdTable {
                 .iter()
                 .map(|candidate| format!("{:08X}", candidate.hash))
                 .collect();
-            eprintln!(
-                "htexture: no replacement for {}: {}",
-                what(),
-                hashes.join(" ")
-            );
+            eprintln!("hires: no replacement for {}: {}", what(), hashes.join(" "));
         }
         found
     }
@@ -549,7 +545,7 @@ pub fn replacement(
     candidates: &[Candidate],
     what: impl FnOnce() -> String,
 ) -> Option<Arc<Replacement>> {
-    let table = pack.htexture();
+    let table = pack.hires();
     let candidates: Vec<Candidate> = candidates
         .iter()
         .filter(|candidate| candidate.origin == [0, 0])
@@ -574,7 +570,7 @@ pub fn named_replacement(pack: &Pack, stem: &str, frame: [u32; 2]) -> Option<Arc
         .ok()
         .flatten()?;
     let frame = [frame[0].max(1), frame[1].max(1)];
-    let table = pack.htexture();
+    let table = pack.hires();
     decoded_replacement(pack, table, asset.path().to_string(), frame)
 }
 
@@ -609,7 +605,7 @@ fn decoded_replacement(
         }
         Ok(_) => None,
         Err(err) => {
-            eprintln!("htexture: {err:#}");
+            eprintln!("hires: {err:#}");
             None
         }
     }
@@ -1182,14 +1178,14 @@ mod tests {
     }
 
     #[test]
-    fn the_table_indexes_every_hex_stem_under_htexture() {
+    fn the_table_indexes_every_hex_stem_under_hires() {
         let pack = pack_of(&[
-            "htexture/bgd/0259741A.webp",
-            "htexture/deep/er/C5157461_3B.png",
-            "htexture/deep/C5157461.png",
-            "htexture/misc/ABCDEF01_8E.webp",
-            "htexture/notes.txt",
-            "htexture/misc/XYZ.webp",
+            "hires/bgd/0259741A.webp",
+            "hires/deep/er/C5157461_3B.png",
+            "hires/deep/C5157461.png",
+            "hires/misc/ABCDEF01_8E.webp",
+            "hires/notes.txt",
+            "hires/misc/XYZ.webp",
             "room/1000/cut/12345678.webp",
         ]);
         let table = HdTable::scan(&pack);
@@ -1209,16 +1205,16 @@ mod tests {
         };
         assert_eq!(
             find(0x0259_741a).as_deref(),
-            Some("htexture/bgd/0259741A.webp")
+            Some("hires/bgd/0259741A.webp")
         );
         // The bare stem wins over a suffixed copy of the same hash.
         assert_eq!(
             find(0xc515_7461).as_deref(),
-            Some("htexture/deep/C5157461.png")
+            Some("hires/deep/C5157461.png")
         );
         assert_eq!(
             find(0xabcd_ef01).as_deref(),
-            Some("htexture/misc/ABCDEF01_8E.webp")
+            Some("hires/misc/ABCDEF01_8E.webp")
         );
         assert_eq!(find(0x1234_5678), None);
     }
@@ -1230,9 +1226,9 @@ mod tests {
         };
         let mut writer = crate::pack::PackWriter::new();
         for path in [
-            "htexture/hires/mask/BE528391.webp",
-            "htexture/hires/mask/C5157461.webp",
-            "htexture/hires/bgd/F9E129D5.webp",
+            "hires/hires/mask/BE528391.webp",
+            "hires/hires/mask/C5157461.webp",
+            "hires/hires/bgd/F9E129D5.webp",
         ] {
             writer.add(path, Vec::new()).unwrap();
         }
@@ -1247,13 +1243,11 @@ mod tests {
             0xd1d1_44a8,
             0xc515_7461,
         ]);
-        writer
-            .add("htexture/hires/cache/ROOM0000.dat", list)
-            .unwrap();
+        writer.add("hires/hires/cache/ROOM0000.dat", list).unwrap();
         // Not a room list: ignored.
         writer
             .add(
-                "htexture/hires/cache/notes.dat",
+                "hires/hires/cache/notes.dat",
                 words(&[0xbe52_8391, 0x1234_5678]),
             )
             .unwrap();
@@ -1280,7 +1274,7 @@ mod tests {
 
     #[test]
     fn the_first_named_candidate_wins_with_its_frame() {
-        let pack = pack_of(&["htexture/00000002.webp", "htexture/00000003.webp"]);
+        let pack = pack_of(&["hires/00000002.webp", "hires/00000003.webp"]);
         let table = HdTable::scan(&pack);
         let candidates = [
             Candidate {
@@ -1300,18 +1294,18 @@ mod tests {
             },
         ];
         let found = table.find(&candidates, String::new).unwrap();
-        assert_eq!(found.path, "htexture/00000003.webp");
+        assert_eq!(found.path, "hires/00000003.webp");
         assert_eq!(found.frame, [3, 3]);
     }
 
     #[test]
     fn a_named_only_pack_is_still_an_hd_pack() {
-        let pack = pack_of(&["htexture/item/0b.webp", "htexture/notes.txt"]);
+        let pack = pack_of(&["hires/item/0b.webp", "hires/notes.txt"]);
         let table = HdTable::scan(&pack);
         assert_eq!(table.len(), 1, "the named icon only");
         assert!(!table.is_empty(), "the named item icon makes it an HD pack");
         // A hash-shaped stem that is not hex is a name, not a hash.
-        let pack = pack_of(&["htexture/item/ZZZZZZZZ.webp"]);
+        let pack = pack_of(&["hires/item/ZZZZZZZZ.webp"]);
         assert!(!HdTable::scan(&pack).is_empty());
     }
 
@@ -1324,7 +1318,7 @@ mod tests {
         })
         .unwrap();
         let mut writer = crate::pack::PackWriter::new();
-        writer.add("htexture/misc/00000007.bmp", bmp).unwrap();
+        writer.add("hires/misc/00000007.bmp", bmp).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let candidates = [Candidate {
             hash: 7,
@@ -1350,7 +1344,7 @@ mod tests {
         })
         .unwrap();
         let mut writer = crate::pack::PackWriter::new();
-        writer.add("htexture/misc/00000007.bmp", bmp).unwrap();
+        writer.add("hires/misc/00000007.bmp", bmp).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let page = Candidate {
             hash: 7,
@@ -1376,17 +1370,13 @@ mod tests {
             .unwrap()
         };
         let mut writer = crate::pack::PackWriter::new();
+        writer.add("hires/item/0b/item.bmp", image(80, 60)).unwrap();
         writer
-            .add("htexture/item/0b/item.bmp", image(80, 60))
-            .unwrap();
-        writer
-            .add("htexture/data/item_all/01.bmp", image(160, 120))
+            .add("hires/data/item_all/01.bmp", image(160, 120))
             .unwrap();
         // A hash-named file still fills the hash table; a caller that names
         // its full stem can also find it by name.
-        writer
-            .add("htexture/hash/00000001.bmp", image(4, 4))
-            .unwrap();
+        writer.add("hires/hash/00000001.bmp", image(4, 4)).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let icon = named_replacement(&pack, "item/0b/item", [40, 30]).unwrap();
@@ -1985,14 +1975,14 @@ mod tests {
             (0x6666_6666, cameras[6].1),
         ] {
             writer
-                .add(&format!("htexture/mask/{hash:08X}.png"), replacement(rect))
+                .add(&format!("hires/mask/{hash:08X}.png"), replacement(rect))
                 .unwrap();
         }
         let list: Vec<u8> = [0x5555_5555, backgrounds[4][0].hash]
             .iter()
             .flat_map(|hash: &u32| hash.to_le_bytes())
             .collect();
-        writer.add("htexture/cache/ROOM1000.dat", list).unwrap();
+        writer.add("hires/cache/ROOM1000.dat", list).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let table = HdTable::scan(&pack);
         let paired: Vec<Option<u32>> = backgrounds

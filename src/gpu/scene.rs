@@ -63,7 +63,7 @@ pub unsafe trait Plain: Copy {}
 // SAFETY: the vertex types are `repr(C)` runs of `f32`/`u32` fields.
 unsafe impl Plain for MeshVertex {}
 unsafe impl Plain for SpriteVertex {}
-unsafe impl Plain for crate::htexture::ModelVertex {}
+unsafe impl Plain for crate::hires::ModelVertex {}
 // SAFETY: a bare integer.
 unsafe impl Plain for u16 {}
 // SAFETY: plain scalars and arrays of them, with no padding.
@@ -514,13 +514,13 @@ pub struct SpriteRun<'a> {
     pub count: u32,
     /// The camera background a mask run's page belongs to, which names the
     /// mask's HD replacement when its own hash doesn't
-    /// ([`crate::htexture::HdTable::paired_masks`]).
+    /// ([`crate::hires::HdTable::paired_masks`]).
     pub background: Option<&'a Image>,
     /// How an effect billboard meets the frame.
     pub op: render::EffectBlend,
     /// The HD composite an effect run's page is drawn from in place of its
     /// content-hash replacement ([`crate::effects::hd`]).
-    pub hd: Option<&'a crate::htexture::Replacement>,
+    pub hd: Option<&'a crate::hires::Replacement>,
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,

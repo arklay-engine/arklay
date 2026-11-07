@@ -59,7 +59,7 @@ pub struct ObjectAsset {
     /// The decoded 8bpp texture.
     pub texture: Texture8,
     /// The room-folder stem the pair was loaded from (`room/<id>/object/00`),
-    /// which names its HD replacement (`htexture/room/<id>/object/00`); `None`
+    /// which names its HD replacement (`hires/room/<id>/object/00`); `None`
     /// for a pair embedded in an RDT.
     pub hd_name: Option<String>,
 }

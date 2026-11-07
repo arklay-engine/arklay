@@ -1235,6 +1235,29 @@ pub fn read_manifest(path: &Path) -> Result<Option<manifest::Manifest>> {
     ))
 }
 
+/// Read one entry of the pack at `path` (an image or a directory) without
+/// loading the rest, as the launcher does for a pack's thumbnail. `None`
+/// when the pack has no such entry.
+pub fn read_entry(path: &Path, entry: &str) -> Result<Option<Vec<u8>>> {
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("failed to read pack {}", path.display()))?;
+    if metadata.is_dir() {
+        validate_path(entry)?;
+        let file = path.join(entry);
+        return match std::fs::read(&file) {
+            Ok(data) => Ok(Some(data)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err).with_context(|| format!("failed to read {}", file.display())),
+        };
+    }
+    let pack = Pack::open_streamed(path, metadata.len())
+        .with_context(|| format!("failed to read pack {}", path.display()))?;
+    if !pack.contains(entry) {
+        return Ok(None);
+    }
+    Ok(Some(pack.read(entry)?.into_owned()))
+}
+
 /// A parsed `.akpak` pack or directory pack, optionally layered over by mods.
 ///
 /// A plain [`Pack::open`] holds one pack image or indexes one directory;
@@ -1244,7 +1267,12 @@ pub fn read_manifest(path: &Path) -> Result<Option<manifest::Manifest>> {
 /// exactly the single-pack path.
 #[derive(Debug)]
 pub struct Pack {
+    /// The whole image, or for a streamed pack only its header, table of
+    /// contents and paths.
     data: Vec<u8>,
+    /// A streamed pack's image file: its entries are read from here on
+    /// demand instead of from `data`.
+    image: Option<std::fs::File>,
     entries: Vec<Entry>,
     lookup: HashMap<String, usize>,
     /// Parsed `manifest.toml`, when the pack carries one.
@@ -1258,9 +1286,9 @@ pub struct Pack {
     /// Requested display language (`--language`); the string catalog resolves
     /// it, falling back to the OS locale and then `en-US`.
     language: Option<String>,
-    /// `htexture/` replacements across the pack and its layers, indexed on
+    /// `hires/` replacements across the pack and its layers, indexed on
     /// first use.
-    htexture: std::sync::OnceLock<crate::htexture::HdTable>,
+    hires: std::sync::OnceLock<crate::hires::HdTable>,
 }
 
 impl Pack {
@@ -1278,12 +1306,57 @@ impl Pack {
         if metadata.is_dir() {
             return Self::open_dir(path);
         }
-        budget::check_len_u64(metadata.len(), budget::MAX_PACK_BYTES, "pack file size")
-            .with_context(|| format!("failed to read pack {}", path.display()))?;
-        let data = std::fs::read(path)
-            .with_context(|| format!("failed to read pack {}", path.display()))?;
-        let mut pack = Self::from_bytes(data)?;
+        // A mod (HD art, films) can be gigabytes and is mostly never read in
+        // one session, so it is streamed; a base pack is held in memory, as
+        // every room load reads from it.
+        let streamed = metadata.len() > budget::MAX_PACK_BYTES
+            || read_manifest(path)
+                .ok()
+                .flatten()
+                .is_some_and(|manifest| manifest.is_mod());
+        let mut pack = if streamed {
+            Self::open_streamed(path, metadata.len())
+        } else {
+            std::fs::read(path)
+                .with_context(|| format!("failed to read pack {}", path.display()))
+                .and_then(Self::from_bytes)
+        }
+        .with_context(|| format!("failed to read pack {}", path.display()))?;
         pack.source = Some(path.to_path_buf());
+        Ok(pack)
+    }
+
+    /// Open an image whose entries are read from the file on demand: only
+    /// the header, table of contents and paths are read here.
+    fn open_streamed(path: &Path, len: u64) -> Result<Self> {
+        budget::check_len_u64(len, budget::MAX_STREAMED_PACK_BYTES, "pack file size")?;
+        let file = std::fs::File::open(path)?;
+        let header = read_at(&file, 0, HEADER_LEN.min(len as usize))?;
+        if header.len() < HEADER_LEN {
+            bail!("pack is smaller than the header");
+        }
+        let entry_count = u32::from_le_bytes([header[6], header[7], header[8], header[9]]) as usize;
+        budget::check_len(entry_count, budget::MAX_PACK_ENTRIES, "pack entry count")?;
+        let toc_end = (HEADER_LEN + entry_count * ENTRY_LEN) as u64;
+        if toc_end > len {
+            bail!("pack table of contents is truncated");
+        }
+        let toc = read_at(&file, 0, toc_end as usize)?;
+        // The paths follow the table of contents and precede every entry's
+        // data, so they end where the first data range starts.
+        let paths_end = (0..entry_count)
+            .map(|index| read_u64(&toc[HEADER_LEN + index * ENTRY_LEN..], 8))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .filter(|&offset| offset >= toc_end)
+            .min()
+            .unwrap_or(toc_end)
+            .min(len);
+        budget::check_len_u64(paths_end, budget::MAX_PACK_BYTES, "pack table of contents")?;
+        let prefix = read_at(&file, 0, paths_end as usize)?;
+        let mut pack = Self::parse_image(prefix, len)?;
+        pack.image = Some(file);
+        pack.manifest = pack.read_manifest()?;
         Ok(pack)
     }
 
@@ -1308,6 +1381,7 @@ impl Pack {
         }
         let mut pack = Self {
             data: Vec::new(),
+            image: None,
             entries,
             lookup,
             manifest: None,
@@ -1315,7 +1389,7 @@ impl Pack {
             overlays: Vec::new(),
             warnings: Vec::new(),
             language: None,
-            htexture: std::sync::OnceLock::new(),
+            hires: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1457,7 +1531,7 @@ impl Pack {
                 .then_with(|| a.0.id.cmp(&b.0.id))
         });
         pack.overlays = applied.into_iter().map(|(_, layer)| layer).collect();
-        pack.htexture = std::sync::OnceLock::new();
+        pack.hires = std::sync::OnceLock::new();
         pack.warnings = warnings;
         Ok(pack)
     }
@@ -1469,11 +1543,22 @@ impl Pack {
             .own_paths()
             .filter(|path| *path != manifest::ENTRY)
             .peekable();
-        files.peek().is_some() && files.all(|path| path.starts_with(crate::htexture::ROOT))
+        files.peek().is_some() && files.all(|path| path.starts_with(crate::hires::ROOT))
     }
 
     /// Parse a pack from an in-memory image.
     pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
+        let len = data.len() as u64;
+        let mut pack = Self::parse_image(data, len)?;
+        pack.manifest = pack.read_manifest()?;
+        Ok(pack)
+    }
+
+    /// Parse an image's table of contents. `data` starts at the image's
+    /// first byte and holds at least its header, table of contents and
+    /// paths; `len` is the whole image's length, which bounds the data
+    /// ranges.
+    fn parse_image(data: Vec<u8>, len: u64) -> Result<Self> {
         budget::check_len_u64(data.len() as u64, budget::MAX_PACK_BYTES, "pack size")?;
         if data.len() < HEADER_LEN {
             bail!("pack is smaller than the header");
@@ -1529,6 +1614,8 @@ impl Pack {
             }
             validate_path(path)
                 .map_err(|err| anyhow!("entry {index} has an unsafe path: {err}"))?;
+            let path = current_name(path);
+            let path = path.as_ref();
             let key = path.to_ascii_lowercase();
             if lookup.contains_key(&key) {
                 bail!("duplicate pack entry: {path}");
@@ -1536,7 +1623,7 @@ impl Pack {
             let end = data_offset
                 .checked_add(length)
                 .with_context(|| format!("entry {index} data range overflows"))?;
-            if end > data.len() {
+            if end as u64 > len {
                 bail!("entry {index} data range {data_offset}..{end} is out of bounds");
             }
             lookup.insert(key, entries.len());
@@ -1549,8 +1636,9 @@ impl Pack {
             });
         }
 
-        let mut pack = Self {
+        Ok(Self {
             data,
+            image: None,
             entries,
             lookup,
             manifest: None,
@@ -1558,10 +1646,8 @@ impl Pack {
             overlays: Vec::new(),
             warnings: Vec::new(),
             language: None,
-            htexture: std::sync::OnceLock::new(),
-        };
-        pack.manifest = pack.read_manifest()?;
-        Ok(pack)
+            hires: std::sync::OnceLock::new(),
+        })
     }
 
     /// Read this pack's own `manifest.toml` entry, when it has one.
@@ -1576,9 +1662,18 @@ impl Pack {
         ))
     }
 
-    /// The readable bytes of one entry: read from disk for a directory pack,
-    /// borrowed when the image entry is raw, decompressed when it is zstd.
+    /// The readable bytes of one entry: read from disk for a directory or
+    /// streamed pack, borrowed when an in-memory image's entry is raw,
+    /// decompressed when it is zstd.
     fn entry_bytes<'a>(&'a self, entry: &Entry) -> Result<Cow<'a, [u8]>> {
+        if let Some(image) = &self.image {
+            let stored = read_at(image, entry.offset as u64, entry.length)
+                .with_context(|| format!("failed to read pack entry {}", entry.path))?;
+            return Ok(match entry.compression {
+                Compression::None => Cow::Owned(stored),
+                Compression::Zstd => Cow::Owned(decompress_zstd(&stored, &entry.path)?),
+            });
+        }
         if let Some(file) = &entry.file {
             let metadata = std::fs::metadata(file)
                 .with_context(|| format!("failed to read pack entry {}", entry.path))?;
@@ -1829,10 +1924,9 @@ impl Pack {
         self.entries.iter().map(|entry| entry.path.as_str())
     }
 
-    /// The `htexture/` replacements this pack and its layers carry.
-    pub fn htexture(&self) -> &crate::htexture::HdTable {
-        self.htexture
-            .get_or_init(|| crate::htexture::HdTable::scan(self))
+    /// The `hires/` replacements this pack and its layers carry.
+    pub fn hires(&self) -> &crate::hires::HdTable {
+        self.hires.get_or_init(|| crate::hires::HdTable::scan(self))
     }
 
     /// Original-case entry paths in table-of-contents order, or the merged
@@ -1923,7 +2017,7 @@ fn collect_directory(dir: &Path, prefix: &str, out: &mut Vec<Entry>) -> Result<(
         )?)
         .context("pack entry size does not fit in memory")?;
         out.push(Entry {
-            path: relative,
+            path: current_name(&relative).into_owned(),
             offset: 0,
             length,
             compression: Compression::None,
@@ -1939,6 +2033,23 @@ fn collect_directory(dir: &Path, prefix: &str, out: &mut Vec<Entry>) -> Result<(
 /// Paths must be non-empty and relative, must not contain backslashes, NUL
 /// bytes or `..` components. Both the writer and the reader enforce these
 /// rules, so an untrusted pack can never escape an extraction root.
+/// The HD texture folder's name before it was `hires/`; packs built with
+/// it still load.
+const LEGACY_HIRES_ROOT: &str = "htexture/";
+
+/// `path` under the names this build reads: an entry under the old
+/// [`LEGACY_HIRES_ROOT`] moves to [`crate::hires::ROOT`].
+fn current_name(path: &str) -> Cow<'_, str> {
+    match path.get(..LEGACY_HIRES_ROOT.len()) {
+        Some(prefix) if prefix.eq_ignore_ascii_case(LEGACY_HIRES_ROOT) => Cow::Owned(format!(
+            "{}{}",
+            crate::hires::ROOT,
+            &path[LEGACY_HIRES_ROOT.len()..]
+        )),
+        _ => Cow::Borrowed(path),
+    }
+}
+
 fn validate_path(path: &str) -> Result<()> {
     if path.is_empty() {
         bail!("pack entry path is empty");
@@ -1979,6 +2090,33 @@ fn read_u64(bytes: &[u8], at: usize) -> Result<u64> {
 }
 
 /// The readable bytes of one entry: borrowed when raw, decompressed when zstd.
+/// Read `len` bytes at `offset` of `file` without moving a shared cursor,
+/// so concurrent readers of one streamed pack never race.
+fn read_at(file: &std::fs::File, offset: u64, len: usize) -> Result<Vec<u8>> {
+    let mut buffer = budget::alloc::<u8>(len, "pack entry read")?;
+    buffer.resize(len, 0);
+    let mut done = 0;
+    while done < len {
+        #[cfg(unix)]
+        let read =
+            std::os::unix::fs::FileExt::read_at(file, &mut buffer[done..], offset + done as u64)?;
+        #[cfg(windows)]
+        let read = std::os::windows::fs::FileExt::seek_read(
+            file,
+            &mut buffer[done..],
+            offset + done as u64,
+        )?;
+        if read == 0 {
+            bail!(
+                "pack image ends at {} of a {len} byte read at {offset}",
+                offset + done as u64
+            );
+        }
+        done += read;
+    }
+    Ok(buffer)
+}
+
 fn entry_bytes<'a>(data: &'a [u8], entry: &Entry) -> Result<Cow<'a, [u8]>> {
     let stored = &data[entry.offset..entry.offset + entry.length];
     match entry.compression {
@@ -2590,6 +2728,88 @@ mod tests {
     }
 
     #[test]
+    fn hd_art_under_the_old_htexture_name_reads_as_hires() {
+        let mut writer = PackWriter::new();
+        writer
+            .add("htexture/bgd/0259741A.webp", b"art".to_vec())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert!(pack.contains("hires/bgd/0259741A.webp"));
+        assert!(!pack.contains("htexture/bgd/0259741A.webp"));
+        assert_eq!(*pack.read("hires/bgd/0259741a.webp").unwrap(), *b"art");
+        assert_eq!(current_name("room/htexture/x"), "room/htexture/x");
+    }
+
+    #[test]
+    fn a_mod_image_is_streamed_and_reads_like_one_in_memory() {
+        let dir = TempDir::new("streamed");
+        let path = dir.join("mod.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(manifest::ENTRY, mod_manifest("hd", "re1", 10))
+            .unwrap();
+        writer.add("movie/00.mp4", vec![5; 4096]).unwrap();
+        writer
+            .add("hires/bgd/0259741A.webp", b"art".repeat(500))
+            .unwrap();
+        writer.add("same.bin", b"art".repeat(500)).unwrap();
+        writer
+            .compress_entries(1, |path| path.ends_with(".mp4"))
+            .unwrap();
+        writer.write(&path).unwrap();
+
+        let streamed = Pack::open(&path).unwrap();
+        let memory = Pack::from_bytes(std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            read_entry(&path, "movie/00.mp4").unwrap(),
+            Some(vec![5; 4096])
+        );
+        assert_eq!(read_entry(&path, "missing.webp").unwrap(), None);
+        assert!(streamed.image.is_some() && memory.image.is_none());
+        assert!(streamed.data.len() < memory.data.len());
+        assert_eq!(streamed.manifest(), memory.manifest());
+        assert_eq!(
+            streamed.entries().collect::<Vec<_>>(),
+            memory.entries().collect::<Vec<_>>()
+        );
+        for path in memory.paths() {
+            assert_eq!(
+                *streamed.read(path).unwrap(),
+                *memory.read(path).unwrap(),
+                "{path}"
+            );
+        }
+
+        // A base pack is still held in memory.
+        let base = dir.join("base.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                manifest::ENTRY,
+                manifest::Manifest::base("re1").render().into_bytes(),
+            )
+            .unwrap();
+        writer.add("a.bin", vec![1, 2, 3]).unwrap();
+        writer.write(&base).unwrap();
+        assert!(Pack::open(&base).unwrap().image.is_none());
+    }
+
+    #[test]
+    fn a_streamed_image_cut_short_fails_to_open_or_read() {
+        let dir = TempDir::new("streamed-short");
+        let path = dir.join("mod.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(manifest::ENTRY, mod_manifest("hd", "re1", 10))
+            .unwrap();
+        writer.add("z.bin", vec![9; 64]).unwrap();
+        writer.write(&path).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, &bytes[..bytes.len() - 1]).unwrap();
+        assert!(Pack::open_streamed(&path, bytes.len() as u64 - 1).is_err());
+    }
+
+    #[test]
     fn a_directory_pack_indexes_and_reads_regular_files_lazily() {
         let dir = TempDir::new("directory");
         std::fs::create_dir_all(dir.join("room")).unwrap();
@@ -3055,6 +3275,7 @@ mod tests {
             start_angle: None,
             start_health: None,
             region: None,
+            ..manifest::Manifest::base("")
         }
         .render()
         .into_bytes()
@@ -3245,18 +3466,18 @@ mod tests {
             &hd,
             &[
                 (manifest::ENTRY, &mod_manifest("hd", "re1", 0)),
-                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+                ("hires/bgd/0a1b2c3d.webp", b"pixels"),
             ],
         );
         let pack = Pack::open_layered(&base, &[hd]).unwrap();
-        assert!(pack.contains("htexture/bgd/0a1b2c3d.webp"));
+        assert!(pack.contains("hires/bgd/0a1b2c3d.webp"));
 
         let rooms = dir.join("rooms.akpak");
         write_pack(
             &rooms,
             &[
                 (manifest::ENTRY, &mod_manifest("rooms", "re1", 0)),
-                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+                ("hires/bgd/0a1b2c3d.webp", b"pixels"),
                 ("room/100/room.scd", b"script"),
             ],
         );

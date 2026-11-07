@@ -58,6 +58,14 @@ fn size(tree: &Tree, id: NodeId, key: &str) -> Size {
     }
 }
 
+/// An image's `aspect`, `W:H` (`4:3`), as width over height.
+fn aspect(tree: &Tree, id: NodeId) -> Option<f32> {
+    let text = tree[id].text("aspect");
+    let (w, h) = text.trim().split_once(':')?;
+    let (w, h): (f32, f32) = (w.trim().parse().ok()?, h.trim().parse().ok()?);
+    (w > 0.0 && h > 0.0).then_some(w / h)
+}
+
 /// Whether a node takes part in layout: visible, and not something empty
 /// that would only leave a gap.
 pub fn present(tree: &Tree, id: NodeId) -> bool {
@@ -66,7 +74,11 @@ pub fn present(tree: &Tree, id: NodeId) -> bool {
         return false;
     }
     match node.kind {
-        Kind::Text | Kind::Badge | Kind::Prompt => !node.text("text").is_empty(),
+        // `reserve="line"` keeps an empty text's line, so a status that
+        // comes and goes (the focused row's warning) does not move the
+        // layout above it.
+        Kind::Text => !node.text("text").is_empty() || node.text("reserve") == "line",
+        Kind::Badge | Kind::Prompt => !node.text("text").is_empty(),
         Kind::Image => matches!(node.prop("src"), Value::Image(_)),
         Kind::Option(_) => node.attr("def").is_none() || node.prop("def") != &Value::Nil,
         Kind::Facts => node.prop("items").truthy(),
@@ -192,13 +204,32 @@ pub fn measure(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, avail: f32) -
         }
         Kind::Rule => (avail, cx.u(2.0).max(1.0)),
         Kind::Separator => (cx.u(1.0).max(1.0), cx.u(1.0).max(1.0)),
-        Kind::Image => {
-            let (w, h) = style::image_size(&variant);
-            (cx.u(w), cx.u(h))
-        }
-        Kind::Item | Kind::Option(_) => {
-            let h = style::row_height(kind, &variant).unwrap_or(66.0);
-            (avail, cx.u(h))
+        Kind::Image => match aspect(tree, id) {
+            // As wide as it may be, at its aspect ratio.
+            Some(ratio) => (avail, avail / ratio),
+            None => {
+                let (w, h) = style::image_size(&variant);
+                (cx.u(w), cx.u(h))
+            }
+        },
+        Kind::Item | Kind::Option(_) => match style::row_height(kind, &variant) {
+            Some(h) => (avail, cx.u(h)),
+            // A card is as tall as what it holds.
+            None => {
+                let pad = padding(tree, id, cx);
+                let inner = (avail - pad[1] - pad[3]).max(0.0);
+                let h: f32 = flow(tree, id)
+                    .into_iter()
+                    .map(|c| measure(tree, c, cx, inner).1)
+                    .sum();
+                (avail, h + pad[0] + pad[2])
+            }
+        },
+        Kind::List if list_columns(tree, id) > 1 => {
+            let children = flow(tree, id);
+            let gap = stack_gap(tree, id, cx);
+            let (_, h) = list_rows(tree, &children, list_columns(tree, id), gap, cx, avail);
+            (avail, h)
         }
         Kind::HintBar => (avail, cx.u(style::HINT_BAR_H)),
         Kind::Prompt => (avail, cx.u(style::PROMPT_H)),
@@ -485,16 +516,51 @@ fn anchor(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, inner: Rect) {
     }
 }
 
-fn arrange_list(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) {
-    let children = flow(tree, id);
-    let gap = stack_gap(tree, id, cx);
-    let mut heights = Vec::with_capacity(children.len());
+/// A list's `columns`: how many items share a row (a grid), at least one.
+pub fn list_columns(tree: &Tree, id: NodeId) -> usize {
+    let node = &tree[id];
+    let columns = match node.prop("columns") {
+        Value::Int(value) => *value,
+        _ => node.text("columns").trim().parse().unwrap_or(1),
+    };
+    columns.clamp(1, 16) as usize
+}
+
+/// A grid's cell width for a row `width` wide.
+fn cell_width(width: f32, columns: usize, gap: f32) -> f32 {
+    ((width - gap * (columns - 1) as f32) / columns as f32).max(0.0)
+}
+
+/// Each row's height in a list `width` wide (one item per row, or
+/// `columns` per row in a grid, the row as tall as its tallest cell) and
+/// their total with the gaps between.
+fn list_rows(
+    tree: &mut Tree,
+    children: &[NodeId],
+    columns: usize,
+    gap: f32,
+    cx: &mut LayoutCx<'_>,
+    width: f32,
+) -> (Vec<f32>, f32) {
+    let cell = cell_width(width, columns, gap);
+    let mut heights = Vec::with_capacity(children.len().div_ceil(columns));
     let mut total = 0.0;
-    for (i, &c) in children.iter().enumerate() {
-        let h = measure(tree, c, cx, rect.w).1;
+    for (i, row) in children.chunks(columns).enumerate() {
+        let h = row
+            .iter()
+            .map(|&c| measure(tree, c, cx, cell).1)
+            .fold(0.0, f32::max);
         heights.push(h);
         total += h + if i > 0 { gap } else { 0.0 };
     }
+    (heights, total)
+}
+
+fn arrange_list(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) {
+    let children = flow(tree, id);
+    let gap = stack_gap(tree, id, cx);
+    let columns = list_columns(tree, id);
+    let (mut heights, mut total) = list_rows(tree, &children, columns, gap, cx, rect.w);
     // Keep room for the scrollbar when it shows.
     let width = if total > rect.h + 0.5 || scrollbar_always(tree, id) {
         rect.w - cx.u(style::SCROLLBAR_ROOM)
@@ -502,27 +568,29 @@ fn arrange_list(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) 
         rect.w
     };
     if (width - rect.w).abs() > f32::EPSILON {
-        heights.clear();
-        total = 0.0;
-        for (i, &c) in children.iter().enumerate() {
-            let h = measure(tree, c, cx, width).1;
-            heights.push(h);
-            total += h + if i > 0 { gap } else { 0.0 };
-        }
+        (heights, total) = list_rows(tree, &children, columns, gap, cx, width);
     }
     tree[id].content = total;
+    let cell = cell_width(width, columns, gap);
     // Lay out at offset zero first to find the focused row.
     let lay = |tree: &mut Tree, scroll: f32, cx: &mut LayoutCx<'_>| {
         let mut y = rect.y - scroll;
-        for (&c, &h) in children.iter().zip(&heights) {
-            arrange(tree, c, cx, Rect::new(rect.x, y, width, h));
+        for (row, &h) in children.chunks(columns).zip(&heights) {
+            for (column, &c) in row.iter().enumerate() {
+                let (x, w) = if columns == 1 {
+                    (rect.x, width)
+                } else {
+                    (rect.x + column as f32 * (cell + gap), cell)
+                };
+                arrange(tree, c, cx, Rect::new(x, y, w, h));
+            }
             y += h + gap;
         }
     };
     // The wheel scrolls the list a couple of rows a notch, wherever the
     // focus is.
     let wheel = std::mem::take(&mut tree[id].wheel);
-    let row = total / children.len().max(1) as f32;
+    let row = total / heights.len().max(1) as f32;
     let scroll = (tree[id].scroll - wheel * row * 2.0).clamp(0.0, (total - rect.h).max(0.0));
     lay(tree, scroll, cx);
     let mut want = scroll;

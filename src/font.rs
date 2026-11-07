@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use crate::htexture::Replacement;
+use crate::hires::Replacement;
 use crate::model::{PALETTE_ROW_LEN, Texture8};
 use crate::pack::{AssetClass, Pack};
 use crate::render::{Framebuffer, SpriteDraw};
@@ -110,12 +110,11 @@ fn load_with(pack: &Pack, id: u8, def: FontDef) -> Option<Font> {
     match crate::assets::decode_texture(&asset, crate::assets::Geometry::Shipped) {
         Ok(texture) => {
             let mut font = Font::new(texture, def);
-            if !pack.htexture().is_empty() {
-                let candidates = crate::htexture::font_candidates(&font.texture);
-                font.hd = crate::htexture::replacement(pack, &candidates, || {
-                    format!("{stem} glyph page")
-                })
-                .map(HdGlyphs::new);
+            if !pack.hires().is_empty() {
+                let candidates = crate::hires::font_candidates(&font.texture);
+                font.hd =
+                    crate::hires::replacement(pack, &candidates, || format!("{stem} glyph page"))
+                        .map(HdGlyphs::new);
             }
             Some(font)
         }

@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::htexture::{Model, QuadImage, Recoloured, Replacement};
+use crate::hires::{Model, QuadImage, Recoloured, Replacement};
 
 /// The atlas's width in texels.
 pub const ATLAS_WIDTH: u32 = 2048;

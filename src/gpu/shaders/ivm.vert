@@ -1,5 +1,5 @@
 #version 450
-// A model the CPU has already projected (`htexture::Model`): the examine
+// A model the CPU has already projected (`hires::Model`): the examine
 // viewer's item, drawn into its own target with `mesh.frag`. Positions arrive
 // in clip space over the target and the colour already lit.
 
