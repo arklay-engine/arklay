@@ -897,6 +897,19 @@ expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
 [[run]]
+name = "alligator_dive_40a"
+room = "40A"
+sound = false
+ticks = 2400
+# as alligator_end_40a with the magnum: the player turns to the alligator and fires every 20 ticks, through its knocks; hurt below 25000 while it rests at the corridor's end in cut 8, it dives (FUN_0046a2a0)
+setup_script = "alligator_dive_40a.lua"
+input = "alligator_dive.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200 --equip 5 --give 0:5:200"
+
+[[run]]
 name = "route_100_200_fight"
 room = "new"
 offset = 0
