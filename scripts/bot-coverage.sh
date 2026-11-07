@@ -19,12 +19,12 @@ cd "$(dirname "$0")/.."
 
 # name:space-separated K=V list (empty: the defaults).
 COMBOS=(
-  "default:"                                   # Yes, Yes, Follow: Barry ending
+  "default:"                                   # Yes, Yes, Follow, Chris freed: Best ending
   "richard-leave:richard=leave"                # Richard dies in 20D
   "cave-yes-no:cave_q2=no"                     # Barry goes with Jill: Barry's branch
-  "cave-no-yes:cave_q1=no"                     # Barry alone: Tell my family (lab)
+  "cave-no-yes:cave_q1=no"                     # Barry alone: Tell my family (lab); Chris ending
   "cave-no-no:cave_q1=no cave_q2=no"           # Barry ahead (as Yes, Yes), Follow
-  "cave-backtrack:cave_exit=backtrack"         # Tell my family (cave)
+  "cave-backtrack:cave_exit=backtrack"         # Tell my family (cave); Chris ending
   "vjolt:vjolt=yes"                            # V-JOLT on Plant 42's root, no Barry in 40C
   "chemical:barry_early=chemical"              # Barry's acid rounds; Barry burns Plant 42
   "sandwich:sandwich=yes"                      # Jill Sandwich: Barry's rescue in 115
