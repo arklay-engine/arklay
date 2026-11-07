@@ -604,6 +604,11 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_damage_cnt", |_, e, ()| Ok(e.em().world.pl.damage_cnt));
+        // The player's `Spd_x`, `Spd_y` and `Spd_z`.
+        methods.add_method_mut("pl_speed", |_, e, ()| {
+            let [x, y, z] = e.em().world.pl.spd;
+            Ok((x, y, z))
+        });
         // The player's `pSub1_kan_t_ptr` and `pSub1_seq_t_ptr` become this
         // body's (its model's second bank), for `Pl_damage`'s falls.
         // The player's `Move_no`, `Move_cnt` and `Hokan_flg` on `pSub1`'s
@@ -996,6 +1001,10 @@ impl UserData for Api {
         });
         methods.add_method_mut("pl_set_routine_at", |_, e, (index, value): (i64, i64)| {
             e.em().world.pl.routine[routine_index(index)?] = value as u8;
+            Ok(())
+        });
+        methods.add_method_mut("pl_or_neck_flags", |_, e, bits: i64| {
+            e.em().world.pl.neck.flags |= bits as u8;
             Ok(())
         });
         methods.add_method_mut("pl_or_be_flg", |_, e, bits: i64| {

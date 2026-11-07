@@ -1251,6 +1251,20 @@ expect = "match"
 record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 200"
 
 [[run]]
+name = "g2_fight_509"
+room = "509"
+character = 0
+sound = false
+ticks = 3000
+# as g2_scene_509, then G2 fights the player, who stands still with life to spare
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 2000, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_fight_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000"
+
+[[run]]
 name = "route_claire_a_fight"
 room = "new"
 character = 1

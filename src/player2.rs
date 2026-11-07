@@ -3724,6 +3724,10 @@ impl Mover<'_, '_> {
             self.em30_killed(held);
             return;
         }
+        if held.holder_id == crate::zombie2::G2_ID {
+            self.em31_held(held);
+            return;
+        }
         if matches!(
             held.holder_id,
             crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
@@ -4450,6 +4454,33 @@ impl Mover<'_, '_> {
             self.work.be_flg |= 2;
             self.work.routine[2] = 2;
         }
+    }
+
+    /// `FUN_004960d0`, `em_damage_table[0x31]`'s `Routine_1` 0: in G2's hand
+    /// on its clip 0, turning to it, while G2's grab carries the player.
+    /// `fg_status`'s `0x40` isn't ported, nor are its `Routine_1` 2 to 4, the
+    /// kill.
+    fn em31_held(&mut self, held: &mut Held<'_>) {
+        if matches!(self.work.routine[1], 2..=4) {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.bank = Bank::Held;
+                self.held_clip(0, 3);
+                self.work.routine[2] = 1;
+                self.work.neck.flags = 1;
+                self.work.sounds.push(0x400_0001);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.work.bank = Bank::Held;
+        self.work.move_cnt = 0;
+        self.joint_move_late(0x400);
+        let [x, _, z] = held.holder;
+        let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
+        self.player.angle = goto(self.player.angle, target, 0x100);
     }
 
     /// `FUN_0045a880`: held from the front or the back, standing.
