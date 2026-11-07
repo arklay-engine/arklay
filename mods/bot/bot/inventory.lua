@@ -271,7 +271,12 @@ local REARM = "rearm: a boxed gun's ammunition is at hand"
 local CURE = "a cure for the poison"
 BotInventory.CURE = CURE
 -- The reasons that take any free slot and are worth a remote trip.
-local FIRST = { [LOADOUT] = true, [REARM] = true, [CURE] = true }
+-- A boxed reserve gun (the grenade launcher) taken out at a box the bot is
+-- at anyway while no held firearm has a round: in 88 of 124 room visits
+-- that ran past monsters with "no firearm with rounds", the launcher lay
+-- in the box and the handgun was empty.
+local REARM_HERE = "rearm: no held firearm has a round"
+local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true, [CURE] = true }
 
 -- The free slots a top-up withdrawal must leave.
 local function slots_to_leave()
@@ -311,6 +316,10 @@ function BotInventory.wanted_back(row, ctx)
     end
     if ctx.rearm and ctx.rearm[item] then
         return REARM
+    end
+    -- Only at a box here, never a trip of its own (ctx.reserve_only).
+    if ctx.rearm_here and ctx.rearm_here[item] and not ctx.reserve_only then
+        return REARM_HERE
     end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
@@ -629,6 +638,20 @@ function BotInventory.context(bot)
             end
         end
     end
+    -- The only held firearm with a round is no spare gun (the staple goes
+    -- last, so the loaded launcher went in before the empty handgun, and
+    -- the box rearm took it out again: REARM_HERE).
+    local loaded_guns = {}
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        local ammo = bot:ammo_for(id)
+        if not row.melee and bot:has_item(id)
+            and bot:item_count(id) + (ammo and bot:item_count(ammo) or 0) > 0 then
+            loaded_guns[#loaded_guns + 1] = id
+        end
+    end
+    if #loaded_guns == 1 and ctx.spare_guns then
+        ctx.spare_guns[loaded_guns[1]] = nil
+    end
     -- With a reserve gun (the launcher) or nothing equipped, one ordinary
     -- firearm is not spare: the swap boxed the shotgun and then the
     -- handgun behind the launcher, and the lab's zombies met an empty
@@ -693,6 +716,25 @@ function BotInventory.context(bot)
                 ctx.rearm = ctx.rearm or {}
                 ctx.rearm[id] = true
                 ctx.rearm[ammo] = true
+            end
+        end
+    end
+    -- The rearm at a box here (REARM_HERE): a reserve gun, while no held
+    -- firearm has a round.
+    if knowledge then
+        local loaded = false
+        for _, row in ipairs(bot:menu().items or {}) do
+            local gun = row.kind == "weapon" and knowledge.weapons[row.item]
+            if gun and not gun.melee then
+                local ammo = bot:ammo_for(row.item)
+                loaded = loaded or row.quantity > 0 or (ammo ~= nil and bot:item_count(ammo) > 0)
+            end
+        end
+        local box = BotInventory.remembered(bot)
+        for id, row in pairs(loaded and {} or knowledge.weapons) do
+            if row.reserve and not row.melee and box[id] and not bot:has_item(id) then
+                ctx.rearm_here = ctx.rearm_here or {}
+                ctx.rearm_here[id] = true
             end
         end
     end
