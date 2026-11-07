@@ -357,17 +357,39 @@ def ensure_pack(args, out: Path) -> Path:
             raise SystemExit(f"re2-regress: pack {pack} does not exist")
         return pack
     pack = out / "re2.akpak"
-    if pack.exists():
+    stamp = out / "re2.akpak.stamp"
+    want = pack_stamp(args.arklay)
+    if pack.exists() and stamp.exists() and stamp.read_text() == want:
         return pack
     game = args.game or os.environ.get("ARKLAY_RE2_ROOT")
     if not game:
+        if pack.exists():
+            print(f"re2-regress: {pack} may be stale (built by another arklay or from other game scripts); "
+                  "pass --game to convert it again", flush=True)
+            return pack
         raise SystemExit("re2-regress: no --pack, and no --game or ARKLAY_RE2_ROOT to convert one from")
-    print(f"converting {game} to {pack} (once)", flush=True)
+    why = "once" if not pack.exists() else "again: the arklay binary or games/re2 changed"
+    print(f"converting {game} to {pack} ({why})", flush=True)
+    stamp.unlink(missing_ok=True)
     subprocess.run(
         [str(args.arklay), "convert-game", game, "--game", "re2", "--out", str(pack)],
         cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
     )
+    stamp.write_text(want)
     return pack
+
+
+def pack_stamp(arklay: Path) -> str:
+    """What a converted pack depends on in this checkout: the arklay binary that
+    converted it (the converter) and every file under games/re2 (the scripts it
+    packs). A pack whose stamp differs is converted again."""
+    digest = hashlib.sha256()
+    digest.update(Path(arklay).read_bytes())
+    scripts = ROOT / "games" / "re2"
+    for path in sorted(p for p in scripts.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(scripts)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest() + "\n"
 
 
 def check_out(path: str) -> Path:
