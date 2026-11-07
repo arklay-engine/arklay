@@ -2114,6 +2114,8 @@ impl Launcher {
             no_autosave: !self.config.game.autosave,
             // Only the command line runs in authentic mode.
             authentic: false,
+            // The title chooses.
+            new_game: crate::ui::NewGameChoice::default(),
         };
         // The new renderer's window stays black until the game's first frame.
         if let Err(err) = display.present_black() {

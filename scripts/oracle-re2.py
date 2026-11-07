@@ -134,14 +134,38 @@ def press(tick: int, button: str) -> list[tuple[int, int]]:
     return [(tick, BUTTONS[button]), (tick + 3, 0)]
 
 
-TITLE = press(200, "down") + press(240, "confirm")
-ROUTES = {
-    "leon": TITLE + [entry for tick in range(400, BOOT_TICKS, 60) for entry in press(tick, "confirm")],
-    "claire": TITLE + press(340, "right") + [
-        entry for tick in range(400, BOOT_TICKS, 60) for entry in press(tick, "confirm")
-    ],
-}
 CHARACTERS = {"leon": 0, "claire": 1}
+DIFFICULTIES = ("normal", "easy", "hard")
+
+
+def title_route(start: str, difficulty: str = "normal", arrange: bool = False) -> list[tuple[int, int]]:
+    """The title screen to play: ORIGINAL MODE (one down) or ARRANGE MODE (two), the character, then the difficulty.
+    The difficulty's rows have NORMAL and EASY side by side and HARD under NORMAL (oracle/re2.md, "The new-game
+    choice"). The gaps are at least those the `newgame_*` boot recordings prove: 40 ticks from a confirm to the
+    next page's first press, and 30 from a press to the confirm."""
+    route = press(200, "down")
+    route += press(240, "down") + press(280, "confirm") if arrange else press(240, "confirm")
+    if start == "claire":
+        route += press(340, "right")
+    route += press(400, "confirm")
+    first = 460
+    if difficulty != "normal":
+        route += press(440, "down" if difficulty == "hard" else "right")
+        first = 480
+    # The confirms go on until play begins: the ones after the difficulty's skip the loading.
+    return route + [entry for tick in range(first, BOOT_TICKS, 60) for entry in press(tick, "confirm")]
+
+
+def choice_state(difficulty: str, arrange: bool) -> tuple[int, int, int]:
+    """What the choice leaves when play begins: `fg_system` masked to `FG_SYSTEM_CHOICE` (the difficulty confirm's
+    `0x20000`, EASY's `0x20`, ARRANGE MODE's `0x40`), `hard_mode` and `censorship_off`."""
+    fg = 0x20000 | (0x20 if difficulty == "easy" else 0) | (0x40 if arrange else 0)
+    return fg, int(difficulty == "hard"), int(arrange)
+
+
+def choice_args(args: argparse.Namespace) -> list[str]:
+    """arklay's options for the same choice."""
+    return ["--difficulty", args.difficulty] + (["--arrange"] if args.arrange else [])
 # What the two engines can compare today. arklay's random stream, fades and frames
 # aren't RE2's yet.
 RE2_FIELDS = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot"
@@ -977,8 +1001,8 @@ Session = WindowsSession if WINDOWS else WineSession
 
 
 def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: float = 0.0) -> None:
-    """Record `args.ticks` ticks of play from the title route `args.start`."""
-    route = ROUTES[args.start]
+    """Record `args.ticks` ticks of play from the title route `args.start`, `args.difficulty` and `args.arrange`."""
+    route = title_route(args.start, args.difficulty, args.arrange)
     entries = parse_input(Path(args.input) if args.input else None)
     if args.shot_dir:
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
@@ -1025,6 +1049,17 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         cursor = 0
                         pad = 0
                         print(f"play begins {boot_tick} ticks after boot")
+                        # A route that missed a press would record the wrong game silently.
+                        chosen = (
+                            game.u32(FG_SYSTEM) & FG_SYSTEM_CHOICE, game.u8(HARD_MODE), game.u8(CENSORSHIP_OFF),
+                        )
+                        wanted = choice_state(args.difficulty, args.arrange)
+                        print("choice: fg_system {:x}, hard_mode {}, censorship_off {}".format(*chosen))
+                        if chosen != wanted:
+                            raise SystemExit(
+                                "the title route chose fg_system {:x}, hard_mode {}, censorship_off {}, not {:x}, {}, {}"
+                                .format(*chosen, *wanted)
+                            )
                         if music_log:
                             music_log.write(f"bgm_tbl {game.read(BGM_TBL, 284).hex()}\n")
                         for flag in args.flag:
@@ -1222,7 +1257,7 @@ def scenario_command(args: argparse.Namespace) -> int:
     record(args, ref_trace, Path(args.work).resolve())
     command = [
         args.arklay, args.pack, "--ui", "game", "--character", str(CHARACTERS[args.start]),
-        "--ticks", str(args.ticks), "--no-mods", "--trace", str(ark_trace),
+        "--ticks", str(args.ticks), "--no-mods", "--trace", str(ark_trace), *choice_args(args),
     ]
     if args.input:
         command += ["--input", args.input]
@@ -1256,7 +1291,7 @@ def pixels_command(args: argparse.Namespace) -> int:
     command = [
         str(Path(args.arklay).resolve()), str(Path(args.pack).resolve()), "--ui", "game",
         "--character", str(CHARACTERS[args.start]),
-        "--ticks", str(args.ticks), "--no-mods", "--trace", str(out / "ark.trace"),
+        "--ticks", str(args.ticks), "--no-mods", "--trace", str(out / "ark.trace"), *choice_args(args),
         "--capture-every", str(args.every), "--capture-dir", str(ark_dir),
     ]
     arklay_input = args.arklay_input or args.input
@@ -1345,7 +1380,15 @@ def main() -> int:
     def common(command: argparse.ArgumentParser) -> None:
         command.add_argument("--game", default=None)
         command.add_argument("--work", default="target/oracle-re2/run")
-        command.add_argument("--start", choices=sorted(ROUTES), default="leon")
+        command.add_argument("--start", choices=sorted(CHARACTERS), default="leon")
+        command.add_argument(
+            "--difficulty", choices=DIFFICULTIES, default="normal",
+            help="the new game's difficulty: NORMAL, EASY, or HARD (`hard_mode`)",
+        )
+        command.add_argument(
+            "--arrange", action="store_true",
+            help="ARRANGE MODE rather than ORIGINAL MODE (`censorship_off`, `fg_system`'s 0x40)",
+        )
         command.add_argument("--input", default=None)
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)

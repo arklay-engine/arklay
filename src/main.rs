@@ -195,6 +195,22 @@ struct Cli {
     #[arg(long, requires = "pack", conflicts_with = "fmv")]
     authentic: bool,
 
+    /// An RE2 new game's difficulty, as the title's choice sets it, for a
+    /// game this run starts (`--ui game`, `--room`): normal, easy or hard
+    #[arg(
+        long,
+        value_enum,
+        value_name = "LEVEL",
+        default_value = "normal",
+        requires = "pack"
+    )]
+    difficulty: DifficultyArg,
+
+    /// An RE2 new game in ARRANGE MODE rather than ORIGINAL MODE
+    /// (`censorship_off`), for a game this run starts
+    #[arg(long, requires = "pack")]
+    arrange: bool,
+
     /// Render one frame to a file and exit (headless testing)
     #[arg(long, value_name = "FILE", requires = "pack")]
     capture: Option<PathBuf>,
@@ -388,6 +404,23 @@ fn parse_msaa(text: &str) -> Result<u32, String> {
 enum RendererArg {
     Software,
     Gpu,
+}
+
+/// The `--difficulty` choices.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum DifficultyArg {
+    Normal,
+    Easy,
+    Hard,
+}
+
+/// The new-game choice `--difficulty` and `--arrange` make.
+fn new_game_choice(difficulty: DifficultyArg, arrange: bool) -> arklay::ui::NewGameChoice {
+    arklay::ui::NewGameChoice {
+        easy: difficulty == DifficultyArg::Easy,
+        hard_mode: difficulty == DifficultyArg::Hard,
+        censorship_off: arrange,
+    }
 }
 
 /// The `convert-game --game` choices.
@@ -1361,6 +1394,7 @@ fn main() -> Result<()> {
                 // A scripted run never writes into the save directory.
                 no_autosave: !config.game.autosave || tracing || cli.input.is_some(),
                 authentic: cli.authentic,
+                new_game: new_game_choice(cli.difficulty, cli.arrange),
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {
@@ -1648,6 +1682,34 @@ mod tests {
         assert!(quick_turn_enabled(Some(true), false, true));
         assert!(!quick_turn_enabled(Some(false), true, false));
         assert!(!quick_turn_enabled(Some(false), true, true));
+    }
+
+    #[test]
+    fn the_cli_takes_the_new_game_choice() {
+        let cli =
+            Cli::try_parse_from(["arklay", "game.akpak", "--difficulty", "hard", "--arrange"])
+                .unwrap();
+        assert_eq!(
+            new_game_choice(cli.difficulty, cli.arrange),
+            arklay::ui::NewGameChoice {
+                easy: false,
+                hard_mode: true,
+                censorship_off: true,
+            }
+        );
+        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--difficulty", "easy"]).unwrap();
+        assert_eq!(
+            new_game_choice(cli.difficulty, cli.arrange),
+            arklay::ui::NewGameChoice {
+                easy: true,
+                ..Default::default()
+            }
+        );
+        let cli = Cli::try_parse_from(["arklay", "game.akpak"]).unwrap();
+        assert_eq!(
+            new_game_choice(cli.difficulty, cli.arrange),
+            arklay::ui::NewGameChoice::default()
+        );
     }
 
     #[test]
