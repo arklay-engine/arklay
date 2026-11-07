@@ -822,10 +822,9 @@ sound = false
 ticks = 1594
 # in the scene's area: the scene, the alligator's entry, its rests and swims up the corridor,
 # its boxes' push, four snaps that throw the player on from behind, the player's death.
-# `rng` is left out: the scene's splashes (effect behaviour 0x52) aren't ported (docs/re2-deviations.md)
 setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
 input = "none.txt"
-fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = { tick = 1219, fields = ["p.z"], note = "the dead player's body is pushed a unit off: the alligator's neck aims at the dying player's head, which arklay places differently (docs/re2-deviations.md)" }
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
@@ -839,7 +838,7 @@ ticks = 1605
 setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
 input = "alligator_face.txt"
 input_shift = 344
-fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
