@@ -1,0 +1,53 @@
+# The new game's choice in play: HARD (`hard_mode`) and ARRANGE MODE (`censorship_off`), which the runner passes to
+# both engines as `--difficulty` and `--arrange` (oracle/re2.md, "Items" and "The new-game choice").
+
+# HARD, ARRANGE MODE: room 102's rounds are 15 (the room's script reads `ck 0:25`). `Sce_Item` rewrites the area to
+# 10 for the check, and `St_get_item` rewrites it again at the take, to 20: the inventory gets 20.
+[[run]]
+name = "item_take_arrange_hard"
+difficulty = "hard"
+arrange = true
+setup_script = "item_102.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+# HARD, ORIGINAL MODE: the area's 30 rounds come in as 20 (30 to 20 at the check, 20 at the take).
+[[run]]
+name = "item_take_hard"
+difficulty = "hard"
+setup_script = "item_102.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+# HARD, ARRANGE MODE, onto a stack of 240: the check sees 10 and picks the stack, the take adds 20, and the byte
+# add wraps to 4.
+[[run]]
+name = "item_merge_wrap_arrange_hard"
+difficulty = "hard"
+arrange = true
+setup_script = "item_merge_wrap_102.lua"
+input = "item_take_102_arklay.txt"
+ticks = 1000
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x14:240"
+
+# HARD: room 200's 30 rounds on the counter come in as 20, and the empty handgun's reload from them leaves 2. The
+# setup's `Rnd` is the one HARD's title route leaves, which the dropped magazine's bounces draw from.
+[[run]]
+name = "weapon_pickup_200_hard"
+difficulty = "hard"
+room = "200"
+setup_script = "weapon_pickup_200_hard.lua"
+input = "weapon_pickup_200.txt"
+input_shift = 344
+ticks = 1300
+fields = "item"
+expect = "match"
+record = "--no-enemies --warp 200:-8950:-1800:-700:3072 --flag 4:6 --life 200 --give 0:2:1"
