@@ -364,6 +364,8 @@ const DOG_STUCK: usize = 18;
 pub(crate) const DOG_GROUND: usize = 20;
 /// Part 4's place, which `Game_loop`'s `Joint_trans2` left there between ticks.
 pub(crate) const DOG_JAW: usize = 21;
+/// The alligator, `Em_23`, whose script is `enemy/23/enemy.lua`.
+pub const ALLIGATOR_ID: u8 = 0x23;
 /// The giant spider, `Em_25`, whose script is `enemy/25/enemy.lua`.
 pub const SPIDER_ID: u8 = 0x25;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
@@ -757,6 +759,17 @@ pub struct World<'a> {
     pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
     pub water: Vec<WaterArea>,
+    /// The flag banks as the tick began. Only the alligator's world has them.
+    pub banks: Vec<[u32; 8]>,
+    /// Flags a script set or cleared: bank, index and `set`'s operation.
+    pub flag_ops: Vec<(u8, u8, u8)>,
+    /// Bits a script cleared in `fg_status`'s first word.
+    pub status_and_not: u32,
+    /// `Cut_change`: the camera cut a script switched to.
+    pub cut: Option<u8>,
+    /// The room's objects' places (`obj_model_set`). Only the alligator's
+    /// world has them.
+    pub objects: Vec<[i32; 3]>,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
@@ -1003,6 +1016,23 @@ impl Em<'_, '_, '_> {
         }
     }
 
+    /// `Em_23`, which leaves the rest to its script. It doesn't run
+    /// `Sca_ck_em` or `Oba_ck_em`: its boxes push the others instead
+    /// (`Oba_ck_hit` of each work against it), which isn't ported yet.
+    fn run_alligator(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        // The parts' `+0x5C` that `Game_loop`'s `Joint_trans` left, which its
+        // reach (`FUN_00469750`) measures from.
+        self.z.parts = self.mover.posed_parts();
+        self.script();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1126,6 +1156,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == YOUNG_ID {
             self.run_young();
+            return;
+        }
+        if self.mover.tick.id == ALLIGATOR_ID {
+            self.run_alligator();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

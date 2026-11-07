@@ -1064,8 +1064,58 @@ impl UserData for Api {
         methods.add_method_mut("draw_buffer", |_, e, ()| Ok(e.em().world.draw_buffer));
         methods.add_method_mut("room_code", |_, e, ()| Ok(e.em().world.room_code));
         methods.add_method_mut("set_status", |_, e, bits: i64| {
-            e.em().world.status_or |= bits as u32;
+            let world = &mut e.em().world;
+            world.status_or |= bits as u32;
+            world.status_and_not &= !(bits as u32);
             Ok(())
+        });
+        methods.add_method_mut("clear_status", |_, e, bits: i64| {
+            let world = &mut e.em().world;
+            world.status_and_not |= bits as u32;
+            world.status_or &= !(bits as u32);
+            Ok(())
+        });
+        // Whether any of `bits` is set in `fg_status`'s first word.
+        methods.add_method_mut("status", |_, e, bits: i64| {
+            let world = &e.em().world;
+            let word = world
+                .banks
+                .get(usize::from(crate::scd2::host::STATUS_BANK))
+                .map_or(0, |words| words[0]);
+            Ok((word | world.status_or) & !world.status_and_not & bits as u32 != 0)
+        });
+        // `Flg_ck` of a flag bank, with what the script changed this tick.
+        methods.add_method_mut("flag", |_, e, (bank, index): (u8, u8)| {
+            let world = &e.em().world;
+            if let Some(&(_, _, op)) = world
+                .flag_ops
+                .iter()
+                .rev()
+                .find(|&&(b, i, _)| b == bank && i == index)
+            {
+                return Ok(op == 1);
+            }
+            Ok(world.banks.get(usize::from(bank)).is_some_and(|words| {
+                words[usize::from(index >> 5) & 7] & (0x8000_0000 >> (index & 31)) != 0
+            }))
+        });
+        methods.add_method_mut("set_flag", |_, e, (bank, index, on): (u8, u8, bool)| {
+            e.em().world.flag_ops.push((bank, index, u8::from(on)));
+            Ok(())
+        });
+        // `Cut_change`.
+        methods.add_method_mut("cut_change", |_, e, cut: u8| {
+            e.em().world.cut = Some(cut);
+            Ok(())
+        });
+        // Where object `index` of the room (`obj_model_set`) stands.
+        methods.add_method_mut("object_pos", |_, e, index: usize| {
+            let [x, y, z] = e.em().world.objects.get(index).copied().unwrap_or_default();
+            Ok((x, y, z))
+        });
+        // The player's `At_em_flg`: a body touched them this tick.
+        methods.add_method_mut("player_touched", |_, e, ()| {
+            Ok(e.em().world.pl.at_em_flg != 0)
         });
         methods.add_method_mut("set_player_angle", |_, e, angle: i64| {
             e.em().world.turn_player = Some(angle as u16 & 0xFFF);
@@ -1472,9 +1522,10 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 9] = [
+    const SCRIPTS: [&str; 10] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
+        include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
@@ -2372,5 +2423,164 @@ mod tests {
         assert_eq!(young.get("died"), 0);
         let young = run_young(0x2002, &[], 2, setup);
         assert_eq!((young.get("died"), young.get("be")), (1, 0));
+    }
+
+    /// A stand-in for the work, enough for `enemy/23/enemy.lua`'s init, wait,
+    /// entry and swim. Each clip ends after `CLIP_LEN` steps.
+    const ALLIGATOR_STUB: &str = "
+        w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, be = 1, angle = 1024,
+            pos = { 5706, 3000, -5316 }, move_no = 0, move_cnt = 0, status = 0,
+            cleared = 0, cuts = {}, steps = 0, sce = SCE, moved = 0 }
+        e = {}
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:set_life(v) w.life = v end
+        function e:move_no() return w.move_no end
+        function e:move_cnt() return w.move_cnt end
+        function e:set_move_no(v) w.move_no = v end
+        function e:clip(n, c) w.move_no = n; w.move_cnt = c; w.steps = 0 end
+        function e:joint()
+            w.steps = w.steps + 1
+            w.move_cnt = w.move_cnt + 1
+            return w.steps >= CLIP_LEN
+        end
+        function e:add_speed_xz() w.moved = w.moved + 1 end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:set_pos(x, y, z) w.pos = { x, y, z } end
+        function e:sce_free(i) return w.sce end
+        function e:set_status(bits) w.status = w.status | bits end
+        function e:clear_status(bits) w.cleared = w.cleared | bits; w.status = w.status & ~bits end
+        function e:status(bits) return w.status & bits ~= 0 end
+        function e:cut_change(cut) w.cuts[#w.cuts + 1] = cut end
+        function e:distance() return DIST end
+        function e:now_seq() return 0 end
+        function e:neck_flags() return 0 end
+        function e:player_touched() return false end
+        function e:object_pos() return 1836, -1800, -21254 end
+        function e:flag() return false end
+        for _, name in ipairs({ 'set_damage_flg', 'set_sce_flg', 'set_neck_flags',
+            'set_body_box', 'set_body_ofs_x', 'spd', 'seq_sound', 'sound' }) do
+            e[name] = function() end
+        end
+    ";
+
+    struct Alligator(std::collections::HashMap<String, i64>, Vec<u8>);
+
+    impl Alligator {
+        fn get(&self, name: &str) -> i64 {
+            self.0[name]
+        }
+    }
+
+    fn run_alligator(ticks: usize, setup: &str) -> Alligator {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        let script = include_str!("../../games/re2/enemy/23/enemy.lua");
+        budget.begin();
+        lua.load(format!(
+            "SCE = 0 DIST = 20000 CLIP_LEN = 4 {setup}
+             {ALLIGATOR_STUB}
+             {script}"
+        ))
+        .exec()
+        .unwrap();
+        // A tick at a time, each with its own budget, as the engine runs them.
+        for _ in 0..ticks {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        budget.begin();
+        lua.load(
+            "return { r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], life = w.life, be = w.be,
+                 cuts = w.cuts, angle = w.angle, z = w.pos[3], move_no = w.move_no,
+                 status = w.status, cleared = w.cleared, rest = w.vars[15] or 0,
+                 moved = w.moved }",
+        )
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let cuts = table
+                .get::<mlua::Table>("cuts")
+                .unwrap()
+                .sequence_values()
+                .map(Result::unwrap)
+                .collect();
+            let fields = [
+                "r0", "r1", "r2", "life", "be", "angle", "z", "move_no", "status", "cleared",
+                "rest", "moved",
+            ]
+            .into_iter()
+            .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+            .collect();
+            Alligator(fields, cuts)
+        })
+        .unwrap()
+    }
+
+    /// `FUN_00468a10`: a life of 25300 and `Be_flg`'s `0x1c00004c`; then the
+    /// entry waits for the room's scene, with `Mot_play_init`'s `Move_no`
+    /// 0xFF from the init's change of routines.
+    #[test]
+    fn an_alligator_waits_for_the_scene() {
+        let alligator = run_alligator(1, "");
+        assert_eq!(alligator.get("life"), 25300);
+        assert_eq!(alligator.get("be"), 0x1C00_004D);
+        assert_eq!(alligator.get("move_no"), 0xFF);
+        let alligator = run_alligator(50, "");
+        assert_eq!(
+            (
+                alligator.get("r0"),
+                alligator.get("r1"),
+                alligator.get("r2")
+            ),
+            (1, 0, 0)
+        );
+        assert_eq!(alligator.get("moved"), 0);
+    }
+
+    /// `FUN_00468d30`: `Sce_free0` starts clip 6 under `fg_status`'s `0x110`;
+    /// its end cuts to camera 1 and puts it at `z` -21212, and clip 3's end
+    /// turns it a quarter, clears `0x110` and rests for 110 ticks.
+    #[test]
+    fn an_alligator_enters_when_the_scene_says() {
+        let alligator = run_alligator(3, "SCE = 1");
+        assert_eq!(alligator.get("r2"), 1);
+        assert_eq!(alligator.get("status"), 0x110);
+        assert_eq!(alligator.get("move_no"), 6);
+        // Tick 2 starts the entry, and clip 6's fourth step, on tick 6, ends it.
+        let alligator = run_alligator(6, "SCE = 1");
+        assert_eq!(alligator.get("r2"), 2);
+        assert_eq!(alligator.1, [1]);
+        assert_eq!(alligator.get("z"), -0x52DC);
+        let alligator = run_alligator(10, "SCE = 1");
+        assert_eq!(
+            (
+                alligator.get("r0"),
+                alligator.get("r1"),
+                alligator.get("r2")
+            ),
+            (1, 1, 0)
+        );
+        assert_eq!(alligator.get("angle"), 1024 + 0x400);
+        assert_eq!(alligator.get("cleared"), 0x110);
+        assert_eq!(alligator.get("rest"), 0x6E - 1);
+    }
+
+    /// `FUN_00468e20`: the rest runs out, then it swims (`Routine_1` 2) while
+    /// the player is more than 90 away.
+    #[test]
+    fn an_alligator_swims_once_its_rest_runs_out() {
+        let alligator = run_alligator(10 + 0x6D, "SCE = 1");
+        assert_eq!(alligator.get("r1"), 1);
+        let alligator = run_alligator(10 + 0x6E, "SCE = 1");
+        assert_eq!(alligator.get("r1"), 2);
+        assert_eq!(alligator.get("move_no"), 1);
+        let alligator = run_alligator(10 + 0x6E, "SCE = 1 DIST = 50");
+        assert_eq!(alligator.get("r1"), 1);
     }
 }

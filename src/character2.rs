@@ -546,7 +546,22 @@ fn run_zombie(
     } else {
         Vec::new()
     };
+    let alligator = character.id == crate::zombie2::ALLIGATOR_ID;
+    let objects = if alligator {
+        game.objects
+            .records
+            .iter()
+            .map(|object| object.pos)
+            .collect()
+    } else {
+        Vec::new()
+    };
     let re2 = &mut game.re2;
+    let banks = if alligator {
+        re2.banks.to_vec()
+    } else {
+        Vec::new()
+    };
     let gacha = re2.key_trg & 0x34F != 0;
     let same_id = re2
         .characters
@@ -630,12 +645,20 @@ fn run_zombie(
         spawns: Vec::new(),
         killed: false,
         water,
+        banks,
+        flag_ops: Vec::new(),
+        status_and_not: 0,
+        cut: None,
+        objects,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
     let killed = world.killed;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
+    let status_and_not = world.status_and_not;
+    let flag_ops = std::mem::take(&mut world.flag_ops);
+    let cut = world.cut;
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
@@ -649,6 +672,23 @@ fn run_zombie(
     for bit in (0..32u8).filter(|bit| status_or & (0x8000_0000u32 >> bit) != 0) {
         re2.set_flag(crate::scd2::host::STATUS_BANK, bit, 1);
     }
+    for bit in (0..32u8).filter(|bit| status_and_not & (0x8000_0000u32 >> bit) != 0) {
+        re2.set_flag(crate::scd2::host::STATUS_BANK, bit, 0);
+    }
+    for (bank, index, op) in flag_ops {
+        re2.set_flag(bank, index, op);
+    }
+    if let Some(cut) = cut {
+        // `Cut_change`: the cut changes, and the zones carry on from it.
+        game.set_camera_cut(usize::from(cut & 0x7F));
+    }
+    // `fg_status`'s `0x100` is the camera's lock, which `Cut_check` obeys.
+    if status_or & 0x100 != 0 {
+        game.camera.locked = true;
+    } else if status_and_not & 0x100 != 0 {
+        game.camera.locked = false;
+    }
+    let re2 = &mut game.re2;
     for call in &kin {
         for other in re2.characters.0.iter_mut().flatten() {
             if other.id == character.id

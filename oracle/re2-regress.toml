@@ -743,3 +743,28 @@ input = "route_100_200.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
 expect = "match"
 record = "--flag 4:135"
+
+[[run]]
+name = "alligator_wait_40a"
+room = "40A"
+sound = false
+ticks = 1400
+# entered from room 408's door: the alligator waits for the room's scene
+setup = { pos = [-9093, -1800, -857], angle = 2064, health = 200, rnd = 6114, camera = 8 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:-9093:-1800:-857:2064:8 --life 200"
+
+[[run]]
+name = "alligator_scene_40a"
+room = "40A"
+sound = false
+ticks = 2400
+# in the scene's area: the scene, the alligator's entry, its rests and swims up the corridor.
+# `rng` is left out: the scene's splashes (effect behaviour 0x52) aren't ported (docs/re2-deviations.md)
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "none.txt"
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 874, fields = ["p.x", "p.z"], note = "the alligator's boxes push the player (Oba_ck_hit against its Atd), not ported yet" }
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
