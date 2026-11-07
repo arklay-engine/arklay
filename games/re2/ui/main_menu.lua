@@ -109,6 +109,8 @@ local CONDITION_X, CONDITION_Y = 105, 54
 -- item page, white on the tab bar and while the screen closes.
 local TAB_X, TAB_Y, TAB_W, TAB_H = 112, 17, 47, 10
 local TAB_LIT, TAB_SELECTED, TAB_DIM = { 128, 64, 64 }, { 128, 128, 128 }, { 40, 40, 40 }
+-- The item box's EXIT, dim off it.
+local TAB_DIM_BOX = { 64, 64, 64 }
 
 -- The slots: icons 40x30 from the grid's corner, the personal slot above.
 local GRID_X, GRID_Y, SLOT_W, SLOT_H = 225, 73, 40, 30
@@ -301,6 +303,17 @@ local function refresh(api)
 end
 
 function M.open(api, args)
+    -- The item box's screen: the engine runs its page (`src/game/itembox2.rs`).
+    if args ~= nil and args.mode == "box" then
+        s.box = true
+        api:set("canvas", 1)
+        s.slots = api:inventory_capacity()
+        s.page, s.last = nil, nil
+        s.open, s.close = 0, nil
+        s.pulse, s.pulse_falling = PULSE_START, false
+        emit(api)
+        return
+    end
     -- The get-item window draws with this script's art but runs no page.
     if args ~= nil and args.mode == "get" then
         s.get = true
@@ -322,12 +335,16 @@ end
 
 function M.tick(api)
     emit(api)
-    refresh(api)
+    if not s.box then
+        refresh(api)
+    end
 end
 
 function M.update(api, _input)
     emit(api)
-    refresh(api)
+    if not s.box then
+        refresh(api)
+    end
 end
 
 function M.tick_monitor(_api) end
@@ -363,8 +380,35 @@ end
 
 -- One tick of the original's drawing state: the cursors' pulses and the
 -- trace step on the frames the screen is drawn.
+-- One tick of the item box's drawing state: the inventory cursor's pulse,
+-- which `St_disp_cursol0` steps on each tick the page's routine 3 runs, on
+-- the inventory and held at 60 off it.
+local function animate_box(api)
+    s.last = s.page
+    s.page = api:re2_box()
+    local last = s.last
+    if s.page == nil or last == nil or not last.started or last.routine ~= 3 then
+        return
+    end
+    if s.page.sub == 0 then
+        if s.pulse_falling then
+            s.pulse_falling = s.pulse >= PULSE_LOW
+            s.pulse = s.pulse - PULSE_STEP
+        else
+            s.pulse_falling = s.pulse > PULSE_HIGH
+            s.pulse = s.pulse + PULSE_STEP
+        end
+    else
+        s.pulse = PULSE_HELD
+    end
+end
+
 function M.animate(api, open, close)
     s.open, s.close = open, close
+    if s.box then
+        animate_box(api)
+        return
+    end
     s.last = s.page
     s.page = api:re2_items()
     s.target_shown = false
@@ -1014,7 +1058,254 @@ local function draw_get(api)
     picture(api, d, get.item, GET_X + p[1], GET_Y + p[2], p[3], p[4])
 end
 
+-- The item box's screen (`St_main01`'s draw list): the box's panel
+-- (`St_disp_itembox`, `0x4FCBC0`) on the left, from `itembox.tim` (texture
+-- 0x1D) at (7, 14), and the item page's inventory, counts and message box
+-- on the right, with the equipped item's panel where the personal slot's
+-- was and EXIT above it. The primitives are drawn by depth, the deepest
+-- first: the rows' icons, the rows' bands (averaged), the names, the
+-- panel's frame and lines, its arrows and scroll bar.
+local B = {}
+B.X, B.Y = 7, 14
+B.TEXTURE = 0x1D
+-- `St_init_itembox`'s sprites (`0x53DB88`, read from the end) at their
+-- places from the panel's origin (`0x53DC00` to `0x53DC60`): the frame's
+-- sixteen pieces.
+B.PIECES = {
+    { 199, 142, 8, 6, 0, 214 },
+    { 199, 4, 8, 6, 0, 202 },
+    { 199, 11, 8, 130, 0, 60 },
+    { 196, 6, 2, 142, 10, 60 },
+    { 4, 6, 2, 142, 8, 60 },
+    { 134, 127, 62, 20, 62, 40 },
+    { 134, 6, 62, 20, 0, 40 },
+    { 6, 127, 128, 20, 0, 20 },
+    { 6, 6, 128, 20, 0, 0 },
+    { 211, 0, 39, 12, 0, 228 },
+    { 208, 0, 3, 153, 15, 60 },
+    { 0, 0, 3, 153, 12, 60 },
+    { 131, 149, 77, 4, 0, 244 },
+    { 131, 0, 77, 4, 0, 240 },
+    { 3, 149, 128, 4, 0, 252 },
+    { 3, 0, 128, 4, 0, 248 },
+}
+-- The bands behind the rows but the chosen one (`0x53DBEC`): their tops,
+-- 20 high from x 6 to 0xC5, averaged.
+B.BANDS = { 26, 46, 87, 107 }
+B.BAND = 48
+-- The chosen row's lines, and the box's end after its last slot.
+B.LINE_IDLE = { 0x30, 0x20, 8 }
+B.END = { 0x80, 0x20, 0x20 }
+-- The equipped item's panel, moved right by 0x34 onto the personal slot's
+-- place (`St_disp_equip` in item box mode), and its count by 0x36.
+B.EQUIP_DX, B.EQUIP_COUNT_DX = 0x34, 0x36
+-- The cursor's pieces from the slot by its two-slot mark (`0x53EFAC`): the
+-- right, the middle and the left.
+B.CURSOR = {
+    [0] = { 25, 3, 3 },
+    { 65, 25, 3 },
+    { 25, -15, -37 },
+}
+
+function B.box_art(api, d)
+    if d.box == nil then
+        d.box = api:page("ui/status/itembox_0") or false
+    end
+    return d.box
+end
+
+function B.box_sprite(api, d, x, y, w, h, u, v)
+    local handle = B.box_art(api, d)
+    if handle then
+        api:page_sprite_scaled(handle, u, v, w, h, d.ox + B.X + x, d.oy + B.Y + y, w, h, 0, 255)
+    end
+end
+
+-- A row's icon (`0x4FCF8E`): the 39x30 cell squeezed onto the quad from
+-- x 0x92 to 0xAB and 19 down, which the PC fills with its far edges, and a
+-- two-slot weapon's right half beside it.
+function B.box_icon(api, d, item, mark, x, y)
+    local texture, u, v = icon_cell(item)
+    local handle = d.pages[texture]
+    if handle ~= nil then
+        api:page_sprite_scaled(handle, u, v, 39, 30, d.ox + x, d.oy + y, 26, 20, 0, 255)
+    end
+    if mark ~= 0 then
+        local half, hu, hv = half_cell(item)
+        handle = d.pages[half]
+        if handle ~= nil then
+            api:page_sprite_scaled(handle, hu, hv, 40, 30, d.ox + x + 0x18, d.oy + y, 26, 20, 0, 255)
+        end
+    end
+end
+
+function B.box_name(api, d, item, x, y)
+    local bytes = api:item_name_bytes(item == 0 and 100 or item)
+    if bytes ~= nil then
+        api:glyphs(d.ox + x, d.oy + y, bytes)
+    end
+end
+
+function B.box_line(api, d, y, rgb)
+    api:line(d.ox + B.X + 6, d.oy + y, d.ox + B.X + 0xC4 + 1, d.oy + y, rgb[1], rgb[2], rgb[3])
+end
+
+-- A slot's two-slot mark: 1 on a two-slot weapon's left half, 2 on its
+-- right (`itembox2::marks`).
+function B.inventory_mark(api, slot)
+    local index = 0
+    while index < s.slots do
+        local item = api:re2_slot(index)
+        if is_wide(item) and index + 1 < s.slots and api:re2_slot(index + 1) == item then
+            if slot == index then
+                return 1
+            elseif slot == index + 1 then
+                return 2
+            end
+            index = index + 2
+        else
+            index = index + 1
+        end
+    end
+    return 0
+end
+
+function B.draw_box(api)
+    local page = s.page or api:re2_box()
+    if page == nil or not page.started then
+        return
+    end
+    local last = s.last
+    local ran_page = last ~= nil and last.started and last.routine == 3
+    local d = art(api)
+    d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
+    api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
+    local top, scroll = page.top, page.scroll
+
+    -- The inventory's side: the message box, the grid's and the equipped
+    -- item's frames, the icons, the counts.
+    fill(api, d, MESSAGE_BOX[1], MESSAGE_BOX[2], MESSAGE_BOX[3], MESSAGE_BOX[4], MESSAGE_FILL)
+    pieces(api, d, MESSAGE_FRAME, 0, 0)
+    for index = FRAME_LEFT + 1, #FRAME do
+        local p = FRAME[index]
+        if index <= FRAME_LEFT + 4 then
+            sprite(api, d, ST, p[1] + B.EQUIP_DX, p[2], p[3], p[4], p[5], p[6])
+        elseif index > FRAME_LEFT + 6 then
+            sprite(api, d, ST, p[1], p[2], p[3], p[4], p[5], p[6])
+        end
+    end
+    -- EXIT and the piece under it, lit while its routine runs.
+    sprite(api, d, ST, 255, 14, 55, 12, 0, 164)
+    sprite(api, d, ST + 5, 259, 15, 47, 10, 0, 30, page.routine == 2 and TAB_SELECTED or TAB_DIM_BOX)
+    for slot = s.slots - 1, 0, -1 do
+        slot_icon(api, d, slot, GRID_X + SLOT_W * (slot % 2), GRID_Y + SLOT_H * (slot // 2))
+    end
+    sprite(api, d, ICONS + 2, EQUIP_BOX[1] + B.EQUIP_DX, EQUIP_BOX[2], EQUIP_BOX[3], EQUIP_BOX[4], EQUIP_BOX[5], EQUIP_BOX[6])
+    local equip = equipped_slot(api)
+    if equip ~= nil then
+        local item, quantity = api:re2_slot(equip)
+        local texture, u, v = icon_cell(item)
+        local x = EQUIP_X + B.EQUIP_DX
+        if is_wide(item) then
+            sprite(api, d, texture, x - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+            local half, hu, hv = half_cell(item)
+            sprite(api, d, half, x + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
+        else
+            sprite(api, d, texture, x, EQUIP_Y, SLOT_W, SLOT_H, u, v)
+        end
+        count(api, d, item, quantity, EQUIP_COUNT_X + B.EQUIP_COUNT_DX, EQUIP_COUNT_Y)
+    end
+    for slot = 0, s.slots - 1 do
+        local item, quantity = api:re2_slot(slot)
+        local at = COUNT_AT[slot]
+        if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
+            count(api, d, item, quantity, COUNT_ORIGIN_X + at[1], COUNT_ORIGIN_Y + at[2])
+        end
+    end
+
+    -- The box's rows: icons, then the bands over them, the names and the
+    -- counts.
+    for row = 4, 0, -1 do
+        local item, _, mark = api:re2_box_slot((top + row) % 64)
+        B.box_icon(api, d, item, mark, B.X + 0x92, B.Y + scroll + 20 * row + 0x1B)
+    end
+    for _, y in ipairs(B.BANDS) do
+        api:fade_tile(0, B.BAND, d.ox + B.X + 6, d.oy + B.Y + y, 0xC5 - 6, 20)
+    end
+    for row = 4, 0, -1 do
+        local item, quantity = api:re2_box_slot((top + row) % 64)
+        B.box_name(api, d, item, B.X + 7, B.Y + scroll + 20 * row + 0x1D)
+        if item ~= 0 then
+            count(api, d, item, quantity, COUNT_ORIGIN_X - 67, COUNT_ORIGIN_Y - 18 + 20 * row + scroll)
+        end
+    end
+    -- A scroll's incoming row: its name and count; its place is held by
+    -- the panel's blank row.
+    local incoming = page.sub == 2 and -1 or page.sub == 3 and 5 or nil
+    if incoming ~= nil then
+        local item, quantity = api:re2_box_slot((top + incoming) % 64)
+        B.box_name(api, d, item, B.X + 7, B.Y + scroll + 20 * incoming + 0x1D)
+        if item ~= 0 then
+            count(api, d, item, quantity, COUNT_ORIGIN_X - 67, COUNT_ORIGIN_Y - 18 + 20 * incoming + scroll)
+        end
+    end
+
+    -- The panel's lines and frame.
+    local lines = page.sub == 0 and B.LINE_IDLE
+        or { page.pulse + 0x50, page.pulse + 0x40, page.pulse & 0x1F }
+    B.box_line(api, d, B.Y + 0x42, lines)
+    B.box_line(api, d, B.Y + 0x56, lines)
+    local chosen = (top + 2) % 64
+    if chosen < 5 or chosen == 63 then
+        B.box_line(api, d, B.Y + scroll - 20 * ((top - 4) % 64) + 0x4F3, B.END)
+    end
+    for k = #B.PIECES, 1, -1 do
+        local p = B.PIECES[k]
+        B.box_sprite(api, d, p[1], p[2], p[3], p[4], p[5], p[6])
+    end
+
+    -- The arrows, pressed on a tick up or down moves the box, and the
+    -- scroll bar's five pieces, two rows a slot.
+    for row = 0, 4 do
+        B.box_sprite(api, d, 200, 12 + ((top + row) % 64) * 2, 6, 2, 0, 190)
+    end
+    B.box_sprite(api, d, 94, 5, 20, 20, 18, page.arrows & 1 ~= 0 and 60 or 80)
+    B.box_sprite(api, d, 94, 127, 20, 20, 18, page.arrows & 2 ~= 0 and 100 or 120)
+    if incoming ~= nil then
+        local item, _, mark = api:re2_box_slot((top + incoming) % 64)
+        local w = mark ~= 0 and 0x30 or 0x18
+        local handle = B.box_art(api, d)
+        if handle then
+            api:page_sprite_scaled(handle, 40, 60, mark ~= 0 and 80 or 40, 30,
+                d.ox + B.X + 0x92, d.oy + B.Y + scroll + 20 * incoming + 0x1B, w + 2, 20, 0, 255)
+        end
+    end
+
+    -- The inventory's cursor and the item's name, from the page's routine.
+    if ran_page then
+        local slot = page.cursor
+        local mark = B.inventory_mark(api, slot)
+        local offsets = B.CURSOR[mark] or B.CURSOR[0]
+        local x = COUNT_ORIGIN_X + SLOT_W * (slot % 2)
+        local y = COUNT_ORIGIN_Y + 1 + SLOT_H * (slot // 2)
+        local rgb = { s.pulse, s.pulse, s.pulse }
+        sprite(api, d, ST + 3, x + offsets[3], y, 22, 34, 0, 30, rgb)
+        sprite(api, d, ST + 3, x + offsets[2], y, 40, 34, 2, 30, rgb)
+        sprite(api, d, ST + 3, x + offsets[1], y, 22, 34, 22, 30, rgb)
+        if page.sub ~= 5 then
+            local item = api:re2_slot(slot)
+            if item ~= 0 then
+                api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item) or "")
+            end
+        end
+    end
+end
+
 function M.draw(api)
+    if s.box then
+        B.draw_box(api)
+        return
+    end
     if s.get then
         draw_get(api)
         return

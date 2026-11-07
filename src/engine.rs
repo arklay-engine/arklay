@@ -632,6 +632,7 @@ pub fn run_with_options(
                         re2_xa_volume: None,
                         re2_inventory: None,
                         re2_item_page: None,
+                        re2_item_box: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -1872,6 +1873,11 @@ const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 /// next, and the room's return and the main task's states take three more;
 /// every recording closes in the same ten.
 const RE2_STATUS_CLOSE_TICKS: u8 = 10;
+/// The open's tick on which the item box's page starts (`St_init01`'s step
+/// 0, after its loads).
+const RE2_BOX_START: u8 = 6;
+/// The close's ticks on which the item box's screen still runs.
+const RE2_BOX_CLOSE_DRAWN: u8 = 7;
 
 /// What RE2's status screen's open and close draw on a frame
 /// ([`GameSession::re2_status_view`]), over the same ticks as RE 1's fades.
@@ -2980,12 +2986,22 @@ impl GameSession {
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
         if let Some(ticks) = self.re2_status_open.as_mut() {
             *ticks = ticks.saturating_add(1);
+            // The lid's last state counts on through the screen's first
+            // three ticks, as the original's does, then holds until the
+            // close.
+            if (2..=3).contains(ticks) && self.game.re2_box.is_some() {
+                self.game.tick_re2_box_entrance();
+            }
         }
+        let start_box = self.re2_status_open == Some(RE2_BOX_START);
         self.re2_status_return = self
             .re2_status_return
             .map(|ticks| ticks + 1)
             .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
         let result = self.tick_session(pack, ui, input, action);
+        if start_box {
+            self.game.start_re2_box();
+        }
         self.animate_re2_status(pack);
         result
     }
@@ -3001,6 +3017,9 @@ impl GameSession {
         self.game.countdown_hud = None;
         self.game.apply_re2_no_enemies();
         self.finish_menu_request(pack);
+        if std::mem::take(&mut self.game.re2_box_open) {
+            self.begin_re2_box_open(pack);
+        }
         let cut = Some((self.loaded.id, self.loaded.room.current_cut));
         let previous = self.tick_cut.filter(|(room, _)| *room == self.loaded.id);
         self.cut_held = previous.is_some_and(|previous| Some(previous) != cut)
@@ -4583,6 +4602,38 @@ impl GameSession {
         }
     }
 
+    /// Open RE2's item box screen, the tick after the lid stopped: the
+    /// status screen's task in its item box mode (`St_init01`), over the
+    /// same fades as START's.
+    fn begin_re2_box_open(&mut self, pack: &Pack) {
+        if self.menu.is_some() {
+            return;
+        }
+        let opened = self.with_menu(pack, |menu, cx, game| {
+            let args = [("mode", ScreenArg::Str("box".to_owned()))];
+            let screen = LuaScreen::open_screen_with_game(
+                "main_menu",
+                &args,
+                ScreenAction::Resume,
+                cx,
+                game,
+            )?;
+            *menu = Some(Box::new(screen));
+            anyhow::Ok(())
+        });
+        if let Err(err) = opened {
+            eprintln!("warning: item box unavailable: {err:#}");
+            return;
+        }
+        self.game.message_menu = true;
+        self.freeze_room_frame = true;
+        self.game.open_re2_box();
+        self.game.tick_re2_box_entrance();
+        // The screen's own fades are `re2_status_open`'s; its page waits
+        // for `St_init01` rather than for RE 1's menu fade.
+        self.re2_status_open = Some(1);
+    }
+
     /// One tick of RE2's status screen's own drawing state, its open and
     /// close included: the original's draw routines step the cursor's pulse
     /// and the condition panel's trace on every frame they run, whatever the
@@ -5989,6 +6040,10 @@ impl GameSession {
             right: input.right,
             cancel: input.run || ui.cancel,
         };
+        if self.game.re2_box.is_some() {
+            self.tick_re2_box(pack, ui, message_input);
+            return;
+        }
         if self.game.re2_items.is_some() {
             self.tick_re2_items(pack, ui, message_input);
             return;
@@ -6218,6 +6273,66 @@ impl GameSession {
         }
     }
 
+    /// One tick of RE2's item box page (`St_main01`), its message and its
+    /// cues: the core bank's, and the room bank's for a row's scroll.
+    fn tick_re2_box(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
+        use game::status2::Input;
+        let input = Input {
+            up: ui.up,
+            down: ui.down,
+            left: ui.left,
+            right: ui.right,
+            confirm: ui.confirm,
+            cancel: ui.cancel,
+            start: ui.start && !ui.cancel,
+        };
+        let input = if self.game.message.active {
+            Input::default()
+        } else {
+            input
+        };
+        let Some(outcome) = self.game.tick_re2_box(input) else {
+            return;
+        };
+        if let Some(page) = self.game.re2_box.as_mut() {
+            let up = ui.up || ui.held_up;
+            let down = ui.down || ui.held_down;
+            page.arrows = if page.sub == game::itembox2::SUB_INVENTORY {
+                0
+            } else {
+                u8::from(up) | u8::from(down) << 1
+            };
+        }
+        for id in &outcome.room_sounds {
+            if let Some(id) = crate::se2::SoundId::decode(*id) {
+                self.game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+            }
+        }
+        self.play_re2_status_sounds(pack, &outcome.sounds);
+        if outcome.sounds.is_empty() && !outcome.room_sounds.is_empty() {
+            let cut = self.sound_cut();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+                cut,
+            );
+        }
+        self.game
+            .update_message(message_input, &self.loaded.room, &self.text);
+        self.tick_menu_screen(pack);
+        if outcome.close {
+            self.re2_status_close = Some(0);
+        }
+    }
+
     /// A yes/no's cue ("Will you mix the herb?", "Will you take the ...?"),
     /// which the message code plays itself (`0x4C9600`).
     fn play_re2_choice_cue(&mut self, pack: &Pack) {
@@ -6277,13 +6392,25 @@ impl GameSession {
             return;
         };
         *ticks += 1;
-        if *ticks < RE2_STATUS_CLOSE_TICKS {
+        let ticks = *ticks;
+        // The box's routines and its draw run until the screen's task ends
+        // (`St_exit`), on the close's seventh tick.
+        if ticks <= RE2_BOX_CLOSE_DRAWN {
+            self.game.tick_re2_box_close();
+        }
+        if ticks < RE2_STATUS_CLOSE_TICKS {
             return;
         }
         self.re2_status_close = None;
         self.re2_status_return = Some(1);
         self.menu = None;
         self.game.close_re2_items();
+        if self.game.re2_box.is_some() {
+            self.game.close_re2_box();
+            // Game mode 5: the lid's routine runs its last count and shuts
+            // the lid.
+            self.game.tick_re2_box_entrance();
+        }
         self.examine = None;
         self.item_box = None;
         if std::mem::take(&mut self.map_direct) {
@@ -7384,6 +7511,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
+            re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -16386,6 +16514,11 @@ fn tick_room_timed(
     {
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, false);
+    }
+    // `Item_box_entrance`, the routine `Sce_Itembox` set: the lid swings,
+    // and when it stops the box's screen opens on the next tick.
+    if context.game.is_re2_room && context.game.tick_re2_box_entrance() {
+        context.game.re2_box_open = true;
     }
     for (zone, kind, damage) in std::mem::take(&mut context.game.re2.pending_damage) {
         crate::player2::sce_damage(

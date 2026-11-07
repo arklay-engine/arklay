@@ -529,6 +529,23 @@ mod imp {
                 },
             );
 
+            // `set_re2_box_slot(slot, id, count[, mark])`: one of RE2's
+            // `Item_boxwork` slots, the oracle's `--box`; mark 3 for a
+            // two-slot weapon.
+            methods.add_method_mut(
+                "set_re2_box_slot",
+                |_lua, game, (slot, id, count, mark): (usize, u8, u8, Option<u8>)| {
+                    let Some(entry) = game.re2.item_box.get_mut(slot) else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "item box slot {slot} is out of range (0..{})",
+                            crate::game::itembox2::BOX_SLOTS
+                        )));
+                    };
+                    *entry = [id, count, mark.unwrap_or(0)];
+                    Ok(())
+                },
+            );
+
             methods.add_method_mut("item_box_clear", |_lua, game, ()| {
                 game.item_box =
                     [crate::game::InventoryItem::default(); crate::game::ITEM_BOX_SLOTS];

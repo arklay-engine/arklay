@@ -1,0 +1,36 @@
+# Room 201's item box (oracle/re2.md, "The item box"): open it, stack the box's handgun rounds onto the inventory's, swap the rounds for the box's two-slot weapon, scroll, swap the weapon back for the herb, cancel, and leave by EXIT.
+0
+420 action
+423
+480 down
+483
+510 confirm
+513
+540 up
+543
+570 up
+573
+600 confirm
+603
+630 confirm
+633
+660 down
+663
+690 confirm
+693
+750 up
+753
+780 confirm
+783
+810 down
+813
+840 confirm
+843
+870 confirm
+873
+900 cancel
+903
+930 up
+933
+960 confirm
+963
