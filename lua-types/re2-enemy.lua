@@ -1386,6 +1386,12 @@ function Re2EnemyApi:pl_routine(index) end
 ---@return integer count
 function Re2EnemyApi:pl_damage_cnt() end
 
+---The player's speed, `Spd_x`, `Spd_y` and `Spd_z`.
+---@return integer x
+---@return integer y
+---@return integer z
+function Re2EnemyApi:pl_speed() end
+
 ---`Gacha_ch`: whether a button was mashed this tick, to break a hold.
 ---@return boolean mashed
 function Re2EnemyApi:gacha() end
@@ -1451,6 +1457,11 @@ function Re2EnemyApi:pl_set_routine_at(index, value) end
 ---Set the player's `Damage_cnt`.
 ---@param value integer Truncated to a byte.
 function Re2EnemyApi:pl_set_damage_cnt(value) end
+
+---Set bits in the player's neck flags (G2 sets `0x12` while it holds the
+---player).
+---@param bits integer Truncated to a byte.
+function Re2EnemyApi:pl_or_neck_flags(bits) end
 
 ---Set bits in the player's `Be_flg`.
 ---@param bits integer
