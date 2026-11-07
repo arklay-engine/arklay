@@ -31034,7 +31034,9 @@ off_0010:
         assert!(
             app.framebuffer
                 .rgba
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .all(|pixel| pixel[..3] == [0, 0, 0]),
             "the title showed before its opening film"
         );
