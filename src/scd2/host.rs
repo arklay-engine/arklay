@@ -2505,8 +2505,9 @@ mod tests {
         assert_eq!(game.re2.enemies, 24);
         let targets = game.re2.neck_targets();
         assert_eq!(targets.len(), 24);
-        assert_eq!(targets.iter().map(|t| t.index).max(), Some(25));
-        assert!(25 < crate::player2::NECK_WORKS);
+        let last = targets.iter().map(|t| t.index).max().unwrap();
+        assert_eq!(last, 25);
+        assert!(last < crate::player2::NECK_WORKS);
     }
 
     #[test]
