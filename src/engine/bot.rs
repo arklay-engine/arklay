@@ -2754,6 +2754,8 @@ struct BotCtx {
     fights: Rc<Vec<meta::RoomFight>>,
     /// Every room's `<ride>` facts, cached by [`BotRuntime`].
     rides: Rc<Vec<meta::RoomRide>>,
+    /// Every room's `<revisit>` facts, cached by [`BotRuntime`].
+    revisits: Rc<Vec<meta::RoomRevisit>>,
     /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
     errands: Rc<Vec<meta::RoomErrand>>,
     /// Every room's `<brew>` facts with its taps, cached by [`BotRuntime`].
@@ -3095,6 +3097,20 @@ impl UserData for BotCtx {
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
                 row.set("from", entry.fact.from.as_str())?;
+                row.set("label", entry.fact.label.as_deref())?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("revisit_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.revisits.iter() {
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("bank", entry.fact.gate.flag.0)?;
+                row.set("bit", entry.fact.gate.flag.1)?;
+                row.set("set", entry.fact.gate.set)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -3992,6 +4008,8 @@ pub struct BotRuntime {
     fights: Rc<Vec<meta::RoomFight>>,
     /// Every room's `<ride>` facts, loaded with `uses`.
     rides: Rc<Vec<meta::RoomRide>>,
+    /// Every room's `<revisit>` facts, loaded with `uses`.
+    revisits: Rc<Vec<meta::RoomRevisit>>,
     /// Every room's errand facts, loaded with `uses`.
     errands: Rc<Vec<meta::RoomErrand>>,
     /// Every room's `<brew>` facts, loaded with `uses`.
@@ -4043,6 +4061,7 @@ impl BotRuntime {
             holds: Rc::default(),
             fights: Rc::default(),
             rides: Rc::default(),
+            revisits: Rc::default(),
             errands: Rc::default(),
             brews: Rc::default(),
             door_vias: Rc::default(),
@@ -4155,6 +4174,8 @@ impl BotRuntime {
             self.holds = Rc::new(meta::load_holds(pack, Some(jill), Some(&self.params))?);
             self.fights = Rc::new(meta::load_fights(pack, Some(jill), Some(&self.params))?);
             self.rides = Rc::new(meta::load_rides(pack, Some(jill), Some(&self.params))?);
+            self.revisits =
+                Rc::new(meta::load_revisits(pack, Some(jill), Some(&self.params))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill), Some(&self.params))?);
             self.brews = Rc::new(meta::load_brews(pack, Some(jill), Some(&self.params))?);
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
@@ -4190,6 +4211,7 @@ impl BotRuntime {
             holds: self.holds.clone(),
             fights: self.fights.clone(),
             rides: self.rides.clone(),
+            revisits: self.revisits.clone(),
             errands: self.errands.clone(),
             brews: self.brews.clone(),
             door_vias: self.door_vias.clone(),
@@ -4511,6 +4533,7 @@ mod tests {
             "item_facts",
             "fight_facts",
             "ride_facts",
+            "revisit_facts",
             "errand_facts",
             "brew_facts",
             "door_facts",
@@ -5549,6 +5572,7 @@ mod tests {
             holds: Rc::default(),
             fights: Rc::default(),
             rides: Rc::default(),
+            revisits: Rc::default(),
             errands: Rc::default(),
             brews: Rc::default(),
             door_vias: Rc::default(),
@@ -6772,6 +6796,7 @@ mod tests {
             holds: Rc::default(),
             fights: Rc::default(),
             rides: Rc::default(),
+            revisits: Rc::default(),
             errands: Rc::default(),
             brews: Rc::default(),
             door_vias: Rc::default(),
