@@ -10,7 +10,7 @@ use crate::assets::{self, Artwork, Geometry};
 use crate::gui::canvas::Picture;
 use crate::gui::save_screen;
 use crate::hash::{BORDER_HEIGHT, BORDER_WIDTH};
-use crate::htexture;
+use crate::hires;
 use crate::item_art;
 use crate::items;
 use crate::pack::{AssetClass, Pack};
@@ -111,7 +111,7 @@ impl Art {
 fn load_icon(pack: &Pack, item: u8) -> Option<Picture> {
     let frame = [items::ICON_WIDTH, items::ICON_HEIGHT];
     for name in item_art::icon_hd_names(item) {
-        if let Some(hd) = htexture::named_replacement(pack, &name, frame) {
+        if let Some(hd) = hires::named_replacement(pack, &name, frame) {
             return Some(crop(&hd));
         }
     }
@@ -121,10 +121,9 @@ fn load_icon(pack: &Pack, item: u8) -> Option<Picture> {
         return None;
     }
     let image = crate::ui::load_picture(pack, stem, Geometry::Shipped, Some([0, 0, 0])).ok()?;
-    let candidates = htexture::image_candidates(&image);
+    let candidates = hires::image_candidates(&image);
     if !candidates.is_empty()
-        && let Some(hd) =
-            htexture::replacement(pack, &candidates, || format!("item icon {item:02x}"))
+        && let Some(hd) = hires::replacement(pack, &candidates, || format!("item icon {item:02x}"))
     {
         return Some(crop(&hd));
     }
@@ -136,7 +135,7 @@ fn load_icon(pack: &Pack, item: u8) -> Option<Picture> {
 }
 
 /// The part of an HD replacement that covers the 40x30 icon at its origin.
-fn crop(hd: &htexture::Replacement) -> Picture {
+fn crop(hd: &hires::Replacement) -> Picture {
     let image = &hd.image;
     let width = (image.width * items::ICON_WIDTH / hd.frame[0].max(1)).clamp(1, image.width);
     let height = (image.height * items::ICON_HEIGHT / hd.frame[1].max(1)).clamp(1, image.height);

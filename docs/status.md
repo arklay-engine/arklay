@@ -994,7 +994,7 @@ RE2 R4 (#248) adds doors, masks and footstep zones.
 - HD masks: TeamX names an RE2 mask page by `bio2hd.asi`'s CRC of the page
   as the mask decoder keys it (black clear, 5-to-8-bit replication) over
   the page's own size, with a 1024 x 1024 replacement whose top-left `4w x
-  4h` holds it; `htexture::image_candidates` offers that name for the 128
+  4h` holds it; `hires::image_candidates` offers that name for the 128
   and 64 pages too.
 - Footsteps: section slot 11 (`rdt + 0x34`, `Floor_check`/`Flr_set`) is a
   `u16` count and 12-byte records (`x`, `z`, width, depth, sound, flags:

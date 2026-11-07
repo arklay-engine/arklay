@@ -1,35 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PLAY: every installed pack. The host publishes `play.rows` (name, file,
-     version, source and the warning shown while the row is focused) and
-     `play.empty`. -->
+<!-- PLAY: every installed pack, as a grid of cards (each pack's 4:3
+     thumbnail and name) or a list. The host publishes `play.rows` (name,
+     file, version, source, thumbnail, badge, the warning shown while the
+     row is focused), `play.empty`, `play.grid`, `play.list` and
+     `play.view_hint`. -->
 <screen use="standard-screen" title="PLAY">
   <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
-  <stack orientation="horizontal" gap="none">
-    <spacer width="30"/>
-    <stack orientation="horizontal" gap="medium" width="fill">
-      <text variant="value-dim" text="Game" width="37.5%" wrap="none"/>
-      <text variant="value-dim" text="Pack" width="22.5%" wrap="none"/>
-      <text variant="value-dim" text="Version" width="15%" wrap="none"/>
-      <text variant="value-dim" text="Source" width="fill" wrap="none"/>
-    </stack>
-    <spacer width="24"/>
-  </stack>
-  <rule/>
+  <command key="aux" cap="V" label="{play.view_hint}" action="play_view"/>
   <stack gap="medium" visible="{play.empty}">
     <text variant="value-dim" text="No game packs found."/>
     <text variant="value-dim" text="Use Install / Rebuild to create one."/>
   </stack>
-  <list items="{play.rows}">
+
+  <stack visible="{play.list}" height="fill">
+    <stack orientation="horizontal" gap="none">
+      <spacer width="30"/>
+      <stack orientation="horizontal" gap="medium" width="fill">
+        <text variant="value-dim" text="Game" width="37.5%" wrap="none"/>
+        <text variant="value-dim" text="Pack" width="22.5%" wrap="none"/>
+        <text variant="value-dim" text="Version" width="15%" wrap="none"/>
+        <text variant="value-dim" text="Source" width="fill" wrap="none"/>
+      </stack>
+      <spacer width="24"/>
+    </stack>
+    <rule/>
+    <list items="{play.rows}" height="fill">
+      <template>
+        <item variant="row" action="play:{item.index}" hint="Play" warning="{item.warning}">
+          <stack orientation="horizontal" gap="medium" height="fill">
+            <text variant="value" text="{item.name}" width="37.5%" wrap="none"/>
+            <text variant="value" text="{item.file}" width="22.5%" wrap="none"/>
+            <text variant="value" text="{item.version}" width="15%" wrap="none"/>
+            <text variant="value" text="{item.source}" width="fill" wrap="none"/>
+          </stack>
+        </item>
+      </template>
+    </list>
+  </stack>
+
+  <list columns="4" variant="cards" items="{play.rows}" height="fill" visible="{play.grid}">
     <template>
-      <item variant="row" action="play:{item.index}" hint="Play" warning="{item.warning}">
-        <stack orientation="horizontal" gap="medium" height="fill">
-          <text variant="value" text="{item.name}" width="37.5%" wrap="none"/>
-          <text variant="value" text="{item.file}" width="22.5%" wrap="none"/>
-          <text variant="value" text="{item.version}" width="15%" wrap="none"/>
-          <text variant="value" text="{item.source}" width="fill" wrap="none"/>
+      <item variant="card" action="play:{item.index}" hint="Play" warning="{item.warning}">
+        <stack gap="small">
+          <image aspect="4:3" src="{item.thumbnail}"/>
+          <text variant="value" text="{item.name}" wrap="none"/>
+          <stack orientation="horizontal" gap="small">
+            <text variant="value-dim" text="{item.file}" width="fill" wrap="none"/>
+            <text variant="{item.badge_tone}" text="{item.badge}" wrap="none"/>
+          </stack>
         </stack>
       </item>
     </template>
   </list>
-  <text slot="footer" variant="warn" text="{focus.warning}" wrap="none"/>
+  <text slot="footer" variant="warn" text="{focus.warning}" wrap="none" reserve="line"/>
 </screen>

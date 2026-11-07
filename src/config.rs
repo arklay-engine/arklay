@@ -91,6 +91,8 @@
 //! enabled = ["hd", "demo"]
 //! disabled = ["balance"]
 //! order = ["demo", "hd"]
+//! # The launcher's mod catalog (Mods > Available): an index.json URL or path.
+//! catalog = "https://example.org/mods/index.json"
 //!
 //! # The launcher's remembered installations (written after a successful
 //! # install or rebuild, not usually edited by hand).
@@ -145,6 +147,9 @@ pub struct Mods {
     /// Mod ids applied first, in this order; the rest follow by their
     /// manifest `(load_order, id)`.
     pub order: Vec<String>,
+    /// The launcher's online mod catalog: an `index.json` URL or a local
+    /// path; `None` means [`crate::catalog::DEFAULT_URL`].
+    pub catalog: Option<String>,
 }
 
 /// The user configuration.
@@ -1054,6 +1059,14 @@ fn parse_mods_line(
         bail!("line {line}: duplicate key `{key}`");
     }
     seen.push(key.to_string());
+    if key == "catalog" {
+        let catalog = parse_quoted(value, line)?;
+        if catalog.trim().is_empty() {
+            bail!("line {line}: `catalog` is empty");
+        }
+        mods.catalog = Some(catalog);
+        return Ok(());
+    }
     let ids = parse_string_array(value, line)?;
     if ids.iter().any(String::is_empty) {
         bail!("line {line}: `{key}` contains an empty mod id");
@@ -1153,6 +1166,13 @@ fn parse_graphics_key(graphics: &mut Graphics, key: &str, value: &str, line: usi
 /// The `[mods]` keys that are set; an absent `enabled` is not written.
 fn render_mods(mods: &Mods) -> String {
     let mut out = String::new();
+    if let Some(catalog) = &mods.catalog {
+        out.push_str(&format!(
+            "catalog = {}
+",
+            quote(catalog)
+        ));
+    }
     if let Some(enabled) = &mods.enabled {
         let ids: Vec<String> = enabled.iter().map(|id| quote(id)).collect();
         out.push_str(&format!("enabled = [{}]\n", ids.join(", ")));
@@ -2100,7 +2120,8 @@ menu_text_size = \"huge\"
             "[mods]\n\
              enabled = [\"hd\", 'demo']  # only these discovered mods\n\
              disabled = [\"balance\"]\n\
-             order = [\"demo\", \"hd\"]\n",
+             order = [\"demo\", \"hd\"]\n\
+             catalog = 'G:\\arklay\\mods\\index.json'\n",
         )
         .unwrap();
         assert_eq!(
@@ -2109,6 +2130,7 @@ menu_text_size = \"huge\"
                 enabled: Some(vec!["hd".into(), "demo".into()]),
                 disabled: vec!["balance".into()],
                 order: vec!["demo".into(), "hd".into()],
+                catalog: Some(r"G:\arklay\mods\index.json".into()),
             }
         );
         let text = config.render();

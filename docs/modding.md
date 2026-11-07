@@ -33,6 +33,12 @@ lua = ["lua/demo.lua"]
 | `id` | Stable pack id. Required. |
 | `name`, `version` | Human-facing labels. Optional. |
 | `description` | Longer human-facing text (credits, a seed); `\n` breaks lines. Optional. |
+| `category` | The [mod catalog](#hosted-mods)'s category, e.g. `"High Definition"`, `"Audio"`, `"Cosmetic"`. Optional. |
+| `authors` | The people or teams who made the content, a string array. Optional. |
+| `credits` | Further acknowledgements (sources, contributors, thanks), one string each. Optional. |
+| `tags` | Free-form labels, one string each. `"official"` marks a pack converted from a retail game (`convert-game` adds it) and `"randomizer"` a generated one; PLAY lists the official games first, RE 1, RE 2 then RE 3. Optional. |
+| `homepage` | The mod's home page URL. Optional. |
+| `thumbnail` | The pack entry holding a 4:3 preview picture (`"thumbnail.webp"`): a card in the PLAY grid for a game pack, in MODS > AVAILABLE for a mod. A converted base pack names its title screen, `ui/title.bmp`. Optional. |
 | `kind` | `"base"` or `"mod"`. Required. |
 | `base` | A mod's base pack id. Required for mods. |
 | `load_order` | Layer order; lower applies first. Default 0. |
@@ -41,6 +47,16 @@ lua = ["lua/demo.lua"]
 | `lua` | Ordered hook paths; empty means discover `lua/**.lua`. |
 | `start_room` | A base pack's new-game room as a three-character room id (`"100"`, or a letter stage such as `"G01"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional; a mod manifest may not set it. |
 | `region` | A base pack's script region, `"USA"`, `"JPN"` or `"EUR"`: `convert-game` records the region whose room scripts the install ships, and the room scripts' `if (USA)`-style tests read it. Without it the scripts run as USA's. Optional; a mod manifest may not set it. |
+
+A string array may run over several lines up to its closing `]`, which keeps
+long credit lists readable:
+
+```toml
+credits = [
+    "bserv: Barry's photo, inventory avatars and menus",
+    "TeamX: the PC HD mods and their mask tools",
+]
+```
 
 A pack carries no game-format tag: each RDT, EMD and WAV entry is identified
 by its own content (`src/format.rs`), so one pack may mix RE1 and RE2
@@ -57,6 +73,12 @@ pack maps every regular file below it to an entry named by its
 directory-relative path (the layout `arklay extract` writes) and reads entries
 on demand, so it does not load the whole game into memory. A directory mod must
 hold `manifest.toml`; `arklay mod build` is optional when running directly.
+
+A mod `.akpak` is read on demand too: opening it reads only its header, table
+of contents and paths, and each entry is read from the file when it is asked
+for, so an HD or film pack of several gigabytes costs no memory until its art
+is drawn. A base pack is read whole (it serves every room load) and is capped
+at 2 GiB; a streamed image may be up to 64 GiB, and any one entry up to 1 GiB.
 
 ```sh
 # Explicit layers, repeatable; later load_order wins a shared entry. A mod may
@@ -102,9 +124,10 @@ the default: every discovered mod applies in `(load_order, id)` order. An
 Mods sort by the configured `order`, then by `(load_order, id)`; within one
 layer the existing ASCII case-insensitive lookup wins. Duplicate mod ids and
 duplicate layer paths are rejected, and a mod may only name a `base` matching
-the base pack's id. The exception is a mod holding nothing but `htexture/`
+the base pack's id. The exception is a mod holding nothing but `hires/`
 entries: textures replace by pixel hash, so once enabled it applies to every game
-pack, whatever its `base` says. With no layers at all the engine takes exactly the
+pack, whatever its `base` says. (The folder was called `htexture/` in
+0.1.0; a pack that still uses that name reads as `hires/`.) With no layers at all the engine takes exactly the
 single-pack path, so a run without `--mod` (and with no discovered mods) is
 byte-identical to earlier releases.
 
@@ -179,7 +202,7 @@ is exact.
 | item definition | `item/0b/item.xml` | xml (see [Item definitions](#item-definitions)) | — |
 | item icon | `item/0b/item`, `item/44/item`, `item/6f/item` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
 | item viewer model | `item/0b/model.tmd` | tmd | the shipped mesh |
-| item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b/model` |
+| item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `hires/item/0b/model` |
 | enemy / player art | (inside `enemy/<id>/enemy*.emd`, `player/<id>/skin/<skin>.emd`) | — | override the whole model entry |
 | player character | `player/<id>/skin/<skin>.emd` (`00` own model, `01`/`02` alternate outfits), `player/<id>/weapon/<item>.emw` (weapon id `00` no weapon … `0a`, `6f` Ingram, `70` Minimi), `player/<id>/sound/<sound>.wav` (`00`-`03` hurt sounds, `04`-`07` their echoing copies); `<id>` is `00` Chris, `01` Jill, `02` Barry, `03` Rebecca | emd, emw; sounds as for `se/` | — |
 | scripted-character held weapon | `enemy/<id>/weapon/<behavior>.tmd` (entity id `20`-`2e`, the behavior byte `01`-`06`); a missing entry holds nothing | tmd | textured from the character's own page |
@@ -192,7 +215,7 @@ is exact.
 | room definition | `room/100/room.xml` | xml (see [Room definitions](#room-definitions)); a raw RDT named for its variant, `room/100/jill-mansion1.rdt`, still loads | — |
 | room scripts | `room/100/room.scd` | scd | — |
 | room object / item model | `room/100/object/00.tmd`, `room/100/item/00.tmd` | tmd | the shipped mesh |
-| room model texture | `room/100/object/00.bmp`; HD replacements use `htexture/room/100/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
+| room model texture | `room/100/object/00.bmp`; HD replacements use `hires/room/100/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
 | room effect sprite | `room/100/effect/00.xml` + `.bmp` | xml; bmp (16-wide CLUT sheet), tim | the shipped sprite's |
 | room player animation | `room/100/anim/00.emr` + `.edd` | emr, edd | — |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
@@ -404,7 +427,7 @@ the one from the later layer wins, and the XML wins a tie. An RDT room runs
 its embedded scripts unless a `room.scd` comes from the same or a later
 layer.
 
-An HD pack can name a model's page `htexture/room/<id>/object/<slot>` (or
+An HD pack can name a model's page `hires/room/<id>/object/<slot>` (or
 `item/<slot>`, covering the whole page) instead of by content hash. A page
 with more than one CLUT row is only replaced by its per-row content hashes.
 The hash names still work, so an HD pack made for RDT rooms keeps replacing
@@ -413,9 +436,9 @@ the same textures.
 Effect sprites are composited onto the room's `effect/NN` sheet at their page
 row (plus one variant page per extra CLUT row), and the composite is what the
 content hash covers. An HD pack can instead name the pieces:
-`htexture/room/<id>/effect/<slot>` covers sprite slot `<slot>`'s rows of its
-page under CLUT row 0, `htexture/room/<id>/effect/<slot>_<row>` its rows of
-the variant page for CLUT row `<row>` (1 to 3), and `htexture/effect/NN`
+`hires/room/<id>/effect/<slot>` covers sprite slot `<slot>`'s rows of its
+page under CLUT row 0, `hires/room/<id>/effect/<slot>_<row>` its rows of
+the variant page for CLUT row `<row>` (1 to 3), and `hires/effect/NN`
 covers the sheet under the sprites. The GPU renderer then builds an HD page at
 the largest scale of the named images: its base is the named sheet (with the
 unnamed sprites' original texels over it), else the composite's
@@ -457,17 +480,17 @@ The texture page keeps the IVM's exact 256x256 indices, palette and
 semi-transparency bits, so the content-hash HD names of an existing pack still
 match.
 
-For HD packs the per-item names are under `htexture/`:
+For HD packs the per-item names are under `hires/`:
 
 ```text
-htexture/item/0b/item.webp     the inventory icon, covering its 40x30 cell
-htexture/item/0b/model.webp    the model's 256x256 page
+hires/item/0b/item.webp     the inventory icon, covering its 40x30 cell
+hires/item/0b/model.webp    the model's 256x256 page
 ```
 
 These are preferred over the older names, which keep working unchanged:
-`htexture/data/item_all/<row:02>` (`<row>` is `imageType - 1`, the file
+`hires/data/item_all/<row:02>` (`<row>` is `imageType - 1`, the file
 Classic REbirth's `hires/Data/ITEM_ALL/<NN>.webp` becomes through
-`convert-mod`) and `htexture/data/item_m2/<name>` (the `ITEM_M2` TIM). The
+`convert-mod`) and `hires/data/item_m2/<name>` (the `ITEM_M2` TIM). The
 content hash remains the final fallback, so an HD pack that predates both
 named routes still replaces the art it did before.
 
@@ -611,10 +634,10 @@ remapped to `0x000001`.
 
 ### HD texture packs
 
-A mod replaces textures by these names under `htexture/`. On first use every image
-(`webp`, `png` or `bmp`) anywhere below `htexture/` is indexed by the first 8 hex
-digits of its file name, so `htexture/bgd/DD17F52F.webp`,
-`htexture/anything/DD17F52F.png` and `htexture/DD17F52F_3B.webp` all replace the
+A mod replaces textures by these names under `hires/`. On first use every image
+(`webp`, `png` or `bmp`) anywhere below `hires/` is indexed by the first 8 hex
+digits of its file name, so `hires/bgd/DD17F52F.webp`,
+`hires/anything/DD17F52F.png` and `hires/DD17F52F_3B.webp` all replace the
 texture hashing to `DD17F52F`; the subdirectories are only for organising files. When
 two files share a hash, a bare `<hash>` name wins over a suffixed `<hash>_XX` one.
 
@@ -657,12 +680,12 @@ and keeps the originals.
 Some masks cannot be named from their own texels: their hash depends on what the
 loader's surface held before the upload. An RE-ENHANCE pack ships the loader's
 `cache/ROOM*.dat` lists, little-endian words of each room's hashes in load order,
-and each camera's mask sits immediately before its background. `htexture` reads
+and each camera's mask sits immediately before its background. `hires` reads
 those lists and pairs a mask with the background hash that follows it. Together
 with the 131 that name themselves, this resolves 407 of the 431 masks RE-ENHANCE
 v2.0 ships.
 
-The rest belong to rooms or cameras the lists do not cover, so `htexture` pairs
+The rest belong to rooms or cameras the lists do not cover, so `hires` pairs
 them by shape. Each mask under a `mask/` directory that no camera uses yet is
 reduced to one texel per original texel (a texel is drawn when most of the HD
 texels over it are at least half opaque). Its coverage is then compared with the
@@ -675,7 +698,7 @@ art differs still compete, so a mask that fits both is left unpaired. On the 131
 picks the right camera for 130 and abstains on the last. It never picks a wrong
 one. It pairs all 24 remaining masks, so all 431 resolve from an unmodified
 `hires/` tree. Three cameras (`306_002`, `406_005`, `407_001`) have no mask in the
-pack. Matching runs once, when the pack's `htexture/` table is first built, and
+pack. Matching runs once, when the pack's `hires/` table is first built, and
 only for a pack with a `mask/` directory. It is spread over every core and takes
 about 0.7 to 0.9 seconds on 8 threads; most of that is hashing each camera's page
 and background.
@@ -687,7 +710,7 @@ A texture with no replacement is reported once on stderr, with every hash that w
 tried:
 
 ```text
-htexture: no replacement for 256x256 model page, CLUT row 1: 3D4A4499 ...
+hires: no replacement for 256x256 model page, CLUT row 1: 3D4A4499 ...
 ```
 
 A complete pack should report nothing while playing. Missing reports mean either the
@@ -820,7 +843,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 
 | CR file | Pack entry |
 | --- | --- |
-| `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
+| `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `hires/**` |
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
 | `STAGEn/ROOM####.RDT` | the room's folder, named for its variant: `room/<room>/<variant>.rdt` (`STAGE6/ROOM6031.RDT` is `room/103/jill-mansion2.rdt`, the original's stages 6 and 7 being the second mansion visit); the engine loads a raw RDT as well as the converted XML |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/<room>/cut/*.bmp`, `room/<room>/mask/*.bmp`, which every variant of the room reads |
@@ -865,6 +888,71 @@ arklay convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
 arklay convert-mod path/to/biorand/mod_biorand --out biorand.akpak
 arklay convert-mod re-hd.zip --root re1hd --base re1.akpak
 ```
+
+## Hosted mods
+
+The launcher's MODS screen has two tabs. **Installed** lists the discovered
+mods to enable, disable and reorder. **Available** lists a hosted mod catalog,
+as a grid of pictures or a list (V), filtered by game and category (F) and
+sorted (G); R fetches it again. A mod's details show its picture,
+description, size, authors and credits, and install it. An install downloads
+the pack to the primary data root's `mods` folder (on Windows
+`%LOCALAPPDATA%\arklay\mods`). There it is checked against the catalog's size
+and SHA-256 and against its own manifest before it replaces anything. An
+installed mod whose catalog version differs shows **Update**, on both tabs.
+Remove deletes the pack. A mod installed from a source folder is left alone:
+two layers may not share an id, so its details say to remove the folder first.
+
+The catalog is `ARKLAY_MOD_CATALOG`, else `[mods] catalog` in `arklay.toml`
+(a URL or a local path to an `index.json`):
+
+```toml
+[mods]
+catalog = "https://example.org/mods/index.json"
+```
+
+The catalog's `index.json` lists each mod's manifest fields plus where the
+pack is, how big it is and its SHA-256. Links are relative to the index, so a
+hosted tree moves as a whole (see `src/catalog.rs` for the full format):
+
+```json
+{
+  "format": 1,
+  "mods": [{
+    "id": "re1-shdp", "name": "Seamless HD Project", "version": "1.1",
+    "game": "re1", "kind": "mod", "category": "High Definition",
+    "authors": ["MoArtis", "Kayael", "Doze_D", "FrankWesker"],
+    "credits": ["..."], "homepage": "https://www.reshdp.com/re1/",
+    "url": "re1-shdp/1.1/re1-shdp.akpak", "size": 529808808, "sha256": "...",
+    "thumbnail": "re1-shdp/1.1/thumbnail.webp"
+  }]
+}
+```
+
+### Publishing the catalog
+
+Each hosted mod is authored as a mod source directory, `<build>/<id>/`, with
+its `manifest.toml` (name, version, category, authors, credits, homepage), a
+640x480 `thumbnail.webp` and its entries. Two scripts maintain them:
+
+- `scripts/import-mods.py [id...]` (re)fills a mod directory's content from
+  the archives the mod was released as, per the recipes in the script:
+  `convert-mod` over the files it selects, or plain copies. It keeps the
+  hand-written `manifest.toml` and thumbnail, and writes a minimal manifest
+  on a first import.
+- `scripts/publish-mods.py [id...]` builds every directory with
+  `arklay mod build` into the hosted tree and writes `index.json`:
+  `<id>/<version>/<id>.akpak` and its `thumbnail.webp`. A published version is
+  never replaced by different bytes, so caches can keep the packs for good.
+  To publish changed content, change the manifest's `version`: the upstream
+  release's version (`1.1`), with a suffix for a repackage of the same
+  release (`1.1-2`). Only `index.json` is rewritten in place, so serve it with
+  a short cache lifetime. `--skip` leaves mods out of the index.
+
+The defaults are `G:\arklay\raw` (the original archives),
+`G:\arklay\mods-build` (the mod directories) and `G:\arklay\mods` (the hosted
+tree, which mirrors the public URL); each script's `--help` lists the
+overrides.
 
 ## The `.s` script assembler
 
@@ -1506,7 +1594,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:blend_black_rect(x, y, w, h, alpha)` | Darken a rectangle. |
 | `api:draw_background(picture, x, y[, r, g, b])` | Draw a picture tinted by `r, g, b`. |
 | `api:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh, scale[, cell])` | A picture region, scaled. `cell` (`{x, y, w, h}`) names the atlas cell the region lies in, so an HD replacement is looked up for that cell alone rather than the whole picture. |
-| `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>/item.bmp`. HD names `htexture/item/<id>/item` and `htexture/data/item_all/<row>` are preferred over the content hash. |
+| `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>/item.bmp`. HD names `hires/item/<id>/item` and `hires/data/item_all/<row>` are preferred over the content hash. |
 | `api:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale[, tint])` | A sheet region through CLUT row `clut`, scaled and tinted. |
 | `api:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v[, whole])` | A sheet region flipped per axis. With `whole`, an HD replacement covers the region's transparent texels too and its own alpha decides what shows, for art the HD page redraws rather than upscales (the ECG condition label). |
 | `api:page_lut(page, sx, sy, w, h, dx, dy, lut[, whole[, options]])` | A rect of an indexed page drawn through `lut`, a table of `0xRRGGBB` colours keyed by texel index; an index without an entry (index 0 included) is transparent. `whole` lets a uniformly tinting lookup's HD replacement cover the whole rect. `options.dw`/`options.dh` stretch the rect over a destination of that size; `options.blend` is `"opaque"` (default), `"half"` (averaged with the frame) or `"add"` (added to it). |

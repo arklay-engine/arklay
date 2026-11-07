@@ -1,43 +1,107 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MODS: every discovered mod, whatever its game, in application order,
-     the lowest priority first. The host publishes `mods.rows` (enabled,
-     name, game, id, version, path), `mods.empty`, `mods.first` and
-     `mods.last` (the priority labels around the rows) and `mods.dir`. -->
+<!-- MODS: two tabs.
+
+     INSTALLED: every discovered mod, whatever its game, in application
+     order, the lowest priority first. The host publishes `mods.rows`
+     (enabled, name, game, id, version, path), `mods.empty`, `mods.first`
+     and `mods.last` (the priority labels around the rows) and `mods.dir`.
+
+     AVAILABLE: the hosted mod catalog, as a list or a grid of pictures. The
+     host publishes `catalog.rows` (index, name, game, category, version,
+     size, status, tone, authors, thumbnail), `catalog.status` (loading,
+     an error, or empty when the rows show), `catalog.list` and
+     `catalog.grid` (which view shows), `catalog.filter`, `catalog.sort`
+     and the command labels. -->
 <screen use="standard-screen" title="MODS">
   <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
-  <command key="aux" cap="O" label="Folder" action="folder"/>
-  <command key="tab_prev" cap="Ctrl+Up/Down" label="{mods.move_hint}" action="move:-1"/>
-  <command key="tab_next" label="{mods.move_hint}" action="move:1" hint="false"/>
-  <stack orientation="horizontal" gap="none">
-    <spacer width="30"/>
-    <stack orientation="horizontal" gap="medium" width="fill">
-      <spacer width="44"/>
-      <text variant="value-dim" text="Mod" width="38%" wrap="none"/>
-      <text variant="value-dim" text="Game" width="20%" wrap="none"/>
-      <text variant="value-dim" text="ID" width="21%" wrap="none"/>
-      <text variant="value-dim" text="Version" width="fill" wrap="none"/>
-    </stack>
-    <spacer width="24"/>
-  </stack>
-  <rule/>
-  <stack gap="medium" visible="{mods.empty}">
-    <text variant="value-dim" text="No mods discovered."/>
-    <text variant="value-dim" text="{mods.dir}"/>
-  </stack>
-  <text variant="value-dim" text="{mods.first}" align="center" wrap="none"/>
-  <list items="{mods.rows}" height="auto">
-    <template>
-      <item variant="row" action="toggle:{item.index}" hint="Toggle" path="{item.path}">
-        <stack orientation="horizontal" gap="medium" height="fill">
-          <checkbox width="44" height="fill" checked="{item.enabled}"/>
-          <text variant="value" text="{item.name}" width="38%" wrap="none"/>
-          <text variant="value" text="{item.game}" width="20%" wrap="none"/>
-          <text variant="value" text="{item.id}" width="21%" wrap="none"/>
-          <text variant="value" text="{item.version}" width="fill" wrap="none"/>
+  <tabs>
+    <tab label="Installed">
+      <command key="aux" cap="O" label="Folder" action="folder"/>
+      <command key="sub_prev" cap="Ctrl+Up/Down" label="{mods.move_hint}" action="move:-1"/>
+      <command key="sub_next" label="{mods.move_hint}" action="move:1" hint="false"/>
+      <stack orientation="horizontal" gap="none">
+        <spacer width="30"/>
+        <stack orientation="horizontal" gap="medium" width="fill">
+          <spacer width="44"/>
+          <text variant="value-dim" text="Mod" width="38%" wrap="none"/>
+          <text variant="value-dim" text="Game" width="20%" wrap="none"/>
+          <text variant="value-dim" text="ID" width="21%" wrap="none"/>
+          <text variant="value-dim" text="Version" width="fill" wrap="none"/>
         </stack>
-      </item>
-    </template>
-  </list>
-  <text variant="value-dim" text="{mods.last}" align="center" wrap="none"/>
-  <text slot="footer" variant="value-dim" text="{focus.path}" wrap="none"/>
+        <spacer width="24"/>
+      </stack>
+      <rule/>
+      <stack gap="medium" visible="{mods.empty}">
+        <text variant="value-dim" text="No mods installed. The Available tab lists mods to download."/>
+        <text variant="value-dim" text="{mods.dir}"/>
+      </stack>
+      <text variant="value-dim" text="{mods.first}" align="center" wrap="none"/>
+      <list items="{mods.rows}" height="auto">
+        <template>
+          <item variant="row" action="toggle:{item.index}" hint="Toggle" path="{item.path}">
+            <stack orientation="horizontal" gap="medium" height="fill">
+              <checkbox width="44" height="fill" checked="{item.enabled}"/>
+              <text variant="value" text="{item.name}" width="38%" wrap="none"/>
+              <text variant="value" text="{item.game}" width="20%" wrap="none"/>
+              <text variant="value" text="{item.id}" width="21%" wrap="none"/>
+              <text variant="{item.version_tone}" text="{item.version}" width="fill" wrap="none"/>
+            </stack>
+          </item>
+        </template>
+      </list>
+      <text variant="value-dim" text="{mods.last}" align="center" wrap="none"/>
+    </tab>
+
+    <tab label="Available">
+      <command key="aux" cap="V" label="{catalog.view_hint}" action="catalog_view"/>
+      <command key="sub_prev" cap="F" label="{catalog.filter_hint}" action="catalog_filter"/>
+      <command key="sub_next" cap="G" label="{catalog.sort_hint}" action="catalog_sort"/>
+      <command key="reset_group" cap="R" label="Refresh" action="catalog_refresh"/>
+      <text variant="value-dim" text="{catalog.status}" wrap="none"/>
+
+      <stack visible="{catalog.list}" height="fill">
+        <stack orientation="horizontal" gap="none">
+          <spacer width="30"/>
+          <stack orientation="horizontal" gap="medium" width="fill">
+            <text variant="value-dim" text="Mod" width="34%" wrap="none"/>
+            <text variant="value-dim" text="Category" width="20%" wrap="none"/>
+            <text variant="value-dim" text="Version" width="10%" wrap="none"/>
+            <text variant="value-dim" text="Size" width="12%" wrap="none"/>
+            <text variant="value-dim" text="Status" width="fill" wrap="none"/>
+          </stack>
+          <spacer width="24"/>
+        </stack>
+        <rule/>
+        <list items="{catalog.rows}" height="fill">
+          <template>
+            <item variant="row" action="mod_info:{item.index}" hint="Details">
+              <stack orientation="horizontal" gap="medium" height="fill">
+                <text variant="value" text="{item.title}" width="34%" wrap="none"/>
+                <text variant="value" text="{item.category}" width="20%" wrap="none"/>
+                <text variant="value" text="{item.version}" width="10%" wrap="none"/>
+                <text variant="value" text="{item.size}" width="12%" wrap="none"/>
+                <text variant="{item.tone}" text="{item.status}" width="fill" wrap="none"/>
+              </stack>
+            </item>
+          </template>
+        </list>
+      </stack>
+
+      <list columns="4" variant="cards" items="{catalog.rows}" height="fill" visible="{catalog.grid}">
+        <template>
+          <item variant="card" action="mod_info:{item.index}" hint="Details">
+            <stack gap="small">
+              <image aspect="4:3" src="{item.thumbnail}"/>
+              <text variant="value" text="{item.name}" wrap="none"/>
+              <stack orientation="horizontal" gap="small">
+                <text variant="value-dim" text="{item.category}" width="fill" wrap="none"/>
+                <text variant="{item.badge_tone}" text="{item.badge}" wrap="none"/>
+              </stack>
+            </stack>
+          </item>
+        </template>
+      </list>
+    </tab>
+  </tabs>
+  <text slot="footer" variant="value-dim" text="{focus.path}" wrap="none" reserve="line"/>
 </screen>

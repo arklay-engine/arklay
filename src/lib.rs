@@ -12,6 +12,7 @@ pub mod bgm2;
 pub mod bmp;
 pub mod budget;
 pub mod build_info;
+pub mod catalog;
 pub mod character2;
 pub mod charset;
 pub mod cinepak;
@@ -42,7 +43,7 @@ pub mod gui;
 pub mod hash;
 #[cfg(feature = "hd")]
 pub mod hdfilm;
-pub mod htexture;
+pub mod hires;
 pub mod item_art;
 pub mod item_catalog;
 pub mod items;

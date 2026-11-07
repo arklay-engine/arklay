@@ -54,7 +54,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
     // from its folder's `item.bmp`; nil and a message when it has none.
     //
     // The handle's HD names are registered so a named
-    // `htexture/item/<id>/item` (or the CR `htexture/data/item_all/<row>`)
+    // `hires/item/<id>/item` (or the CR `hires/data/item_all/<row>`)
     // replacement wins over the content hash while the frame is captured.
     methods.add_method_mut("item_icon", |_lua, api, item: u8| {
         let pack: &Pack = api.cx.pack;
@@ -564,12 +564,12 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                         [r, g, b]
                     });
                     let whole = match whole {
-                        Some(true) => htexture::Recolour::whole(&palette, &colours),
+                        Some(true) => hires::Recolour::whole(&palette, &colours),
                         _ => None,
                     };
                     let (lut, whole) = match whole {
                         Some(lut) => (lut, true),
-                        None => (htexture::Recolour::lut(&palette, &colours), false),
+                        None => (hires::Recolour::lut(&palette, &colours), false),
                     };
                     let draw = |framebuffer: &mut Framebuffer| {
                         if whole {
@@ -577,13 +577,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                         }
                         draw(framebuffer);
                     };
-                    let recoloured = htexture::Recoloured {
+                    let recoloured = hires::Recoloured {
                         art,
                         indices: host.assets.indices(handle)?,
                         lut,
                     };
                     framebuffer.draw_replaced(
-                        htexture::QuadImage::Recoloured(Arc::new(recoloured)),
+                        hires::QuadImage::Recoloured(Arc::new(recoloured)),
                         corners,
                         uv,
                         [1.0; 3],

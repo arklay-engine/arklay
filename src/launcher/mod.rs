@@ -48,10 +48,11 @@ use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_Keymod};
 use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_MOUSEWHEEL_FLIPPED};
 use sdl3_sys::scancode::{
     SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_A, SDL_SCANCODE_B, SDL_SCANCODE_D,
-    SDL_SCANCODE_DOWN, SDL_SCANCODE_E, SDL_SCANCODE_EQUALS, SDL_SCANCODE_ESCAPE,
-    SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT, SDL_SCANCODE_MINUS, SDL_SCANCODE_O, SDL_SCANCODE_Q,
-    SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
-    SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
+    SDL_SCANCODE_DOWN, SDL_SCANCODE_E, SDL_SCANCODE_EQUALS, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F,
+    SDL_SCANCODE_G, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT, SDL_SCANCODE_MINUS, SDL_SCANCODE_O,
+    SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_S,
+    SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_V, SDL_SCANCODE_W,
+    SDL_Scancode,
 };
 
 use crate::build_info;
@@ -59,7 +60,8 @@ use crate::config::{Config, Mods, UpdateChannel};
 use crate::controls::{self, Source as Input};
 use crate::convert::{self, CONVERT_VERSION, Game};
 use crate::engine::{self, Display, Gamepads, ModOptions};
-use crate::gui::canvas::{Canvas, Color, Rect};
+use crate::gui::canvas::{Canvas, Color, Picture, Rect};
+use crate::gui::dom::value::ImageValue;
 use crate::gui::dom::{Custom, Library, Node, Ui, UiOutput, Value};
 use crate::gui::locale::Locale;
 use crate::gui::theme::palette;
@@ -75,6 +77,9 @@ use crate::progress::ProgressSnapshot;
 use crate::steam;
 use crate::update::{self, UpdateInfo};
 use crate::video::{self, RendererKind};
+
+mod mod_manager;
+use mod_manager::{ModCatalog, ModJob, View};
 
 /// The launcher's window title. Play replaces it with the pack's name, and a
 /// failed game puts it back.
@@ -170,18 +175,21 @@ enum Screen {
     Install,
     Update,
     Mods,
+    /// One hosted mod's details, from MODS > AVAILABLE.
+    ModInfo,
     Progress,
     Message,
 }
 
 impl Screen {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Main,
         Self::Play,
         Self::Games,
         Self::Install,
         Self::Update,
         Self::Mods,
+        Self::ModInfo,
         Self::Progress,
         Self::Message,
     ];
@@ -195,6 +203,7 @@ impl Screen {
             Self::Install => "launcher_install",
             Self::Update => "launcher_update",
             Self::Mods => "launcher_mods",
+            Self::ModInfo => "launcher_mod",
             Self::Progress => "launcher_progress",
             Self::Message => "launcher_message",
         }
@@ -208,13 +217,14 @@ impl Screen {
     fn parent(self) -> Option<Self> {
         match self {
             Self::Install => Some(Self::Games),
+            Self::ModInfo => Some(Self::Mods),
             _ => None,
         }
     }
 }
 
 /// The launcher's screens and components.
-const DOCUMENTS: [(&str, &str); 9] = [
+const DOCUMENTS: [(&str, &str); 10] = [
     (
         "launcher_components",
         include_str!("../../assets/ui/launcher_components.xml"),
@@ -242,6 +252,10 @@ const DOCUMENTS: [(&str, &str); 9] = [
     (
         "launcher_mods",
         include_str!("../../assets/ui/launcher_mods.xml"),
+    ),
+    (
+        "launcher_mod",
+        include_str!("../../assets/ui/launcher_mod.xml"),
     ),
     (
         "launcher_progress",
@@ -291,6 +305,10 @@ struct PackRow {
     path: PathBuf,
     stale: bool,
     error: Option<String>,
+    /// The pack entry holding its 4:3 preview picture.
+    thumbnail: Option<String>,
+    /// Whether it was converted from a retail game (tagged `official`).
+    official: bool,
 }
 
 /// The remembered game installation.
@@ -451,7 +469,21 @@ fn tone(warn: bool) -> &'static str {
 struct Launcher {
     ui: Ui,
     play_index: usize,
+    /// How PLAY shows the packs.
+    play_view: View,
+    /// Each pack's decoded preview picture, by path; `None` when it has none.
+    pack_thumbs: HashMap<PathBuf, Option<Arc<Picture>>>,
     mods_index: usize,
+    /// The cursor on MODS > AVAILABLE.
+    available_index: usize,
+    /// The MODS tab last shown (0 Installed, 1 Available).
+    mods_tab: usize,
+    /// The hosted mod catalog.
+    catalog: ModCatalog,
+    /// A mod download in progress.
+    mod_job: Option<ModJob>,
+    /// The global mod folders discovery searches (the config's).
+    mod_dirs: Vec<PathBuf>,
     config: Config,
     packs: Vec<PackRow>,
     mods: Vec<ModRow>,
@@ -510,7 +542,14 @@ impl Launcher {
         let mut launcher = Self {
             ui,
             play_index: 0,
+            play_view: View::default(),
+            pack_thumbs: HashMap::new(),
             mods_index: 0,
+            available_index: 0,
+            mods_tab: 0,
+            catalog: ModCatalog::default(),
+            mod_job: None,
+            mod_dirs: Config::mod_dirs(),
             config: config.clone(),
             packs,
             mods,
@@ -631,8 +670,10 @@ impl Launcher {
         match screen {
             Screen::Mods => {
                 self.refresh_mods();
+                self.refresh_catalog(false);
                 self.mods_index = 0;
             }
+            Screen::ModInfo => self.refresh_mods(),
             Screen::Update => self.rollback = update::rollback_available(),
             _ => {}
         }
@@ -644,7 +685,14 @@ impl Launcher {
                 let index = Game::ALL.iter().position(|&game| game == self.game);
                 self.ui.set_focus_index(index.unwrap_or(0));
             }
-            Screen::Mods => self.ui.set_focus_index(self.mods_index),
+            Screen::Mods => {
+                self.ui.set_tab_index(self.mods_tab);
+                self.ui.set_focus_index(if self.mods_tab == 0 {
+                    self.mods_index
+                } else {
+                    self.available_index
+                });
+            }
             _ => {}
         }
     }
@@ -727,7 +775,11 @@ impl Launcher {
             Screen::Games => self.publish_games(),
             Screen::Install => self.publish_install(),
             Screen::Update => self.publish_update(),
-            Screen::Mods => self.publish_mods(),
+            Screen::Mods => {
+                self.publish_mods();
+                self.publish_catalog();
+            }
+            Screen::ModInfo => self.publish_catalog(),
             Screen::Progress => self.publish_progress(),
         }
     }
@@ -765,7 +817,23 @@ impl Launcher {
         self.ui.set("main.mods", plural(self.mods.len(), "mod"));
     }
 
+    /// Switch PLAY between its grid and its list, keeping the cursor.
+    fn toggle_play_view(&mut self) {
+        self.play_view = match self.play_view {
+            View::Grid => View::List,
+            View::List => View::Grid,
+        };
+        self.publish();
+        self.ui.set_focus_index(self.play_index);
+    }
+
     fn publish_play(&mut self) {
+        for pack in &self.packs {
+            if !self.pack_thumbs.contains_key(&pack.path) {
+                self.pack_thumbs
+                    .insert(pack.path.clone(), pack_thumbnail(pack).map(Arc::new));
+            }
+        }
         let rows = self
             .packs
             .iter()
@@ -793,17 +861,49 @@ impl Launcher {
                 } else {
                     String::new()
                 };
+                // The grid card's second line: the pack's state when it
+                // needs attention, else its version.
+                let (badge, badge_warn) = if pack.error.is_some() {
+                    ("Unreadable".to_string(), true)
+                } else if pack.stale {
+                    ("Rebuild required".to_string(), true)
+                } else {
+                    (pack.version.clone(), false)
+                };
+                let thumbnail = match self.pack_thumbs.get(&pack.path).cloned().flatten() {
+                    Some(picture) => Value::Image(ImageValue {
+                        colour: picture,
+                        grey: None,
+                    }),
+                    None => mod_manager::placeholder(),
+                };
                 Value::map([
                     ("name", Value::from(pack.name.as_str())),
                     ("file", Value::from(pack.file.as_str())),
                     ("version", Value::from(version)),
                     ("source", Value::from(pack.source.as_str())),
                     ("warning", Value::from(warning)),
+                    ("thumbnail", thumbnail),
+                    ("badge", Value::from(badge)),
+                    ("badge_tone", Value::from(tone(badge_warn))),
                 ])
             })
             .collect();
+        let any = !self.packs.is_empty();
         self.ui.set("play.rows", Value::list(rows));
-        self.ui.set("play.empty", self.packs.is_empty());
+        self.ui.set("play.empty", !any);
+        self.ui
+            .set("play.list", any && self.play_view == View::List);
+        self.ui
+            .set("play.grid", any && self.play_view == View::Grid);
+        self.ui.set(
+            "play.view_hint",
+            match (any, self.play_view) {
+                (false, _) => "",
+                (true, View::Grid) => "List view",
+                (true, View::List) => "Grid view",
+            },
+        );
     }
 
     /// A game's pack state for the game lists, and whether it needs
@@ -972,12 +1072,18 @@ impl Launcher {
             .mods
             .iter()
             .map(|row| {
+                // A newer hosted version shows beside the installed one.
+                let (version, tone) = match self.catalog_update(&row.id) {
+                    Some(newer) => (format!("{} > {newer}", row.version), "warn"),
+                    None => (row.version.clone(), "value"),
+                };
                 Value::map([
                     ("enabled", Value::Bool(row.enabled)),
                     ("name", Value::from(row.name.as_str())),
                     ("game", Value::from(row.game.as_str())),
                     ("id", Value::from(row.id.as_str())),
-                    ("version", Value::from(row.version.as_str())),
+                    ("version", Value::from(version)),
+                    ("version_tone", Value::from(tone)),
                     ("path", Value::from(row.path.display().to_string())),
                 ])
             })
@@ -1010,6 +1116,11 @@ impl Launcher {
                 .lock()
                 .map(|state| state.clone())
                 .unwrap_or_default()
+        } else if let Some(job) = &self.mod_job {
+            job.state
+                .lock()
+                .map(|state| state.clone())
+                .unwrap_or_default()
         } else if let Some(job) = &self.update_job {
             job.state
                 .lock()
@@ -1021,7 +1132,17 @@ impl Launcher {
         let rebuild = self.job.as_ref().is_some_and(|job| job.rebuild);
         let game = self.job.as_ref().map_or(self.game, |job| job.game);
         let game_title = game.title().to_uppercase();
-        let title = if self.update_job.is_some() {
+        let title = if let Some(job) = &self.mod_job {
+            format!(
+                "{} {}",
+                if job.update {
+                    "UPDATING"
+                } else {
+                    "DOWNLOADING"
+                },
+                job.entry.name.to_uppercase()
+            )
+        } else if self.update_job.is_some() {
             "UPDATING ENGINE".to_string()
         } else if rebuild {
             format!("REBUILDING {game_title}")
@@ -1054,6 +1175,10 @@ impl Launcher {
             .is_some_and(|job| job.cancel.load(Ordering::Relaxed))
             || self
                 .update_job
+                .as_ref()
+                .is_some_and(|job| job.cancel.load(Ordering::Relaxed))
+            || self
+                .mod_job
                 .as_ref()
                 .is_some_and(|job| job.cancel.load(Ordering::Relaxed));
         self.ui.set("progress.title", title);
@@ -1112,8 +1237,13 @@ impl Launcher {
                 }
             }
             Screen::Mods => {
+                self.mods_tab = self.ui.tab_indices().first().copied().unwrap_or(0);
                 if let Some(index) = self.ui.focus_index() {
-                    self.mods_index = index;
+                    if self.mods_tab == 0 {
+                        self.mods_index = index;
+                    } else {
+                        self.available_index = index;
+                    }
                 }
             }
             _ => {}
@@ -1248,6 +1378,9 @@ impl Launcher {
     /// Carry out an action a screen reported. Returns true to close.
     fn action(&mut self, name: &str, arg: &Value, display: &mut Display) -> bool {
         let index = arg.as_int().unwrap_or(0).max(0) as usize;
+        if self.catalog_action(name, arg) {
+            return false;
+        }
         match name {
             "exit" => return true,
             "play_screen" => self.enter(Screen::Play),
@@ -1259,6 +1392,7 @@ impl Launcher {
                 self.play_index = index;
                 return self.play(display);
             }
+            "play_view" => self.toggle_play_view(),
             "install_game" => {
                 if let Some(&game) = Game::ALL.get(index) {
                     self.select_game(game);
@@ -1299,6 +1433,9 @@ impl Launcher {
             }
             "cancel_job" => {
                 if let Some(job) = &self.job {
+                    job.cancel.store(true, Ordering::Relaxed);
+                }
+                if let Some(job) = &self.mod_job {
                     job.cancel.store(true, Ordering::Relaxed);
                 }
                 if let Some(job) = &self.update_job {
@@ -1461,6 +1598,9 @@ impl Launcher {
             b if b == SDL_GAMEPAD_BUTTON_START.0 && options => GuiKey::Cancel,
             b if b == SDL_GAMEPAD_BUTTON_BACK.0 && options => GuiKey::ResetAll,
             b if b == SDL_GAMEPAD_BUTTON_NORTH.0 && options => GuiKey::ResetGroup,
+            b if b == SDL_GAMEPAD_BUTTON_NORTH.0 && self.screen() == Screen::Mods => {
+                GuiKey::ResetGroup
+            }
             b if b == SDL_GAMEPAD_BUTTON_START.0 => GuiKey::Confirm,
             b if b == SDL_GAMEPAD_BUTTON_BACK.0 => GuiKey::Cancel,
             b if b == SDL_GAMEPAD_BUTTON_WEST.0 => GuiKey::Aux,
@@ -1487,9 +1627,21 @@ impl Launcher {
     fn keyboard_key(&self, scancode: SDL_Scancode, modifiers: SDL_Keymod) -> Option<GuiKey> {
         let ctrl = modifiers & SDL_KMOD_CTRL != 0;
         let options = self.options.is_some();
+        // MODS switches its tabs with Q/E and keeps Ctrl+Up/Down for moving
+        // a mod; V, F, G and R are its Available tab's view, filter, sort and
+        // refresh.
+        let mods = !options && self.screen() == Screen::Mods;
         Some(match scancode {
             SDL_SCANCODE_ESCAPE => GuiKey::Cancel,
             SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER | SDL_SCANCODE_SPACE => GuiKey::Confirm,
+            SDL_SCANCODE_UP | SDL_SCANCODE_W if ctrl && mods => GuiKey::SubPrev,
+            SDL_SCANCODE_DOWN | SDL_SCANCODE_S if ctrl && mods => GuiKey::SubNext,
+            SDL_SCANCODE_Q if mods => GuiKey::TabPrev,
+            SDL_SCANCODE_E if mods => GuiKey::TabNext,
+            SDL_SCANCODE_V if mods => GuiKey::Aux,
+            SDL_SCANCODE_F if mods => GuiKey::SubPrev,
+            SDL_SCANCODE_G if mods => GuiKey::SubNext,
+            SDL_SCANCODE_R if mods => GuiKey::ResetGroup,
             SDL_SCANCODE_UP | SDL_SCANCODE_W if ctrl => GuiKey::TabPrev,
             SDL_SCANCODE_DOWN | SDL_SCANCODE_S if ctrl => GuiKey::TabNext,
             SDL_SCANCODE_UP | SDL_SCANCODE_W => GuiKey::Up,
@@ -1505,6 +1657,7 @@ impl Launcher {
             SDL_SCANCODE_EQUALS => GuiKey::TabPrev,
             SDL_SCANCODE_MINUS => GuiKey::TabNext,
             SDL_SCANCODE_B if !options && self.screen() == Screen::Install => GuiKey::Aux,
+            SDL_SCANCODE_V if !options && self.screen() == Screen::Play => GuiKey::Aux,
             SDL_SCANCODE_O if !options && self.screen() == Screen::Mods => GuiKey::Aux,
             _ => return None,
         })
@@ -1774,7 +1927,7 @@ impl Launcher {
     }
 
     fn refresh_mods(&mut self) {
-        self.mods = scan_mods(&self.packs, &self.config, &Config::mod_dirs());
+        self.mods = scan_mods(&self.packs, &self.config, &self.mod_dirs);
         if self.mods_index >= self.mods.len() {
             self.mods_index = self.mods.len().saturating_sub(1);
         }
@@ -1915,6 +2068,10 @@ impl Launcher {
             self.show_message("PACK ERROR", &[error], Screen::Play);
             return false;
         }
+        // Go black first: the renderer swap and the pack's loading take most
+        // of a second, and the window would otherwise hold the launcher's
+        // last frame through it.
+        self.go_black(display);
         // Hand the pads to the game's input latch; it opens its own handles.
         self.pads = Gamepads::default();
         display.note_window_size();
@@ -1958,6 +2115,10 @@ impl Launcher {
             // Only the command line runs in authentic mode.
             authentic: false,
         };
+        // The new renderer's window stays black until the game's first frame.
+        if let Err(err) = display.present_black() {
+            logging::write(&format!("play: black frame: {err:#}"));
+        }
         logging::write(&format!("play: {}", pack.path.display()));
         let result = engine::run_root_with_display(
             &pack.path,
@@ -1975,14 +2136,31 @@ impl Launcher {
             Err(err) => {
                 logging::write(&format!("game failed: {err:#}"));
                 self.pads.init();
-                let mut software = graphics;
-                software.renderer = RendererKind::Software;
-                let _ = display.set_renderer(software);
+                // The launcher carries on on the game's renderer (software,
+                // if the GPU one failed and fell back).
                 let _ = display.set_title(WINDOW_TITLE);
                 self.show_message("GAME FAILED", &[&format!("{err:#}")], Screen::Play);
                 false
             }
         }
+    }
+
+    /// Replace the launcher's frame with black at once.
+    fn go_black(&mut self, display: &mut Display) {
+        let (width, height) = self.size;
+        if width == 0 || height == 0 {
+            return;
+        }
+        // Twice: with vsync the second present waits until the first is on
+        // screen, before a renderer swap can replace this renderer.
+        for _ in 0..2 {
+            if let Err(err) = display.present_black().and_then(|()| display.show()) {
+                logging::write(&format!("play: black frame: {err:#}"));
+                break;
+            }
+        }
+        // The next draw repaints the launcher in full (after a failed start).
+        self.ui.invalidate();
     }
 
     /// Open the native folder picker for a manually installed copy.
@@ -2090,6 +2268,7 @@ impl Launcher {
                     },
                 );
                 self.packs = scan_packs();
+                self.pack_thumbs.clear();
                 self.game = job.game;
                 self.refresh_mods();
                 self.goto(Screen::Main);
@@ -2124,10 +2303,28 @@ impl Launcher {
     fn set_capture_screen(&mut self, name: &str, display: &mut Display) {
         let screen = match name {
             "play" => Screen::Play,
+            "play-list" => {
+                self.play_view = View::List;
+                Screen::Play
+            }
             "games" => Screen::Games,
             "install" => Screen::Install,
             "update" => Screen::Update,
             "mods" => Screen::Mods,
+            // MODS > AVAILABLE as a grid or a list, and the first mod's
+            // details, once the catalog and its pictures have loaded.
+            "mods-available" | "mods-list" | "mod" => {
+                self.mods_tab = 1;
+                if name == "mods-list" {
+                    self.catalog.view = View::List;
+                }
+                self.goto(Screen::Mods);
+                self.wait_for_catalog(Duration::from_secs(20));
+                if name == "mod" {
+                    self.catalog_action("mod_info", &Value::Int(0));
+                }
+                return;
+            }
             "options" => {
                 self.open_options(display);
                 return;
@@ -2190,6 +2387,7 @@ impl Launcher {
             let job_changed = self.poll_job();
             let update_changed = self.poll_update_job();
             let check_changed = self.poll_check();
+            let mods_changed = self.poll_mod_job() | self.poll_catalog();
             if self.auto_update
                 && !self.checking
                 && self.update_job.is_none()
@@ -2199,13 +2397,16 @@ impl Launcher {
                 self.auto_update = false;
                 self.start_update();
             }
-            if dialog_changed || job_changed || update_changed || check_changed {
+            if dialog_changed || job_changed || update_changed || check_changed || mods_changed {
                 self.ui.invalidate();
             }
             let (width, height) = display.drawable_size();
             if width > 0 && height > 0 && (self.draw(width, height) || present) {
-                display.present_ui(self.size.0, self.size.1, &self.rgba)?;
-                display.show()?;
+                let canvas = match &self.options {
+                    Some(menu) => menu.canvas(),
+                    None => self.ui.canvas(),
+                };
+                display.present_canvas(canvas)?;
                 present = false;
             }
             if !unsafe { SDL_WaitEventTimeout(&mut event, self.pad_wait()) } {
@@ -2229,9 +2430,17 @@ impl Launcher {
                     if let Some(job) = &self.update_job {
                         job.cancel.store(true, Ordering::Relaxed);
                     }
+                    // A download removes its part file once it sees the
+                    // cancel.
+                    if let Some(job) = &self.mod_job {
+                        job.cancel.store(true, Ordering::Relaxed);
+                    }
                     let deadline = std::time::Instant::now() + Duration::from_secs(3);
-                    while self.job.is_some() && std::time::Instant::now() < deadline {
+                    while (self.job.is_some() || self.mod_job.is_some())
+                        && std::time::Instant::now() < deadline
+                    {
                         self.poll_job();
+                        self.poll_mod_job();
                         std::thread::sleep(Duration::from_millis(20));
                     }
                     self.save_window(display);
@@ -2507,16 +2716,87 @@ fn scan_packs() -> Vec<PackRow> {
                 path,
                 stale,
                 error,
+                official: manifest.as_ref().is_some_and(is_official),
+                thumbnail: manifest.as_ref().and_then(|manifest| {
+                    // A base pack converted before packs named their
+                    // thumbnail still holds the title screen.
+                    manifest.thumbnail.clone().or_else(|| {
+                        (!manifest.is_mod()).then(|| convert::BASE_THUMBNAIL.to_string())
+                    })
+                }),
             });
         }
     }
+    sort_packs(&mut packs);
+    packs
+}
+
+/// The official games in the order PLAY lists them, ahead of every other
+/// official pack.
+const OFFICIAL_ORDER: [&str; 3] = ["re1", "re2", "re3"];
+
+/// Whether a pack is a retail game's conversion: tagged `official`, or, for
+/// a pack converted before packs carried tags, an untagged base pack with
+/// a game's id.
+fn is_official(manifest: &manifest::Manifest) -> bool {
+    manifest.has_tag(manifest::TAG_OFFICIAL)
+        || (manifest.tags.is_empty()
+            && !manifest.is_mod()
+            && OFFICIAL_ORDER.contains(&manifest.id.to_ascii_lowercase().as_str()))
+}
+
+/// Order packs for PLAY: the official games first (RE1, RE2, RE3, then any
+/// other), then everything else by name.
+fn sort_packs(packs: &mut [PackRow]) {
+    let rank = |pack: &PackRow| {
+        if !pack.official {
+            return OFFICIAL_ORDER.len() + 1;
+        }
+        let id = pack.id.to_ascii_lowercase();
+        OFFICIAL_ORDER
+            .iter()
+            .position(|&game| game == id)
+            .unwrap_or(OFFICIAL_ORDER.len())
+    };
     packs.sort_by(|a, b| {
-        a.name
-            .to_ascii_lowercase()
-            .cmp(&b.name.to_ascii_lowercase())
+        rank(a)
+            .cmp(&rank(b))
+            .then_with(|| {
+                a.name
+                    .to_ascii_lowercase()
+                    .cmp(&b.name.to_ascii_lowercase())
+            })
             .then_with(|| a.file.cmp(&b.file))
     });
-    packs
+}
+
+/// The decoded preview picture `pack` names, when it has one that reads.
+fn pack_thumbnail(pack: &PackRow) -> Option<Picture> {
+    let entry = pack.thumbnail.as_deref()?;
+    let data = match pack::read_entry(&pack.path, entry) {
+        Ok(data) => data?,
+        Err(err) => {
+            logging::write(&format!(
+                "{}: thumbnail {entry}: {err:#}",
+                pack.path.display()
+            ));
+            return None;
+        }
+    };
+    match crate::assets::decode_image_bytes(&pack::extension_of(entry), &data) {
+        Ok(image) => Some(Picture {
+            width: image.width,
+            height: image.height,
+            rgba: image.rgba,
+        }),
+        Err(err) => {
+            logging::write(&format!(
+                "{}: thumbnail {entry}: {err:#}",
+                pack.path.display()
+            ));
+            None
+        }
+    }
 }
 
 /// Whether a pack needs a rebuild to match this engine. RE1 packs carry
@@ -2794,9 +3074,12 @@ pub fn run() -> Result<()> {
     }
     let capture = env::var_os("ARKLAY_LAUNCHER_CAPTURE").map(PathBuf::from);
     let mut graphics = config.graphics;
-    // The launcher is 2D; the game backend is chosen when Play hands the
-    // window over.
-    graphics.renderer = RendererKind::Software;
+    // The launcher draws on the renderer the game uses, so Play hands the
+    // window over without a renderer swap. A headless capture renders in
+    // software.
+    if capture.is_some() {
+        graphics.renderer = RendererKind::Software;
+    }
     let mut display = Display::new(WINDOW_TITLE, capture.is_some(), graphics)?;
     if capture.is_none() {
         display.set_resizable(true);
@@ -2992,6 +3275,8 @@ mod tests {
             path: base,
             stale: false,
             error: None,
+            thumbnail: None,
+            official: false,
         };
         let config = Config::default();
         let packs = std::slice::from_ref(&pack);
@@ -3065,6 +3350,8 @@ mod tests {
             path: PathBuf::from(format!("/packs/{id}.akpak")),
             stale: false,
             error: None,
+            thumbnail: None,
+            official: false,
         }
     }
 
@@ -3194,5 +3481,119 @@ mod tests {
             launcher.ui.screens(),
             [Screen::Main, Screen::Progress].map(Screen::name)
         );
+    }
+
+    #[test]
+    fn official_games_come_first_in_game_order() {
+        use crate::manifest::{Manifest, TAG_OFFICIAL, TAG_RANDOMIZER};
+
+        let tagged = |id: &str, tags: &[&str]| Manifest {
+            tags: tags.iter().map(|tag| tag.to_string()).collect(),
+            ..Manifest::base(id)
+        };
+        assert!(is_official(&tagged("re2", &[TAG_OFFICIAL])));
+        // An untagged game pack predates tags; any other untagged pack, or
+        // a randomized one, is not official.
+        assert!(is_official(&tagged("re1", &[])));
+        assert!(!is_official(&tagged("re1", &[TAG_RANDOMIZER])));
+        assert!(!is_official(&tagged("biorand-1", &[])));
+        assert!(!is_official(&Manifest {
+            kind: manifest::PackKind::Mod,
+            ..tagged("re1", &[])
+        }));
+
+        let row = |id: &str, name: &str, official: bool| PackRow {
+            name: name.to_string(),
+            official,
+            ..pack_row(id)
+        };
+        let mut packs = vec![
+            row("biorand-2", "A randomized game", false),
+            row("re3", "Resident Evil 3", true),
+            row("demo", "Demo", true),
+            row("re2", "Resident Evil 2", true),
+            row("biorand-1", "Another", false),
+            row("re1", "Resident Evil", true),
+        ];
+        sort_packs(&mut packs);
+        let ids: Vec<&str> = packs.iter().map(|pack| pack.id.as_str()).collect();
+        assert_eq!(ids, ["re1", "re2", "re3", "demo", "biorand-2", "biorand-1"]);
+    }
+
+    #[test]
+    fn play_shows_each_packs_thumbnail_in_a_grid_or_a_list() {
+        use crate::manifest::Manifest;
+        use crate::pack::PackWriter;
+
+        let dir =
+            std::env::temp_dir().join(format!("arklay-launcher-thumbs-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("re1.akpak");
+        let mut writer = PackWriter::new();
+        let manifest = Manifest {
+            thumbnail: Some(convert::BASE_THUMBNAIL.to_string()),
+            ..Manifest::base("re1")
+        };
+        writer
+            .add(manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        let title = crate::state::Image {
+            width: 8,
+            height: 6,
+            rgba: [0x40, 0x80, 0xC0, 0xFF].repeat(48),
+        };
+        writer
+            .add(
+                convert::BASE_THUMBNAIL,
+                crate::bmp::encode_to_vec(&title).unwrap(),
+            )
+            .unwrap();
+        writer.write(&path).unwrap();
+
+        let with_art = PackRow {
+            path: path.clone(),
+            thumbnail: manifest.thumbnail.clone(),
+            ..pack_row("re1")
+        };
+        // A pack whose thumbnail cannot be read shows the placeholder.
+        let without = PackRow {
+            stale: true,
+            thumbnail: Some("missing.webp".to_string()),
+            ..pack_row("re2")
+        };
+        let mut launcher = Launcher::with(
+            &Config::default(),
+            vec![with_art, without],
+            HashMap::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        launcher.goto(Screen::Play);
+        assert_eq!(launcher.ui.get("play.grid"), Value::Bool(true));
+        assert_eq!(launcher.ui.get("play.list"), Value::Bool(false));
+        assert_eq!(launcher.ui.get("play.view_hint"), Value::from("List view"));
+        let Value::List(rows) = launcher.ui.get("play.rows") else {
+            panic!("play.rows is a list");
+        };
+        let thumbnail = |row: &Value| match row {
+            Value::Map(map) => match map.get("thumbnail") {
+                Some(Value::Image(image)) => (image.colour.width, image.colour.height),
+                other => panic!("thumbnail {other:?}"),
+            },
+            other => panic!("row {other:?}"),
+        };
+        assert_eq!(thumbnail(&rows[0]), (8, 6));
+        assert_eq!(thumbnail(&rows[1]), (4, 3));
+        let badge = |row: &Value| match row {
+            Value::Map(map) => map.get("badge").cloned(),
+            _ => None,
+        };
+        assert_eq!(badge(&rows[1]), Some(Value::from("Rebuild required")));
+
+        launcher.toggle_play_view();
+        assert_eq!(launcher.ui.get("play.list"), Value::Bool(true));
+        assert_eq!(launcher.ui.get("play.grid"), Value::Bool(false));
+        let _ = fs::remove_dir_all(&dir);
     }
 }

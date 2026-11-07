@@ -17,12 +17,12 @@
 //! its `model.bmp` is an untextured model, and an item without `model.tmd`
 //! has no model.
 //!
-//! HD replacements keep working through [`crate::htexture`]:
+//! HD replacements keep working through [`crate::hires`]:
 //!
-//! - `htexture/item/<id>/item` and `htexture/item/<id>/model` are the named
+//! - `hires/item/<id>/item` and `hires/item/<id>/model` are the named
 //!   per-item keys.
-//! - `htexture/data/item_all/<imageType - 1:02>` and
-//!   `htexture/data/item_m2/<model name>` are the legacy CR file names, so an
+//! - `hires/data/item_all/<imageType - 1:02>` and
+//!   `hires/data/item_m2/<model name>` are the legacy CR file names, so an
 //!   existing HD pack keeps replacing the shared art.
 //! - the content hashes of the icon cell and of the model page remain the
 //!   last route.

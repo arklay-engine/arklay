@@ -166,7 +166,7 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
             // HD textures replace by pixel hash, not by path.
             .filter(|path| {
                 *path != manifest::ENTRY
-                    && !path.starts_with(crate::htexture::ROOT)
+                    && !path.starts_with(crate::hires::ROOT)
                     && !is_override(&base_pack, path)
             })
             .collect();

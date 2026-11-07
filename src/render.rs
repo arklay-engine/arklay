@@ -464,7 +464,7 @@ impl Framebuffer {
     /// frame. Without a list `draw` simply runs.
     pub fn draw_replaced(
         &mut self,
-        image: impl Into<crate::htexture::QuadImage>,
+        image: impl Into<crate::hires::QuadImage>,
         dst: [f32; 4],
         uv: [f32; 4],
         colour: [f32; 3],
@@ -1862,7 +1862,7 @@ impl Framebuffer {
         joints: &[anim::Mat4x3],
         camera: &Camera,
         light: Option<&EntityLight>,
-        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
+        page: Option<std::sync::Arc<crate::hires::Replacement>>,
     ) {
         if self.list.is_none() {
             self.draw_ivm(ivm, joints, camera, light);
@@ -1887,7 +1887,7 @@ impl Framebuffer {
         &mut self,
         ivm: &std::sync::Arc<crate::ivm::Ivm>,
         polygons: &[ScreenPolygon],
-        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
+        page: Option<std::sync::Arc<crate::hires::Replacement>>,
     ) {
         let triangles: Vec<Triangle> = polygons
             .iter()
@@ -1933,7 +1933,7 @@ impl Framebuffer {
         &mut self,
         ivm: &std::sync::Arc<crate::ivm::Ivm>,
         triangles: &[Triangle],
-        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
+        page: Option<std::sync::Arc<crate::hires::Replacement>>,
     ) {
         let Some(visible) = self.visible([0, 0, self.width as i32, self.height as i32], true)
         else {
@@ -1955,7 +1955,7 @@ impl Framebuffer {
                     let w = vertex.w;
                     let ndc_x = (vertex.position[0] - x0 as f32) / width * 2.0 - 1.0;
                     let ndc_y = 1.0 - (vertex.position[1] - y0 as f32) / height * 2.0;
-                    crate::htexture::ModelVertex {
+                    crate::hires::ModelVertex {
                         clip: [ndc_x * w, ndc_y * w, depth_ndc(w) * w, w],
                         uv: stored_uv(vertex, triangle.uv_nudge[corner], &ivm.texture),
                         shade: vertex.shade,
@@ -1968,7 +1968,7 @@ impl Framebuffer {
         let [x, y] = list.offset;
         let rect = [x0 + x, y0 + y, x1 + x, y1 + y];
         list.push(crate::draw2d::Item {
-            kind: crate::draw2d::Kind::Model(std::sync::Arc::new(crate::htexture::Model {
+            kind: crate::draw2d::Kind::Model(std::sync::Arc::new(crate::hires::Model {
                 ivm: ivm.clone(),
                 vertices,
                 page,
@@ -2628,7 +2628,7 @@ pub struct EntityMesh<'a> {
     /// Per-joint `JointSetColorTint` colours (1/128 multipliers); a non-zero
     /// entry draws the joint unlit in that colour.
     pub joint_colours: [[u8; 3]; 32],
-    /// The stem under `htexture/` that names the texture page's HD
+    /// The stem under `hires/` that names the texture page's HD
     /// replacement (a room model's `room/<id>/object/<slot>`); the content hashes remain
     /// the fallback. `None` for a page with no stable name.
     pub hd_name: Option<&'a str>,
@@ -4034,7 +4034,7 @@ pub struct EffectLayer<'a> {
     /// The named HD composite of each page, indexed like `pages`; a missing
     /// entry leaves the GPU renderer to the page's content hash
     /// ([`crate::effects::hd`]). The software renderer ignores it.
-    pub hd: &'a [Option<&'a crate::htexture::Replacement>],
+    pub hd: &'a [Option<&'a crate::hires::Replacement>],
     /// This frame's live billboards, in pool submission order.
     pub quads: &'a [EffectQuad],
 }
@@ -5150,7 +5150,7 @@ mod tests {
 
     #[test]
     fn a_punched_rect_covers_its_rect_within_the_clip_with_unmasked_art() {
-        let replacement = std::sync::Arc::new(crate::htexture::Replacement {
+        let replacement = std::sync::Arc::new(crate::hires::Replacement {
             image: Image {
                 width: 1,
                 height: 1,
@@ -5188,7 +5188,7 @@ mod tests {
 
     #[test]
     fn a_replaced_draw_becomes_its_art_where_the_original_draws() {
-        let replacement = std::sync::Arc::new(crate::htexture::Replacement {
+        let replacement = std::sync::Arc::new(crate::hires::Replacement {
             image: Image {
                 width: 1,
                 height: 1,

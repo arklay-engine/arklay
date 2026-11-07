@@ -14,7 +14,8 @@
 //!
 //! | cap | limit | corpus peak | formats |
 //! |---|---|---|---|
-//! | [`MAX_PACK_BYTES`] | 2 GiB | 458 MiB | `.akpak` image |
+//! | [`MAX_PACK_BYTES`] | 2 GiB | 458 MiB | `.akpak` image held in memory |
+//! | [`MAX_STREAMED_PACK_BYTES`] | 64 GiB | 3.3 GiB | `.akpak` image read on demand (mods) |
 //! | [`MAX_PACK_ENTRIES`] | 1,048,576 | 3,242 | pack table of contents |
 //! | [`MAX_ENTRY_BYTES`] | 1 GiB | ~40 MiB | one pack entry |
 //! | [`MAX_DECODE_ALLOC`] | 512 MiB | ~64 MiB | one transient decode buffer |
@@ -62,6 +63,10 @@ use anyhow::{Context, Result, anyhow, bail};
 
 /// Largest pack image accepted from disk or memory.
 pub const MAX_PACK_BYTES: u64 = 2 << 30;
+/// Largest pack image read on demand: only its table of contents and paths
+/// are held in memory (themselves bounded by [`MAX_PACK_BYTES`]), and each
+/// entry is read when it is asked for.
+pub const MAX_STREAMED_PACK_BYTES: u64 = 64 << 30;
 /// Largest entry count a pack table of contents may declare.
 pub const MAX_PACK_ENTRIES: usize = 1 << 20;
 /// Largest single pack entry accepted.

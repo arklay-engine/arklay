@@ -33,7 +33,7 @@
 //!   per pixel, so with MSAA a mask's edge is not antialiased against what
 //!   it hides.
 //!
-//! * A pack's HD replacements ([`crate::htexture`]) are looked up as an image
+//! * A pack's HD replacements ([`crate::hires`]) are looked up as an image
 //!   or page is uploaded, from the hash of the pixels it would otherwise
 //!   upload. A replaced image is sampled at its own resolution
 //!   (`sprite.frag`'s `scale`); a replaced page keeps its indices for
@@ -71,7 +71,7 @@ use sdl3_sys::rect::SDL_Rect;
 use sdl3_sys::video::{SDL_GetWindowSizeInPixels, SDL_Window};
 
 use crate::draw2d::{self, DrawList};
-use crate::htexture;
+use crate::hires;
 use crate::model::{Texture8, Tmd};
 use crate::pack::Pack;
 use crate::render::{
@@ -97,7 +97,7 @@ const IVM_VERT: &[u8] = include_bytes!("shaders/ivm.vert.spv");
 pub const EVICT_AFTER_FRAMES: u64 = 300;
 
 /// The rows of `draw2d.frag`'s `lut` per recoloured item: each index's
-/// [`htexture::Recolour`] scale (alpha 1 when the index draws), luma weight
+/// [`hires::Recolour`] scale (alpha 1 when the index draws), luma weight
 /// and flat colour.
 const LUT_ROWS: u32 = 3;
 /// The largest accepted offscreen resolution multiplier.
@@ -459,14 +459,14 @@ pub struct GpuRenderer {
     model_frame: u64,
     model_buffer: *mut SDL_GPUBuffer,
     model_capacity: u32,
-    /// The HD art's textures by [`htexture::Replacement`], kept
+    /// The HD art's textures by [`hires::Replacement`], kept
     /// alive so the key is not reused, and the presented frame each was
     /// last drawn in. Unlike the scene's uploads they outlive gameplay, so
     /// menus and title screens do not upload them every frame.
-    overlay_images: HashMap<usize, (Arc<htexture::Replacement>, *mut SDL_GPUTexture, u64)>,
+    overlay_images: HashMap<usize, (Arc<hires::Replacement>, *mut SDL_GPUTexture, u64)>,
     /// The recoloured items' original page indices as `R8_UINT` textures,
-    /// by [`htexture::Indices`], kept like `overlay_images`.
-    overlay_indices: HashMap<usize, (Arc<htexture::Indices>, *mut SDL_GPUTexture, u64)>,
+    /// by [`hires::Indices`], kept like `overlay_images`.
+    overlay_indices: HashMap<usize, (Arc<hires::Indices>, *mut SDL_GPUTexture, u64)>,
     /// The frame's recolourings, [`LUT_ROWS`] rows of 256 per recoloured
     /// item (`draw2d.frag`'s `lut`), and the rows it holds.
     overlay_lut: *mut SDL_GPUTexture,
@@ -482,10 +482,10 @@ pub struct GpuRenderer {
     /// The named replacement each page key names, kept alive so its address
     /// cannot be reused for a different replacement while the entry is
     /// cached (the key stores that address).
-    page_keeps: HashMap<PageKey, Arc<htexture::Replacement>>,
+    page_keeps: HashMap<PageKey, Arc<hires::Replacement>>,
     /// The named HD replacement each mesh page stem resolved to in the pack
     /// at `named_pack` (its address), so the lookup runs once per stem.
-    named_pages: HashMap<String, Option<Arc<htexture::Replacement>>>,
+    named_pages: HashMap<String, Option<Arc<hires::Replacement>>>,
     named_pack: usize,
     images: HashMap<usize, Resident<ImageTexture>>,
     /// Bound in place of a page's replacements when it has none.
@@ -1225,7 +1225,7 @@ impl GpuRenderer {
             attribute(2, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 24),
             attribute(3, SDL_GPU_VERTEXELEMENTFORMAT_UINT, 36),
         ];
-        let model_stride = std::mem::size_of::<htexture::ModelVertex>() as u32;
+        let model_stride = std::mem::size_of::<hires::ModelVertex>() as u32;
         let ivm_vert = self.shader(IVM_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0)?;
         // The CPU already dropped the back faces.
         let model = |this: &Self, blend, write| {
@@ -1516,14 +1516,14 @@ impl GpuRenderer {
     }
 
     /// The HD replacement `pack` names for the mesh page `stem`
-    /// (`htexture/<stem>`, covering the whole page), looked up once per stem.
+    /// (`hires/<stem>`, covering the whole page), looked up once per stem.
     /// `None` leaves the page to its content hashes.
     fn named_page(
         &mut self,
         pack: &Pack,
         stem: &str,
         texture: &Texture8,
-    ) -> Option<Arc<htexture::Replacement>> {
+    ) -> Option<Arc<hires::Replacement>> {
         let address = pack as *const Pack as usize;
         if self.named_pack != address {
             self.named_pack = address;
@@ -1532,7 +1532,7 @@ impl GpuRenderer {
         if let Some(found) = self.named_pages.get(stem) {
             return found.clone();
         }
-        let found = htexture::named_replacement(pack, stem, [texture.width, texture.height]);
+        let found = hires::named_replacement(pack, stem, [texture.width, texture.height]);
         self.named_pages.insert(stem.to_string(), found.clone());
         found
     }
@@ -1546,7 +1546,7 @@ impl GpuRenderer {
         texture: &Texture8,
         used: u32,
         pack: Option<&Pack>,
-        named: Option<&Arc<htexture::Replacement>>,
+        named: Option<&Arc<hires::Replacement>>,
     ) -> Result<Option<PageTextures>> {
         // Like the software rasterizer, an empty page draws nothing; a
         // truncated one draws its missing texels as index 0 (transparent).
@@ -1558,7 +1558,7 @@ impl GpuRenderer {
             named: named.map_or(0, |replacement| Arc::as_ptr(replacement) as usize),
             pack: pack.map_or(0, |pack| pack as *const Pack as usize),
         };
-        let pack = pack.filter(|pack| !pack.htexture().is_empty());
+        let pack = pack.filter(|pack| !pack.hires().is_empty());
         let fingerprint = scene::texture_fingerprint(texture);
         if let Some(entry) = self.pages.get_mut(&key)
             && entry.fingerprint == fingerprint
@@ -1657,13 +1657,13 @@ impl GpuRenderer {
         used: u32,
         pack: &Pack,
     ) -> Result<()> {
-        let table = pack.htexture();
+        let table = pack.hires();
         // Rows sharing a replacement share its layer.
         let mut layers: Vec<Image> = Vec::new();
         let mut layer_by_path: Vec<(String, usize)> = Vec::new();
         let mut rows: Vec<(usize, usize, [u32; 2], [u32; 2])> = Vec::new();
         for row in 0..page_row_count(texture) {
-            let candidates = htexture::page_candidates(texture, row);
+            let candidates = hires::page_candidates(texture, row);
             let found = if used & 1u32.checked_shl(row as u32).unwrap_or(0) != 0 {
                 table.find(&candidates, || {
                     format!(
@@ -1679,7 +1679,7 @@ impl GpuRenderer {
             };
             let layer = match layer_by_path.iter().find(|(path, _)| *path == found.path) {
                 Some((_, layer)) => *layer,
-                None => match htexture::load(pack, &found.path) {
+                None => match hires::load(pack, &found.path) {
                     Ok(image) if image.width > 0 && image.height > 0 => {
                         layers.push(image);
                         let layer = layers.len() - 1;
@@ -1688,7 +1688,7 @@ impl GpuRenderer {
                     }
                     Ok(_) => continue,
                     Err(err) => {
-                        eprintln!("htexture: {err:#}");
+                        eprintln!("hires: {err:#}");
                         continue;
                     }
                 },
@@ -1705,7 +1705,7 @@ impl GpuRenderer {
         copy: *mut SDL_GPUCopyPass,
         page: &mut PageTextures,
         texture: &Texture8,
-        replacement: &htexture::Replacement,
+        replacement: &hires::Replacement,
     ) -> Result<()> {
         let layers = [replacement.image.clone()];
         let rows = [(
@@ -1789,15 +1789,15 @@ impl GpuRenderer {
         background: Option<&Image>,
         pack: &Pack,
     ) -> Option<(Image, [f32; 2])> {
-        let table = pack.htexture();
-        let mut candidates = htexture::image_candidates(image);
+        let table = pack.hires();
+        let mut candidates = hires::image_candidates(image);
         if let Some(background) = background {
-            candidates.extend(table.paired_masks(&htexture::image_candidates(background)));
+            candidates.extend(table.paired_masks(&hires::image_candidates(background)));
         }
         let found = table.find(&candidates, || {
             format!("{}x{} image", image.width, image.height)
         })?;
-        match htexture::load(pack, &found.path) {
+        match hires::load(pack, &found.path) {
             Ok(hd)
                 if hd.width > 0
                     && hd.height > 0
@@ -1811,7 +1811,7 @@ impl GpuRenderer {
             }
             Ok(_) => None,
             Err(err) => {
-                eprintln!("htexture: {err:#}");
+                eprintln!("hires: {err:#}");
                 None
             }
         }
@@ -1825,7 +1825,7 @@ impl GpuRenderer {
         copy: *mut SDL_GPUCopyPass,
         image: &Image,
         background: Option<&Image>,
-        hd: Option<&htexture::Replacement>,
+        hd: Option<&hires::Replacement>,
         pack: Option<&Pack>,
     ) -> Result<Option<ImageTexture>> {
         if image.width == 0
@@ -1857,7 +1857,7 @@ impl GpuRenderer {
         let replacement = match hd {
             Some(_) => None,
             None => pack
-                .filter(|pack| !pack.htexture().is_empty())
+                .filter(|pack| !pack.hires().is_empty())
                 .and_then(|pack| Self::image_replacement(image, background, pack)),
         };
         let (source, scale) = match (hd, &replacement) {
@@ -2711,7 +2711,7 @@ impl GpuRenderer {
     fn ensure_overlay_image(
         &mut self,
         copy: *mut SDL_GPUCopyPass,
-        replacement: &Arc<htexture::Replacement>,
+        replacement: &Arc<hires::Replacement>,
         fresh: &mut Vec<usize>,
     ) -> Result<()> {
         let key = Arc::as_ptr(replacement) as usize;
@@ -2932,7 +2932,7 @@ impl GpuRenderer {
     fn ensure_overlay_indices(
         &mut self,
         copy: *mut SDL_GPUCopyPass,
-        indices: &Arc<htexture::Indices>,
+        indices: &Arc<hires::Indices>,
         fresh: &mut Vec<usize>,
     ) -> Result<()> {
         let key = Arc::as_ptr(indices) as usize;
@@ -3594,8 +3594,8 @@ fn item_vertices(
 }
 
 /// A recoloured item's [`LUT_ROWS`] rows of `draw2d.frag`'s `lut`.
-fn lut_texels(lut: &[Option<htexture::Recolour>; 256]) -> Vec<[f32; 4]> {
-    let row = |texel: fn(&htexture::Recolour) -> [f32; 4]| {
+fn lut_texels(lut: &[Option<hires::Recolour>; 256]) -> Vec<[f32; 4]> {
+    let row = |texel: fn(&hires::Recolour) -> [f32; 4]| {
         lut.iter()
             .map(move |entry| entry.as_ref().map_or([0.0; 4], texel))
     };
@@ -3949,7 +3949,7 @@ mod tests {
         assert_eq!(draw(&background), [0, 200, 0]);
     }
 
-    /// A pack's `htexture/` replacements are drawn in place of the background
+    /// A pack's `hires/` replacements are drawn in place of the background
     /// and the model page whose pixels hash to their names, at their own
     /// resolution.
     #[test]
@@ -3988,14 +3988,14 @@ mod tests {
         // The cube's 64-wide page covers 64 x 256 texels of its replacement.
         let hd_page = solid(128, 512, |_| [240, 240, 240]);
         let mut writer = crate::pack::PackWriter::new();
-        let background_hash = htexture::image_candidates(&background)[0].hash;
-        let page_hash = htexture::page_candidates(&texture, 0)[0].hash;
+        let background_hash = hires::image_candidates(&background)[0].hash;
+        let page_hash = hires::page_candidates(&texture, 0)[0].hash;
         for (path, image) in [
             (
-                format!("htexture/bgd/{background_hash:08X}.bmp"),
+                format!("hires/bgd/{background_hash:08X}.bmp"),
                 &hd_background,
             ),
-            (format!("htexture/skin/{page_hash:08X}.bmp"), &hd_page),
+            (format!("hires/skin/{page_hash:08X}.bmp"), &hd_page),
         ] {
             writer
                 .add(&path, crate::bmp::encode_to_vec(image).unwrap())
@@ -4123,7 +4123,7 @@ mod tests {
 
     #[test]
     fn item_vertices_carry_the_item_to_each_corner() {
-        let image = Arc::new(htexture::Replacement {
+        let image = Arc::new(hires::Replacement {
             image: Image {
                 width: 1,
                 height: 1,
@@ -4304,7 +4304,7 @@ mod tests {
         };
         gpu.record_scene(&scene, None).unwrap();
         let replacement = |rgba: [u8; 4]| {
-            Arc::new(htexture::Replacement {
+            Arc::new(hires::Replacement {
                 image: solid(64, 64, rgba),
                 frame: [32, 32],
             })
@@ -4456,7 +4456,7 @@ mod tests {
         // A 3x1 page of indices 1, 2 and 0 under a 6x2 HD image, each
         // original texel 100 pixels wide: index 1 tinted to half, index 2
         // swapped for red, index 0 clear.
-        let art = Arc::new(htexture::Replacement {
+        let art = Arc::new(hires::Replacement {
             image: Image {
                 width: 6,
                 height: 2,
@@ -4465,11 +4465,11 @@ mod tests {
             frame: [3, 1],
         });
         let mut lut = [None; 256];
-        lut[1] = Some(htexture::Recolour::of([200, 100, 50], [100, 50, 25]));
-        lut[2] = Some(htexture::Recolour::of([200, 100, 50], [255, 0, 0]));
-        let recoloured = htexture::Recoloured {
+        lut[1] = Some(hires::Recolour::of([200, 100, 50], [100, 50, 25]));
+        lut[2] = Some(hires::Recolour::of([200, 100, 50], [255, 0, 0]));
+        let recoloured = hires::Recoloured {
             art,
-            indices: Arc::new(htexture::Indices {
+            indices: Arc::new(hires::Indices {
                 width: 3,
                 height: 1,
                 texels: vec![1, 2, 0],
@@ -4527,7 +4527,7 @@ mod tests {
         });
         // The item's top-left half, untextured: red in front, then green
         // behind it.
-        let corner = |x: f32, y: f32, depth: f32, shade: [f32; 3]| htexture::ModelVertex {
+        let corner = |x: f32, y: f32, depth: f32, shade: [f32; 3]| hires::ModelVertex {
             clip: [x, y, depth, 1.0],
             uv: [0.0, 0.0],
             shade,
@@ -4544,9 +4544,9 @@ mod tests {
         vertices.extend(half(0.9, [0.0, 1.0, 0.0]));
         let rect = [100.0, 80.0, 200.0, 160.0];
         let clip = [100, 80, 200, 160];
-        let model = |vertices: Vec<htexture::ModelVertex>| {
+        let model = |vertices: Vec<hires::ModelVertex>| {
             item(
-                draw2d::Kind::Model(Arc::new(htexture::Model {
+                draw2d::Kind::Model(Arc::new(hires::Model {
                     ivm: ivm.clone(),
                     vertices,
                     page: None,
@@ -4627,7 +4627,7 @@ mod tests {
             },
             objects: Vec::new(),
         });
-        let corner = |x: f32, y: f32| htexture::ModelVertex {
+        let corner = |x: f32, y: f32| hires::ModelVertex {
             clip: [x, y, 0.5, 1.0],
             uv: [0.0, 0.0],
             shade: [1.0; 3],
@@ -4639,9 +4639,9 @@ mod tests {
             height: 1,
             rgba: rgba.to_vec(),
         };
-        let model = |page: Option<Arc<htexture::Replacement>>| {
+        let model = |page: Option<Arc<hires::Replacement>>| {
             list_of(vec![item(
-                draw2d::Kind::Model(Arc::new(htexture::Model {
+                draw2d::Kind::Model(Arc::new(hires::Model {
                     ivm: ivm.clone(),
                     vertices: vertices.clone(),
                     page,
@@ -4660,7 +4660,7 @@ mod tests {
         // The base page is white.
         assert_eq!(pixel(&mut gpu, &model(None)), [255, 255, 255]);
         // The named replacement is red, at its own resolution.
-        let red = Arc::new(htexture::Replacement {
+        let red = Arc::new(hires::Replacement {
             image: solid([255, 0, 0, 255]),
             frame: [1, 1],
         });

@@ -259,26 +259,26 @@ fn real_item_art_takes_named_and_legacy_hd_paths() {
         .unwrap();
     // The new per-item names, plus one legacy `ITEM_ALL` name.
     writer
-        .add("htexture/item/02/item.bmp", image(80, 60, [0, 0, 255]))
+        .add("hires/item/02/item.bmp", image(80, 60, [0, 0, 255]))
         .unwrap();
     writer
-        .add("htexture/item/02/model.bmp", image(512, 512, [0, 0, 255]))
+        .add("hires/item/02/model.bmp", image(512, 512, [0, 0, 255]))
         .unwrap();
     writer
-        .add("htexture/data/item_all/01.bmp", image(80, 60, [0, 255, 0]))
+        .add("hires/data/item_all/01.bmp", image(80, 60, [0, 255, 0]))
         .unwrap();
     writer.write(&mod_path).unwrap();
 
     let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&mod_path)).unwrap();
-    let icon = arklay::htexture::named_replacement(&layered, "item/02/item", [40, 30])
+    let icon = arklay::hires::named_replacement(&layered, "item/02/item", [40, 30])
         .expect("the named per-item icon");
     assert_eq!((icon.image.width, icon.image.height), (80, 60));
     assert_eq!(icon.frame, [40, 30]);
-    let page = arklay::htexture::named_replacement(&layered, "item/02/model", [256, 256])
+    let page = arklay::hires::named_replacement(&layered, "item/02/model", [256, 256])
         .expect("the named per-item model page");
     assert_eq!((page.image.width, page.image.height), (512, 512));
     assert_eq!(page.frame, [256, 256]);
-    let legacy = arklay::htexture::named_replacement(&layered, "data/item_all/01", [40, 30])
+    let legacy = arklay::hires::named_replacement(&layered, "data/item_all/01", [40, 30])
         .expect("the legacy ITEM_ALL name");
     assert_eq!((legacy.image.width, legacy.image.height), (80, 60));
 
