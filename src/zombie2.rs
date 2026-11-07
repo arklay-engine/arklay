@@ -373,6 +373,9 @@ const ALLIGATOR_HEAD: usize = 7;
 const ALLIGATOR_BOXES: [(i16, u16); 3] = [(3000, 600), (0x1C2, 0x5AA), (0x76C, 0x3B6)];
 /// The giant spider, `Em_25`, whose script is `enemy/25/enemy.lua`.
 pub const SPIDER_ID: u8 = 0x25;
+/// G1, William Birkin's first form, `Em_30`, whose script is
+/// `enemy/30/enemy.lua`.
+pub const G1_ID: u8 = 0x30;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
 /// that `Game_loop`'s `Joint_trans` left there, x and z.
 pub(crate) const SPIDER_FOOT: usize = 32;
@@ -1073,6 +1076,23 @@ impl Em<'_, '_, '_> {
         self.z.more_atd = rest.to_vec();
     }
 
+    /// `Em_30`, which leaves the rest to its script: `Root_ck` to the player
+    /// on every tick, then, unless the room is stopped, `Damage_cnt`, the
+    /// move, `Oba_ck_em` and `Sca_ck_em` (`0x400`).
+    fn run_g1(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.script();
+        self.oba_ck_em();
+        self.sca_ck_em();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1184,6 +1204,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == MRX_ID {
             self.run_mrx();
+            return;
+        }
+        if self.mover.tick.id == G1_ID {
+            self.run_g1();
             return;
         }
         if is_plant(self.mover.tick.id) {
