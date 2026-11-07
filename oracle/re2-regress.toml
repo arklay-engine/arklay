@@ -736,10 +736,10 @@ record = "--no-enemies --keep-enemy-in 101:0 --flag 4:135"
 name = "route_100_200_enemies"
 room = "new"
 offset = 0
-# The route's input with the enemies on, for information: room 100's zombies kill the player and the game over returns to the title after tick 1459, in both games (docs/re2-deviations.md, "The route with the enemies on"). Recorded over 7400 ticks.
+# The route's input with the enemies on: room 100's zombies kill the player and the game over returns to the title after tick 1459, in both games (docs/re2-deviations.md, "The route with the enemies on"). Recorded over 7400 ticks.
 ticks = 1460
 setup_script = "route_100_200_enemies.lua"
 input = "route_100_200.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
-expect = { tick = 1013, fields = ["bgm"], note = "the game over's music cut leaves the third sequence's state at 0100 where the original's is 0200" }
+expect = "match"
 record = "--flag 4:135"

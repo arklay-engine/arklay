@@ -4215,6 +4215,8 @@ impl GameSession {
             }
         }
         if out.finished {
+            // `Die_move_end`'s `Snd_sys_init2`.
+            self.game.re2.music.sys_init2();
             self.finish_death();
         }
     }
