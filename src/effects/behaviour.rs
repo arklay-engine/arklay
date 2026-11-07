@@ -258,10 +258,16 @@ fn ground_splat(game: &mut GameState, index: usize) {
 /// The hit sets the bitten pose (animation 2, behaviour 100). Returns true even
 /// when the player was already being attacked, in which case no damage lands.
 ///
-/// The original's trailing branch also probes the secondary enemy list for a
-/// stage-2 room-0xC "shark" (an entity id 0x13 in slot 2). No shipped room
-/// reaches it: that shut web sits far outside the 500-unit grace, so the port
-/// leaves the branch out.
+/// When the player is out of range or out of sight, the original's trailing
+/// branch tests the second enemy slot (`g_EnemiesList[1]`, entity 2): in room
+/// 30C (0-based stage 2, room 0xC) that is the spider web (id 0x13) over the
+/// door to 30D. A splash within `range + 500` of the web
+/// (`effect_distance_to_entity`, 0x0043bf60) takes 5 health and, when the
+/// web's hit gate is open (`hit_state == 0`), stamps `hit_state = 9` (weapon
+/// bits 0x08, the knife's, so the web burns strands) and the damaged or
+/// destroy state, exactly as a weapon hit does. This is how the Black Tiger's
+/// own acid clears the web. The branch also returns true when the web's hit
+/// gate was shut.
 fn projectile_hit_check(
     game: &mut GameState,
     room: &RoomState,
@@ -276,11 +282,8 @@ fn projectile_hit_check(
     let dx = player_pos[0] - i32::from(x);
     let dz = player_pos[2] - i32::from(z);
     let distance = crate::sfx::integer_sqrt(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)));
-    if distance >= range {
-        return false;
-    }
-    if crate::combat::check_weapon_line_of_sight(game, room, player_pos) != 0 {
-        return false;
+    if distance >= range || crate::combat::check_weapon_line_of_sight(game, room, player_pos) != 0 {
+        return web_hit_check(game, range, x, z);
     }
     if attacked == 0 {
         let enemy_id = game.entities[1].id;
@@ -320,6 +323,44 @@ fn projectile_hit_check(
             player.action_behavior = 0;
             player.action_state = 0;
         }
+    }
+    true
+}
+
+/// Room 30C's spider web (entity id 0x13, enemy slot 2).
+const WEB_ENTITY: u8 = 0x13;
+/// The web's entity slot: the original's `g_EnemiesList[1]`.
+const WEB_SLOT: usize = 2;
+/// The Black Tiger room's stage digit (1-based; the original's stage 2).
+const TIGER_ROOM_STAGE: u8 = 3;
+/// The Black Tiger room.
+const TIGER_ROOM: u8 = 0x0c;
+
+/// The trailing branch of `effect_projectile_hit_check`: a splash that missed
+/// the player damages room 30C's web when it lands within `range + 500` of
+/// it. Returns true when the web was in range, hit or not.
+fn web_hit_check(game: &mut GameState, range: i32, x: i16, z: i16) -> bool {
+    if game.entities[WEB_SLOT].id != WEB_ENTITY
+        || game.id.stage != TIGER_ROOM_STAGE
+        || game.id.room != TIGER_ROOM
+    {
+        return false;
+    }
+    let web = &mut game.entities[WEB_SLOT];
+    let dx = web.pos[0] - i32::from(x);
+    let dz = web.pos[2] - i32::from(z);
+    let distance = crate::sfx::integer_sqrt(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)));
+    if distance >= range + 500 {
+        return false;
+    }
+    if web.hit_state == 0 {
+        web.health = web.health.wrapping_sub(5);
+        // Weapon bits 0x08: the web's damaged state treats it as a knife cut.
+        web.hit_state = 9;
+        web.set_state(if web.health < 0 { 3 } else { 2 });
+        web.set_ignore(0);
+        web.action_behavior = 0;
+        web.action_state = 0;
     }
     true
 }
@@ -2998,5 +3039,110 @@ mod tests {
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.screen, [expected.0, expected.1]);
         assert_ne!(effect.screen, before, "the cut move must change the screen");
+    }
+
+    /// Room 30C with the player 5000 units off and the web (id 0x13, slot 2,
+    /// 55 health) at `(3000, 0, 3000)`.
+    fn tiger_room() -> GameState {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("30C").unwrap();
+        game.entities[0].pos = [-5000, 0, -5000];
+        game.entities[0].health = 100;
+        game.entities[1].id = 4;
+        let web = &mut game.entities[2];
+        web.id = 0x13;
+        web.pos = [3000, 0, 3000];
+        web.health = 0x37;
+        web.set_state(1);
+        game
+    }
+
+    #[test]
+    fn acid_landing_near_the_30c_web_damages_it_like_a_knife_cut() {
+        let mut game = tiger_room();
+        // 1000 from the web: outside the 600 range, inside its 500 grace.
+        assert!(projectile_hit_check(&mut game, &room(), 600, 2000, 3000));
+        let web = &game.entities[2];
+        assert_eq!(web.health, 0x37 - 5);
+        assert_eq!(web.hit_state, 9);
+        assert_eq!(web.hit_state & 0xF8, 0x08, "the knife's weapon bits");
+        assert_eq!(web.state(), 2);
+        assert_eq!(game.entities[0].health, 100, "the player is untouched");
+
+        // The hit gate is shut until the web's damaged state clears it.
+        assert!(projectile_hit_check(&mut game, &room(), 600, 2000, 3000));
+        assert_eq!(game.entities[2].health, 0x37 - 5);
+
+        // Just past the grace: no hit.
+        game.entities[2].hit_state = 0;
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 1900, 3000));
+        assert_eq!(game.entities[2].health, 0x37 - 5);
+    }
+
+    #[test]
+    fn repeated_acid_destroys_the_30c_web() {
+        let mut game = tiger_room();
+        let mut hits = 0;
+        loop {
+            assert!(projectile_hit_check(&mut game, &room(), 900, 3000, 3000));
+            hits += 1;
+            if game.entities[2].state() == 3 {
+                break;
+            }
+            assert!(hits < 12);
+            assert_eq!(game.entities[2].state(), 2);
+            // The web's damaged state reopens the hit gate.
+            game.entities[2].hit_state = 0;
+            game.entities[2].set_state(1);
+        }
+        // 55 health, 5 a splash: the twelfth takes it below zero.
+        assert_eq!(hits, 12);
+        assert!(game.entities[2].health < 0);
+    }
+
+    #[test]
+    fn acid_ignores_a_web_in_another_room_or_another_entity() {
+        let mut game = tiger_room();
+        game.id = crate::state::RoomId::parse("30D").unwrap();
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert_eq!(game.entities[2].health, 0x37);
+
+        let mut game = tiger_room();
+        game.id = crate::state::RoomId::parse("40C").unwrap();
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert_eq!(game.entities[2].health, 0x37);
+
+        let mut game = tiger_room();
+        game.entities[2].id = 0x12;
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert_eq!(game.entities[2].health, 0x37);
+
+        // The web in the first enemy slot is not the one the branch tests.
+        let mut game = tiger_room();
+        game.entities.swap(1, 2);
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert_eq!(game.entities[1].health, 0x37);
+    }
+
+    #[test]
+    fn acid_hitting_the_player_spares_the_web() {
+        let mut game = tiger_room();
+        game.entities[0].pos = [3000, 0, 3000];
+        assert!(projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        // The Black Tiger's acid on a first playthrough: 12.
+        assert_eq!(game.entities[0].health, 100 - 12);
+        assert_eq!(game.entities[0].is_being_attacked, 1);
+        assert_eq!(game.entities[0].state(), 2);
+        assert_eq!(game.entities[0].action_behavior, 100);
+        assert_eq!(
+            game.entities[2].health, 0x37,
+            "the player hit returns first"
+        );
+
+        // Out of the player's range and no web: no hit, as before.
+        let mut game = tiger_room();
+        game.entities[2].id = 0;
+        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert_eq!(game.entities[0].health, 100);
     }
 }
