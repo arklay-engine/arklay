@@ -366,6 +366,11 @@ pub(crate) const DOG_GROUND: usize = 20;
 pub(crate) const DOG_JAW: usize = 21;
 /// The alligator, `Em_23`, whose script is `enemy/23/enemy.lua`.
 pub const ALLIGATOR_ID: u8 = 0x23;
+/// The part `Em_23`'s boxes follow (`pSuper`, `+0x4fc` of its parts).
+const ALLIGATOR_HEAD: usize = 7;
+/// `FUN_00468a10`'s `Atd[0]` to `Atd[2]`: `Ofs_x` and `At_w` (each `W` and
+/// `At_d` the same, `At_h` 2000).
+const ALLIGATOR_BOXES: [(i16, u16); 3] = [(3000, 600), (0x1C2, 0x5AA), (0x76C, 0x3B6)];
 /// The giant spider, `Em_25`, whose script is `enemy/25/enemy.lua`.
 pub const SPIDER_ID: u8 = 0x25;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
@@ -457,6 +462,9 @@ impl std::ops::DerefMut for Vars {
 pub struct Zombie {
     /// `Em_22`'s state: this isn't a zombie but a licker.
     pub licker: Option<Box<licker::Licker>>,
+    /// `Atd[1]` and up, which the others are pushed out of after `Atd[0]`:
+    /// the alligator's.
+    pub more_atd: Vec<Atd>,
     /// Parts it has thrown that are still falling.
     pub thrown: Vec<ThrownPart>,
     /// `Sce_parts_down`s since it last ran.
@@ -1027,10 +1035,42 @@ impl Em<'_, '_, '_> {
             self.z.damage_cnt -= 1;
         }
         self.old_pos = self.mover.player.pos;
-        // The parts' `+0x5C` that `Game_loop`'s `Joint_trans` left, which its
-        // reach (`FUN_00469750`) measures from.
-        self.z.parts = self.mover.posed_parts();
+        // The parts as the last draw left them, which its boxes, its neck and
+        // its reach (`FUN_00469750`) start from: a script's `pos_set` since
+        // then doesn't move them.
+        if self.z.parts.is_empty() {
+            self.z.parts = self.mover.posed_parts();
+        }
         self.script();
+        self.alligator_atd();
+        self.z.parts = self.mover.posed_parts();
+    }
+
+    /// `Em_23`'s `Oba_set_ofs`: its three boxes, each `Ofs_x` ahead along
+    /// part 7 as the last draw left it (`Be_flg`'s `0x2000000`, with `Cdir`
+    /// cleared). The init gives them their sizes.
+    fn alligator_atd(&mut self) {
+        let Some(Some(part)) = self.z.parts.get(ALLIGATOR_HEAD).copied() else {
+            return;
+        };
+        let boxes = ALLIGATOR_BOXES.map(|(ofs_x, at_w)| {
+            let ofs = [i32::from(ofs_x), 0, 0];
+            let at = std::array::from_fn(|axis| {
+                let turned: i32 = (0..3).map(|i| i32::from(part.m[axis][i]) * ofs[i]).sum();
+                part.t[axis] + (turned >> 12)
+            });
+            Atd {
+                ofs_x,
+                ofs_y: 0,
+                at_w,
+                at_h: 2000,
+                w: at_w,
+                at,
+            }
+        });
+        let [first, rest @ ..] = boxes;
+        self.z.atd = first;
+        self.z.more_atd = rest.to_vec();
     }
 
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's

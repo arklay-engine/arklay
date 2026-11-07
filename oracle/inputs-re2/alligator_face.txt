@@ -1,0 +1,3 @@
+# room 40A: after the scene, turn round to face the alligator (oracle/re2.md)
+820 right
+852
