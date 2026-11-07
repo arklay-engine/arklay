@@ -969,6 +969,53 @@ local function menu_reload(bot, s, weapon)
     return false
 end
 
+-- An acid glob in flight within DODGE_RADIUS (horizontally) is dodged: the
+-- splash tests the player within 600 or 900 of where it lands (behaviours 22
+-- and 55). Plant 42's drops from the ceiling onto where the bot stood (about
+-- 30 ticks); the Black Tiger's flies at it (11). Standing to aim took every
+-- one: 18 hits from 40C's plant in a run.
+-- Five approach steps (1500): past the 900 splash with a margin.
+local DODGE_RADIUS = 5 * C.APPROACH
+local DODGE_STEP = DODGE_RADIUS + C.APPROACH
+
+-- The dodge for this tick, or nil: run straight away from the nearest glob
+-- still in the air, else across its line.
+local function dodge(bot, s, player)
+    local nearest, best
+    for _, g in ipairs(bot:projectiles()) do
+        local d = bot:distance(g.x, g.z)
+        if g.y < 0 and d < DODGE_RADIUS and (not best or d < best) then
+            nearest, best = g, d
+        end
+    end
+    if not nearest then
+        s.dodge = nil
+        return false
+    end
+    local dx, dz = player.x - nearest.x, player.z - nearest.z
+    if best < 50 then
+        -- Right over the bot: away along its facing's side.
+        dx, dz = C.RING[3][1], C.RING[3][2]
+        best = C.RING[1][1]
+    end
+    local tries = {
+        { dx, dz }, { -dz, dx }, { dz, -dx },
+    }
+    for _, dir in ipairs(tries) do
+        local x = player.x + dir[1] * DODGE_STEP // best
+        local z = player.z + dir[2] * DODGE_STEP // best
+        local result = bot:walk_to(x, z, { run = true, tolerance = C.APPROACH, avoid_enemies = true })
+        if result.status == "moving" then
+            if not s.dodge then
+                bot:log(string.format("dodge: glob at (%d,%d) %d away", nearest.x, nearest.z, best))
+            end
+            s.dodge = true
+            return true
+        end
+    end
+    return false
+end
+
 function BotTactics.step(bot, scene, player)
     local s = state()
     s.now = bot:tick()
@@ -983,6 +1030,10 @@ function BotTactics.step(bot, scene, player)
     end
     if not scene.controllable or player.grabbed then
         return false
+    end
+    if player.state == 1 and dodge(bot, s, player) then
+        s.aim_ticks = 0
+        return true
     end
     local room = bot:room().id
     -- A boss seen in its <fight>'s room is met (BotNav.fight_met): what the

@@ -23,3 +23,6 @@ rejected.
 
 | batch | commit | change | completed | deaths | median hits | p90 hits | median ticks | stalls | default | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
+| b00-base | 55cc220 | baseline (acid fix #444, no look-ahead) | 10/17 | 37 | 88 | 103 | 202170.0 | 4 | yes | base |
+| b01-ready | - | B: readiness counts any loading of a boxed launcher; fight job fails with no banded gun | 9/17 | 42 | 85 | 122 | 197787 | 3 | NO | reject (completion, deaths, default) |
+| b02-dodge | 55cc220+C | C: dodge acid globs in the air within 1500 | 11/17 | 26 | 65 | 119 | 190053 | 4 | yes | accept |
