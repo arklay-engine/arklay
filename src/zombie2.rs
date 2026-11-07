@@ -784,6 +784,8 @@ pub struct World<'a> {
     /// A script pointed the player's `pSub1_kan_t_ptr` at this body's
     /// model's clips (its second bank), for `Pl_damage`'s falls.
     pub sub1: bool,
+    /// `scd_var_cut`, the camera's cut as the tick began.
+    pub camera_cut: u8,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
@@ -1048,6 +1050,9 @@ impl Em<'_, '_, '_> {
             self.z.parts = self.mover.posed_parts();
         }
         self.script();
+        // What a hit that it shrugs off (`FUN_00469e20`) goes back to: the
+        // original's `+0x1fc`, the routines as a hit finds them.
+        self.z.last_routine = self.work().routine;
         self.alligator_atd();
         self.z.parts = self.mover.posed_parts();
     }

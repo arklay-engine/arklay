@@ -1,8 +1,9 @@
 -- The alligator, `Em_23` (entity id 0x23).
 --
 -- `Em_23` runs `Routine_0` from `funcs_4687AE` (`0x527e18`): 0 is the init
--- (`FUN_00468a10`) and 1 the move (`FUN_00468ce0`); the hit (2,
--- `FUN_00469cf0`) and the death (3, `FUN_0046a6d0`) aren't ported yet. The
+-- (`FUN_00468a10`), 1 the move (`FUN_00468ce0`) and 2 the hit
+-- (`FUN_00469cf0`), of which the shrug and the flinch are ported; the death
+-- (3, `FUN_0046a6d0`) isn't ported yet. The
 -- move runs `funcs_468CEB` before its clip and `funcs_468D18` after it, by
 -- `Routine_1`: 0 the entry (`FUN_00468d30`), 1 the rest (`FUN_00469010`), 2
 -- the swim (`FUN_00469030`), 3 the turn (`FUN_00469060`) and 7 the wait at
@@ -32,11 +33,22 @@ local C233 <const> = 14 -- `+0x233`.
 local REST <const> = 15 -- `+0x238`: the rest before it swims.
 local TIMER2 <const> = 16 -- `Timer2` (`+0x16a`).
 local C231 <const> = 17 -- `+0x231`.
-local NECK_X <const> = 18 -- `Neck_point_x` to `_z` (`+0x170`), which `Rot_neck` would turn the head to; the neck isn't ported.
+local NECK_X <const> = 18 -- `Neck_point_x` to `_z` (`+0x170`), which `Rot_neck` turns the head to.
 local NECK_Y <const> = 19
 local NECK_Z <const> = 20
 local TIMER0 <const> = 21 -- `Timer0` (`+0x158`): the snap's count.
-local BLOOD <const> = 22 -- `+0x234`: `FUN_0046b1c0` runs each tick while it's 1.
+local BLOOD <const> = 22 -- `+0x234`: what runs each tick: 1 `FUN_0046b1c0`, 2 `FUN_0046b670`.
+local TANK_T <const> = 23 -- `+0x15a`: the count of `FUN_004697f0`'s steps.
+-- The gas tank's place on part 6, once the jaws hold it: the original's
+-- object work 1 `Pos_x` to `_z` with its parent matrix on that part.
+local TANK_X <const> = 24
+local TANK_Y <const> = 25
+local TANK_Z <const> = 26
+local HIT_BY <const> = 27 -- `+0x230`: the weapon (`Routine_1`) of the last hit.
+local HURT <const> = 28 -- `+0x1d2`: `FUN_00469d40`'s pick of `funcs_469D34`.
+local BLOOD_END <const> = 29 -- `DWORD_0068950c`: the shotguns' blood's last tick.
+local BLOOD_POINT <const> = 30 -- `DWORD_00689508`: weapon 4's point of `BLOOD_POINTS`.
+local LAST_VAR <const> = BLOOD_POINT
 
 -- `Rot_neck_em`'s neck: `Neck_no` 5, whose part has a rate of 20 and a limit
 -- of 560 (its `+0x9c` and `+0xa0`).
@@ -54,8 +66,8 @@ local LIFE_EXTRA <const> = 300
 -- `fg_room`'s bits that room 40A's script raises.
 local ROOM_BANK <const> = 5
 
--- The gas tank: room 40A's `obj_model_set` 2.
-local TANK_OBJECT <const> = 2
+-- The gas tank: room 40A's `obj_model_set` 1 (the original's object work 1, `DAT_0098a84c`).
+local TANK_OBJECT <const> = 1
 
 local function i16(value)
     value = value & 0xFFFF
@@ -114,7 +126,7 @@ local function init(e)
     -- `Atd[2]`, the body's, aren't modelled.
     e:set_body_box(0, 600, 2000, 600)
     e:set_body_ofs_x(3000)
-    for index = FLAGS, BLOOD do
+    for index = FLAGS, LAST_VAR do
         e:set_var(index, 0)
     end
     e:set_be_flg(e:be_flg() | 0x1C00004C)
@@ -518,17 +530,305 @@ local function reach_ck(e)
     e:set_player_life(-1)
 end
 
+-- `Approach_one`: `value` a step toward `target`, and not past it.
+local function approach_one(value, target, step)
+    local below = value < target
+    local moved = below and value + step or value - step
+    if (moved < target) ~= below or moved == target then
+        return target
+    end
+    return moved
+end
+
+-- The jaws' roll this step of `FUN_004697f0`: `ease` of `count` steps to
+-- `b` on `+0x22a` and `a` on `+0x228`.
+local function tank_jaws(e, ease, count, b, a)
+    local t = e:var(TANK_T)
+    add_var16(e, JAW_B, ease(count, t, b))
+    add_var16(e, JAW_A, ease(count, t, a))
+    t = t + 1
+    e:set_var(TANK_T, t)
+    return t
+end
+
+local function tank_approach(e, x_step, y_step)
+    if x_step then
+        e:set_var(TANK_X, approach_one(e:var(TANK_X), 0x6D6, x_step))
+    end
+    if y_step then
+        e:set_var(TANK_Y, approach_one(e:var(TANK_Y), -0xD2, y_step))
+    end
+end
+
+local function tank_next(e, done)
+    if done then
+        e:set_var(TANK_T, 0)
+        e:set_var(TANK, e:var(TANK) + 1)
+    end
+end
+
+-- `FUN_004697f0`: the gas tank (`+0x226`). Once its swim reaches the tank
+-- (1), it raises `fg_room`'s 0x1d and opens its jaws over 13 ticks, pushing
+-- the tank ahead of it, then takes it in them (3): the tank's place is kept
+-- on part 6 from then, and the jaws close (3, 4) and open a little (5, 6) as
+-- it settles 1750 ahead and 210 up, which it keeps (7).
+local function tank(e)
+    local step = e:var(TANK)
+    if step == 1 then
+        e:set_var(TANK_T, 0)
+        e:set_flag(ROOM_BANK, 0x1D, true)
+        step = 2
+        e:set_var(TANK, 2)
+    end
+    if step == 2 then
+        local t = tank_jaws(e, ease_in, 0xD, 0xF0, -0x140)
+        local _, _, z = e:pos()
+        local tx, ty, tz = e:object_pos(TANK_OBJECT)
+        if tz - z < 0x1FA4 then
+            tz = z + 0x1FA4
+            e:set_object_pos(TANK_OBJECT, tx, ty, tz)
+        end
+        if t == 0xD then
+            e:set_var(TANK_T, 0)
+            e:set_neck_flags(e:neck_flags() & 0xFB)
+            local lx, ly, lz = e:part_local(6, tx, ty, tz)
+            e:set_var(TANK_X, lx)
+            e:set_var(TANK_Y, ly)
+            e:set_var(TANK_Z, lz)
+            e:set_var(TANK, 3)
+        end
+    elseif step == 3 then
+        local t = tank_jaws(e, ease_in, 6, -0x8C, -0x3C)
+        tank_approach(e, 0x46, nil)
+        tank_next(e, t == 6)
+    elseif step == 4 then
+        local t = tank_jaws(e, ease_out, 6, -0x8C, -0x3C)
+        tank_approach(e, 0x91, 0x19)
+        tank_next(e, t == 6)
+    elseif step == 5 then
+        local t = tank_jaws(e, ease_in, 7, 0x4B, 100)
+        tank_approach(e, 100, 0x37)
+        tank_next(e, t == 7)
+    elseif step == 6 then
+        local t = tank_jaws(e, ease_out, 7, 0x4B, 100)
+        tank_next(e, t == 7)
+    elseif step == 7 then
+        tank_approach(e, 100, 0x1E)
+    end
+end
+
+-- The tank in its jaws, placed on part 6 as the last draw left it.
+local function hold_tank(e)
+    if e:var(TANK) >= 3 then
+        local x, y, z = e:drawn_part_point(6, i16(e:var(TANK_X)), i16(e:var(TANK_Y)), i16(e:var(TANK_Z)))
+        e:set_object_pos(TANK_OBJECT, x, y, z)
+    end
+end
+
+-- `DAT_00527ea0`: where a hit bleeds, on the body's parts: the point on the
+-- part, the blood's turn and the part.
+local BLOOD_POINTS <const> = {
+    [0] = { 2300, -300, 400, -2500, 7 },
+    { 1900, -500, 400, -2500, 7 },
+    { 1200, -600, 800, -2500, 7 },
+    { 500, -200, 1200, -2500, 7 },
+    { 1600, -600, 100, -2500, 7 },
+    { 1800, -400, -300, -2500, 7 },
+    { 2600, 0, -300, -2500, 7 },
+    { 800, -400, -900, -2500, 7 },
+    { 1700, 500, -900, -2500, 6 },
+    { 200, 100, 500, -2500, 4 },
+    { 600, 300, 0, -2500, 10 },
+    { 700, 0, 1300, -2500, 6 },
+    { 1000, 700, 800, -2500, 6 },
+    { 2000, 900, -100, -2500, 6 },
+    { 2000, 200, 0, -2500, 6 },
+    { 3800, 500, 0, -2500, 6 },
+    { 3200, 300, 500, -2500, 6 },
+    { 3300, 300, 200, -2500, 6 },
+    { 3100, 300, -300, -2500, 6 },
+    { 900, 500, -1000, -2500, 5 },
+    { 600, 1200, 800, -2500, 3 },
+    { -400, 800, 200, -2500, 8 },
+    { 700, -400, 1200, -2500, 5 },
+    { 1300, 0, 1300, -2500, 6 },
+}
+
+local function i8(value)
+    value = value & 0xFF
+    return value >= 0x80 and value - 0x100 or value
+end
+
+-- `FUN_0046b890`: blood (effect 0, `row`) at a point on `part` as the last
+-- draw left it. `blood_censor` is taken as off.
+local function blood_at(e, row, size, dir, part, x, y, z)
+    local wx, wy, wz = e:drawn_part_point(part, x, y, z)
+    e:call_effect(0, row, size, i16(dir), i16(wx), i16(wy), i16(wz))
+end
+
+-- `FUN_0046b080`: `count` bloods of row 6 at points of `BLOOD_POINTS`, the
+-- first eight or, `wide`, all of them.
+local function bleed(e, count, size, wide)
+    for _ = 1, count do
+        local index = wide and e:rnd() % 0x18 or e:rnd() & 7
+        local point = BLOOD_POINTS[index]
+        local dir = i8(e:rnd()) * 0x10 + point[4]
+        blood_at(e, 6, size, dir, point[5], point[1], point[2], point[3])
+    end
+end
+
+-- `FUN_0046b110`: weapon 4's blood, near one point a burst keeps.
+local function bleed_weapon4(e)
+    if e:var(C233) == 0 then
+        e:set_var(BLOOD_POINT, e:rnd() & 7)
+    end
+    e:set_var(C233, 4)
+    local point = BLOOD_POINTS[e:var(BLOOD_POINT)]
+    local x = e:rnd() * 2 + point[1] - 0x7F
+    local y = e:rnd() * 2 + point[2] - 0x7F
+    local z = e:rnd() * 2 + point[3] - 0x7F
+    blood_at(e, 6, 0x2800, point[4], point[5], i16(x), i16(y), i16(z))
+end
+
+-- `FUN_0046b670`: the shotguns' blood, two a tick over the ticks after the
+-- hit until `+0x231` reaches `last`.
+local function bleed_shotgun(e, last)
+    if e:var(C231) == 0 then
+        e:set_var(BLOOD, 2)
+        e:set_var(C231, 1)
+        e:set_var(BLOOD_END, last)
+        return
+    end
+    bleed(e, 1, 0x3000, true)
+    bleed(e, 1, 0x3000, true)
+    if e:var(C231) == e:var(BLOOD_END) then
+        e:set_var(BLOOD, 0)
+    end
+    e:set_var(C231, (e:var(C231) + 1) & 0xFF)
+end
+
+-- `FUN_0046af30`: a hit's blood, by the weapon. Weapons 9 to 0x13 aren't
+-- fired in arklay, so only their rows that need no other effect are here.
+local function hit_blood(e)
+    e:set_var(C231, 0)
+    local weapon = e:var(HIT_BY)
+    if weapon == 2 or weapon == 3 or weapon == 5 or weapon == 6 or weapon == 0xD or weapon == 0xF then
+        bleed(e, 1, 0x2800, false)
+    elseif weapon == 4 then
+        bleed_weapon4(e)
+    elseif weapon == 7 then
+        bleed_shotgun(e, 4)
+    elseif weapon == 8 then
+        bleed_shotgun(e, 6)
+    elseif weapon == 0x12 then
+        bleed(e, 4, 0x2800, false)
+    end
+end
+
+-- `FUN_00469d40`: what a hit does. While the player lives: with the tank in
+-- its jaws, anything but the knife sets it off (1); at the corridor's end in
+-- cut 8, hurt below 25000, it goes under (2, or 3 while zapping); otherwise a
+-- quarter of hits, not while it turns or soon after the last, make it flinch
+-- (4). The rest it shrugs off (0).
+local function hurt_kind(e)
+    if e:life() < 25000 then
+        e:set_var(FLAGS, e:var(FLAGS) | 0x20)
+    end
+    if e:player_life() >= 0 then
+        if e:var(TANK) == 7 then
+            if e:var(HIT_BY) ~= 1 then
+                return 1
+            end
+        elseif e:var(FLAGS) & 0x10 ~= 0 and e:cut() == 8 and e:life() < 25000 then
+            e:set_var(SNAP, 0)
+            e:set_var(JAW_B, 0)
+            e:set_var(JAW_A, 0)
+            -- `fg_status`'s `0x40000000` with `fg_zapping`'s 0x10 isn't modelled.
+            return 2
+        elseif e:var(TURNING) == 0 and e:var(HIT_WAIT) == 0 and e:rnd() & 3 == 0 then
+            e:set_var(HIT_WAIT, (e:rnd() & 0x3F) + 0x78)
+            return 4
+        end
+    end
+    return 0
+end
+
+-- `FUN_00469e20`: it bleeds and carries on with what it was doing, this tick.
+local function shrug(e)
+    if e:var(C232) == 0 and e:var(C233) == 0 then
+        e:sound(5)
+    end
+    hit_blood(e)
+    e:restore_routine()
+    if e:routine(0) == 1 then
+        local before = BEFORE[e:routine(1)]
+        if before then
+            before(e)
+        end
+        local after = AFTER[e:routine(1)]
+        if after then
+            after(e)
+        end
+    end
+end
+
+-- `FUN_0046a650`: it flinches (clip 10), then rests.
+local function flinch(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        if e:var(C232) == 0 then
+            e:sound(0)
+        end
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        hit_blood(e)
+        e:set_routine(2, 1)
+    elseif sub ~= 1 then
+        return
+    end
+    if mot_play_sp(e, 10, 3) ~= 0 then
+        e:routines(1, 1, 0, 0)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+    end
+end
+
+-- `funcs_469D34`; the explosion (1, `FUN_00469e90`) and going under at the
+-- corridor's end (2, `FUN_0046a2a0`, and 3, `FUN_0046a430`) aren't ported.
+local HURTS <const> = { [0] = shrug, nil, nil, nil, flinch }
+
+-- `FUN_00469cf0`: `Routine_0` 2.
+local function hurt(e)
+    if e:routine(1) ~= 0xFF then
+        e:set_var(HIT_BY, e:routine(1))
+        e:set_routine(1, 0xFF)
+        e:set_var(HURT, hurt_kind(e))
+        if e:move_cnt() > 1 then
+            e:set_move_cnt(e:move_cnt() - 2)
+        end
+    end
+    local entry = HURTS[e:var(HURT)]
+    if entry then
+        entry(e)
+    end
+end
+
 function update(e)
     local zero = e:routine(0)
     if zero == 0 then
         init(e)
     elseif zero == 1 then
         move(e)
+    elseif zero == 2 then
+        hurt(e)
     end
     mot_play_init(e)
+    tank(e)
     snap(e)
-    if e:var(FLAGS) & 4 ~= 0 and e:neck_flags() & 4 == 0 then
-        e:rot_neck_part(NECK, NECK_RATE, NECK_LIMIT)
+    if e:var(FLAGS) & 4 ~= 0 then
+        if e:neck_flags() & 4 == 0 then
+            e:rot_neck_part(NECK, NECK_RATE, NECK_LIMIT)
+        else
+            e:rot_neck_point(NECK, NECK_RATE, NECK_LIMIT, i16(e:var(NECK_X)), i16(e:var(NECK_Y)), i16(e:var(NECK_Z)))
+        end
     end
     e:set_jaw(e:var(JAW_B), e:var(JAW_A))
     -- On the init's tick, while the room loads, arklay's player isn't placed
@@ -548,10 +848,14 @@ function update(e)
     e:seq_sound()
     count_down(e, C232)
     count_down(e, GRABBED)
-    if e:var(BLOOD) ~= 0 then
+    local callback = e:var(BLOOD)
+    if callback == 1 then
         blood(e)
+    elseif callback == 2 then
+        bleed_shotgun(e, e:var(BLOOD_END))
     end
     count_down(e, C233)
     count_down(e, HIT_WAIT)
     count_down(e, REST)
+    hold_tank(e)
 end

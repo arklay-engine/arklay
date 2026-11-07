@@ -1,0 +1,49 @@
+# room 40A: after the scene, run to the button at the second leg, drop the gas tank, then shoot the alligator every 30 ticks (oracle/re2.md)
+822 up run
+859 up run right
+877 up run
+920 up run right
+922 up run
+962
+964 right
+975
+978 confirm
+982
+1330 right
+1344
+1346 aim
+1360 aim fire
+1364 aim
+1390 aim fire
+1394 aim
+1420 aim fire
+1424 aim
+1450 aim fire
+1454 aim
+1480 aim fire
+1484 aim
+1510 aim fire
+1514 aim
+1540 aim fire
+1544 aim
+1570 aim fire
+1574 aim
+1600 aim fire
+1604 aim
+1630 aim fire
+1634 aim
+1660 aim fire
+1664 aim
+1690 aim fire
+1694 aim
+1720 aim fire
+1724 aim
+1750 aim fire
+1754 aim
+1780 aim fire
+1784 aim
+1810 aim fire
+1814 aim
+1840 aim fire
+1844 aim
+1870
