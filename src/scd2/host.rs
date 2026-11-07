@@ -2834,8 +2834,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A cockroach, which isn't modelled.
-        spawn_character(&mut game, 0x29, 255);
+        // An enemy that isn't modelled (`Em_2B`).
+        spawn_character(&mut game, 0x2B, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.
