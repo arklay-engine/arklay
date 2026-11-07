@@ -244,31 +244,9 @@ function BotPuzzle.preferred_pickup(bot, id)
     return false
 end
 
--- Whether a held gun has rounds (its own, or another loading's of the same
--- launcher) and a knowledge band for enemy `id`.
+-- Whether combat would fight enemy `id` (BotTactics.armed_for).
 function BotPuzzle.armed_for(bot, id)
-    local k = bot:knowledge() or {}
-    local entry = k.enemies and k.enemies[id]
-    if not (entry and entry.keep) then
-        return false
-    end
-    for _, row in ipairs(bot:menu().items or {}) do
-        local weapon = row.kind == "weapon" and k.weapons[row.item]
-        if weapon and not weapon.melee and entry.keep[row.item] then
-            local base = weapon.variant_of or row.item
-            local rounds = row.quantity or 0
-            for wid, other in pairs(k.weapons) do
-                if wid == base or other.variant_of == base then
-                    local ammo = bot:ammo_for(wid)
-                    rounds = rounds + (ammo and bot:item_count(ammo) or 0)
-                end
-            end
-            if rounds > 0 then
-                return true
-            end
-        end
-    end
-    return false
+    return BotTactics.armed_for(bot, id)
 end
 
 function BotPuzzle.next_interact(bot)
