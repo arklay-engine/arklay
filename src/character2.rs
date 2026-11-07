@@ -141,9 +141,15 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
             let licker = other.zombie.as_ref().and_then(|z| z.licker.as_ref());
             let head = licker.map(|licker| licker.head);
             let back = licker.and_then(|licker| licker.back);
+            let more = other
+                .zombie
+                .as_ref()
+                .map(|z| z.more_atd.clone())
+                .unwrap_or_default();
             std::iter::once(atd)
                 .chain(head)
                 .chain(back)
+                .chain(more)
                 .map(move |atd| crate::zombie2::Oba {
                     slot: slot as u8,
                     be_flg: other.be_flg,

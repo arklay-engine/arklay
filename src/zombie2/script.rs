@@ -1113,6 +1113,27 @@ impl UserData for Api {
             let [x, y, z] = e.em().world.objects.get(index).copied().unwrap_or_default();
             Ok((x, y, z))
         });
+        // `Rot_neck_em` on `Neck_no` `joint`, with the joint's rate and limit
+        // (its `+0x9C` and `+0xA0`), from where the last draw left it toward
+        // the player's head.
+        methods.add_method_mut(
+            "rot_neck_part",
+            |_, e, (joint, rate, limit): (usize, i32, i32)| {
+                let em = e.em();
+                let from = em.z.parts.get(joint).copied().flatten().map(|m| m.t);
+                let target = em.world.player_neck;
+                let angle = em.mover.player.angle as i16;
+                em.work().neck.joint = Some(joint as u8);
+                em.mover
+                    .rot_neck_joint(joint, from, target, angle, rate, limit);
+                Ok(())
+            },
+        );
+        // The alligator's jaws: the roll of parts 6 and 7 on top of their pose.
+        methods.add_method_mut("set_jaw", |_, e, (six, seven): (i16, i16)| {
+            e.em().work().neck.jaw = [six, seven];
+            Ok(())
+        });
         // The player's `At_em_flg`: a body touched them this tick.
         methods.add_method_mut("player_touched", |_, e, ()| {
             Ok(e.em().world.pl.at_em_flg != 0)
@@ -2462,11 +2483,32 @@ mod tests {
         function e:distance() return DIST end
         function e:now_seq() return 0 end
         function e:neck_flags() return 0 end
-        function e:player_touched() return false end
         function e:object_pos() return 1836, -1800, -21254 end
         function e:flag() return false end
+        w.jaws = {}
+        w.pl = { 1, 0, 0, 0 }
+        w.downs = {}
+        w.draws = 0
+        w.effects = 0
+        function e:set_jaw(six, seven) w.jaws[#w.jaws + 1] = { six, seven } end
+        function e:player_touched() return TOUCH end
+        w.dc = 0
+        function e:pl_damage_cnt() return w.dc end
+        -- The player's own tick sets its `Damage_cnt` as the throw starts.
+        function e:pl_hold() w.dc = 0x80 end
+        function e:cdir_player() return true end
+        function e:pl_set_routine(a, b, c, d) w.pl = { a, b, c, d } end
+        function e:pl_set_routine_at(i, v) w.pl[i + 1] = v end
+        function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+        function e:rnd() w.draws = w.draws + 1 return 0 end
+        function e:call_effect() w.effects = w.effects + 1 end
+        function e:player_pos() return 0, -1800, 20000 end
+        function e:direction_from_player() return 0 end
+        function e:own_part() return 0, 0, 0 end
+        function e:hypot() return 20000 end
         for _, name in ipairs({ 'set_damage_flg', 'set_sce_flg', 'set_neck_flags',
-            'set_body_box', 'set_body_ofs_x', 'spd', 'seq_sound', 'sound' }) do
+            'set_body_box', 'set_body_ofs_x', 'spd', 'seq_sound', 'sound',
+            'player_goto_angle', 'rot_neck_part' }) do
             e[name] = function() end
         end
     ";
@@ -2484,7 +2526,7 @@ mod tests {
         let script = include_str!("../../games/re2/enemy/23/enemy.lua");
         budget.begin();
         lua.load(format!(
-            "SCE = 0 DIST = 20000 CLIP_LEN = 4 {setup}
+            "SCE = 0 DIST = 20000 CLIP_LEN = 4 TOUCH = false {setup}
              {ALLIGATOR_STUB}
              {script}"
         ))
@@ -2500,7 +2542,9 @@ mod tests {
             "return { r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], life = w.life, be = w.be,
                  cuts = w.cuts, angle = w.angle, z = w.pos[3], move_no = w.move_no,
                  status = w.status, cleared = w.cleared, rest = w.vars[15] or 0,
-                 moved = w.moved }",
+                 moved = w.moved, draws = w.draws, effects = w.effects,
+                 pl1 = w.pl[2], down = w.downs[1] or 0, downs = #w.downs,
+                 jaw = #w.jaws > 0 and (w.jaws[#w.jaws][1] * 0x10000 + (w.jaws[#w.jaws][2] & 0xFFFF)) or 0 }",
         )
         .eval::<mlua::Table>()
         .map(|table| {
@@ -2512,7 +2556,7 @@ mod tests {
                 .collect();
             let fields = [
                 "r0", "r1", "r2", "life", "be", "angle", "z", "move_no", "status", "cleared",
-                "rest", "moved",
+                "rest", "moved", "draws", "effects", "pl1", "down", "downs", "jaw",
             ]
             .into_iter()
             .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
@@ -2582,5 +2626,44 @@ mod tests {
         assert_eq!(alligator.get("move_no"), 1);
         let alligator = run_alligator(10 + 0x6E, "SCE = 1 DIST = 50");
         assert_eq!(alligator.get("r1"), 1);
+    }
+
+    /// `FUN_00469480`: once the player has touched it, the jaws open and
+    /// close over eight ticks (as the original's `+0x22a` and `+0x228` went
+    /// in room 40A), then snap: `FUN_00469630` throws the player on from
+    /// behind (`Routine` 5,3) for `Pl_life_down(40)`, and `FUN_0046b1c0`
+    /// bleeds on three ticks, four draws of `Rnd` each.
+    #[test]
+    fn an_alligators_jaws_snap_at_the_player() {
+        let jaws = [
+            (1, -6),
+            (5, -25),
+            (11, -56),
+            (20, -100),
+            (29, -144),
+            (35, -175),
+            (39, -194),
+            (40, -200),
+            (38, -189),
+        ];
+        // The entry ends on tick 10; the rest's first tick, 11, sees the touch.
+        for (tick, (six, seven)) in jaws.into_iter().enumerate() {
+            let alligator = run_alligator(11 + tick, "SCE = 1 TOUCH = true");
+            let jaw = alligator.get("jaw");
+            assert_eq!(
+                ((jaw >> 16) as i16, jaw as i16),
+                (six, seven),
+                "tick {tick}"
+            );
+        }
+        let alligator = run_alligator(19, "SCE = 1 TOUCH = true");
+        assert_eq!(alligator.get("downs"), 1, "the snap's first tick");
+        assert_eq!(alligator.get("down"), 0x28);
+        assert_eq!(alligator.get("pl1"), 3);
+        assert_eq!((alligator.get("draws"), alligator.get("effects")), (4, 1));
+        let alligator = run_alligator(21, "SCE = 1 TOUCH = true");
+        assert_eq!((alligator.get("draws"), alligator.get("effects")), (12, 3));
+        let alligator = run_alligator(30, "SCE = 1 TOUCH = true");
+        assert_eq!(alligator.get("draws"), 12);
     }
 }

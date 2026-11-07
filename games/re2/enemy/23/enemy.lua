@@ -35,6 +35,16 @@ local C231 <const> = 17 -- `+0x231`.
 local NECK_X <const> = 18 -- `Neck_point_x` to `_z` (`+0x170`), which `Rot_neck` would turn the head to; the neck isn't ported.
 local NECK_Y <const> = 19
 local NECK_Z <const> = 20
+local TIMER0 <const> = 21 -- `Timer0` (`+0x158`): the snap's count.
+local BLOOD <const> = 22 -- `+0x234`: `FUN_0046b1c0` runs each tick while it's 1.
+
+-- `Rot_neck_em`'s neck: `Neck_no` 5, whose part has a rate of 20 and a limit
+-- of 560 (its `+0x9c` and `+0xa0`).
+local NECK <const> = 5
+local NECK_RATE <const> = 20
+local NECK_LIMIT <const> = 560
+-- `FUN_00469750`: the player within this of part 0 is caught.
+local REACH <const> = 0x1450
 
 local LIFE <const> = 25000
 -- `WORD_00527dea` and `DAT_00527de8`: the life past 25000, normal and with
@@ -104,7 +114,7 @@ local function init(e)
     -- `Atd[2]`, the body's, aren't modelled.
     e:set_body_box(0, 600, 2000, 600)
     e:set_body_ofs_x(3000)
-    for index = FLAGS, NECK_Z do
+    for index = FLAGS, BLOOD do
         e:set_var(index, 0)
     end
     e:set_be_flg(e:be_flg() | 0x1C00004C)
@@ -239,9 +249,12 @@ local function turn(e)
     snap_ck(e)
     local sub = e:routine(2)
     if sub == 0 then
+        -- The sound, and the turn's first step on the same tick.
         e:sound(4)
         e:set_routine(2, 1)
-    elseif sub == 1 then
+        sub = 1
+    end
+    if sub == 1 then
         local ended = play_fast(e, 2, 0x10)
         e:set_var(TURNING, 1)
         if ended ~= 0 then
@@ -357,6 +370,154 @@ local function shake(e)
     end
 end
 
+-- `FUN_00469b80` and `FUN_00469bc0`: a move of `total` over `count` steps,
+-- speeding up or slowing down, this step's share.
+-- C's division, toward 0, for the easings' negative totals.
+local function cdiv(a, b)
+    local q = a // b
+    if q < 0 and q * b ~= a then
+        q = q + 1
+    end
+    return q
+end
+
+-- `FUN_00469b80` and `FUN_00469bc0`: this step's share of a move of `total`
+-- over `count` steps, speeding up or slowing down.
+local function ease_in(count, step, total)
+    if step == 0 then
+        return 0
+    end
+    local square = count * count
+    return cdiv(step * step * total, square) - cdiv((step - 1) * (step - 1) * total, square)
+end
+
+local function ease_out(count, step, total)
+    if step == 0 then
+        return total
+    end
+    step = count - step
+    local square = count * count
+    return cdiv((step + 1) * (step + 1) * total, square) - cdiv(step * step * total, square)
+end
+
+local function add_var16(e, index, value)
+    e:set_var(index, i16(e:var(index) + value))
+end
+
+-- `FUN_0046b1c0`: three ticks of blood about the player's head.
+local function blood(e)
+    local count = e:var(C231)
+    if count == 0 then
+        e:set_var(BLOOD, 1)
+    elseif count <= 3 then
+        local px, py, pz = e:player_pos()
+        local dir = e:direction_from_player()
+        local i8 = function(v) v = v & 0xFF; return v >= 0x80 and v - 0x100 or v end
+        local bx = i8(e:rnd()) + px
+        local by = i8(e:rnd()) - 800 + py
+        local bz = i8(e:rnd()) + pz
+        local turn = i8(e:rnd()) * 0x10 + dir
+        e:call_effect(0, 1, 0x2000, i16(turn), bx, by, bz)
+        if count == 3 then
+            e:set_var(BLOOD, 0)
+            e:set_var(C231, 4)
+            return
+        end
+    else
+        return
+    end
+    e:set_var(C231, count + 1)
+end
+
+-- `FUN_00469630`: the jaws' snap throws the player back and hurts them.
+local function knock(e)
+    if not e:player_touched() or e:pl_damage_cnt() ~= 0 then
+        return
+    end
+    e:pl_hold()
+    local one = e:cdir_player() and 3 or 2
+    e:pl_set_routine(5, one, 0, 0)
+    local x, _, z = e:pos()
+    local dir
+    if z < -8999 then
+        if x > -0x3CF0 then
+            dir = e:cdir_player() and 0x800 or 0
+        else
+            dir = e:cdir_player() and 0xC00 or 0x400
+        end
+    else
+        dir = e:cdir_player() and 0 or 0x800
+    end
+    e:player_goto_angle(dir, 0x600)
+    -- `hard_mode` and `censorship_off` are clear: 40 before `Pl_life_down`'s
+    -- own scaling.
+    local down = 0x28
+    local result = e:pl_life_down(down)
+    if result & 1 ~= 0 then
+        e:pl_set_routine_at(2, 4)
+    end
+    if result & 2 ~= 0 then
+        e:pl_set_routine(3, 0, 0, 0)
+    end
+    e:set_var(REST, 0x46)
+    e:set_var(C231, 0)
+    blood(e)
+end
+
+-- `FUN_00469480`: the jaws open over four ticks and shut over four, then
+-- snap over three more (the knock) and settle over three.
+local function snap(e)
+    local step = e:var(SNAP)
+    if step == 1 then
+        e:set_var(TIMER0, 0)
+        step = 2
+        e:set_var(SNAP, 2)
+    end
+    local t
+    if step == 2 or step == 3 then
+        t = e:var(TIMER0) + 1
+        e:set_var(TIMER0, t)
+        local ease = step == 2 and ease_in or ease_out
+        add_var16(e, JAW_B, ease(4, t, 0x14))
+        add_var16(e, JAW_A, ease(4, t, -100))
+        if t == 4 then
+            e:set_var(TIMER0, 0)
+            e:set_var(SNAP, step + 1)
+        end
+    elseif step == 4 or step == 5 then
+        t = e:var(TIMER0) + 1
+        e:set_var(TIMER0, t)
+        local ease = step == 4 and ease_in or ease_out
+        add_var16(e, JAW_B, ease(3, t, -0x14))
+        add_var16(e, JAW_A, ease(3, t, 100))
+        if t == 3 then
+            e:set_var(TIMER0, 0)
+            e:set_var(SNAP, step == 4 and 5 or 0)
+        end
+        knock(e)
+    end
+end
+
+-- `FUN_00469750`: the player within reach of part 0 is caught, and dies.
+local function reach_ck(e)
+    if e:pl_damage_cnt() ~= 0 then
+        return
+    end
+    local x, _, z = e:own_part(0)
+    local px, _, pz = e:player_pos()
+    if e:hypot(px - x, pz - z) >= REACH then
+        return
+    end
+    e:set_var(FLAGS, e:var(FLAGS) | 2)
+    e:set_var(GRABBED, 8)
+    e:pl_hold()
+    e:pl_set_routine(5, 1, 0, 0)
+    e:set_be_flg(e:be_flg() | 0x100A)
+    e:pl_or_be_flg(0x1008)
+    e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+    e:set_player_life(-1)
+end
+
 function update(e)
     local zero = e:routine(0)
     if zero == 0 then
@@ -365,6 +526,17 @@ function update(e)
         move(e)
     end
     mot_play_init(e)
+    snap(e)
+    if e:var(FLAGS) & 4 ~= 0 and e:neck_flags() & 4 == 0 then
+        e:rot_neck_part(NECK, NECK_RATE, NECK_LIMIT)
+    end
+    e:set_jaw(e:var(JAW_B), e:var(JAW_A))
+    -- On the init's tick, while the room loads, arklay's player isn't placed
+    -- yet and the parts haven't been drawn; the original's player is at the
+    -- door, out of reach.
+    if e:var(FLAGS) & 2 == 0 and zero ~= 0 then
+        reach_ck(e)
+    end
     local seq = e:now_seq() & 0xF8000000
     if seq == 0x28000000 then
         e:set_var(SHAKE, 1)
@@ -376,6 +548,9 @@ function update(e)
     e:seq_sound()
     count_down(e, C232)
     count_down(e, GRABBED)
+    if e:var(BLOOD) ~= 0 then
+        blood(e)
+    end
     count_down(e, C233)
     count_down(e, HIT_WAIT)
     count_down(e, REST)

@@ -504,6 +504,8 @@ pub const NECK_JOINT: usize = 8;
 const DOG_NECK: [usize; 2] = [2, 3];
 /// `Pl_init`'s turn rates and limits of [`NECK_JOINT`], yaw then pitch.
 const NECK_RATES: [i32; 2] = [0x60, 0x60];
+/// The alligator's jaws, which [`Neck::jaw`] rolls.
+const ALLIGATOR_JAWS: [usize; 2] = [6, 7];
 const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
 /// What `Pl_neck` counts down from.
 const NECK_WAIT: u8 = 0x2D;
@@ -537,6 +539,9 @@ pub struct Neck {
     pub target: Option<usize>,
     /// The second joint's yaw, when the neck has two (`DOG_NECK`).
     pub turn_two: Option<i16>,
+    /// The alligator's jaws (`Em_23`'s `+0x22a` and `+0x228`): the roll of
+    /// parts 6 and 7 on top of their pose.
+    pub jaw: [i16; 2],
     /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
     /// so a new room doesn't restart it.
     pub wait: u8,
@@ -570,6 +575,13 @@ impl Work {
 impl Neck {
     /// Add the turn to `pose`, as `Rot_neck` does around its `RotMatrix`.
     pub fn apply(&self, pose: &mut Keyframe) {
+        if self.jaw != [0, 0] {
+            for (joint, roll) in ALLIGATOR_JAWS.into_iter().zip(self.jaw) {
+                if let Some(rotation) = pose.rotations.get_mut(joint) {
+                    rotation[2] = rotation[2].wrapping_add(roll);
+                }
+            }
+        }
         if let Some(turn_two) = self.turn_two {
             for (joint, turn) in DOG_NECK.into_iter().zip([self.turn[0], turn_two]) {
                 if let Some(rotation) = pose.rotations.get_mut(joint) {
@@ -3456,6 +3468,10 @@ impl Mover<'_, '_> {
             self.em2a_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::ALLIGATOR_ID {
+            self.em23_held(held);
+            return;
+        }
         if matches!(
             held.holder_id,
             crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
@@ -3671,6 +3687,146 @@ impl Mover<'_, '_> {
             0 => self.em2a_thrown(),
             2 => self.em2a_killed(held),
             _ => self.em2a_turned(),
+        }
+    }
+
+    /// `FUN_0046a710`, `em_damage_table_real[0x13]`: the alligator's jaws.
+    /// `Routine_1` 1 drags the player to it, 2 throws them back from the
+    /// front and 3 from behind, on the room's clips.
+    fn em23_held(&mut self, held: &mut Held<'_>) {
+        match self.work.routine[1] {
+            1 => self.em23_dragged(held),
+            2 => self.em23_thrown(),
+            3 => self.em23_thrown_round(),
+            _ => {}
+        }
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 1: caught by its reach, and pulled in.
+    /// The blood at the player's parts (`FUN_0046acf0`) and `fg_system`'s
+    /// `0x4000000` aren't ported.
+    fn em23_dragged(&mut self, held: &mut Held<'_>) {
+        if self.work.routine[2] == 0 {
+            self.work.sounds.push(0x403_0001);
+            self.work.move_no = 0;
+            self.work.move_cnt = 3;
+            self.work.hokan = 0;
+            self.work.routine[3] = 0;
+            self.work.routine[2] = 1;
+        } else if self.work.routine[2] != 1 {
+            return;
+        }
+        if self.work.routine[3] < 3 {
+            self.work.routine[3] += 1;
+        }
+        let [x, _, z] = held.holder;
+        let to = direction_ck(x, z, self.player.pos[0], self.player.pos[2]);
+        self.player.angle = goto(self.player.angle, to, 0x80);
+        self.work.bank = Bank::Weapon;
+        let ended = self.joint_move_late(0x400);
+        self.work.routine[2] += u8::from(ended);
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 2: thrown back, sliding to a stop.
+    fn em23_thrown(&mut self) {
+        const LATE: u16 = 0x400;
+        self.work.bank = Bank::Room;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x401_0001);
+                    self.work.spd = [-800, 0, 0];
+                    self.work.move_no = 0x12;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                if self.work.hokan == 0 {
+                    self.work.routine[2] = 2;
+                }
+                self.add_speed_xz();
+                self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0x96);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.move_no = 0x13;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 3;
+                }
+                self.add_speed_xz();
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0xF);
+                self.work.routine[2] += u8::from(first) + u8::from(second);
+                if self.work.spd[0] > 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+            }
+            _ => {}
+        }
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 3: thrown forward from behind, then
+    /// back to the player's own clip.
+    fn em23_thrown_round(&mut self) {
+        const LATE: u16 = 0x400;
+        match self.work.routine[2] {
+            0 | 1 => {
+                self.work.bank = Bank::Room;
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x402_0001);
+                    self.work.move_no = 0x14;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.spd = [800, 0, 0];
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                self.add_speed_xz();
+                let ended = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_sub(0x78);
+                self.work.routine[2] += u8::from(ended);
+                if self.work.spd[0] < 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            2 | 4 | 5 => {
+                self.work.bank = Bank::Room;
+                if self.work.routine[2] != 5 {
+                    self.work.move_no = 0x11;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 5;
+                    self.work.damage_cnt = 0;
+                }
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                if first || second {
+                    self.work.routine[2] = 6;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                }
+            }
+            6 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(0x400, true) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt = 0;
+                    self.work.neck.flags &= 0xED;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -4825,6 +4981,9 @@ pub fn plc_stop(work: &mut Work) {
 /// `Load_member_branch` for the fields that live in [`Work`].
 pub fn member(work: &Work, member: u8) -> Option<i32> {
     Some(match member {
+        // `Be_flg`'s low and high words.
+        0 => i32::from(work.be_flg as u16),
+        1 => i32::from((work.be_flg >> 16) as u16),
         2..=5 => i32::from(work.routine[usize::from(member) - 2]),
         7 => i32::from(work.kind),
         0x14 | 0x19 => i32::from(work.dest[0]),
@@ -4844,6 +5003,8 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
 /// `Member_set_branch` for the fields that live in [`Work`]. False for another.
 pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
     match member {
+        0 => work.be_flg = (work.be_flg & 0xFFFF_0000) | u32::from(value as u16),
+        1 => work.be_flg = (work.be_flg & 0xFFFF) | u32::from(value as u16) << 16,
         2..=5 => work.routine[usize::from(member) - 2] = value as u8,
         7 => work.kind = value as u16,
         0x14 | 0x19 => work.dest[0] = value as i16,
