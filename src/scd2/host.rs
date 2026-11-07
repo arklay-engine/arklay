@@ -1336,6 +1336,7 @@ impl GameHost<'_> {
         let zombie = (0x10..=0x21).contains(&id)
             || licker
             || id == crate::zombie2::MRX_ID
+            || id == crate::zombie2::ALLIGATOR_ID
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
             || crate::zombie2::is_plant(id);
@@ -2121,8 +2122,9 @@ impl Host for GameHost<'_> {
                 }
             }
             "member_set" => self.set_member(task, at(0) as u8, at(1) as i32),
+            // `Member_set2` reads the variable as a signed word (`MOVSX`).
             "member_set2" => {
-                let value = i32::from(self.var(at(1) as u8));
+                let value = i32::from(self.var(at(1) as u8) as i16);
                 self.set_member(task, at(0) as u8, value);
             }
             "sce_key_ck" | "sce_trg_ck" => {
@@ -2605,8 +2607,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A spider, which isn't modelled.
-        spawn_character(&mut game, 0x23, 255);
+        // A cockroach, which isn't modelled.
+        spawn_character(&mut game, 0x29, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.
