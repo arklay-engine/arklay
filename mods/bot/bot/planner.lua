@@ -269,6 +269,25 @@ local function mark(bot, kind, room, slot, reason, permanent)
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
 end
 
+-- Puzzle steps held for a free slot (a <push reveals>, its `inventory full`
+-- mark set needed): each counts as a pickup needing room,
+-- so a box visit frees one (BotInventory.pickups_needing_room). Only while
+-- the inventory is as it was marked: once it changes the step is tried
+-- again, and a done step's mark goes stale with the item it handed over.
+-- With `any_sig`, every such step still held, whatever the inventory: the
+-- slots the pickups that no step or use needs must leave free.
+function BotPlanner.steps_needing_room(bot, any_sig)
+    local n = 0
+    local sig = inventory_sig(bot)
+    for _, m in pairs(plan().marks) do
+        if m.kind == "interact" and m.needed and (any_sig or m.sig == sig)
+            and m.reason:find("inventory full", 1, true) then
+            n = n + 1
+        end
+    end
+    return n
+end
+
 -- Whether an `inventory full` mark on `item` waits for the inventory to
 -- change however often it was tried, beyond a key or <use> item (m.needed):
 -- a heal while the bot is hurt with none held (408's wasps stung it to 1
@@ -1453,10 +1472,24 @@ end
 
 -- A pickup of `item` fits: a free slot, or a held stack it merges into.
 local function pickup_fits(bot, item, full)
-    if not full then
-        return true
-    end
     local kind, merge = bot:item_kind(item)
+    if not full then
+        -- A puzzle step held for a free slot keeps it: an item that no key,
+        -- <use> or step needs leaves it (30E's herbs took the slot a box
+        -- visit freed for 306's Doom Book, again and again).
+        local held = BotPlanner.steps_needing_room(bot, true)
+        if held == 0 or kind == "key" or kind == "file" or (merge and bot:has_item(item)) then
+            return true
+        end
+        local used = 0
+        for _, row in ipairs(bot:inventory()) do
+            if row.item ~= 0 then
+                used = used + 1
+            end
+        end
+        local free = (bot:menu().capacity or used) - used
+        return free > held or BotInventory.context(bot).uses[item] == true
+    end
     -- A document goes to the FILE tab, not a slot.
     return kind == "file" or (merge and bot:has_item(item))
 end
@@ -1695,8 +1728,20 @@ local function choose(bot)
             if not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
                 mark(bot, "interact", room, BotPuzzle.step_key(fact),
                     "inventory full: " .. inventory_sig(bot))
+                -- Never given up for a full inventory, like a key: 306's
+                -- Doom Book was lost after three passes with every slot
+                -- used, and with it the Wolf Medal and the way to the lab.
+                plan().marks[mark_key("interact", room, BotPuzzle.step_key(fact))].needed = true
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
+            if fact.kind == "push" and fact.reveals then
+                -- The slot is free now: the step no longer holds one.
+                local key = mark_key("interact", room, BotPuzzle.step_key(fact))
+                local m = plan().marks[key]
+                if m and m.reason:find("inventory full", 1, true) then
+                    plan().marks[key] = nil
+                end
+            end
             -- A boss fight ahead waits for health and rounds, a hazard
             -- (<leave>) for health; the mark
             -- lifts once the inventory changes (a heal, ammunition).
@@ -2295,6 +2340,24 @@ local function choose(bot)
                             or (cure_now ~= nil and cure_now[goal.item] == true)
                         local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
                             needed, heals)
+                        local left = plan().marks[mark_key("item", goal.room, goal.slot)]
+                        if not tag and left and left.reason:find("inventory full", 1, true) then
+                            -- An item an open <use> needs, left behind on a
+                            -- full inventory, weighs as a <holds> one does:
+                            -- 217's MO disk lost to every nearer pickup.
+                            -- One per open use: three computers, three disks.
+                            local open, use_label = 0, nil
+                            for _, use in ipairs(use_list) do
+                                if use.item == goal.item and BotPuzzle.use_open(bot, use) then
+                                    open = open + 1
+                                    use_label = use_label or use.label
+                                end
+                            end
+                            if open > bot:item_count(goal.item) then
+                                bonus = ITEM_BONUS + USE_BONUS
+                                tag = "for " .. (use_label or "a use")
+                            end
+                        end
                         heal_target = heals and goal.item_kind == "heal" or nil
                         cost = cost - bonus
                         label = string.format("item 0x%02X in %s", goal.item, goal.room)

@@ -14,7 +14,8 @@
 --   keep:     the equipped item, a firearm the knowledge file fights with
 --             and its ammunition (the ammo reserve), the loadout (below),
 --             every key, every item
---             an open <use> fact needs (bot:use_facts(), done flag clear),
+--             an open <use> fact needs (bot:use_facts(), done flag clear;
+--             not one whose uses all lie in stages not entered yet),
 --             every heal item that restores health (the row's `heals`)
 --             and one <cure> stack. Anything else may go in the box (a
 --             red herb alone).
@@ -103,7 +104,7 @@ function BotInventory.keep(row, ctx)
     if row.kind == "key" then
         return "key"
     end
-    if ctx.uses and ctx.uses[item] then
+    if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
         return "a <use> fact needs it"
     end
     if item == ctx.equipped then
@@ -298,7 +299,7 @@ function BotInventory.wanted_back(row, ctx)
     if ctx.cure_now and ctx.cure_now[item] then
         return CURE
     end
-    if ctx.uses and ctx.uses[item] then
+    if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
         return "a <use> fact needs it"
     end
     if ctx.keys and ctx.keys[item] then
@@ -345,6 +346,13 @@ local TOP_UPS = {
 -- The box rows to take back, at most `free` of them, box order.
 function BotInventory.withdrawals(box_items, ctx, free)
     local out = {}
+    -- A puzzle step held for a free slot keeps it (ctx.hold_free): 30E's
+    -- box gave the slot it had just freed for 306's Doom Book to the
+    -- launcher 30C's tiger fight prefers, visit after visit.
+    free = free - (ctx.hold_free or 0)
+    if free < 0 then
+        free = 0
+    end
     local heal_taken = false
     -- The cure first, then the loadout and the rearm, so the heal top-up
     -- does not fill their slots.
@@ -514,11 +522,37 @@ function BotInventory.context(bot)
     if ctx.equipped and bot:ammo_for(ctx.equipped) then
         ctx.ammo[bot:ammo_for(ctx.equipped)] = true
     end
+    -- A <use> item whose open uses all lie in stages not entered yet (the
+    -- lab's MO disk computers, from the caves) is needed but not kept: the
+    -- boxes share one store, so it may wait in one and come out at a box of
+    -- that stage (ctx.far). Carried, two disks and the crank filled the
+    -- slots 306's Doom Book needed.
+    local stages = { [string.sub(bot:room().id, 1, 1)] = true }
+    for _, room in ipairs(bot:world().rooms) do
+        if room.visited then
+            stages[string.sub(room.id, 1, 1)] = true
+        end
+    end
+    local near, used = {}, {}
     for _, fact in ipairs(bot:use_facts()) do
         if BotPuzzle.use_open(bot, fact) then
             ctx.uses[fact.item] = true
+            used[fact.item] = true
+            if stages[string.sub(fact.room, 1, 1)] then
+                near[fact.item] = true
+            end
         end
     end
+    -- (Only <use> items: a <deliver> item or a doom book has no use fact
+    -- to place it, and a brew's chemicals are wanted here.)
+    for item, _ in pairs(used) do
+        if not near[item] then
+            ctx.far = ctx.far or {}
+            ctx.far[item] = true
+        end
+    end
+    ctx.hold_free = BotPlanner and BotPlanner.steps_needing_room
+        and BotPlanner.steps_needing_room(bot, true) or 0
     -- So are a <brew>'s bottles and chemicals while it is open here: the
     -- room's bottles then count as needed pickups, so the box makes room
     -- for them all in one trip.
@@ -834,6 +868,7 @@ end
 function BotInventory.pickups_needing_room(bot, skip)
     -- A due <fetch> hands over an item that needs a slot too.
     local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
+        + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local _, merge = bot:item_kind(goal.item)
@@ -851,6 +886,7 @@ end
 -- items worth a spare gun's slot.
 function BotInventory.needed_pickups(bot, ctx, skip)
     local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
+        + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
     local progress = n
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
@@ -957,7 +993,7 @@ function BotInventory.box_reason(bot, skip, here)
     if not here then
         ctx.reserve_only = true
     end
-    local free = ctx.capacity - ctx.used
+    local free = ctx.capacity - ctx.used - ctx.hold_free
     if free > 0 or #deposits > 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)

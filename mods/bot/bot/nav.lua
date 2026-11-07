@@ -194,6 +194,23 @@ function BotNav.approach_points(bot, zone)
         end
     end
     plan(candidates)
+    -- None planned: the sides' end points too, level with the zone's
+    -- corners. The only floor beside a zone may be a pocket at one corner
+    -- (217's MO disk on its desk, reached from the strip north of it).
+    if #planned == 0 then
+        local corners = {}
+        for _, d in ipairs(offsets) do
+            for _, a in ipairs({ -(zone.depth // 2), zone.depth // 2 }) do
+                corners[#corners + 1] = { zone.x - d, cz + a }
+                corners[#corners + 1] = { zone.x + zone.width + d, cz + a }
+            end
+            for _, a in ipairs({ -(zone.width // 2), zone.width // 2 }) do
+                corners[#corners + 1] = { cx + a, zone.z - d }
+                corners[#corners + 1] = { cx + a, zone.z + zone.depth + d }
+            end
+        end
+        plan(corners)
+    end
     if #planned == 0 and not zone.inside then
         -- None planned: the zone may sit inside a solid block, its face
         -- more than the deepest offset plus the body radius from it (213's

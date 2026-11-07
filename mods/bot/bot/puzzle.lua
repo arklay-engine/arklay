@@ -21,8 +21,10 @@
 --                                   let a scene play, not skip it, while
 --                                   the flag is clear (and the `after` flag
 --                                   set): a scene a skip would break
---   <leave slot bank bit label>     once the flag is set, out through door
---                                   AOT `slot` before anything else
+--   <leave slot bank bit [escape] label>
+--                                   once the flag is set, out through door
+--                                   AOT `slot` before anything else; an
+--                                   escape asks no heal-up before it
 --   <keep_out slot [bank bit while] reason>
 --                                   (read by the engine) walks plan around
 --                                   AOT `slot`'s zone
@@ -407,10 +409,11 @@ function BotPuzzle.leave(bot)
 end
 
 -- A <leave> fact whose flag is still clear, or nil: the room's steps lead
--- into a hazard that drains health until the room changes (507's gas).
+-- into a hazard that drains health until the room changes (507's gas). An
+-- `escape` leave (30F's boulder) is a chase, not a drain: it asks no heal.
 function BotPuzzle.leave_ahead(bot)
     for _, fact in ipairs(meta(bot).leaves or {}) do
-        if not bot:flag(fact.bank, fact.bit) then
+        if not fact.escape and not bot:flag(fact.bank, fact.bit) then
             return fact
         end
     end
