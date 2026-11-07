@@ -466,16 +466,6 @@ def _close(inspectable) -> None:
 
 
 STALE_PICTURES = 300
-QueryPerformanceCounter = _api(kernel32, "QueryPerformanceCounter", wt.BOOL, ctypes.POINTER(ctypes.c_int64))
-QueryPerformanceFrequency = _api(kernel32, "QueryPerformanceFrequency", wt.BOOL, ctypes.POINTER(ctypes.c_int64))
-
-
-def performance_time() -> int:
-    """Now, in the 100 ns units of the performance counter that capture frames are stamped in."""
-    count, frequency = ctypes.c_int64(), ctypes.c_int64()
-    QueryPerformanceCounter(ctypes.byref(count))
-    QueryPerformanceFrequency(ctypes.byref(frequency))
-    return count.value * 10_000_000 // frequency.value
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 ES_DISPLAY_REQUIRED = 0x00000002
@@ -509,8 +499,6 @@ class WindowCapture:
         self.device = self.context = self.winrt_device = self.item = self.pool = self.session = None
         self.frame = None  # The newest frame the pool has given, held until a newer one comes.
         self.new_frame = False  # Whether it came since the last picture.
-        self.frame_time = 0  # When DWM composed `frame`, in 100 ns units of the performance counter.
-        self.stop_time = 0  # When the game last stopped (`stopped`), the same way.
         # Pictures in a row with no new frame. The game presents every tick but in a door's
         # hold (Wine's route has 106 identical frames in a row at most), so many more mean
         # that DWM has stopped composing: the display is off or the session locked.
@@ -575,33 +563,25 @@ class WindowCapture:
             _close(self.frame)
             self.frame = frame
             self.new_frame = True
-            when = ctypes.c_int64()
-            _method(frame, 7, ctypes.POINTER(ctypes.c_int64))(ctypes.byref(when))
-            self.frame_time = when.value
 
     def stopped(self) -> None:
-        """The game has just stopped: take what the pool holds, and note when."""
-        self.stop_time = performance_time()
+        """The game has just stopped: take what the pool holds, which it needs room for."""
         self.drain()
 
     def picture(self) -> tuple[int, int, bytes]:
-        """The client area of the newest frame, as (width, height, BGRX rows top down)."""
+        """The game's picture, as (width, height, BGRX rows top down)."""
         if IsIconic(self.hwnd):
             raise RuntimeError("the game's window is minimised, so it has no picture: restore it")
-        # The game presented its frame just before it stopped: let DWM compose it, and the
-        # capture hand it over.
+        # Let DWM compose what the game presented just before it stopped (two refreshes), and
+        # take the newest frame. The game's fades are drawn off its own thread, on a clock
+        # (Classic Rebirth's, it seems), so during one the picture goes on changing while the
+        # game is stopped; taking it at the same point after every stop is what keeps those
+        # frames as close to Wine's (whose screenshot comes later still) as they get.
         DwmFlush()
         DwmFlush()
-        # The game presents and reaches `Pad_set` within microseconds, and DWM composes the
-        # frame at the next refresh, so the frame of this tick is composed after the stop and
-        # comes a little after that. A frame composed before the stop is the last tick's, or
-        # this one's if the game presented nothing new (in a door's hold): wait a while for a
-        # newer one, then take it.
         self.drain()
-        deadline = time.monotonic() + 0.1
-        while self.frame_time < self.stop_time and time.monotonic() < deadline:
-            time.sleep(0.002)
-            self.drain()
+        time.sleep(0.005)  # the capture hands a frame over a little after DWM composes it
+        self.drain()
         if not self.frame:
             raise RuntimeError("the capture has no frame of the game's window yet")
         self.unchanged = 0 if self.new_frame else self.unchanged + 1
@@ -611,6 +591,10 @@ class WindowCapture:
                 f"the game's window has shown nothing new for {self.unchanged} pictures: is the display off, "
                 "or the session locked?"
             )
+        return self._pixels()
+
+    def _pixels(self) -> tuple[int, int, bytes]:
+        """The client area of the newest frame, as (width, height, BGRX rows top down)."""
         surface = ctypes.c_void_p()
         _method(self.frame, 6, ctypes.POINTER(ctypes.c_void_p))(ctypes.byref(surface))
         access = _query(surface, IID_IDirect3DDxgiInterfaceAccess)
