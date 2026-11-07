@@ -12,13 +12,14 @@
 --
 -- The state keeps the executable's variables under their own numbers, so the
 -- oracle's `ti`, `tlogo` and `tfade` fields compare one for one; the engine
--- reads them back with `api:set` (`trace` below).
+-- reads them back with `api:set` (`publish` below).
 --
 -- What each row leads to: LOAD GAME takes the confirm's white flash and fade
--- and opens the load screen; ORIGINAL MODE and ARRANGE MODE slide into the
--- new-game choice; SPECIAL and OPTION are not ported (`docs/re2-deviations.md`,
--- "The title"): SPECIAL buzzes, OPTION leaves through its fade back to the
--- title. An idle title starts the attract demo after 0x708 ticks.
+-- and opens the load screen; ORIGINAL MODE and ARRANGE MODE lead to the
+-- new-game choice (`ui/char_select.lua`); SPECIAL slides up to its extras,
+-- whose modes aren't ported; OPTION fades out and, arklay having no option
+-- screen, the title starts again (`docs/re2-deviations.md`, "The title"). An
+-- idle title fades into the attract demo after 0x708 ticks.
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
 
