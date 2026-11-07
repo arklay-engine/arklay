@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 409 drug storehouse, behind 408's door 1 once its number panel is
+     solved (scenario 0x21). The room's four empty bottles (0x13) lie on
+     the shelves. With an empty bottle held, AOTs 8, 11 and 12 are the
+     taps: each asks and fills one bottle with water (0x14), UMB No.2
+     (0x15) or UMB No.4 (0x16). For Jill only water flows until the V-JOLT
+     report (0x69, 40A's bookshelf, item bit 0x4E) is taken. Chemicals mix
+     only in this room (the menu's MOVE); a wrong pair turns both into
+     empty bottles, and effect 4 fumes the room (scenario 0x16).
+     V-JOLT (0x1B) is UMB No.13 and NP-003; the brew plans the tree from
+     the engine's recipes. It is done once 40F's root has it (0x13). -->
+<bot format="2">
+  <tap slot="8" item="0x14" label="water"/>
+  <tap slot="11" item="0x15" label="UMB No.2"/>
+  <tap slot="12" item="0x16" label="UMB No.4"/>
+  <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="7" after_bit="0x4E"
+        after_while="clear" when="vjolt=yes" label="V-JOLT for Plant 42's root"/>
+</bot>

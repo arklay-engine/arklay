@@ -139,6 +139,15 @@ function BotScene.handle(bot, scene)
         if tick < (s.pickup_cooldown or 0) then
             return true
         end
+        -- Nothing on screen in a room with <tap> facts (the freeze after
+        -- a menu closes): an action press buffered here reaches the room
+        -- tick and fires the tap the player stands at, spending a bottle
+        -- on the wrong chemical.
+        local menu = bot:menu()
+        if not (menu.open or menu.requested or menu.screen)
+            and #((bot:room_meta() or {}).taps or {}) > 0 then
+            return true
+        end
         if tick % 2 == 0 then
             bot:press_action()
         else

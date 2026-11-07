@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 40F Plant 42's root, behind 40E's door. While scenario 0x13 and 0x00
+     are clear, AOT 2 over the root is the V-JOLT's (0x1B) use-item probe
+     and AOT 3, the same zone, sets system bit 0x23. The main then plays
+     the pour once V-JOLT is used there, setting scenario 0x13: 40C loads
+     Plant 42 weakened and skips Barry's rescue. -->
+<bot format="2">
+  <use slot="2" item="0x1B" bank="0" bit="0x13" when="vjolt=yes"
+       label="V-JOLT on Plant 42's root"/>
+</bot>

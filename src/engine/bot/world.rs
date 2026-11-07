@@ -575,6 +575,7 @@ pub(super) mod tests {
             item_defs: crate::item_catalog::ItemCatalog::embedded(),
             drug_store: false,
             computer: None,
+            panel: None,
         }
     }
 

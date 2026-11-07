@@ -117,6 +117,10 @@ function BotPuzzle.is_fact_slot(bot, slot)
             end
         end
     end
+    -- A drug store's tap (BotMix) is pressed only for its brew.
+    if BotMix.is_tap(bot, slot) then
+        return true
+    end
     -- A <door>'s via zone is that door's way out (305's passage to 30F),
     -- not a passage to check.
     local room = bot:room().id

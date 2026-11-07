@@ -402,6 +402,20 @@ struct SessionSnapshot {
     drug_store: bool,
     /// The lab computer terminal, while it is up.
     computer: Option<ComputerSnapshot>,
+    /// Room 408's numeric panel, while it runs.
+    panel: Option<PanelSnapshot>,
+}
+
+/// Room 408's numeric panel (`super::passcode_panel`) as the screen shows
+/// it, read-only.
+#[derive(Clone, Copy, Debug, Default)]
+struct PanelSnapshot {
+    /// Whether the pad takes input (the prompt was answered, not yet solved).
+    active: bool,
+    /// The cursor's column and row, 0..=2.
+    cursor: (u8, u8),
+    /// The nine lamps, row-major.
+    lamps: [bool; 9],
 }
 
 /// The lab computer terminal's state machine as its screen keeps it
@@ -1282,6 +1296,11 @@ impl SessionSnapshot {
                 typed: screen
                     .state_truthy_list("field")
                     .map_or(0, |field| field.len()),
+            }),
+            panel: session.passcode_panel.as_ref().map(|panel| PanelSnapshot {
+                active: panel.active(),
+                cursor: panel.cursor(),
+                lamps: panel.lamps(),
             }),
         }
     }
@@ -2737,6 +2756,8 @@ struct BotCtx {
     rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<brew>` facts with its taps, cached by [`BotRuntime`].
+    brews: Rc<Vec<meta::RoomBrew>>,
     /// Every room's `<avoid>` facts, cached by [`BotRuntime`].
     avoid_facts: Rc<Vec<meta::RoomAvoid>>,
     /// Every room's `<door>` facts, cached by [`BotRuntime`].
@@ -2984,6 +3005,29 @@ impl UserData for BotCtx {
                 leaves.push(row)?;
             }
             table.set("leaves", leaves)?;
+            let taps = lua.create_table()?;
+            for fact in &meta.taps {
+                let row = lua.create_table()?;
+                row.set("slot", fact.slot)?;
+                row.set("item", fact.item)?;
+                row.set("label", fact.label.as_deref())?;
+                taps.push(row)?;
+            }
+            table.set("taps", taps)?;
+            let brews = lua.create_table()?;
+            for fact in &meta.brews {
+                let row = lua.create_table()?;
+                row.set("item", fact.item)?;
+                row.set("bottle", fact.bottle)?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("after_clear", fact.after_clear)?;
+                row.set("label", fact.label.as_deref())?;
+                brews.push(row)?;
+            }
+            table.set("brews", brews)?;
             let kites = lua.create_table()?;
             for fact in &meta.kites {
                 let row = lua.create_table()?;
@@ -3089,6 +3133,37 @@ impl UserData for BotCtx {
                         .map(|gate| if gate.set { "set" } else { "clear" }),
                 )?;
                 row.set("unless_held", entry.fact.unless_held)?;
+                table.push(row)?;
+            }
+            Ok(table)
+        });
+
+        // Every room's open-or-not <brew> facts with that room's taps:
+        // `{room, item, bottle, bank, bit, after_bank, after_bit,
+        // after_clear, label, taps = {{slot, item, label}, ...}}`.
+        methods.add_method("brew_facts", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for entry in bot.brews.iter() {
+                let fact = &entry.fact;
+                let row = lua.create_table()?;
+                row.set("room", entry.room.as_str())?;
+                row.set("item", fact.item)?;
+                row.set("bottle", fact.bottle)?;
+                row.set("bank", fact.flag.0)?;
+                row.set("bit", fact.flag.1)?;
+                row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
+                row.set("after_clear", fact.after_clear)?;
+                row.set("label", fact.label.as_deref())?;
+                let taps = lua.create_table()?;
+                for tap in &entry.taps {
+                    let t = lua.create_table()?;
+                    t.set("slot", tap.slot)?;
+                    t.set("item", tap.item)?;
+                    t.set("label", tap.label.as_deref())?;
+                    taps.push(t)?;
+                }
+                row.set("taps", taps)?;
                 table.push(row)?;
             }
             Ok(table)
@@ -3293,6 +3368,14 @@ impl UserData for BotCtx {
                 view.set("typed", computer.typed)?;
                 table.set("computer", view)?;
             }
+            if let Some(panel) = &bot.snapshot.panel {
+                let view = lua.create_table()?;
+                view.set("active", panel.active)?;
+                view.set("x", panel.cursor.0)?;
+                view.set("y", panel.cursor.1)?;
+                view.set("lamps", lua.create_sequence_from(panel.lamps)?)?;
+                table.set("panel", view)?;
+            }
             Ok(table)
         });
 
@@ -3491,6 +3574,21 @@ impl UserData for BotCtx {
                 combine_result_table(lua, &bot.snapshot, slot, target)
             },
         );
+
+        // The engine's recipe for MOVE-ing item `cursor` onto item `target`
+        // (`items::combine`), whatever is held: `{cursor, target, effect}`,
+        // the ids the two slots become and the effect byte, or nil when the
+        // pair does not mix.
+        methods.add_method("recipe", |lua, _bot, (cursor, target): (u8, u8)| {
+            let Some(record) = crate::items::combine(cursor, target) else {
+                return Ok(Value::Nil);
+            };
+            let table = lua.create_table()?;
+            table.set("cursor", record.new_cursor)?;
+            table.set("target", record.new_target)?;
+            table.set("effect", record.effect)?;
+            Ok(Value::Table(table))
+        });
 
         methods.add_method("can_see", |_lua, bot, slot: u8| {
             Ok(bot
@@ -3895,6 +3993,8 @@ pub struct BotRuntime {
     rides: Rc<Vec<meta::RoomRide>>,
     /// Every room's errand facts, loaded with `uses`.
     errands: Rc<Vec<meta::RoomErrand>>,
+    /// Every room's `<brew>` facts, loaded with `uses`.
+    brews: Rc<Vec<meta::RoomBrew>>,
     /// Every room's `<avoid>` facts, loaded with `uses`.
     avoid_facts: Rc<Vec<meta::RoomAvoid>>,
     /// Every room's `<door>` facts, loaded with `uses`.
@@ -3943,6 +4043,7 @@ impl BotRuntime {
             fights: Rc::default(),
             rides: Rc::default(),
             errands: Rc::default(),
+            brews: Rc::default(),
             door_vias: Rc::default(),
             avoid_facts: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
@@ -4054,6 +4155,7 @@ impl BotRuntime {
             self.fights = Rc::new(meta::load_fights(pack, Some(jill), Some(&self.params))?);
             self.rides = Rc::new(meta::load_rides(pack, Some(jill), Some(&self.params))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill), Some(&self.params))?);
+            self.brews = Rc::new(meta::load_brews(pack, Some(jill), Some(&self.params))?);
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
             self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill), Some(&self.params))?);
         }
@@ -4088,6 +4190,7 @@ impl BotRuntime {
             fights: self.fights.clone(),
             rides: self.rides.clone(),
             errands: self.errands.clone(),
+            brews: self.brews.clone(),
             door_vias: self.door_vias.clone(),
             avoid_facts: self.avoid_facts.clone(),
             knowledge: self.knowledge.clone(),
@@ -4408,9 +4511,11 @@ mod tests {
             "fight_facts",
             "ride_facts",
             "errand_facts",
+            "brew_facts",
             "door_facts",
             "avoid_facts",
             "combine_result",
+            "recipe",
         ];
         // The bot's own memory and run bookkeeping, never the game.
         const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
@@ -5444,6 +5549,7 @@ mod tests {
             fights: Rc::default(),
             rides: Rc::default(),
             errands: Rc::default(),
+            brews: Rc::default(),
             door_vias: Rc::default(),
             avoid_facts: Rc::default(),
             knowledge: None,
@@ -5825,6 +5931,70 @@ mod tests {
         assert!(!behind("0, 0, 2000, 0, 0, 1000"));
         assert!(!behind("0, 0, 2000, 0, 1000, 0"));
         assert!(!behind("0, 0, 2000, 0, 0, 0"));
+    }
+
+    #[test]
+    fn a_brew_mixes_what_is_held_before_it_fills_and_picks_the_cheaper_recipe() {
+        let vm = route_vm();
+        // A stub bot over the drug store's chemistry (the ids of
+        // `items::combine`): water 0x14, UMB No.2 0x15, UMB No.4 0x16,
+        // UMB No.7 0x17, UMB No.13 0x18, Yellow-6 0x19, NP-003 0x1A,
+        // V-JOLT 0x1B; a mix leaves the empty bottle 0x13 in the cursor slot.
+        let step = |held: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local mixes = {{ ["20,21"] = 26, ["21,22"] = 25, ["20,25"] = 23,
+                        ["22,26"] = 23, ["23,25"] = 24, ["24,26"] = 27 }}
+                    local held = {{ {held} }}
+                    local bot = {{}}
+                    function bot:room_meta()
+                        return {{ taps = {{ {{ slot = 8, item = 20 }}, {{ slot = 11, item = 21 }},
+                            {{ slot = 12, item = 22 }} }} }}
+                    end
+                    function bot:recipe(a, b)
+                        local lo, hi = a, b
+                        if lo > hi then lo, hi = hi, lo end
+                        local made = mixes[lo .. "," .. hi]
+                        return made and {{ cursor = 19, target = made, effect = 0 }} or nil
+                    end
+                    function bot:inventory()
+                        local out = {{}}
+                        for i, item in ipairs(held) do out[i] = {{ item = item }} end
+                        return out
+                    end
+                    function bot:menu()
+                        local out = {{}}
+                        for i, item in ipairs(held) do out[i] = {{ item = item, slot = i - 1 }} end
+                        return {{ items = out }}
+                    end
+                    function bot:has_item(item)
+                        for _, h in ipairs(held) do if h == item then return true end end
+                        return false
+                    end
+                    local op, why = BotMix.next_step(bot, {{ item = 27, bottle = 19 }})
+                    if not op then return "wait: " .. why end
+                    if op.kind == "fill" then return "fill " .. op.item end
+                    local lo, hi = op.a, op.b
+                    if lo > hi then lo, hi = hi, lo end
+                    return string.format("mix %d+%d", lo, hi)"#
+                ),
+            )
+        };
+        // Nothing held but a bottle: fill first.
+        assert!(step("19").starts_with("fill "), "{}", step("19"));
+        // NP-003, Yellow-6, UMB No.4 and water held, no bottle: the plan
+        // still needs one fill, and a mix of two held chemicals into UMB
+        // No.7 goes first, which also empties a bottle for it.
+        let ready = step("26, 25, 22, 20");
+        assert!(
+            ["mix 20+25", "mix 22+26"].contains(&ready.as_str()),
+            "{ready}"
+        );
+        // Neither a bottle nor a ready mix: wait.
+        assert_eq!(step("26"), "wait: no empty bottle held");
+        // The last step.
+        assert_eq!(step("24, 26"), "mix 24+26");
     }
 
     #[test]
@@ -6602,6 +6772,7 @@ mod tests {
             fights: Rc::default(),
             rides: Rc::default(),
             errands: Rc::default(),
+            brews: Rc::default(),
             door_vias: Rc::default(),
             avoid_facts: Rc::default(),
             knowledge: None,

@@ -24,7 +24,8 @@
   <flag bank="1" bit="0x63" label="20D: Richard saved"/>
   <flag bank="1" bit="0x64" label="20D: Richard dead"/>
   <flag bank="0" bit="0x7F" label="the radio from Richard"/>
-  <flag bank="0" bit="0x16" label="V-JOLT made"/>
+  <flag bank="0" bit="0x21" label="408: the number panel (door to 409)"/>
+  <flag bank="0" bit="0x16" label="409: a wrong chemical mix fumes"/>
   <flag bank="0" bit="0x13" label="40F: V-JOLT poured"/>
   <flag bank="0" bit="0x29" label="40C: Plant 42 dead"/>
   <flag bank="1" bit="0x26" label="20C: Now I've done it (the rope snaps)"/>

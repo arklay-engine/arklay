@@ -1008,6 +1008,45 @@ local function use_goal(bot, fact, action)
     }
 end
 
+-- A <brew> step (BotMix.next_step): fill an empty bottle at a tap (press
+-- its event zone; the scene handler answers Yes at its prompt) or MOVE one
+-- chemical onto another through the menu.
+local function brew_goal(bot, fact, step)
+    if step.kind == "fill" then
+        local action = BotNav.action_by_slot(bot, step.tap.slot)
+        if not action then
+            return nil, string.format("tap slot %d is not a live action", step.tap.slot)
+        end
+        local before = BotMix.count(bot, step.item)
+        local bottles = BotMix.count(bot, fact.bottle)
+        local label = string.format("brew 0x%02X: fill 0x%02X at slot %d (%s)", fact.item,
+            step.item, step.tap.slot, step.tap.label or "unnamed")
+        return {
+            kind = "brew", slot = step.tap.slot, label = label,
+            job = {
+                zone = zone_of(action), label = label, pattern = "edge",
+                presses = 2, gap = 20, side = 4 * C.SECOND,
+                -- A spent bottle ends it too: the award has landed by
+                -- the time the job runs again, and a press that reached a
+                -- neighbouring tap made a chemical the next plan uses.
+                done = function(b)
+                    return BotMix.count(b, step.item) > before
+                        or BotMix.count(b, fact.bottle) < bottles
+                end,
+            },
+        }
+    end
+    local label = string.format("brew 0x%02X: mix 0x%02X onto 0x%02X (menu slots %d, %d)",
+        fact.item, step.a, step.b, step.slot, step.target)
+    return {
+        kind = "brew", slot = "mix", label = label,
+        job = {
+            menu = "combine", label = label,
+            start = function(b) return BotMenu.combine(b, step.slot, step.target, label) end,
+        },
+    }
+end
+
 -- An item box visit: press its zone; BotInventory drives the box screen
 -- the press opens, and the goal is done once that visit has ended.
 local function box_goal(bot, action, why)
@@ -1656,6 +1695,25 @@ local function choose(bot)
         elseif not blocked(bot, "use", room, fact.slot) then
             return use_goal(bot, fact, row.action)
         end
+    end
+
+    -- 1b'. A <brew> here (BotMix): fill bottles at the room's taps and
+    -- mix them until the brew's item is held. With no empty bottle held
+    -- the ground items below come first (the room's bottles).
+    -- A failed step is marked on its tap slot (or "mix") like any goal.
+    for _, fact in ipairs(BotMix.brews(bot)) do
+        local step, why = BotMix.next_step(bot, fact)
+        local goal
+        if step then
+            goal, why = brew_goal(bot, fact, step)
+        end
+        if goal and blocked(bot, "brew", room, goal.slot) then
+            goal, why = nil, "its next step is marked"
+        end
+        if goal then
+            return goal
+        end
+        BotMix.note(bot, fact, why)
     end
 
     -- 1c. Inventory room: a MOVE that empties a slot, a heal used for

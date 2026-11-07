@@ -279,8 +279,11 @@ local REARM_HERE = "rearm: no held firearm has a round"
 local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true, [CURE] = true }
 
 -- The free slots a top-up withdrawal must leave.
-local function slots_to_leave()
-    return BotInventory.RESERVE
+-- A top-up leaves the reserve free, or the slots an open <brew> still
+-- needs for its bottles (ctx.brew_slots), whichever is more.
+local function slots_to_leave(_, ctx)
+    local brew = ctx and ctx.brew_slots or 0
+    return brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
 end
 
 -- Why the box item `row` ({item, kind}) should come out, or nil.
@@ -516,6 +519,13 @@ function BotInventory.context(bot)
             ctx.uses[fact.item] = true
         end
     end
+    -- So are a <brew>'s bottles and chemicals while it is open here: the
+    -- room's bottles then count as needed pickups, so the box makes room
+    -- for them all in one trip.
+    for item, _ in pairs(BotMix.needs(bot)) do
+        ctx.uses[item] = true
+    end
+    ctx.brew_slots = BotMix.slots_needed(bot)
     -- An item a wanted <deliver> needs is kept like a <use> item.
     for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
         ctx.uses[item] = true
