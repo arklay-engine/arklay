@@ -10,8 +10,8 @@ This book documents the engine for people who build packs and mods:
   replacement formats and how mods layer over a pack.
 - **Lua API**: the functions and tables the engine gives Lua hooks, screen
   scripts and enemy scripts.
-- **.akscr scripts**: the room script language, version 1 for RE 1 and
-  version 2 for RE 2.
+- **.akscr scripts**: the room script language, with a dialect for RE 1
+  and one for RE 2.
 - **Engine internals**: the architecture, performance budgets, status matrix
   and the recorded deviations from the original games.
 

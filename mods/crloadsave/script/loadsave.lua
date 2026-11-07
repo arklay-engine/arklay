@@ -9,7 +9,7 @@
 --
 -- The mod's `mod.lua` registers this entry with `api:register_save_screen`;
 -- the engine knows nothing about the screen itself. The API it uses is the
--- general screen surface documented in docs/modding.md, and its strings are
+-- general screen surface documented in lua-types/screen.lua, and its strings are
 -- the `UI_SAVE_CR_*` keys this mod ships under `language/`.
 
 local VISIBLE_ROWS = 10 -- rows drawn at once (CR shows ten)

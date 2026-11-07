@@ -299,8 +299,10 @@ cargo run -- re1.akpak --room 106 --mansion2
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and
-their override table, the `.s` grammar, the `.akscr` script language, the mod source convention, the
-language-file overrides and the sandboxed Lua hook API; `docs/language.md`
+their override table, the mod source convention, the
+language-file overrides and the sandboxed Lua hook API; `docs/akscr/`
+documents the `.akscr` script language and the `.s` grammar
+(`docs/akscr/index.md`, `docs/akscr/re1/` and `docs/akscr/re2/`, with a page per opcode); `docs/language.md`
 documents the `language/<tag>.txt` format, the key registry, the fallback chain
 and the missing-glyph box; `docs/m15-deviations.md` records the deliberate
 limits (whole-room script replacement, sandbox, error/budget policy). A run

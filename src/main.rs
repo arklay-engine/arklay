@@ -572,7 +572,25 @@ enum ModAction {
         #[arg(long, value_name = "PATH")]
         base: Option<PathBuf>,
     },
+
+    /// Write the LuaLS definition files of the engine's Lua APIs, for
+    /// linting and completion in an editor
+    LuaTypes {
+        /// Output directory; add it to the editor's `workspace.library`
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+    },
 }
+
+/// The LuaLS definition files in `lua-types/`, which document every Lua API
+/// the engine gives scripts (and generate the book's Lua API pages).
+const LUA_TYPES: &[(&str, &str)] = &[
+    ("hooks.lua", include_str!("../lua-types/hooks.lua")),
+    ("screen.lua", include_str!("../lua-types/screen.lua")),
+    ("gui.lua", include_str!("../lua-types/gui.lua")),
+    ("enemy.lua", include_str!("../lua-types/enemy.lua")),
+    ("re2-enemy.lua", include_str!("../lua-types/re2-enemy.lua")),
+];
 
 #[derive(Subcommand, Debug)]
 enum PackAction {
@@ -861,6 +879,21 @@ fn decompile_rooms(
         .iter()
         .map(|(&id, scripts)| (id, arklay::scd::akscr::decompile_with(scripts, names, id)))
         .collect())
+}
+
+/// Write the embedded Lua definition files into `out`.
+fn write_lua_types(out: &Path) -> Result<()> {
+    fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
+    for (name, text) in LUA_TYPES {
+        let path = out.join(name);
+        fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
+    }
+    println!(
+        "wrote {} Lua definition files to {}; add it to workspace.library in .luarc.json",
+        LUA_TYPES.len(),
+        out.display()
+    );
+    Ok(())
 }
 
 /// Build a mod source directory and print its summary and aggregated warnings.
@@ -1259,6 +1292,7 @@ fn main() -> Result<()> {
         },
         Some(Command::Mod { action }) => match action {
             ModAction::Build { dir, out, base } => build_mod_pack(&dir, &out, base.as_deref()),
+            ModAction::LuaTypes { out } => write_lua_types(&out),
         },
         Some(Command::Pack { action }) => match action {
             PackAction::Info { pack, mods } => pack_info(&pack, &mods),

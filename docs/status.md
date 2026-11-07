@@ -676,7 +676,7 @@ directory rather than the eight `savedatN.dat` slots, since a script lists the
 directory itself.
 
 The screen script runs on the general Lua screen surface documented in
-`docs/modding.md` — `on_open`/`update`/`draw`, `api:saves()` (the folder scan
+[Screen scripts](lua/screen.md) — `on_open`/`update`/`draw`, `api:saves()` (the folder scan
 with each file's parsed character, save count, stage/room, resolved location,
 timestamp and loadability), `api:save`/`api:load`/`api:remove`/`api:exit`, the
 pad edges and words, `api:sound` for the screen cues and immediate-mode
