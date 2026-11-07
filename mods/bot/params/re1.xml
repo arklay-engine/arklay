@@ -38,4 +38,29 @@
        plays "Tell my family" (cave) and Barry is gone. -->
   <param name="cave_exit" values="follow|backtrack" default="follow"
          label="308: follow Barry through door 1, or backtrack"/>
+  <!-- Barry's first meeting after the lockpick. `forest` is the bot's own
+       order: 212 early, where Barry stands at Forest's body and gives the
+       acid launcher (common 0x0A). `chemical` holds 211's door to 212
+       (room/211/bot.xml) until Barry's acid-rounds scene has played: the
+       herbicide taken from 118 and 106 or 203 entered again sets common
+       0x07, which also blocks the sandwich rescue, 20A's "page missing"
+       and 405's family door, and has Barry burn Plant 42 in 40C. -->
+  <param name="barry_early" values="forest|chemical" default="forest"
+         label="Barry's acid rounds (herbicide first) or Barry at Forest"/>
+  <!-- 116/115: `yes` lifts the shotgun from 116's rack without the broken
+       one (room/116/bot.xml), so 115's ceiling trap springs on the way
+       out, and holds 211's door to 212 until it has (common 0x21): with
+       common 0x07 and 0x5F clear, Barry kicks the 109 door in (common
+       0x20). `no` hangs the broken shotgun in its place. -->
+  <param name="sandwich" values="no|yes" default="no"
+         label="spring 115's ceiling trap before 212 (Barry's rescue)"/>
+  <!-- 20C on the second mansion visit, after the rope snaps. `wait` stays
+       in the pit until Barry is back with the rope and the pass number
+       (common 0x25). `leave` pushes the switch below and climbs down the
+       ladder to 21A before then, so 0x25 stays clear: Barry skips 308 and
+       plays "Tell my family" in 502. The way on is 21A, 21B, 21C and the
+       200 lift up to 213 (room/200/bot.xml), since 201's key panel needs
+       the pass number. -->
+  <param name="rope" values="wait|leave" default="wait"
+         label="20C: wait in the pit for Barry's rope, or leave first"/>
 </params>

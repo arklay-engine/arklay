@@ -5,8 +5,13 @@
      on_aot_05. Without the pass number (common 0x25, from Barry's rope in
      20C) it answers "You don't know the pass number."; with it, the panel
      sets 0x46 and turns the door on around the player. Later entries switch
-     AOT 5 off, and the door is a plain door. -->
+     AOT 5 off, and the door is a plain door. With rope=leave the pass
+     number never comes, so the door is held shut from both sides (here
+     and 214's door 0, which reads message 128 until 0x46): remote
+     planning then goes round by 21C and the 200 lift instead. -->
 <bot format="2">
   <interact slot="5" bank="0" bit="0x46" after_bank="1" after_bit="0x25" character="jill"
             label="the pass number into the key panel"/>
+  <avoid slot="1" bank="0" bit="0x46" while="clear" character="jill" when="rope=leave"
+         reason="the key panel needs the pass number (common 0x25)"/>
 </bot>

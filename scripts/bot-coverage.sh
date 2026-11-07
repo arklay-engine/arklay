@@ -26,6 +26,9 @@ COMBOS=(
   "cave-no-no:cave_q1=no cave_q2=no"           # Barry ahead (as Yes, Yes), Follow
   "cave-backtrack:cave_exit=backtrack"         # Tell my family (cave)
   "vjolt:vjolt=yes"                            # V-JOLT on Plant 42's root, no Barry in 40C
+  "chemical:barry_early=chemical"              # Barry's acid rounds; Barry burns Plant 42
+  "sandwich:sandwich=yes"                      # Jill Sandwich: Barry's rescue in 115
+  "rope-leave:rope=leave"                      # out of 20C's pit first: Tell my family (lab)
 )
 
 NAME="coverage-$(date +%Y%m%d-%H%M%S)"

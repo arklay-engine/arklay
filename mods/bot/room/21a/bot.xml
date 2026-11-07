@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 21A under passage 1, Jill on the second mansion visit. Door 0 is the
+     ladder up into 20C, parked off (no flags) until AOT 2 in the same
+     zone asks "There's a ladder. Will you climb it?". It comes out in
+     20C's pit, whose only other way out is Barry's rope (common 0x25). With
+     rope=leave the rope never comes, so the ladder is held shut: the
+     remembered doors make 21A, 20C and 20B look like a way back to the
+     2F corridor, and a hurt bot climbed up and down it until the loop rule
+     ended the run. The way out is 21B, 21C and 110 (or the 200 lift). -->
+<bot format="2">
+  <avoid slot="0" bank="1" bit="0x25" while="clear" character="jill" when="rope=leave"
+         reason="the ladder comes out in 20C's pit, a dead end without Barry's rope"/>
+  <avoid slot="2" bank="1" bit="0x25" while="clear" character="jill" when="rope=leave"
+         reason="the ladder comes out in 20C's pit, a dead end without Barry's rope"/>
+</bot>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 109 trap passage. Door 3 leads to 115, the ceiling-trap room, and on
+     through it to 116 (nothing else). With sandwich=yes the shotgun leaves
+     116's rack bare, and 115's init springs the trap on every entry while
+     both rack item bits (7:00, 7:01) are clear: Barry's rescue only while
+     common 0x07 and 0x5F are clear, otherwise the Barry-less ceiling,
+     which kills Jill unless she gets out through the 116 door in time. So
+     once the trap has sprung (common 0x21) the door is held shut. -->
+<bot format="2">
+  <avoid slot="3" bank="1" bit="0x21" while="set" character="jill" when="sandwich=yes"
+         reason="115's ceiling trap springs again while 116's rack is bare"/>
+</bot>
