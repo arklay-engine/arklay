@@ -119,6 +119,8 @@ pub struct Re2State {
     pub rnd: crate::zombie2::Rnd,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: u8,
+    /// `BYTE_00689610`: `Em_2D`'s wait before the next wake groan.
+    pub em2d_groan: u8,
     /// `DWORD_009888d8`'s low byte: the draw buffer, which `Swap_Cbuff` flips
     /// once a frame.
     pub draw_buffer: u8,
@@ -589,6 +591,7 @@ impl Default for Re2State {
             scroll: 0,
             rnd: Default::default(),
             tongue_owner: 0,
+            em2d_groan: 0,
             draw_buffer: 0,
             enemies: 0,
             sound_types: [0; 2],
@@ -1495,6 +1498,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::G3_ID
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
+            || id == crate::zombie2::EM2D_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -2471,6 +2475,41 @@ mod tests {
         assert_eq!(game.re2_enemy_dest, [(0x118, 2, [5, 6])], "used once");
         exec(&mut game, "sce_em_set", &zombie);
         assert_eq!(dest(&game), [0, 0], "the room's next load starts it at 0");
+    }
+
+    /// Room 205's slot 0: an `Em_2D` with `zombie` data, which `main_00`
+    /// freezes through member 7 (`calc`'s 5 and 6 on the copy) and `main_03`
+    /// lets go.
+    #[test]
+    fn sce_em_set_places_an_em2d_and_member_7_holds_it() {
+        let mut game = GameState::default();
+        let em2d = [
+            0, 0, 45, 16, 0, 0, 17, 0, 255, -27150, -2580, -12350, 0, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &em2d);
+        exec(&mut game, "work_set", &[WK_ENEMY, 0]);
+        exec(&mut game, "member_copy", &[16, 7]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.var(16), 0x10);
+        host.set_var(16, host.var(16) | 0x8000);
+        exec(&mut game, "member_set2", &[7, 16]);
+        let character = game.re2.characters.0[0].as_ref().unwrap();
+        assert_eq!(character.id, crate::zombie2::EM2D_ID);
+        assert!(character.zombie.is_some());
+        assert_eq!(character.work.kind, 0x8010);
+        assert_eq!(character.body.pos, [-27150, -2580, -12350]);
+        let mut host = GameHost { game: &mut game };
+        host.set_var(16, host.var(16) & 0x7FFF);
+        exec(&mut game, "member_set2", &[7, 16]);
+        let character = game.re2.characters.0[0].as_ref().unwrap();
+        assert_eq!(character.work.kind, 0x0010);
+        // No shot reaches it until its hits are ported; a zombie beside it is
+        // still a target.
+        assert!(crate::character2::targets(&game).is_empty());
+        let zombie = [0, 1, 0x10, 0, 0, 0, 7, 0, 255, 0, 0, 0, 0, 0, 0];
+        exec(&mut game, "sce_em_set", &zombie);
+        let targets = crate::character2::targets(&game);
+        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
     }
 
     #[test]

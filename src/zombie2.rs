@@ -407,6 +407,11 @@ pub const IVY_ID: u8 = 0x2E;
 /// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
 /// room's template, and those a room places alone.
 pub const VINE_ID: u8 = 0x2F;
+/// The bodies in room 205's walls, `Em_2D`, whose script is
+/// `enemy/2d/enemy.lua`.
+pub const EM2D_ID: u8 = 0x2D;
+/// `0x529c24 + kind * 7`: `Em_2D`'s `Neck_no` by `Type & 1`.
+const EM2D_NECK: [usize; 2] = [1, 8];
 /// The poison ivy, which runs `Em_2E`'s code.
 pub const POISON_IVY_ID: u8 = 0x39;
 /// `Em_2E`'s `Neck_no`, whose yaw its `Rot_neck_em` turns.
@@ -784,6 +789,8 @@ pub struct World<'a> {
     pub kin: Vec<KinCall>,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: &'a mut u8,
+    /// `BYTE_00689610`: `Em_2D`'s wait before the next wake groan.
+    pub em2d_groan: &'a mut u8,
     /// `fg_common`'s `0xa4`, which takes some life off a licker.
     pub common_a4: bool,
     /// `DWORD_009888d8`'s low byte: which draw buffer this frame fills.
@@ -1174,6 +1181,26 @@ impl Em<'_, '_, '_> {
         self.z.parts = self.mover.posed_parts();
     }
 
+    /// `Em_2D`: `Root_ck` even while the room is stopped, then the script and
+    /// `Oba_ck_em`. There's no `Damage_cnt` count-down, `Sca_ck_em`,
+    /// `Rot_neck_em` or frame sound.
+    fn run_em2d(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        self.old_pos = self.mover.player.pos;
+        // The parts' `+0x5C` as the last draw left them, which `FUN_004843d0`
+        // and `FUN_00484530` measure from (`e:own_part`), and `Neck_no`'s,
+        // which the next `Root_ck` looks from.
+        self.z.parts = self.mover.posed_parts();
+        let neck = EM2D_NECK[usize::from(self.kind() & 1)];
+        self.work().neck.joint = Some(neck as u8);
+        self.work().neck.position = self.z.parts.get(neck).copied().flatten().map(|m| m.t);
+        self.script();
+        self.oba_ck_em();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1309,6 +1336,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == ALLIGATOR_ID {
             self.run_alligator();
+            return;
+        }
+        if self.mover.tick.id == EM2D_ID {
+            self.run_em2d();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

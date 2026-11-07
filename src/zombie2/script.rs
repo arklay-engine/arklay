@@ -551,6 +551,13 @@ impl UserData for Api {
             Ok(())
         });
 
+        // `Em_2D`'s wait before the next wake groan, `BYTE_00689610`.
+        methods.add_method_mut("groan_wait", |_, e, ()| Ok(*e.em().world.em2d_groan));
+        methods.add_method_mut("set_groan_wait", |_, e, value: i64| {
+            *e.em().world.em2d_groan = value as u8;
+            Ok(())
+        });
+
         // Turning, and how the player lies.
         methods.add_method_mut("distance", |_, e, ()| Ok(e.em().distance));
         methods.add_method_mut("distance_now", |_, e, ()| {
@@ -1767,8 +1774,9 @@ mod tests {
         assert_eq!(repeated_names(&names), ["pos"]);
     }
 
-    const SCRIPTS: [&str; 10] = [
+    const SCRIPTS: [&str; 11] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
+        include_str!("../../games/re2/enemy/2d/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
@@ -2948,5 +2956,364 @@ mod tests {
         // Where the original's jaws (`+0x22a`, `+0x228`) rest with the tank.
         let jaws: (i64, i64) = lua.load("return w.vars[10], w.vars[9]").eval().unwrap();
         assert_eq!(jaws, (34, -161));
+    }
+
+    /// `Em_2D`'s world: `DIST` is `L_pl`, the player stands at `PLAYER`
+    /// (x, z) in the way `TARGET` from the body, `PARTS` gives the parts'
+    /// places (x, z), a clip lasts `CLIP_LEN` frames, and `ROUTINES`, `VARS`,
+    /// `ANGLE`, `TIMER`, `FRAME`, `GROAN`, `ROOM_ENEMY` and `PL_DC` start it
+    /// past its init.
+    const EM2D_STUB: &str = "
+        local draws, drawn = DRAWS, 0
+        local clip_len = CLIP_LEN or 1000
+        local parts = PARTS or {}
+        local player = PLAYER or { 0, 20000 }
+        w = { r = ROUTINES or { [0] = 0, 0, 0, 0 }, vars = VARS or {}, timer = TIMER or 0,
+            be = 1, kind = KIND, angle = ANGLE or 0, spd = { 0, 0, 0 }, pos = POS or { 0, 0, 0 },
+            clips = {}, move_no = -1, frame = FRAME or 0, hokan = -1, hidden = -1, dc = 0,
+            life = 0, sounds = {}, groan = GROAN or 0, room_enemy = ROOM_ENEMY or 0,
+            pl_dc = PL_DC or 0, box = 0, joints = 0 }
+        e = {}
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:timer(i) return w.timer end
+        function e:set_timer(i, v) w.timer = v & 0xFFFF end
+        function e:rnd() drawn = drawn + 1; return draws[drawn] end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:kind() return w.kind end
+        function e:set_life(v) w.life = v end
+        function e:set_damage_cnt(v) w.dc = v end
+        function e:damage_cnt() return w.dc end
+        function e:clip(n, c, h)
+            w.clips[#w.clips + 1] = n; w.move_no = n; w.frame = c; w.hokan = h
+        end
+        function e:joint()
+            w.joints = w.joints + 1; w.frame = w.frame + 1; return w.frame >= clip_len
+        end
+        function e:move_cnt() return w.frame end
+        function e:step(ended) if ended then w.r[2] = w.r[2] + 1 end end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v end
+        function e:set_speed(x, y, z) w.spd = { x, y, z } end
+        function e:add_speed_xz_at(dir)
+            local dx, dz = rotate((w.angle + dir) & 0xFFFF, w.spd[1], w.spd[3])
+            w.pos = { w.pos[1] + dx, w.pos[2], w.pos[3] + dz }
+        end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:set_pos(x, y, z) w.pos = { x, y, z } end
+        function e:distance() return DIST or 20000 end
+        function e:player_pos() return player[1], 0, player[2] end
+        function e:goto_ck(x, z, rate)
+            local error = ((TARGET or 0) - w.angle + rate) & 0xFFF
+            if error < rate * 2 then return 0 end
+            return error > 0x800 and -rate or rate
+        end
+        function e:goto_player() end
+        function e:own_part(p)
+            local at = parts[p] or { 0, 0 }
+            return at[1], -2000, at[2]
+        end
+        function e:hypot(x, z) return math_hypot(x, z) end
+        function e:set_hidden_parts(v) w.hidden = v end
+        function e:sound(n) w.sounds[#w.sounds + 1] = n end
+        function e:groan_wait() return w.groan end
+        function e:set_groan_wait(v) w.groan = v & 0xFF end
+        function e:room_enemy() return w.room_enemy end
+        function e:set_room_enemy(v) w.room_enemy = v end
+        function e:pl_damage_cnt() return w.pl_dc end
+        function e:pl_set_damage_cnt(v) w.pl_dc = v end
+        function e:set_body_box(y, at_w, at_h, wide) w.box = at_w end
+        for _, name in ipairs({ 'set_d_life', 'set_damage_flg', 'set_sce_flg', 'clear_neck',
+            'set_body_ofs_x' }) do
+            e[name] = function() end
+        end
+    ";
+
+    /// What `run_em2d` leaves: its fields by name, its clips and its sounds.
+    struct Em2d(std::collections::HashMap<String, i64>, Vec<i64>, Vec<i64>);
+
+    impl Em2d {
+        fn get(&self, name: &str) -> i64 {
+            self.0[name]
+        }
+    }
+
+    /// `Em_2D`'s script on the stub for `ticks` ticks, with `setup`'s globals.
+    fn run_em2d(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Em2d {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        lua.load(setup).exec().unwrap();
+        let script = include_str!("../../games/re2/enemy/2d/enemy.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.globals().set("KIND", kind).unwrap();
+        lua.globals()
+            .set(
+                "math_hypot",
+                lua.create_function(|_, (x, z): (i32, i32)| Ok(square_root0(x * x + z * z)))
+                    .unwrap(),
+            )
+            .unwrap();
+        lua.globals()
+            .set(
+                "rotate",
+                lua.create_function(|_, (angle, x, z): (i64, i32, i32)| {
+                    Ok(player2::rotate(angle as u16, x, z))
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        lua.load(format!(
+            "{EM2D_STUB}
+             {script}
+             for _ = 1, {ticks} do update(e) end
+             return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], r3 = w.r[3], life = w.life,
+                 be = w.be, angle = w.angle, x = w.pos[1], z = w.pos[3], timer = w.timer,
+                 hidden = w.hidden, groan = w.groan, room_enemy = w.room_enemy,
+                 move_no = w.move_no, frame = w.frame, hokan = w.hokan, dc = w.dc,
+                 pl_dc = w.pl_dc, drawn = drawn, box = w.box, joints = w.joints,
+                 home_angle = w.vars[0] or 0, home_x = w.vars[1] or 0,
+                 home_z = w.vars[2] or 0, seen = w.vars[3] or 0, clips = w.clips,
+                 sounds = w.sounds }}"
+        ))
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let list = |name: &str| {
+                table
+                    .get::<mlua::Table>(name)
+                    .unwrap()
+                    .sequence_values()
+                    .map(Result::unwrap)
+                    .collect()
+            };
+            let fields = "r0 r1 r2 r3 life be angle x z timer hidden groan room_enemy move_no \
+                frame hokan dc pl_dc drawn box joints home_angle home_x home_z seen"
+                .split_whitespace()
+                .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+                .collect();
+            Em2d(fields, list("clips"), list("sounds"))
+        })
+        .unwrap()
+    }
+
+    /// Past the init and armed (`Routine_2` 2), pushed back into the wall
+    /// from its home, then `setup`.
+    fn em2d_armed(setup: &str) -> String {
+        format!(
+            "ROUTINES = {{ [0] = 1, 0, 2, 0 }}; ANGLE = 1024; POS = {{ -12100, -2480, -6600 }};
+             VARS = {{ [0] = 1024, -12100, -7000, 0 }}; TARGET = 1024; {setup}"
+        )
+    }
+
+    /// `FUN_00483eb0`: one draw for `Timer0`, the home, life 250, both bodies
+    /// hidden and `Be_flg` `0x0C001407`.
+    #[test]
+    fn an_em2d_init_hides_both_bodies_and_draws_its_wait() {
+        for kind in [0x10, 1] {
+            let setup = "ANGLE = 1024; POS = { -12100, -2480, -7000 }; GROAN = 9; ROOM_ENEMY = 9";
+            let em = run_em2d(kind, &[0x2B], 1, setup);
+            let routines = [em.get("r0"), em.get("r1"), em.get("r2"), em.get("r3")];
+            assert_eq!(routines, [1, 0, 0, 0]);
+            assert_eq!((em.get("timer"), em.get("drawn")), (0xB, 1));
+            assert_eq!((em.get("life"), em.get("be")), (250, 0x0C00_1407));
+            assert_eq!(em.get("hidden"), 0x7FFE);
+            let home = (em.get("home_angle"), em.get("home_x"), em.get("home_z"));
+            assert_eq!(home, (1024, -12100, -7000));
+            assert_eq!(em.get("seen"), 0);
+            // A leader counts down before the init clears them.
+            assert_eq!((em.get("groan"), em.get("room_enemy")), (0, 0));
+            assert_eq!(em.1, vec![0]);
+            assert_eq!((em.get("hokan"), em.get("joints"), em.get("box")), (0, 1, 800));
+        }
+    }
+
+    /// `FUN_004842b0`'s step 0: home, then 400 back into the wall, and the
+    /// timer counts down to the arming.
+    #[test]
+    fn an_em2d_backs_into_the_wall_then_arms() {
+        let wall = "ANGLE = 1024; POS = { -12100, -2480, -7000 }";
+        let em = run_em2d(0x10, &[0x2B], 2, wall);
+        assert_eq!((em.get("x"), em.get("z")), (-12100, -6600));
+        assert_eq!((em.get("r2"), em.get("dc"), em.get("timer")), (1, 0x80, 0xA));
+        assert_eq!((em.get("move_no"), em.get("hokan")), (0, 0xF));
+        let west = "ANGLE = 0; POS = { -27150, -2580, -12350 }";
+        let em = run_em2d(0x10, &[0x2B], 2, west);
+        assert_eq!((em.get("x"), em.get("z")), (-27550, -12350));
+        // Armed on the tick its count passes 0: `Timer0 + 1` ticks of the wait.
+        let em = run_em2d(0x10, &[0x2B], 1 + 0xB, wall);
+        assert_eq!(em.get("r2"), 1);
+        let em = run_em2d(0x10, &[0x2B], 1 + 0xB + 1, wall);
+        assert_eq!((em.get("r2"), em.get("timer")), (2, 0xFFFF));
+    }
+
+    /// `FUN_004841c0`'s second branch: under 3000 and in front, it comes out
+    /// and walks 50 a tick on clip 0, from the frame the wait left.
+    #[test]
+    fn an_armed_em2d_emerges_within_3000_in_front() {
+        for (kind, shown) in [(0, 0x7F00), (1, 0x00FE)] {
+            let em = run_em2d(kind, &[], 1, &em2d_armed("DIST = 2800; FRAME = 1"));
+            assert_eq!((em.get("r1"), em.get("r2")), (0, 3));
+            assert_eq!((em.get("hidden"), em.get("be")), (shown, 1));
+            assert_eq!((em.get("seen"), em.get("dc")), (1, 0));
+            assert!(em.2.is_empty() && em.1.is_empty());
+            assert_eq!((em.get("frame"), em.get("z")), (2, -6650));
+        }
+        // From frame 11 on, it no longer moves.
+        let em = run_em2d(0, &[], 1, &em2d_armed("DIST = 2800; FRAME = 10"));
+        assert_eq!(em.get("z"), -6600);
+        // At 3000, or off its facing by 0x2f8 or more, it stays in.
+        let em = run_em2d(0, &[], 1, &em2d_armed("DIST = 3000"));
+        assert_eq!(em.get("r2"), 2);
+        let em = run_em2d(0, &[], 1, &em2d_armed("DIST = 2800; TARGET = 1024 + 0x2F8"));
+        assert_eq!(em.get("r2"), 2);
+        let em = run_em2d(0, &[], 1, &em2d_armed("DIST = 2800; TARGET = 1024 + 0x2F7"));
+        assert_eq!(em.get("r2"), 3);
+        // Not yet armed.
+        let setup = em2d_armed("DIST = 2800; ROUTINES = { [0] = 1, 0, 1, 0 }; TIMER = 5");
+        assert_eq!(run_em2d(0, &[], 1, &setup).get("r2"), 1);
+    }
+
+    /// `FUN_004841c0`'s first branch, and the head turn's three or four draws
+    /// on the same tick. A second wake groans unless the room's wait runs.
+    #[test]
+    fn an_em2d_turns_its_head_within_2500() {
+        let setup = em2d_armed("DIST = 2400; ROUTINES = { [0] = 1, 0, 3, 0 }");
+        let em = run_em2d(0, &[1, 0x05, 3, 1], 1, &setup);
+        let routines = [em.get("r0"), em.get("r1"), em.get("r2"), em.get("r3")];
+        assert_eq!(routines, [1, 1, 1, 0]);
+        assert_eq!((em.get("x"), em.get("z")), (-12100, -7000));
+        assert_eq!((em.get("move_no"), em.get("hokan")), (2, 0xF));
+        assert_eq!(em.get("timer"), 0x3C + 5 - 1);
+        assert_eq!((em.get("drawn"), em.2.clone()), (4, vec![0]));
+        assert_eq!(em.get("seen"), 1);
+        // An even third draw plays nothing; an even fourth plays sound 1.
+        let em = run_em2d(0, &[0, 0, 2, 0], 1, &setup);
+        assert_eq!((em.get("move_no"), em.get("drawn"), em.2.len()), (1, 3, 0));
+        let em = run_em2d(0, &[0, 0, 1, 2], 1, &setup);
+        assert_eq!(em.2, vec![1]);
+        // Woken before: the groan, and the room's wait before the next.
+        let seen = em2d_armed("DIST = 2400; VARS = { [0] = 1024, -12100, -7000, 1 }");
+        let em = run_em2d(0, &[0, 0, 0], 1, &seen);
+        assert_eq!((em.2.clone(), em.get("groan")), (vec![4], 0x3C));
+        let em = run_em2d(0, &[0, 0, 0], 1, &format!("{seen}; GROAN = 5"));
+        assert_eq!((em.2.len(), em.get("groan")), (0, 5));
+        // Off its facing by 0x400, no.
+        let em = run_em2d(0, &[0, 0, 0], 1, &format!("{setup}; TARGET = 1024 + 0x400"));
+        assert_eq!(em.get("r1"), 0);
+    }
+
+    /// `FUN_00484430`'s turn: 0x20 a tick, and never more than 0x180 from
+    /// home, compared signed on the facing unmasked.
+    #[test]
+    fn an_em2d_head_turn_is_clamped_around_home() {
+        let turning = |home: i64, target: i64, ticks: usize| {
+            let setup = format!(
+                "ROUTINES = {{ [0] = 1, 1, 1, 0 }}; ANGLE = {home}; TIMER = 500;
+                 VARS = {{ [0] = {home}, 0, 0, 1 }}; TARGET = {target}; PLAYER = {{ 5000, 0 }}"
+            );
+            run_em2d(0, &[], ticks, &setup).get("angle")
+        };
+        assert_eq!(turning(0, 0xC00, 1), 0xFFE0);
+        assert_eq!(turning(0, 0xC00, 12), 0xFE80);
+        assert_eq!(turning(0, 0xC00, 13), 0xFE80);
+        assert_eq!(turning(0, 0xC00, 40), 0xFE80);
+        assert_eq!(turning(1024, 0x800, 40), 1024 + 0x180);
+        assert_eq!(turning(1024, 0, 40), 1024 - 0x180);
+        // A facing past the other side of home, as the reach's unclamped turn
+        // can leave it, is clamped to that side.
+        let setup = "ROUTINES = { [0] = 1, 1, 1, 0 }; ANGLE = 0xF80; TIMER = 500;
+            VARS = { [0] = 0, 0, 0, 1 }; TARGET = 0xF80; PLAYER = { 5000, 0 }";
+        assert_eq!(run_em2d(0, &[], 1, setup).get("angle"), 0x180);
+        // The timer's end goes to the retreat.
+        let setup = "ROUTINES = { [0] = 1, 1, 1, 0 }; TIMER = 0";
+        assert_eq!(run_em2d(0, &[], 1, setup).get("r1"), 5);
+    }
+
+    /// `FUN_004843d0`: the player within 900 of the arm, part 3 or 10.
+    #[test]
+    fn an_em2d_reaches_when_the_player_is_within_900_of_its_arm() {
+        for (kind, part) in [(0, 3), (1, 10)] {
+            let at = |distance: i64| {
+                let setup = format!(
+                    "ROUTINES = {{ [0] = 1, 1, 1, 0 }}; TIMER = 50; PLAYER = {{ 0, 0 }};
+                     PARTS = {{ [{part}] = {{ {distance}, 0 }} }}"
+                );
+                run_em2d(kind, &[], 1, &setup)
+            };
+            // `SquareRoot0` comes from a table, so the edges are approximate.
+            let em = at(880);
+            assert_eq!((em.get("r1"), em.get("r2")), (3, 1));
+            assert_eq!((em.get("move_no"), em.get("hokan"), em.get("frame")), (3, 0xF, 1));
+            assert_eq!(at(920).get("r1"), 1);
+        }
+    }
+
+    /// `FUN_00484780`: sound 6, clip 4 and 30 a tick back, then hidden at
+    /// `Life` -1 for good.
+    #[test]
+    fn an_em2d_retreats_and_ends() {
+        let setup = "ROUTINES = { [0] = 1, 5, 0, 0 }; ANGLE = 1024; POS = { 0, 0, -7000 };
+            CLIP_LEN = 3";
+        let em = run_em2d(0, &[0x07], 1, setup);
+        assert_eq!((em.2.clone(), em.get("move_no"), em.get("hokan")), (vec![6], 4, 0xF));
+        assert_eq!((em.get("z"), em.get("dc"), em.get("r1")), (-6970, 0x80, 5));
+        let em = run_em2d(0, &[0x07], 3, setup);
+        assert_eq!(em.get("z"), -6910);
+        assert_eq!((em.get("timer"), em.get("hidden"), em.get("be")), (0x07 + 0x1E, 0x7FFE, 3));
+        let routines = [em.get("r0"), em.get("r1"), em.get("r2"), em.get("r3")];
+        assert_eq!((routines, em.get("life")), ([1, 7, 0, 0], -1));
+        let later = run_em2d(0, &[0x07], 10, setup);
+        assert_eq!((later.get("z"), later.get("joints")), (-6910, 3));
+    }
+
+    /// `Em_2D`: only a body with `Type`'s 0x10 counts the room's two
+    /// globals down.
+    #[test]
+    fn an_em2d_leader_counts_the_room_globals_down() {
+        let setup = "ROUTINES = { [0] = 1, 7, 0, 0 }; ROOM_ENEMY = 5; GROAN = 3";
+        let em = run_em2d(0x10, &[], 1, setup);
+        assert_eq!((em.get("room_enemy"), em.get("groan")), (4, 2));
+        let em = run_em2d(0x10, &[], 5, setup);
+        assert_eq!((em.get("room_enemy"), em.get("groan")), (0, 0));
+        let em = run_em2d(0x01, &[], 1, setup);
+        assert_eq!((em.get("room_enemy"), em.get("groan")), (5, 3));
+    }
+
+    /// `FUN_00484530`: within 600 of the arm, past frame 4 and with no
+    /// room wait, it takes the player, or waits while another body has them.
+    #[test]
+    fn an_em2d_grab_check_needs_600_a_late_frame_and_no_cooldown() {
+        let at = |extra: &str| {
+            let setup = format!(
+                "ROUTINES = {{ [0] = 1, 3, 1, 0 }}; PLAYER = {{ 0, 0 }};
+                 PARTS = {{ [3] = {{ 580, 0 }} }}; {extra}"
+            );
+            run_em2d(0, &[], 1, &setup)
+        };
+        let em = at("FRAME = 5");
+        assert_eq!((em.get("r1"), em.get("pl_dc")), (4, 0x80));
+        let em = at("FRAME = 5; PL_DC = 0x80");
+        assert_eq!((em.get("r1"), em.get("r2"), em.get("move_no")), (6, 1, 5));
+        assert_eq!(at("FRAME = 4").get("r1"), 3);
+        assert_eq!(at("FRAME = 5; ROOM_ENEMY = 2").get("r1"), 3);
+        assert_eq!(at("FRAME = 5; PARTS = { [3] = { 620, 0 } }").get("r1"), 3);
+    }
+
+    /// `FUN_00484850`: each step ends the tick, and the head turn follows
+    /// once the player is free.
+    #[test]
+    fn an_em2d_holds_while_another_body_grabs() {
+        let setup = "ROUTINES = { [0] = 1, 6, 0, 0 }; PL_DC = 0x80";
+        let em = run_em2d(0, &[], 1, setup);
+        assert_eq!((em.get("r2"), em.get("move_no"), em.get("joints")), (1, 5, 0));
+        let em = run_em2d(0, &[], 3, setup);
+        assert_eq!((em.get("r2"), em.get("joints")), (1, 2));
+        let setup = "ROUTINES = { [0] = 1, 6, 1, 0 }";
+        let em = run_em2d(0, &[], 1, setup);
+        assert_eq!((em.get("r2"), em.get("joints")), (2, 1));
+        let em = run_em2d(0, &[], 2, setup);
+        assert_eq!((em.get("r1"), em.get("r2")), (1, 0));
     }
 }
