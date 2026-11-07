@@ -640,6 +640,7 @@ pub fn yawn_advance(
 
     // Joint 2's world translation moves into `<<9` space; the rest of the
     // chain accumulates there and converts back at the very end.
+    let joint2 = pose.world[2].t;
     for axis in 0..3 {
         pose.world[2].t[axis] = pose.world[2].t[axis].wrapping_shl(9);
     }
@@ -724,6 +725,12 @@ pub fn yawn_advance(
     entity.pos[0] = entity.pos[0].wrapping_add(off_x >> 9);
     entity.pos[2] = entity.pos[2].wrapping_add(off_z >> 9);
     pose.transform[0].t[1] = pose.transform[0].t[1].wrapping_add(off_y >> 9);
+    // Joint 2 leaves the scratch space too. `yawn_post_move` rebuilds it, but
+    // the grab's opening frames (swallow states 0 and 1) skip that tail, and
+    // a body segment's collision drag that frame follows the chain from
+    // joint 2: in `<<9` space it threw the whole body (and the held player)
+    // hundreds of thousands of units out of the room.
+    pose.world[2].t = joint2;
 
     entity.timing_control = data.timing as u8;
     entity.animation_frame_id = entity.animation_frame_id.wrapping_add(1);
@@ -1356,6 +1363,36 @@ mod tests {
         assert!(!yawn_advance(&mut clock, &mut entity, &clips, false, 0x200));
         assert!(yawn_advance(&mut clock, &mut entity, &clips, false, 0x200));
         assert_eq!(entity.animation_frame_id, 0, "wrapped");
+    }
+
+    #[test]
+    fn yawn_advance_leaves_joint_2_in_room_space() {
+        // The chain is built in `<<9` scratch space; joint 2 must come back
+        // out of it, or a segment drag that follows from it (the grab's
+        // frames, which skip yawn_post_move) throws the body out of the room.
+        let clips = vec![yawn_clip(3)];
+        let mut clock = yawn_clock();
+        let mut entity = Entity {
+            pos: [5000, 0, 4000],
+            ..Entity::default()
+        };
+        let skeleton = yawn_skeleton();
+        yawn_pose_init(
+            clock.yawn.get_or_insert_with(Default::default),
+            &entity,
+            &skeleton,
+            &yawn_keyframe(0, 0),
+        );
+        yawn_advance(&mut clock, &mut entity, &clips, false, 0x200);
+        let pose = clock.yawn.as_deref().unwrap();
+        for axis in [0, 2] {
+            let offset = pose.world[2].t[axis] - entity.pos[axis];
+            assert!(
+                offset.abs() < 0x8000,
+                "joint 2 axis {axis} at {:?}",
+                pose.world[2].t
+            );
+        }
     }
 
     #[test]

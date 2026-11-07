@@ -289,10 +289,14 @@ fn closes_inventory(kind: ItemKind) -> bool {
 
 /// Remove one item from `slot`, compacting the inventory.
 fn consume_slot(game: &mut GameState, slot: usize) {
-    if let Some(stack) = game.inventory.get_mut(slot) {
-        if stack.quantity > 0 {
-            stack.quantity -= 1;
-        }
+    // A stack picked up with quantity 0 (the square and hex cranks, the
+    // lighter, the lockpick) is never used up: like `remove_item`, only a
+    // counted stack is decremented and emptied. The square crank turns
+    // 301's pool twice, and there is one crank.
+    if let Some(stack) = game.inventory.get_mut(slot)
+        && stack.quantity > 0
+    {
+        stack.quantity -= 1;
         if stack.quantity == 0 {
             stack.id = 0;
         }
@@ -320,5 +324,18 @@ mod tests {
         assert!(!closes(0x44)); // green herb
         assert!(!closes(0x02)); // beretta
         assert!(!closes(0x0B)); // handgun ammo
+    }
+
+    #[test]
+    fn consume_slot_keeps_an_uncounted_stack() {
+        // The square crank (picked up with quantity 0) survives its use;
+        // a counted stack is decremented and emptied at zero.
+        let mut game = GameState::default();
+        game.add_item(0x1D, 0);
+        game.add_item(0x3D, 1);
+        consume_slot(&mut game, 0);
+        assert!(game.has_item(0x1D));
+        consume_slot(&mut game, 1);
+        assert!(!game.has_item(0x3D));
     }
 }

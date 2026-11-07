@@ -3996,6 +3996,8 @@ impl GameSession {
             if !self.game.message.active {
                 self.open_pickup_view(pack, request);
             }
+        } else if !self.game.message.active {
+            self.game.take_unhandled_menu_mode();
         }
         // The death machine runs at the end of the gameplay frame, after the
         // room tick noticed the health drop, exactly like the original.
@@ -4538,6 +4540,7 @@ impl GameSession {
             self.map = None;
         }
         self.game.message_menu = false;
+        self.game.clear_menu_field();
         if let Some(assets) = self.loaded.player_assets.as_ref() {
             self.player
                 .menu_exit_restore(&mut self.game, &assets.emd.clips);
@@ -5496,7 +5499,16 @@ impl GameSession {
         // The menu task runs before the main loop's message update: a prompt
         // the viewer raises types its first glyph this frame, and one that
         // resolves this frame is only seen by the viewer on the next.
+        let had_view = self.pickup_view.is_some();
         self.step_pickup_view(pack, ui);
+        // The action press that dismissed the viewer belongs to the menu, not
+        // to the room-action probe: a reach-gated ground item would otherwise
+        // be re-armed from the player's standing position and reopen a fresh
+        // got-item viewer after every close. Swallow it until the key comes up,
+        // like the message window does.
+        if had_view && self.pickup_view.is_none() && action {
+            self.swallow_action = true;
+        }
         // The original's state 4 runs `menu_draw_health_bar` after the viewer
         // on every frame the viewer stays up, so the face and the EKG keep
         // sweeping (and drawing from the shared `rand()`) under the model.
@@ -7137,7 +7149,7 @@ impl GameSession {
         );
         if !self.game.message.active {
             self.boot_message = None;
-            self.arm_room_fade();
+            self.arm_room_entry_fade();
         }
     }
 
@@ -27365,6 +27377,64 @@ mod tests {
             session.room_fade_draw_alpha(),
             Some(255),
             "the room fades up from black as after a watched narration"
+        );
+    }
+
+    /// A continue's narration ends in the room-entry fade with the room-events
+    /// gate armed, and the gate's release restores the menu bit START needs.
+    /// The save restores `MESSAGE_FLAGS_INITIAL`, which has that bit clear, so
+    /// START was ignored until a door or pickup set it.
+    #[test]
+    fn start_opens_the_menu_after_the_continue_narration() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        session.set_skips_enabled(true);
+        session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), action_press(), true)
+            .unwrap();
+        assert!(
+            session.boot_message.is_none(),
+            "the press ended the narration"
+        );
+        assert!(session.room_boot_gate, "the room is held during the fade");
+        for _ in 0..120 {
+            if !session.room_boot_gate {
+                break;
+            }
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(!session.room_boot_gate, "the fade released the room");
+        assert_eq!(
+            session.game.message_flags & START_MESSAGE_BITS,
+            START_MESSAGE_BITS,
+            "the release restores the START bits"
+        );
+        for start in [true, false] {
+            session
+                .tick(
+                    &pack,
+                    UiInput {
+                        start,
+                        ..UiInput::default()
+                    },
+                    player::Input::default(),
+                    false,
+                )
+                .unwrap();
+        }
+        assert!(
+            session.menu.is_some(),
+            "START opens the menu after a continue"
         );
     }
 

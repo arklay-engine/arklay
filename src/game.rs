@@ -369,6 +369,12 @@ const MSF_PICKUP_SCREEN: u8 = 23;
 const MSF_MENU_GOT_ITEM: u8 = 21;
 /// `main_state_flags` bit 0x800, toggled by `give_item` (item viewer).
 const MSF_MENU_ITEM_VIEW: u8 = 20;
+/// `main_state_flags` bit 0x200 (`F_STATUS_16`), in the menu byte; by its
+/// place there main-menu mode 5 (inferred, the screen is not identified).
+/// The scripts of rooms 204, 20D and 408 raise it and then wait for it to
+/// clear. The port opens no screen for it and consumes it (see
+/// [`GameState::take_unhandled_menu_mode`]).
+const MSF_MENU_MODE_5: u8 = 22;
 /// `main_state_flags` bit 0x1000: the item-box menu may open (the lid settled).
 const MSF_MENU_MODE_ITEMBOX: u8 = 19;
 /// `main_state_flags` bit 0x80: the climb/vault transition is latched.
@@ -2486,6 +2492,17 @@ impl Entity {
     /// Overwrite the entity state byte, keeping the ignore flag.
     pub fn set_state(&mut self, state: u8) {
         self.state_field = (self.state_field & 0xFF00) | u16::from(state);
+    }
+
+    /// Overwrite the byte at offset 0x8A: the player's `isBeingAttackedFlag`
+    /// (slot 0, `player`) and every other entity's hit state. The port keeps
+    /// the two in separate fields, so an SCD write to the byte picks by slot.
+    pub fn set_byte_8a(&mut self, player: bool, value: u8) {
+        if player {
+            self.is_being_attacked = value;
+        } else {
+            self.hit_state = value;
+        }
     }
 
     /// The player-ignore flag (offset 0x85).
@@ -4681,11 +4698,16 @@ impl GameState {
                 StepResult::Continue
             }
             "act_idle" => {
+                // The idle zeroes the whole state word through +0x8A, so on
+                // the player it also drops a leftover being-attacked flag (a
+                // throw an event cut short, 40C's Barry rescue), which would
+                // otherwise hold the player in the damage state.
+                let player = self.selected_entity == 0;
                 if let Some(entity) = self.selected_entity_mut() {
                     entity.state_field = 1;
                     entity.action_behavior = 0;
                     entity.action_state = 0;
-                    entity.hit_state = 0;
+                    entity.set_byte_8a(player, 0);
                 }
                 StepResult::Continue
             }
@@ -5079,6 +5101,12 @@ impl GameState {
         // A room load runs the same per-frame reset before reseeding the rest
         // of the room state.
         self.room_state_reset();
+        // The first system word is the room's own scratch (`FG_ROOM` bits
+        // 0-31): it survives a frame but not a door. Every room script sets
+        // and tests these bits for itself; one left set by another room
+        // (room 210's bit 15) would start room 106's Barry scenes with no
+        // Barry in the room and hold the player in state 8 for good.
+        self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[0..4].fill(0);
         // `room_set` parks the special-room-light state at -1 (no overlay) and
         // clears the delta and the scripted channel masks.
         self.state_words[1] = 0xFFFF;
@@ -5092,8 +5120,11 @@ impl GameState {
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when
         // a transition runs, so an abandoned reach cannot freeze the
-        // destination's scripted walks.
-        self.health_status &= 0x7F;
+        // destination's scripted walks. The fast `0x40` drain (a room's gas)
+        // ends with the room too: no script clears it, and 409 raises it
+        // right after "Perhaps I should leave for a moment", 205 every frame
+        // its trigger holds. Only the herb poisons (`0x02`, `0x20`) carry on.
+        self.health_status &= 0x3F;
         self.event_item_used = false;
         // The effect pool and the resolved sprite metadata reset with the room
         // (the original's effect init), so no billboard leaks across a door.
@@ -6121,14 +6152,26 @@ impl GameState {
         record: items::CombineRecord,
         herb: bool,
     ) -> CombineResult {
+        // The original's equipped marker is the slot's 1-based index, so a
+        // recipe that rewrites the equipped slot's id (other rounds loaded
+        // into the equipped grenade launcher turn it into that loading's
+        // item) leaves the new item equipped.
+        let equipped_slot = self
+            .equipped
+            .and_then(|equipped| self.inventory.iter().position(|stack| stack.id == equipped));
         self.inventory[cursor_slot].id = record.new_cursor;
         self.inventory[target_slot].id = record.new_target;
         if record.new_target == 0 {
             self.inventory[target_slot].quantity = 0;
         }
+        let rewritten = equipped_slot
+            .map(|slot| self.inventory[slot].id)
+            .filter(|&id| id != 0 && Some(id) != self.equipped);
         self.apply_combine_effect(cursor_slot, target_slot, record.effect);
         self.rebuild_slots();
-        if self.equipped.is_some_and(|item| !self.has_item(item)) {
+        if let Some(id) = rewritten {
+            self.set_equipped(Some(id));
+        } else if self.equipped.is_some_and(|item| !self.has_item(item)) {
             self.set_equipped(None);
         }
         CombineResult::Applied {
@@ -7090,11 +7133,36 @@ impl GameState {
             MSF_MENU_GOT_ITEM,
             MSF_MENU_ITEM_VIEW,
             MSF_MENU_KEY_DEPLETED,
+            MSF_SCRIPT_ONLY_14,
         ] {
             self.apply_flag(5, sel, 1);
         }
         self.message_item_slot = None;
         self.got_item_slot = None;
+    }
+
+    /// The pause menu closed: the original's `menu_restore_game_state`
+    /// clears the whole pending-menu field ([`Self::menu_pending`]). That
+    /// includes `MSF_SCRIPT_ONLY_14`, which room scripts raise (301's crank,
+    /// 300, 304, 306, 307 and 30F) and nothing else clears: left raised, it
+    /// holds every desk shut for the rest of the session.
+    pub fn clear_menu_field(&mut self) {
+        for sel in MSF_SCRIPT_ONLY_14..=MSF_PICKUP_SCREEN {
+            self.apply_flag(5, sel, 1);
+        }
+    }
+
+    /// Consume a raised main-menu mode 5 (`MSF_MENU_MODE_5`), which the port
+    /// has no screen for. The original's menu runs the mode and its
+    /// `menu_restore_game_state` clears the whole menu byte; left raised, the
+    /// bit holds [`Self::menu_pending`] true and every desk refuses its press
+    /// for the rest of the session.
+    pub fn take_unhandled_menu_mode(&mut self) -> bool {
+        if !self.flags[5].bit(MSF_MENU_MODE_5) {
+            return false;
+        }
+        self.apply_flag(5, MSF_MENU_MODE_5, 1);
+        true
     }
 
     /// Whether the ground pick-up armed for `slot` fits the inventory, which
@@ -7644,8 +7712,13 @@ impl GameState {
         }
         // A finished ladder climb (state 8) returns the zone flag, the ladder
         // mode bit and the message flag the climb locked out.
+        // The climb's start raised the sequence byte (0x80); control returns
+        // with it clear, or START (gated on it) stays refused after a ladder.
         if player.ladder_release {
             player.ladder_release = false;
+            if self.entities[0].is_being_attacked == 0x80 {
+                self.entities[0].is_being_attacked = 0;
+            }
             self.entities[0].zone_flags &= !0x10;
             self.flags[5].apply(MSF_LADDER_DOWN, 1);
             self.message_flags |= 0x0040;
@@ -7991,7 +8064,15 @@ impl GameState {
             self.tear_down_item(slot, action, true);
             return true;
         }
-        self.add_item(item, action.item_quantity().max(1));
+        // A pickup authored with quantity 0 (the cranks, the lighter, the
+        // lockpick) is kept at 0, like the starting knife: the menu USE never
+        // uses it up. Only a stacking item takes at least one.
+        let quantity = if self.item_defs.get(item).merge {
+            action.item_quantity().max(1)
+        } else {
+            action.item_quantity()
+        };
+        self.add_item(item, quantity);
         self.last_picked_item = Some(item);
         // BioCard 0x213 (`pickedItemId`) is what the scripts test with cmpb 19.
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
@@ -9852,7 +9933,14 @@ impl ScdHost for ScdGameHost<'_> {
                     entity.angle = operand_i16(operands, 2) as u16 & 0x0FFF;
                     entity.roll = operand_i16(operands, 3) as u16;
                     entity.flags &= 0xFFF3;
-                    entity.set_active(true);
+                    // Only the position: the slot stays as the room's
+                    // `enemy` records left it. Every shipped `pos_set` names
+                    // a slot its room spawns, so a slot left inactive is one
+                    // whose record the enemy bank skipped (that monster is
+                    // dead). Marking it active would raise the stale monster
+                    // the slot held in the previous room, outside
+                    // `enemy_count` and so out of every weapon's reach (204's
+                    // second researcher once one is killed).
                 }
                 StepResult::Continue
             }
@@ -13340,6 +13428,32 @@ mod tests {
         );
     }
 
+    /// `act_idle` zeroes the state word through +0x8A: the player's
+    /// being-attacked flag and another entity's hit state. 40C's Barry
+    /// rescue throws Jill (flag 1) and idles her from its actor script; a
+    /// flag left set holds her in the damage state for good.
+    #[test]
+    fn act_idle_clears_the_byte_at_8a_by_slot() {
+        let mut state = game();
+        state.selected_entity = 0;
+        state.entities[0].is_being_attacked = 1;
+        state.entities[0].hit_state = 0x11;
+        let mut host = ScdGameHost::new(&mut state);
+        let idle = actor_op(0x86).unwrap();
+        assert_eq!(host.on_misc(idle, &[]), StepResult::Continue);
+        assert_eq!(host.state().entities[0].is_being_attacked, 0);
+        assert_eq!(host.state().entities[0].state(), 1);
+
+        let mut state = game();
+        state.selected_entity = 1;
+        state.entities[1].hit_state = 0x11;
+        state.entities[1].is_being_attacked = 1;
+        let mut host = ScdGameHost::new(&mut state);
+        assert_eq!(host.on_misc(idle, &[]), StepResult::Continue);
+        assert_eq!(host.state().entities[1].hit_state, 0);
+        assert_eq!(host.state().entities[1].is_being_attacked, 1);
+    }
+
     #[test]
     fn actor_run_completes_in_one_tick() {
         // A whole actor run: motion, animation and end. The VM must execute
@@ -13989,6 +14103,7 @@ mod tests {
         let mut state = game();
         state.entities[0].zone_flags = 0x30;
         state.flags[5].apply(MSF_LADDER_DOWN, 0);
+        state.entities[0].is_being_attacked = 0x80;
         let mut player =
             crate::player::spawn(RoomId::parse("1000").unwrap(), &RoomState::default());
         player.stairs.ladder = true;
@@ -13997,6 +14112,10 @@ mod tests {
         state.tick_objects(&RoomState::default(), &mut player);
 
         assert!(!player.ladder_release);
+        assert_eq!(
+            state.entities[0].is_being_attacked, 0,
+            "START is open again"
+        );
         assert_eq!(state.entities[0].zone_flags & 0x10, 0);
         assert!(!state.ladder_down());
         assert_ne!(state.message_flags & 0x40, 0, "message flag returned");
@@ -14401,6 +14520,14 @@ mod tests {
         state.enter_room(RoomId::parse("101").unwrap(), &RoomState::default());
         assert!(state.pending_reach.is_none());
         assert_eq!(state.health_status & 0x80, 0, "the reach lock clears");
+    }
+
+    #[test]
+    fn room_entry_ends_the_gas_drain_but_not_the_poisons() {
+        let mut state = item_game("1000", 1);
+        state.health_status = 0x40 | 0x20 | 0x02;
+        state.enter_room(RoomId::parse("101").unwrap(), &RoomState::default());
+        assert_eq!(state.health_status, 0x22);
     }
 
     #[test]
@@ -14825,6 +14952,37 @@ mod tests {
         assert!(state.check_desk(0));
         assert_eq!(state.desk.state, 1);
         assert_eq!(state.desk.action, Some(0));
+    }
+
+    #[test]
+    fn a_closing_menu_clears_the_script_raised_bit_and_frees_the_desk() {
+        // Room 301's crank: set(FG_STATUS, F_STATUS_11), which nothing clears
+        // but the original's `menu_restore_game_state`.
+        for close in [
+            GameState::clear_item_view_flags,
+            GameState::clear_menu_field,
+        ] {
+            let mut state = desk_game();
+            state.add_item(ITEM_DESK_KEY, 1);
+            state.apply_flag(5, MSF_SCRIPT_ONLY_14, 0);
+            assert!(!state.check_desk(0), "the raised bit blocks the desk");
+            close(&mut state);
+            assert!(!state.menu_pending());
+            assert!(state.check_desk(0), "the desk opens once a menu closed");
+        }
+    }
+
+    #[test]
+    fn a_script_raised_menu_mode_5_is_consumed_and_frees_the_desk() {
+        let mut state = desk_game();
+        state.add_item(ITEM_DESK_KEY, 1);
+        assert!(!state.take_unhandled_menu_mode(), "nothing raised");
+        // Room 204's script after the Richard scene: set(FG_STATUS, F_STATUS_16).
+        state.apply_flag(5, MSF_MENU_MODE_5, 0);
+        assert!(!state.check_desk(0), "the raised mode blocks the desk");
+        assert!(state.take_unhandled_menu_mode());
+        assert!(!state.flags[5].bit(MSF_MENU_MODE_5));
+        assert!(state.check_desk(0), "the desk opens once it is consumed");
     }
 
     #[test]
@@ -17235,6 +17393,24 @@ mod tests {
     }
 
     #[test]
+    fn loading_other_rounds_keeps_the_equipped_launcher_equipped() {
+        // The empty flame-loaded launcher takes explosive rounds and turns
+        // into the explosive-loaded item in the same slot: the equipped
+        // marker (a slot index in the original) follows it.
+        let mut state = game();
+        state.add_item(0x09, 0);
+        state.add_item(0x10, 6);
+        state.set_equipped(Some(0x09));
+        assert!(matches!(
+            state.combine_slots(0, 1),
+            CombineResult::Applied { .. }
+        ));
+        assert_eq!(state.inventory[0].id, 0x07);
+        assert_eq!(state.equipped, Some(0x07));
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_EQUIPPED)], 0x07);
+    }
+
+    #[test]
     fn combine_effects_transfer_ammo_and_merge_quantities() {
         // Effect 1: the gun takes the clip's rounds up to its maximum.
         let mut state = game();
@@ -18266,11 +18442,6 @@ mod tests {
             0,
             "g_SysFlags[1] is cleared by the room reset"
         );
-        assert_eq!(
-            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
-            0x55,
-            "the first system word survives (room_state_reset only clears [1])"
-        );
     }
 
     #[test]
@@ -18280,6 +18451,11 @@ mod tests {
         let mut state = seeded_room_state();
         state.room_state_reset();
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
+            0x55,
+            "the first system word survives a frame (room_state_reset only clears [1])"
+        );
 
         let mut state = seeded_room_state();
         state.state_words[1] = 5;
@@ -18291,6 +18467,11 @@ mod tests {
         state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
 
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0..4],
+            [0; 4],
+            "the first system word (FG_ROOM 0-31) does not survive a door"
+        );
         assert_eq!(state.state_words[1], 0xFFFF, "the light parks at -1");
         assert_eq!(state.state_words[2], 0);
         assert_eq!(state.special_light_masks, [0; 3]);
