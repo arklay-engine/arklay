@@ -9,13 +9,17 @@
 
 # Lua API
 
-- [Lua API]()
+- [Lua hooks](lua/hooks.md)
+- [Screen scripts](lua/screen.md)
+- [GUI DOM](lua/gui.md)
+- [Enemy scripts](lua/enemy.md)
+- [RE 2 enemy scripts](lua/re2-enemy.md)
 
 # .akscr scripts
 
-- [.akscr scripts]()
-  - [Version 1: RE 1]()
-  - [Version 2: RE 2]()
+- [.akscr scripts](akscr/index.md)
+  - [RE 1 scripts](akscr/re1.md)
+  - [RE 2 scripts](akscr/re2.md)
 
 # Engine internals
 

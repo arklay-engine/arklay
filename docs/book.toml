@@ -21,3 +21,8 @@ create-missing = false
 git-repository-url = "https://github.com/arklay-engine/arklay"
 edit-url-template = "https://github.com/arklay-engine/arklay/edit/main/docs/{path}"
 site-url = "/arklay/"
+
+# Expands `{{#lua-api FILE}}` in a chapter into the API reference generated
+# from the LuaLS definition file FILE (docs/lua/*.lua).
+[preprocessor.lua-api]
+command = "python3 ../scripts/lua-api-doc.py"

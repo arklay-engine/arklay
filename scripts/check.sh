@@ -4,8 +4,9 @@
 # cold worktree. The slower tiers are opt-in; CI runs the `--ci` tier on every
 # PR, so a session does not need to.
 #
-#   ./scripts/check.sh          session: fmt, clippy, the unit and fast
-#                               integration tests in one profile
+#   ./scripts/check.sh          session: fmt, clippy, the Lua API docs
+#                               check, the unit and fast integration tests
+#                               in one profile
 #   ./scripts/check.sh --ci     everything the Linux CI job runs: the session
 #                               tier plus the second test profile, the real
 #                               test binaries' non-ignored tests,
@@ -170,6 +171,8 @@ wait_clippy() {
 }
 
 step cargo fmt --check
+# The Lua API definition files in docs/lua document every registered method.
+step python3 scripts/lua-api-doc.py check
 
 mkdir -p "$clippy_dir"
 (
