@@ -2,9 +2,9 @@
 --
 -- `Em_33` runs `Routine_0` from `0x52a5f0`: 0 is the init (`FUN_00496a80`)
 -- and 1 the move (`FUN_00496c90`), which runs `Routine_1` from `0x52a610`.
--- Of those, routine 0 (`FUN_00496d00`) is room 509's scene: its
--- `Routine_2` 0 waits off the stage until the room's script raises
--- `Sce_free0` to 1. The rest of the scene, the fight, the hit (2,
+-- Of those, routine 0 (`FUN_00496d00`) is room 509's scene: G3 waits off
+-- the stage, walks in and rises as the room's script steps `Sce_free0`
+-- through 1, 2 and 3, and starts the fight in routine 1. The fight, the hit (2,
 -- `FUN_00499210`) and the death (3, `FUN_00499e00`) aren't ported yet.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
@@ -155,11 +155,216 @@ local function scene_wait(e)
     end
 end
 
+-- `Routine_2` 1: clip 10 plays and moves G3 until the script sets
+-- `Sce_free0` to 2.
+local function scene_walk(e)
+    e:spd()
+    e:joint(0x100)
+    e:add_speed_xz()
+    if e:sce_free(0) == 2 then
+        e:set_routine(2, 2)
+        e:set_routine(3, 0)
+    end
+    e:seq_sound()
+end
+
+-- Every other tick, `weight` on even ticks of `Timer2` and 0xfff on odd ones.
+local function flicker(e, weight)
+    local tick = (e:timer(2) + 1) & 0xFF
+    e:set_timer(2, tick)
+    return tick & 1 == 0 and weight or 0xFFF
+end
+
+-- `FUN_004974c0`: the clip, and `Timer0` down by `step` to 0. The frame's
+-- high word.
+local function play_down(e, step)
+    e:joint(0x100)
+    local timer = i16(e:timer(0)) - step
+    e:set_timer(0, timer < 0 and 0 or timer)
+    return e:now_seq() >> 16
+end
+
+-- `FUN_00497510`: `Timer0` down by 0x200 to 0, as parts 9 and 6's first
+-- weight.
+local function fade_9_6(e)
+    local timer = i16(e:timer(0)) - 0x200
+    timer = timer < 0 and 0 or timer
+    e:set_timer(0, timer)
+    set_weight(e, 9, timer)
+    set_weight(e, 6, timer)
+end
+
+-- `Size` wobbles by 30 each tick, on `Timer2`.
+local function wobble(e)
+    local tick = (e:timer(2) + 1) & 0xFF
+    e:set_timer(2, tick)
+    e:set_var(SIZE, i16(e:var(SIZE) + (tick & 1 ~= 0 and 0x1E or -0x1E)))
+end
+
+-- `Routine_2` 2: the rise. It waits for `Sce_free0` 3, then holds clip 5's
+-- first frame for 31 ticks while parts 10 and 0x11 flicker (1, 2), plays it
+-- (3, 4, 5) while the morphs of parts 0x11 and 10 run down, flickers parts
+-- 9, 6, 2, 3, 0x12 and 0x13 while part 0xb's morph runs down (6), shrinks
+-- the morphs of parts 2, 3, 0x12 and 0x13 and wobbles (7, 8), swells and
+-- settles (9, 10), plays clip 6 (11) and after 30 ticks sets `Sce_free1`
+-- to 1 (12).
+local function scene_rise(e)
+    local three = e:routine(3)
+    if three == 0 then
+        if e:sce_free(0) == 3 then
+            e:set_routine(3, 1)
+        end
+    elseif three == 1 or three == 2 then
+        if three == 1 then
+            e:set_routine(3, 2)
+            e:clip(5, 0, 0xF)
+            e:set_var(LOOK, 1)
+            e:set_var(LOOK_STEP, 1)
+            e:set_timer(0, 0x1F)
+            e:set_timer(2, 0)
+        end
+        local weight = flicker(e, 0xF00)
+        set_weight(e, 10, weight)
+        set_weight(e, 0x11, weight)
+        e:joint(0x100)
+        e:set_timer(0, e:timer(0) - 1)
+        e:set_move_cnt(0)
+        if e:timer(0) == 0 then
+            e:set_routine(3, 3)
+        end
+    elseif three == 3 then
+        local weight = flicker(e, 0xF00)
+        set_weight(e, 10, weight)
+        set_weight(e, 0x11, weight)
+        e:joint(0x200)
+        if e:now_seq() & 0x10000 ~= 0 then
+            e:set_routine(3, 4)
+            e:set_timer(0, 0xFFF)
+        end
+    elseif three == 4 then
+        local high = play_down(e, 0x180)
+        set_weight(e, 0x11, e:timer(0))
+        set_weight(e, 10, flicker(e, 0xE00))
+        if high == 2 then
+            e:set_routine(3, 5)
+            e:set_timer(0, 0xFFF)
+        end
+    elseif three == 5 then
+        local high = play_down(e, 0x100)
+        set_weight(e, 10, e:timer(0))
+        if high == 3 then
+            e:set_routine(3, 6)
+            e:set_timer(0, 0xFFF)
+            e:set_timer(1, 0xFFF)
+        end
+    elseif three == 6 then
+        local weight = flicker(e, 0xD00)
+        for _, part in ipairs({ 9, 6, 2, 3, 0x12, 0x13 }) do
+            set_weight(e, part, weight)
+        end
+        local timer = i16(e:timer(1) - 0x100)
+        e:set_timer(1, timer & 0xFFFF)
+        if timer < 0 then
+            e:set_routine(3, 7)
+            e:set_timer(1, 0xFFF)
+            e:set_timer(0, 0xFFF)
+            e:set_timer(3, 4)
+            set_weight(e, 0xB, 0)
+        else
+            set_weight(e, 0xB, timer)
+        end
+    elseif three == 7 then
+        local tick = (e:timer(2) + 1) & 0xFF
+        e:set_timer(2, tick)
+        local timer = i16(e:timer(1) - 0x400)
+        e:set_var(SIZE, i16(e:var(SIZE) + (tick & 1 ~= 0 and 0x1E or -0x1E)))
+        if timer < 0 then
+            timer = 0
+        end
+        e:set_timer(1, timer)
+        for _, part in ipairs({ 2, 3, 0x12, 0x13 }) do
+            set_weight(e, part, timer)
+        end
+        fade_9_6(e)
+        e:joint(0x100)
+        local count = (e:timer(3) - 1) & 0xFF
+        e:set_timer(3, count)
+        if count == 0 then
+            e:set_routine(3, 8)
+        end
+    elseif three == 8 then
+        wobble(e)
+        fade_9_6(e)
+        e:joint(0x100)
+        if e:now_seq() & 0x40000 ~= 0 then
+            e:set_routine(3, 9)
+        end
+    elseif three == 9 then
+        local size = i16(e:var(SIZE) + 500)
+        if size > 0x117F then
+            size = 0x11FF
+            e:set_routine(3, 10)
+        end
+        e:set_var(SIZE, size)
+        fade_9_6(e)
+        e:joint(0x100)
+    elseif three == 10 then
+        local size = i16(e:var(SIZE) - 5)
+        e:set_var(SIZE, size < 0xFFF and 0xFFF or size)
+        fade_9_6(e)
+        if e:joint(0x100) then
+            e:set_routine(3, 0xB)
+            e:set_var(PULSE_OFF, 0)
+            e:clip(6, 0, 0xF)
+            e:sound(0xB)
+        end
+    elseif three == 0xB then
+        if e:joint(0x100) then
+            e:set_routine(3, 0xC)
+            e:set_timer(0, 0x1E)
+        end
+    elseif three == 0xC then
+        e:set_timer(0, e:timer(0) - 1)
+        if e:timer(0) == 0 then
+            e:set_sce_free(1, 1)
+            e:set_routine(2, 3)
+            e:set_routine(3, 0)
+        end
+    end
+    e:seq_sound()
+end
+
+-- `Routine_2` 3: a tick later, the scene's end. `Type`'s high byte, the
+-- first weights of the scene's parts, `Be_flg`'s 0x800 and the neck's 1
+-- clear, and the fight starts in `Routine_1` 1.
+local function scene_end(e)
+    if e:routine(3) == 0 then
+        e:set_routine(3, 1)
+        return
+    end
+    e:set_kind(e:kind() & 0xFF)
+    e:set_be_flg(e:be_flg() & ~0x800)
+    e:set_neck_flags(e:neck_flags() & ~1)
+    for _, part in ipairs(SCENE_PARTS) do
+        set_weight(e, part, 0)
+    end
+    e:set_var(LOOK, 0)
+    e:set_var(LOOK_STEP, 1)
+    e:routines(1, 1, 0, 0)
+    e:set_damage_cnt(e:damage_cnt() & 0x7F)
+end
+
 -- Routine 0 (`FUN_00496d00`): room 509's scene.
 local function scene(e)
     local two = e:routine(2)
     if two == 0 then
         scene_wait(e)
+    elseif two == 1 then
+        scene_walk(e)
+    elseif two == 2 then
+        scene_rise(e)
+    elseif two == 3 then
+        scene_end(e)
     end
 end
 
@@ -202,6 +407,53 @@ local function look_around(e)
     look(e, EYE_Y, e:goto_ck(x, z, 1) > 0 and 2 or -2)
 end
 
+-- `FUN_0049aad0` on `LOOK` 1: every `(Rnd() & 7) * LOOK_STEP` ticks the
+-- eye darts by `(Rnd() & 0xf) - 7`, across, up, both or neither by a third
+-- `Rnd`.
+local function look_dart(e)
+    local count = e:var(LOOK_CNT)
+    if count ~= 0 then
+        e:set_var(LOOK_CNT, count - 1)
+        return
+    end
+    local step = (e:rnd() & 0xF) - 7
+    local which = e:rnd()
+    if which & 1 ~= 0 then
+        look(e, EYE_X, step)
+    end
+    if which & 2 ~= 0 then
+        look(e, EYE_Y, step)
+    end
+    e:set_var(LOOK_CNT, ((e:rnd() & 7) * e:var(LOOK_STEP)) & 0xFF)
+end
+
+-- `FUN_0049aad0` on other `LOOK`s: a blink, part 0xb's morph closing over
+-- 9 ticks and opening over 8, after which the eye looks around again.
+local function blink(e)
+    local step = e:var(LOOK_STEP)
+    local count = e:var(LOOK_CNT)
+    if step == 0 then
+        e:set_var(LOOK_STEP, 1)
+        step = 1
+        count = 0
+    end
+    if step == 1 then
+        count = count + 1
+        if count > 8 then
+            e:set_var(LOOK_STEP, 2)
+            count = 8
+        end
+    elseif step == 2 then
+        count = count - 1
+        if count == 0 then
+            e:set_var(LOOK, 0)
+            e:set_var(LOOK_STEP, 0)
+        end
+    end
+    e:set_var(LOOK_CNT, count)
+    set_weight(e, 0xB, count << 9)
+end
+
 -- `FUN_0049ad10`: part 2's pulse, up by 0x200 a tick to 0x2800 and down by
 -- 0x800 a tick to 0, while `PULSE_OFF` is clear.
 local function pulse(e)
@@ -237,8 +489,13 @@ function update(e)
     elseif zero == 1 then
         move(e)
     end
-    if e:var(LOOK) == 0 then
+    local mode = e:var(LOOK)
+    if mode == 0 then
         look_around(e)
+    elseif mode == 1 then
+        look_dart(e)
+    else
+        blink(e)
     end
     pulse(e)
 end
