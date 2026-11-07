@@ -170,6 +170,9 @@ fn make_install(root: &Path) {
     write(&data.join("Zmovie/r109.bin"), &[0, 0, 1, 0xBA, 1]);
     write(&data.join("Pl0/Zmovie/opn1stl.bin"), &[0, 0, 1, 0xBA, 2]);
     write(&data.join("Pl1/Zmovie/titlec.bin"), b"not a film");
+    // The films room 200 and room 204 play (`movie_on 5` and `movie_on 10`).
+    write(&data.join("Zmovie/r200.bin"), &[0, 0, 1, 0xBA, 3]);
+    write(&data.join("Pl0/Zmovie/r204l.bin"), &[0, 0, 1, 0xBA, 4]);
 }
 
 fn read(pack: &Pack, path: &str) -> Vec<u8> {
@@ -346,6 +349,8 @@ fn converts_every_category() {
     assert_eq!(read(&pack, "movie/r109.mpg"), [0, 0, 1, 0xBA, 1]);
     assert_eq!(read(&pack, "movie/opn1stl.mpg"), [0, 0, 1, 0xBA, 2]);
     assert!(!pack.contains("movie/titlec.mpg"), "not an MPEG stream");
+    assert_eq!(read(&pack, "movie/r200.mpg"), [0, 0, 1, 0xBA, 3]);
+    assert_eq!(read(&pack, "movie/r204l.mpg"), [0, 0, 1, 0xBA, 4]);
 
     // Demo reels interleave the characters; the alternate takes are not
     // packed.
