@@ -25,7 +25,12 @@ Rows above the "deterministic" marker ran before `bot/order.lua`: Lua 5.4
 seeds its string hash from the clock and ASLR, so `pairs` order, and with it
 some seeds' runs, varied between runs of the same commit (seeds 6, 12 and
 16 parted by up to 20 hits and 2 deaths). Their verdicts were taken on that
-noise. From the marker on, a seed replays the same run.
+noise. From the marker on, `pairs` is deterministic, but until b16 a skipped
+cutscene still fast-forwarded in 12 ms wall-clock bursts after every reload,
+so where control came back hung on the machine's load (the same commit's
+seeds still parted by a few hits and up to one death: b05 to b15). From b16
+on, a headless bot run fast-forwards a scene to its end in one update, and
+two batches of one commit match seed for seed.
 
 | batch | commit | change | completed | deaths | median hits | p90 hits | median ticks | stalls | default | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -42,3 +47,7 @@ noise. From the marker on, a seed replays the same run.
 | b10-bossgun | 2d59397+H | H: a reserve gun with rounds is the last spare gun to box (after the staple) | 11/17 | 33 | 65 | 128 | 196954 | 3 | NO | reject (completion 11<13, deaths 33>25, default fails) |
 | b11-rearm-reserve | 2d59397+J | J: rearm a boxed reserve gun when no held firearm has a round | 12/17 | 24 | 53 | 119 | 189060.5 | 3 | yes | reject (completion 12<13; deaths 24, median 53 better: retry after K) |
 | b12-yawn-up | 2d59397+K | K: Yawn 2 takes aim-up shots (grown form inside 4000) | 13/17 | 14 | 57 | 92 | 202042 | 3 | yes | accept |
+| b13-rearm-reserve | 218c1d3+J | J: rearm a boxed reserve gun when no held firearm has a round (on K) | 12/17 | 23 | 70 | 100 | 203012.0 | 3 | yes | reject (12<13, deaths 23>14) |
+| b14-loadout-pickup | 218c1d3+L | L: a met fight's weapon on the frontier is a needed pickup | 13/17 | 15 | 57 | 93 | 201797 | 3 | yes | reject (deaths 15>14; seed 10 still loops) |
+| b15-kite | 218c1d3+M | M: the fight job keeps away from its target when nothing held can fire | 13/17 | 16 | 57 | 91 | 202436 | 3 | yes | reject (deaths 16>14) |
+| b16-nowall | 218c1d3+N | N: a headless bot run fast-forwards a skipped cutscene without the 12 ms wall-clock bound (reloads too) | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | accept (new base: a second batch matches it seed for seed) |

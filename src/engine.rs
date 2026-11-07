@@ -2390,8 +2390,10 @@ struct GameSession {
     /// clears at once. It goes back to [`Self::music`] when the skip ends.
     cutscene_skip_music: Option<Mixer>,
     /// Wall time one fast-forward burst may take ([`CUTSCENE_SKIP_BURST`]);
-    /// a test sets it to zero for one scene tick per call.
-    cutscene_skip_burst: std::time::Duration,
+    /// a test sets it to zero for one scene tick per call. `None` (a headless
+    /// bot run) has no wall-time bound: the scene runs to its end in one
+    /// update, so the tick it returns control on does not hang on the clock.
+    cutscene_skip_burst: Option<std::time::Duration>,
     /// The room-entry fade the original arms on every gameplay (re)entry after
     /// a room load: type 2, accumulator `0x7FFF` and a negative counter that
     /// steps the alpha down once per fixed tick.
@@ -2924,7 +2926,7 @@ impl GameSession {
             native_subtitle: false,
             cutscene_skip: None,
             cutscene_skip_music: None,
-            cutscene_skip_burst: CUTSCENE_SKIP_BURST,
+            cutscene_skip_burst: Some(CUTSCENE_SKIP_BURST),
             re2_die: None,
             re2_die_sheet: None,
             room_fade: transition::Fade::inactive(),
@@ -3546,7 +3548,11 @@ impl GameSession {
                 self.end_cutscene_skip(true);
                 break;
             }
-            if ran && start.elapsed() >= self.cutscene_skip_burst {
+            if ran
+                && self
+                    .cutscene_skip_burst
+                    .is_some_and(|burst| start.elapsed() >= burst)
+            {
                 break;
             }
             ran = true;
@@ -10107,6 +10113,9 @@ struct App {
     /// interactive window, off for traces and captures, which follow the
     /// oracle's `MovieEnable = 0`.
     room_films: bool,
+    /// A headless bot run: sessions fast-forward a skipped cutscene without
+    /// a wall-time bound (see [`GameSession::cutscene_skip_burst`]).
+    unbounded_cutscene_skip: bool,
     /// The Subtitles option: on draws voiced lines' subtitles, off hides
     /// them. Sessions inherit it (see [`GameSession::subtitles_off`]).
     subtitles: bool,
@@ -10236,6 +10245,7 @@ impl App {
             pending_movie: None,
             skips_enabled: false,
             room_films: false,
+            unbounded_cutscene_skip: false,
             subtitles: true,
             subtitle_style: gui::SubtitleStyle::default(),
             autosave: false,
@@ -10890,6 +10900,9 @@ impl App {
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
         session.films = self.room_films;
+        if self.unbounded_cutscene_skip {
+            session.cutscene_skip_burst = None;
+        }
         session.subtitles_off = !self.subtitles;
         session.game.player_options = self.player_options;
         if self.audio {
@@ -12112,9 +12125,12 @@ fn run_ui_impl(
         app.enable_skips();
         app.attach_bot(bot.risk, bot.goal_room.as_deref(), bot.seed)?;
         // A headless run has no frame to stay responsive for: let one update
-        // fast-forward a whole second of scene instead of a 12 ms burst.
+        // fast-forward the whole scene instead of a 12 ms burst, so where
+        // control returns does not depend on the machine's load. Every later
+        // session (a reload) inherits it.
+        app.unbounded_cutscene_skip = true;
         if let Mode::Play(session) = &mut app.mode {
-            session.cutscene_skip_burst = std::time::Duration::from_secs(1);
+            session.cutscene_skip_burst = None;
         }
         let max_ticks = if bot.max_ticks == 0 {
             bot::DEFAULT_MAX_TICKS
@@ -30648,7 +30664,7 @@ mod tests {
         session.set_skips_enabled(true);
         // One scene tick per call: the burst's wall-clock budget is machine
         // dependent, and a fast machine would run the whole scene at once.
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         session
             .tick(&pack, UiInput::default(), action_press(), true)
@@ -30761,7 +30777,7 @@ mod tests {
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
         session.set_skips_enabled(true);
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         // A glyph, then the `0x01` terminator with a 64-frame dismissal.
         assert!(session.game.message.start(0, 0, &[0x0C, 0x01, 0x40], false));
@@ -30804,7 +30820,7 @@ mod tests {
         let (pack, a, _b) = two_room_door_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         session.set_skips_enabled(true);
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         session
             .tick(&pack, UiInput::default(), action_press(), true)
@@ -30932,7 +30948,7 @@ mod tests {
             trigger_test_door(&pack, &mut session);
             let door = session.transition.take();
             session.set_skips_enabled(true);
-            session.cutscene_skip_burst = std::time::Duration::ZERO;
+            session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
             session.swallow_action = false;
             session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
             session
