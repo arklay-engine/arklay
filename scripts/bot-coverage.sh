@@ -29,6 +29,8 @@ COMBOS=(
   "chemical:barry_early=chemical"              # Barry's acid rounds; Barry burns Plant 42
   "sandwich:sandwich=yes"                      # Jill Sandwich: Barry's rescue in 115
   "rope-leave:rope=leave"                      # out of 20C's pit first: Tell my family (lab)
+  "chris-leave:chris=leave"                    # Chris stays in 512's cell: Barry ending
+  "bad:rope=leave chris=leave"                 # no Barry, no Chris: Bad ending
 )
 
 NAME="coverage-$(date +%Y%m%d-%H%M%S)"
