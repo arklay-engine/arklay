@@ -10,7 +10,8 @@
 # Options (each also an environment variable):
 #   -n, --name NAME      batch name              (BATCH_NAME, default: timestamp)
 #   -o, --out DIR        output root             (BATCH_OUT, default target/bot-batches)
-#   -s, --seeds LIST     comma list or range     (BATCH_SEEDS, default 1,2,3,4,5,6,7,8; 1-16 works)
+#   -s, --seeds LIST     comma list or range     (BATCH_SEEDS, default 1,2,3,4,5,6,7,8; 1-16 works;
+#                        seed 0 is the default run, without --bot-seed)
 #   -r, --risk R         --bot-risk              (BATCH_RISK, default 0.25)
 #   -j, --jobs N         parallel runs           (BATCH_JOBS, default: CPU count)
 #   -p, --pack PATH      game pack               (BOT_PACK, default
@@ -91,8 +92,11 @@ run_one() {
   s="$1"
   rm -rf "$DIR/seed-$s.saves"; mkdir -p "$DIR/seed-$s.saves"
   start=$(date +%s)
+  # Seed 0 is the default run: no --bot-seed, the game's own RNG.
+  seed_arg=(--bot-seed "$s")
+  [ "$s" = 0 ] && seed_arg=()
   ( cd "$here" && timeout "$TIMEOUT" "$BIN" "$PACK" --mod mods/bot --bot --bot-headless \
-      --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" --bot-seed "$s" \
+      --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" "${seed_arg[@]}" \
       --save-dir "$DIR/seed-$s.saves" ) > "$DIR/seed-$s.log" 2>&1
   code=$?
   echo "exit=$code secs=$(( $(date +%s) - start ))" > "$DIR/seed-$s.exit"
