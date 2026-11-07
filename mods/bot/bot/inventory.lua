@@ -125,6 +125,9 @@ function BotInventory.keep(row, ctx)
     if ctx.rearm and ctx.rearm[item] then
         return "its gun comes back out of the box"
     end
+    if ctx.rearm_reserve and ctx.rearm_reserve[item] then
+        return "its gun comes back out of the box"
+    end
     if row.kind == "heal" and row.heals ~= false then
         return "heal"
     end
@@ -277,7 +280,11 @@ BotInventory.CURE = CURE
 -- that ran past monsters with "no firearm with rounds", the launcher lay
 -- in the box and the handgun was empty.
 local REARM_HERE = "rearm: no held firearm has a round"
-local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true, [CURE] = true }
+-- A boxed reserve gun's rounds (and the gun) taken out at a box the bot is
+-- at anyway while sourcing ammunition (ctx.rearm_reserve).
+local REARM_RESERVE = "rearm: sourcing, and the box holds a reserve gun's rounds"
+local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true,
+    [REARM_RESERVE] = true, [CURE] = true }
 
 -- The free slots a top-up withdrawal must leave.
 -- A top-up leaves the reserve free, or the slots an open <brew> still
@@ -324,6 +331,9 @@ function BotInventory.wanted_back(row, ctx)
     -- Only at a box here, never a trip of its own (ctx.reserve_only).
     if ctx.rearm_here and ctx.rearm_here[item] and not ctx.reserve_only then
         return REARM_HERE
+    end
+    if ctx.rearm_reserve and ctx.rearm_reserve[item] and not ctx.reserve_only then
+        return REARM_RESERVE
     end
     if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
         return "ammunition top-up at the box"
@@ -739,6 +749,7 @@ function BotInventory.context(bot)
         end
     end
     ctx.ammo_low = BotSurvival.ammo_need(bot)
+    ctx.new_guns = BotInventory.new_guns(bot)
     -- Under the floor, the gun's other loadings' rounds come out too (the
     -- launcher's acid and flame rounds load into it, BotInventory.load_now):
     -- the bot met 509's zombies with an empty launcher and both in 50E's box.
@@ -792,6 +803,50 @@ function BotInventory.context(bot)
                 ctx.rearm_here[id] = true
             end
         end
+        -- Sourcing ammunition (the equipped gun under its floor, none
+        -- known), a reserve gun, held or boxed, comes out with one kind of
+        -- rounds the box holds for any of its loadings, while it holds none
+        -- of them: 502's swap boxed the empty launcher for the MO disks,
+        -- the acid and flame rounds stayed beside it, and the bot met 509's
+        -- four zombies with four handgun rounds, four deaths. With
+        -- barry_early=chemical the launcher and both kinds of rounds sat in
+        -- 100's box while the bot walked the mansion on one shell.
+        if BotSurvival.sourcing_now(bot) then
+            local bases = {}
+            for id, row in pairs(knowledge.weapons) do
+                if row.reserve and not row.melee and bot:ammo_for(id) then
+                    local base = row.variant_of or id
+                    local b = bases[base] or { guns = {}, rounds = {} }
+                    bases[base] = b
+                    b.guns[#b.guns + 1] = id
+                    b.rounds[#b.rounds + 1] = bot:ammo_for(id)
+                end
+            end
+            for _, b in pairs(bases) do
+                local held_gun, boxed_gun, held_rounds, boxed_rounds = false, nil, false, nil
+                table.sort(b.guns)
+                table.sort(b.rounds)
+                local clip = 0
+                for _, id in ipairs(b.guns) do
+                    held_gun = held_gun or bot:has_item(id)
+                    boxed_gun = boxed_gun or (box[id] and id) or nil
+                    if bot:has_item(id) then
+                        clip = clip + bot:item_count(id)
+                    end
+                end
+                for _, ammo in ipairs(b.rounds) do
+                    held_rounds = held_rounds or bot:item_count(ammo) > 0
+                    boxed_rounds = boxed_rounds or (box[ammo] and ammo) or nil
+                end
+                if boxed_rounds and not held_rounds and clip == 0 and (held_gun or boxed_gun) then
+                    ctx.rearm_reserve = ctx.rearm_reserve or {}
+                    ctx.rearm_reserve[boxed_rounds] = true
+                    if not held_gun then
+                        ctx.rearm_reserve[boxed_gun] = true
+                    end
+                end
+            end
+        end
     end
     local weapon = bot:weapon()
     if weapon.ammo then
@@ -828,10 +883,50 @@ function BotInventory.context(bot)
             ctx.rearm = nil
         end
     end
+    -- The reserve rearm takes every slot it needs at once, or none: the
+    -- acid rounds alone came out into the one free slot beside the boxed
+    -- launcher, went back in for the next pickup, and the two visits
+    -- repeated until the run's ticks ran out.
+    if ctx.rearm_reserve then
+        local box = BotInventory.remembered(bot)
+        local slots = 0
+        for item, _ in pairs(ctx.rearm_reserve) do
+            if box[item] then
+                slots = slots + 1
+            end
+        end
+        if ctx.capacity - ctx.used - (ctx.hold_free or 0) < slots then
+            ctx.rearm_reserve = nil
+        end
+    end
     if ctx.loadout then
         ctx.pickups = BotInventory.pickups_needing_room(bot)
     end
     return ctx
+end
+
+-- The firearms the bot has none of, neither held nor boxed, counting any
+-- loading of a gun as that gun (variant_of): {[item] = true}. While the
+-- equipped gun is under its floor one is a needed pickup (it comes with
+-- its clip): with barry_early=chemical, 212's grenade launcher met a full
+-- inventory of keys, herbs and the knife, stayed on the floor for 100k
+-- ticks, and the handgun's last round went in the mansion.
+function BotInventory.new_guns(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local box = BotInventory.remembered(bot)
+    local have = {}
+    for id, row in pairs(weapons) do
+        if bot:has_item(id) or box[id] then
+            have[row.variant_of or id] = true
+        end
+    end
+    local out = {}
+    for id, row in pairs(weapons) do
+        if not row.melee and not have[row.variant_of or id] then
+            out[id] = true
+        end
+    end
+    return out
 end
 
 -- What the bot remembers the box holds: {[item] = true}.
@@ -910,6 +1005,7 @@ function BotInventory.needed_pickups(bot, ctx, skip)
             local needed = kind == "key" or ctx.uses[goal.item] or required
                 or (ctx.gun_ammo and ctx.gun_ammo[goal.item])
                 or ctx.ammo_low == goal.item
+                or (ctx.ammo_low and ctx.new_guns and ctx.new_guns[goal.item])
             if needed and not (merge and bot:has_item(goal.item)) then
                 n = n + 1
                 if kind == "key" or ctx.uses[goal.item] or required then
