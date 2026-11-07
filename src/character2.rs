@@ -270,7 +270,12 @@ const MAGAZINE_SOUND: u16 = 0xE;
 
 /// What the player's routine sees of the slots, in `enemy_work`'s order.
 pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
-    let characters = game.re2.characters.0.iter().enumerate();
+    targets_of(&game.re2)
+}
+
+/// [`targets`], from the RE 2 state alone.
+pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Target> {
+    let characters = re2.characters.0.iter().enumerate();
     characters
         .filter(|(slot, _)| *slot != SPLAYER_SLOT)
         .filter_map(|(slot, character)| {
@@ -289,6 +294,9 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 at_w: zombie.atd.at_w,
                 at_w1: if character.id == crate::zombie2::DOG_ID {
                     600
+                } else if character.id == crate::zombie2::ALLIGATOR_ID {
+                    // `FUN_00468a10`.
+                    0x44C
                 } else if matches!(
                     character.id,
                     crate::zombie2::CROW_ID
@@ -306,6 +314,9 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                         .map_or(500, |licker| licker.head.at_w)
                 },
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
+                ofs_y: zombie.atd.ofs_y,
+                at_h: zombie.atd.at_h,
+                angle: character.body.angle,
             })
         })
         .collect()
@@ -342,9 +353,13 @@ pub fn take_hit(game: &mut GameState) {
         }
     }
     for call in std::mem::take(&mut game.re2.player.effects) {
-        game.re2
+        let index = game
+            .re2
             .effects
             .call(call.kind, call.row, call.size, call.dir, call.at, false);
+        if let (Some(index), Some(motion)) = (index, call.motion) {
+            game.re2.effects.launch(index, motion);
+        }
     }
     let Some(hit) = game.re2.player.hit.take() else {
         return;
@@ -994,6 +1009,7 @@ pub fn init(
     if std::mem::take(&mut game.re2.load_pass) {
         game.re2.tick_before();
         game.re2.effects.water = water_areas(game);
+        game.re2.effects.weapon = game.equipped_weapon_id;
         let player = game
             .entities
             .first_mut()

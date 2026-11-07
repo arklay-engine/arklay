@@ -3955,9 +3955,11 @@ impl GameSession {
         if self.game.is_re2_room {
             self.tick_re2_weapon(pack);
             let water = crate::character2::water_areas(&self.game);
+            let weapon = self.game.equipped_weapon_id;
             let re2 = &mut self.game.re2;
             re2.tick_before();
             re2.effects.water = water;
+            re2.effects.weapon = weapon;
             let player = self
                 .game
                 .entities

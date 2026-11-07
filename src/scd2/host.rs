@@ -887,10 +887,25 @@ impl Re2State {
             damage_cnt: self.player.damage_cnt,
             ..Default::default()
         });
+        self.effects.bodies = crate::character2::targets_of(self);
         if self.flag(STOP_BANK, STOP_EFFECTS) {
             self.effects.tick_stopped(&mut self.rnd, sca);
         } else {
             self.effects.tick(&mut self.rnd, sca);
+        }
+        self.effects.bodies.clear();
+        for blast in std::mem::take(&mut self.effects.blasts) {
+            let slot = match blast {
+                crate::weapon2::BlastEffect::Tested(slot) => slot,
+                crate::weapon2::BlastEffect::Hit(hit) => hit.slot,
+            };
+            let Some(character) = self.characters.0.get_mut(slot).and_then(Option::as_mut) else {
+                continue;
+            };
+            if let Some(mut zombie) = character.zombie.take() {
+                crate::zombie2::take_blast(character, &mut zombie, &blast);
+                character.zombie = Some(zombie);
+            }
         }
         if let (Some(target), Some((_, life))) = (self.effects.target.take(), player) {
             *life = target.life;

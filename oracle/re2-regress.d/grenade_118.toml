@@ -1,0 +1,12 @@
+[[run]]
+name = "grenade_118"
+room = "118"
+sound = false
+ticks = 1600
+# run_119's start with the grenade launcher and grenade rounds (#491): aim at the zombies and fire every 40 ticks
+setup_script = "grenade_118.lua"
+input = "grenade_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --equip-load 9 --give 0:9:30"

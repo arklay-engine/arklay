@@ -488,7 +488,15 @@ pub struct EffectCall {
     pub size: u16,
     pub dir: i16,
     pub at: [i16; 3],
+    /// What the caller writes over the slot's first block once it's made.
+    pub motion: Option<crate::esp2::Launch>,
 }
+
+/// `Type & 0xFFF` of the grenade launcher with each of its rounds.
+const GRENADES: u8 = 9;
+const ACID_ROUNDS: u8 = 0xB;
+/// `FUN_004d6150`'s and `FUN_004d6460`'s point on the hand.
+const GRENADE_MUZZLE: [i32; 3] = [0x78, 0x4B0, 0];
 
 /// A splash in [`Work::effects`] whose `Rnd` draws are still to be made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1018,9 +1026,15 @@ pub struct Weapon {
 
 impl Weapon {
     /// Whether [`Mover::pl_mv_aim`] handles it: the knife, the starting
-    /// handguns, the magnums and the shotguns.
+    /// handguns, the magnums, the shotguns and the grenade launcher.
     fn aims(&self) -> bool {
-        matches!(self.id, KNIFE | 2 | 3 | 5..=8)
+        matches!(self.id, KNIFE | 2 | 3 | 5..=8 | GRENADES..=ACID_ROUNDS)
+    }
+
+    /// `pl_mv05_w1_t2` looks for no body itself with the launchers and the
+    /// bowgun: what they fire does.
+    fn shoots_effects(&self) -> bool {
+        matches!(self.id, GRENADES..=0xC)
     }
 
     /// `pl_mv05_tbl`'s `pl_mv05_w0` (`0x4d4b20`): the knife shares the
@@ -1039,6 +1053,7 @@ impl Weapon {
             6 => [0x85, 0x87, 35],
             7 => [7, 10, 28],
             8 => [0x88, 0x8A, 35],
+            GRENADES..=ACID_ROUNDS => [0x8A, 0x8C, 26],
             _ => [0x85, 0x87, 8],
         }
     }
@@ -1144,6 +1159,14 @@ impl Weapon {
                     calls: &[(0x30E_1D00, None)],
                 },
             ],
+            (0xA | ACID_ROUNDS, 1) => &[ShotEffect {
+                point: GRENADE_MUZZLE,
+                calls: &[
+                    (0x100_2000, None),
+                    (0x20C_1000, Some(0)),
+                    (0x308_1200, None),
+                ],
+            }],
             (7, 0x1A) | (8, 5) => SHOTGUN_CASE,
             (7, 0x1B) | (8, 6) => SHOTGUN_SMOKE,
             (8, 1) => &[
@@ -2756,7 +2779,7 @@ impl Mover<'_, '_> {
             self.work.fired = true;
             self.work.spd = [0; 3];
         }
-        if self.work.shot_ticks & 1 != 0 {
+        if self.work.shot_ticks & 1 != 0 && !self.tick.weapon.shoots_effects() {
             self.shoot();
         }
         self.work.shot_ticks >>= 1;
@@ -2787,7 +2810,14 @@ impl Mover<'_, '_> {
         for draw in &mut self.work.water_draws[draws_from..] {
             draw.effect = draw.effect - splash_from + shot_from;
         }
-        if self.tick.weapon.id == 7 && self.work.now_seq & FRAME_SOUND != 0 {
+        if self.tick.weapon.shoots_effects() && self.work.move_cnt == 8 && !self.tick.weapon.loaded
+        {
+            // `FUN_004d6150`: an empty launcher stops the shot to reload.
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+        }
+        let sounds = matches!(self.tick.weapon.id, 7 | GRENADES..=ACID_ROUNDS);
+        if sounds && self.work.now_seq & FRAME_SOUND != 0 {
             self.player
                 .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
         }
@@ -2917,6 +2947,7 @@ impl Mover<'_, '_> {
                     size: 0,
                     dir: dir.wrapping_add((ring * 0x400) as i16),
                     at,
+                    motion: None,
                 });
             }
         }
@@ -2941,6 +2972,7 @@ impl Mover<'_, '_> {
                     size: 0,
                     dir,
                     at: at.map(|axis| axis as i16),
+                    motion: None,
                 });
             }
         }
@@ -2953,6 +2985,10 @@ impl Mover<'_, '_> {
     fn shot_effects(&mut self) {
         let frame = self.work.move_cnt.wrapping_add(1);
         let angle = self.player.angle as i16;
+        if self.tick.weapon.id == GRENADES && frame == 1 {
+            self.grenades();
+            return;
+        }
         for effect in self.tick.weapon.shot_effects(frame) {
             let Some(at) = self.part_point(SHOT_PART, effect.point) else {
                 continue;
@@ -2964,8 +3000,55 @@ impl Mover<'_, '_> {
                     size: word as u16,
                     dir: dir.map_or(0, |dir| angle.wrapping_add(dir)),
                     at: at.map(|axis| axis as i16),
+                    motion: None,
                 });
             }
+        }
+    }
+
+    /// `FUN_004d6150`'s first frame: a flash and five grenades out of the
+    /// muzzle, spread across and up by their velocities. Aimed up, they take
+    /// their speeds across from the second row of `ACROSS`.
+    fn grenades(&mut self) {
+        const ACROSS: [[i16; 3]; 2] = [[0, -120, -240], [250, 200, 150]];
+        /// The grenades' `+8` and `+0xe`, `+0x10`, by which of the three
+        /// columns of `ACROSS` each takes.
+        const SPREAD: [(i8, i16, i16, usize); 5] = [
+            (-10, 600, 0, 0),
+            (-20, 400, 100, 1),
+            (-20, 400, -100, 1),
+            (-40, 250, 50, 2),
+            (-40, 250, -50, 2),
+        ];
+        let (Some(hand), Some(at)) = (
+            self.part_matrix(SHOT_PART),
+            self.part_point(SHOT_PART, GRENADE_MUZZLE),
+        ) else {
+            return;
+        };
+        let at = at.map(|axis| axis as i16);
+        let call = |word: u32, dir: i16, motion| EffectCall {
+            kind: (word >> 24) as u8,
+            row: (word >> 16) as u8,
+            size: word as u16,
+            dir,
+            at,
+            motion,
+        };
+        self.work.effects.push(call(0x100_2000, 0, None));
+        let across = ACROSS[usize::from(self.work.status_flg & TILT_UP != 0)];
+        let angle = self.player.angle as i16;
+        for (accel, up, side, column) in SPREAD {
+            let motion = crate::esp2::Launch {
+                accel,
+                velocity: [across[column], up, side],
+                matrix: hand.m,
+                t: hand.t,
+                point: GRENADE_MUZZLE.map(|axis| axis as i16),
+            };
+            self.work
+                .effects
+                .push(call(0x20C_0A00, angle, Some(motion)));
         }
     }
 
@@ -3937,6 +4020,7 @@ impl Mover<'_, '_> {
             size: 0x1400,
             dir: direction_ck(x, z, x, z) as i16,
             at: at.map(|axis| axis as i16),
+            motion: None,
         });
     }
 
@@ -4035,6 +4119,7 @@ impl Mover<'_, '_> {
                 size,
                 dir: if turned { dir.wrapping_add(0x400) } else { dir },
                 at: at.map(|axis| axis as i16),
+                motion: None,
             });
         }
     }
@@ -4380,6 +4465,7 @@ impl Mover<'_, '_> {
             size,
             dir: dir as i16,
             at: at.map(|axis| axis as i16),
+            motion: None,
         });
     }
 
@@ -4724,6 +4810,7 @@ impl Mover<'_, '_> {
             size,
             dir: dir as i16,
             at: at.map(|axis| axis as i16),
+            motion: None,
         });
     }
 
@@ -4774,6 +4861,7 @@ impl Mover<'_, '_> {
                 size,
                 dir: dir.wrapping_add(turn) as i16,
                 at: at.map(|axis| axis as i16),
+                motion: None,
             });
         }
     }
@@ -5531,13 +5619,28 @@ mod weapon_tests {
     }
 
     #[test]
+    fn the_grenade_launcher_fires_effects_rather_than_a_shot() {
+        for id in [GRENADES, 0xA, ACID_ROUNDS] {
+            let launcher = weapon(id);
+            assert!(launcher.aims());
+            assert!(launcher.shoots_effects());
+            assert_eq!(launcher.frames(), [0x8A, 0x8C, 26]);
+        }
+        assert!(!weapon(8).shoots_effects());
+        // The grenade rounds' five come from `grenades`; the other rounds make
+        // their three calls from the table.
+        assert!(weapon(GRENADES).shot_effects(1).is_empty());
+        assert_eq!(weapon(0xA).shot_effects(1)[0].calls.len(), 3);
+    }
+
+    #[test]
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
             [KNIFE, 2, 3, 5, 6, 7, 8]
                 .iter()
                 .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 9, 13].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 0xC, 13].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);

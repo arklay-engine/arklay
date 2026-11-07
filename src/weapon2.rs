@@ -33,6 +33,11 @@ pub struct Target {
     pub at_w1: u16,
     /// `Workm.t[1]` of its neck.
     pub neck_y: i32,
+    /// `Atd[0]`'s `Ofs_y` (`+0x98`) and `At_h` (`+0x9e`), and `Cdir_y`, for
+    /// what a blast hits.
+    pub ofs_y: i16,
+    pub at_h: u16,
+    pub angle: u16,
 }
 
 impl Target {
@@ -782,6 +787,452 @@ fn attack_r_ck0(pos: [i32; 3], angle: u16, rect: [i16; 4], at: [i32; 2]) -> bool
         && (along(length_axis, corners[0]) ^ along(length_axis, corners[2])) < 0
 }
 
+/// A `FUN_004d7e30`: a search for the bodies in a rectangle at `at`, turned
+/// by `dir`. `word` is its last argument: the weapon's row of `Wp_dmg_tbl` in
+/// the low half, `0x10000` for every body in it rather than the first,
+/// `0x20000` for the band by the height, and the damage word's field in the
+/// top four bits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Blast {
+    pub at: [i32; 3],
+    pub dir: i16,
+    pub word: u32,
+}
+
+/// What a blast did to a body, as `FUN_004d7e30` writes it straight to the
+/// enemy's work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlastEffect {
+    /// A body it tested: `Damage_flg` (`+0x1d0`) starts again at 0.
+    Tested(usize),
+    Hit(BlastHit),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlastHit {
+    pub slot: usize,
+    pub weapon: u8,
+    pub damage: i16,
+    /// `Damage_no` (`+0x1d2`).
+    pub damage_no: u8,
+    /// `Damage_cnt`'s new count.
+    pub count: u8,
+    /// `Damage_flg`'s low byte.
+    pub flags: u8,
+}
+
+/// `FUN_004d7e30`. Each body hit loses its life on `targets` at once, as the
+/// original does, so a later search the same tick passes it by.
+///
+/// `rect` is the caller's `x`, `z`, width and length, as `attack_r_ck0`
+/// takes them. Each body tested widens it by its `+0x1ee`, and only a miss
+/// takes that back: a hit leaves it wider for the bodies after, and for the
+/// caller's next search.
+///
+/// The routine a hit replaces isn't kept at `+0x1fc`, and the search for the
+/// first body only (no `0x10000`) leaves out `0x40000`'s test of the floor.
+pub fn blast_ck(blast: &Blast, rect: &mut [i16; 4], targets: &mut [Target]) -> Vec<BlastEffect> {
+    let mut effects = Vec::new();
+    let band = (blast.word >> 28) as u8;
+    let every = blast.word & 0x10000 != 0;
+    let weapon = blast.word as u8;
+    let y = blast.at[1];
+    for target in targets.iter_mut() {
+        if !target.in_play()
+            || target.damage_cnt != 0
+            || target.life < 0
+            || target.kind & TYPE_UNTARGETED != 0
+        {
+            continue;
+        }
+        effects.push(BlastEffect::Tested(target.slot));
+        let h = u32::from(target.at_h);
+        let above = (i32::from(target.ofs_y) - y) as u32;
+        if above
+            .wrapping_add(h + 100)
+            .wrapping_add(target.pos[1] as u32)
+            >= h * 2 + 200
+        {
+            continue;
+        }
+        let wide = (target.at_w1 as i16) >> 2;
+        rect[2] = rect[2].wrapping_add(wide);
+        rect[3] = rect[3].wrapping_add(wide);
+        if !attack_r_ck0(blast.at, blast.dir as u16, *rect, target.at) {
+            rect[2] = rect[2].wrapping_sub(wide);
+            rect[3] = rect[3].wrapping_sub(wide);
+            continue;
+        }
+        let Some(&[damage, stun]) =
+            heavy_rows(target.id).and_then(|rows| rows.get(usize::from(weapon).checked_sub(9)?))
+        else {
+            continue;
+        };
+        let damage = (damage >> (u32::from(band) * 10) & 0x3FF) as i16;
+        target.life = target.life.wrapping_sub(damage);
+        let mut damage_no = 1u8;
+        if blast.word & 0x20000 != 0 {
+            let half = i32::from(target.ofs_y) >> 1;
+            if target.pos[1] + half < y {
+                damage_no = 0;
+            }
+            if target.be_flg & 0x1000_0000 != 0 && y < target.pos[1] + half * 3 {
+                damage_no = 2;
+            }
+        }
+        let count = (stun >> 9 & 0x7F) as u8;
+        target.damage_cnt = (target.damage_cnt & 0x80) | count;
+        let direction = i32::from(crate::player2::direction_ck(
+            blast.at[0],
+            blast.at[2],
+            target.pos[0],
+            target.pos[2],
+        ) as i16);
+        let side = direction - i32::from(target.angle as i16);
+        let mut flags = 1u8;
+        if (side + 0x400) & 0xFFF < 0x800 {
+            flags |= 0x20;
+        }
+        if (side + 0x600) & 0xFFF < 0x400 {
+            flags |= 0x40;
+        }
+        if (side - 0x200) & 0xFFF < 0x400 {
+            flags |= 0x80;
+        }
+        effects.push(BlastEffect::Hit(BlastHit {
+            slot: target.slot,
+            weapon,
+            damage,
+            damage_no: damage_no.wrapping_add(band * 3),
+            count,
+            flags,
+        }));
+        if !every {
+            break;
+        }
+    }
+    effects
+}
+
+/// `Wp_dmg_tbl`'s rows from the grenade launcher on, `Type & 0xFFF` of 9 to
+/// 0x13: each the damage word and the stun word, as [`Damage`] has them.
+type HeavyRows = [[u32; 2]; 11];
+
+fn heavy_rows(id: u8) -> Option<&'static HeavyRows> {
+    let rows = match id {
+        // 0x535350.
+        0x10..=0x14 | 0x18..=0x1F | 0x2C | 0x37 | 0x38 | 0x3C..=0x3F => &[
+            [0x00A0_C8C8, 0x078F_1E0A],
+            [0x0050_C8C8, 0x078F_1E0A],
+            [0x00A0_C8C8, 0x078F_1E0A],
+            [0x01E0_781E, 0x0000_000A],
+            [0x00E0_3C10, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0040_1004, 0x0081_020A],
+            [0x00F0_3C0F, 0x0285_0A0A],
+            [0x384E_1384, 0x078F_1E0A],
+            [0x0080_2008, 0x0102_040A],
+            [0x00E0_3C10, 0x0285_0A14],
+        ],
+        // 0x5354D0.
+        0x15..=0x17 => &[
+            [0x00A0_C8C8, 0x078F_1E0A],
+            [0x0050_C8C8, 0x078F_1E0A],
+            [0x00A0_C8C8, 0x078F_1E0A],
+            [0x01E0_781E, 0x0000_000A],
+            [0x00E0_3C10, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0040_1004, 0x0081_020A],
+            [0x00F0_3C0F, 0x0285_0A0A],
+            [0x384E_1384, 0x078F_1E0A],
+            [0x0080_2008, 0x0102_040A],
+            [0x00E0_3C10, 0x0285_0A14],
+        ],
+        // 0x535650.
+        0x20 => &[
+            [0x00A0_C92C, 0x078F_1E0A],
+            [0x0050_C92C, 0x078F_1E0A],
+            [0x00A0_C92C, 0x078F_1E0A],
+            [0x01A0_681A, 0x0000_000A],
+            [0x00F0_4012, 0x078F_1E0A],
+            [0x0411_0441, 0x078F_1E0A],
+            [0x00A0_280A, 0x0183_060A],
+            [0x00C0_300C, 0x0285_0A0A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x0120_4812, 0x0183_060A],
+            [0x00F0_4012, 0x078F_1E0A],
+        ],
+        // 0x5357D0.
+        0x21 => &[
+            [0x00F0_F03C, 0x078F_1E0A],
+            [0x00F0_F03C, 0x078F_1E0A],
+            [0x00F0_F03C, 0x078F_1E0A],
+            [0x00F0_3C0F, 0x0000_000A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x01E0_781E, 0x078F_1E0A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+        ],
+        // 0x535950.
+        0x22 => &[
+            [0x0140_F03C, 0x078F_1E0A],
+            [0x0050_F055, 0x078F_1E0A],
+            [0x00A0_F082, 0x078F_1E0A],
+            [0x0140_5014, 0x0000_000A],
+            [0x00C0_340E, 0x078F_1E0A],
+            [0x0461_1846, 0x078F_1E0A],
+            [0x00B0_2C0B, 0x0285_0A0A],
+            [0x00C0_300C, 0x0387_0E0A],
+            [0x0C83_20C8, 0x078F_1E0A],
+            [0x0140_5014, 0x0285_0A0A],
+            [0x00C0_340E, 0x078F_1E0A],
+        ],
+        // 0x535C50.
+        0x23 => &[
+            [0x01E0_781E, 0x078F_1E0A],
+            [0x0050_7C1F, 0x078F_1E0A],
+            [0x0190_6419, 0x078F_1E0A],
+            [0x0140_5014, 0x0000_000A],
+            [0x00F0_4011, 0x0285_0A14],
+            [0x01E0_781E, 0x078F_1E0A],
+            [0x00A0_280A, 0x050A_140A],
+            [0x00A0_280A, 0x050A_140A],
+            [0x06E1_B86E, 0x078F_1E0A],
+            [0x0120_4812, 0x050A_140A],
+            [0x00F0_4011, 0x0285_0A14],
+        ],
+        // 0x535AD0.
+        0x24 => &[
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x0050_F050, 0x078F_1E0A],
+            [0x00F1_9064, 0x078F_1E0A],
+            [0x0140_5014, 0x0000_000A],
+            [0x00C0_340E, 0x078F_1E0A],
+            [0x0320_C832, 0x078F_1E0A],
+            [0x00B0_2C0B, 0x0285_0A0A],
+            [0x00B0_2C0B, 0x0387_0E0A],
+            [0x0C83_20C8, 0x078F_1E0A],
+            [0x0140_5014, 0x0285_0A0A],
+            [0x00C0_340E, 0x078F_1E0A],
+        ],
+        // 0x535DD0.
+        0x25 | 0x26 => &[
+            [0x0140_F03C, 0x078F_1FB4],
+            [0x0052_0882, 0x078F_1F68],
+            [0x00A0_F05A, 0x078F_1F68],
+            [0x0140_5014, 0x0000_000A],
+            [0x00F0_4011, 0x078F_1E0A],
+            [0x0461_1846, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x0C83_20C8, 0x078F_1E0A],
+            [0x0120_4812, 0x0285_0A0A],
+            [0x00F0_4011, 0x078F_1E0A],
+        ],
+        // 0x535F50.
+        0x27 => &[
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0051_4050, 0x078F_1E0A],
+            [0x00A1_E479, 0x078F_1E0A],
+            [0x0120_4812, 0x0000_000A],
+            [0x0120_4C14, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x0030_0C03, 0x0081_020A],
+            [0x0C93_24C9, 0x078F_1E0A],
+            [0x0110_4411, 0x0285_0A0A],
+            [0x0120_4C14, 0x0285_0A14],
+        ],
+        // 0x5360D0.
+        0x28 => &[
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0051_4050, 0x078F_1E0A],
+            [0x00A1_E479, 0x078F_1E0A],
+            [0x0120_4812, 0x0000_000A],
+            [0x0120_4C14, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x0030_0C03, 0x0081_020A],
+            [0x0C93_24C9, 0x078F_1E0A],
+            [0x0110_4411, 0x0285_0A0A],
+            [0x0120_4C14, 0x0285_0A14],
+        ],
+        // 0x536250.
+        0x29 => &[
+            [0x00F0_F03C, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x00F0_3C0F, 0x0000_000A],
+            [0x00E0_3C10, 0x078F_1E14],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x0070_1C07, 0x0081_020A],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x0070_1C07, 0x0081_020A],
+            [0x00E0_3C10, 0x078F_1E14],
+        ],
+        // 0x536550.
+        0x2A => &[
+            [0x0320_C832, 0x078F_1E0A],
+            [0x0050_F03C, 0x078F_1EDA],
+            [0x00A1_4451, 0x078F_1EDA],
+            [0x0100_4010, 0x0000_000A],
+            [0x0100_4010, 0x078F_1E0A],
+            [0x0461_1846, 0x078F_1E0A],
+            [0x00D0_340D, 0x0489_120A],
+            [0x0140_5014, 0x078F_1E0A],
+            [0x1F47_D1F4, 0x078F_1E0A],
+            [0x0180_6018, 0x0489_120A],
+            [0x0100_4010, 0x078F_1E0A],
+        ],
+        // 0x5366D0.
+        0x2B => &[
+            [0x0320_C832, 0x078F_1E0A],
+            [0x0050_F03C, 0x078F_1EDA],
+            [0x00A1_9465, 0x078F_1EDA],
+            [0x0100_4010, 0x0000_000A],
+            [0x0100_4010, 0x078F_1E0A],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x00D0_340D, 0x0489_120A],
+            [0x0140_5014, 0x078F_1E0A],
+            [0x1F47_D1F4, 0x078F_1E0A],
+            [0x0180_6018, 0x0489_120A],
+            [0x0100_4010, 0x078F_1E0A],
+        ],
+        // 0x5363D0.
+        0x2D => &[
+            [0x0140_F03C, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x00F0_4414, 0x0000_000A],
+            [0x00E0_3C10, 0x0285_0A14],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x0070_1C07, 0x0081_020A],
+            [0x0280_A028, 0x0387_0E0A],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x00E0_380E, 0x0081_020A],
+            [0x00E0_3C10, 0x0285_0A14],
+        ],
+        // 0x536850.
+        0x2E | 0x2F | 0x39 => &[
+            [0x0280_A028, 0x078F_1E0A],
+            [0x00A1_B92C, 0x078F_1E0A],
+            [0x00A1_1846, 0x078F_1E0A],
+            [0x00A0_280A, 0x0000_000A],
+            [0x0070_1C07, 0x0285_0A14],
+            [0x0320_C832, 0x078F_1E0A],
+            [0x0050_1405, 0x0306_0C0A],
+            [0x00F0_3C0F, 0x0183_060A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x00A0_280A, 0x0306_0C0A],
+            [0x0070_1C07, 0x0285_0A14],
+        ],
+        // 0x5369D0.
+        0x30 | 0x32 | 0x35 => &[
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0051_1846, 0x078F_1E0A],
+            [0x00A1_9465, 0x078F_1E0A],
+            [0x0110_4411, 0x0000_000A],
+            [0x00F0_4011, 0x0285_0A14],
+            [0x0501_4050, 0x078F_1E0A],
+            [0x0080_2008, 0x0285_0A0A],
+            [0x0040_1004, 0x0102_040A],
+            [0x0C83_20C8, 0x078F_1E0A],
+            [0x0100_4010, 0x0285_0A0A],
+            [0x00E0_3C10, 0x0285_0A14],
+        ],
+        // 0x536B50.
+        0x31 => &[
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0051_9064, 0x078F_1E0A],
+            [0x00A1_4050, 0x078F_1E0A],
+            [0x0110_4411, 0x0000_000A],
+            [0x0130_5015, 0x0285_0A14],
+            [0x0461_1846, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x0050_1405, 0x0102_040A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x0120_4812, 0x0285_0A0A],
+            [0x0130_5015, 0x0285_0A14],
+        ],
+        // 0x536CD0.
+        0x33 => &[
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0051_9465, 0x078F_1E0A],
+            [0x00A1_4050, 0x078F_1E0A],
+            [0x0130_4C13, 0x0000_000A],
+            [0x0190_681B, 0x0285_0A14],
+            [0x0501_4050, 0x078F_1E0A],
+            [0x00C0_300C, 0x0408_100A],
+            [0x0080_2008, 0x0204_080A],
+            [0x1906_4190, 0x078F_1E0A],
+            [0x0140_5014, 0x0387_0E0A],
+            [0x0190_681B, 0x0285_0A14],
+        ],
+        // 0x536E50.
+        0x34 => &[
+            [0x05A1_685A, 0x078F_1E0A],
+            [0x0051_1846, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x0130_4C13, 0x0000_000A],
+            [0x01B0_701D, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x0090_2409, 0x0285_0A0A],
+            [0x0050_1405, 0x0102_040A],
+            [0x12D4_B52D, 0x078F_1E0A],
+            [0x0140_5014, 0x0285_0A0A],
+            [0x01B0_701D, 0x0285_0A14],
+        ],
+        // 0x537150.
+        0x36 => &[
+            [0x0501_4050, 0x078F_1E0A],
+            [0x0051_1846, 0x078F_1E0A],
+            [0x00A1_1846, 0x078F_1E0A],
+            [0x0140_5014, 0x0000_000A],
+            [0x00F0_4011, 0x0285_0A14],
+            [0x03C0_F03C, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x0050_1405, 0x0102_040A],
+            [0x0C83_20C8, 0x078F_1E0A],
+            [0x0110_4411, 0x0285_0A0A],
+            [0x00F0_4011, 0x0285_0A14],
+        ],
+        // 0x5372D0.
+        0x3A => &[
+            [0x0320_C832, 0x078F_1E0A],
+            [0x0051_9465, 0x078F_1E0A],
+            [0x00A0_F03C, 0x078F_1E0A],
+            [0x00A0_280A, 0x0000_000A],
+            [0x0090_280B, 0x078F_1E0A],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x00A0_280A, 0x0285_0A0A],
+            [0x00C0_300C, 0x0285_0A0A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x0140_5014, 0x0285_0A0A],
+            [0x0090_280B, 0x078F_1E0A],
+        ],
+        // 0x537450.
+        0x3B => &[
+            [0x0280_A028, 0x078F_1E0A],
+            [0x00A0_A028, 0x078F_1E0A],
+            [0x00A0_A028, 0x078F_1E0A],
+            [0x00F0_4014, 0x0000_000A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+            [0x0280_A028, 0x078F_1E0A],
+            [0x0070_1C07, 0x0285_0A0A],
+            [0x0070_1C07, 0x0285_0A0A],
+            [0x12C4_B12C, 0x078F_1E0A],
+            [0x00E0_380E, 0x0285_0A0A],
+            [0x00F0_3C0F, 0x078F_1E0A],
+        ],
+        _ => return None,
+    };
+    Some(rows)
+}
+
 /// What `Weapon_at_ck` needs of the shooter.
 pub struct Shooter {
     pub pos: [i32; 3],
@@ -1188,6 +1639,81 @@ mod tests {
                 .count()
         };
         assert!(hits(500) > hits(0));
+    }
+
+    fn standing(slot: usize, x: i32, z: i32) -> Target {
+        Target {
+            ofs_y: -1000,
+            at_h: 1000,
+            ..zombie(slot, x, z)
+        }
+    }
+
+    fn hits(effects: &[BlastEffect]) -> Vec<BlastHit> {
+        effects
+            .iter()
+            .filter_map(|effect| match effect {
+                BlastEffect::Hit(hit) => Some(*hit),
+                BlastEffect::Tested(_) => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_grenade_in_flight_hurts_every_body_in_reach() {
+        let mut targets = [
+            standing(1, -700, 0),
+            standing(2, -600, 300),
+            standing(3, 4000, 0),
+        ];
+        let blast = Blast {
+            at: [0, -1000, 0],
+            dir: 0,
+            word: 0x3_0009,
+        };
+        let effects = blast_ck(&blast, &mut [-1400, 0, 350, 250], &mut targets);
+        let hits = hits(&effects);
+        assert_eq!(hits.iter().map(|hit| hit.slot).collect::<Vec<_>>(), [1, 2]);
+        // `Em_10`'s row for weapon 9: 200 in the first field.
+        assert!(hits.iter().all(|hit| hit.damage == 200 && hit.weapon == 9));
+        assert_eq!(targets[0].life, 50 - 200);
+        assert_ne!(targets[0].damage_cnt, 0);
+        assert_eq!(targets[2].life, 50, "out of reach");
+        // Each body it looked at starts its `Damage_flg` again.
+        assert_eq!(effects.len(), 5);
+    }
+
+    #[test]
+    fn a_burst_hurts_only_the_first_body_and_from_its_second_field() {
+        let mut targets = [standing(1, -700, 0), standing(2, -600, 300)];
+        let blast = Blast {
+            at: [0, -1000, 0],
+            dir: 0,
+            word: 0x1002_0009,
+        };
+        let hits = hits(&blast_ck(&blast, &mut [-2000, 0, 1000, 500], &mut targets));
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].slot, 1);
+        assert_eq!(hits[0].damage, 50);
+        // The second field's `Damage_no`s are 3 to 5.
+        assert!((3..=5).contains(&hits[0].damage_no));
+    }
+
+    #[test]
+    fn a_body_just_hit_is_passed_by_and_the_box_stays_wide() {
+        let mut targets = [Target {
+            at_w1: 400,
+            ..standing(1, -700, 0)
+        }];
+        let blast = Blast {
+            at: [0, -1000, 0],
+            dir: 0,
+            word: 0x3_0009,
+        };
+        let mut rect = [-1400, 0, 350, 250];
+        assert_eq!(hits(&blast_ck(&blast, &mut rect, &mut targets)).len(), 1);
+        assert_eq!(rect, [-1400, 0, 450, 350], "a hit leaves the box widened");
+        assert!(blast_ck(&blast, &mut rect, &mut targets).is_empty());
     }
 
     #[test]
