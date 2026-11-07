@@ -926,6 +926,10 @@ pub enum Re2ItemGetPhase {
 
 /// The get-item window's ticks, from the oracle's room 102 pick-ups.
 const ITEM_GET_ASK_TICK: u8 = 7;
+/// The Blue Card Key, which room 200's computer takes.
+const BLUE_CARD_KEY: u8 = 0x35;
+/// The door table's "Will you use the {item}?", which the computer asks.
+const DOOR_MESSAGE_USE: u8 = 7;
 const ITEM_GET_TAKE_TICK: u8 = 19;
 const ITEM_GET_REFUSE_TICKS: u8 = 15;
 const ITEM_GET_CLOSE_TICKS: u8 = 10;
@@ -1430,6 +1434,7 @@ pub struct ScaVolume {
     pub offset: [i16; 3],
 }
 
+pub mod computer2;
 pub mod door2;
 mod entity;
 pub mod item_get2;
@@ -3235,6 +3240,11 @@ pub struct GameState {
     pub is_re2_room: bool,
     /// RE2's get-item window while it is open: it owns the session tick.
     pub re2_item_get: Option<Re2ItemGet>,
+    /// `Sce_Windows`'s request this tick (`0x989E74`): game mode 7 starts
+    /// the computer on the next.
+    pub re2_computer_request: Option<u8>,
+    /// RE2's computer while game mode 7 runs it.
+    pub re2_computer: Option<computer2::Computer>,
     /// The item a crouching pick-up is for, until its crouch opens the
     /// get-item window (`0x9888D0`, which `Sce_Item` set).
     pub re2_crouch_item: Option<RoomAction>,
@@ -3745,6 +3755,8 @@ impl Default for GameState {
             re2: Default::default(),
             is_re2_room: false,
             re2_item_get: None,
+            re2_computer_request: None,
+            re2_computer: None,
             re2_crouch_item: None,
             re2_crouch_start: false,
             re2_message_stop: None,
@@ -8542,6 +8554,16 @@ impl GameState {
     /// returns. Water (kind 7) sets the player's `Water`.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
+        if action.sce == crate::scd2::host::SCE_WINDOWS {
+            // `Sce_Windows`: game mode 7 from the next tick, with its first
+            // byte plus its third shifted by 4 (room 200: mode 0, cut 15).
+            self.re2_computer_request = Some(
+                action.params[2]
+                    .wrapping_mul(16)
+                    .wrapping_add(action.params[0]),
+            );
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_FLAG_CHANGE {
             // `Sce_Flg_chg`: the words bank, flag and whether to set it, on
             // `Flg_addr`'s banks as `set` has them.
@@ -8747,6 +8769,80 @@ impl GameState {
         get.ticks = ticks;
         self.re2_item_get = Some(get);
         cue
+    }
+
+    /// One tick of game mode 7's computer, with confirm held or not. Returns
+    /// the cut it showed, if it changed one; the computer is dropped once
+    /// its task exits.
+    pub fn tick_re2_computer(&mut self, confirm: bool) -> Option<u8> {
+        use computer2::Effect;
+        let mut computer = self.re2_computer.take()?;
+        let capacity = self.inventory_capacity();
+        let world = computer2::World {
+            confirm,
+            scenario_b: self.re2.flag(1, 1),
+            unlocked: self.re2.flag(4, 70),
+            key17: self.re2.flag(crate::scd2::host::KEY_BANK, 17),
+            card: self
+                .inventory
+                .iter()
+                .take(capacity)
+                .any(|stack| stack.id == BLUE_CARD_KEY),
+            message_open: self.message.active,
+            message_no: self.message.menu_choice_id() & 1 != 0,
+            cut: self.camera.current_cut as u8,
+        };
+        let mut cut = None;
+        for effect in computer.tick(&world) {
+            match effect {
+                Effect::Sound(slot) => {
+                    if let Some(id) =
+                        crate::se2::SoundId::decode(0x0200_0000 | u32::from(slot) << 16)
+                    {
+                        self.re2
+                            .sounds
+                            .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                    }
+                }
+                Effect::Cut(next) => {
+                    // `Bg_loadPC` doesn't touch `Cut_old`.
+                    self.set_camera_cut(usize::from(next));
+                    cut = Some(next);
+                }
+                Effect::Unlock => self.re2.set_flag(4, 70, 1),
+                Effect::TakeCard => {
+                    // `Item_work[slot] = {0, 0, 0}; Sort_item()`: the slots
+                    // after it move up.
+                    if let Some(index) = self
+                        .inventory
+                        .iter()
+                        .take(capacity)
+                        .position(|stack| stack.id == BLUE_CARD_KEY)
+                    {
+                        self.inventory.remove(index);
+                        self.rebuild_slots();
+                    }
+                }
+                Effect::AskCard => {
+                    self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = BLUE_CARD_KEY;
+                    // The door table's "Will you use the {item}?", with the
+                    // delays `Mess_disp` doubles while the computer runs.
+                    self.show_re2_global(crate::scd2::host::door_message(DOOR_MESSAGE_USE));
+                }
+                Effect::Resume => {}
+            }
+        }
+        if !computer.done() {
+            self.re2_computer = Some(computer);
+        }
+        cut
+    }
+
+    /// The oracle's `pc` field: the computer's state, `-` without one.
+    pub fn re2_computer_trace(&self) -> String {
+        self.re2_computer
+            .as_ref()
+            .map_or_else(|| "-".to_string(), computer2::Computer::trace)
     }
 
     /// The oracle's `inv` field: `Item_work`'s ten slots, the personal item,

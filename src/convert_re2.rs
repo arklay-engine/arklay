@@ -620,6 +620,19 @@ fn copy_text(
     let language = text::language_file(&sources, exe, &places);
     crate::language::Language::parse(&language).context("invalid RE2 language file")?;
     tally.add(writer, "text", "language/en-US.txt", language.into_bytes())?;
+    if let Some(exe) = exe {
+        // Room 200's computer types the executable's own ASCII, control
+        // codes and all, so its strings stay raw: one a line.
+        tally.add(
+            writer,
+            "text",
+            crate::game::computer2::TEXT_ENTRY,
+            exe.computer
+                .iter()
+                .flat_map(|line| line.iter().copied().chain(*b"\n"))
+                .collect(),
+        )?;
+    }
     for (entry, source) in [
         (
             crate::lua::NEW_GAME_ENTRY,

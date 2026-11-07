@@ -10,7 +10,7 @@ voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 13800]
 frame_max_mean = 0.8
-expect = { tick = 13802, fields = ["cam", "mot", "rseed"], note = "room 200's computer: the original enters game mode 7 on tick 13801 and shows cut 15, its console, on 13802, which arklay doesn't port yet (docs/internals/deviations/re2.md)" }
+expect = "match"
 # the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
 ignore = [
     [356, "rng"],

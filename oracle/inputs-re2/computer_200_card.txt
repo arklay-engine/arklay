@@ -1,0 +1,49 @@
+# room 200: the counter's computer, card (oracle/re2.md, "Room 200's computer"): action at the computer, the yes, then a press every 30 ticks until the last prompt
+364 action
+368
+400 action
+404
+430 action
+434
+460 action
+464
+490 action
+494
+520 action
+524
+550 action
+554
+580 action
+584
+610 action
+614
+640 action
+644
+670 action
+674
+700 action
+704
+730 action
+734
+760 action
+764
+790 action
+794
+820 action
+824
+850 action
+854
+880 action
+884
+910 action
+914
+940 action
+944
+970 action
+974
+1000 action
+1004
+1030 action
+1034
+1060 action
+1064

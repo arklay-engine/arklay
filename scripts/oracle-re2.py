@@ -684,6 +684,24 @@ def map_flags_trace(game: Game) -> str:
     return f"mapfg={flags} map={page}"
 
 
+COMPUTER_TASK = 0x68A244  # task 1: +2 its sleep count, +4 its function, +8..+0xA R0..R2
+COMPUTER_WINDOWS = 0x4D1F50  # `Windows`, the function task 1 runs in game mode 7
+COMPUTER_WORK = 0x9800A0  # `pCom_work`: +0 col, +1 row, +0x2DC the frame's step
+
+
+def computer_trace(game: Game) -> str:
+    """Room 200's computer (`Windows`, `Computer200`): task 1's R0, R1, R2 and sleep count, `c_mode`, the frame's direction and step, `printed`, `confirmed`, and the console's column and row; `-` unless task 1 runs `Windows`."""
+    if game.u32(COMPUTER_TASK + 4) != COMPUTER_WINDOWS:
+        return "pc=-"
+    work = game.u32(COMPUTER_WORK)
+    step, col, row = (game.u8(work + 0x2DC), game.u8(work), game.u8(work + 1)) if work else (0, 0, 0)
+    return (
+        f"pc={game.u8(COMPUTER_TASK + 8)},{game.u8(COMPUTER_TASK + 9)},{game.u8(COMPUTER_TASK + 10)},"
+        f"{game.u16(COMPUTER_TASK + 2)},{game.u8(0x98E52D)},{game.u8(0x98E52F)},{step},"
+        f"{game.u32(0x689B6C)},{game.u32(0x689B68)},{col},{row}"
+    )
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -760,6 +778,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     )
     fields.append(item_box_trace(game))
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
+    fields.append(computer_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

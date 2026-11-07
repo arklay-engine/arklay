@@ -1,0 +1,50 @@
+# Room 200's computer (game mode 7, Sce_Windows) from a warp into the counter computer's area (oracle/re2.md, "Room 200's computer").
+# The frames are compared but have no frame_max_mean: the console and its frame are not drawn yet (#502).
+
+[[run]]
+name = "computer_200_card"
+room = "200"
+setup_script = "computer_200.lua"
+input = "computer_200_card.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
+frames = [344, 1299]
+expect = "match"
+record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --give 2:0x35:1 --give 3:0x26:1"
+
+[[run]]
+name = "computer_200_nocard"
+room = "200"
+setup_script = "computer_200_nocard.lua"
+input = "computer_200_nocard.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
+frames = [344, 999]
+expect = "match"
+record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200"
+
+[[run]]
+name = "computer_200_released"
+room = "200"
+setup_script = "computer_200_released.lua"
+input = "computer_200_released.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
+frames = [344, 999]
+expect = "match"
+record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --flag 4:70 --give 2:0x35:1"
+
+[[run]]
+name = "computer_200_refuse"
+room = "200"
+setup_script = "computer_200.lua"
+input = "computer_200_refuse.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
+frames = [344, 999]
+expect = "match"
+record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --give 2:0x35:1 --give 3:0x26:1"
