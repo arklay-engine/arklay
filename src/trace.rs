@@ -65,6 +65,8 @@ pub struct TraceTick<'a> {
     pub re2_splayer: Option<[i32; 16]>,
     /// The zombies in play, as the oracle's `zm` field writes them.
     pub re2_zombies: Option<String>,
+    /// Their hidden and coloured parts, as the oracle's `zp` field writes them.
+    pub re2_zombie_parts: Option<String>,
     /// RE2's music: the `bgm` field.
     pub re2_music: Option<String>,
     /// RE2's game over ([`crate::die2::Die::trace_field`]).
@@ -237,6 +239,9 @@ impl TraceWriter {
         if let Some(zombies) = &tick.re2_zombies {
             write!(self.out, " zm={zombies}")?;
         }
+        if let Some(parts) = &tick.re2_zombie_parts {
+            write!(self.out, " zp={parts}")?;
+        }
         if let Some(music) = &tick.re2_music {
             write!(self.out, " bgm={music}")?;
         }
@@ -369,6 +374,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_zombie_parts: None,
             re2_music: None,
             re2_die: None,
             re2_neck: None,
@@ -421,6 +427,7 @@ mod tests {
                 re2_character: None,
                 re2_splayer: None,
                 re2_zombies: None,
+                re2_zombie_parts: None,
                 re2_music: None,
                 re2_die: None,
                 re2_neck: None,
@@ -468,6 +475,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_zombie_parts: None,
             re2_music: None,
             re2_die: None,
             re2_neck: None,
@@ -518,6 +526,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_zombie_parts: None,
             re2_music: None,
             re2_die: None,
             re2_neck: Some("0,8,0,0,0".to_string()),
