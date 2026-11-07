@@ -784,3 +784,48 @@ input_shift = 344
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "route_100_200_fight"
+room = "new"
+offset = 0
+# The route with the enemies on, fought as a player would, to room 200 (oracle/re2.md, "The route"). No flags: the new game as it starts.
+ticks = 9600
+setup_script = "route_100_200_fight.lua"
+input = "route_100_200_fight.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
+frames = [0, 9599]
+frame_max_mean = 0.8
+# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+    # the head stands 1 to 3 units higher on the first ticks after the get-item window closes (docs/re2-deviations.md)
+    [3661, "pneck"],
+    [3662, "pneck"],
+    [3663, "pneck"],
+    [3664, "pneck"],
+    [3665, "pneck"],
+    [7321, "pneck"],
+    [7322, "pneck"],
+    [7323, "pneck"],
+    [7324, "pneck"],
+    [7325, "pneck"],
+    [7326, "pneck"],
+]
+expect = "match"
+record = ""
