@@ -65,6 +65,9 @@ pub struct TraceTick<'a> {
     pub re2_splayer: Option<[i32; 16]>,
     /// The zombies in play, as the oracle's `zm` field writes them.
     pub re2_zombies: Option<String>,
+    /// RE2's `Esp_` pool, the oracle's `esp` field
+    /// ([`crate::esp2::Effects::trace_field`]).
+    pub re2_effects: Option<String>,
     /// RE2's music: the `bgm` field.
     pub re2_music: Option<String>,
     /// RE2's game over ([`crate::die2::Die::trace_field`]).
@@ -237,6 +240,9 @@ impl TraceWriter {
         if let Some(zombies) = &tick.re2_zombies {
             write!(self.out, " zm={zombies}")?;
         }
+        if let Some(effects) = &tick.re2_effects {
+            write!(self.out, " esp={effects}")?;
+        }
         if let Some(music) = &tick.re2_music {
             write!(self.out, " bgm={music}")?;
         }
@@ -369,6 +375,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_effects: None,
             re2_music: None,
             re2_die: None,
             re2_neck: None,
@@ -421,6 +428,7 @@ mod tests {
                 re2_character: None,
                 re2_splayer: None,
                 re2_zombies: None,
+                re2_effects: None,
                 re2_music: None,
                 re2_die: None,
                 re2_neck: None,
@@ -446,6 +454,53 @@ mod tests {
     }
 
     #[test]
+    fn an_re2_tick_writes_its_effects() {
+        let game = GameState::default();
+        let path = temp_path("re2-effects");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        for effects in [Some("1/95:2,0,7,0,a003,0,100,0,0".to_string()), None] {
+            let tick = TraceTick {
+                room: RoomId {
+                    stage: 2,
+                    room: 0x00,
+                    player_flag: 0,
+                    mansion2: false,
+                },
+                rng: 0,
+                rseed: 0,
+                fade_counter: 0,
+                fade_state: -1,
+                cam: 0,
+                player_flags: 0,
+                entities: &*game.entities,
+                re2_player: Some(([1, 0], [0; 9])),
+                re2_character: None,
+                re2_splayer: None,
+                re2_zombies: None,
+                re2_effects: effects,
+                re2_music: None,
+                re2_die: None,
+                re2_neck: None,
+                re2_neck_position: None,
+                re2_xa_volume: None,
+                re2_inventory: None,
+                re2_item_page: None,
+                re2_item_box: None,
+                re2_sounds: None,
+                frame_hash: 0,
+            };
+            writer.write_tick(&tick).unwrap();
+        }
+        writer.flush().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let lines: Vec<&str> = text.lines().skip(1).collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains(" esp=1/95:2,0,7,0,a003,0,100,0,0"));
+        assert!(!lines[1].contains("esp="));
+    }
+
+    #[test]
     fn tick_index_increments_once_per_line() {
         let game = GameState::default();
         let path = temp_path("counter");
@@ -468,6 +523,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_effects: None,
             re2_music: None,
             re2_die: None,
             re2_neck: None,
@@ -518,6 +574,7 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_effects: None,
             re2_music: None,
             re2_die: None,
             re2_neck: Some("0,8,0,0,0".to_string()),

@@ -55,6 +55,9 @@ PL = 0x00989EF0  # the player's work
 ENEMIES = 0x0098A114  # EnemyEntity*[16]
 # `enemy_work` holds 32 slots, and `Game_loop` runs those below this end.
 ENEMIES_END = 0x0098862C
+ESP = 0x00992CA0  # `Esp_`: the effect pool (`Esp_init_R`, `Esp_call`, `Esp_move`)
+ESP_SLOTS = 0x60
+ESP_SLOT = 0x7C  # +0 and +1 the behaviours, +0x18 the flags, +0x1C the kind, +0x1E the row, +0x21 the frame, +0x34 the position
 SPLAYER = 0x0098A110  # splayer_work
 FLG_ADDR = 0x0053B218  # the flag banks
 FG_SYSTEM = 0x00989E6C
@@ -581,6 +584,21 @@ def zombie_trace(game: Game) -> str:
     return "zm=" + (";".join(rows) or "-")
 
 
+def esp_trace(game: Game) -> str:
+    """`Esp_`'s taken slots (`+0x18` non-zero, which is what `Esp_call`'s free search tests): behaviours, kind, row, flags, frame and position, after the live count."""
+    pool = game.read(ESP, ESP_SLOTS * ESP_SLOT)
+    rows, live = [], 0
+    for slot in range(ESP_SLOTS):
+        at = slot * ESP_SLOT
+        flags = struct.unpack_from("<H", pool, at + 0x18)[0]
+        if flags == 0:
+            continue
+        live += flags >> 15
+        x, y, z = struct.unpack_from("<3h", pool, at + 0x34)
+        rows.append(f"{slot}:{pool[at]:x},{pool[at + 1]:x},{pool[at + 0x1C]:x},{pool[at + 0x1E]:x},{flags:x},{pool[at + 0x21]:x},{x},{y},{z}")
+    return f"esp={live}/" + (";".join(rows) or "-")
+
+
 def inventory_trace(game: Game) -> str:
     """`Item_work`'s eleven slots, `id:count` (the tenth is the lighter's or the lockpick's), then the player's slot count."""
     work = game.read(ITEM_WORK, 11 * 4)
@@ -659,6 +677,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
                 f"{speed[0]},{speed[1]},{speed[2]}"
             )
     fields.append(zombie_trace(game))
+    fields.append(esp_trace(game))
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
     fields.append(

@@ -625,6 +625,7 @@ pub fn run_with_options(
                         re2_character: None,
                         re2_splayer: None,
                         re2_zombies: None,
+                        re2_effects: None,
                         re2_music: None,
                         re2_die: None,
                         re2_neck: None,
@@ -7489,6 +7490,10 @@ impl GameSession {
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
             re2_zombies: self.game.is_re2_room.then(|| self.game.re2.zombie_trace()),
+            re2_effects: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.effects.trace_field()),
             re2_music: self
                 .game
                 .is_re2_room
