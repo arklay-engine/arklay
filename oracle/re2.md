@@ -264,6 +264,12 @@ The weapon runs (`weapon_*.txt`) use the inventory runs' room 102: record with `
 
 In the three EQUIP runs every field matches on every tick, `rseed` and `snd` included: the status screen opens and closes as in the inventory runs (START at 364, the close at 480, the player's move restarted at 490 and the world back at 491), and `weapon_handgun` and `weapon_empty` still match on every tick.
 
+## Films
+
+The recorder writes `MovieEnable = 0` to `config.ini`, which the executable reads inverted (`MarniConfig::ReadAll` keeps `GetDword("MovieEnable", 1) == 0`), so the original runs with its films off: a script's `movie_on` (`Init_movie_work`, 0x4CAEC0) raises `fg_system`'s `0x200`, closes the sound (`SsClose`), opens it again (`SsInit2`) and drops `0x200` inside the one call, and `Movie_set(2)` leaves two frames unpresented. No film plays, and nothing in the trace but the `movie` field shows it. arklay's traces follow the same config; its interactive window plays the film. With `--sound` the original's `SsInit2` is slow, but the tick after `movie_on` still traces `Movie_idx` 0, so no tick of the hold depends on the pace.
+
+- `film_204.txt` with `--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1 --ticks 1000` (`film_204.lua`; flag 4:85 skips the room's entry scene, which would move the player, and only the scene's licker, slot 1, is left on): walk up the corridor into area 7, whose event 9 is the licker window scene. The scene starts at tick 395 with `cut_chg 7`, changes to cut 4 at 424 and runs `movie_on 10` at 425 (`movie=0000,1,0` on both ticks, 0 at 426), then drops the licker in at 426. In the original the screen keeps the frame from before the first change for 424, 425 and 426, and arklay's does too; every traced field matches on all 656 ticks (`film_204`). The frames differ at 395 and 396, where the original holds the frame before `cut_chg 7` and arklay draws the old cut with the player already moved. In the `.wav` the room's ambience (`sub04`, loaded and silent before) becomes audible from `movie_on`'s tick: `SsInit2` starts the sub again, on a new buffer, at DirectSound's full level.
+
 ## The trace
 
 | Field | Source |
@@ -282,6 +288,7 @@ In the three EQUIP runs every field matches on every tick, `rseed` and `snd` inc
 | `pneck` | where the player's head is in the world, the neck joint's `+0x5C`, which `Root_ck` aims at; `-` when arklay hasn't posed it. Compared only when `--fields` names it |
 | `bgm` | `Bgm`, each of the three `Seq_ctr`'s state and hold, and the tracks of the five channels (`bgm/<track>`), `-` for none; it says something only with `--sound` |
 | `xavol` | `xa_vol`'s level for the voice channel (`0x693E88`), which the next line's start gives DirectSound. Compared only when `--fields` names it |
+| `movie` | `fg_system & 0x8200` (a film plays, and the bit `Init_movie_work` clears), `Movie_idx` (`0x6805C0`, the frames `WinMain` still holds after this tick's decrement) and `Movie_r0` (`0x68058E`, the film's state) (see "Films"). Compared only when `--fields` names it |
 | `inv` | `Item_work`'s ten slots and the personal item, `id:count`, then the slot count (see "Items"). Compared only when `--fields` names it |
 | `gi` | the game mode, the status screen's routines, the get-item window's routine and sub-step and the message state; the original's only |
 | `ib` | the item box: `Item_box_entrance`'s state (`0x98E542`), the lid's speed and step (`0x689C90`, `0x689C98`) and its turn (the box's object's `Cdir_z`), then the screen's routine, sub, count, cursor and START gate (`0x691F61` to `0x691F63`, `0x691F6C`, `0x691F76`), the box's top row and scroll (`0x691F84`, `0x691F85`) and the chosen row's pulse (`0x692FBE`). Compared only when `--fields` names it |

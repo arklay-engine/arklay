@@ -1,0 +1,3 @@
+# room 204: walk up the corridor into area 7, the licker window scene and its film (movie_on 10) (oracle/re2.md, "Films")
+360 up
+470

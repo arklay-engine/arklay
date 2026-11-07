@@ -1,0 +1,14 @@
+# Room 204's licker window (event 9): the scene's `movie_on 10`, with the oracle's films off, holds two frames and closes and opens the sound (oracle/re2.md, "Films"). The zombie in slot 0 is switched off so that only the scene's licker (slot 1, `zm1`) runs. `movie` is compared in this run only: the other runs' doors and cut changes are not checked against it yet. `bgm` is left out: from `--room 204` the main's sequence holds 0xff where the original's warp leaves 1.
+[[run]]
+name = "film_204"
+room = "204"
+setup_script = "film_204.lua"
+input = "film_204.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,snd,movie"
+frames = [360, 999]
+# the frames of the scene's cut_chg 7 (395, 396) are the old cut redrawn where the original holds the frame before it
+frame_max_mean = 0.4
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1"
