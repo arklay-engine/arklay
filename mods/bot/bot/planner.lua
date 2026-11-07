@@ -1456,6 +1456,11 @@ local function target_goal(bot, world, t)
         end
         return nil
     end
+    if t.kind == "revisit" then
+        -- A room entered again for the story flags changed since
+        -- (BotPlanner.revisit_room): done on entering it.
+        return { kind = "revisit", room = t.room, slot = t.slot }
+    end
     return frontier_goal(world, t)
 end
 
@@ -1929,7 +1934,9 @@ local function choose(bot)
                 local ctx = BotInventory.context(bot)
                 local m = plan().marks[mark_key("item", room, action.slot)]
                 m.item = action.item
-                if bot:item_kind(action.item) == "key" or ctx.uses[action.item] then
+                -- So is a hand weapon a met fight needs (30C's knife).
+                if bot:item_kind(action.item) == "key" or ctx.uses[action.item]
+                    or (ctx.required and ctx.required[action.item]) then
                     m.needed = true
                 end
             elseif BotNav.is_origin_zone(action) then
@@ -2230,6 +2237,11 @@ local function choose(bot)
             p.target = nil
             goal = nil
         end
+        if goal and goal.kind == "revisit" and goal.room == room then
+            -- Entered: its init has read the changed flags.
+            p.target = nil
+            goal = nil
+        end
         if goal and goal.room == room and goal.kind == "door" then
             for _, row in ipairs(doors_here) do
                 if row.door.slot == goal.slot then
@@ -2247,7 +2259,7 @@ local function choose(bot)
         else
             steps = goal and goal.room ~= room
                 and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
-                    or goal.kind == "fight" or usable(goal))
+                    or goal.kind == "fight" or goal.kind == "revisit" or usable(goal))
                 and route(bot, world, room, goal.room)
         end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -2672,6 +2684,71 @@ local function forgive_fight(bot)
     return forgiven
 end
 
+-- The story flags (the scenario and common banks, 0 and 1) as a string of
+-- the set bits: what a room's init reads to pick its variant.
+local STORY_BANK_COUNT = 2
+local BANK_BITS = 1 << 8
+local function story_sig(bot)
+    local parts = {}
+    for bank = 0, STORY_BANK_COUNT - 1 do
+        for sel = 0, BANK_BITS - 1 do
+            if bot:flag(bank, sel) then
+                parts[#parts + 1] = bank * BANK_BITS + sel
+            end
+        end
+    end
+    return table.concat(parts, ",")
+end
+
+-- Before the run finishes on an empty frontier: a room of this stage left
+-- before the story flags last changed is entered again (nearest first by
+-- doors), since its init may now play a scene or open a door. 514 starts
+-- the self-destruct, which unlocks the lab's exit and 50B's cell door,
+-- only when entered after the Tyrant's death; with every other goal of
+-- the lab done before that fight, nothing led back there and the run
+-- ended in 513. Each room is revisited once per story signature, so this
+-- ends. Returns whether a revisit target was set.
+function BotPlanner.revisit_room(bot)
+    local p = plan()
+    local room = bot:room().id
+    local world = bot:world()
+    local sig = story_sig(bot)
+    local seen = p.story_seen or {}
+    p.revisited = p.revisited or {}
+    local stage = string.sub(room, 1, 1)
+    local best, best_steps = nil, nil
+    for _, r in ipairs(world.rooms or {}) do
+        if r.visited and r.id ~= room and string.sub(r.id, 1, 1) == stage
+            and seen[r.id] ~= sig and not p.revisited[r.id .. "|" .. sig] then
+            local steps = route(bot, world, room, r.id)
+            if steps and steps[1] and (not best or #steps < #best_steps
+                or (#steps == #best_steps and r.id < best)) then
+                best, best_steps = r.id, steps
+            end
+        end
+    end
+    if not best then
+        return false
+    end
+    p.revisited[best .. "|" .. sig] = true
+    local label = string.format("room %s again (story flags changed since it was left)", best)
+    p.target = { kind = "revisit", room = best, slot = "revisit", label = label,
+        best = #best_steps, stalls = 0 }
+    bot:log("frontier empty; entering " .. label)
+    return true
+end
+
+-- Called on every room change: the story flags as the bot leaves the last
+-- room and enters this one (BotPlanner.revisit_room).
+local function note_story(p, bot, room_id)
+    local sig = story_sig(bot)
+    p.story_seen = p.story_seen or {}
+    if p.last_room then
+        p.story_seen[p.last_room] = sig
+    end
+    p.story_seen[room_id] = sig
+end
+
 fight_forced = function(bot, room)
     local f = plan().forced_fight
     return f ~= nil and f.room == room and f.entry == (plan().entries or {})[room]
@@ -2731,6 +2808,7 @@ function BotPlanner.enter_room(bot, room)
         p.arrivals[room.id][p.last_room] = { x = me.x, z = me.z }
     end
     p.last_from = p.last_room ~= room.id and p.last_room or nil
+    note_story(p, bot, room.id)
     p.last_room = room.id
     BotPuzzle.enter_room()
     p.last_done = { room = room.id, tick = bot:tick(), anywhere = true }
@@ -2898,6 +2976,13 @@ function BotPlanner.step(bot)
             p.empty_since = p.empty_since or bot:tick()
             if bot:tick() - p.empty_since < EMPTY_FRONTIER_GRACE then
                 return
+            end
+        end
+        -- Each call takes one room off the list, so this ends.
+        while not p.goal and BotPlanner.revisit_room(bot) do
+            p.goal = choose(bot)
+            if p.goal then
+                p.empty_since = nil
             end
         end
         if not p.goal then

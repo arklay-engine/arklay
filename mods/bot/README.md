@@ -247,6 +247,13 @@ Priorities, highest first:
    entering a room with a door parked at its origin, the bot then idles
    (`waiting for door slot N -> X at the room origin`): the room's event
    may carry the player through it (310's lift down to 500). Then
+   each visited room of this stage that the bot left before the story
+   flags (scenario and common banks) last changed is entered again,
+   nearest first, once per story state (`frontier empty; entering room X
+   again`): its init may now play a scene or open a door. 514 starts the
+   self-destruct, which unlocks the lab's exit, only when entered after
+   the Tyrant's death; with the lab's other goals done before that fight,
+   nothing else led back there. Then
    `frontier empty: nothing reachable is left` (with the count of goals
    marked looping). Entering the `--bot-goal-room` finishes with
    `goal room X reached`. Every finish lists the locked doors
@@ -699,7 +706,8 @@ drives the box screen with pad input only.
   equipped and that no fight in this stage prefers (the knife goes in
   until 30C's stage, where the loadout takes it back out). Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
-  fact or a locked door needs back) do spare guns go too, fewest rounds
+  fact or a locked door needs back), or for a hand weapon the loadout
+  requires (below), do spare guns go too, fewest rounds
   first, the `staple` gun (the handgun, whose ammunition is the most
   common) after every other, never one the loadout or a `<use>` needs
   (408's guardhouse key found the slots full of the equipped shotgun's
@@ -748,6 +756,12 @@ drives the box screen with pad input only.
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
   way it does for a needed pickup (`loadout: a fight ahead prefers it`). A
+  preferred hand weapon is required, not only preferred: its fight's step
+  holds until it is held, so it counts as a needed pickup on the frontier
+  (while none is boxed) and its inventory-full mark waits for the
+  inventory to change, and it may swap out a spare gun like a key (30C's
+  web met a full inventory of guns, rounds, the crank and the medal, with
+  one knife boxed and one on its floor, and the run ended there). A
   boss not met yet asks nothing: the bot does not peek at what is ahead.
   Meeting one is remembered past a reload (a player who died to it knows it
   is there). Another loading of the preferred launcher keeps its rounds
