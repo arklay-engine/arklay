@@ -26,4 +26,20 @@
   <interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0"
             label="the control device: unlock door 0"/>
   <answer choice="yes" slot="1"/>
+  <!-- The kiting ring: the room's floor is a circuit of corridors around
+       the central block (x 6822 to 14760, z 11322 to 24210), so the
+       corners of its middle line, in order, each with the half width of
+       the corridor that starts there (off it, in a pocket such as the
+       handgun rounds' at (6000, 30000), the run takes the walk's way
+       back): west (x 2808 to 6822), north (z 24210 up to 26334 by the
+       north-west wall, 30942 past it), east (x 14760 to 19026) and south
+       (z 5800 to 11322). The tyrant follows the shortest way round. -->
+  <kite enemy="0x0C" x="4800" z="8500" radius="2000"/>
+  <kite enemy="0x0C" x="4800" z="25300" radius="3000"/>
+  <kite enemy="0x0C" x="16900" z="26500" radius="2100"/>
+  <kite enemy="0x0C" x="16900" z="8500" radius="2700"/>
+  <!-- The south leg bows north here: on the straight line at z 8500,
+       Wesker's branch stalled the run against something the bot does not
+       see (an NPC, not in its enemy list) near (11000, 8400). -->
+  <kite enemy="0x0C" x="10800" z="9900" radius="2700"/>
 </bot>

@@ -290,7 +290,17 @@
        box loadout brings it to the fight. The slash's 2700 is the
        Manhattan sum of the axis gaps (web_distance), so a diagonal gap of
        2000 is still outside it. Enemy bit 112 (0x70) is set by its death
-       (513's init). -->
+       (513's init).
+       Stood and fought, the slashes cost a death in about half the default
+       seeds' entries (42 hits in seeds 1 to 4; three story runs died there
+       four times with a handgun), so it is kited (`<kite>`) round 513's ring
+       of corridors. Its walk (113 a tick) is under the run's 0xD2, it has
+       no charge, rise or rush (behaviour 14 zeroes the cooldown), and the
+       pod and Wesker scene runs in state 8 (`scene`), when the bot only
+       runs. The stop distances are the heliport's: shoot from 10000, lower
+       inside 7500 (6000 before the stop's first hit, and for the launcher),
+       and a gun too slow for that (the shotgun) stops from 15000 (`edge`),
+       which the ring's run reaches. -->
   <enemy id="0x0C" name="tyrant" policy="fight" stand="torso" downed="none"
          up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="220"
          prefer="0x07">
@@ -299,6 +309,8 @@
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>
     <keep weapon="0x08" min="3200" max="6000" damage="100"/>
     <keep weapon="0x09" min="3200" max="6000" damage="100"/>
+    <kite walk="0x01" scene="0x08" speed="120" shoot="10000" urgent="10000" edge="15000"
+          lower="7500" hold="6000" commit="6000"/>
   </enemy>
 
   <!-- Tyrant on the heliport (303), entity 0x10: the same machine as 0x0C
