@@ -2197,6 +2197,10 @@ struct GameSession {
     /// `SsStopAll`'s "was playing" words for the main's channels and each
     /// sub's (`0x689DCC`, `0x689DD0`): `SsInit2` starts those again.
     re2_music_closed: [bool; 3],
+    /// The subs `SsInit2` started again, with the `SsSetVol` level they had
+    /// then: the restart passes a stale index, so the new buffer plays at
+    /// DirectSound's full level until the music next sets the sub's volume.
+    re2_sub_full: [Option<u8>; 2],
     /// RE2's films play (the original's `MovieEnable == 0`): on for the
     /// interactive window, off for traces and captures, as the oracle runs.
     films: bool,
@@ -2750,6 +2754,7 @@ impl GameSession {
             frame_hold: 0,
             frame_held: false,
             re2_music_closed: [false; 3],
+            re2_sub_full: [None; 2],
             films: false,
             transition: None,
             transition_finished: false,
@@ -4575,10 +4580,25 @@ impl GameSession {
                 }
                 self.re2_music_closed[sequence] = false;
                 for &index in channels {
-                    if self.game.re2.music.channels[index].track.is_some() {
+                    let channel = self.game.re2.music.channels[index];
+                    if channel.track.is_some() {
                         mixer.restart_bgm_channel(index);
+                        if let Some(sub) = index.checked_sub(3) {
+                            self.re2_sub_full[sub] = Some(channel.volume);
+                        }
                     }
                 }
+            }
+        }
+        for (sub, full) in self.re2_sub_full.iter_mut().enumerate() {
+            let volume = self.game.re2.music.channels[3 + sub].volume;
+            if full.is_some_and(|level| level != volume) {
+                *full = None;
+            }
+            if full.is_some()
+                && let Some(mixer) = self.music.as_mut()
+            {
+                mixer.set_bgm_channel_volume(3 + sub, crate::sfx::volume_gain(0));
             }
         }
     }
@@ -30651,22 +30671,31 @@ off_0010:
         let samples: Vec<i16> = (0..4096).map(|n| (n % 64) as i16 * 100).collect();
         mixer.load_bgm_channel(0, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
         mixer.load_bgm_channel(3, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
+        mixer.load_bgm_channel(4, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
         mixer.restart_bgm_channel(0);
         mixer.stop_bgm_channel(3);
         session.game.re2.music.channels[0].track = Some(1);
         session.game.re2.music.channels[3].track = Some(2);
+        session.game.re2.music.channels[4].track = Some(3);
         session.music = Some(mixer);
         session.game.re2.sound_close = Some(0);
         session.re2_sound_close_and_init(&pack);
         let mixer = session.music.as_ref().unwrap();
         assert!(!mixer.bgm_channel_playing(0), "SsStopAll stops the main");
-        assert_eq!(session.re2_music_closed, [true, false, false]);
+        assert!(!mixer.bgm_channel_playing(4));
+        assert_eq!(session.re2_music_closed, [true, false, true]);
         session.game.re2.sound_init = true;
         session.re2_sound_close_and_init(&pack);
         let mixer = session.music.as_ref().unwrap();
         assert!(mixer.bgm_channel_playing(0), "SsInit2 starts the main again");
         assert!(!mixer.bgm_channel_playing(3), "the sub wasn't playing");
+        assert!(mixer.bgm_channel_playing(4));
         assert_eq!(session.re2_music_closed, [false; 3]);
+        assert_eq!(session.re2_sub_full, [None, Some(0)], "the sub plays at full level");
+        // The music's next volume for the sub ends that.
+        session.game.re2.music.channels[4].volume = 65;
+        session.re2_sound_close_and_init(&pack);
+        assert_eq!(session.re2_sub_full, [None, None]);
     }
 
     #[test]
