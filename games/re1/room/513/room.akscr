@@ -115,9 +115,9 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1D, TRUE);
-    set(FG_STATUS, F_STATUS_1C, TRUE);
-    if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
+    if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE))
     {
         set(FG_ROOM, F_ROOM_07, TRUE);
     }
@@ -149,7 +149,7 @@ proc init
     }
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_C0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
         {
             item_aot_set(AOT_02_ITEM, 9975, 7464, 2000, 2000, IT_37_KEY_LAB_MASTER, 2, IMDL_00, OBJ_06, 0, 0, 0, 0, F_ITEM_5F, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_5 | 16 | ITEM_REACH);
         }
@@ -181,7 +181,7 @@ proc init
     obj(OBJ_05, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 11100, -20000, 4170, 3192, 0, 0, 0, 0, 0, 0, 0, 0);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_C0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
         {
             if (ck(FG_ROOM, F_ROOM_07, FALSE))
             {
@@ -331,7 +331,7 @@ proc main
                 if (ck(FG_ROOM, F_ROOM_03, FALSE))
                 {
                     set(FG_ROOM, F_ROOM_03, TRUE);
-                    set(FG_SCENARIO, F_SCENARIO_37, TRUE);
+                    set(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE);
                     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 159, 255, 0);
                     if (ck(FG_ROOM, F_ROOM_04, FALSE))
                     {
@@ -371,7 +371,7 @@ proc main
                 if (ck(FG_ROOM, F_ROOM_03, FALSE))
                 {
                     set(FG_ROOM, F_ROOM_03, TRUE);
-                    set(FG_SCENARIO, F_SCENARIO_37, TRUE);
+                    set(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE);
                     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 159, 255, 0);
                     if (ck(FG_ROOM, F_ROOM_04, FALSE))
                     {
@@ -398,7 +398,7 @@ proc main
             if (ck(FG_ENEMY, F_ENEMY_70, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
             {
                 set(FG_ROOM, F_ROOM_03, TRUE);
-                set(FG_SCENARIO, F_SCENARIO_37, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE);
                 aot_reset(AOT_03_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_03_message, 0);
             }
         }
@@ -415,7 +415,7 @@ proc main
             evt_exec(0, TASK_05, from_main_4);
         }
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
         {
@@ -912,7 +912,7 @@ event on_enter_4
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(10);
     if (CHRIS)
     {
@@ -1044,11 +1044,11 @@ event on_enter_4
         bgm_stop_all(0);
         if (CHRIS)
         {
-            movie_on(MOVIE_0B_DMB);
+            movie_on(MOVIE_0B_TYRANT_WAKES_CHRIS);
         }
         else
         {
-            movie_on(MOVIE_0C_DMC);
+            movie_on(MOVIE_0C_TYRANT_WAKES_JILL);
         }
     }
     evt_next();
@@ -1671,7 +1671,7 @@ event on_enter_4
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     sleep(40);
     evt_work_set(WK_ENEMY, ENEMY_01_TYRANT_1);
     evt_actor_begin();
@@ -1879,7 +1879,7 @@ event on_enter_4
     {
         run
         {
-            if (ck(FG_COMMON, F_COMMON_C0, TRUE))
+            if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
             {
                 evt_exec(0, TASK_05, on_enter_4_sub6);
             }
@@ -1957,7 +1957,7 @@ event on_enter_4
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -2050,7 +2050,7 @@ event on_enter_6 when (JILL)
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     do
     {
         evt_next();
@@ -2143,7 +2143,7 @@ event on_enter_6 when (JILL)
     evt_nop();
     run
     {
-        movie_on(MOVIE_0C_DMC);
+        movie_on(MOVIE_0C_TYRANT_WAKES_JILL);
         pos_set(ENEMY_00, 0, 683, 0, 7394, 0, 8567);
         dir_set(0, 0, 685, 0, 9103, 0, 9103);
         bgm_stop_all(0);
@@ -2511,7 +2511,7 @@ event on_enter_6 when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     voice_play(VOICE_PLAY, VO_117_05);
     message(MSG_VO_117_05, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
@@ -2588,7 +2588,7 @@ event on_enter_6 when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     cutnext(CAM_02);
     evt_fork(TASK_07, on_enter_2, 0);
     evt_next();
@@ -2608,7 +2608,7 @@ event on_enter_6 when (JILL)
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -2978,7 +2978,7 @@ event on_aot_03_message when (JILL)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 1099, 0, 5765, 0, 9028);
     }
     voice_play(VOICE_PLAY, VO_117_10);
@@ -3117,7 +3117,7 @@ event on_aot_03_message when (JILL)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
         sys_multi(SYS_IDLE);

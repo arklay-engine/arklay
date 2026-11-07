@@ -66,7 +66,7 @@ proc init
     {
         aot_set(AOT_06_EVENT, 12500, 7500, 14500, 2000, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_06, 0, 0, 0);
     }
-    if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+    if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
     {
         if (CHRIS)
         {
@@ -78,7 +78,7 @@ proc init
         }
         evt_exec(0, TASK_09, on_enter);
     }
-    if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+    if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
     {
         if (CHRIS)
         {
@@ -127,7 +127,7 @@ event on_aot_06
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         }
         sleep(30);
     }
@@ -138,7 +138,7 @@ event on_aot_06
             aot_delete(AOT_06_EVENT, SCE_NONE, 0);
             set(FG_COMMON, F_COMMON_45, TRUE);
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         }
         sleep(1);
     }
@@ -204,7 +204,7 @@ event on_aot_06
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -247,7 +247,7 @@ event from_main
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             cutnext(CAM_07);
         }
         sleep(40);
@@ -257,7 +257,7 @@ event from_main
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             set(FG_COMMON, F_COMMON_46, TRUE);
         }
         sleep(20);
@@ -283,33 +283,33 @@ event from_main
         cutnext(CAM_05);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_4B, FALSE) && ck(FG_COMMON, F_COMMON_C0, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
             {
                 evt_exec(0, TASK_09, from_main_sub1);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_4B, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+        if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
         {
             evt_exec(0, TASK_09, from_main_sub2);
         }
-        if (ck(FG_COMMON, F_COMMON_4B, TRUE) && ck(FG_COMMON, F_COMMON_C0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
         {
             evt_exec(0, TASK_09, from_main_sub3);
         }
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_4B, FALSE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
             {
                 evt_exec(0, TASK_09, from_main_sub4);
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_4B, FALSE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
             {
                 evt_exec(0, TASK_09, from_main_sub4);
             }
-            if (ck(FG_COMMON, F_COMMON_4B, FALSE) && ck(FG_COMMON, F_COMMON_C0, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, FALSE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
             {
                 evt_exec(0, TASK_09, from_main_sub1);
             }
@@ -323,7 +323,7 @@ event from_main_sub1
     run
     {
         cutnext(CAM_06);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         dir_set(0, 0, 2400, 0, 4370, 0, 29960);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -699,7 +699,7 @@ event from_main_sub2
         sleep(5);
         run
         {
-            if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
             {
                 evt_exec(0, TASK_09, from_main_sub2_sub1);
             }
@@ -1050,7 +1050,7 @@ event from_main_sub2
     run
     {
         cutnext(CAM_06);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1557,7 +1557,7 @@ event from_main_sub3
     run
     {
         cutnext(CAM_06);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2117,7 +2117,7 @@ event from_main_sub4
     run
     {
         cutnext(CAM_06);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

@@ -38,7 +38,7 @@ proc init
     obj(OBJ_00, 0, SCA_NONE, 10885, -5580, 5935, 2038, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 1900, 1900, 7300, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
     aot_set(AOT_03_MESSAGE, 5600, 4000, 3600, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_2A, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ALT_OUTFIT, TRUE))
     {
         if (costume_ck(COSTUME_00))
         {
@@ -84,7 +84,7 @@ event on_aot_05
             {
                 setb(B_CHARACTER_MODEL, 9, 0);
             }
-            set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_ALT_OUTFIT, TRUE);
             costume_set(COSTUME_00);
             evt_exec(0, TASK_09, on_aot_05_sub1);
         }
@@ -188,7 +188,7 @@ event on_aot_04_message
             {
                 setb(B_CHARACTER_MODEL, 9, 0);
             }
-            set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_ALT_OUTFIT, TRUE);
             costume_set(COSTUME_01);
             evt_exec(0, TASK_09, on_aot_05_sub1);
         }

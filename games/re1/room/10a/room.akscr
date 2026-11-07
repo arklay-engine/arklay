@@ -17,8 +17,8 @@
 #define CAM_02 0x02
 #define CAM_03 0x03
 #define ENEMY_00_HUNTER 0x00
-#define ENEMY_00_ZOMBIE_LAB 0x00
-#define ENEMY_01_ZOMBIE_LAB 0x01
+#define ENEMY_00_ZOMBIE_GREEN 0x00
+#define ENEMY_01_ZOMBIE_GREEN 0x01
 #define F_ROOM_3F 0x3F
 #define MSG_VO_00C_00 0x00
 #define MSG_VO_00C_01 0x01
@@ -36,7 +36,7 @@ proc init
 {
     if (MANSION2)
     {
-        set(FG_STATUS, F_STATUS_1C, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     }
     door_aot_set(AOT_00_DOOR, 15200, 2400, 2000, 2600, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_109_TRAP_PASSAGE, 2700, 0, 8500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 1800, 1000, 2400, 1400, 2, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, DOOR_LOCK_40, ROOM_117_LARGE_GALLERY, 2900, 0, 10000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -45,8 +45,8 @@ proc init
     if (MANSION1)
     {
         door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
     }
     else
     {
@@ -93,7 +93,7 @@ proc main when (CHRIS && MANSION2)
     if (ck(FG_ENEMY, F_ENEMY_02, TRUE) && ck(FG_COMMON, F_COMMON_21, TRUE))
     {
         set(FG_COMMON, F_COMMON_21, FALSE);
-        if (ck(FG_COMMON, F_COMMON_22, TRUE))
+        if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
         {
             setw(W_04, 0);
             evt_exec(0, TASK_09, from_main);
@@ -123,11 +123,11 @@ event on_aot_05 when (MANSION2)
         bgm_stop_all(0);
     }
     sleep(1);
-    movie_on(MOVIE_06_DM6);
+    movie_on(MOVIE_06_HUNTER_RUN);
     sleep(1);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         bgm_restore(0);
         dir_set(0, 0, 304, 0, 2276, 0, 3481);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -172,7 +172,7 @@ event on_aot_05 when (MANSION2)
         {
             set(FG_COMMON, F_COMMON_21, TRUE);
         }
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -190,7 +190,7 @@ event from_main when (CHRIS && MANSION2)
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -228,7 +228,7 @@ event from_main when (CHRIS && MANSION2)
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -262,7 +262,7 @@ event from_main_2 when (CHRIS && MANSION2)
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -291,7 +291,7 @@ event from_main_2 when (CHRIS && MANSION2)
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+        while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     }
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_22);
@@ -307,7 +307,7 @@ event from_main_2 when (CHRIS && MANSION2)
     act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 

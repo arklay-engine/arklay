@@ -786,6 +786,29 @@ restore their own `room_bgm` bytes and do not run this file.
 Both files are whole-file replacements, like `game/new_game.lua`: a mod that
 ships one must reproduce every group, room row or state byte it wants to keep.
 
+## Flag names
+
+The debug menu's FLAGS screen names the game banks' bits (scenario, common,
+lock, enemy and item) from the pack's `game/flags.lua`, loaded when the menu
+opens:
+
+```lua
+local api = ...
+
+api:set_flag_name(1, 0x02, "KENNETH_ZOMBIE_SEEN", "The zombie eating Kenneth has been seen.")
+api:set_flag_name(1, 0xA0, "J_BARRY_DINING_ENTRY", "Jill: ...")
+api:set_flag_name(1, 0xA0, "C_MUSIC_SCORE_GIVEN", "Chris: ...")
+```
+
+A bit can take a name per player; the screen shows them as `J_.. / C_..`.
+The shipped file is generated when the arklay binary is built, from the
+`F_SCENARIO_`, `F_COMMON_`, `F_LOCK_`, `F_ENEMY_` and `F_ITEM_` defines of
+`games/re1/inc/flags.akinc` (each define's trailing `//` comment is its
+description), so the names are written once, where the room scripts use them.
+A bit still named by its number (`F_COMMON_A4`) is left out. A mod can ship
+its own `game/flags.lua`; it replaces the whole file. The engine's own banks
+are named by the engine.
+
 ## The new-game start inventory
 
 The items a new game starts with come from the Lua chunk `game/new_game.lua`,
@@ -996,10 +1019,10 @@ directory at or above `--out`, and from the English text beside it
 (`language/en-US.txt`):
 
 - items (`IT_0B_AMMO_HANDGUN`, `IT_2F_KEY_INK_RIBBON`), enemies
-  (`EM_11_ZOMBIE_LAB`, `EM_0A_ADDER`), flags
+  (`EM_11_ZOMBIE_GREEN`, `EM_0A_ADDER`), flags
   (`F_SCENARIO_0A`, a bit of `FG_SCENARIO`), door sounds and animations
-  (`DOOR_SND_01_DR_MTL`, `DOOR_16_KAI01`) and films (`MOVIE_05_DM1`) by the
-  define's prefix; `door_aot_set`'s lock is `DOOR_LOCKED | F_LOCK_12`, the
+  (`DOOR_SND_01_DR_MTL`, `DOOR_16_KAI01`) and films (`MOVIE_03_FIRST_ZOMBIE`) by the
+  define's prefix; `door_aot_set`'s lock is `DOOR_LOCKED | F_LOCK_103_104`, the
   `FG_LOCK` bit that unlocks it; a door
   target is a room of the same stage (`ROOM_106_MAIN_HALL`) or
   `STAGE_2 | ROOM_201_..` for another;
@@ -1082,9 +1105,9 @@ hand edits, so the checked-in RE1 scripts are no longer re-exported.
 
 proc init
 {
-    if (ck(FG_COMMON, F_COMMON_A4, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE) && ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        set(FG_COMMON, F_COMMON_A9, TRUE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, TRUE);
         message(MSG_THERE_IS_A_BLOOD_STAIN_ON, 0); // "There's a blood stain on the floor."
     }
     else if (ck(FG_ROOM, F_ROOM_02, FALSE))
@@ -1283,6 +1306,7 @@ exist (Lua colon syntax):
 | `api:set_item_use_flag(item[, value])` | Set/clear a key/special/chemical item-use flag. |
 | `api:set_flag_bank(bank, bytes)` | Overwrite a bank's raw bytes, from a string or a sequence table. |
 | `api:set_state_byte(index, value)` | Write one BioCard state-image byte. |
+| `api:set_flag_name(bank, bit, name[, description])` | Name a game bank's bit for the debug menu's FLAGS screen (`game/flags.lua`); a bit can take one name per player. |
 | `api:set_music_group(group, { { track, loop }, ... })` | Define one preset of up to three numeric music tracks; empty groups are silent. |
 | `api:set_room_music(stage, room, { group, ... }[, { mansion2 = true }])` | Replace a room's up-to-four group variants (stage is the 1-based stage digit, 1-5); `mansion2` sets a mansion room's second visit's row. |
 | `api:set_room_music_state(stage, room, state[, { mansion2 = true }])` | Write the saved per-room music state byte (variant, mode and channel mask), of the second visit with `mansion2`. |

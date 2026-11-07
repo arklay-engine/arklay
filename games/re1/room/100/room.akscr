@@ -225,13 +225,13 @@ proc init
         room_bgm_state_set(0, ROOM_100_SAVE_ROOM, BGM_MAIN_ON | 1);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_24, FALSE) && ck(FG_COMMON, F_COMMON_62, FALSE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE) && ck(FG_COMMON, F_COMMON_62, FALSE))
             {
                 set(FG_COMMON, F_COMMON_39, TRUE);
                 room_bgm_state_set(0, ROOM_100_SAVE_ROOM, BGM_RELOAD);
                 enemy(EM_23_NPC_REBECCA, EB_06, NO_FLAG, SPAWN_FORCE, 2, 0, 2220, 0, 7280, 0, 3920, ENEMY_00_NPC_REBECCA, ANIM_10, 12, EVAR_00);
                 aot_set(AOT_01_EVENT, 6780, 3420, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01_4, 0, 0, 0);
-                set(FG_COMMON, F_COMMON_22, TRUE);
+                set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE);
                 evt_exec(0, TASK_09, on_enter);
                 cut_auto(CUT_LOCKED);
                 setb(B_CAMERA, CAM_02, 0);
@@ -241,11 +241,11 @@ proc init
                 enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2220, 0, 7280, 0, 3920, ENEMY_00_NPC_REBECCA, ANIM_00, 0, EVAR_00);
                 aot_set(AOT_01_EVENT, 6780, 3420, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01_3, 0, 0, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_27, FALSE) && ck(FG_COMMON, F_COMMON_2C, FALSE) && ck(FG_COMMON, F_COMMON_24, TRUE) && ck(FG_COMMON, F_COMMON_39, FALSE) && ck(FG_COMMON, F_COMMON_3C, FALSE))
+            if (ck(FG_COMMON, F_COMMON_27, FALSE) && ck(FG_COMMON, F_COMMON_2C, FALSE) && ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE) && ck(FG_COMMON, F_COMMON_39, FALSE) && ck(FG_COMMON, F_COMMON_3C, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_22, TRUE))
+                if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
                 {
-                    if (ck(FG_COMMON, F_COMMON_A0, TRUE) && ck(FG_COMMON, F_COMMON_A9, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, FALSE))
                     {
                     }
                     else
@@ -282,11 +282,11 @@ proc init
                     }
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_27, FALSE) && ck(FG_COMMON, F_COMMON_2C, FALSE) && ck(FG_COMMON, F_COMMON_24, TRUE) && ck(FG_COMMON, F_COMMON_39, FALSE) && ck(FG_COMMON, F_COMMON_3C, TRUE))
+            if (ck(FG_COMMON, F_COMMON_27, FALSE) && ck(FG_COMMON, F_COMMON_2C, FALSE) && ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE) && ck(FG_COMMON, F_COMMON_39, FALSE) && ck(FG_COMMON, F_COMMON_3C, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_22, TRUE))
+                if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
                 {
-                    if (ck(FG_COMMON, F_COMMON_A0, TRUE) && ck(FG_COMMON, F_COMMON_A9, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, FALSE))
                     {
                     }
                     else
@@ -309,18 +309,18 @@ proc init
                 sys_multi(SYS_UNEQUIP);
                 evt_exec(0, TASK_09, on_enter_2);
             }
-            if (ck(FG_COMMON, F_COMMON_2D, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ1, TRUE))
             {
-                set(FG_SCENARIO, F_SCENARIO_49, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_SERUM1_OBJ_ACK, TRUE);
             }
-            if (ck(FG_COMMON, F_COMMON_2E, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ2, TRUE))
             {
-                set(FG_SCENARIO, F_SCENARIO_4A, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, TRUE);
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_22, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
             {
                 if (ck(FG_COMMON, F_COMMON_21, TRUE))
                 {
@@ -331,10 +331,10 @@ proc init
                     cut_auto(CUT_LOCKED);
                     setb(B_CAMERA, CAM_04, 0);
                     evt_exec(0, TASK_09, on_enter_2);
-                    set(FG_COMMON, F_COMMON_22, FALSE);
+                    set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE);
                     room_bgm_state_set(0, ROOM_100_SAVE_ROOM, BGM_RELOAD);
                 }
-                if (ck(FG_COMMON, F_COMMON_07, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
                 {
                     sys_multi(SYS_UNEQUIP);
                     sys_multi(SYS_PLAYER_FLAGS, SYS_OR | PLF_04);
@@ -342,17 +342,17 @@ proc init
                     cut_auto(CUT_LOCKED);
                     setb(B_CAMERA, CAM_04, 0);
                     evt_exec(0, TASK_09, on_enter_2);
-                    set(FG_COMMON, F_COMMON_22, FALSE);
+                    set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE);
                     room_bgm_state_set(0, ROOM_100_SAVE_ROOM, BGM_RELOAD);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_23, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE))
             {
-                set(FG_SCENARIO, F_SCENARIO_49, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_SERUM1_OBJ_ACK, TRUE);
             }
-            if (ck(FG_COMMON, F_COMMON_24, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE))
             {
-                set(FG_SCENARIO, F_SCENARIO_4A, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, TRUE);
             }
         }
     }
@@ -361,7 +361,7 @@ proc init
         room_bgm_state_set(5, 0, BGM_MAIN_ON);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_22, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
             {
                 if (ck(FG_COMMON, F_COMMON_32, TRUE))
                 {
@@ -383,7 +383,7 @@ proc init
                 else if (ck(FG_COMMON, F_COMMON_2F, TRUE))
                 {
                     set(FG_COMMON, F_COMMON_30, TRUE);
-                    set(FG_COMMON, F_COMMON_C0, TRUE);
+                    set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
                     set(FG_COMMON, F_COMMON_2F, FALSE);
                     room_bgm_state_set(5, 0, BGM_OFF);
                     evt_exec(0, TASK_09, on_enter_chris_mansion2);
@@ -396,7 +396,7 @@ proc init
 
 proc main when (JILL && MANSION1)
 {
-    if (ck(FG_ROOM, F_ROOM_1F, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7D, TRUE))
+    if (ck(FG_ROOM, F_ROOM_1F, FALSE) && ck(FG_SCENARIO, F_SCENARIO_FADE_MENU_LATCH, TRUE))
     {
         set(FG_ROOM, F_ROOM_1F, TRUE);
         bgm_play(BGM_MAIN);
@@ -407,9 +407,9 @@ event on_enter when (CHRIS && MANSION1)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3356, 0, 3372, 0, 2568);
-        set(FG_COMMON, F_COMMON_24, TRUE);
+        set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE);
     }
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -483,7 +483,7 @@ event on_aot_01 when (CHRIS && MANSION1)
         set(FG_COMMON, F_COMMON_3C, TRUE);
         aot_reset(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         cutnext(CAM_01);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 3400, 0, 3260, 0, 2370);
         pos_set(ENEMY_00_NPC_REBECCA, 0, 2600, 0, 7294, 0, 8200);
@@ -518,8 +518,8 @@ event on_enter_2 when (MANSION1)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_SCENARIO, F_SCENARIO_7D, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_FADE_MENU_LATCH, TRUE);
         if (CHRIS)
         {
             set(FG_COMMON, F_COMMON_3C, TRUE);
@@ -616,7 +616,7 @@ event on_enter_2 when (MANSION1)
         dir_set(0, 0, 1544, 0, 6900, 0, 7948);
         cutnext(CAM_01);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         sys_multi(SYS_PLAYER_FLAGS, SYS_XOR | PLF_04);
     }
@@ -892,7 +892,7 @@ event on_aot_00_door when (CHRIS && MANSION1)
         set(FG_COMMON, F_COMMON_39, FALSE);
         set(FG_COMMON, F_COMMON_2C, TRUE);
         aot_reset(AOT_00_DOOR, SCE_NONE, 0, 0, 0, 0);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_fork(TASK_09, on_aot_00_door_sub3, 0);
@@ -926,7 +926,7 @@ event on_aot_00_door when (CHRIS && MANSION1)
 
 event on_aot_00_door_sub1 when (CHRIS && MANSION1)
 {
-    set(FG_COMMON, F_COMMON_22, FALSE);
+    set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE);
     evt_fork(TASK_09, on_aot_00_door_sub1_sub1, 0);
     evt_fork(TASK_09, on_aot_00_door_sub1_sub2, 0);
     voice_play(VOICE_PLAY, VO_004_0C);
@@ -940,7 +940,7 @@ event on_aot_00_door_sub1 when (CHRIS && MANSION1)
 
 event on_aot_00_door_sub2 when (CHRIS && MANSION1)
 {
-    set(FG_COMMON, F_COMMON_22, TRUE);
+    set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE);
     evt_fork(TASK_09, on_aot_00_door_sub2_sub1, 0);
     evt_fork(TASK_09, on_aot_00_door_sub2_sub2, 0);
     voice_play(VOICE_PLAY, VO_004_0E);
@@ -1132,7 +1132,7 @@ event event_14 when (CHRIS && MANSION1)
     act_reset();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -1160,7 +1160,7 @@ event on_aot_01_2 when (CHRIS && MANSION1)
         set(FG_COMMON, F_COMMON_3C, TRUE);
         aot_reset(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         cutnext(CAM_01);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 3400, 0, 3260, 0, 2370);
         pos_set(ENEMY_00_NPC_REBECCA, 0, 2600, 0, 7294, 0, 8200);
@@ -1371,7 +1371,7 @@ event on_aot_01_2_sub3 when (CHRIS && MANSION1)
     act_reset();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -1732,8 +1732,8 @@ event on_aot_01_3 when (CHRIS && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        if (ck(FG_COMMON, F_COMMON_22, TRUE))
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
         {
             evt_exec(0, TASK_09, on_aot_01_3_sub1);
             voice_play(VOICE_PLAY, VO_004_0F);
@@ -1748,7 +1748,7 @@ event on_aot_01_3 when (CHRIS && MANSION1)
     }
     wait_message();
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -1833,14 +1833,14 @@ event on_aot_01_4 when (CHRIS && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         evt_exec(0, TASK_09, on_aot_01_4_sub1);
         voice_play(VOICE_PLAY, VO_004_09);
         message(MSG_VO_004_09, 0);
     }
     wait_message();
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -1884,14 +1884,14 @@ event on_aot_02 when (CHRIS && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         evt_exec(0, TASK_09, on_aot_02_sub1);
         voice_play(VOICE_PLAY, VO_007_0E);
         message(MSG_VO_007_0E, 0);
     }
     wait_message();
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -1979,30 +1979,30 @@ event on_aot_03 when (MANSION1)
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_2D, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ1, TRUE))
             {
                 aot_on(AOT_06_ITEM, SCE_ITEM, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_2E, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ2, TRUE))
             {
                 aot_on(AOT_07_ITEM, SCE_ITEM, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_2D, FALSE) && ck(FG_COMMON, F_COMMON_2E, FALSE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ1, FALSE) && ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ2, FALSE))
             {
                 message(MSG_VITAMINS_AND_SERUMS_2A | MSG_FAST, RUN_READY | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "Vitamins and serums."
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_23, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE))
             {
                 aot_on(AOT_03_ITEM, SCE_ITEM, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_24, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE))
             {
                 aot_on(AOT_04_ITEM, SCE_ITEM, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_23, FALSE) && ck(FG_COMMON, F_COMMON_24, FALSE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, FALSE) && ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE))
             {
                 message(MSG_VITAMINS_AND_SERUMS_2A | MSG_FAST, RUN_READY | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "Vitamins and serums."
             }
@@ -2013,35 +2013,35 @@ event on_aot_03 when (MANSION1)
     {
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_2D, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ1, TRUE))
             {
                 if (ck(FG_ITEM, F_ITEM_17, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_2D, FALSE);
+                    set(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ1, FALSE);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_2E, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ2, TRUE))
             {
                 if (ck(FG_ITEM, F_ITEM_18, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_2E, FALSE);
+                    set(FG_COMMON, F_COMMON_CHRIS_SERUM_OBJ2, FALSE);
                 }
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_23, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE))
             {
                 if (ck(FG_ITEM, F_ITEM_17, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_23, FALSE);
+                    set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, FALSE);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_24, TRUE))
+            if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE))
             {
                 if (ck(FG_ITEM, F_ITEM_18, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_24, FALSE);
+                    set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE);
                 }
             }
         }
@@ -2051,7 +2051,7 @@ event on_aot_03 when (MANSION1)
 
 event on_enter_chris_mansion2 when (CHRIS && MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_RUN, F_RUN_MONSTERS, FALSE);
@@ -2062,7 +2062,7 @@ event on_enter_chris_mansion2 when (CHRIS && MANSION2)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
@@ -2082,7 +2082,7 @@ event on_enter_sub1_chris_mansion2 when (CHRIS && MANSION2)
 
 event on_enter_2_chris_mansion2 when (CHRIS && MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_fork(TASK_09, on_enter_2_sub1_chris_mansion2, 0);
@@ -2137,7 +2137,7 @@ event on_enter_2_chris_mansion2 when (CHRIS && MANSION2)
     run
     {
         aot_set(AOT_0A_EVENT, 7562, 7398, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0a, 0, 0, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -2347,13 +2347,13 @@ event on_enter_2_sub12 when (CHRIS && MANSION2)
 event on_aot_0a when (CHRIS && MANSION2)
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_fork(TASK_09, on_aot_0a_sub1, 0);
     voice_play(VOICE_PLAY, VO_007_0D_63);
     message(MSG_VO_007_0D_63, 0);
     wait_message();
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 

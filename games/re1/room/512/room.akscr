@@ -47,7 +47,7 @@ proc init
     {
         room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
     }
-    if (ck(FG_COMMON, F_COMMON_4B, FALSE))
+    if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, FALSE))
     {
         if (CHRIS)
         {
@@ -62,7 +62,7 @@ proc init
             enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
         }
         evt_exec(0, TASK_09, on_enter);
-        set(FG_COMMON, F_COMMON_4B, TRUE);
+        set(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE);
         room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_1_ON);
     }
     aot_set(AOT_01_MESSAGE, 1800, 3100, 900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
@@ -78,7 +78,7 @@ event on_enter
         {
             pos_set(ENEMY_00_NPC_JILL, 0, 0, 0, 5680, 0, 2930);
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
             {
                 evt_exec(0, TASK_09, on_enter_sub1);
@@ -96,7 +96,7 @@ event on_enter
             dir_set(0, 0, 1024, 0, 5670, 0, 9200);
         }
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         sleep(20);
         run
         {
@@ -375,7 +375,7 @@ event on_enter_sub1
         {
             cut_auto(CUT_FREE);
         }
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         if (CHRIS)
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
@@ -696,7 +696,7 @@ event on_enter_sub2
     }
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         if (CHRIS)
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);

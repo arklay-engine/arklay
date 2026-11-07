@@ -14,9 +14,9 @@
 #define AOT_03_DOOR 0x03
 #define AOT_04_DOOR 0x04
 #define ENEMY_00_HUNTER 0x00
-#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_00_ZOMBIE_GREEN 0x00
 #define ENEMY_01_HUNTER 0x01
-#define ENEMY_01_ZOMBIE_LAB 0x01
+#define ENEMY_01_ZOMBIE_GREEN 0x01
 #define F_ROOM_00 0x00
 #define F_ROOM_01 0x01
 #define F_ROOM_18 0x18
@@ -40,8 +40,8 @@ proc init
     {
         if (MANSION1)
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
             if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
             {
                 set(FG_SCENARIO, F_SCENARIO_05, TRUE);
@@ -64,16 +64,16 @@ proc init
         {
             enemy(EM_06_HUNTER, EB_02, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         }
-        if (ck(FG_COMMON, F_COMMON_5F, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, TRUE))
         {
-            set(FG_COMMON, F_COMMON_5E, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, TRUE);
         }
         if (MANSION1)
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-            enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_01_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
-        set(FG_COMMON, F_COMMON_4F, TRUE);
+        set(FG_COMMON, F_COMMON_J_BARRY_TERRACE_READY, TRUE);
     }
 }
 
@@ -86,18 +86,18 @@ proc main
             set(FG_ROOM, F_ROOM_18, TRUE);
             if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                pos_set(ENEMY_00_ZOMBIE_GREEN, 0, 0, 0, 5500, 0, 18500);
+                pos_set(ENEMY_01_ZOMBIE_GREEN, 0, 2048, 0, 19000, 0, 3500);
             }
             else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+                pos_set(ENEMY_00_ZOMBIE_GREEN, 0, 0, 0, 5500, 0, 18500);
+                pos_set(ENEMY_01_ZOMBIE_GREEN, 0, 2048, 0, 19000, 0, 3500);
             }
             else
             {
-                pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 3500);
-                pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 18500);
+                pos_set(ENEMY_00_ZOMBIE_GREEN, 0, 0, 0, 5500, 0, 3500);
+                pos_set(ENEMY_01_ZOMBIE_GREEN, 0, 2048, 0, 19000, 0, 18500);
             }
         }
     }
@@ -122,9 +122,9 @@ proc main
                 pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 18500);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_6B, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+        if (ck(FG_COMMON, F_COMMON_6B, TRUE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
         {
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             voice_play(VOICE_PLAY, VO_A00_00);
         }
     }

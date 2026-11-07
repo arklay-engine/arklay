@@ -27,7 +27,7 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     door_aot_set(AOT_00_DOOR, 2300, 6500, 2700, 3200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, STAGE_3 | ROOM_304_SECOND_HOUSE_GATE, 4000, 0, 30000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 11300, 13800, 3500, 3200, 1, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_401_ROOM_001, 9700, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 10600, 8200, 2400, 3200, 3, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_403_SAVE_ROOM, 8600, 0, 9000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -45,7 +45,7 @@ proc init
         obj(OBJ_00, OF_ACTIVE, SCA_NONE, 4622, 0, 10550, 3072, 0, 0, 0, 0, 450, 1980, 450, 450);
     }
     aot_set(AOT_06_USEITEM, 15711, 8221, 900, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 24, 0, 1, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_51, TRUE))
         {
@@ -60,29 +60,29 @@ proc init
     }
     if (CHRIS)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_1E, FALSE) && ck(FG_SCENARIO, F_SCENARIO_1F, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_B, FALSE))
         {
             if (cmpw(0, W_05, CMP_GE, 105))
             {
-                set(FG_SCENARIO, F_SCENARIO_1E, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, TRUE);
             }
             else
             {
-                set(FG_SCENARIO, F_SCENARIO_1F, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_B, TRUE);
             }
         }
     }
     else
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_1E, FALSE) && ck(FG_SCENARIO, F_SCENARIO_1F, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_B, FALSE))
         {
             if (cmpw(0, W_05, CMP_GE, 72))
             {
-                set(FG_SCENARIO, F_SCENARIO_1E, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, TRUE);
             }
             else
             {
-                set(FG_SCENARIO, F_SCENARIO_1F, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_B, TRUE);
             }
         }
         if (ck(FG_COMMON, F_COMMON_AE, TRUE))
@@ -105,13 +105,13 @@ proc main
     if (ck(FG_ROOM, F_ROOM_18, TRUE))
     {
         set(FG_ROOM, F_ROOM_18, FALSE);
-        if (ck(FG_ROOM, F_ROOM_17, FALSE) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+        if (ck(FG_ROOM, F_ROOM_17, FALSE) && ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
         {
             set(FG_ROOM, F_ROOM_17, TRUE);
             eml_state(0, ENEMY_00_PLANT_FOUNTAIN, EML_BEHAVIOUR, EB_80);
         }
     }
-    else if (ck(FG_ROOM, F_ROOM_17, TRUE) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    else if (ck(FG_ROOM, F_ROOM_17, TRUE) && ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
         set(FG_ROOM, F_ROOM_17, FALSE);
         eml_state(0, ENEMY_00_PLANT_FOUNTAIN, EML_BEHAVIOUR, EB_02);

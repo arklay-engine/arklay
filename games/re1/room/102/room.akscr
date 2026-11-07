@@ -45,12 +45,12 @@ proc init
     aot_set(AOT_04_HIKIDASHI, 2000, 2237, 1750, 700, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 30, 0, 2, 0, 3, 0);
     if (MANSION2)
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_2F, TRUE))
             {
                 set(FG_COMMON, F_COMMON_30, TRUE);
-                set(FG_COMMON, F_COMMON_C0, TRUE);
+                set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
                 set(FG_COMMON, F_COMMON_2F, FALSE);
                 evt_exec(0, TASK_09, on_enter);
             }
@@ -70,7 +70,7 @@ event event_00 when (MANSION2)
 
 event on_enter when (MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_RUN, F_RUN_MONSTERS, FALSE);
@@ -81,7 +81,7 @@ event on_enter when (MANSION2)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }

@@ -79,12 +79,12 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_47, SAT_MANUAL | SAT_PLAYER, 0);
     aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 200, 0, F_ITEM_49, SAT_MANUAL | SAT_PLAYER, 0);
     }
@@ -149,7 +149,7 @@ proc main
         }
         else
         {
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
             cut_auto(CUT_FREE);
         }
@@ -246,19 +246,19 @@ proc main
         set(FG_COMMON, F_COMMON_21, FALSE);
         bgm_stop(BGM_SUB_1);
     }
-    if (ck(FG_COMMON, F_COMMON_22, TRUE))
+    if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
     {
-        set(FG_COMMON, F_COMMON_22, FALSE);
+        set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE);
         bgm_stop(BGM_SUB_2);
     }
-    if (ck(FG_COMMON, F_COMMON_23, TRUE))
+    if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE))
     {
-        set(FG_COMMON, F_COMMON_23, FALSE);
+        set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, FALSE);
         bgm_play(BGM_MAIN);
     }
-    if (ck(FG_COMMON, F_COMMON_24, TRUE))
+    if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, TRUE))
     {
-        set(FG_COMMON, F_COMMON_24, FALSE);
+        set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE);
         bgm_play(BGM_SUB_1);
     }
     if (ck(FG_COMMON, F_COMMON_25, TRUE))
@@ -308,9 +308,9 @@ proc main
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 28661, -2600, 11650, 2912);
         dir_set(0, 0, 864, 0, 26692, 0, 19840);
     }
-    if (ck(FG_COMMON, F_COMMON_22, TRUE))
+    if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
     {
-        set(FG_COMMON, F_COMMON_22, FALSE);
+        set(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE);
         setb(B_ROOM, 19, 0);
         cam_set(CAM_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
         cutnext(CAM_02);
@@ -338,7 +338,7 @@ event from_main
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_AOT, IMDL_00);
     evt_tween_begin_alt();
@@ -511,7 +511,7 @@ event from_main
     aot_reset(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_016_05);
             message(MSG_VO_016_05, 0);
@@ -533,7 +533,7 @@ event from_main
         set(FG_RUN, F_RUN_1A, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         mass_mask(MASK_CLEAR, FXF_8000);
         cutcurr(0);
     }
@@ -1245,7 +1245,7 @@ event from_main_2
     sleep(10);
     act_reset();
     evt_nop();
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(15);
     objtbl_b_set(TBL_ITEM, IMDL_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     sleep(10);
@@ -1275,7 +1275,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     run
     {
         sys_multi(SYS_IDLE);
@@ -1346,7 +1346,7 @@ event from_main_3
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(180);
     evt_fork(TASK_03, from_main_3_sub2, 0);
@@ -2540,7 +2540,7 @@ event from_main_4
         aot_switch(0, SPR_01, SPR_ON);
         aot_switch(0, SPR_02, SPR_ON);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         pos_set(ENEMY_00_TYRANT_2, 0, 800, 0, 13873, 0, 24724);
         bank_bit(255);
         cutnext(CAM_06);
@@ -2578,7 +2578,7 @@ event from_main_4
         inst_cfg(COL_LIST_01, COL_04, CF_2, 5526, 25100, 17154, 32000);
         set(FG_ROOM, F_ROOM_09, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }

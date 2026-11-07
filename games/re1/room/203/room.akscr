@@ -58,19 +58,19 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_0A, FALSE) && ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_ITEM, F_ITEM_0D, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_FOREST_SCENE, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_ITEM, F_ITEM_118_KEY_HERBICIDE_0, FALSE))
         {
-            set(FG_COMMON, F_COMMON_07, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE);
             set(FG_ROOM, F_ROOM_1F, TRUE);
-            item_aot_set(AOT_08_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_0E, SAT_UNDER | SAT_PLAYER, 0);
+            item_aot_set(AOT_08_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_106_AMMO_GRENADE_ACID_1, SAT_UNDER | SAT_PLAYER, 0);
             enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1568, 0, 23782, -2885, 14862, ENEMY_00_NPC_BARRY, ANIM_00, 0, EVAR_00);
             evt_exec(0, TASK_00, on_enter);
             set(FG_ROOM, F_ROOM_0A, TRUE);
             set(FG_ROOM, F_ROOM_0B, TRUE);
         }
-        if (ck(FG_COMMON, F_COMMON_05, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_LOCKPICK_SCENE, FALSE))
         {
-            set(FG_COMMON, F_COMMON_07, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE);
             aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
             aot_reset(AOT_02_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
             aot_reset(AOT_03_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
@@ -122,7 +122,7 @@ event on_enter when (JILL)
     act_anim_seq(AB_02, 29000, 19000, F_ROOM_03);
     act_reset();
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(5);
     evt_fork(TASK_01, on_enter_sub2, 0);
     voice_play(VOICE_PLAY, VO_106_00);
@@ -487,7 +487,7 @@ event on_enter_sub1 when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     do
     {
         evt_next();
@@ -625,7 +625,7 @@ event on_enter_sub3 when (JILL)
     run
     {
         pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 10000, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_1F, FALSE);
         set(FG_ROOM, F_ROOM_0A, FALSE);

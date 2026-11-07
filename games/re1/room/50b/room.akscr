@@ -78,7 +78,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_AC, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -88,7 +88,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_B3, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_CHRIS, ANIM_00, 0, EVAR_00);
             }
@@ -105,7 +105,7 @@ event on_enter
         {
             if (ck(FG_COMMON, F_COMMON_AC, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
                 {
                     eml_state(0, ENEMY_01_NPC_JILL, EML_08);
                 }
@@ -115,7 +115,7 @@ event on_enter
         {
             if (ck(FG_COMMON, F_COMMON_B3, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
                 {
                     eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
                 }
@@ -130,7 +130,7 @@ event on_aot_01_door
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_SCENARIO, F_SCENARIO_65, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -399,7 +399,7 @@ event on_aot_01_door
             aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 255, 0);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

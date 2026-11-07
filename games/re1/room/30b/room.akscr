@@ -73,7 +73,7 @@
 
 proc init
 {
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         door_aot_set(AOT_00_DOOR, 21800, 18800, 2200, 2600, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_27, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
@@ -82,7 +82,7 @@ proc init
         door_aot_set(AOT_00_DOOR, 21800, 18800, 2200, 2600, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
     door_aot_set(AOT_01_DOOR, 25600, 300, 4300, 2900, 11, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30C_BLACK_TIGER_ROOM, 10700, 0, 12500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_02_ITEM, 2030, 9800, 1200, 1200, IT_0E_AMMO_MAGNUM, 6, IMDL_00, SCA_NONE, 2630, -2060, 10400, 0, F_ITEM_7D, SAT_MANUAL | SAT_PLAYER, 0);
     }
@@ -90,13 +90,13 @@ proc init
     {
         item_aot_set(AOT_02_ITEM, 2030, 9800, 1200, 1200, IT_12_AMMO_GRENADE_FLAME, 6, IMDL_00, SCA_NONE, 2620, -1880, 9780, 400, F_ITEM_7E, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         item_aot_set(AOT_03_ITEM, 20400, 17700, 1000, 1300, IT_06_WEAPON_FLAMETHROWER, 240, IMDL_01, SCA_NONE, 21190, -3100, 17840, 0, F_ITEM_99, SAT_MANUAL | SAT_PLAYER, 0);
         swap_var(XFER_RESTORE, AOT_03_ITEM, B_0D);
     }
     obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 2000, -2480, 14500, 0, 0, 0, 0, 0, 2700, 2800, 2800, 2800);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 21090, -3072, 17840, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
@@ -133,7 +133,7 @@ proc init
         enemy(EM_06_HUNTER, EB_02, F_ENEMY_7A, SPAWN_FORCE, 1, 0, 2400, 0, 27800, 0, 11600, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         enemy(EM_06_HUNTER, EB_02, F_ENEMY_7B, SPAWN_FORCE, 1, 0, 2400, 0, 27800, 0, 11600, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         aot_set(AOT_0C_NONE, 20400, 17700, 1000, 1300, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     }
@@ -162,7 +162,7 @@ proc init
     {
         room_bgm_state_set(2, ROOM_30B_ROCK_PASSAGE, BGM_SUB_2_ON);
     }
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
 }
 
 proc main
@@ -194,7 +194,7 @@ proc main
     }
     if (ck(FG_SCENARIO, F_SCENARIO_3D, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_17, TRUE) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (ck(FG_ROOM, F_ROOM_17, TRUE) && ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
         {
             if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
             {
@@ -206,7 +206,7 @@ proc main
             }
         }
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (testpickup(IT_06_WEAPON_FLAMETHROWER))
         {
@@ -946,7 +946,7 @@ event event_02
     run
     {
         cutnext(CAM_04);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_1C, TRUE);
         set(FG_ROOM, F_ROOM_0A, TRUE);
@@ -1060,7 +1060,7 @@ event event_02
     {
         set(FG_ROOM, F_ROOM_18, TRUE);
         cutcurr(0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_delete(AOT_06_NONE, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_07_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
@@ -1182,7 +1182,7 @@ event event_06
         dir_set(0, 0, 900, 0, 21600, 0, 18300);
         cutnext(CAM_00);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_next();
     evt_nop();
@@ -1232,7 +1232,7 @@ event event_06
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_ROOM, F_ROOM_21, FALSE);
         bgm_play(BGM_SUB_2);
     }
@@ -1735,7 +1735,7 @@ event from_main_7
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 23000, 20000);
         pos_set(ENEMY_00_HUNTER, 0, 1300, 0, 23200, 0, 17800);
         eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_02);
@@ -1750,7 +1750,7 @@ event from_main_7
     run
     {
         cutcurr(0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();

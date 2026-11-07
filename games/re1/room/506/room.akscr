@@ -41,7 +41,7 @@ proc init
     obj(OBJ_00, OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_01, OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_02, OF_INTANGIBLE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         enemy(EM_15_PROP_COMPUTER_HANDS_RIGHT, EB_80, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 3760, 16564, -1242, 8322, ENEMY_00_PROP_COMPUTER_HANDS_RIGHT, ANIM_00, 0, EVAR_00);
         enemy(EM_14_PROP_COMPUTER_HANDS_LEFT, EB_80, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 3760, 16564, -1242, 9022, ENEMY_01_PROP_COMPUTER_HANDS_LEFT, ANIM_00, 0, EVAR_00);
@@ -73,7 +73,7 @@ event on_aot_01
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            set(FG_SCENARIO, F_SCENARIO_20, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_INTERACTIVE_SCREEN, TRUE);
         }
     }
     evt_finish();

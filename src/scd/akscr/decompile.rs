@@ -271,7 +271,7 @@ fn enemy_names(scripts: &Scripts, names: &Names) -> BTreeMap<u8, String> {
             let kind = match kinds.iter().copied().collect::<Vec<_>>().as_slice() {
                 &[kind] => Some(names.enemy(kind).map_or_else(
                     || format!("{kind:02X}"),
-                    // `EM_11_ZOMBIE_LAB` is `ZOMBIE_LAB`.
+                    // `EM_11_ZOMBIE_GREEN` is `ZOMBIE_GREEN`.
                     |name| name.splitn(3, '_').nth(2).unwrap_or(name).to_string(),
                 )),
                 _ => None,

@@ -58,9 +58,9 @@ proc init
             item_aot_set(AOT_08_ITEM, 10690, 5280, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 11930, -1800, 5320, 0, F_ITEM_B6, SAT_MANUAL | SAT_PLAYER, 0);
         }
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_1E, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, TRUE))
         {
             obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5630, -1600, 21630, -950, 0, 0, 0, 0, 0, 0, 0, 0);
             obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5700, -1670, 21430, -2048, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -71,7 +71,7 @@ proc init
             obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5480, -1670, 21430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
-    else if (ck(FG_SCENARIO, F_SCENARIO_1E, TRUE))
+    else if (ck(FG_SCENARIO, F_SCENARIO_PANEL_VARIANT_A, TRUE))
     {
         obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5900, -1600, 21340, 380, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5700, -1670, 21430, -2048, 0, 0, 0, 0, 0, 0, 0, 0);

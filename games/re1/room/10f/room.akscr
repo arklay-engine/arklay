@@ -99,7 +99,7 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_06, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_104_10F, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
         aot_set(AOT_01_MESSAGE, 8800, 7200, 1500, 1700, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
@@ -111,7 +111,7 @@ proc init
     aot_set(AOT_02_MESSAGE, 10200, 7300, 600, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_A4, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -122,7 +122,7 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_A7, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
         }
@@ -171,11 +171,11 @@ proc init
     obj(OBJ_02, OF_NOT_PUSHABLE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 15000, 0, 11200, 1024, 0, 0, 0, 0, 600, 544, 900, 600);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_A2, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_A0, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_A1, TRUE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_PRACTISED, TRUE))
                 {
                     evt_exec(0, TASK_00, on_enter_2);
                 }
@@ -191,11 +191,11 @@ proc init
             evt_exec(0, TASK_09, on_enter_3);
         }
         evt_exec(0, TASK_09, on_enter_4);
-        if (ck(FG_COMMON, F_COMMON_A2, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, FALSE))
         {
             enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 424, 0, 200, 0, 500, ENEMY_00_NPC_REBECCA, ANIM_00, 0, EVAR_00);
         }
-        else if (ck(FG_COMMON, F_COMMON_A9, FALSE))
+        else if (ck(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, FALSE))
         {
             enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3224, 0, 9600, 0, 8100, ENEMY_00_NPC_REBECCA, ANIM_00, 0, EVAR_00);
         }
@@ -222,7 +222,7 @@ proc main
                 {
                     if (ck(FG_COMMON, F_COMMON_61, TRUE))
                     {
-                        if (ck(FG_COMMON, F_COMMON_24, FALSE))
+                        if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE))
                         {
                             evt_exec(0, TASK_09, from_main);
                         }
@@ -236,7 +236,7 @@ proc main
                         evt_exec(0, TASK_09, from_main_6);
                     }
                 }
-                else if (ck(FG_COMMON, F_COMMON_24, FALSE))
+                else if (ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ2, FALSE))
                 {
                     evt_exec(0, TASK_09, from_main);
                 }
@@ -256,9 +256,9 @@ proc main
     }
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_A4, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_A3, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN, TRUE))
             {
                 aot_delete(AOT_06_USEITEM, SCE_USEITEM, SAT_PLAYER);
                 aot_delete(AOT_07_USEITEM, SCE_USEITEM, SAT_PLAYER);
@@ -270,7 +270,7 @@ proc main
             }
             if (testpickup(IT_20_KEY_EMBLEM_GOLD))
             {
-                set(FG_COMMON, F_COMMON_A3, TRUE);
+                set(FG_COMMON, F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN, TRUE);
                 evt_exec(0, TASK_09, from_main_3_v2);
             }
             if (testitem(IT_1F_KEY_EMBLEM_WOOD))
@@ -278,7 +278,7 @@ proc main
                 if (ck(FG_ROOM, F_ROOM_23, TRUE))
                 {
                     set(FG_ITEM, F_ITEM_14, TRUE);
-                    set(FG_COMMON, F_COMMON_A4, TRUE);
+                    set(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
                     aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
                     evt_exec(0, TASK_09, from_main_4_chris);
@@ -293,12 +293,12 @@ proc main
                     objtbl_b_set(TBL_ITEM, IMDL_01, OF_ACTIVE);
                     aot_delete(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
                     evt_exec(0, TASK_09, from_main_4_chris);
-                    set(FG_COMMON, F_COMMON_A3, FALSE);
+                    set(FG_COMMON, F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN, FALSE);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_A2, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_A9, FALSE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, FALSE))
                 {
                     aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                     aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d, 0);
@@ -307,9 +307,9 @@ proc main
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_A2, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_PIANO_PLAYED, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_A9, FALSE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_LEFT_BAR, FALSE))
                 {
                     aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                     aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_2, 0);
@@ -320,11 +320,11 @@ proc main
             aot_delete(AOT_08_USEITEM, SCE_NONE, SAT_PLAYER);
             aot_delete(AOT_09_USEITEM, SCE_NONE, SAT_PLAYER);
         }
-        if (ck(FG_COMMON, F_COMMON_A4, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 153, 255, 0);
         }
-        else if (ck(FG_COMMON, F_COMMON_A3, TRUE))
+        else if (ck(FG_COMMON, F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN, TRUE))
         {
             aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 152, 255, 0);
         }
@@ -342,7 +342,7 @@ proc main
                 aot_switch(0, SPR_0E, SPR_OFF);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_A7, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_A6, TRUE))
             {
@@ -364,7 +364,7 @@ proc main
                 if (ck(FG_ROOM, F_ROOM_22, TRUE))
                 {
                     set(FG_ITEM, F_ITEM_14, TRUE);
-                    set(FG_COMMON, F_COMMON_A7, TRUE);
+                    set(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
                     aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
                     evt_exec(0, TASK_09, from_main_3);
@@ -390,7 +390,7 @@ proc main
             aot_delete(AOT_08_USEITEM, SCE_NONE, SAT_PLAYER);
             aot_delete(AOT_09_USEITEM, SCE_NONE, SAT_PLAYER);
         }
-        if (ck(FG_COMMON, F_COMMON_A7, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 153, 255, 0);
         }
@@ -434,13 +434,13 @@ event from_main
         if (CHRIS)
         {
             remove_item(IT_23_KEY_MUSIC_SCORE);
-            set(FG_COMMON, F_COMMON_A0, TRUE);
+            set(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE);
             message(MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC | MSG_FAST, 0); // "Chris unfortunately can't read music."
         }
         else
         {
             message(MSG_IT_IS_MOONLIGHT_SONATA | MSG_FAST, 0); // "It's “Moonlight Sonata"."
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         }
     }
     do
@@ -450,7 +450,7 @@ event from_main
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     if (CHRIS)
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
         act_flag_op(EF_OR, 0);
@@ -663,7 +663,7 @@ event from_main
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+        while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
         sleep(40);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
         evt_actor_begin();
@@ -956,7 +956,7 @@ event from_main_2 when (CHRIS)
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         remove_item(IT_23_KEY_MUSIC_SCORE);
-        set(FG_COMMON, F_COMMON_A0, TRUE);
+        set(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE);
         message(MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC | MSG_FAST, 0); // "Chris unfortunately can't read music."
     }
     do
@@ -964,7 +964,7 @@ event from_main_2 when (CHRIS)
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
     act_flag_op(EF_OR, 0);
@@ -1455,7 +1455,7 @@ event from_main_sub1 when (CHRIS)
     {
         cutnext(CAM_01);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 146, 125, 0);
     }
@@ -1533,7 +1533,7 @@ event from_main_sub2 when (CHRIS)
     {
         cutnext(CAM_01);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 146, 125, 0);
         aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, on_aot_00_door, 0);
@@ -1560,7 +1560,7 @@ event from_main_2_jill when (JILL)
     sleep(20);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         cutnext(CAM_03);
     }
     evt_work_set(WK_OBJ, OBJ_00);
@@ -1583,7 +1583,7 @@ event from_main_2_jill when (JILL)
     {
         cutnext(CAM_04);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_finish();
@@ -1687,7 +1687,7 @@ event from_main_3 when (JILL)
     sleep(21);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         cutnext(CAM_03);
     }
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
@@ -1711,7 +1711,7 @@ event from_main_3 when (JILL)
     {
         cutnext(CAM_04);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_finish();
@@ -1737,7 +1737,7 @@ event on_enter_jill when (JILL)
 event on_aot_00_door when (CHRIS)
 {
     aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1776,7 +1776,7 @@ event on_aot_00_door when (CHRIS)
     run
     {
         door_aot_set(AOT_03_ITEM, 11600, 760, 5800, 4400, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, 0, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1813,7 +1813,7 @@ event on_enter_2
         sleep(10);
         run
         {
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             voice_play(VOICE_PLAY, VO_006_0F);
             message(MSG_VO_006_0F, 0);
         }
@@ -2499,7 +2499,7 @@ event on_enter_2
     {
         if (CHRIS)
         {
-            set(FG_COMMON, F_COMMON_A2, TRUE);
+            set(FG_COMMON, F_COMMON_C_PIANO_PLAYED, TRUE);
         }
         else
         {
@@ -2508,7 +2508,7 @@ event on_enter_2
             set(FG_COMMON, F_COMMON_A5, TRUE);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         if (CHRIS)
         {
@@ -2561,7 +2561,7 @@ event from_main_3_v2
         sleep(20);
         run
         {
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             cutnext(CAM_03);
         }
         evt_work_set(WK_OBJ, OBJ_00);
@@ -2584,7 +2584,7 @@ event from_main_3_v2
         {
             cutnext(CAM_04);
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             cut_auto(CUT_FREE);
         }
     }
@@ -2593,7 +2593,7 @@ event from_main_3_v2
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             cut_auto(CUT_FREE);
         }
     }
@@ -2607,7 +2607,7 @@ event from_main_4_chris when (CHRIS)
     sleep(21);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         cutnext(CAM_03);
     }
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
@@ -2631,7 +2631,7 @@ event from_main_4_chris when (CHRIS)
     {
         cutnext(CAM_04);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_finish();
@@ -2662,7 +2662,7 @@ event from_main_5 when (CHRIS)
 event on_enter_4
 {
     sleep(1);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     evt_finish();
 }
 
@@ -2671,7 +2671,7 @@ event on_aot_0d when (CHRIS)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         message(26 | MSG_FAST, 0);
         voice_play(VOICE_PLAY, VO_007_08);
         aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_PLAYER);
@@ -2692,7 +2692,7 @@ event on_aot_0d when (CHRIS)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -2707,7 +2707,7 @@ event on_aot_0d_2 when (CHRIS)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         message(27 | MSG_FAST, 0);
         voice_play(VOICE_PLAY, VO_008_01);
         aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_PLAYER);
@@ -2728,7 +2728,7 @@ event on_aot_0d_2 when (CHRIS)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

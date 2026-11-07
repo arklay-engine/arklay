@@ -56,7 +56,7 @@ proc init
     {
         obj(OBJ_00, OF_ACTIVE, SCA_NONE, 10720, -2350, 15120, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_rot(ROT_OBJ | OBJ_00, -2048, 1024);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         }
@@ -66,12 +66,12 @@ proc init
         }
         enemy(EM_06_HUNTER, EB_27, F_ENEMY_75, SPAWN_FORCE, 2, 0, 520, 0, 5853, 0, 16051, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         room_bgm_state_set(5, 11, BGM_MAIN_ON);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_21, TRUE))
             {
                 set(FG_COMMON, F_COMMON_21, FALSE);
-                if (ck(FG_COMMON, F_COMMON_22, TRUE))
+                if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
                 {
                     plw_anim(PLW_02, ANIM_28, 0);
                     setw(W_04, 0);
@@ -106,7 +106,7 @@ proc init
 
 event on_enter when (CHRIS && MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -147,7 +147,7 @@ event on_enter when (CHRIS && MANSION2)
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -178,7 +178,7 @@ event on_enter_sub1 when (CHRIS && MANSION2)
 
 event on_enter_2 when (CHRIS && MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -215,7 +215,7 @@ event on_enter_2 when (CHRIS && MANSION2)
     act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 

@@ -70,7 +70,7 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
     door_aot_set(AOT_02_DOOR, 22300, 3200, 4700, 4100, 12, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, STAGE_1 | ROOM_11B_STORE_ROOM, 8200, 0, 5900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -116,11 +116,11 @@ proc init
     }
     enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_30, SPAWN_FORCE, 2, 0, 744, 0, 23945, 0, 20792, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
     enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_31, SPAWN_FORCE, 2, 0, 1464, 0, 29528, 0, 23029, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_32, SPAWN_FORCE, 2, 0, 2784, 0, 9000, 0, 11000, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_14, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_14, FALSE) && ck(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE))
     {
         set(FG_ROOM, F_ROOM_00, TRUE);
     }
@@ -149,7 +149,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_ROOM, F_ROOM_00, TRUE) && ck(FG_ROOM, F_ROOM_01, FALSE))
         {
@@ -227,7 +227,7 @@ event from_main_2
     evt_disable(TASK_00);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     if (CHRIS)
     {
         voice_play(VOICE_PLAY, VO_009_00_1E);
@@ -342,7 +342,7 @@ event from_main_2
     {
         sys_multi(SYS_IDLE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_STATUS, F_STATUS_11, TRUE);
         aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
         if (CHRIS)

@@ -443,7 +443,7 @@ event on_aot_09_sub1
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     timer_setup(LIGHT_FADE_VEIL, -2000, FADE_R | FADE_G | FADE_B);
     sleep(1);
@@ -499,7 +499,7 @@ event on_aot_09_sub1
             setw(W_LIGHT_DELTA, 0);
         }
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_07, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);

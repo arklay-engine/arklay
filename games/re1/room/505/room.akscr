@@ -44,7 +44,7 @@ proc init
     {
         effect_tracked(FX_0A, FX_ROW_10, FX_AT_WORLD, 22500, 61736, 2300, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, FALSE))
     {
         enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_3F, SPAWN_FORCE, 2, 0, 15, 0, 4174, 0, 12125, ENEMY_00, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_3F, TRUE))
@@ -56,7 +56,7 @@ proc init
             enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_41, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00, ANIM_00, 0, EVAR_00);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, FALSE))
     {
         enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_42, SPAWN_FORCE, 2, 0, 495, 0, 11847, 0, 3599, ENEMY_01, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_42, TRUE))
@@ -68,7 +68,7 @@ proc init
             enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_44, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01, ANIM_00, 0, EVAR_00);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, FALSE))
     {
         enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_45, SPAWN_FORCE, 2, 0, 2871, 0, 11775, 0, 1457, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_45, TRUE))
@@ -82,7 +82,7 @@ proc init
     }
     if (CHRIS)
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, FALSE))
         {
             enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_48, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
             if (ck(FG_ENEMY, F_ENEMY_48, TRUE))
@@ -94,10 +94,10 @@ proc init
                 enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_4A, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_5C, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+        if (ck(FG_COMMON, F_COMMON_BGM_207_C, FALSE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE) && ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
         {
             evt_exec(0, TASK_09, on_enter);
-            set(FG_COMMON, F_COMMON_5C, TRUE);
+            set(FG_COMMON, F_COMMON_BGM_207_C, TRUE);
             room_bgm_state_set(4, ROOM_500_UNDER_FOUNTAIN, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
             room_bgm_state_set(4, ROOM_501_HELIPORT_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
             room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
@@ -125,7 +125,7 @@ proc init
     }
     else
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, FALSE))
         {
             enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_48, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
             if (ck(FG_ENEMY, F_ENEMY_48, TRUE))
@@ -138,7 +138,7 @@ proc init
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE))
     {
         enemy(EM_09_CHIMERA, EB_03, F_ENEMY_A4, SPAWN_FORCE, 2, 0, 0, 0, 13100, 0, 3070, ENEMY_00, ANIM_00, 0, EVAR_01);
         enemy(EM_09_CHIMERA, EB_03, F_ENEMY_A5, SPAWN_FORCE, 2, 0, 2072, 0, 10250, 0, 18760, ENEMY_01, ANIM_00, 0, EVAR_01);
@@ -166,7 +166,7 @@ event on_enter
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     run
     {
         snd_pan_vol_set(BGM_SUB_1, 112, 112);
@@ -228,7 +228,7 @@ event on_enter
     act_reset();
     evt_nop();
     cut_auto(CUT_FREE);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     run
     {
         room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);

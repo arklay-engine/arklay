@@ -61,7 +61,7 @@ proc init
     obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_01, OF_ACTIVE, SCA_NONE, 8795, 0, 7886, 2048, 0, 0, 0, 0, 450, 1980, 450, 450);
     obj(OBJ_02, OF_ACTIVE, SCA_NONE, 14035, 0, 6190, 0, 0, 0, 0, 0, 450, 1980, 450, 450);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     set(FG_ROOM, F_ROOM_20, TRUE);
     set(FG_ROOM, F_ROOM_21, TRUE);
     aot_delete(AOT_09_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -207,7 +207,7 @@ event from_main
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cut_auto(CUT_LOCKED);
         cutnext(CAM_01);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_ROOM, F_ROOM_1E, TRUE);
         bank_bit(1);
         bank_bit(2);
@@ -268,7 +268,7 @@ event from_main
         aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         set(FG_SCENARIO, F_SCENARIO_3A, TRUE);
         set(FG_ROOM, F_ROOM_1E, FALSE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }

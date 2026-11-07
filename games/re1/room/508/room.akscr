@@ -82,7 +82,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_AC, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 dir_set(0, 0, 4056, 0, 2600, 0, 2500);
                 evt_exec(0, TASK_09, on_enter);
@@ -93,7 +93,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_B3, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 dir_set(0, 0, 4056, 0, 2600, 0, 2500);
                 evt_exec(0, TASK_09, on_enter);
@@ -109,7 +109,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_AC, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 4056, 0, 3100, 0, 4300, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -119,7 +119,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_B3, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 4056, 0, 3100, 0, 4300, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
             }
@@ -179,7 +179,7 @@ event on_enter
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (CHRIS)
         {
             set(FG_COMMON, F_COMMON_AC, TRUE);
@@ -337,7 +337,7 @@ event on_enter
             pos_set(ENEMY_00_NPC_CHRIS, 0, 4056, 0, 0, 0, 0);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

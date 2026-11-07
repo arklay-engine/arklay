@@ -76,28 +76,28 @@ proc init
         aot_set(AOT_04_MESSAGE, 5600, 13700, 1000, 2100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
         aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         aot_set(AOT_05_TYPEWRITER, 6500, 17800, 2800, 1100, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE) && ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
         {
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             set(FG_COMMON, F_COMMON_30, TRUE);
             set(FG_COMMON, F_COMMON_33, TRUE);
-            set(FG_COMMON, F_COMMON_23, TRUE);
+            set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE);
         }
         if (ck(FG_COMMON, F_COMMON_36, TRUE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE))
         {
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             set(FG_COMMON, F_COMMON_6C, TRUE);
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_5C, TRUE) && ck(FG_COMMON, F_COMMON_48, TRUE) && ck(FG_COMMON, F_COMMON_55, FALSE))
+        if (ck(FG_COMMON, F_COMMON_BGM_207_C, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_A, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_B, FALSE))
         {
             dir_set(0, 0, 2650, 0, 13000, 0, 4040);
             enemy(EM_2A_NPC_BARRY_2, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1224, 0, 11700, 0, 4500, ENEMY_00_NPC_BARRY_2, ANIM_33, 0, EVAR_00);
             evt_exec(0, TASK_09, on_enter_2);
         }
-        if (ck(FG_COMMON, F_COMMON_5C, TRUE) && ck(FG_COMMON, F_COMMON_48, TRUE) && ck(FG_COMMON, F_COMMON_55, TRUE))
+        if (ck(FG_COMMON, F_COMMON_BGM_207_C, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_A, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_B, TRUE))
         {
             enemy(EM_2A_NPC_BARRY_2, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1224, 0, 11700, 0, 4500, ENEMY_00_NPC_BARRY_2, ANIM_36, 50, EVAR_00);
         }
@@ -122,7 +122,7 @@ event from_main
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (CHRIS)
         {
             dir_set(0, 0, 0, 0, 5250, 300, 15200);
@@ -206,7 +206,7 @@ event on_enter
         aot_delete(AOT_06_MESSAGE, SCE_NONE, 0);
         objtbl_b_set(TBL_OBJ, OBJ_02, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -219,7 +219,7 @@ event from_main_sub1
         aot_set(AOT_06_MESSAGE, 600, 11000, 6200, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         objtbl_b_set(TBL_OBJ, OBJ_02, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -352,9 +352,9 @@ event on_enter_2 when (JILL)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_COMMON, F_COMMON_55, TRUE);
-        set(FG_COMMON, F_COMMON_C0, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        set(FG_COMMON, F_COMMON_BGM_207_B, TRUE);
+        set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -578,7 +578,7 @@ event on_enter_2 when (JILL)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();

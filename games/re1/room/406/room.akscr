@@ -125,7 +125,7 @@ event on_enter when (JILL)
     {
         set(FG_COMMON, F_COMMON_B2, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 4085, 0, 2800, 0, 3000);
     }
     sleep(10);
@@ -553,7 +553,7 @@ event on_enter when (JILL)
     {
         bgm_stop(BGM_SUB_1);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         room_bgm_state_set(3, ROOM_406_ROOM_002, BGM_MAIN_ON);
     }

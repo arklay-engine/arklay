@@ -99,14 +99,14 @@ proc init
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_21, FALSE) && ck(FG_COMMON, F_COMMON_4F, TRUE) && ck(FG_SCENARIO, F_SCENARIO_67, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_21, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_TERRACE_READY, TRUE) && ck(FG_SCENARIO, F_SCENARIO_67, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_5E, FALSE))
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, FALSE))
                 {
                     enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 52, 0, 22680, 0, 26170, ENEMY_01, ANIM_00, 0, EVAR_00);
-                    if (ck(FG_COMMON, F_COMMON_5F, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, FALSE))
                     {
-                        set(FG_COMMON, F_COMMON_5F, TRUE);
+                        set(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, TRUE);
                         evt_exec(0, TASK_09, on_enter_2);
                     }
                     else
@@ -133,7 +133,7 @@ proc init
                 set(FG_SCENARIO, F_SCENARIO_67, TRUE);
                 evt_exec(0, TASK_09, on_enter_3);
                 evt_exec(0, TASK_09, on_enter_4);
-                if (ck(FG_COMMON, F_COMMON_5E, FALSE))
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, FALSE))
                 {
                     enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 19000, -3000, 20000, ENEMY_01, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 19100, -4000, 21000, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
@@ -167,7 +167,7 @@ event on_aot_03 when (MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         bgm_stop(BGM_MAIN);
     }
     if (CHRIS)
@@ -183,7 +183,7 @@ event on_aot_03 when (MANSION1)
         set(FG_COMMON, F_COMMON_42, TRUE);
         if (JILL)
         {
-            set(FG_COMMON, F_COMMON_5E, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, TRUE);
         }
         aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
         cutnext(CAM_03);
@@ -222,7 +222,7 @@ event on_aot_03 when (MANSION1)
     act_nop();
     act_reset();
     evt_nop();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     sleep(20);
     run
     {
@@ -243,7 +243,7 @@ event on_aot_03_2 when (JILL && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_01);
@@ -261,7 +261,7 @@ event on_aot_03_2 when (JILL && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -282,7 +282,7 @@ event event_04 when (JILL && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(20);
     message(MSG_FOREST, 0); // "Forest..."
@@ -293,7 +293,7 @@ event event_04 when (JILL && MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -305,9 +305,9 @@ event on_enter_2 when (JILL && MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_COMMON, F_COMMON_42, TRUE);
-        set(FG_COMMON, F_COMMON_0A, TRUE);
+        set(FG_COMMON, F_COMMON_J_BARRY_FOREST_SCENE, TRUE);
     }
     evt_work_set(WK_ENEMY, ENEMY_01);
     evt_actor_begin();
@@ -1125,7 +1125,7 @@ event event_23 when (JILL && MANSION1)
     act_reset();
     evt_nop();
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     sleep(10);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     run

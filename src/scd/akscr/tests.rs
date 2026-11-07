@@ -827,12 +827,15 @@ event event_01
 fn includes_and_defines_name_values() {
     let load = |path: &str| -> anyhow::Result<String> {
         assert_eq!(path, "inc/flags.akinc");
-        Ok("// flags\n#define F_COMMON_A4 0xA4\n#define F_ALIAS F_COMMON_A4\n".to_string())
+        Ok(
+            "// flags\n#define F_COMMON_A4 0xA4    // a comment\n#define F_ALIAS F_COMMON_A4\n"
+                .to_string(),
+        )
     };
     let text = "#version 1
 #include \"inc/flags.akinc\"
 #include \"inc/flags.akinc\"
-#define SEVEN 7
+#define SEVEN 7 // a comment
 proc main noreturn
 {
     set(FG_COMMON, F_COMMON_A4, TOGGLE);
@@ -912,7 +915,7 @@ fn include_names_decompile_game_data() {
 #define STAGE_2 0x40
 #define ROOM_101_STAIRS 0x01
 #define ROOM_201_HALL 0x01
-#define F_COMMON_A4 0xA4
+#define F_COMMON_A4 0xA4                // a comment
 #define F_STATUS_08 0x08
 "
         .to_string(),

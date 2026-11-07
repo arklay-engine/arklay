@@ -13,7 +13,7 @@
 #define AOT_02_DOOR 0x02
 #define AOT_03_NONE 0x03
 #define CAM_00 0x00
-#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_00_ZOMBIE_GREEN 0x00
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
 #define F_ROOM_1A 0x1A
@@ -26,11 +26,11 @@ proc init
     door_aot_set(AOT_01_DOOR, 5700, 6400, 1400, 1200, 2, DOOR_SND_00_DR_WD, DOOR_1D_DOOR01K, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 10200, 4000, 1400, 1100, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_NONE, 1000, 3900, 1100, 1200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_05, TRUE))
         {
-            enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
         else
         {
@@ -45,14 +45,14 @@ proc init
                 aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
-            enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
     }
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
         if (ck(FG_ROOM, F_ROOM_18, FALSE) && ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
         {
@@ -122,9 +122,9 @@ event event_01
     run
     {
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        pos_set(ENEMY_00_ZOMBIE_LAB, 0, 1600, 0, 5900, 0, 6100);
+        pos_set(ENEMY_00_ZOMBIE_GREEN, 0, 1600, 0, 5900, 0, 6100);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6400, 6300);
-        eml_state(0, ENEMY_00_ZOMBIE_LAB, EML_BEHAVIOUR, EB_00);
+        eml_state(0, ENEMY_00_ZOMBIE_GREEN, EML_BEHAVIOUR, EB_00);
         cutnext(CAM_00);
         set(FG_ROOM, F_ROOM_1A, TRUE);
     }
@@ -149,7 +149,7 @@ event event_03
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_ZOMBIE_LAB, 0, 16, 8);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_ZOMBIE_GREEN, 0, 16, 8);
     sleep(30);
     act_motion_bitclr();
     act_nop();

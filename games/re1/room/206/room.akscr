@@ -106,7 +106,7 @@ proc init
         {
             room_bgm_state_set(6, 6, BGM_OFF);
         }
-        if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_COMMON, F_COMMON_6C, TRUE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE) && ck(FG_COMMON, F_COMMON_6C, TRUE))
         {
             enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 72, 0, 6947, 0, 12497, ENEMY_00_NPC_REBECCA_2, ANIM_00, 0, EVAR_00);
         }
@@ -140,7 +140,7 @@ proc init
 
 proc main when (CHRIS && MANSION2)
 {
-    if (ck(FG_COMMON, F_COMMON_C0, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
+    if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
     {
         set(FG_ROOM, F_ROOM_03, TRUE);
         aot_reset(AOT_04_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_04, 0);
@@ -170,7 +170,7 @@ event from_main when (CHRIS && MANSION2)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         cut_auto(CUT_LOCKED);
         bgm_play(BGM_MAIN);
@@ -215,7 +215,7 @@ event from_main when (CHRIS && MANSION2)
         cutnext(CAM_00);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
     }
     evt_finish();
@@ -271,7 +271,7 @@ event from_main_2 when (CHRIS && MANSION2)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_COMMON, F_COMMON_6D, TRUE);
         bgm_volume_ramp(BGM_MAIN, -95, 30);
         cut_auto(CUT_LOCKED);
@@ -328,7 +328,7 @@ event from_main_2 when (CHRIS && MANSION2)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
     }
     evt_finish();
@@ -477,7 +477,7 @@ event from_main_3 when (CHRIS && MANSION2)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         cut_auto(CUT_LOCKED);
         bgm_play(BGM_MAIN);
@@ -538,9 +538,9 @@ event from_main_3 when (CHRIS && MANSION2)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
-        set(FG_COMMON, F_COMMON_C0, TRUE);
+        set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
         eml_state(0, ENEMY_00_NPC_REBECCA_2, EML_STATUS, EML_STATUS_SET | 1);
     }
     evt_finish();
@@ -665,7 +665,7 @@ event on_aot_04 when (CHRIS && MANSION2)
         cut_auto(CUT_LOCKED);
         cutnext(CAM_05);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         dir_set(0, 0, 2728, 0, 8875, 0, 11549);
         pos_set(ENEMY_00_NPC_REBECCA_2, 0, 72, 0, 7897, 0, 12497);
@@ -703,7 +703,7 @@ event on_aot_04 when (CHRIS && MANSION2)
         objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         cutnext(CAM_03);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_02, FALSE);
         pos_set(ENEMY_00_NPC_REBECCA_2, 0, 72, 0, 6947, 0, 12497);

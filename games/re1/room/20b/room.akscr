@@ -48,7 +48,7 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_09, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
             {
                 enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1A, SPAWN_FORCE, 2, 0, 3640, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
                 enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_1B, SPAWN_FORCE, 2, 0, 3048, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
@@ -80,7 +80,7 @@ event from_main
         set(FG_SCENARIO, F_SCENARIO_09, FALSE);
         set(FG_SCENARIO, F_SCENARIO_08, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 1024, 0, 5520, 0, 4535);
     }
     evt_fork(TASK_09, on_enter, 0);
@@ -99,7 +99,7 @@ event from_main
         cutnext(CAM_01);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }

@@ -3190,6 +3190,9 @@ pub struct GameState {
     /// Static music groups and room rows loaded from `game/music.lua`.
     /// Runtime-only; the save block carries just [`GameState::room_bgm`].
     pub music: crate::music::MusicTables,
+    /// The game banks' bit names a `game/flags.lua` chunk gives
+    /// (`api:set_flag_name`), for the debug menu. Runtime-only.
+    pub flag_names: crate::flag_names::FlagNames,
     /// Voice-line state behind the `voice_play` wait handshake.
     pub voice: VoiceState,
     /// Film state behind the `movie_on` request handshake.
@@ -3686,6 +3689,7 @@ impl Default for GameState {
             bgm: BgmState::default(),
             room_bgm: [0xFF; ROOM_BGM_LEN],
             music: crate::music::MusicTables::default(),
+            flag_names: crate::flag_names::FlagNames::default(),
             voice: VoiceState::default(),
             fmv: FmvState::default(),
             inventory: Vec::new(),

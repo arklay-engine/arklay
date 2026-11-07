@@ -107,7 +107,7 @@ proc init
         aot_set(AOT_0A_MESSAGE, 9800, 4400, 700, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 77, 0, 0, 0);
         aot_set(AOT_0B_MESSAGE, 7300, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 77, 0, 0, 0);
         aot_set(AOT_0C_MESSAGE, 1900, 3500, 1200, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 0, 77, 0, 0, 0);
-        if (ck(FG_COMMON, F_COMMON_3D, TRUE) && ck(FG_SCENARIO, F_SCENARIO_00, TRUE) && ck(FG_COMMON, F_COMMON_3A, FALSE))
+        if (ck(FG_COMMON, F_COMMON_3D, TRUE) && ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE) && ck(FG_COMMON, F_COMMON_3A, FALSE))
         {
             enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1300, 0, 7446, 0, 5874, ENEMY_00_NPC_REBECCA, ANIM_2A, 0, EVAR_00);
             evt_exec(0, TASK_09, on_enter);
@@ -182,7 +182,7 @@ proc main
             aot_reset(AOT_0B_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 152, 77, 0);
             aot_reset(AOT_0C_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 153, 77, 0);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_16, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, TRUE))
         {
             if (ck(FG_ROOM, F_ROOM_18, FALSE))
             {
@@ -192,7 +192,7 @@ proc main
             {
                 evt_exec(0, TASK_09, from_main);
             }
-            set(FG_SCENARIO, F_SCENARIO_16, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, FALSE);
             set(FG_ROOM, F_ROOM_18, TRUE);
         }
         if (ck(FG_ROOM, F_ROOM_01, TRUE))
@@ -228,7 +228,7 @@ proc main
             aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 77, 0);
             aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 77, 0);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_16, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, TRUE))
         {
             if (ck(FG_ROOM, F_ROOM_18, FALSE))
             {
@@ -238,7 +238,7 @@ proc main
             {
                 evt_exec(0, TASK_09, from_main);
             }
-            set(FG_SCENARIO, F_SCENARIO_16, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, FALSE);
             set(FG_ROOM, F_ROOM_18, TRUE);
         }
     }
@@ -436,7 +436,7 @@ event on_aot_0d when (CHRIS)
     {
         cutnext(CAM_00);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_COMMON, F_COMMON_3B, TRUE);
     }
     evt_fork(TASK_09, on_aot_0d_sub1, 0);
@@ -569,7 +569,7 @@ event event_0A when (CHRIS)
     run
     {
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -698,7 +698,7 @@ event on_aot_0d_2 when (CHRIS)
     {
         cutnext(CAM_00);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_fork(TASK_09, on_aot_0d_2_sub3, 0);
     voice_play(VOICE_PLAY, VO_A08_07);
@@ -748,7 +748,7 @@ event on_aot_0d_2_sub1 when (CHRIS)
     run
     {
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_3, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -766,7 +766,7 @@ event on_aot_0d_2_sub2 when (CHRIS)
     run
     {
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -805,7 +805,7 @@ event on_aot_0d_3 when (CHRIS)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         cutnext(CAM_00);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
@@ -817,7 +817,7 @@ event on_aot_0d_3 when (CHRIS)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -828,7 +828,7 @@ event on_aot_0d_4 when (CHRIS)
     {
         cutnext(CAM_00);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_fork(TASK_09, on_aot_0d_3_sub1, 0);
     voice_play(VOICE_PLAY, VO_A08_0A);
@@ -838,7 +838,7 @@ event on_aot_0d_4 when (CHRIS)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }

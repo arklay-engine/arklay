@@ -124,7 +124,7 @@ proc init
     }
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
         {
             evt_exec(0, TASK_09, on_enter);
             set(FG_COMMON, F_COMMON_5A, TRUE);
@@ -133,7 +133,7 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_4D, FALSE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE) && ck(FG_COMMON, F_COMMON_4D, FALSE))
         {
             evt_exec(0, TASK_09, on_enter);
             set(FG_COMMON, F_COMMON_4D, TRUE);
@@ -177,7 +177,7 @@ event on_aot_05
             {
                 set(FG_SCENARIO, F_SCENARIO_01, TRUE);
                 aot_delete(AOT_05_EVENT, SCE_NONE, 0);
-                if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+                if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
                 {
                     evt_exec(0, TASK_09, on_aot_05_sub2);
                 }
@@ -258,7 +258,7 @@ event on_aot_05_sub2
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (CHRIS)
         {
             pos_set(ENEMY_00_NPC_REBECCA, 0, 3920, 0, 7300, 0, 16600);
@@ -728,7 +728,7 @@ event on_aot_05_sub2_sub1
         cut_auto(CUT_FREE);
         if (JILL)
         {
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_04_DOOR, SCE_DOOR, 0);
@@ -998,7 +998,7 @@ event on_aot_05_sub2_sub2
         cut_auto(CUT_FREE);
         if (JILL)
         {
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_04_DOOR, SCE_DOOR, 0);
@@ -1012,7 +1012,7 @@ event on_enter
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (CHRIS)
         {
             set(FG_LOCK, F_LOCK_2C, TRUE);
@@ -1449,7 +1449,7 @@ event on_enter
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();

@@ -56,8 +56,12 @@ impl Names {
         for (path, text) in files {
             names.includes.push(path.clone());
             for (index, line) in text.lines().enumerate() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with("//") {
+                // A define may end in a `//` comment.
+                let trimmed = line
+                    .split_once("//")
+                    .map_or(line, |(define, _)| define)
+                    .trim();
+                if trimmed.is_empty() {
                     continue;
                 }
                 let mut parts = trimmed.split_whitespace();

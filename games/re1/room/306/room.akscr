@@ -145,7 +145,7 @@ event from_main
     run
     {
         dir_set(0, 0, 3072, 0, 5110, 0, 10050);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_STATUS, F_STATUS_3E, TRUE);
         cutnext(CAM_01);
         se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 5850, 10000);
@@ -198,7 +198,7 @@ event from_main
         set(FG_STATUS, F_STATUS_11, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

@@ -90,7 +90,7 @@ proc init
             aot_delete(AOT_05_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             set(FG_LOCK, F_LOCK_2F, TRUE);
         }
-        set(FG_STATUS, F_STATUS_1D, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     }
 }
 
@@ -110,7 +110,7 @@ proc main when (CHRIS)
         else
         {
             cutcurr(0);
-            set(FG_STATUS, F_STATUS_1A, TRUE);
+            set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
         }
     }
     if (testpickup(IT_06_WEAPON_FLAMETHROWER))
@@ -126,7 +126,7 @@ proc main when (CHRIS)
         evt_exec(0, TASK_09, from_main_2);
         evt_exec(0, TASK_09, from_main_3);
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
         {
@@ -261,7 +261,7 @@ event from_main when (CHRIS)
         cutcurr(0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
     }
     evt_finish();
 }
@@ -373,7 +373,7 @@ event from_main_2 when (CHRIS)
         cutcurr(0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
     }
     evt_work_set(WK_AOT, IMDL_00);
     evt_tween_begin_alt();

@@ -64,7 +64,7 @@ proc init
     obj(OBJ_TEX_QUEUE | OBJ_00, OF_ACTIVE, SCA_NONE, 16850, -390, 6090, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_A4, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             obj(OBJ_01, OF_ACTIVE, SCA_NONE, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
             obj(OBJ_02, 0, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -77,7 +77,7 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_A7, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE))
         {
             obj(OBJ_01, OF_ACTIVE, SCA_NONE, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
             obj(OBJ_02, 0, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -126,7 +126,7 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_A9, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_GREENHOUSE_PLANT_DEAD, FALSE))
         {
             enemy(EM_0F_PLANT_FOUNTAIN, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 8400, 0, 5800, ENEMY_00_PLANT_FOUNTAIN, ANIM_00, 0, EVAR_00);
             enemy(EM_0F_PLANT_FOUNTAIN, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 8300, 0, 6100, ENEMY_01_PLANT_FOUNTAIN, ANIM_00, 0, EVAR_00);
@@ -224,7 +224,7 @@ proc main
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_A9, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_GREENHOUSE_PLANT_DEAD, FALSE))
         {
             if (testitem(IT_26_KEY_HERBICIDE))
             {
@@ -235,7 +235,7 @@ proc main
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_5B, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MONSTER_PLANT_HITS, TRUE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_5C, FALSE))
         {
@@ -271,7 +271,7 @@ event from_main
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         if (CHRIS)
         {
@@ -336,10 +336,10 @@ event from_main
         }
         else
         {
-            set(FG_COMMON, F_COMMON_A9, TRUE);
+            set(FG_COMMON, F_COMMON_J_GREENHOUSE_PLANT_DEAD, TRUE);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

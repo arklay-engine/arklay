@@ -68,7 +68,7 @@ proc init
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_08, F_ENEMY_09, SPAWN_FORCE, 2, 0, 3136, 0, 9520, 0, 19044, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_0A, SPAWN_FORCE, 2, 0, 288, 0, 2805, 0, 13359, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_08, F_ENEMY_0B, SPAWN_FORCE, 2, 0, 2144, 0, 13096, 0, 7312, ENEMY_02_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_3C, FALSE);
         }
@@ -106,11 +106,11 @@ proc init
                 enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
                 aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05_message, 0, 0, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_23, FALSE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE) && ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, FALSE))
             {
                 if (ck(FG_COMMON, F_COMMON_33, TRUE))
                 {
-                    set(FG_STATUS, F_STATUS_1D, TRUE);
+                    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
                     set(FG_ROOM, F_ROOM_1E, TRUE);
                     set(FG_ROOM, F_ROOM_1D, TRUE);
                     room_bgm_state_set(5, 1, BGM_RELOAD | 1);
@@ -124,7 +124,7 @@ proc init
                     enemy(EM_06_HUNTER, EB_17, F_ENEMY_0F, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_22, FALSE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE))
             {
                 enemy(EM_06_HUNTER, EB_17, F_ENEMY_0E, SPAWN_FORCE, 2, 0, 3000, 0, 4067, 0, 17454, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
                 enemy(EM_06_HUNTER, EB_17, F_ENEMY_0F, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
@@ -143,7 +143,7 @@ proc main when (CHRIS && MANSION2)
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_1E, TRUE))
     {
         set(FG_ROOM, F_ROOM_1E, FALSE);
-        set(FG_STATUS, F_STATUS_1D, FALSE);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
         cutnext(CAM_04);
         evt_exec(0, TASK_09, from_main);
     }
@@ -173,9 +173,9 @@ event from_main when (CHRIS && MANSION2)
     {
         set(FG_ROOM, F_ROOM_1B, TRUE);
         bgm_play(BGM_MAIN);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_COMMON, F_COMMON_2F, TRUE);
-        set(FG_COMMON, F_COMMON_23, TRUE);
+        set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE);
         dir_set(0, 0, 272, 0, 2744, 0, 7000);
         pos_set(ENEMY_01_HUNTER, 0, 256, 0, 4219, 0, 7747);
     }
@@ -198,7 +198,7 @@ event from_main when (CHRIS && MANSION2)
         cutnext(CAM_03);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     eml_state(0, ENEMY_01_HUNTER, EML_BEHAVIOUR, EB_00);
     evt_finish();
@@ -302,7 +302,7 @@ event on_aot_05_message when (CHRIS && MANSION2)
     {
         bgm_play(BGM_SUB_1);
         cutnext(CAM_05);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_COMMON, F_COMMON_31, FALSE);
         aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
@@ -355,7 +355,7 @@ event on_aot_05_message when (CHRIS && MANSION2)
     {
         aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_3, 0);
         cutnext(CAM_04);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -546,7 +546,7 @@ event on_aot_05_message_2 when (CHRIS && MANSION2)
     {
         bgm_play(BGM_MAIN);
         cutnext(CAM_05);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_COMMON, F_COMMON_31, FALSE);
         set(FG_COMMON, F_COMMON_35, TRUE);
@@ -562,7 +562,7 @@ event on_aot_05_message_2 when (CHRIS && MANSION2)
     {
         aot_reset(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 255, 0);
         cutnext(CAM_04);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -593,12 +593,12 @@ event on_aot_05_message_2_sub1 when (CHRIS && MANSION2)
 event on_aot_05_message_3 when (CHRIS && MANSION2)
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_fork(TASK_09, on_aot_05_message_3_sub1, 0);
     voice_play(VOICE_PLAY, VO_007_0D_63);
     message(MSG_VO_007_0D_63, 0);
     wait_message();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }

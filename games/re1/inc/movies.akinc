@@ -1,30 +1,31 @@
-// Films, by `movie_on` id, named from their files.
+// Films, by `movie_on` id, named for what they show; the comment gives the
+// original file name.
 
-#define MOVIE_00_OJ 0x00
-#define MOVIE_01_PJ 0x01
-#define MOVIE_02_DMF 0x02
-#define MOVIE_03_DM3 0x03
-#define MOVIE_04_DM4 0x04
-#define MOVIE_05_DM1 0x05
-#define MOVIE_06_DM6 0x06
-#define MOVIE_07_DM7 0x07
-#define MOVIE_08_DM8 0x08
-#define MOVIE_09_DM2 0x09
-#define MOVIE_0B_DMB 0x0B
-#define MOVIE_0C_DMC 0x0C
-#define MOVIE_0D_DMD 0x0D
-#define MOVIE_0E_DME 0x0E
-#define MOVIE_0F_ED1 0x0F
-#define MOVIE_10_ED2 0x10
-#define MOVIE_11_ED3 0x11
-#define MOVIE_12_ED4 0x12
-#define MOVIE_13_ED5 0x13
-#define MOVIE_14_ED6 0x14
-#define MOVIE_15_ED7 0x15
-#define MOVIE_16_ED8 0x16
-#define MOVIE_17_CAPCOM 0x17
-#define MOVIE_18_STFC_B 0x18
-#define MOVIE_19_STFJ_B 0x19
-#define MOVIE_1A_STFZ_B 0x1A
-#define MOVIE_1B_STAF_B 0x1B
-#define MOVIE_1C_VLOGO 0x1C
+#define MOVIE_00_TITLE 0x00                                 // oj: the title sequence (eye and logo)
+#define MOVIE_01_PROLOGUE 0x01                              // pj: the live-action prologue and cast
+#define MOVIE_02_MANSION_EXPLODES 0x02                      // dmf: the mansion blows up
+#define MOVIE_03_FIRST_ZOMBIE 0x03                          // dm3: the zombie eating Kenneth turns round (104)
+#define MOVIE_04_HUNTER_AT_DOOR 0x04                        // dm4: a Hunter's view down a passage to a door (21C)
+#define MOVIE_05_FRONT_DOOR_DOG_JILL 0x05                   // dm1: a dog lunges in at the front door, Jill (106)
+#define MOVIE_06_HUNTER_RUN 0x06                            // dm6: a Hunter's view running into the mansion (10A)
+#define MOVIE_07_WATER_TANK_DRAINS 0x07                     // dm7: the water tank drains (40E)
+#define MOVIE_08_FOUNTAIN_OPENS 0x08                        // dm8: the fountain drains and opens (305)
+#define MOVIE_09_FRONT_DOOR_DOG_CHRIS 0x09                  // dm2: a dog lunges in at the front door, Chris (106)
+#define MOVIE_0B_TYRANT_WAKES_CHRIS 0x0B                    // dmb: the Tyrant wakes in its tank, Chris (513)
+#define MOVIE_0C_TYRANT_WAKES_JILL 0x0C                     // dmc: the Tyrant wakes in its tank, Jill (513)
+#define MOVIE_0D_WATER_GATE_DRAINS 0x0D                     // dmd: the water gate pool drains (301)
+#define MOVIE_0E_HELICOPTER_LANDS 0x0E                      // dme: the helicopter comes in to the heliport
+#define MOVIE_0F_ENDING_CHRIS_ALONE 0x0F                    // ed1
+#define MOVIE_10_ENDING_JILL_ALONE 0x10                     // ed2
+#define MOVIE_11_ENDING_CHRIS_JILL 0x11                     // ed3
+#define MOVIE_12_ENDING_CHRIS_REBECCA 0x12                  // ed4
+#define MOVIE_13_ENDING_JILL_BARRY 0x13                     // ed5
+#define MOVIE_14_ENDING_CHRIS_JILL_REBECCA 0x14             // ed6
+#define MOVIE_15_ENDING_JILL_CHRIS_BARRY 0x15               // ed7
+#define MOVIE_16_STAFF_ROLL 0x16                            // ed8: the forest fading out before the staff roll
+#define MOVIE_17_CAPCOM_LOGO 0x17                           // capcom
+#define MOVIE_18_CREDITS_CHRIS 0x18                         // stfc_b
+#define MOVIE_19_CREDITS_JILL 0x19                          // stfj_b
+#define MOVIE_1A_CREDITS_STFZ 0x1A                          // stfz_b: the credits roll for the other player ids
+#define MOVIE_1B_CREDITS_STAF 0x1B                          // staf_b: the credits roll of the plate endings
+#define MOVIE_1C_VIRGIN_LOGO 0x1C                           // vlogo

@@ -40,9 +40,9 @@ proc init
     {
         aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_10, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_YAWN_BITE, FALSE))
         {
             enemy(EM_0D_YAWN_1, EB_80, F_ENEMY_18, SPAWN_FORCE, 2, 0, 0, 0, 4500, 0, 24500, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
         }
@@ -64,16 +64,16 @@ proc init
     {
         room_bgm_state_set(1, ROOM_210_ATTIC, BGM_OFF);
     }
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
         if (ck(FG_ENEMY, F_ENEMY_18, TRUE))
         {
-            if (ck(FG_STATUS, F_STATUS_08, FALSE))
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 set(FG_COMMON, F_COMMON_26, TRUE);
             }
@@ -86,7 +86,7 @@ proc main
         if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_18, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
             set(FG_ROOM, F_ROOM_1E, TRUE);
-            set(FG_STATUS, F_STATUS_1D, FALSE);
+            set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
             evt_exec(0, TASK_09, from_main);
         }
     }
@@ -126,7 +126,7 @@ event on_aot_04
 {
     run
     {
-        set(FG_STATUS, F_STATUS_1D, FALSE);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         cutnext(CAM_05);

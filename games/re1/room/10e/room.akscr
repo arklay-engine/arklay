@@ -116,7 +116,7 @@ event on_aot_03_item
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -201,7 +201,7 @@ event on_aot_03_item
     sleep(29);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     sleep(16);

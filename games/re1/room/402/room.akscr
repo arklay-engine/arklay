@@ -34,7 +34,7 @@ proc init
     aot_set(AOT_03_NONE, 1300, 2100, 2400, 3200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 2, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 4800, 700, 1500, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_05_MESSAGE, 2000, 6400, 2000, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     set(FG_ROOM, F_ROOM_1A, TRUE);
     if (ck(FG_SCENARIO, F_SCENARIO_43, FALSE))
     {
@@ -57,16 +57,16 @@ proc main
         else
         {
             evt_exec(0, TASK_09, from_main_3);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_43, FALSE) && ck(FG_ROOM, F_ROOM_1A, TRUE))
     {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_00) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_00) && ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
         {
             evt_exec(0, TASK_09, on_enter);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_01) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01) && ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
         {
             evt_exec(0, TASK_09, from_main);
         }
@@ -154,7 +154,7 @@ event from_main_2
     {
         se_play_3d(SND_BANK_ROOM, SE_17_BATHMIX, 0, SND_AT_POINT, 0, 2400, 3800);
         set(FG_SCENARIO, F_SCENARIO_43, TRUE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
@@ -181,7 +181,7 @@ event from_main_2
     }
     tw_end();
     sleep(30);
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 21000, 0, 21000);

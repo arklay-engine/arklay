@@ -1,7 +1,16 @@
-// Flag bits by group: `ck(FG_COMMON, F_COMMON_A4, TRUE)`.
-// F_<group>_<bit>; a room's own FG_ROOM bits are defined in its script.
+// Flag bits by group: `ck(FG_COMMON, F_COMMON_INTRO_SEEN, TRUE)`.
+// F_<group>_<bit> is a bit not yet named; a room's own FG_ROOM bits are
+// defined in its script. Named bits say what they mean when set:
+// - F_ITEM_<room>_<item>_<model>: the pickup with that IT_ name (less its
+//   id) and IMDL slot, set while it is still there;
+// - F_ENEMY_<room>_<type>_<slot>: the enemy with that EM_ name (less its id)
+//   in that room's ENEMY_ slot, set once it is dead;
+// - F_LOCK_<room>_<room>: the door between the two rooms, set once unlocked;
+// - _J_ / _C_ after the group: the bit means this only in Jill's / Chris's
+//   game. A bit both games use for different things has a define for each,
+//   and each use takes the name of its player's branch.
 
-#define F_SCENARIO_00 0x00
+#define F_SCENARIO_STAGE_VARIANT 0x00                       // Stage changes go to the +5 stage variants while set (engine).
 #define F_SCENARIO_01 0x01
 #define F_SCENARIO_02 0x02
 #define F_SCENARIO_03 0x03
@@ -10,34 +19,34 @@
 #define F_SCENARIO_08 0x08
 #define F_SCENARIO_09 0x09
 #define F_SCENARIO_0A 0x0A
-#define F_SCENARIO_0B 0x0B
+#define F_SCENARIO_BALCONY_STATUE_PUSHED 0x0B               // Statue pushed off the 2F balcony (202); the blue jewel lies by it in 105.
 #define F_SCENARIO_0C 0x0C
 #define F_SCENARIO_0D 0x0D
 #define F_SCENARIO_0E 0x0E
 #define F_SCENARIO_0F 0x0F
-#define F_SCENARIO_10 0x10
-#define F_SCENARIO_11 0x11
+#define F_SCENARIO_YAWN_BITE 0x10                           // Set by the Yawn's bite (engine).
+#define F_SCENARIO_KENNETH_EXAMINED 0x11                    // Removes Kenneth's examine spot in 104. Never set: no script or engine code writes it.
 #define F_SCENARIO_12 0x12
-#define F_SCENARIO_13 0x13
+#define F_SCENARIO_ITEM_13_GATE 0x13                        // Item 0x13 cannot be used while set (engine).
 #define F_SCENARIO_14 0x14
-#define F_SCENARIO_16 0x16
+#define F_SCENARIO_CHEMICAL_MIXED 0x16                      // A chemical combine was done (engine).
 #define F_SCENARIO_17 0x17
 #define F_SCENARIO_18 0x18
 #define F_SCENARIO_1B 0x1B
 #define F_SCENARIO_1C 0x1C
 #define F_SCENARIO_1D 0x1D
-#define F_SCENARIO_1E 0x1E
-#define F_SCENARIO_1F 0x1F
-#define F_SCENARIO_20 0x20
-#define F_SCENARIO_21 0x21
+#define F_SCENARIO_PANEL_VARIANT_A 0x1E                     // Picks the passcode panel's starting state (engine).
+#define F_SCENARIO_PANEL_VARIANT_B 0x1F                     // Picks the passcode panel's starting state (engine).
+#define F_SCENARIO_INTERACTIVE_SCREEN 0x20                  // An interactive screen is up (engine).
+#define F_SCENARIO_PANEL_SOLVED 0x21                        // The lab passcode panel is solved (engine).
 #define F_SCENARIO_23 0x23
 #define F_SCENARIO_24 0x24
 #define F_SCENARIO_25 0x25
 #define F_SCENARIO_26 0x26
 #define F_SCENARIO_27 0x27
 #define F_SCENARIO_28 0x28
-#define F_SCENARIO_29 0x29
-#define F_SCENARIO_2A 0x2A
+#define F_SCENARIO_PLANT42_DEAD 0x29                        // Plant 42 is dead (engine).
+#define F_SCENARIO_ALT_OUTFIT 0x2A                          // The alternate outfit (engine).
 #define F_SCENARIO_2B 0x2B
 #define F_SCENARIO_2D 0x2D
 #define F_SCENARIO_2E 0x2E
@@ -49,7 +58,7 @@
 #define F_SCENARIO_34 0x34
 #define F_SCENARIO_35 0x35
 #define F_SCENARIO_36 0x36
-#define F_SCENARIO_37 0x37
+#define F_SCENARIO_WESKER_LATE_ANIM 0x37                    // Wesker's later animation set (engine).
 #define F_SCENARIO_38 0x38
 #define F_SCENARIO_39 0x39
 #define F_SCENARIO_3A 0x3A
@@ -64,10 +73,10 @@
 #define F_SCENARIO_44 0x44
 #define F_SCENARIO_45 0x45
 #define F_SCENARIO_46 0x46
-#define F_SCENARIO_47 0x47
-#define F_SCENARIO_48 0x48
-#define F_SCENARIO_49 0x49
-#define F_SCENARIO_4A 0x4A
+#define F_SCENARIO_YAWN_SERUM 0x47                          // Serum marker: the first Yawn poisons only while clear (engine).
+#define F_SCENARIO_PLANT42_OBJ_ACK 0x48                     // Plant 42 objective seen: stops the guardhouse map highlight.
+#define F_SCENARIO_SERUM1_OBJ_ACK 0x49                      // Serum objective 1 seen: stops the mansion map highlight.
+#define F_SCENARIO_SERUM2_OBJ_ACK 0x4A                      // Serum objective 2 seen: stops the mansion map highlight.
 #define F_SCENARIO_4B 0x4B
 #define F_SCENARIO_4C 0x4C
 #define F_SCENARIO_4D 0x4D
@@ -76,7 +85,7 @@
 #define F_SCENARIO_50 0x50
 #define F_SCENARIO_51 0x51
 #define F_SCENARIO_52 0x52
-#define F_SCENARIO_5B 0x5B
+#define F_SCENARIO_MONSTER_PLANT_HITS 0x5B                  // The monster plant took three or more hits (engine).
 #define F_SCENARIO_5C 0x5C
 #define F_SCENARIO_5D 0x5D
 #define F_SCENARIO_5E 0x5E
@@ -93,27 +102,31 @@
 #define F_SCENARIO_6A 0x6A
 #define F_SCENARIO_6B 0x6B
 #define F_SCENARIO_6C 0x6C
-#define F_SCENARIO_7B 0x7B
-#define F_SCENARIO_7C 0x7C
-#define F_SCENARIO_7D 0x7D
-#define F_SCENARIO_7F 0x7F
+#define F_SCENARIO_DC_BEST_ENDING 0x7A                      // Director's Cut: ADVANCED cleared with the best ending; the Colt Python is unlimited (engine).
+#define F_SCENARIO_SECOND_PLAYTHROUGH 0x7B                  // A run has been cleared; enemies, damage and endings use their second-playthrough variants.
+#define F_SCENARIO_HAS_LOCKPICK 0x7C                        // Jill took Barry's lockpick (106); desks take it instead of the small key.
+#define F_SCENARIO_FADE_MENU_LATCH 0x7D                     // Picks the fade-in at gameplay entry; cleared when the menu closes (engine).
+#define F_SCENARIO_ROCKET_UNLOCK 0x7E                       // The rocket launcher is unlocked for the next run (engine).
+#define F_SCENARIO_HAS_RADIO 0x7F                           // The radio was picked up (engine).
 
-#define F_COMMON_00 0x00
-#define F_COMMON_01 0x01
-#define F_COMMON_02 0x02
-#define F_COMMON_03 0x03
-#define F_COMMON_04 0x04
-#define F_COMMON_05 0x05
-#define F_COMMON_07 0x07
-#define F_COMMON_08 0x08
+#define F_COMMON_INTRO_SEEN 0x00                            // The opening main hall scene has played (106).
+#define F_COMMON_HALL_EARLY_RETURN 0x01                     // Came back to the hall before seeing Kenneth's zombie: Wesker's reminder played (106), and the dining room only says there is more to investigate (105).
+#define F_COMMON_KENNETH_ZOMBIE_SEEN 0x02                   // The zombie eating Kenneth has been seen (film in 104, or Barry shooting it at the 104 door in 105).
+#define F_COMMON_WESKER_GONE_SEEN 0x03                      // The empty hall scene after the zombie: Wesker has gone missing (106).
+#define F_COMMON_FRONT_DOOR_FILM_SEEN 0x04                  // The front door was tried once and its film played (106); later tries say it is too dangerous.
+#define F_COMMON_J_BARRY_LOCKPICK_SCENE 0x05                // Barry's lockpick scene in the hall has started (106).
+#define F_COMMON_J_BARRY_ACID_ROUNDS 0x07                   // Jill: Barry's acid rounds scene (106 or 203); also briefly set by 203 when Jill goes upstairs before the lockpick scene.
+#define F_COMMON_C_RESEARCHER_WILL_TAKEN 0x07               // Chris: the Researcher's Will was taken (20A).
+#define F_COMMON_J_RESEARCHER_WILL_TAKEN 0x08               // Jill: the Researcher's Will was taken (20A).
+#define F_COMMON_C_HALL_RIBBON_TAKEN 0x08                   // Chris: the hall ink ribbon was taken; the spot is a typewriter (106).
 #define F_COMMON_09 0x09
-#define F_COMMON_0A 0x0A
-#define F_COMMON_0B 0x0B
+#define F_COMMON_J_BARRY_FOREST_SCENE 0x0A                  // Likely: the terrace scene with Barry and Forest's body (212); blocks the hall acid rounds scene.
+#define F_COMMON_J_HALL_RIBBON_GONE 0x0B                    // No ink ribbon in the hall: taken (106), or set at a first Jill new game.
 #define F_COMMON_20 0x20
 #define F_COMMON_21 0x21
-#define F_COMMON_22 0x22
-#define F_COMMON_23 0x23
-#define F_COMMON_24 0x24
+#define F_COMMON_RADIO_TAB_GATE 0x22                        // Story gate for the radio tab (engine).
+#define F_COMMON_JILL_SERUM_OBJ1 0x23                       // Jill: serum 1 needed (map highlight); 303 and 307 reuse the bit.
+#define F_COMMON_JILL_SERUM_OBJ2 0x24                       // Jill: serum 2 needed; 303 reuses the bit.
 #define F_COMMON_25 0x25
 #define F_COMMON_26 0x26
 #define F_COMMON_27 0x27
@@ -122,8 +135,8 @@
 #define F_COMMON_2A 0x2A
 #define F_COMMON_2B 0x2B
 #define F_COMMON_2C 0x2C
-#define F_COMMON_2D 0x2D
-#define F_COMMON_2E 0x2E
+#define F_COMMON_CHRIS_SERUM_OBJ1 0x2D                      // Chris: serum 1 needed (map highlight).
+#define F_COMMON_CHRIS_SERUM_OBJ2 0x2E                      // Chris: serum 2 needed (map highlight).
 #define F_COMMON_2F 0x2F
 #define F_COMMON_30 0x30
 #define F_COMMON_31 0x31
@@ -133,7 +146,7 @@
 #define F_COMMON_35 0x35
 #define F_COMMON_36 0x36
 #define F_COMMON_37 0x37
-#define F_COMMON_38 0x38
+#define F_COMMON_PLANT42_OBJ 0x38                           // Plant 42 objective open: the guardhouse map highlight.
 #define F_COMMON_39 0x39
 #define F_COMMON_3A 0x3A
 #define F_COMMON_3B 0x3B
@@ -142,35 +155,37 @@
 #define F_COMMON_40 0x40
 #define F_COMMON_41 0x41
 #define F_COMMON_42 0x42
-#define F_COMMON_43 0x43
+#define F_COMMON_YAWN_POISONED 0x43                         // Poisoned by the Yawn; cleared by the serum (engine).
 #define F_COMMON_44 0x44
 #define F_COMMON_45 0x45
 #define F_COMMON_46 0x46
 #define F_COMMON_47 0x47
-#define F_COMMON_48 0x48
+#define F_COMMON_BGM_207_A 0x48                             // Music condition for room 207 (engine).
 #define F_COMMON_49 0x49
 #define F_COMMON_4A 0x4A
-#define F_COMMON_4B 0x4B
+#define F_COMMON_SECOND_SURVIVOR 0x4B                       // Ending: a second survivor (engine).
 #define F_COMMON_4C 0x4C
 #define F_COMMON_4D 0x4D
 #define F_COMMON_4E 0x4E
-#define F_COMMON_4F 0x4F
+#define F_COMMON_J_BARRY_TERRACE_READY 0x4F                 // Guess: arms Barry's terrace event (212); set in 105 after the lockpick scene, and in 107 and 204.
 #define F_COMMON_50 0x50
 #define F_COMMON_51 0x51
 #define F_COMMON_52 0x52
 #define F_COMMON_53 0x53
 #define F_COMMON_54 0x54
-#define F_COMMON_55 0x55
+#define F_COMMON_BGM_207_B 0x55                             // Music condition for room 207 (engine).
 #define F_COMMON_56 0x56
 #define F_COMMON_57 0x57
 #define F_COMMON_58 0x58
 #define F_COMMON_59 0x59
 #define F_COMMON_5A 0x5A
 #define F_COMMON_5B 0x5B
-#define F_COMMON_5C 0x5C
+#define F_COMMON_BGM_207_C 0x5C                             // Music condition for room 207 (engine).
 #define F_COMMON_5D 0x5D
-#define F_COMMON_5E 0x5E
-#define F_COMMON_5F 0x5F
+#define F_COMMON_J_BARRY_LEFT_TERRACE 0x5E                  // Jill: Likely: Barry has left the terrace (212 spawns him while clear).
+#define F_COMMON_5E 0x5E                                    // Chris: Not yet traced (Richard/serum rooms 20D/20E).
+#define F_COMMON_J_BARRY_MET_ON_TERRACE 0x5F                // Jill: Likely: met Barry on the terrace (212).
+#define F_COMMON_5F 0x5F                                    // Chris: Not yet traced (Richard/serum rooms 20D/20E).
 #define F_COMMON_60 0x60
 #define F_COMMON_61 0x61
 #define F_COMMON_62 0x62
@@ -185,35 +200,45 @@
 #define F_COMMON_6B 0x6B
 #define F_COMMON_6C 0x6C
 #define F_COMMON_6D 0x6D
-#define F_COMMON_A0 0xA0
-#define F_COMMON_A1 0xA1
-#define F_COMMON_A2 0xA2
-#define F_COMMON_A3 0xA3
-#define F_COMMON_A4 0xA4
+#define F_COMMON_J_BARRY_DINING_ENTRY 0xA0                  // Jill: Barry's walk into the dining room has played (105).
+#define F_COMMON_C_MUSIC_SCORE_GIVEN 0xA0                   // Chris: the music score was given to Rebecca at the piano (10F); her playing is heard in 104.
+#define F_COMMON_J_BARRY_LEFT_DINING 0xA1                   // Jill: Likely: Barry's dining room scenes are over; he no longer appears there (105).
+#define F_COMMON_C_REBECCA_PRACTISED 0xA1                   // Chris: Likely: Rebecca has practised the score; she plays it on the next visit to the bar (10F).
+#define F_COMMON_J_BARRY_SHOWED_BLOOD 0xA2                  // Jill: Barry showed Jill the blood by the fireplace (105).
+#define F_COMMON_C_PIANO_PLAYED 0xA2                        // Chris: Rebecca played the Moonlight Sonata (10F).
+#define F_COMMON_J_BARRY_DOOR_TALK 0xA3                     // Jill: Likely: Barry's talk at the dining room's hall door (105).
+#define F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN 0xA3               // Chris: the gold emblem was taken from the bar (10F).
+#define F_COMMON_C_BAR_WOOD_EMBLEM_SET 0xA4                 // The wooden emblem is in the bar's slot (10F).
 #define F_COMMON_A5 0xA5
 #define F_COMMON_A6 0xA6
-#define F_COMMON_A7 0xA7
-#define F_COMMON_A8 0xA8
-#define F_COMMON_A9 0xA9
-#define F_COMMON_AA 0xAA
-#define F_COMMON_AB 0xAB
-#define F_COMMON_AC 0xAC
-#define F_COMMON_AD 0xAD
+#define F_COMMON_J_BAR_WOOD_EMBLEM_SET 0xA7                 // Jill: the wooden emblem is in the bar's slot (10F).
+#define F_COMMON_C_FIREPLACE_WOOD_EMBLEM 0xA7               // Chris: the wooden emblem is on the dining room fireplace (105); set at new game (106).
+#define F_COMMON_C_FIREPLACE_GOLD_EMBLEM 0xA8               // The gold emblem is on the dining room fireplace; the clock moves aside (105).
+#define F_COMMON_J_GREENHOUSE_PLANT_DEAD 0xA9               // Jill: the greenhouse plant was killed with herbicide (10C).
+#define F_COMMON_C_REBECCA_LEFT_BAR 0xA9                    // Chris: Likely: Rebecca has left the bar (10F, 100).
+#define F_COMMON_J_FIREPLACE_WOOD_EMBLEM 0xAA               // Jill: the wooden emblem is on the dining room fireplace (105); set at new game (106).
+#define F_COMMON_AA 0xAA                                    // Chris: Not yet traced (guardhouse 408 scene).
+#define F_COMMON_J_FIREPLACE_GOLD_EMBLEM 0xAB               // Jill: the gold emblem is on the dining room fireplace; the clock moves aside (105).
+#define F_COMMON_AB 0xAB                                    // Chris: Not yet traced (guardhouse 405 scene).
+#define F_COMMON_J_ENTERED_TEA_ROOM 0xAC                    // Jill: Jill has entered 104 on the first mansion visit.
+#define F_COMMON_AC 0xAC                                    // Chris: Not yet traced (lab 508/50B scene).
+#define F_COMMON_J_KENNETH_ZOMBIE_DEAD 0xAD                 // Jill: Barry shot Kenneth's zombie, in either of its 105 scenes.
+#define F_COMMON_AD 0xAD                                    // Chris: Not yet traced (guardhouse 408 scene).
 #define F_COMMON_AE 0xAE
 #define F_COMMON_AF 0xAF
 #define F_COMMON_B0 0xB0
 #define F_COMMON_B1 0xB1
 #define F_COMMON_B2 0xB2
 #define F_COMMON_B3 0xB3
-#define F_COMMON_B4 0xB4
-#define F_COMMON_C0 0xC0
+#define F_COMMON_J_ZOMBIE_SHOT_AT_DOOR 0xB4                 // Barry shot Kenneth's zombie at the 104 door before Jill went in (105); 104 then has Kenneth's other model and no ammo.
+#define F_COMMON_PARTNER_ALIVE 0xC0                         // Ending: the partner survived (engine).
 
 #define F_LOCK_00 0x00
 #define F_LOCK_01 0x01
 #define F_LOCK_02 0x02
 #define F_LOCK_04 0x04
-#define F_LOCK_05 0x05
-#define F_LOCK_06 0x06
+#define F_LOCK_106_111 0x05                                 // Armor key.
+#define F_LOCK_104_10F 0x06                                 // Sword key.
 #define F_LOCK_07 0x07
 #define F_LOCK_09 0x09
 #define F_LOCK_0A 0x0A
@@ -222,8 +247,8 @@
 #define F_LOCK_0D 0x0D
 #define F_LOCK_0E 0x0E
 #define F_LOCK_10 0x10
-#define F_LOCK_12 0x12
-#define F_LOCK_13 0x13
+#define F_LOCK_103_104 0x12                                 // Unlocked from the 103 side.
+#define F_LOCK_104_110 0x13                                 // Unlocked from the 110 side.
 #define F_LOCK_14 0x14
 #define F_LOCK_15 0x15
 #define F_LOCK_16 0x16
@@ -272,7 +297,7 @@
 #define F_ENEMY_19 0x19
 #define F_ENEMY_1A 0x1A
 #define F_ENEMY_1B 0x1B
-#define F_ENEMY_1C 0x1C
+#define F_ENEMY_104_ZOMBIE_GREEN_0 0x1C                     // The zombie eating Kenneth (104 slot 0); killed by Barry in 105.
 #define F_ENEMY_1D 0x1D
 #define F_ENEMY_1E 0x1E
 #define F_ENEMY_1F 0x1F
@@ -373,8 +398,8 @@
 #define F_ENEMY_9B 0x9B
 #define F_ENEMY_9C 0x9C
 #define F_ENEMY_9D 0x9D
-#define F_ENEMY_9E 0x9E
-#define F_ENEMY_9F 0x9F
+#define F_ENEMY_104_HUNTER_0 0x9E
+#define F_ENEMY_104_HUNTER_1 0x9F
 #define F_ENEMY_A0 0xA0
 #define F_ENEMY_A1 0xA1
 #define F_ENEMY_A2 0xA2
@@ -402,17 +427,17 @@
 #define F_ENEMY_B9 0xB9
 
 #define F_STATUS_07 0x07
-#define F_STATUS_08 0x08
-#define F_STATUS_0E 0x0E
-#define F_STATUS_0F 0x0F
+#define F_STATUS_PLAYER_JILL 0x08                           // The player is Jill: picks the room file variant (msf bit 23).
+#define F_STATUS_VOICE_PLAYING 0x0E                         // A voice line is playing (msf bit 17).
+#define F_STATUS_LETTERBOX 0x0F                             // Cutscene letterbox bars fade in while set (msf bit 16).
 #define F_STATUS_11 0x11
 #define F_STATUS_12 0x12
 #define F_STATUS_16 0x16
 #define F_STATUS_18 0x18
 #define F_STATUS_19 0x19
-#define F_STATUS_1A 0x1A
-#define F_STATUS_1C 0x1C
-#define F_STATUS_1D 0x1D
+#define F_STATUS_CAMERA_REDRAW 0x1A                         // A deferred camera switch is waiting to redraw (msf bit 5).
+#define F_STATUS_SCRIPT_ONLY_1C 0x1C                        // Set by many room inits; nothing in the engine reads it (msf bit 3).
+#define F_STATUS_CAMERA_DEFER 0x1D                          // Camera switches wait for the script (F_STATUS_CAMERA_REDRAW) instead of redrawing (msf bit 2).
 #define F_STATUS_1F 0x1F
 #define F_STATUS_20 0x20
 #define F_STATUS_24 0x24
@@ -446,12 +471,12 @@
 #define F_ITEM_06 0x06
 #define F_ITEM_07 0x07
 #define F_ITEM_08 0x08
-#define F_ITEM_09 0x09
+#define F_ITEM_106_KEY_LOCKPICK_0 0x09                      // Given by Barry.
 #define F_ITEM_0A 0x0A
 #define F_ITEM_0B 0x0B
 #define F_ITEM_0C 0x0C
-#define F_ITEM_0D 0x0D
-#define F_ITEM_0E 0x0E
+#define F_ITEM_118_KEY_HERBICIDE_0 0x0D                     // Tested in 106 and 203 to gate Barry's acid rounds scene.
+#define F_ITEM_106_AMMO_GRENADE_ACID_1 0x0E                 // Given by Barry; 203 gives the same rounds as model 0.
 #define F_ITEM_0F 0x0F
 #define F_ITEM_10 0x10
 #define F_ITEM_11 0x11
@@ -462,12 +487,12 @@
 #define F_ITEM_17 0x17
 #define F_ITEM_18 0x18
 #define F_ITEM_19 0x19
-#define F_ITEM_1A 0x1A
+#define F_ITEM_106_WEAPON_HANDGUN_2 0x1A                    // Jill's dropped handgun (Chris).
 #define F_ITEM_1B 0x1B
 #define F_ITEM_1D 0x1D
 #define F_ITEM_1E 0x1E
 #define F_ITEM_1F 0x1F
-#define F_ITEM_21 0x21
+#define F_ITEM_105_KEY_MANSION_SHIELD_0 0x21                // Behind the clock.
 #define F_ITEM_22 0x22
 #define F_ITEM_23 0x23
 #define F_ITEM_24 0x24
@@ -475,17 +500,17 @@
 #define F_ITEM_26 0x26
 #define F_ITEM_27 0x27
 #define F_ITEM_28 0x28
-#define F_ITEM_29 0x29
-#define F_ITEM_2A 0x2A
-#define F_ITEM_2B 0x2B
-#define F_ITEM_2C 0x2C
+#define F_ITEM_104_AMMO_HANDGUN_0 0x29
+#define F_ITEM_105_KEY_EMBLEM_WOOD_1 0x2A                   // On the fireplace; set again when it is put back.
+#define F_ITEM_105_KEY_EMBLEM_GOLD_2 0x2B                   // The gold emblem shown on the fireplace (not a pickup).
+#define F_ITEM_105_KEY_JEWEL_BLUE_4 0x2C                    // By the fallen statue.
 #define F_ITEM_2D 0x2D
 #define F_ITEM_2E 0x2E
-#define F_ITEM_2F 0x2F
+#define F_ITEM_104_AMMO_HANDGUN_1 0x2F
 #define F_ITEM_30 0x30
 #define F_ITEM_31 0x31
 #define F_ITEM_32 0x32
-#define F_ITEM_34 0x34
+#define F_ITEM_106_INK_3 0x34
 #define F_ITEM_37 0x37
 #define F_ITEM_38 0x38
 #define F_ITEM_39 0x39

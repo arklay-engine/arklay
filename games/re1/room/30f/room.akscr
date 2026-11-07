@@ -113,7 +113,7 @@ proc init
     }
     set(FG_SCENARIO, F_SCENARIO_42, TRUE);
     set(FG_STATUS, F_STATUS_3D, TRUE);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     set(FG_STATUS, F_STATUS_3C, TRUE);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_305_FOUNTAIN))
     {
@@ -170,7 +170,7 @@ proc main
         set(FG_ROOM, F_ROOM_1F, FALSE);
         message(MSG_YOU_GOT_THE_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of UNDER GROUND."
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
         {
@@ -190,7 +190,7 @@ proc main
     if (testitem(IT_1E_KEY_CRANK_HEXAGONAL))
     {
         cut_auto(CUT_LOCKED);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 1024, 0, 19710, 0, 22052);
         }
@@ -275,7 +275,7 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_1D, TRUE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
             objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
@@ -284,7 +284,7 @@ proc main
             objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
             eml_pos(OBJ_01, -2048, 0, 0, 16710, -2310, 23970);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 0, 0, 2, 2);
             objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
@@ -296,7 +296,7 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_1D, TRUE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
             objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
@@ -305,7 +305,7 @@ proc main
             objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
             eml_pos(OBJ_01, 0, 0, 0, 16710, -2310, 23970);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
             objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
@@ -321,7 +321,7 @@ proc main
         set(FG_ROOM, F_ROOM_14, FALSE);
         eml_pos(OBJ_01, -1024, 0, 0, 17310, -1700, 23400);
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
         {
@@ -334,7 +334,7 @@ proc main
             inst_cfg(COL_LIST_01, COL_06, 0, 16002, 0, 23202, 18360);
         }
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_NE, CAM_06))
         {
@@ -1129,7 +1129,7 @@ event event_02
     run
     {
         cutnext(CAM_07);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_1C, TRUE);
         set(FG_ROOM, F_ROOM_0A, TRUE);
@@ -1252,7 +1252,7 @@ event event_02
     {
         set(FG_ROOM, F_ROOM_18, TRUE);
         cutcurr(0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_delete(AOT_09_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_0E_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
@@ -1419,7 +1419,7 @@ event from_main_4
     run
     {
         set(FG_RUN, F_RUN_READY, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     for (4)
     {
@@ -1448,26 +1448,26 @@ event from_main_4
     {
         set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_ROOM, F_ROOM_1D, TRUE);
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, FALSE))
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, TRUE);
         }
         else if (ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, FALSE);
             set(FG_SCENARIO, F_SCENARIO_4B, TRUE);
         }
         else
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_SERUM2_OBJ_ACK, FALSE);
             set(FG_SCENARIO, F_SCENARIO_4B, FALSE);
         }
         eml_pos(OBJ_03, 0, 0, 0, 1, 1, 1);
         set(FG_STATUS, F_STATUS_11, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
         set(FG_ROOM, F_ROOM_15, TRUE);
         aot_on(AOT_06_USEITEM, SCE_USEITEM, 1);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -1860,7 +1860,7 @@ event on_aot_03
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }

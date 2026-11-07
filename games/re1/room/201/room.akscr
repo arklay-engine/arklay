@@ -52,23 +52,23 @@ proc init
     aot_set(AOT_05_EVENT, 14700, 25700, 1500, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
     if (MANSION1)
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             set(FG_COMMON, F_COMMON_2C, FALSE);
         }
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1D, SPAWN_FORCE, 2, 0, 0, 0, 9500, 0, 8600, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1E, SPAWN_FORCE, 2, 0, 2039, 0, 9242, 0, 13969, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1F, SPAWN_FORCE, 2, 0, 920, 0, 5213, 0, 10454, ENEMY_02_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_A0, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_MUSIC_SCORE_GIVEN, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_A1, FALSE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_PRACTISED, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_A1, TRUE);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_PRACTISED, TRUE);
                     room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_MAIN_ON | 2);
                     room_bgm_state_set(0, ROOM_10F_BAR, BGM_RELOAD | 1);
                 }
@@ -79,12 +79,12 @@ proc init
     {
         enemy(EM_06_HUNTER, EB_00, F_ENEMY_3C, SPAWN_FORCE, 2, 0, 1976, 0, 15656, 0, 21372, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         enemy(EM_06_HUNTER, EB_10, F_ENEMY_3D, SPAWN_FORCE, 2, 0, 1809, 0, 20872, 0, 4240, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_2F, TRUE))
             {
                 set(FG_COMMON, F_COMMON_30, TRUE);
-                set(FG_COMMON, F_COMMON_C0, TRUE);
+                set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
                 set(FG_COMMON, F_COMMON_2F, FALSE);
                 evt_exec(0, TASK_09, on_enter);
             }
@@ -107,7 +107,7 @@ proc init
 
 event on_enter when (CHRIS && MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_RUN, F_RUN_MONSTERS, FALSE);
@@ -118,7 +118,7 @@ event on_enter when (CHRIS && MANSION2)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }

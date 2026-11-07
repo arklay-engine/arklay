@@ -39,7 +39,7 @@
 proc init when (MANSION2)
 {
     door_aot_set(AOT_00_DOOR, 10900, 3500, 1300, 1000, 0, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     aot_set(AOT_01_EVENT, 400, 8200, 3200, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
     aot_set(AOT_02_USEITEM, 3600, 8200, 1700, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_68, FALSE))
@@ -154,7 +154,7 @@ event on_aot_03 when (MANSION2)
         aot_delete(AOT_03_EVENT, SCE_NONE, 0);
         objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_SCENARIO, F_SCENARIO_68, TRUE);
     }
     sleep(30);
@@ -167,7 +167,7 @@ event on_aot_03 when (MANSION2)
         cutnext(CAM_04);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         if (ck(FG_SCENARIO, F_SCENARIO_41, FALSE))
         {
             aot_switch(0, SPR_04, SPR_OFF);

@@ -73,7 +73,7 @@ event on_enter
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -131,7 +131,7 @@ event on_enter_2
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 4, 0);
         }

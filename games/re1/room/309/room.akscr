@@ -44,7 +44,7 @@ proc init
     {
         item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 25000, 19000, 1000, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00, SCA_NONE, 25500, -2130, 19500, 0, F_ITEM_2D, SAT_MANUAL | SAT_PLAYER, 0);
         item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM, 25000, 20900, 1000, 1000, IT_41_HEAL_FIRST_AID_SPRAY, 1, IMDL_01, SCA_NONE, 25500, -2130, 21400, 0, F_ITEM_F8, SAT_MANUAL | SAT_PLAYER, 0);
-        if (ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_48, FALSE))
+        if (ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_A, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_53, TRUE))
             {
@@ -76,7 +76,7 @@ proc init
             aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         }
     }
-    if (ck(FG_COMMON, F_COMMON_48, TRUE))
+    if (ck(FG_COMMON, F_COMMON_BGM_207_A, TRUE))
     {
         if (CHRIS)
         {
@@ -98,7 +98,7 @@ event on_aot_02_door when (JILL)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (ck(FG_COMMON, F_COMMON_59, TRUE))
         {
             evt_exec(0, TASK_09, on_aot_02_door_sub2);
@@ -286,7 +286,7 @@ event on_aot_02_door_sub1 when (JILL)
     wait_message();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -446,7 +446,7 @@ event on_aot_02_door_sub2 when (JILL)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     sleep(10);
     run

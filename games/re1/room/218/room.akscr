@@ -93,7 +93,7 @@ event on_aot_01 when (MANSION2)
     {
         aot_delete(AOT_01_EVENT, SCE_EVENT, SAT_PLAYER);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

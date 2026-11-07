@@ -88,7 +88,7 @@ proc init
     }
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_07, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
@@ -106,7 +106,7 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_08, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, FALSE))
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
@@ -114,7 +114,7 @@ proc init
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
-            else if (ck(FG_COMMON, F_COMMON_07, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
             {
                 item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
                 eml_rot(IMDL_01, 2048, 0);
@@ -161,7 +161,7 @@ proc init
         {
             enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 320, 0, 5496, 0, 3240, ENEMY_00_NPC_BARRY, ANIM_23, 8, EVAR_00);
             evt_exec(0, TASK_00, on_enter);
-            set(FG_STATUS, F_STATUS_1D, TRUE);
+            set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
             room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_RELOAD);
         }
     }
@@ -419,7 +419,7 @@ event on_aot_02_message_sub1
     }
     sleep(10);
     evt_fork(TASK_02, on_aot_02_message_sub1_sub1, 0);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -463,7 +463,7 @@ event on_aot_02_message_sub1
         aot_reset(AOT_02_MESSAGE, SCE_NONE, 0, 0, 0, 0);
         aot_reset(AOT_06_USEITEM, SCE_NONE, 0, 0, 0, 0);
         set(FG_SCENARIO, F_SCENARIO_12, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
         sys_multi(SYS_IDLE);
@@ -480,11 +480,11 @@ event on_aot_01_message
         aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
         if (CHRIS)
         {
-            set(FG_COMMON, F_COMMON_07, TRUE);
+            set(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, TRUE);
         }
         else
         {
-            set(FG_COMMON, F_COMMON_08, TRUE);
+            set(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE);
         }
     }
     evt_finish();
@@ -537,7 +537,7 @@ event on_enter when (JILL)
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(CUT_LOCKED);
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
@@ -893,9 +893,9 @@ event on_enter when (JILL)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_COMMON, F_COMMON_08, TRUE);
+        set(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE);
         cut_auto(CUT_FREE);
         sys_multi(SYS_IDLE);
     }

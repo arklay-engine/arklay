@@ -738,6 +738,22 @@ mod imp {
                 },
             );
 
+            // `set_flag_name(bank, bit, name[, description])` names a bit of a
+            // game bank for the debug menu (`game/flags.lua`).
+            methods.add_method_mut(
+                "set_flag_name",
+                |_lua, game, (bank, bit, name, description): (u8, u8, String, Option<String>)| {
+                    if usize::from(bank) >= crate::game::FLAG_BANK_COUNT {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "set_flag_name: no flag bank {bank}"
+                        )));
+                    }
+                    game.flag_names
+                        .add(bank, bit, &name, description.as_deref().unwrap_or(""));
+                    Ok(())
+                },
+            );
+
             // `set_room_music(stage, room, { group, ... }[, { mansion2 = true }])`
             // replaces a room's up-to-four group variants. Stage is the
             // 1-based stage digit; `mansion2` names a mansion room's second

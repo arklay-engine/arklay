@@ -137,7 +137,7 @@ proc init
             if (ck(FG_COMMON, F_COMMON_21, TRUE))
             {
                 set(FG_COMMON, F_COMMON_21, FALSE);
-                if (ck(FG_COMMON, F_COMMON_22, TRUE))
+                if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
                 {
                     plw_anim(PLW_02, ANIM_28, 0);
                     setw(W_04, 0);
@@ -212,7 +212,7 @@ event on_enter
 {
     if (CHRIS)
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 650, 0, 5300, 0, 7160);
     }
     else
@@ -220,7 +220,7 @@ event on_enter
         run
         {
             set(FG_COMMON, F_COMMON_21, TRUE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             dir_set(0, 0, 2400, 0, 6800, 0, 7300);
             if (MANSION1)
             {
@@ -423,7 +423,7 @@ event on_enter
         }
         else
         {
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (MANSION2 && CHRIS)
@@ -437,7 +437,7 @@ event on_enter
         evt_actor_begin();
         act_idle();
         act_reset();
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
@@ -479,7 +479,7 @@ event on_enter_2 when (JILL)
 
 event event_03 when (CHRIS)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 650, 0, 5300, 0, 7160);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -517,7 +517,7 @@ event event_03 when (CHRIS)
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+        while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
         sleep(10);
     }
     voice_play(VOICE_PLAY, VO_00C_21);
@@ -548,7 +548,7 @@ event event_03 when (CHRIS)
     act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 event on_enter_sub1 when (JILL)

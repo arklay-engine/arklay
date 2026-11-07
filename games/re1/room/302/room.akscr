@@ -132,7 +132,7 @@ proc init
     set(FG_STATUS, F_STATUS_3C, TRUE);
     enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AA, SPAWN_FORCE, 2, 0, 1024, 0, 15000, 0, 13000, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
     enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AB, SPAWN_FORCE, 2, 0, 1024, 0, 8000, 0, 19300, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         enemy(EM_02_CERBERUS, EB_00, F_ENEMY_AC, SPAWN_FORCE, 2, 0, 1024, 0, 20000, 0, 19300, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
     }
@@ -536,7 +536,7 @@ event on_aot_0a_sub1
 {
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 4, 0);
         }

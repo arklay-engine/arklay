@@ -42,13 +42,13 @@ proc init
         aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
         aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE) && ck(FG_COMMON, F_COMMON_20, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_COMMON, F_COMMON_20, TRUE))
     {
         evt_exec(0, TASK_09, on_enter_2);
         aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_STATUS, F_STATUS_08, TRUE) && ck(FG_COMMON, F_COMMON_29, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE) && ck(FG_COMMON, F_COMMON_29, TRUE))
     {
         evt_exec(0, TASK_09, on_enter_2);
         aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -62,7 +62,7 @@ proc main
     {
         evt_exec(0, TASK_09, from_main);
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (testitem(IT_03_WEAPON_SHOTGUN))
         {

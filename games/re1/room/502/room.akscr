@@ -56,7 +56,7 @@ proc init
     if (CHRIS)
     {
         aot_set(AOT_02_ITEMBOX, 1100, 6350, 3200, 2750, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 4, 0, 0, 0, 0, 0);
-        if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+        if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
         {
             enemy(EM_21_NPC_JILL, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2368, 0, 8140, 0, 9680, ENEMY_00_NPC_JILL, ANIM_06, 0, EVAR_00);
             if (ck(FG_COMMON, F_COMMON_5B, FALSE))
@@ -81,18 +81,18 @@ proc init
         aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         enemy(EM_2A_NPC_BARRY_2, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_00_NPC_BARRY_2, ANIM_32, 99, EVAR_00);
         enemy(EM_20_NPC_CHRIS, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_01_NPC_CHRIS, ANIM_00, 0, EVAR_00);
-        if (ck(FG_COMMON, F_COMMON_4B, TRUE) && ck(FG_COMMON, F_COMMON_4E, FALSE))
+        if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE) && ck(FG_COMMON, F_COMMON_4E, FALSE))
         {
             pos_set(ENEMY_01_NPC_CHRIS, 0, 1504, 0, 3860, 0, 11550);
             evt_exec(0, TASK_07, on_enter_3);
         }
-        if (ck(FG_COMMON, F_COMMON_25, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
+        if (ck(FG_COMMON, F_COMMON_25, FALSE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE))
         {
             pos_set(ENEMY_00_NPC_BARRY_2, 0, 0, 0, 2400, 0, 10500);
             aot_set(AOT_04_MESSAGE, 1900, 9300, 1500, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
-            if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
                 {
                     evt_exec(0, TASK_09, on_enter_2);
                 }
@@ -101,20 +101,20 @@ proc init
                     evt_exec(0, TASK_09, on_enter);
                 }
             }
-            else if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 evt_exec(0, TASK_09, on_enter_4);
             }
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_RELOAD | 2);
         }
-        if (ck(FG_COMMON, F_COMMON_52, TRUE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
+        if (ck(FG_COMMON, F_COMMON_52, TRUE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE))
         {
             pos_set(ENEMY_00_NPC_BARRY_2, 0, 0, 0, 2400, 0, 10500);
             aot_set(AOT_04_MESSAGE, 1900, 9300, 1500, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
-            if (ck(FG_COMMON, F_COMMON_C0, FALSE))
+            if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
                 {
                     evt_exec(0, TASK_09, on_enter_2);
                 }
@@ -123,14 +123,14 @@ proc init
                     evt_exec(0, TASK_09, on_enter);
                 }
             }
-            else if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
             {
                 evt_exec(0, TASK_09, on_enter_4);
             }
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_RELOAD | 2);
         }
-        if (ck(FG_COMMON, F_COMMON_4B, TRUE) && ck(FG_COMMON, F_COMMON_4E, TRUE))
+        if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE) && ck(FG_COMMON, F_COMMON_4E, TRUE))
         {
             pos_set(ENEMY_01_NPC_CHRIS, 0, 1504, 0, 3860, 0, 11550);
             evt_exec(0, TASK_09, on_enter_4);
@@ -145,7 +145,7 @@ event on_enter when (JILL)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_2);
     evt_actor_begin();
@@ -167,7 +167,7 @@ event on_enter when (JILL)
     run
     {
         set(FG_COMMON, F_COMMON_54, TRUE);
-        set(FG_COMMON, F_COMMON_C0, TRUE);
+        set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
         cutnext(CAM_03);
         dir_set(0, 0, 1552, 0, 3850, 0, 11500);
     }
@@ -371,7 +371,7 @@ event on_enter when (JILL)
     {
         cutnext(CAM_00);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -387,7 +387,7 @@ event on_enter_2
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     if (JILL)
     {
@@ -461,7 +461,7 @@ event on_enter_2
         run
         {
             set(FG_COMMON, F_COMMON_54, TRUE);
-            set(FG_COMMON, F_COMMON_C0, TRUE);
+            set(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE);
             cutnext(CAM_03);
             dir_set(0, 0, 1552, 0, 3850, 0, 11500);
         }
@@ -770,7 +770,7 @@ event on_enter_2
         }
         cutnext(CAM_00);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         if (CHRIS)
         {
             eml_state(0, ENEMY_00_NPC_JILL, EML_08);
@@ -804,7 +804,7 @@ event on_enter_3
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         }
         sleep(10);
         evt_work_set(WK_ENEMY, ENEMY_01_NPC_CHRIS);
@@ -834,7 +834,7 @@ event on_enter_3
         {
             cutnext(CAM_00);
             cut_auto(CUT_FREE);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }

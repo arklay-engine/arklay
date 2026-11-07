@@ -106,7 +106,7 @@ proc init
             room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_OFF);
             set(FG_ROOM, F_ROOM_0A, FALSE);
         }
-        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_38, TRUE))
+        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE))
         {
             enemy(EM_08_PLANT_42, EB_46, F_ENEMY_60, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 1524, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
@@ -115,9 +115,9 @@ proc init
             enemy(EM_08_PLANT_42, EB_45, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 10400, -7000, 10800, ENEMY_04_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10400, ENEMY_05_PLANT_42, ANIM_00, 0, EVAR_00);
         }
-        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_38, FALSE))
+        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, FALSE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_29, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE))
             {
                 enemy(EM_08_PLANT_42, EB_08, F_ENEMY_60, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 2024, 0, 10800, -7000, 11200, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
@@ -136,7 +136,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_37, FALSE))
         {
             set(FG_COMMON, F_COMMON_37, TRUE);
-            if (ck(FG_COMMON, F_COMMON_22, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
             {
                 if (ck(FG_COMMON, F_COMMON_59, TRUE))
                 {
@@ -163,10 +163,10 @@ proc init
                 evt_exec(0, TASK_09, on_enter_2);
             }
         }
-        else if (ck(FG_COMMON, F_COMMON_38, TRUE))
+        else if (ck(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE))
         {
-            set(FG_COMMON, F_COMMON_38, FALSE);
-            set(FG_SCENARIO, F_SCENARIO_29, TRUE);
+            set(FG_COMMON, F_COMMON_PLANT42_OBJ, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE);
             room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_RELOAD);
             set(FG_ROOM, F_ROOM_0A, FALSE);
             evt_exec(0, TASK_09, on_enter_3);
@@ -181,14 +181,14 @@ proc init
         {
             set(FG_ROOM, F_ROOM_0F, TRUE);
         }
-        if (ck(FG_COMMON, F_COMMON_07, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
         {
             set(FG_ROOM, F_ROOM_0F, TRUE);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_13, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_ITEM_13_GATE, TRUE))
         {
             set(FG_ROOM, F_ROOM_0F, FALSE);
-            set(FG_SCENARIO, F_SCENARIO_29, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE);
         }
         if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
         {
@@ -197,7 +197,7 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_29, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, FALSE))
             {
                 if (ck(FG_ROOM, F_ROOM_0F, TRUE))
                 {
@@ -256,7 +256,7 @@ proc main
     }
     if (ck(FG_ENEMY, F_ENEMY_60, TRUE))
     {
-        set(FG_SCENARIO, F_SCENARIO_00, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE);
     }
     if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0A, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
     {
@@ -313,7 +313,7 @@ proc main
                 aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
             }
         }
-        if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_SCENARIO, F_SCENARIO_29, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
+        if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
         {
             set(FG_ROOM, F_ROOM_0E, TRUE);
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -337,8 +337,8 @@ event on_enter
         run
         {
             set(FG_COMMON, F_COMMON_3D, TRUE);
-            set(FG_COMMON, F_COMMON_38, TRUE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             dir_set(0, 0, 0, 0, 2622, 0, 14077);
             eml_state(0, ENEMY_00_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
             eml_state(0, ENEMY_01_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
@@ -448,7 +448,7 @@ event on_enter
             eml_state(0, ENEMY_03_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
             eml_state(0, ENEMY_04_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
             eml_state(0, ENEMY_05_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         }
         else
         {
@@ -471,7 +471,7 @@ event on_enter
 
 event from_main when (JILL)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(ANIM_20, F_ROOM_3F, 0);
@@ -588,7 +588,7 @@ event from_main when (JILL)
         eml_state(0, ENEMY_00_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
         set(FG_ROOM, F_ROOM_0C, TRUE);
         cutnext(CAM_00);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -1002,7 +1002,7 @@ event on_enter_sub8 when (CHRIS)
 event on_aot_07 when (JILL)
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_06_NPC_BARRY_2_STARS, 0, 150, 75);
@@ -1029,7 +1029,7 @@ event on_aot_07 when (JILL)
     run
     {
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -1039,7 +1039,7 @@ event on_enter_2 when (CHRIS)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 0, 0, 2622, 0, 14077);
         eml_state(0, ENEMY_00_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
         eml_state(0, ENEMY_01_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
@@ -1071,7 +1071,7 @@ event on_enter_2 when (CHRIS)
         eml_state(0, ENEMY_04_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
         eml_state(0, ENEMY_05_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
     }
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
@@ -1129,7 +1129,7 @@ event on_enter_3
 {
     if (CHRIS)
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1177,7 +1177,7 @@ event on_enter_3
             eml_state(0, ENEMY_00_PLANT_42, EML_BEHAVIOUR, EB_08);
             eml_state(0, ENEMY_02_PLANT_42, EML_BEHAVIOUR, EB_01);
             eml_state(0, ENEMY_04_PLANT_42, EML_BEHAVIOUR, EB_01);
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
             cutnext(CAM_00);
             cut_auto(CUT_FREE);

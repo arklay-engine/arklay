@@ -39,7 +39,7 @@ proc init
     {
         room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_MAIN_ON);
     }
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         enemy(EM_09_CHIMERA, EB_02, F_ENEMY_78, SPAWN_FORCE, 2, 0, 3072, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
         enemy(EM_09_CHIMERA, EB_02, F_ENEMY_79, SPAWN_FORCE, 2, 0, 1152, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);

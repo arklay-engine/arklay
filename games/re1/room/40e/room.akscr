@@ -37,7 +37,7 @@ proc init
 {
     if (JILL)
     {
-        set(FG_STATUS, F_STATUS_1C, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     }
     door_aot_set(AOT_00_DOOR, 29700, 15100, 3700, 4800, 12, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 29700, 27200, 3700, 3200, 1, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -1237,7 +1237,7 @@ event event_06
     run
     {
         bgm_stop_all(0);
-        movie_on(MOVIE_07_DM7);
+        movie_on(MOVIE_07_WATER_TANK_DRAINS);
     }
     evt_next();
     evt_nop();

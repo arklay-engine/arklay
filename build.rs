@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 mod budget;
 #[path = "build/scd/mod.rs"]
 mod scd;
+// `game/flags.lua` is generated from `inc/flags.akinc`.
+#[path = "src/flag_names/generate.rs"]
+mod flag_names_generate;
 
 /// The crate root, read at build-script run time.
 ///
@@ -71,9 +74,10 @@ fn main() {
     }
 
     // The enemy scripts carry the shared top-level `lib/` modules they require.
-    emit_scripts(&["enemy", "lib"], "ENEMY_SCRIPTS", "enemy_scripts.rs");
-    emit_scripts(&["ui"], "UI_SCRIPTS", "ui_scripts.rs");
-    emit_scripts(&["game"], "GAME_SCRIPTS", "game_scripts.rs");
+    emit_scripts(&["enemy", "lib"], "ENEMY_SCRIPTS", "enemy_scripts.rs", &[]);
+    emit_scripts(&["ui"], "UI_SCRIPTS", "ui_scripts.rs", &[]);
+    let flags = emit_flag_names();
+    emit_scripts(&["game"], "GAME_SCRIPTS", "game_scripts.rs", &[flags]);
     emit_language_files();
     emit_item_files();
     emit_room_scripts();
@@ -82,8 +86,9 @@ fn main() {
 
 /// Generate the pack-entry table for the checked-in Lua scripts under each
 /// `games/re1/{dir}/` of `dirs`, so `convert-game` packs exactly the scripts in
-/// the tree without a hand-maintained list.
-fn emit_scripts(dirs: &[&str], table: &str, file: &str) {
+/// the tree without a hand-maintained list. `generated` adds scripts this
+/// build wrote, as `(entry, path)`.
+fn emit_scripts(dirs: &[&str], table: &str, file: &str, generated: &[(String, PathBuf)]) {
     let mut entries: Vec<(String, PathBuf)> = Vec::new();
     for dir in dirs {
         let root = manifest_dir().join(format!("games/re1/{dir}"));
@@ -95,6 +100,15 @@ fn emit_scripts(dirs: &[&str], table: &str, file: &str) {
             "no Lua scripts found under {}; the build would ship an incomplete {table}",
             root.display()
         );
+    }
+    for (entry, path) in generated {
+        assert!(
+            entries
+                .iter()
+                .all(|(other, _)| !other.eq_ignore_ascii_case(entry)),
+            "{entry} is generated; remove the checked-in copy"
+        );
+        entries.push((entry.clone(), path.clone()));
     }
     entries.sort_by_key(|(entry, _)| entry.to_ascii_lowercase());
 
@@ -120,6 +134,21 @@ fn emit_scripts(dirs: &[&str], table: &str, file: &str) {
 
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out_dir.join(file), out).expect("failed to write a generated script table");
+}
+
+/// Write `game/flags.lua`, the game banks' flag names, from
+/// `games/re1/inc/flags.akinc`; returns its `(entry, path)`.
+fn emit_flag_names() -> (String, PathBuf) {
+    const SOURCE: &str = "games/re1/inc/flags.akinc";
+    println!("cargo:rerun-if-changed={SOURCE}");
+    println!("cargo:rerun-if-changed=src/flag_names/generate.rs");
+    let akinc = std::fs::read_to_string(manifest_dir().join(SOURCE))
+        .unwrap_or_else(|err| panic!("cannot read {SOURCE}: {err}"));
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    let path = out_dir.join("flags.lua");
+    std::fs::write(&path, flag_names_generate::flags_lua(&akinc, SOURCE))
+        .expect("failed to write the generated game/flags.lua");
+    ("game/flags.lua".to_string(), path)
 }
 
 /// Recursively collect every `.lua` file under `dir`, naming each pack entry

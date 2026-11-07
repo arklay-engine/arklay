@@ -44,12 +44,12 @@ proc init when (MANSION2)
     set(FG_ROOM, F_ROOM_0A, TRUE);
     cut_auto(CUT_LOCKED);
     setb(B_CAMERA, CAM_02, 0);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_21, TRUE))
         {
             set(FG_COMMON, F_COMMON_21, FALSE);
-            if (ck(FG_COMMON, F_COMMON_22, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE))
             {
                 plw_anim(PLW_02, ANIM_28, 0);
                 setw(W_04, 0);
@@ -61,7 +61,7 @@ proc init when (MANSION2)
                 setw(W_04, 0);
                 evt_exec(0, TASK_09, on_enter_3);
             }
-            if (ck(FG_COMMON, F_COMMON_22, FALSE) && ck(FG_COMMON, F_COMMON_36, FALSE))
+            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE) && ck(FG_COMMON, F_COMMON_36, FALSE))
             {
                 evt_exec(0, TASK_09, on_enter);
             }
@@ -183,7 +183,7 @@ event on_enter when (MANSION2)
 
 event on_enter_2 when (MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 5600, 0, 3246);
     sleep(1);
     bgm_play(BGM_SUB_1);
@@ -222,7 +222,7 @@ event on_enter_2 when (MANSION2)
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
@@ -253,7 +253,7 @@ event on_enter_2_sub1 when (MANSION2)
 
 event on_enter_3 when (MANSION2)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     dir_set(0, 0, 2880, 0, 5600, 0, 3246);
     sleep(1);
     bgm_play(BGM_SUB_1);
@@ -283,7 +283,7 @@ event on_enter_3 when (MANSION2)
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+        while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     }
     else
     {
@@ -303,7 +303,7 @@ event on_enter_3 when (MANSION2)
     act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 

@@ -75,7 +75,7 @@ proc init
         aot_set(AOT_08_USEITEM, 6750, 5400, 1300, 1100, SCE_USEITEM, SAT_PLAYER, 9, 0, 16, 0, 1, 0);
     }
     set(FG_ROOM, F_ROOM_1F, TRUE);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     obj(OBJ_02, OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 2600, 1900, 600, 3700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 141, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_3F, FALSE))
@@ -89,9 +89,9 @@ proc main
     if (testitem(IT_2B_KEY_SLIDES))
     {
         aot_reset(AOT_06_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 32, 1);
-        set(FG_SCENARIO, F_SCENARIO_20, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_INTERACTIVE_SCREEN, TRUE);
         set(FG_SCENARIO, F_SCENARIO_3F, TRUE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_3F, FALSE))
     {

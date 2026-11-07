@@ -383,6 +383,8 @@ impl State<'_> {
             return Ok(true);
         }
         if let Some(rest) = word(trimmed, "#define") {
+            // A define may end in a `//` comment.
+            let rest = rest.split_once("//").map_or(rest, |(define, _)| define);
             let mut parts = rest.split_whitespace();
             let (Some(name), Some(value), None) = (parts.next(), parts.next(), parts.next()) else {
                 bail!("expected `#define NAME value`");

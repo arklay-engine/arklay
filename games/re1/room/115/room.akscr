@@ -71,17 +71,17 @@ proc init
     {
         enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 6900, 0, 9600, ENEMY_00_NPC_BARRY, ANIM_00, 0, EVAR_00);
         enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 450, 0, 5000, ENEMY_01_NPC_BARRY, ANIM_00, 0, EVAR_00);
-        if (ck(FG_COMMON, F_COMMON_07, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
         {
             set(FG_COMMON, F_COMMON_21, TRUE);
         }
-        if (ck(FG_COMMON, F_COMMON_5F, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, TRUE))
         {
             set(FG_COMMON, F_COMMON_21, TRUE);
         }
         if (ck(FG_ITEM, F_ITEM_00, FALSE) && ck(FG_ITEM, F_ITEM_01, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_5F, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, FALSE))
             {
                 set(FG_LOCK, F_LOCK_00, FALSE);
                 set(FG_LOCK, F_LOCK_01, FALSE);
@@ -116,7 +116,7 @@ proc init
 
 event event_00 when (JILL)
 {
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -365,7 +365,7 @@ event on_enter when (JILL)
     evt_nop();
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     evt_nop();
     evt_nop();
 }
@@ -421,7 +421,7 @@ event event_04 when (JILL)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         evt_exec(0, TASK_09, event_08);
     }
@@ -459,7 +459,7 @@ event on_enter_2
     tw_end();
     evt_nop();
     sleep(1);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     if (CHRIS)
@@ -508,7 +508,7 @@ event on_enter_2
         }
         cutnext(CAM_02);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -529,7 +529,7 @@ event on_enter_2
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_00);
     }

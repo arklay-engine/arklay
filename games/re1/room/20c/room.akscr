@@ -116,7 +116,7 @@ proc init when (MANSION2)
     {
         aot_set(AOT_0A_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
     }
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     if (JILL)
     {
         room_bgm_state_set(6, 12, BGM_RELOAD | 1);
@@ -423,7 +423,7 @@ event on_aot_03 when (MANSION2)
         run
         {
             set(FG_RUN, F_RUN_CONTROLS, FALSE);
-            set(FG_STATUS, F_STATUS_0F, TRUE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
             set(FG_COMMON, F_COMMON_26, TRUE);
             aot_reset(AOT_03_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         }
@@ -507,7 +507,7 @@ event on_aot_03 when (MANSION2)
         wait_message();
         run
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_7F, FALSE))
+            if (ck(FG_SCENARIO, F_SCENARIO_HAS_RADIO, FALSE))
             {
                 evt_exec(0, TASK_09, on_aot_03_sub8);
             }
@@ -524,7 +524,7 @@ event on_aot_02 when (MANSION2)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_fork(TASK_09, on_aot_02_sub1, 0);
@@ -753,7 +753,7 @@ event on_aot_04 when (MANSION2)
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     if (CHRIS)
@@ -811,7 +811,7 @@ event event_08 when (MANSION2)
     act_reset();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
@@ -1592,7 +1592,7 @@ event from_main_2 when (JILL && MANSION2)
         aot_delete(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_COMMON, F_COMMON_25, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 1184, 0, 9578, 0, 16571);
     }
     evt_fork(TASK_09, from_main_2_sub1, 0);
@@ -1603,7 +1603,7 @@ event from_main_2 when (JILL && MANSION2)
     {
         msg_list(0, 6908, -2000, 3837, 255, 255, 255, LIGHT_KIND_00, 13761, 6558, -2950, 16287, 255, 255, 255, LIGHT_KIND_00, 13321, 0, 347, 0, 230, 230, 230, LIGHT_KIND_01, 9115, 751, 847, 977);
         cutnext(CAM_02);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(70);
     run
@@ -1713,7 +1713,7 @@ event on_enter when (MANSION2)
 event event_30 when (JILL && MANSION2)
 {
     sleep(1);
-    set(FG_STATUS, F_STATUS_1D, FALSE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
     evt_finish();
 }
 

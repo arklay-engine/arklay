@@ -66,8 +66,8 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1C, TRUE);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     set(FG_STATUS, F_STATUS_3C, TRUE);
     door_aot_set(AOT_00_DOOR, 0, 15200, 2900, 3800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 0, 0, ROOM_303_HELIPORT, 8700, 0, 5300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 20500, 11100, 3300, 3500, 1, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, ROOM_310_COURT_TO_LABO, 24600, 6400, 1300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
@@ -171,7 +171,7 @@ proc init
 
 proc main
 {
-    set(FG_STATUS, F_STATUS_1C, TRUE);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 69, 0);
     if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
@@ -665,7 +665,7 @@ event from_main_3
     run
     {
         bgm_stop_all(0);
-        movie_on(MOVIE_08_DM8);
+        movie_on(MOVIE_08_FOUNTAIN_OPENS);
         cut_auto(CUT_LOCKED);
         if (ck(FG_ROOM, F_ROOM_1E, FALSE))
         {
