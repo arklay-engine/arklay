@@ -2629,6 +2629,12 @@ function BotPlanner.note_message(bot, message)
     end
 end
 
+-- Whether the current goal walks out of the room (a door or a stair).
+function BotPlanner.leaving()
+    local goal = plan().goal
+    return goal ~= nil and (goal.kind == "door" or goal.kind == "stair")
+end
+
 function BotPlanner.drop_goal(bot)
     local p = plan()
     if p.goal then
