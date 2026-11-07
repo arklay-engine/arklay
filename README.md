@@ -105,9 +105,12 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
 # You can play the RE2 pack as Leon or Claire, in either scenario: rooms, doors,
 # items, the typewriter, saves and the scripts' scenes with their characters and
-# voice lines work, with text-only menus. Zombies, the licker, dogs and crows
-# walk, attack and die; the other enemy families are still to come. The engine
-# also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
+# voice lines work. The title, the new-game choice, the inventory, the status
+# screen and the item box are drawn from the original's art. Leon A's route from
+# the new game to the main hall matches the original tick for tick, zombies
+# included, apart from the differences in docs/re2-deviations.md. Zombies,
+# lickers, dogs, crows, Mr. X, the plants and the spiders are ported; the
+# alligator is in progress and the G forms are to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and docs/re2-deviations.md);
 # --game re2 skips detection
 cargo run -- convert-game /path/to/re2
