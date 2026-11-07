@@ -20,7 +20,7 @@
 ---
 ---- **Engine screens** are the pack entries `ui/<id>.lua`: `title`,
 ---  `char_select`, `save_load`, `ending_result`, `ending_epilogue`,
----  `return_title`, `death`, `computer_lab`, `main_menu`, `map`, `file`,
+---  `return_title`, `death`, `main_menu`, `map`, `file`,
 ---  `item_view` and `item_box` for RE 1, and `title`, `char_select`,
 ---  `main_menu` and `item_box` for RE 2. Shared code lives under `ui/lib/`.
 ---  An entry in the pack or a mod replaces the copy built into the engine,

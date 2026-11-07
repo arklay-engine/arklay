@@ -2328,7 +2328,11 @@ impl GpuRenderer {
 
         for run in &sprites.after {
             let pipeline = match run.op {
-                crate::render::EffectBlend::Normal => self.pipelines.sprite,
+                // The GPU samples every sprite alike; a smooth quad's edges
+                // stay nearest-sampled there.
+                crate::render::EffectBlend::Normal | crate::render::EffectBlend::Smooth => {
+                    self.pipelines.sprite
+                }
                 crate::render::EffectBlend::Add => self.pipelines.sprite_add,
             };
             draw_sprites(pass, pipeline, self.mask_keys, std::slice::from_ref(run));

@@ -2348,6 +2348,35 @@ impl Framebuffer {
             ],
         ];
         let rgba = &mut self.rgba;
+        if quad.op == EffectBlend::Smooth {
+            // `MarniDrawTrianglesPersp`: bilinear, blended by coverage like
+            // a ground shadow. `v` is sheet-relative; the sampler reads the
+            // whole page.
+            let whole_page = top == 0 && sheet_height == page.height;
+            let page_v = |v: f32| {
+                if whole_page {
+                    v
+                } else {
+                    (v * sheet_height as f32 + top as f32) / page.height as f32
+                }
+            };
+            for triangle in &triangles {
+                crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
+                    let texel = sample_bilinear(page, fragment.u, page_v(fragment.v));
+                    let target = fragment.y * target_stride * 4 + fragment.x * 4;
+                    let Some(slot) = rgba.get_mut(target..target + 4) else {
+                        return;
+                    };
+                    let mix = unorm8(f32::from(texel[3]) * (1.0 / 255.0) * alpha);
+                    for (index, destination) in slot[..3].iter_mut().enumerate() {
+                        let source = unorm8(f32::from(texel[index]) * (1.0 / 255.0) * color[index]);
+                        *destination = blend_unorm8(source, *destination, mix);
+                    }
+                    slot[3] = 255;
+                });
+            }
+            return;
+        }
         for triangle in &triangles {
             crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
                 let texel_x = clamp_texel(fragment.u, page.width);
@@ -2379,6 +2408,7 @@ impl Framebuffer {
                             unorm_mul(source, alpha) + unorm_mul(frame, 255 - alpha)
                         }
                         EffectBlend::Add => frame + unorm_mul(source, alpha),
+                        EffectBlend::Smooth => unreachable!("drawn above"),
                     };
                     *channel = blended.min(255) as u8;
                 }
@@ -4048,6 +4078,10 @@ pub enum EffectBlend {
     Normal,
     /// The frame plus the texel: fire.
     Add,
+    /// Bilinear-sampled and mixed by the texel's alpha, the way the
+    /// original's perspective-triangle path draws a textured quad (the lab
+    /// computer's spinning Umbrella-mark wedges).
+    Smooth,
 }
 
 impl EffectQuad {

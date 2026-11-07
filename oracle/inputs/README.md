@@ -126,6 +126,17 @@ Save mode (each header names its save):
   scenario: the confirm press opens the door on tick 10, is released, and is
   pressed again on tick 32 past frame 10, which skips the rest of the
   animation.
+- `computer_unlock.txt` — `computer_chris_506.dat` and
+  `computer_jill_506.dat`: the room-506 lab computer from the examine message
+  to the room coming back: the CRT zoom and Umbrella logo, the JOHN / ADA
+  login on the on-screen keyboard (typed by the forearm models), B2 with the
+  MOLE command, B5, and Cancel / Yes with the logout and the shrink. Run it
+  for 3000 ticks.
+- `computer_reject.txt` — the same saves: a wrong password, refused and
+  retried.
+- `computer_cancel.txt` — the same saves: cancel from the password field
+  (the terminal reads it off the raw bit `0x0040` that run shares), a second
+  boot, and a cancel from its login.
 - `door_101.txt` — `door_chris_103.dat`: the same for a same-stage door (103 to
   101), whose `room_set` runs on the placement's frame. The destination's track
   changes, so `update_room_bgm`'s `bgm_fade_out_all` holds the black tail for

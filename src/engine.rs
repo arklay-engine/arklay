@@ -2313,45 +2313,6 @@ struct GameSession {
     /// Debug jump destinations that failed to load, so the warning is logged
     /// once per session instead of on every confirm.
     debug_failed: HashSet<u32>,
-    /// The lab computer terminal (`ui/computer_lab.lua`, room 5060) while it
-    /// owns the screen. The
-    /// room stays frozen; the terminal's camera, lights and parked player are
-    /// installed when it opens and restored when it closes.
-    computer: Option<Box<ui::lua_screen::LuaScreen>>,
-    /// The room state the terminal saved at `computer_lab_init`: the camera,
-    /// the player's Y and the RDT lighting.
-    computer_saved: Option<ComputerSaved>,
-}
-
-/// The scene light the lab terminal installs over the room's own
-/// (`s_labLights`).
-const LAB_LIGHTS: [[i32; 3]; 3] = [
-    [14300, -1950, 9650],
-    [4450, -2650, 12000],
-    [14700, -1600, 5600],
-];
-
-/// The ambient the lab terminal installs (`0x708` per channel).
-const LAB_AMBIENT: i16 = 0x708;
-
-/// The two lab cell doors' `g_LocksFlags` bits, indexed by the door the
-/// terminal released (its `released_door` value minus one).
-const DOOR_LOCK_BITS: [u8; 2] = [0x25, 0x26];
-
-/// The lab map's room-flag bit (`ROOM_FLAG_MAP_BASE + MAP_INDEX_LABORATORY`).
-const LAB_MAP_FLAG: u8 = 0x81;
-
-/// The state `computer_lab_init` (0x004123d0) swaps out for the terminal and
-/// restores on exit.
-struct ComputerSaved {
-    /// `g_interactiveScreenSavedCameraId`.
-    cut: usize,
-    /// `g_labSlidesSavedPlayerY`.
-    player_y: i32,
-    /// The RDT's three lights.
-    lights: [crate::state::Light; 3],
-    /// The RDT ambient colour.
-    ambient: [i16; 3],
 }
 
 /// New-game start position X (the original's `InitPlayerData`).
@@ -2824,8 +2785,6 @@ impl GameSession {
             death: ui::death::DeathSequence::idle(),
             death_screen: None,
             debug_failed: HashSet::new(),
-            computer: None,
-            computer_saved: None,
         });
         session.enter_room(pack, None, true, RoomBgmHandoff::Now);
         Ok(session)
@@ -3497,13 +3456,6 @@ impl GameSession {
             self.tick_death_screen(pack, ui, input);
             return Ok(());
         }
-        // The lab computer terminal owns the whole tick while it is up: the
-        // room is frozen on its monitor camera and only the terminal's state
-        // machine advances (`check_and_display_interactive_screen`).
-        if self.computer.is_some() {
-            self.tick_computer(pack, ui);
-            return Ok(());
-        }
         // The original's room-events gate (`g_message_flags` bit 0x80): the
         // entry fade's state machine restores the bit on the tick its
         // accumulator drops below 1, and until then `room_events_check` does
@@ -3878,10 +3830,6 @@ impl GameSession {
         // tick's state and `on_message` may rewrite a message the tick raised
         // before the window resolves its bytes.
         run_lua_tick_hooks(self.lua.as_ref(), &mut self.game, message_before);
-        // `check_and_display_interactive_screen` runs right after the scripts:
-        // the room action's event has raised scenario flag 0x20 by now, and the
-        // room's init set the SysFlags bit that selects the computer terminal.
-        self.maybe_open_computer(pack);
         // The message window advances after the script/entity task pass,
         // exactly like the original's `main_loop`: a request a script raised
         // this tick and the state it changed are visible to the same frame's
@@ -4418,7 +4366,6 @@ impl GameSession {
             || self.save_screen.is_some()
             || self.debug_menu.is_some()
             || self.return_title.is_some()
-            || self.computer.is_some()
             || self.system_menu_open
     }
 
@@ -7872,32 +7819,6 @@ impl GameSession {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         }
-        // The computer terminal draws over the frozen monitor-camera scene.
-        if self.computer.is_some() {
-            let Self {
-                computer,
-                save_dir,
-                font,
-                text,
-                game,
-                framebuffer,
-                ..
-            } = self;
-            if let Some(screen) = computer.as_mut() {
-                let cx = UiContext {
-                    authentic: game.player_options.authentic,
-                    pack,
-                    save_dir,
-                    font: font.as_ref(),
-                    text: Some(text),
-                    ticks: game.frame,
-                    cues: std::cell::RefCell::new(Vec::new()),
-                    game: Some(game),
-                };
-                screen.draw(&cx, framebuffer);
-            }
-            return Ok(());
-        }
         // The menu is hidden while the opening fade-out darkens the frozen
         // frame and while the closing fade runs; it is revealed for the
         // fade-in. A document pick-up suppresses it for the whole flow: the
@@ -8255,7 +8176,6 @@ impl GameSession {
             || self.movie.is_some()
             || self.transition.is_some()
             || self.death_screen.is_some()
-            || self.computer.is_some()
         {
             return false;
         }
@@ -8280,117 +8200,6 @@ impl GameSession {
     /// The last rendered frame.
     fn frame(&self) -> &Framebuffer {
         &self.framebuffer
-    }
-
-    /// Open the lab computer terminal if the room's scripts raised the
-    /// interactive-screen gate for it.
-    ///
-    /// The original's `check_and_display_interactive_screen` (0x0042a030) tests
-    /// scenario flag `0x20` and dispatches on the SysFlags bit: `0x1e` is the
-    /// computer terminal (room 5060), whose init parks the player 9000 units
-    /// below the floor, switches to camera 4 and installs the terminal's lights.
-    fn maybe_open_computer(&mut self, pack: &Pack) {
-        if self.computer.is_some() {
-            return;
-        }
-        if !self.game.flag_test(game::BANK_SCENARIO, 0x20, false) {
-            return;
-        }
-        if !self.game.flag_test(game::BANK_SYSTEM, 0x1e, false) {
-            return;
-        }
-        self.open_computer(pack);
-    }
-
-    /// `computer_lab_init` (0x004123d0): install the terminal's camera, lights
-    /// and parked player, then open the screen.
-    fn open_computer(&mut self, pack: &Pack) {
-        let mut cx = self.ui_context(pack);
-        let screen = ui::lua_screen::LuaScreen::open_screen(
-            "computer_lab",
-            &[],
-            ScreenAction::Resume,
-            &mut cx,
-        );
-        let cues = cx.cues.into_inner();
-        self.play_ui_cue_names(pack, cues);
-        let screen = match screen {
-            Ok(screen) => screen,
-            Err(err) => {
-                // Without the terminal the gate closes like a cancelled one.
-                eprintln!("warning: computer terminal unavailable: {err:#}");
-                self.game.apply_flag(game::BANK_SCENARIO, 0x20, 1);
-                return;
-            }
-        };
-        let cut = self.game.camera.current_cut;
-        let player_y = self.player.pos[1];
-        self.computer_saved = Some(ComputerSaved {
-            cut,
-            player_y,
-            lights: self.loaded.room.lights,
-            ambient: self.loaded.room.ambient,
-        });
-        // The monitor close-up is camera 4 in room 5060.
-        if self.loaded.room.cuts.get(4).is_some() {
-            self.game.set_camera_cut(4);
-            self.loaded.room.current_cut = 4;
-        }
-        self.player.pos[1] = -9000;
-        self.game.sync_entity_from_player(&self.player);
-        for (index, light) in self.loaded.room.lights.iter_mut().enumerate() {
-            light.pos = LAB_LIGHTS[index];
-            light.color = [0x78, 0x78, 0x78];
-            light.kind = 0;
-            light.radius = 0xFFFF;
-        }
-        self.loaded.room.ambient = [LAB_AMBIENT; 3];
-        self.computer = Some(Box::new(screen));
-    }
-
-    /// One frozen tick of the computer terminal.
-    fn tick_computer(&mut self, pack: &Pack, ui: UiInput) {
-        let Some(mut screen) = self.computer.take() else {
-            return;
-        };
-        let (result, cues) = {
-            let cx = self.ui_context(pack);
-            let result = screen.update(&cx, ui);
-            (result, cx.cues.into_inner())
-        };
-        self.play_ui_cue_names(pack, cues);
-        self.computer = Some(screen);
-        if let ScreenResult::Done(_) = result {
-            self.close_computer();
-        }
-    }
-
-    /// `computer_lab_finish` (0x00413930): apply the unlock, clear the gate and
-    /// restore the saved camera, lights and player.
-    fn close_computer(&mut self) {
-        let Some(screen) = self.computer.take() else {
-            return;
-        };
-        // `cl_cmd_unlock`: the released door's lock bit and the lab map.
-        let door = screen.value("released_door");
-        if let Some(&bit) = usize::try_from(door - 1)
-            .ok()
-            .and_then(|index| DOOR_LOCK_BITS.get(index))
-        {
-            self.game.apply_flag(2, bit, 0);
-            self.game.apply_flag(game::BANK_ROOM_FLAGS, LAB_MAP_FLAG, 0);
-        }
-        self.game.apply_flag(game::BANK_SCENARIO, 0x20, 1);
-        if let Some(saved) = self.computer_saved.take() {
-            self.loaded.room.lights = saved.lights;
-            self.loaded.room.ambient = saved.ambient;
-            self.player.pos[1] = saved.player_y;
-            self.game.sync_entity_from_player(&self.player);
-            if saved.cut < self.loaded.room.cuts.len() {
-                self.game.set_camera_cut(saved.cut);
-                self.loaded.room.current_cut = saved.cut;
-            }
-        }
     }
 
     /// Step the camera cut with the debug shift+`,`/`.` keys.
@@ -15162,6 +14971,9 @@ struct EffectPageCache {
     room: Option<RoomId>,
     pages: EffectPages,
     re2: Re2EffectPages,
+    /// The lab computer's texture pages ([`crate::computer_lab::PAGE_ENTRIES`]),
+    /// decoded the first time the terminal draws.
+    lab: Option<Vec<Option<Image>>>,
 }
 
 impl EffectPageCache {
@@ -15172,6 +14984,25 @@ impl EffectPageCache {
             self.pages = build_effect_pages(pack, id, room);
         }
         &self.pages
+    }
+
+    /// The lab computer's pages, decoded once.
+    fn lab_pages(&mut self, pack: &Pack) -> &[Option<Image>] {
+        self.lab.get_or_insert_with(|| {
+            crate::computer_lab::PAGE_ENTRIES
+                .iter()
+                .map(|entry| {
+                    let page = pack
+                        .read(entry)
+                        .ok()
+                        .and_then(|data| crate::computer_lab::decode_page(&data));
+                    if page.is_none() {
+                        eprintln!("warning: missing lab computer page {entry}");
+                    }
+                    page
+                })
+                .collect()
+        })
     }
 }
 
@@ -15976,6 +15807,28 @@ struct RoomContext<'a> {
     enemy_lua: Option<&'a mut enemy::LuaEnemyHost>,
 }
 
+/// One frame of the room-5060 lab computer (`display_computer_lab`), while
+/// the interactive-screen gate is up. An RE1 room only: the gate bits mean
+/// something else in RE2.
+fn tick_lab_terminal(context: &mut RoomContext<'_>, cancel_held: bool) {
+    if context.game.is_re2_room {
+        return;
+    }
+    let mut terminal = std::mem::take(&mut context.game.lab_terminal);
+    let pad = terminal.pad_from_dpad(
+        context.game.dpad_held,
+        context.game.dpad_pressed,
+        cancel_held,
+    );
+    terminal.tick(&mut crate::computer_lab::Host {
+        game: context.game,
+        room: context.room,
+        player: context.player,
+        pad,
+    });
+    context.game.lab_terminal = terminal;
+}
+
 /// The pad-driven half of the player's frame: the control gate has passed, so
 /// the action-key scan, the stair/ladder zone branch and then the locomotion
 /// (or weapon) machine run in the original's order.
@@ -16274,12 +16127,17 @@ fn tick_room_timed(
     // background at display time with the flag as it stands then, so the
     // re-slice follows the flag here too, ahead of the camera switch.
     apply_screen_border(context.game, context.room);
+    // `check_and_display_interactive_screen` runs right after the scripts: the
+    // room action's event has raised scenario flag 0x20 by now, and room
+    // 5060's init set the system bit that selects the lab computer. Its forced
+    // cuts count as a switch for the effect reprojection below.
+    let previous_cut = context.room.current_cut;
+    tick_lab_terminal(&mut context, input.cancel_held);
     // The original's `check_camera_switch(0)` runs after the scripts and
     // BEFORE `update_entities`/`update_player_anim`, so it tests the position
     // the scripts left rather than this tick's movement. That is what makes a
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
-    let previous_cut = context.room.current_cut;
     if !context.game.re2.script_door {
         apply_camera(context.room, context.game, Some(context.player.pos));
     }
@@ -17423,6 +17281,7 @@ impl InputState {
                 right: active & KEY_RIGHT != 0,
                 run: active & KEY_RUN != 0,
                 run_pressed: pressed & KEY_RUN != 0,
+                cancel_held: active & KEY_CANCEL != 0,
                 action_held: active & KEY_CONFIRM != 0,
                 action_pressed: pressed & KEY_CONFIRM != 0,
                 aim: active & KEY_AIM != 0,
@@ -19174,6 +19033,10 @@ fn render_frame_on(
         .re2
         .prepare(&game.re2.effects, &game.re2.effects.pages());
     effect_cache.pages_for(pack, id, &game.room_effects);
+    let lab_sprites = game.lab_terminal.sprites().to_vec();
+    if !lab_sprites.is_empty() {
+        effect_cache.lab_pages(pack);
+    }
     let pages = &effect_cache.pages;
     let re2_images = &effect_cache.re2;
     let mut quads = build_effect_quads(game, room, id, &camera, pages, tween);
@@ -19197,6 +19060,20 @@ fn render_frame_on(
         quads.extend(re2_quads.into_iter().map(|quad| EffectQuad {
             page: quad.page + first,
             ..quad
+        }));
+    }
+    // The lab computer's monitor and keyboard sprites, which sort among the
+    // arms' triangles like the original's ordering table.
+    if let Some(lab) = effect_cache
+        .lab
+        .as_ref()
+        .filter(|_| !lab_sprites.is_empty())
+    {
+        let first = page_refs.len();
+        page_refs.extend(lab.iter().map(Option::as_ref));
+        quads.extend(lab_sprites.iter().map(|quad| EffectQuad {
+            page: quad.page + first,
+            ..*quad
         }));
     }
     let effect_layer = EffectLayer {
@@ -25377,66 +25254,6 @@ mod tests {
         session.close_menu();
         assert!(session.map.is_none() && session.menu.is_none());
         assert!(!session.map_direct);
-    }
-
-    #[test]
-    fn the_interactive_gate_opens_the_computer_terminal() {
-        let dir = TempDir::new();
-        let pack_path = new_game_pack(&dir);
-        let pack = Pack::open(&pack_path).unwrap();
-        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
-
-        // Neither gate flag alone opens the terminal.
-        session.maybe_open_computer(&pack);
-        assert!(session.computer.is_none());
-        session.game.apply_flag(game::BANK_SCENARIO, 0x20, 0);
-        session.maybe_open_computer(&pack);
-        assert!(
-            session.computer.is_none(),
-            "the SysFlags bit is still clear"
-        );
-        session.game.apply_flag(game::BANK_SYSTEM, 0x1e, 0);
-        session.maybe_open_computer(&pack);
-        assert!(
-            session.computer.is_some(),
-            "both gate flags open the screen"
-        );
-
-        // `computer_lab_init` parked the player and swapped the lighting.
-        assert_eq!(session.player.pos[1], -9000);
-        assert_eq!(session.loaded.room.ambient, [LAB_AMBIENT; 3]);
-        assert_eq!(session.loaded.room.lights[0].pos, LAB_LIGHTS[0]);
-
-        // `computer_lab_finish` clears the gate and restores the saved state.
-        let saved_y = session.computer_saved.as_ref().unwrap().player_y;
-        session.close_computer();
-        assert!(session.computer.is_none());
-        assert!(!session.game.flag_test(game::BANK_SCENARIO, 0x20, false));
-        assert_eq!(session.player.pos[1], saved_y);
-        // A cancelled terminal releases nothing.
-        assert!(!session.game.flag_test(2, DOOR_LOCK_BITS[1], false));
-        assert!(
-            !session
-                .game
-                .flag_test(game::BANK_ROOM_FLAGS, LAB_MAP_FLAG, false)
-        );
-
-        // The door the terminal published releases its lock bit and the map.
-        session.game.apply_flag(game::BANK_SCENARIO, 0x20, 0);
-        session.maybe_open_computer(&pack);
-        session
-            .computer
-            .as_mut()
-            .unwrap()
-            .test_set_value("released_door", 2);
-        session.close_computer();
-        assert!(session.game.flag_test(2, DOOR_LOCK_BITS[1], false));
-        assert!(!session.game.flag_test(2, DOOR_LOCK_BITS[0], false));
-        assert!(
-            session
-                .game
-                .flag_test(game::BANK_ROOM_FLAGS, LAB_MAP_FLAG, false)
-        );
     }
 
     #[test]
