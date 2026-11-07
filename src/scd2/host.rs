@@ -2126,7 +2126,7 @@ impl Host for GameHost<'_> {
                 crate::player2::plc_ret(&mut self.game.re2.player);
             }
             "plc_stop" if self.work_is_player(task) => {
-                crate::player2::plc_stop(&mut self.game.re2.player);
+                crate::player2::plc_stop_player(&mut self.game.re2.player);
             }
             "plc_rot" if self.task_character(task).is_some() => {
                 let by = at(1) as i16;
