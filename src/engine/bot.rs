@@ -1010,8 +1010,10 @@ fn enemy_snapshots(
 }
 
 /// The effect behaviours whose splash tests the player
-/// (`effect_projectile_hit_check`): the drop splat and the splash timer.
-const PROJECTILE_BEHAVIOURS: [u8; 2] = [22, 55];
+/// (`effect_projectile_hit_check`): the faded fall (21, which runs the drop
+/// splat every tick before handing over to it: the Black Tiger's spit flies
+/// this way), the drop splat and the splash timer.
+const PROJECTILE_BEHAVIOURS: [u8; 3] = [21, 22, 55];
 
 /// The acid globs in flight: the live effects running a behaviour that
 /// tests the player (the Black Tiger's spit, Plant 42's).
@@ -2882,9 +2884,14 @@ impl UserData for BotCtx {
                         row.set("object", object)?;
                         row.set("slot", slot)?;
                     }
-                    meta::Target::Fight { enemy, stage } => {
+                    meta::Target::Fight {
+                        enemy,
+                        stage,
+                        optional,
+                    } => {
                         row.set("kind", "fight")?;
                         row.set("enemy", enemy)?;
+                        row.set("optional", optional)?;
                         row.set("stage", stage.map(|byte| char::from(byte).to_string()))?;
                     }
                     meta::Target::Wait => {
@@ -3004,6 +3011,7 @@ impl UserData for BotCtx {
                     "stage",
                     entry.stage.map(|byte| char::from(byte).to_string()),
                 )?;
+                row.set("optional", entry.optional)?;
                 table.push(row)?;
             }
             Ok(table)

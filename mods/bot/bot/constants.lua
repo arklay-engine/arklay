@@ -90,10 +90,10 @@ BotConst.STATUS_HIGH = 0x80
 -- player::TURN_STEP: an in-place turn rotates 0x60 a tick, so turning
 -- around takes FULL_TURN / 2 / TURN_STEP ticks.
 BotConst.TURN_STEP = 0x60
--- player::BACK_SPEED: the backward walk covers 0x40 a tick and keeps the
--- player facing forward, so it opens a gap on anything slower without the
--- turn-around a forward walk needs.
-BotConst.BACK_SPEED = 0x40
+-- player::RUN_SPEED and BACK_SPEED: the run covers 0xD2 a tick; the
+-- backward walk 0x40, facing forward, so it opens a gap on anything slower
+-- without the turn-around a forward walk needs.
+BotConst.SPEED = { run = 0xD2, back = 0x40 }
 -- Weapon behaviour 0x13 is the gun hold: a fire press is taken only here.
 BotConst.HOLD_BEHAVIOR = 0x13
 -- Weapon behaviour 0x18 is the reload running.

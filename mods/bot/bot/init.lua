@@ -152,6 +152,9 @@ function on_bot_tick(bot)
         return
     end
     if not fought and BotTactics.step(bot, scene, player) then
+        if BotTactics.dodging() then
+            BotPlanner.hold_clock()
+        end
         return
     end
     BotPlanner.step(bot)

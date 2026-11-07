@@ -778,6 +778,11 @@ function BotTactics.avoiding()
     return s.sourcing == true or (s.avoid_until or 0) > (s.now or 0)
 end
 
+-- Whether a spit dodge holds the pad.
+function BotTactics.dodging()
+    return state().spit ~= nil
+end
+
 function BotTactics.active()
     return state().active == true
 end
@@ -1040,7 +1045,7 @@ local function choose(bot, s, k, enemies, player)
                 reach = entry and entry.reach,
                 engage = far,
                 outrun = entry and entry.outrun,
-                slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.BACK_SPEED,
+                slow = entry ~= nil and entry.speed ~= nil and entry.speed < C.SPEED.back,
                 hurt_before = s.hurt_by ~= nil and s.hurt_by[hurt_key(bot:room().id, enemy.slot)] == true,
                 ahead = entry ~= nil and entry.grabs == true
                     and abs(angle_delta(enemy.bearing, player.angle)) <= AHEAD_ARC,
@@ -1188,6 +1193,289 @@ local function dodge(bot, s, player)
     return false
 end
 
+-- A spitter (a knowledge <spit>: 30C's Black Tiger) is dodged before it
+-- spits. Its globs fly near twice the run speed and hit within glob_hit on
+-- every tick of their flight (a hit from 3300 within 5 ticks), so a glob in the
+-- air is too late to dodge. But they fly along the spitter's facing (one
+-- glob straight, two at fan / 2 or fan off it), and the tiger locks its
+-- facing from the bite's tell sub-state on, about 19 ticks before it spits:
+-- the glob lines are known then. So while the tiger can spit (locked, mid
+-- spit, or picking and lined up) and the bot stands within SPIT_SAFE of a
+-- line, it runs to the quickest spot clear of every line (and of the bite),
+-- then holds until the volley has passed. A dodged glob flies on along its
+-- line, which is how the tiger's own spit wears 30C's web down.
+-- A line closer than SPIT_SAFE starts a dodge; a spot is clear past
+-- SPIT_CLEAR. The locked facing is exact, so the margins only cover a
+-- glob's spread of particles.
+local SPIT_SAFE = C.APPROACH // 2
+local SPIT_CLEAR = C.APPROACH
+-- (Both on top of the spitter's glob_hit; a spot also keeps out of its bite,
+-- bite_keep.)
+-- Escape spots are tried every C.APPROACH out to SPIT_RINGS of them, on 16
+-- headings.
+local SPIT_RINGS = 14
+-- A walk, a strafe or a pick spits with no tell: the bot waits for the
+-- spit itself while its escape takes this many ticks less than the globs'
+-- flight, and moves at once otherwise.
+local SPIT_SLACK = 4
+-- The hold ends once the spit is this old and no glob is within
+-- SPIT_NEAR of the bot (they fly 373 a tick), or once the tiger is back in
+-- a bite's early sub-states with no spit thrown.
+local SPIT_PASS = C.SECOND // 4
+local SPIT_NEAR = 10 * C.APPROACH
+local SPIT_TIMEOUT = 3 * C.SECOND
+
+-- sin of an angle in 4096ths of a turn (the bot VM has no math library).
+local function sin_turn(units)
+    local half = C.FULL_TURN // 2
+    local a = units % C.FULL_TURN
+    if a >= half then
+        a = a - C.FULL_TURN
+    end
+    local x = a * 6.2831853 / C.FULL_TURN
+    local quarter = 1.5707963
+    if x > quarter then
+        x = 3.1415927 - x
+    elseif x < -quarter then
+        x = -3.1415927 - x
+    end
+    local x2 = x * x
+    return x * (1 - x2 / 6 * (1 - x2 / 20 * (1 - x2 / 42 * (1 - x2 / 72))))
+end
+
+-- The unit heading of engine angle `units`: (cos, -sin).
+local function heading(units)
+    return sin_turn(units + C.FULL_TURN // 4), -sin_turn(units)
+end
+
+-- The glob lines of spitter `e` (its knowledge `entry`): {ox, oz, ux, uz}.
+-- With `wide`, only the wide fan's three (the narrow fan, one volley in
+-- four, is a risk taken when no spot clears both).
+local function spit_lines(e, entry, wide)
+    local lines = {}
+    local half = entry.fan // 2
+    local offs = { 0, half, -half, entry.fan, -entry.fan }
+    if wide then
+        offs = { 0, entry.fan, -entry.fan }
+    end
+    for _, off in ipairs(offs) do
+        local ux, uz = heading(e.angle + off)
+        lines[#lines + 1] = { ox = e.x, oz = e.z, ux = ux, uz = uz, hit = entry.glob_hit }
+    end
+    return lines
+end
+
+-- The least distance from (x, z) to a glob line ahead of its origin,
+-- past the glob's hit.
+local function line_clearance(lines, x, z)
+    local best = nil
+    for _, l in ipairs(lines) do
+        local dx, dz = x - l.ox, z - l.oz
+        local along = dx * l.ux + dz * l.uz
+        if along > -C.APPROACH then
+            local perp = dx * l.uz - dz * l.ux
+            if perp < 0 then
+                perp = -perp
+            end
+            perp = perp - l.hit
+            if not best or perp < best then
+                best = perp
+            end
+        end
+    end
+    return best or C.FULL_TURN * C.FULL_TURN
+end
+
+-- Whether spitter `e`'s lines are live: every state but a bite's early
+-- sub-states (before the tell, the facing still follows the bot and no
+-- spit can come for about 20 ticks). A walk or a strafe spits the moment
+-- the bot is lined up, with no tell, so their lines count at once.
+local function spit_live(e, entry)
+    if e.action_behavior == entry.tell_behavior then
+        return e.action_state >= entry.tell_state
+    end
+    return true
+end
+
+-- Whether spitter `e` bites (a bite cycle) with the bot inside its reach.
+local function spit_biting(e, entry)
+    return e.action_behavior == entry.tell_behavior and e.distance < entry.bite_keep + C.APPROACH
+end
+
+-- The quickest reachable spot clear of `lines` and of the bite of `e`.
+local function spit_escape(bot, player, e, entry, lines)
+    local best, best_cost
+    for j = 0, 15 do
+        local units = j * (C.FULL_TURN // 16)
+        local ux, uz = heading(units)
+        local turn = abs(angle_delta(units, player.angle % C.FULL_TURN)) // C.TURN_STEP
+        for ring = 2, SPIT_RINGS do
+            local r = ring * C.APPROACH
+            local x, z = (player.x + ux * r) // 1, (player.z + uz * r) // 1
+            -- The run there keeps out of the bite too (from inside it, it
+            -- at least does not close on the tiger).
+            local reach = entry.bite_keep
+            if e.distance < reach then
+                reach = e.distance
+            end
+            local fx, fz = x - e.x, z - e.z
+            if line_clearance(lines, x, z) >= SPIT_CLEAR
+                and fx * fx + fz * fz >= (entry.bite_keep + C.APPROACH) ^ 2
+                and segment_dist2(e.x, e.z, player.x, player.z, x, z) >= reach * reach * 1.0 then
+                local cost = turn + r / C.SPEED.run
+                if not best_cost or cost < best_cost then
+                    local path = bot:path(x, z)
+                    if path.status == "ok" and path.length <= r * 1.3 then
+                        best, best_cost = { x = x, z = z, cost = cost }, cost
+                    end
+                end
+                break
+            end
+        end
+    end
+    return best
+end
+
+-- Whether a spitter here may lock onto the bot before a swing or a shot
+-- that roots it ends. A knife swing and its recovery hold the bot about 25
+-- ticks, the bite's wait and turn take about 23 before the lock, and the
+-- escape needs the 19 the lock leaves: a swing is safe only in the first
+-- SPIT_SWING ticks of a spit (the spit runs about 40, then the bite's wait),
+-- or while a walk or a pick has the bot clear of its lines.
+local SPIT_SWING = 2 * C.SECOND // 3
+function BotTactics.spit_holds_fire(bot, player)
+    local k = bot:knowledge()
+    local s = state()
+    s.spit_start = s.spit_start or {}
+    for _, e in ipairs(bot:enemies()) do
+        local entry = k.enemies[e.id]
+        if entry and entry.spit_behavior and (e.health or 0) >= 0 then
+            if e.action_behavior == entry.spit_behavior then
+                s.spit_start[e.slot] = s.spit_start[e.slot] or bot:tick()
+                if bot:tick() - s.spit_start[e.slot] > SPIT_SWING then
+                    return true
+                end
+            else
+                s.spit_start[e.slot] = nil
+                if e.action_behavior == entry.tell_behavior then
+                    return true
+                end
+                if line_clearance(spit_lines(e, entry), player.x, player.z) < SPIT_CLEAR then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Run straight for (x, z) on the pad: an in-place turn (twice the run-turn's
+-- rate) while the heading is more than DASH_TURN off, else the run with the
+-- turn held. walk_to's run latch waits out heading wobble, and the dodge's
+-- 19 ticks cannot.
+local DASH_TURN = C.FULL_TURN // 8
+local DASH_BAND = C.FULL_TURN // 64
+local function dash(bot, x, z)
+    local f = bot:face_to(x, z)
+    local err = f.angle_error or 0
+    local go = abs(err) < DASH_TURN
+    -- A held aim (a knife waiting to swing) roots the bot: let go of it.
+    bot:set_input({ up = go, run = go, right = err > DASH_BAND, left = err < -DASH_BAND,
+        aim = false, fire = false })
+end
+
+local function spit_dodge(bot, s, player)
+    local k = bot:knowledge()
+    local now = bot:tick()
+    local d = s.spit
+    if d then
+        local e = enemy_by_slot(bot:enemies(), d.slot)
+        local entry = e and k.enemies[e.id]
+        if e and e.action_behavior == entry.spit_behavior and not d.spat then
+            d.spat = now
+        end
+        local live = e and (spit_live(e, entry) or spit_biting(e, entry))
+        local near = false
+        for _, g in ipairs(bot:projectiles()) do
+            if bot:distance(g.x, g.z) < SPIT_NEAR then
+                near = true
+            end
+        end
+        local flight = e and (e.distance - entry.glob_spawn) // entry.glob_speed or 0
+        local over = not e or (d.spat and now - d.spat >= SPIT_PASS + flight and not near)
+            or (not d.spat and not live) or now - d.tick >= SPIT_TIMEOUT
+        if over then
+            bot:log(string.format("spit dodge over (%s) at (%d,%d) health=%d",
+                d.spat and "the volley passed" or "no spit came", player.x, player.z, player.health))
+            s.spit = nil
+            s.aim_ticks = 0
+            return false
+        end
+        -- The tiger turned (a walk keeps turning): a spot on a line is
+        -- planned again.
+        local lines = spit_lines(e, entry, d.wide)
+        if line_clearance(lines, d.x, d.z) < SPIT_SAFE then
+            local spot = spit_escape(bot, player, e, entry, lines)
+            if spot then
+                d.x, d.z = spot.x, spot.z
+            end
+        end
+        if line_clearance(lines, player.x, player.z) < SPIT_CLEAR
+            or bot:distance(d.x, d.z) > C.APPROACH then
+            dash(bot, d.x, d.z)
+            return true
+        end
+        bot:set_input({})
+        return true
+    end
+    for _, e in ipairs(bot:enemies()) do
+        local entry = k.enemies[e.id]
+        local biting = entry and entry.spit_behavior and spit_biting(e, entry)
+        if entry and entry.spit_behavior and (e.health or 0) >= 0
+            and (biting or spit_live(e, entry)) then
+            local lines = spit_lines(e, entry)
+            local clear = line_clearance(lines, player.x, player.z)
+            -- Inside the bite while it bites: out first, lines or not.
+            if biting then
+                clear = 0
+            end
+            if clear < SPIT_SAFE then
+                local spot = spit_escape(bot, player, e, entry, lines)
+                local wide = false
+                if not spot then
+                    spot = spit_escape(bot, player, e, entry, spit_lines(e, entry, true))
+                    wide = spot ~= nil
+                end
+                -- No tell (a walk, strafe or pick): the spit itself is the
+                -- signal while the escape beats the globs' flight.
+                local told = e.action_behavior == entry.tell_behavior
+                    or e.action_behavior == entry.spit_behavior
+                local flight = (e.distance - entry.glob_spawn) / entry.glob_speed
+                if spot and not told and spot.cost + SPIT_SLACK < flight then
+                    spot = nil
+                    clear = nil
+                end
+                if spot then
+                    s.spit = { slot = e.slot, tick = now, x = spot.x, z = spot.z, cost = spot.cost,
+                        wide = wide }
+                    bot:log(string.format(
+                        "spit dodge: slot=%d ab=%d as=%d dist=%d clear=%d: to (%d,%d) cost %.0f%s",
+                        e.slot, e.action_behavior, e.action_state, e.distance, clear // 1,
+                        spot.x, spot.z, spot.cost, wide and " (wide fan only)" or ""))
+                    return spit_dodge(bot, s, player)
+                end
+                if clear and s.spit_stuck ~= now - 1 then
+                    bot:log(string.format("spit dodge: slot=%d dist=%d: no clear spot", e.slot, e.distance))
+                end
+                if clear then
+                    s.spit_stuck = now
+                end
+            end
+        end
+    end
+    return false
+end
+
 function BotTactics.step(bot, scene, player)
     local s = state()
     s.now = bot:tick()
@@ -1202,6 +1490,9 @@ function BotTactics.step(bot, scene, player)
     end
     if not scene.controllable or player.grabbed then
         return false
+    end
+    if spit_dodge(bot, s, player) then
+        return true
     end
     if player.state == 1 and dodge(bot, s, player) then
         s.aim_ticks = 0
@@ -1375,7 +1666,7 @@ function BotTactics.step(bot, scene, player)
             and entry.crawl_reach or nil,
         reach = entry and entry.reach,
         speed = entry and entry.speed,
-        back_speed = C.BACK_SPEED,
+        back_speed = C.SPEED.back,
     })
     -- A retreat walks backwards, still facing the target, to the distance
     -- spacing asked for, then the bot shoots again: a new retreat waits for
@@ -1453,6 +1744,13 @@ function BotTactics.step(bot, scene, player)
         s.space = nil
     end
 
+    -- A swing or shot roots the bot, and a raised aim takes ticks to drop:
+    -- neither while a spitter may lock onto it. Face the target, aim down.
+    if BotTactics.spit_holds_fire(bot, player) then
+        s.aim_ticks = 0
+        bot:face_to(target.x, target.z)
+        return true
+    end
     -- Face the target before raising the aim.
     if s.aim_ticks == 0 then
         local face = bot:face_to(target.x, target.z)

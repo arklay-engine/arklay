@@ -7,9 +7,11 @@
      fought first, with the grenade launcher (the knowledge file's prefer).
      Door 1 is avoided while the web stands: the bot still saw it and
      walked into the web, where it stood stuck until the tiger's poison
-     killed it. -->
+     killed it. Without a launcher loading the tiger fight is passed
+     (optional): the bot stood unarmed before it and was spat to death four
+     times. It dodges the spit instead while the knife cuts the web. -->
 <bot format="2">
-  <fight enemy="0x04" bank="3" bit="137" label="Black Tiger"/>
+  <fight enemy="0x04" bank="3" bit="137" optional="yes" label="Black Tiger"/>
   <fight enemy="0x13" bank="3" bit="138" label="cut the web with the knife"/>
   <avoid slot="1" bank="3" bit="138" while="clear" reason="the web covers the door to 30D"/>
 </bot>
