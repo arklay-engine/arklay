@@ -30589,7 +30589,9 @@ off_0010:
             .add(&id.cut_entry(0), bmp::encode_to_vec(&test_image()).unwrap())
             .unwrap();
         for (stem, bytes) in films {
-            writer.add(&format!("movie/{stem}.mpg"), bytes.clone()).unwrap();
+            writer
+                .add(&format!("movie/{stem}.mpg"), bytes.clone())
+                .unwrap();
         }
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
@@ -30609,7 +30611,10 @@ off_0010:
         let frame = session.game.frame;
         let mut ticks = 0;
         while session.movie.is_some() {
-            assert!(session.game.re2.flag(0, FG_SYSTEM_MOVIE), "0x200 is up while it plays");
+            assert!(
+                session.game.re2.flag(0, FG_SYSTEM_MOVIE),
+                "0x200 is up while it plays"
+            );
             session
                 .tick(&pack, UiInput::default(), player::Input::default(), false)
                 .unwrap();
@@ -30620,7 +30625,10 @@ off_0010:
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
         assert!(session.game.re2.sound_init, "SsInit2 after the film");
         assert!(session.load_held, "the film's last pass shows black");
-        assert_eq!(session.movie_idx, 0, "Movie_set(1), then WinMain's decrement");
+        assert_eq!(
+            session.movie_idx, 0,
+            "Movie_set(1), then WinMain's decrement"
+        );
     }
 
     #[test]
@@ -30657,7 +30665,10 @@ off_0010:
         let (_dir, pack, mut session) = re2_film_session(&[]);
         session.game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
         assert!(session.start_re2_movie(&pack, 10, false).is_err());
-        assert!(session.start_re2_movie(&pack, 1, false).is_err(), "a null id");
+        assert!(
+            session.start_re2_movie(&pack, 1, false).is_err(),
+            "a null id"
+        );
         session.end_re2_movie();
         assert!(session.movie.is_none());
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
@@ -30669,9 +30680,21 @@ off_0010:
         let (_dir, pack, mut session) = re2_film_session(&[]);
         let mut mixer = Mixer::capture();
         let samples: Vec<i16> = (0..4096).map(|n| (n % 64) as i16 * 100).collect();
-        mixer.load_bgm_channel(0, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
-        mixer.load_bgm_channel(3, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
-        mixer.load_bgm_channel(4, audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE), true);
+        mixer.load_bgm_channel(
+            0,
+            audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE),
+            true,
+        );
+        mixer.load_bgm_channel(
+            3,
+            audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE),
+            true,
+        );
+        mixer.load_bgm_channel(
+            4,
+            audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE),
+            true,
+        );
         mixer.restart_bgm_channel(0);
         mixer.stop_bgm_channel(3);
         session.game.re2.music.channels[0].track = Some(1);
@@ -30687,11 +30710,18 @@ off_0010:
         session.game.re2.sound_init = true;
         session.re2_sound_close_and_init(&pack);
         let mixer = session.music.as_ref().unwrap();
-        assert!(mixer.bgm_channel_playing(0), "SsInit2 starts the main again");
+        assert!(
+            mixer.bgm_channel_playing(0),
+            "SsInit2 starts the main again"
+        );
         assert!(!mixer.bgm_channel_playing(3), "the sub wasn't playing");
         assert!(mixer.bgm_channel_playing(4));
         assert_eq!(session.re2_music_closed, [false; 3]);
-        assert_eq!(session.re2_sub_full, [None, Some(0)], "the sub plays at full level");
+        assert_eq!(
+            session.re2_sub_full,
+            [None, Some(0)],
+            "the sub plays at full level"
+        );
         // The music's next volume for the sub ends that.
         session.game.re2.music.channels[4].volume = 65;
         session.re2_sound_close_and_init(&pack);
