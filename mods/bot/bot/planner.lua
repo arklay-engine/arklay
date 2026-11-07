@@ -592,6 +592,21 @@ local function via_fact(bot, room_id, slot)
     return nil
 end
 
+-- The plan().revisit_seen key of a <revisit> fact (bot:revisit_facts()).
+local function revisit_key(fact)
+    return string.format("%s|%d|%d|%s", fact.room, fact.bank, fact.bit, tostring(fact.set))
+end
+
+-- Whether the bot's map has room `id` as visited.
+local function visited_room(world, id)
+    for _, r in ipairs(world.rooms or {}) do
+        if r.id == id then
+            return r.visited == true
+        end
+    end
+    return false
+end
+
 -- Whether an <avoid> fact holds door `slot` of room `room_id` shut now:
 -- an ungated one always, a gated one while its gate holds (302's north
 -- elevator before the power is on). Remote planning reads it; in the room
@@ -2457,6 +2472,28 @@ local function choose(bot)
             end
         end
     end
+    -- A room to enter again now that a flag has changed (<revisit>): 50B,
+    -- whose cell door to 512 shows only in the self-destruct.
+    local seen = plan().revisit_seen or {}
+    for _, fact in ipairs(bot:revisit_facts()) do
+        if fact.room ~= room and not seen[revisit_key(fact)]
+            and bot:flag(fact.bank, fact.bit) == fact.set and visited_room(world, fact.room) then
+            local steps = route(bot, world, room, fact.room)
+            local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+            if first then
+                order = order + 1
+                local label = string.format("room %s again (%s)", fact.room,
+                    fact.label or "a flag changed")
+                consider({
+                    cost = door_len(first.slot) - HELD_USE_BONUS + route_monsters(steps),
+                    order = order, door = first,
+                    why = string.format("toward %s, %d door(s)", label, #steps),
+                    target = { kind = "revisit", room = fact.room, slot = "revisit",
+                        label = label, best = #steps, stalls = 0 },
+                })
+            end
+        end
+    end
     -- An item errand in another room: carry a held item to the <deliver>
     -- that wants it, or go to a <fetch> that offers one it needs.
     local wanted = BotPuzzle.wanted_items(bot)
@@ -2747,6 +2784,17 @@ function BotPlanner.revisit_room(bot)
     return true
 end
 
+-- Called on every room change: each <revisit> fact of this room whose
+-- flag is in its state now is done (its init has read the flag).
+local function note_revisits(p, bot, room_id)
+    p.revisit_seen = p.revisit_seen or {}
+    for _, fact in ipairs(bot:revisit_facts()) do
+        if fact.room == room_id and bot:flag(fact.bank, fact.bit) == fact.set then
+            p.revisit_seen[revisit_key(fact)] = true
+        end
+    end
+end
+
 -- Called on every room change: the story flags as the bot leaves the last
 -- room and enters this one (BotPlanner.revisit_room).
 local function note_story(p, bot, room_id)
@@ -2818,6 +2866,7 @@ function BotPlanner.enter_room(bot, room)
     end
     p.last_from = p.last_room ~= room.id and p.last_room or nil
     note_story(p, bot, room.id)
+    note_revisits(p, bot, room.id)
     p.last_room = room.id
     BotPuzzle.enter_room()
     p.last_done = { room = room.id, tick = bot:tick(), anywhere = true }

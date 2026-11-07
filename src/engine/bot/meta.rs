@@ -33,6 +33,10 @@
 //! 507's plate starts the gas. `<leave slot bank bit>` sends the bot out
 //! through door AOT `slot` as soon as the flag is set: a room event that
 //! keeps hurting until the player leaves (507's gas, after the air shaft).
+//! `<revisit bank bit while>` brings the bot back into the room once the
+//! flag reaches that state, if it last left the room before then: a door
+//! the room's init adds only later (50B's cell door to 512, live only in
+//! the self-destruct), which the bot's map cannot know about from outside.
 //! A format-1 document may not use them.
 //!
 //! Every fact element takes an optional `character="jill"|"chris"`: the fact
@@ -83,6 +87,7 @@ pub struct RoomMeta {
     pub errands: Vec<Errand>,
     pub doors: Vec<DoorVia>,
     pub rides: Vec<Ride>,
+    pub revisits: Vec<Revisit>,
     pub keep_outs: Vec<KeepOut>,
     pub leaves: Vec<Leave>,
     pub kites: Vec<KiteLoop>,
@@ -160,6 +165,15 @@ pub struct Ride {
     pub slot: u8,
     /// The room id as `bot:room().id` spells it (uppercase).
     pub from: String,
+    pub label: Option<String>,
+}
+
+/// `<revisit bank bit while [label]>`: the bot comes back into the room
+/// once the flag is in the `while` state, unless it has been in the room
+/// with the flag in that state since (`bot:revisit_facts()`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Revisit {
+    pub gate: Gate,
     pub label: Option<String>,
 }
 
@@ -575,6 +589,31 @@ pub fn load_rides(
     Ok(rides)
 }
 
+/// One room's `<revisit>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomRevisit {
+    /// The room id as `bot:room().id` spells it (`"50B"`).
+    pub room: String,
+    pub fact: Revisit,
+}
+
+/// Every room's `<revisit>` facts, by room id then document order
+/// (`bot:revisit_facts()`).
+pub fn load_revisits(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomRevisit>> {
+    let mut revisits = Vec::new();
+    for (id, meta) in load_all(pack, jill, params)? {
+        revisits.extend(meta.revisits.into_iter().map(|fact| RoomRevisit {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(revisits)
+}
+
 /// One room's `<door>` fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomDoorVia {
@@ -781,6 +820,7 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 | "tap"
                 | "brew"
                 | "ride"
+                | "revisit"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -878,6 +918,12 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 let fact = parse_ride(child)?;
                 if keep {
                     meta.rides.push(fact);
+                }
+            }
+            "revisit" => {
+                let fact = parse_revisit(child)?;
+                if keep {
+                    meta.revisits.push(fact);
                 }
             }
             "keep_out" => {
@@ -1145,6 +1191,21 @@ fn parse_ride(node: Node<'_, '_>) -> Result<Ride> {
     Ok(Ride {
         slot,
         from: from.to_ascii_uppercase(),
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_revisit(node: Node<'_, '_>) -> Result<Revisit> {
+    check_attributes(
+        node,
+        &["bank", "bit", "while", "label", "character", "when"],
+    )?;
+    check_leaf(node)?;
+    let gate = parse_gate(node)?.ok_or_else(|| {
+        anyhow::anyhow!("{}: <revisit> needs `bank`, `bit` and `while`", at(node))
+    })?;
+    Ok(Revisit {
+        gate,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -2291,6 +2352,26 @@ mod tests {
         let fromless = r#"<bot format="2"><ride slot="1"/></bot>"#;
         let error = parse(fromless).unwrap_err().to_string();
         assert!(error.contains("needs `from`"), "{error}");
+    }
+
+    #[test]
+    fn revisit_needs_a_flag_gate() {
+        let text = r#"<bot format="2">
+            <revisit bank="1" bit="0x4C" while="set" label="the cell door"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.revisits.len(), 1);
+        assert_eq!(
+            meta.revisits[0].gate,
+            Gate {
+                flag: (1, 0x4C),
+                set: true,
+            }
+        );
+        assert_eq!(meta.revisits[0].label.as_deref(), Some("the cell door"));
+        let gateless = r#"<bot format="2"><revisit label="x"/></bot>"#;
+        let error = parse(gateless).unwrap_err().to_string();
+        assert!(error.contains("needs `bank`"), "{error}");
     }
 
     #[test]
