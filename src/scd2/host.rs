@@ -80,6 +80,9 @@ pub struct Re2State {
     /// `Item_work`'s eleventh slot (`0x98ED5C`): the lighter or the lockpick,
     /// `[id, count]`, which the eight slots and their count don't see.
     pub personal_item: [u8; 2],
+    /// `Item_boxwork` (`0x98ED60`): the item box's 64 slots, `[id, count,
+    /// mark]`, the mark 3 for a two-slot weapon.
+    pub item_box: [[u8; 3]; crate::game::itembox2::BOX_SLOTS],
     /// The room music table (`bgm_tbl`).
     pub bgm: crate::bgm2::BgmTable,
     /// The main music playing.
@@ -294,9 +297,11 @@ impl PartialEq for Characters {
 impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
+const SAVE_LEN: usize = SAVE_LEN_NO_BOX + crate::game::itembox2::BOX_SLOTS * 3;
+/// A save from before the item box's slots.
+const SAVE_LEN_NO_BOX: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
 /// A save from before the personal item's two bytes.
-const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN - 2;
+const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN_NO_BOX - 2;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -497,6 +502,7 @@ impl Default for Re2State {
             vm: None,
             scenario_b: false,
             personal_item: [0; 2],
+            item_box: [[0; 3]; crate::game::itembox2::BOX_SLOTS],
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
@@ -537,6 +543,7 @@ impl Re2State {
         out.extend_from_slice(&self.random.to_le_bytes());
         out.push(u8::from(self.scenario_b));
         out.extend_from_slice(&self.personal_item);
+        out.extend(self.item_box.iter().flatten());
         out
     }
 
@@ -551,7 +558,10 @@ impl Re2State {
 
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
-        if bytes.len() != SAVE_LEN && bytes.len() != SAVE_LEN_NO_PERSONAL {
+        if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_BOX
+            && bytes.len() != SAVE_LEN_NO_PERSONAL
+        {
             return None;
         }
         let mut words = bytes
@@ -582,6 +592,12 @@ impl Re2State {
             rest.get(5).copied().unwrap_or(0),
             rest.get(6).copied().unwrap_or(0),
         ];
+        let boxed = rest.get(7..).unwrap_or(&[]);
+        for (index, slot) in self.item_box.iter_mut().enumerate() {
+            for (byte, value) in slot.iter_mut().enumerate() {
+                *value = boxed.get(index * 3 + byte).copied().unwrap_or(0);
+            }
+        }
         Some(())
     }
 
@@ -3135,8 +3151,23 @@ mod tests {
         assert_eq!(loaded.personal_item, [0x2F, 1]);
         // A save from before the slot loads with it empty.
         let mut old = Re2State::default();
-        old.load_save_bytes(&bytes[..bytes.len() - 2]).unwrap();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_PERSONAL]).unwrap();
         assert_eq!(old.personal_item, [0, 0]);
+    }
+
+    #[test]
+    fn the_item_box_survives_a_save() {
+        let mut state = Re2State::default();
+        state.item_box[0] = [0x14, 15, 0];
+        state.item_box[63] = [0x0E, 7, 3];
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.item_box, state.item_box);
+        // A save from before the box loads with it empty.
+        let mut old = Re2State::default();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_BOX]).unwrap();
+        assert_eq!(old.item_box[0], [0; 3]);
     }
 
     #[test]

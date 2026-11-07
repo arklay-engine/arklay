@@ -82,6 +82,9 @@ pub struct TraceTick<'a> {
     /// RE2: the status screen's item page (`ip`), as the end of the
     /// oracle's `gi`.
     pub re2_item_page: Option<String>,
+    /// RE2: the item box's lid and page and the box's slots, the oracle's
+    /// `ib` and `box` fields.
+    pub re2_item_box: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -253,6 +256,9 @@ impl TraceWriter {
         if let Some(page) = &tick.re2_item_page {
             write!(self.out, " ip={page}")?;
         }
+        if let Some(fields) = &tick.re2_item_box {
+            write!(self.out, " {fields}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -368,6 +374,7 @@ mod tests {
             re2_xa_volume: None,
             re2_inventory: None,
             re2_item_page: None,
+            re2_item_box: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -419,6 +426,7 @@ mod tests {
                 re2_xa_volume: None,
                 re2_inventory: None,
                 re2_item_page: None,
+                re2_item_box: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -465,6 +473,7 @@ mod tests {
             re2_xa_volume: None,
             re2_inventory: None,
             re2_item_page: None,
+            re2_item_box: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -514,6 +523,7 @@ mod tests {
             re2_xa_volume: None,
             re2_inventory: None,
             re2_item_page: None,
+            re2_item_box: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };

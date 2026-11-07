@@ -1349,6 +1349,7 @@ exist (Lua colon syntax):
 | `api:set_equipped_weapon(id)` | Set the weapon id the firing model uses, without touching the equipped item. |
 | `api:item_box_set(slot, id[, quantity])` | Replace one of the 48 item-box slots. |
 | `api:item_box_clear()` | Empty the whole item box. |
+| `api:set_re2_box_slot(slot, id, count[, mark])` | Replace one of RE 2's 64 item box slots; mark 3 for a two-slot weapon. |
 | `api:set_health(hp)` | Set the player's health and its BioCard copy. |
 | `api:set_max_health(hp)` | Set the player's maximum health. |
 | `api:set_health_status(byte)` | Set the health-status flags (poison bits included). |

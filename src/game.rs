@@ -1428,6 +1428,7 @@ pub struct ScaVolume {
 
 mod entity;
 pub mod item_get2;
+pub mod itembox2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
@@ -3240,6 +3241,16 @@ pub struct GameState {
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
+    /// RE2's item box lid (`Item_box_entrance`).
+    pub re2_box_entrance: itembox2::Entrance,
+    /// RE2's item box page while its screen is up.
+    pub re2_box: Option<itembox2::BoxPage>,
+    /// The box page's bytes as the trace shows them; they stay after the
+    /// screen closes, as the original's do.
+    pub re2_box_bytes: itembox2::BoxPage,
+    /// The lid's swing ended this tick: the box's screen opens on the next
+    /// (game mode 1).
+    pub re2_box_open: bool,
     /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
     /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
     /// cleared, so nothing runs, draws or touches it, but for the
@@ -3714,6 +3725,10 @@ impl Default for GameState {
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
+            re2_box_entrance: itembox2::Entrance::default(),
+            re2_box: None,
+            re2_box_bytes: itembox2::BoxPage::default(),
+            re2_box_open: false,
             re2_no_enemies: None,
             stair_zones: StairZones::default(),
             stair_height: None,
@@ -8512,7 +8527,9 @@ impl GameState {
                 self.re2.pending_events.push(event);
             }
             RoomActionKind::ItemBox => {
-                self.open_itembox(slot);
+                // `Sce_Itembox`: the area's first parameter is the box's
+                // object.
+                self.open_re2_box_entrance(action.params[0]);
                 self.record_interaction(slot, action.kind, None);
             }
             RoomActionKind::Typewriter => self.record_interaction(slot, action.kind, None),

@@ -559,6 +559,30 @@ def inventory_trace(game: Game) -> str:
     return f"inv={slots}/{game.u8(ITEM_SLOTS)}"
 
 
+ITEM_BOX_WORK = 0x98ED60  # `Item_boxwork`: 64 slots of id, count and the two-slot weapon's half
+ITEM_BOX_ENTRANCE = 0x98E542  # `Item_box_entrance`'s state; its object at 0x98E533
+ITEM_BOX_OBJECT = 0x98E533
+ITEM_BOX_LID = 0x689C90  # the lid's speed and its step (`0x689C98`)
+OBJECTS = 0x98A61C  # `pOm`: 0x1F8 bytes an object, the lid's turn at +0x78
+ITEM_BOX_PAGE = [0x691F61, 0x691F62, 0x691F63, 0x691F6C, 0x691F76, 0x691F84]
+
+
+def item_box_trace(game: Game) -> str:
+    """The item box (`Item_box_entrance` and `St_main01`): the lid's state, speed, step and turn, the screen's routine, sub, count, cursor and repeat gate, the box's top row and its scroll, the cursor lines' pulse; then the inventory's two-slot marks and the box's filled slots."""
+    lid = game.i16(OBJECTS + game.u8(ITEM_BOX_OBJECT) * 0x1F8 + 0x78)
+    page = ",".join(str(game.u8(address)) for address in ITEM_BOX_PAGE)
+    marks = "".join(str(game.u8(ITEM_WORK + n * 4 + 2)) for n in range(10))
+    work = game.read(ITEM_BOX_WORK, 64 * 4)
+    slots = ";".join(
+        f"{n}:{work[n * 4]:x}:{work[n * 4 + 1]}:{work[n * 4 + 2]}" for n in range(64) if work[n * 4]
+    )
+    return (
+        f"ib={game.u8(ITEM_BOX_ENTRANCE)},{game.i16(ITEM_BOX_LID)},{game.i16(ITEM_BOX_LID + 8)},{lid},"
+        f"{page},{struct.unpack('b', bytes((game.u8(0x691F85),)))[0]},{game.i16(0x692FBE)} "
+        f"box={marks}/{slots or '-'}"
+    )
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -627,6 +651,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x},"
         + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
+    fields.append(item_box_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
@@ -1004,6 +1029,9 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         for item in args.give:
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
+                        for item in args.box:
+                            slot, item_id, count, *mark = (int(part, 0) for part in item.split(":"))
+                            game.write(ITEM_BOX_WORK + slot * 4, bytes((item_id, count, mark[0] if mark else 0)))
                         if args.life is not None:
                             game.write(PL + ENTITY_LIFE, struct.pack("<h", args.life))
                 if settled and args.equip is not None:
@@ -1331,6 +1359,10 @@ def main() -> int:
         command.add_argument(
             "--give", action="append", default=[], metavar="SLOT:ID:COUNT",
             help="put an item in the inventory when play begins",
+        )
+        command.add_argument(
+            "--box", action="append", default=[], metavar="SLOT:ID:COUNT[:MARK]",
+            help="put an item in the item box when play begins; MARK 3 for a two-slot weapon",
         )
         command.add_argument(
             "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",

@@ -11,7 +11,7 @@
 //! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
 //! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp`, `room/<id>/mask/<nn>.bmp` |
 //! | `Common/bin/rc2000_.adt`, `rc2168_.adt` | `room/<id>/scroll/<nn>.bmp` |
-//! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
+//! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin`, `itembox.tim` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
 //! | ADT streams in `Common/bin/itemdata.bin` | `ui/status/check_<id:02x>.tim` |
 //! | `Common/file/map<nn>.adt` (TIM `k`) | `ui/status/map<nn>_<k>.tim` |
 //! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
@@ -1393,8 +1393,9 @@ fn copy_scroll_pictures(
 }
 
 /// The status screen's sheets, each a run of TIMs: `Common/Data/st<n>_jp.tim`
-/// (one per character), and `Common/Data/itemall.bin`, the item icons.
-const STATUS_SHEETS: [&str; 4] = ["ST0_JP", "ST1_JP", "ST2_JP", "ITEMALL"];
+/// (one per character), `Common/Data/itemall.bin`, the item icons, and
+/// `Common/Data/itembox.tim`, the item box's panel.
+const STATUS_SHEETS: [&str; 5] = ["ST0_JP", "ST1_JP", "ST2_JP", "ITEMALL", "ITEMBOX"];
 
 /// The status screen's art, as `ui/status/<stem>_<k>.tim` per TIM `k` of each
 /// [`STATUS_SHEETS`] file, and CHECK's pictures from `Common/bin/itemdata.bin`

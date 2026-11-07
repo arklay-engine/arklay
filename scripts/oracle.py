@@ -79,7 +79,7 @@ class Tick:
     inventory: str | None = None
     # RE2's item page: arklay's `ip`, the end of the original's `gi`.
     item_page: str | None = None
-    # RE2's title (`ti`, `tlogo`, `tfade`): a `--boot` record's screen state.
+    # RE2's screens' own fields: the title's (`ti`, `tlogo`, `tfade`, a `--boot` record's) and the item box's (`ib`, `box`).
     screen: dict[str, str] = field(default_factory=dict)
 
     def entity_str(self, slot: int) -> str:
@@ -89,9 +89,9 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "ib", "box"}
 # A screen's own fields, compared only when named.
-SCREEN_FIELDS = ("ti", "tlogo", "tfade")
+SCREEN_FIELDS = ("ti", "tlogo", "tfade", "ib", "box")
 
 
 def normalize_room(stage: str, room: str) -> str:
