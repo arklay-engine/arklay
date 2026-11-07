@@ -39,7 +39,7 @@ mod debug_hud;
 mod debug_view;
 mod watch;
 
-pub use bot::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK};
+pub use bot::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK, seeded_rand_state};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -8917,6 +8917,9 @@ struct App {
     /// Where the in-game menu's RESTART goes: the save last loaded or
     /// written, else the new game this run started.
     restart_point: Option<RestartPoint>,
+    /// `--bot-seed`, and how many sessions it has already seeded.
+    bot_seed: Option<u32>,
+    bot_seed_sessions: u32,
     /// The optional Lua-driven player bot. While it is active its input
     /// replaces the human one; once it finishes, the normal input returns.
     bot: Option<bot::BotRuntime>,
@@ -8998,6 +9001,8 @@ impl App {
             ending: None,
             system_menu: None,
             restart_point: None,
+            bot_seed: None,
+            bot_seed_sessions: 0,
             bot: None,
             watch: None,
         }
@@ -9414,7 +9419,7 @@ impl App {
     }
 
     /// Attach the pack's Lua bot to the running game session.
-    fn attach_bot(&mut self, risk: f64, goal_room: Option<&str>) -> Result<()> {
+    fn attach_bot(&mut self, risk: f64, goal_room: Option<&str>, seed: Option<u32>) -> Result<()> {
         if !matches!(self.mode, Mode::Play(_)) {
             bail!("--bot requires a game session (use `--ui game`)");
         }
@@ -9423,6 +9428,11 @@ impl App {
                 .with_risk(risk)
                 .with_goal_room(goal_room),
         );
+        self.bot_seed = seed;
+        // The boot already started the first session; it has not ticked yet.
+        if let Mode::Play(session) = &mut self.mode {
+            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, session);
+        }
         Ok(())
     }
 
@@ -9544,6 +9554,11 @@ impl App {
         if let Some(Err(err)) = reset {
             eprintln!("[bot] warning: could not reset the bot route: {err:#}");
             self.bot = None;
+        }
+        // `--bot-seed`: every session the bot runs gets its own stream, the
+        // reload after a death included (a save does not carry the RNG state).
+        if self.bot.is_some() {
+            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, &mut session);
         }
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
@@ -10743,7 +10758,7 @@ fn run_ui_impl(
         app.player_options = player_options;
         app.boot(boot)?;
         app.enable_skips();
-        app.attach_bot(bot.risk, bot.goal_room.as_deref())?;
+        app.attach_bot(bot.risk, bot.goal_room.as_deref(), bot.seed)?;
         // A headless run has no frame to stay responsive for: let one update
         // fast-forward a whole second of scene instead of a 12 ms burst.
         if let Mode::Play(session) = &mut app.mode {
@@ -10952,7 +10967,7 @@ fn run_ui_impl(
     }
     if bot.enabled {
         app.enable_skips();
-        app.attach_bot(bot.risk, bot.goal_room.as_deref())?;
+        app.attach_bot(bot.risk, bot.goal_room.as_deref(), bot.seed)?;
     }
     let mut owned = None;
     let display = match shared {
@@ -15647,6 +15662,15 @@ fn pack_region(pack: &Pack) -> scd::akscr::Region {
     pack.manifest()
         .and_then(|manifest| manifest.region)
         .unwrap_or(scd::akscr::Region::Usa)
+}
+
+/// Seed `session`'s game RNG from `--bot-seed` (a no-op without it) and count
+/// the session.
+fn apply_bot_seed(seed: Option<u32>, sessions: &mut u32, session: &mut GameSession) {
+    if let Some(seed) = seed {
+        session.game.rand_state = seeded_rand_state(seed, *sessions);
+        *sessions += 1;
+    }
 }
 
 /// Build a fresh game state for `id`/`room` with the pack's static music
@@ -30927,7 +30951,7 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot(bot::DEFAULT_RISK, None).unwrap();
+        app.attach_bot(bot::DEFAULT_RISK, None, None).unwrap();
         app.enable_skips();
         let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
         let Mode::Play(session) = &mut app.mode else {
@@ -30950,6 +30974,40 @@ off_0010:
             session.movie.is_none(),
             "the bot confirm must reach the film through the fixed tick"
         );
+    }
+
+    #[test]
+    fn bot_seed_perturbs_the_game_rng_and_every_reload() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[("bot/init.lua", b"function on_bot_tick(bot) end\n")],
+        );
+        let state_after = |seed: Option<u32>, sessions: usize| -> Vec<u32> {
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+            app.attach_bot(bot::DEFAULT_RISK, None, seed).unwrap();
+            let mut states = Vec::new();
+            for _ in 0..sessions {
+                let Mode::Play(session) = &app.mode else {
+                    panic!("expected a play mode");
+                };
+                states.push(session.game.rand_state);
+                let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+                app.start_session(session);
+            }
+            states
+        };
+        let unseeded = state_after(None, 2);
+        assert_eq!(unseeded, [1, 1], "no seed leaves the stream alone");
+        let a = state_after(Some(7), 3);
+        assert_eq!(a, state_after(Some(7), 3), "the same seed replays");
+        assert_ne!(a[0], 1);
+        assert_ne!(a[0], a[1], "a reload is a fresh stream");
+        assert_ne!(a[1], a[2]);
+        assert_ne!(a, state_after(Some(8), 3), "another seed differs");
     }
 
     /// Run the app until `predicate` holds, returning the film ids seen in

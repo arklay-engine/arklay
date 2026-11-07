@@ -216,6 +216,13 @@ struct Cli {
     )]
     bot_risk: f64,
 
+    /// Seed the game's random number generator for this bot run, so each
+    /// seed plays a different game (hunter health, enemy choices, poison);
+    /// the same seed, code and `--bot-risk` replay identically. Without it
+    /// the game's own stream is untouched. Example: `--bot-seed 7`
+    #[arg(long, value_name = "N", requires = "bot")]
+    bot_seed: Option<u32>,
+
     /// End the bot run when the player enters this room: a three-digit room
     /// id such as `20D` (stage, then room, in hex). Lua reads it as
     /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
@@ -1525,6 +1532,7 @@ fn main() -> Result<()> {
                 stats_path: cli.bot_stats.clone(),
                 risk: cli.bot_risk,
                 goal_room: cli.bot_goal_room.clone(),
+                seed: cli.bot_seed,
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -1759,6 +1767,20 @@ mod tests {
             assert!(error.to_string().contains(bad), "{error}");
         }
         assert!(parse(&["arklay", "game.akpak", "--bot-risk", "0.5"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_seed_parses_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert_eq!(
+            parse(&["arklay", "game.akpak", "--bot"]).unwrap().bot_seed,
+            None
+        );
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "42"]).unwrap();
+        assert_eq!(cli.bot_seed, Some(42));
+        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "x"]).is_err());
+        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "-1"]).is_err());
+        assert!(parse(&["arklay", "game.akpak", "--bot-seed", "3"]).is_err());
     }
 
     #[test]
