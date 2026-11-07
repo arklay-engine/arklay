@@ -1,0 +1,74 @@
+# room 40A: after the scene, run along the corridor and up its second leg, turn to the alligator and fire the magnum every 20 ticks, through its knocks and its rest at the end (oracle/re2.md)
+822 up run
+859 up run right
+877 up run
+1010 right
+1042
+1044 aim
+1060 aim fire
+1065 aim
+1080 aim fire
+1085 aim
+1100 aim fire
+1105 aim
+1120 aim fire
+1125 aim
+1140 aim fire
+1145 aim
+1160 aim fire
+1165 aim
+1180 aim fire
+1185 aim
+1200 aim fire
+1205 aim
+1220 aim fire
+1225 aim
+1240 aim fire
+1245 aim
+1260 aim fire
+1265 aim
+1280 aim fire
+1285 aim
+1300 aim fire
+1305 aim
+1320 aim fire
+1325 aim
+1340 aim fire
+1345 aim
+1360 aim fire
+1365 aim
+1380 aim fire
+1385 aim
+1400 aim fire
+1405 aim
+1420 aim fire
+1425 aim
+1440 aim fire
+1445 aim
+1460 aim fire
+1465 aim
+1480 aim fire
+1485 aim
+1500 aim fire
+1505 aim
+1520 aim fire
+1525 aim
+1540 aim fire
+1545 aim
+1560 aim fire
+1565 aim
+1580 aim fire
+1585 aim
+1600 aim fire
+1605 aim
+1620 aim fire
+1625 aim
+1640 aim fire
+1645 aim
+1660 aim fire
+1665 aim
+1680 aim fire
+1685 aim
+1700 aim fire
+1705 aim
+1720

@@ -897,6 +897,46 @@ expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
 [[run]]
+name = "alligator_dive_40a"
+room = "40A"
+sound = false
+ticks = 2400
+# as alligator_end_40a with the magnum: the player turns to the alligator and fires every 20 ticks, through its knocks; hurt below 25000 while it rests at the corridor's end in cut 8, it dives (FUN_0046a2a0)
+setup_script = "alligator_dive_40a.lua"
+input = "alligator_dive.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200 --equip 5 --give 0:5:200"
+
+[[run]]
+name = "alligator_drag_40a"
+room = "40A"
+sound = false
+# as alligator_scene_40a, then the player runs up the corridor and stops just inside its second leg: the alligator's reach catches them as it turns (FUN_00469750) and drags them under (player routine 5,1). Both games end the room at the game over on tick 1380
+ticks = 1380
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_drag.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_zap_40a"
+room = "40A"
+character = 2
+sound = false
+ticks = 2400
+# as alligator_dive_40a in scenario B with fg_zapping's 0x10 (script flag bank 29), where the dive is FUN_0046a430
+setup_script = "alligator_zap_40a.lua"
+input = "alligator_dive.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --flag 1:1 --flag 29:16 --life 200 --equip 5 --give 0:5:200"
+
+[[run]]
 name = "route_100_200_fight"
 room = "new"
 offset = 0
@@ -1209,6 +1249,34 @@ input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 509:13248:-1800:-16378:3480:5 --flag 4:99 --life 200"
+
+[[run]]
+name = "g2_scene_509"
+room = "509"
+character = 0
+sound = false
+ticks = 981
+# room 509's scene: the player stands on the ground floor in the area that starts it (a warp, since the lift arrives on floor 1), and G2 changes and climbs down; it ends as G2 leaves routine 7 for the fight
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 200, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_scene_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 200"
+
+[[run]]
+name = "g2_fight_509"
+room = "509"
+character = 0
+sound = false
+ticks = 3000
+# as g2_scene_509, then G2 fights the player, who stands still with life to spare
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 2000, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_fight_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000"
 
 [[run]]
 name = "route_claire_a_fight"

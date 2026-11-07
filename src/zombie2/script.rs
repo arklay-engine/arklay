@@ -604,6 +604,11 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_damage_cnt", |_, e, ()| Ok(e.em().world.pl.damage_cnt));
+        // The player's `Spd_x`, `Spd_y` and `Spd_z`.
+        methods.add_method_mut("pl_speed", |_, e, ()| {
+            let [x, y, z] = e.em().world.pl.spd;
+            Ok((x, y, z))
+        });
         // The player's `pSub1_kan_t_ptr` and `pSub1_seq_t_ptr` become this
         // body's (its model's second bank), for `Pl_damage`'s falls.
         // The player's `Move_no`, `Move_cnt` and `Hokan_flg` on `pSub1`'s
@@ -998,6 +1003,10 @@ impl UserData for Api {
             e.em().world.pl.routine[routine_index(index)?] = value as u8;
             Ok(())
         });
+        methods.add_method_mut("pl_or_neck_flags", |_, e, bits: i64| {
+            e.em().world.pl.neck.flags |= bits as u8;
+            Ok(())
+        });
         methods.add_method_mut("pl_or_be_flg", |_, e, bits: i64| {
             e.em().world.pl.be_flg |= bits as u32;
             Ok(())
@@ -1156,7 +1165,9 @@ impl UserData for Api {
                 .banks
                 .get(usize::from(crate::scd2::host::STATUS_BANK))
                 .map_or(0, |words| words[0]);
-            Ok((word | world.status_or) & !world.status_and_not & bits as u32 != 0)
+            // The aim's `0x80` (`pl_mv_05`) is kept on the player.
+            let aim = if world.pl.holds_view() { 0x80 } else { 0 };
+            Ok((word | world.status_or | aim) & !world.status_and_not & bits as u32 != 0)
         });
         // `Flg_ck` of a flag bank, with what the script changed this tick.
         methods.add_method_mut("flag", |_, e, (bank, index): (u8, u8)| {

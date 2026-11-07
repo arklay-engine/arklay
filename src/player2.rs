@@ -3724,6 +3724,10 @@ impl Mover<'_, '_> {
             self.em30_killed(held);
             return;
         }
+        if held.holder_id == crate::zombie2::G2_ID {
+            self.em31_held(held);
+            return;
+        }
         if matches!(
             held.holder_id,
             crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
@@ -3991,9 +3995,47 @@ impl Mover<'_, '_> {
         }
     }
 
-    /// `FUN_0046a710`'s `Routine_1` 1: caught by its reach, and pulled in.
-    /// The blood at the player's parts (`FUN_0046acf0`) and `fg_system`'s
-    /// `0x4000000` aren't ported.
+    /// `FUN_0046acf0(step)`: the drag's blood, its first three ticks. Each step
+    /// takes three of the player's parts from its first and a point on each,
+    /// as `Esp_call`'s matrix and vector: blood rows 1, 2 and 1 toward the
+    /// step's way, then rows 2, 0 and 0 a quarter round from it. The parts
+    /// are posed as the last draw left them, before this tick's move.
+    fn em23_drag_blood(&mut self, step: u8) {
+        /// The way, the first part, and the points on it and the two after.
+        const STEPS: [(i16, usize, [[i32; 3]; 3]); 3] = [
+            (0x850, 4, [[0, 0, 0], [0, 0, 0], [0, 200, 0]]),
+            (0x536, 3, [[0, 200, 0], [0, 300, 0], [0, 200, 0]]),
+            (0x9E6, 1, [[-300, -500, 200], [0, 0, 200], [-200, 600, 400]]),
+        ];
+        /// Row and size of each call, and whether it turns a quarter.
+        const CALLS: [(u8, u16, bool, usize); 6] = [
+            (1, 0x1800, false, 0),
+            (2, 0x1000, false, 1),
+            (1, 0x1800, false, 2),
+            (2, 0x2000, true, 0),
+            (0, 0x1800, true, 1),
+            (0, 0x1000, true, 2),
+        ];
+        let Some(&(dir, first, points)) = STEPS.get(usize::from(step)) else {
+            return;
+        };
+        for (row, size, turned, index) in CALLS {
+            let at = self
+                .part_point(first + index, points[index])
+                .unwrap_or(self.player.pos);
+            self.work.effects.push(EffectCall {
+                kind: 0,
+                row,
+                size,
+                dir: if turned { dir.wrapping_add(0x400) } else { dir },
+                at: at.map(|axis| axis as i16),
+            });
+        }
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 1: caught by its reach, and pulled in,
+    /// bleeding over its first three ticks. `fg_system`'s `0x4000000` isn't
+    /// ported.
     fn em23_dragged(&mut self, held: &mut Held<'_>) {
         if self.work.routine[2] == 0 {
             self.work.sounds.push(0x403_0001);
@@ -4006,6 +4048,7 @@ impl Mover<'_, '_> {
             return;
         }
         if self.work.routine[3] < 3 {
+            self.em23_drag_blood(self.work.routine[3]);
             self.work.routine[3] += 1;
         }
         let [x, _, z] = held.holder;
@@ -4411,6 +4454,33 @@ impl Mover<'_, '_> {
             self.work.be_flg |= 2;
             self.work.routine[2] = 2;
         }
+    }
+
+    /// `FUN_004960d0`, `em_damage_table[0x31]`'s `Routine_1` 0: in G2's hand
+    /// on its clip 0, turning to it, while G2's grab carries the player.
+    /// `fg_status`'s `0x40` isn't ported, nor are its `Routine_1` 2 to 4, the
+    /// kill.
+    fn em31_held(&mut self, held: &mut Held<'_>) {
+        if matches!(self.work.routine[1], 2..=4) {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.bank = Bank::Held;
+                self.held_clip(0, 3);
+                self.work.routine[2] = 1;
+                self.work.neck.flags = 1;
+                self.work.sounds.push(0x400_0001);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.work.bank = Bank::Held;
+        self.work.move_cnt = 0;
+        self.joint_move_late(0x400);
+        let [x, _, z] = held.holder;
+        let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
+        self.player.angle = goto(self.player.angle, target, 0x100);
     }
 
     /// `FUN_0045a880`: held from the front or the back, standing.
@@ -5719,6 +5789,67 @@ mod tests {
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
         // The original's at Claire's new game: 18841, -2346, -2932.
         assert_eq!((x - 18802, y, z), (39, -2346, -2932));
+    }
+
+    /// `FUN_0046acf0`'s second step: six bloods on parts 3 to 5, rows 1, 2
+    /// and 1 toward 0x536 and rows 2, 0 and 0 a quarter round, each at its
+    /// part's point; there is no fourth step.
+    #[test]
+    fn the_alligators_drag_bleeds_on_three_parts_a_step() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 7];
+        }
+        setup.skeleton.relative = std::iter::once([0; 3])
+            .chain(std::iter::repeat_n([0, -100, 0], 6))
+            .collect();
+        setup.skeleton.children = (1..7u8).map(|child| vec![child]).collect();
+        setup.skeleton.children.push(Vec::new());
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.em23_drag_blood(1);
+        let calls: Vec<_> = std::mem::take(&mut mover.work.effects)
+            .iter()
+            .map(|call| (call.kind, call.row, call.size, call.dir, call.at))
+            .collect();
+        let (near, far) = ([1000, -100, 2000], [1000, -300, 2000]);
+        assert_eq!(
+            calls,
+            [
+                (0, 1, 0x1800, 0x536, near),
+                (0, 2, 0x1000, 0x536, near),
+                (0, 1, 0x1800, 0x536, far),
+                (0, 2, 0x2000, 0x936, near),
+                (0, 0, 0x1800, 0x936, near),
+                (0, 0, 0x1000, 0x936, far),
+            ]
+        );
+        mover.em23_drag_blood(3);
+        assert!(mover.work.effects.is_empty());
     }
 
     /// `Snd_se_walk` in water: the footfall plays the water's sound, and three
