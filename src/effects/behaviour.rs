@@ -1963,9 +1963,11 @@ fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
             };
             let y = i32::from(h16(&effect, 0x0e)) + i32::from(effect.pos[1]);
             // Inside the `-0x961..` band: past the floor the sprite lands, and
-            // while the player is in their idle animation the splash also
-            // probes for a hit (the Black Tiger's acid globs land through this
-            // path).
+            // while the player is in state 1 (the pad-driven routine, not a hit
+            // reaction) the splash also probes for a hit (the Black Tiger's
+            // acid globs land through this path). The original's
+            // `g_playerEntity.animationId == 1` is the packed `+0x84` state
+            // byte, the one the hit test writes 2 to: not the EDD clip.
             if -0x961 < y {
                 if -1 < y {
                     ground_splat(game, index);
@@ -1974,7 +1976,7 @@ fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
                         slot.set_flags(flags);
                     }
                 }
-                if game.entities[0].animation_id == 1
+                if game.entities[0].state() == 1
                     && projectile_hit_check(game, room, 900, effect.pos[0], effect.pos[2])
                 {
                     ground_splat(game, index);
@@ -3055,6 +3057,38 @@ mod tests {
         web.health = 0x37;
         web.set_state(1);
         game
+    }
+
+    /// The splash timer (behaviour 55) with one glob 100 from the player,
+    /// in the air inside its probe band, in room 30C.
+    fn acid_glob_over_the_player(state: u8, clip: u8) -> GameState {
+        let mut game = game_with_row(&[raw_block(55, 0)]);
+        game.id = crate::state::RoomId::parse("30C").unwrap();
+        game.entities[1].id = 4;
+        game.entities[0].pos = [0, 0, 0];
+        game.entities[0].health = 100;
+        game.entities[0].set_state(state);
+        game.entities[0].animation_id = clip;
+        let slot = usize::from(spawn(&mut game, 0, [0, 0, 0], 0, 0));
+        game.effects.slot_mut(slot).unwrap().pos = [100, -500, 100];
+        run(&mut game, &room());
+        game
+    }
+
+    #[test]
+    fn acid_hits_a_player_in_control_whatever_the_clip() {
+        // A walking clip (not 1) is no cover: the test reads the state byte.
+        let game = acid_glob_over_the_player(1, 3);
+        assert_eq!(game.entities[0].health, 100 - 12);
+        assert_eq!(game.entities[0].state(), 2, "the hit reaction");
+    }
+
+    #[test]
+    fn acid_spares_a_player_already_reacting() {
+        // State 2 (a hit reaction) with clip 1: the old clip test hit again,
+        // and each glob chained the next reaction until the player died.
+        let game = acid_glob_over_the_player(2, 1);
+        assert_eq!(game.entities[0].health, 100);
     }
 
     #[test]
