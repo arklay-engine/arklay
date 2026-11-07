@@ -63,9 +63,10 @@
        the pass number. -->
   <param name="rope" values="wait|leave" default="wait"
          label="20C: wait in the pit for Barry's rope, or leave first"/>
-  <!-- The lab: `save` holds 511's connection switch, the last step
-       before 50C's elevator to the Tyrant (room/511/bot.xml), until 512's
-       cell has freed Chris (common 0x4B); `leave` keeps off
+  <!-- The lab: `save` holds 50F's power panel, the first step to 50C's
+       elevator and the Tyrant, until 508's pass-code lamps are lit
+       (scenario 0x50, room/50F/bot.xml), and 501's escape battery until
+       512's cell has freed Chris (common 0x4B, room/501/bot.xml); `leave` keeps off
        50B's door to 512, so Chris stays locked up: with Barry (common 0xC0
        clear) the Barry ending, without him the Bad ending. -->
   <param name="chris" values="save|leave" default="save"

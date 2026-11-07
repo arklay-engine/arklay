@@ -3,8 +3,13 @@
      while common bit 0x46 is clear: the lift's battery is pulled out
      (AOT 5's event says so). The battery lies at AOT 2 in this room;
      used at AOT 4 its event sets common 0x46, and on the next entry door 1
-     is a door. -->
+     is a door. Under chris=save the use waits until 512's cell has freed
+     Chris (common 0x4B), during the self-destruct, so the bot does not
+     leave without him. -->
 <bot format="2">
-  <use slot="4" item="0x27" bank="1" bit="0x46" label="the battery for the escape lift"/>
+  <use slot="4" item="0x27" bank="1" bit="0x46" after_bank="1" after_bit="0x4B" when="chris=save"
+       label="the battery for the escape lift"/>
+  <use slot="4" item="0x27" bank="1" bit="0x46" when="chris=leave"
+       label="the battery for the escape lift"/>
   <avoid slot="5" reason="the pulled-out battery message: the use at AOT 4 is the way on"/>
 </bot>
