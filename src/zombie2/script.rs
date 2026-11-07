@@ -987,6 +987,13 @@ impl UserData for Api {
         });
         methods.add_method_mut("area_count", |_, e, ()| Ok(e.em().world.guides.len()));
         // `Goto00_ck`: 0 once within `rate`, or the way to turn.
+        // `Hit_ck_point4` of the body's place on the current cut's view
+        // (`DWORD_00988630`); true when the cut has none.
+        methods.add_method_mut("in_cut_view", |_, e, ()| {
+            let em = e.em();
+            let [x, _, z] = em.mover.player.pos;
+            Ok(em.mover.tick.room.in_cut_view(x, z).unwrap_or(true))
+        });
         methods.add_method_mut("goto_ck", |_, e, (x, z, rate): (i32, i32, i32)| {
             let body = &*e.em().mover.player;
             let target = direction_ck(body.pos[0], body.pos[2], x, z);

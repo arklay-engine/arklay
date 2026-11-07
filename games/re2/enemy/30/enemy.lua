@@ -5,10 +5,11 @@
 -- (`FUN_0048ab30`); the hit (2, `FUN_0048dc70`) and the death (3,
 -- `FUN_0048f050`) aren't ported yet. The move runs by `Type & 0x3f`: 0 to 4
 -- run `funcs_48AB5B` before the clip and `funcs_48AB72` after it, by
--- `Routine_1`, and 5 runs `FUN_0048ff00`. Of those, only routine 10 is
--- ported: the first encounter's scene in room 303 (`Type` 0), where it waits
--- until the room's event raises `Sce_free0`, then changes and goes on to
--- routine 1, the fight, which isn't ported yet.
+-- `Routine_1`, and 5 runs `FUN_0048ff00`. Of those, routine 10 is the first
+-- encounter's scene in room 303 (`Type` 0), where it waits until the room's
+-- event raises `Sce_free0`, then changes and goes on to routine 1, the
+-- fight's walk, which chooses its attacks (2 to 5 and 7). The attacks aren't
+-- ported yet.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
 -- `e:set_var` are the fields of the original's work that the engine doesn't
@@ -205,10 +206,85 @@ local function scene(e)
     end
 end
 
+-- `Goto00_ck` toward the player: 0 once facing them within `rate`.
+local function player_ck(e, rate)
+    local x, _, z = e:player_pos()
+    return e:goto_ck(x, z, rate)
+end
+
+-- Routine 1 before the clip (`0x48ae20`): the fight's choice of what to do
+-- next, by the player's distance (`L_pl`) and whether it faces them. Close
+-- and facing, it swipes (5) or, unless it has just attacked, may step in (3);
+-- from 0x708 to 3000 it lunges (2), or with `FLAGS`' 1 or 0x20 slashes (7);
+-- and while the player is hurt it goes for them (4).
+local function fight_ck(e)
+    local far = e:distance()
+    player_ck(e, 0x5F4)
+    local near = player_ck(e, 0x270)
+    local ahead = player_ck(e, 0x338)
+    if ahead == 0 and far < 0x5DC then
+        e:routines(1, 5, 0, 0)
+        if e:var(CNT_21A) < 10 and e:rnd() & 1 ~= 0 then
+            e:routines(1, 3, 0, 0)
+        end
+    end
+    if e:var(CNT_21A) == 0 and e:pl_damage_cnt() == 0 then
+        if ahead == 0 and far < 3000 and far > 0x708 then
+            e:routines(1, 2, 0, 0)
+            if e:var(FLAGS) & 1 ~= 0 and e:rnd() & 3 ~= 0 then
+                e:routines(1, 7, 0, 0)
+            end
+            if e:var(FLAGS) & 0x20 ~= 0 then
+                e:routines(1, 7, 0, 0)
+            end
+        end
+        if near == 0 and far < 0x9C4 and far > 0x708 and e:rnd() & 3 == 0 then
+            e:routines(1, 7, 0, 0)
+        end
+        if ahead == 0 and far < 0x708 then
+            e:routines(1, 3, 0, 0)
+        end
+    end
+    if e:pl_damage_cnt() ~= 0 and far < 3000 then
+        e:routines(1, 4, 0, 0)
+    end
+end
+
+-- Routine 1 after the clip (`0x48af70`): the walk to `Dest`, which
+-- `Root_ck` sets, turning faster while it doesn't face it. Its stride is
+-- halved while the clip blends in, and longer while it's out of the cut's
+-- view. A step's end sometimes groans (`Snd_se_enem` 7).
+local function walk(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(e:var(FLAGS) & 1 ~= 0 and 0xC or 1, 0, 0x1F)
+        e:set_routine(2, 1)
+    elseif sub ~= 1 then
+        return
+    end
+    local x, z = e:dest()
+    e:goto_point(x, z, 0x10)
+    if e:goto_ck(x, z, 0x338) ~= 0 then
+        e:goto_point(x, z, 0x20)
+    end
+    e:spd()
+    if e:hokan() > 0xF then
+        -- `SAR`: toward minus infinity.
+        e:set_speed_x(e:speed_x() // 2)
+    end
+    if not e:in_cut_view() then
+        e:set_speed_x(e:speed_x() + 0x28)
+    end
+    if e:joint(0x80) and e:rnd() & 3 == 0 then
+        e:sound(7)
+    end
+    e:add_speed_xz()
+end
+
 -- `funcs_48AB5B` (before the clip) and `funcs_48AB72` (after it), by
 -- `Routine_1`.
-local BEFORE <const> = {}
-local AFTER <const> = { [10] = scene }
+local BEFORE <const> = { [1] = fight_ck }
+local AFTER <const> = { [1] = walk, [10] = scene }
 
 -- `FUN_0048ab30`.
 local function move(e)
