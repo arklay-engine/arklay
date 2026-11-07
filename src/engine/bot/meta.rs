@@ -129,10 +129,14 @@ pub struct KiteLoop {
 /// 507's gas drains health until the room changes, so once the air shaft
 /// has taken the player to the west half (room bit 7) the way out comes
 /// first; the computer there waits for the next entry.
+/// `escape="yes"` marks a chase rather than a drain: the flag is set only
+/// while it runs (30F's boulder, room bit 0x13), so the steps leading into
+/// it wait for no heal-up.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leave {
     pub slot: u8,
     pub flag: (u8, u8),
+    pub escape: bool,
     pub label: Option<String>,
 }
 
@@ -1514,11 +1518,31 @@ fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
 }
 
 fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
-    check_attributes(node, &["slot", "bank", "bit", "label", "character", "when"])?;
+    check_attributes(
+        node,
+        &[
+            "slot",
+            "bank",
+            "bit",
+            "escape",
+            "label",
+            "character",
+            "when",
+        ],
+    )?;
     check_leaf(node)?;
+    let escape = match node.attribute("escape") {
+        None | Some("no") => false,
+        Some("yes") => true,
+        Some(other) => bail!(
+            "{}: <leave> `escape` value `{other}` is not `yes` or `no`",
+            at(node)
+        ),
+    };
     Ok(Leave {
         slot: attr(node, "slot")?,
         flag: (bank_attr(node)?, attr(node, "bit")?),
+        escape,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -2002,6 +2026,7 @@ mod tests {
             <keep_out slot="8" bank="4" bit="3" while="clear" reason="the plate"/>
             <keep_out slot="9" reason="always"/>
             <leave slot="0" bank="4" bit="7" label="out"/>
+            <leave slot="1" bank="4" bit="0x13" escape="yes"/>
         </bot>"#;
         let meta = parse(text).unwrap();
         assert_eq!(
@@ -2024,17 +2049,27 @@ mod tests {
         );
         assert_eq!(
             meta.leaves,
-            vec![Leave {
-                slot: 0,
-                flag: (4, 7),
-                label: Some("out".to_string()),
-            }]
+            vec![
+                Leave {
+                    slot: 0,
+                    flag: (4, 7),
+                    escape: false,
+                    label: Some("out".to_string()),
+                },
+                Leave {
+                    slot: 1,
+                    flag: (4, 0x13),
+                    escape: true,
+                    label: None,
+                },
+            ]
         );
         for bad in [
             r#"<bot format="2"><keep_out slot="8"/></bot>"#,
             r#"<bot format="2"><keep_out slot="8" reason=" "/></bot>"#,
             r#"<bot format="2"><keep_out slot="8" bank="4" bit="3" reason="x"/></bot>"#,
             r#"<bot format="2"><leave slot="0"/></bot>"#,
+            r#"<bot format="2"><leave slot="0" bank="4" bit="7" escape="maybe"/></bot>"#,
             r#"<bot format="1"><leave slot="0" bank="4" bit="7"/></bot>"#,
         ] {
             assert!(parse(bad).is_err(), "{bad}");
