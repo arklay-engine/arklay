@@ -1010,7 +1010,7 @@ setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, 
 input = "g1_scene_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1217, fields = ["zm0"], note = "G1's lunge (routine 2) isn't ported yet (docs/re2-deviations.md)" }
+expect = { tick = 1304, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
 
 [[run]]
@@ -1024,5 +1024,33 @@ setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, 
 input = "g1_flee_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1485, fields = ["zm0"], note = "G1's lunge (routine 2) isn't ported yet (docs/re2-deviations.md)" }
+expect = { tick = 1729, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_hit_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2400
+# as g1_scene_303, but after the scene the player walks into G1's lunge, falls back onto a wall, gets up and is hit again
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_hit_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 1330, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_hit_side_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2400
+# as g1_scene_303, but after the scene the player turns and walks into G1's lunge from the side, and falls forwards
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_hit_side_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 1268, fields = ["zm0"], note = "G1's step in (routine 3) isn't ported yet (docs/re2-deviations.md)" }
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"

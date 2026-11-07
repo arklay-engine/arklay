@@ -8,8 +8,9 @@
 -- `Routine_1`, and 5 runs `FUN_0048ff00`. Of those, routine 10 is the first
 -- encounter's scene in room 303 (`Type` 0), where it waits until the room's
 -- event raises `Sce_free0`, then changes and goes on to routine 1, the
--- fight's walk, which chooses its attacks (2 to 5 and 7). The attacks aren't
--- ported yet.
+-- fight's walk, which chooses its attacks: the lunge and slash (2 and 7),
+-- with the pull from a wall (6) and the rearing up (8), are ported; the step
+-- in (3), the charge (4), the swipe (5) and 9 aren't yet.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
 -- `e:set_var` are the fields of the original's work that the engine doesn't
@@ -281,22 +282,220 @@ local function walk(e)
     e:add_speed_xz()
 end
 
+-- The lunge's and the slash's clips (`0x48b080`'s tables), by `FLAGS`' 1:
+-- `Move_no`, `Move_cnt`, `Hokan_flg`, and `Joint_move`'s rate.
+local LUNGE <const> = { [0] = { 4, 0, 0xF, 0x100 }, { 4, 0x21, 3, 0x400 } }
+local SLASH <const> = { [0] = { 0xB, 0, 0xF, 0x100 }, { 0xB, 0x11, 3, 0x400 } }
+-- The frame before which each may break off: the lunge's and the slash's.
+local BREAK_BEFORE <const> = { [0] = 0x1E, 0x14 }
+-- The frame each swings again from (clip 8).
+local AGAIN_AT <const> = { [0] = 0x2E, 0x1E }
+-- The two points along part 6, the arm, that hit the player within 900, and
+-- the one that strikes a wall (`Sca_ck_hit`, 400, mask `0x8000`, 0x96 lower).
+local HIT_NEAR <const> = { 0x1F4, 0x183, 0 }
+local HIT_FAR <const> = { 0x44C, 0x183, 0 }
+local WALL <const> = { 0x320, 0x183, 0 }
+local ARM <const> = 6
+
+-- A point along part 6 as `FUN_00490060` composes it, on this tick's pose,
+-- facing and place.
+local function arm_point(e, point)
+    return e:part_point(ARM, point[1], point[2], point[3])
+end
+
+-- `L_pos_ckXZM` on part 6.
+local function arm_reaches(e, point)
+    local x, _, z = arm_point(e, point)
+    if x == nil then
+        return false
+    end
+    local px, _, pz = e:player_pos()
+    return e:hypot(x - px, z - pz) < 900
+end
+
+-- The hit: 30 life (45 in hard mode) and a fall on G1's own clips, backwards
+-- from in front (2,4), forwards from behind (2,5), or turned round first by a
+-- slash from behind that hasn't swung again (2,5,1 on clip 5).
+local function hit_player(e)
+    local dir = (e:direction_to_player() - 0x400) & 0xFFFF
+    local front = ((e:player_angle() - dir + 0x400) & 0xFFF) < 0x800
+    local again = e:timer(3) ~= 0
+    if again then
+        front = not front
+        dir = (dir - 0x800) & 0xFFFF
+    end
+    e:pl_life_down(0x1E, true)
+    local one = front and 5 or 4
+    e:pl_set_routine(2, one, 0, 0)
+    local turn = not front
+    if e:timer(2) ~= 0 and not again then
+        turn = false
+        if not front then
+            e:pl_set_routine(2, 5, 1, 0)
+            e:pl_set_motion(5, 5, 3, 0x96, 0, 0)
+        end
+    end
+    if turn then
+        e:set_player_angle(dir + 0x800)
+    end
+    e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+    e:pl_set_sub1()
+    e:set_var(FLAGS, e:var(FLAGS) & 0xFFFE)
+    e:set_timer(3, 1)
+    e:sound(6)
+    e:set_timer(1, 0xF)
+end
+
+-- Routines 2 and 7 (`0x48b080`): the lunge and the slash. It may break off
+-- early if the player gets away or out of its arc, swings again once, and on
+-- the clips' hit frames (`0x30000`) turns to the player and hits them with
+-- its arm, or strikes a wall with it (routine 6).
+local function swing(e)
+    local sub = e:routine(2)
+    local row = e:var(FLAGS) & 1
+    if sub == 0 then
+        local clip = LUNGE[row]
+        e:clip(clip[1], clip[2], clip[3])
+        if row ~= 0 then
+            e:sound(3)
+        end
+        e:set_routine(2, 1)
+        e:set_timer(2, 0)
+        if e:routine(1) == 7 then
+            e:set_timer(2, 1)
+            clip = SLASH[row]
+            e:clip(clip[1], clip[2], clip[3])
+            e:set_var(FLAGS, e:var(FLAGS) & 0xFFDF)
+        end
+        e:spd()
+        e:set_timer(3, 0)
+        e:set_timer(1, 0)
+    elseif sub ~= 1 then
+        return
+    end
+    e:spd()
+    if e:hokan() ~= 0 then
+        local x, y, z = e:speed()
+        e:set_speed(x // 2, y, z // 2)
+    end
+    if e:joint(LUNGE[row][4]) then
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, (e:timer(1) + 0x1E) & 0xFF)
+    end
+    e:add_speed_xz()
+    local slash = e:timer(2)
+    local count = e:move_cnt()
+    if count > 5 and count < BREAK_BEFORE[slash] and e:timer(3) == 0 then
+        e:goto_player(0x20)
+        if e:distance() > 0xED8 or player_ck(e, 0x52C) ~= 0 then
+            e:routines(1, 1, 0, 0)
+            e:set_var(CNT_21A, 10)
+            if e:rnd() & 3 == 0 then
+                e:routines(1, 8, 0, 0)
+            end
+        end
+    end
+    if count == AGAIN_AT[slash] and (slash == 0 or e:timer(3) == 0) then
+        if e:timer(3) == 0 or e:rnd() & 3 == 0 then
+            e:clip(8, 0, LUNGE[e:var(FLAGS) & 1][3])
+            e:set_timer(3, 1)
+        end
+    end
+    if e:now_seq() & 0x30000 == 0 then
+        return
+    end
+    e:goto_player(0x20)
+    if e:timer(3) ~= 0 and player_ck(e, 0x400) ~= 0 then
+        e:set_angle((e:angle() + 0x80) & 0xFFFF)
+    end
+    if (arm_reaches(e, HIT_NEAR) or arm_reaches(e, HIT_FAR)) and e:pl_damage_cnt() == 0 then
+        hit_player(e)
+    end
+    local x, y, z = arm_point(e, WALL)
+    if x ~= nil and e:sca_struck(x, y + 0x96, z, 400, 0x8000) then
+        e:routines(1, 6, 0, 0)
+        e:set_var(CNT_21A, 0x1E)
+        -- Four sparks at the arm; their effects aren't ported, but the three
+        -- `Rnd`s between them are drawn.
+        e:rnd()
+        e:rnd()
+        e:rnd()
+    end
+end
+
+-- Routine 6 (`0x48c060`): the arm struck a wall, and it pulls it free
+-- (clip 7), turning to the player; then it walks again, or one time in two
+-- goes to routine 8, and one time in two, facing an unhurt player, to 4's
+-- charge (`Routine_2` 2). `FLAGS`' 0x20 makes its next lunge a slash.
+local function pull_free(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_var(FLAGS, e:var(FLAGS) | 0x20)
+        e:clip(7, 0, 2)
+        e:set_routine(2, 1)
+    elseif sub ~= 1 then
+        return
+    end
+    e:goto_player(0x10)
+    e:spd()
+    if e:joint(0x400) then
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, 0x28)
+        if e:rnd() & 1 == 0 then
+            e:routines(1, 8, 0, 0)
+        end
+        if e:rnd() & 1 == 0 and e:pl_damage_cnt() == 0 and player_ck(e, 0x100) == 0 then
+            e:routines(1, 4, 2, 0)
+        end
+    end
+    e:add_speed_xz()
+end
+
+-- Routine 8 (`0x48c130`): it rears up (clip 17), turned toward the player,
+-- and raises `FLAGS`' 1, which plays its walk and its swings from their
+-- faster clips and frames; then it walks again.
+local function rear(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(0x11, 0, 7)
+        e:set_routine(2, 1)
+        e:goto_player(0x40)
+        e:set_var(FLAGS, e:var(FLAGS) | 1)
+    elseif sub ~= 1 then
+        return
+    end
+    e:spd()
+    if e:joint(0x200) then
+        e:set_var(FLAGS, e:var(FLAGS) | 1)
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, 10)
+    end
+    e:add_speed_xz()
+end
+
 -- `funcs_48AB5B` (before the clip) and `funcs_48AB72` (after it), by
 -- `Routine_1`.
 local BEFORE <const> = { [1] = fight_ck }
-local AFTER <const> = { [1] = walk, [10] = scene }
+local AFTER <const> = {
+    [1] = walk,
+    [2] = swing,
+    [6] = pull_free,
+    [7] = swing,
+    [8] = rear,
+    [10] = scene,
+}
 
 -- `FUN_0048ab30`.
 local function move(e)
     if e:kind() & 0x3F > 4 then
         return
     end
-    local routine = e:routine(1)
-    local before = BEFORE[routine]
+    local before = BEFORE[e:routine(1)]
     if before then
         before(e)
     end
-    local after = AFTER[routine]
+    -- The choice may have changed `Routine_1`, which the second table reads.
+    local after = AFTER[e:routine(1)]
     if after then
         after(e)
     end

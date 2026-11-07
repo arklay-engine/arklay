@@ -16368,6 +16368,9 @@ fn tick_room_timed(
     context.game.sync_entity_from_player(context.player);
     // The stairway (`action_behavior` 0x11) skips both passes as well: its
     // clip carries the player through the stairs' own collision volume.
+    // `Sca_ck_em` clears `Sca_info` before it looks, and doesn't look at all
+    // on these paths.
+    context.game.re2.player.sca_hit = false;
     if context.game.re2.player.climbing() {
         context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
         context.game.entities[0].pos = context.player.pos;
@@ -16420,6 +16423,7 @@ fn tick_room_timed(
                 if let Some(floor) = resolved.floor {
                     work.floor = floor;
                 }
+                work.sca_hit = resolved.hit;
                 player::CollisionResolution::from_sca(resolved)
             }
             _ => player::resolve_room_collision(

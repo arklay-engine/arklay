@@ -781,6 +781,9 @@ pub struct World<'a> {
     /// The room's objects' places (`obj_model_set`). Only the alligator's
     /// world has them.
     pub objects: Vec<[i32; 3]>,
+    /// A script pointed the player's `pSub1_kan_t_ptr` at this body's
+    /// model's clips (its second bank), for `Pl_damage`'s falls.
+    pub sub1: bool,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
