@@ -403,11 +403,12 @@ mod tests {
             ),
             "https://cdn.example/a.akpak"
         );
-        let local = resolve(r"G:\arklay\mods\index.json", "a/1.0/a.akpak");
-        assert_eq!(
-            Path::new(&local),
-            Path::new(r"G:\arklay\mods").join("a/1.0/a.akpak")
-        );
+        // A local catalog's links resolve beside it, in the platform's own
+        // path form.
+        let folder = std::env::temp_dir().join("arklay").join("mods");
+        let index = folder.join("index.json");
+        let local = resolve(&index.to_string_lossy(), "a/1.0/a.akpak");
+        assert_eq!(Path::new(&local), folder.join("a/1.0/a.akpak"));
         assert_eq!(extension("https://x/y/thumbnail.webp?v=2"), Some("webp"));
         // `none` turns the catalog off; nothing configured is the default.
         if std::env::var_os(URL_ENV).is_none() {
