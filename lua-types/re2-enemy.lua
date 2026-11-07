@@ -645,6 +645,16 @@ function Re2EnemyApi:rotate(angle, x, z) end
 ---@return integer z
 function Re2EnemyApi:rot_apply(ax, ay, az, x, y, z) end
 
+---`rsin`: the executable's sine table, 4096 for a quarter turn.
+---@param angle integer
+---@return integer
+function Re2EnemyApi:rsin(angle) end
+
+---`rcos`.
+---@param angle integer
+---@return integer
+function Re2EnemyApi:rcos(angle) end
+
 ---`Direction_ck`: the facing from one point on the floor to another.
 ---@param x0 integer
 ---@param z0 integer
@@ -1176,6 +1186,13 @@ function Re2EnemyApi:super_add(x, y, z) end
 ---Put the body back on a plain floor (`Super_matrix` cleared).
 function Re2EnemyApi:init_super() end
 
+---Draw the body on the surface `RotMatrix` makes of this `Super_vector`
+---(`pSuper` while it is `&Super_matrix`).
+---@param x integer
+---@param y integer
+---@param z integer
+function Re2EnemyApi:set_super(x, y, z) end
+
 ---`Rot_vector_super`: a vector turned by an angle on the surface the body is
 ---on.
 ---@param angle integer
@@ -1341,6 +1358,29 @@ function Re2EnemyApi:player_touched() end
 ---@return integer? y
 ---@return integer? z
 function Re2EnemyApi:player_root_point(x, y, z) end
+
+---A point given on one of the player's parts as the player's last move left
+---it (`CompM` of its `Workm`), the head on its neck's turn, in the world.
+---@param part integer The player's part.
+---@param x integer
+---@param y integer
+---@param z integer
+---@return integer? x All three `nil` without a pose of that part.
+---@return integer? y
+---@return integer? z
+function Re2EnemyApi:player_part_point(part, x, y, z) end
+
+---One of the cockroaches' swarm-wide words (`Em_29`): 0 the ticks with more
+---than two on the player, 1 how many are on the player, 2 the attach points
+---taken, 3 the player was killed.
+---@param index integer 0 to 3.
+---@return integer
+function Re2EnemyApi:swarm(index) end
+
+---Set one of the swarm's words (`swarm`).
+---@param index integer 0 to 3.
+---@param value integer
+function Re2EnemyApi:set_swarm(index, value) end
 
 ---The turn from the body's facing to the player.
 ---@return integer angle `0..0xFFF`.
