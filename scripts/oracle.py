@@ -224,10 +224,14 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
 
 
 def selected(key: str, fields: list[str] | None) -> bool:
-    """Whether `key` is compared: `None` compares everything, else a name or `e*`."""
+    """Whether `key` is compared: `None` compares everything, else a name, `zm*` (every enemy slot's `zm<slot>`) or `e*`."""
     if fields is None:
         return key not in OPT_IN_FIELDS
-    return key in fields or (key.startswith("e") and "e*" in fields)
+    if key in fields:
+        return True
+    if key.startswith("zm") and key[2:].isdigit() and "zm*" in fields:
+        return True
+    return key.startswith("e") and "e*" in fields
 
 
 def compare_pair(ref: list[Tick], ark: list[Tick], ref_offset: int, ark_offset: int,
@@ -504,8 +508,8 @@ def main() -> int:
                          help="scan this many start offsets for the best alignment")
     compare.add_argument("--json", dest="json_out", default=None)
     compare.add_argument("--fields", default=None,
-                         help="comma-separated fields to compare (room, cam, p.x, ..., e*); "
-                              "default: every field")
+                         help="comma-separated fields to compare (room, cam, p.x, ..., zm0, e*); "
+                              "zm* selects every enemy slot's zm<slot>; default: every field")
 
     pixels = sub.add_parser("pixels", help="compare the capture frame directories")
     pixels.add_argument("ref_dir")
