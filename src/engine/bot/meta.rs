@@ -79,6 +79,17 @@ pub struct RoomMeta {
     pub rides: Vec<Ride>,
     pub keep_outs: Vec<KeepOut>,
     pub leaves: Vec<Leave>,
+    pub kites: Vec<KiteLoop>,
+}
+
+/// `<kite enemy x z radius>`: the loop the bot runs while it keeps enemy
+/// `enemy` (a knowledge `<kite>`) at a distance in this room: centre
+/// (`x`, `z`) and `radius`, inside the room's open floor (303's deck).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KiteLoop {
+    pub enemy: u8,
+    pub centre: (i32, i32),
+    pub radius: i32,
 }
 
 /// `<leave slot bank bit [label]>`: once flag `bank`/`bit` is set, the
@@ -659,6 +670,7 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 | "door"
                 | "keep_out"
                 | "leave"
+                | "kite"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -758,6 +770,12 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
                 let fact = parse_leave(child)?;
                 if keep {
                     meta.leaves.push(fact);
+                }
+            }
+            "kite" => {
+                let fact = parse_kite_loop(child)?;
+                if keep {
+                    meta.kites.push(fact);
                 }
             }
             other => bail!("{}: unknown <bot> element <{other}>", at(child)),
@@ -1263,6 +1281,20 @@ fn parse_keep_out(node: Node<'_, '_>) -> Result<KeepOut> {
         slot: attr(node, "slot")?,
         reason,
         gate: parse_gate(node)?,
+    })
+}
+
+fn parse_kite_loop(node: Node<'_, '_>) -> Result<KiteLoop> {
+    check_attributes(node, &["enemy", "x", "z", "radius", "character"])?;
+    check_leaf(node)?;
+    let radius: i32 = attr(node, "radius")?;
+    if radius <= 0 {
+        bail!("{}: <kite> radius must be > 0", at(node));
+    }
+    Ok(KiteLoop {
+        enemy: attr(node, "enemy")?,
+        centre: (attr(node, "x")?, attr(node, "z")?),
+        radius,
     })
 }
 
@@ -1786,6 +1818,30 @@ mod tests {
             r#"<bot format="2"><keep_out slot="8" bank="4" bit="3" reason="x"/></bot>"#,
             r#"<bot format="2"><leave slot="0"/></bot>"#,
             r#"<bot format="1"><leave slot="0" bank="4" bit="7"/></bot>"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn kite_names_an_enemy_and_its_loop() {
+        let text = r#"<bot format="2">
+            <kite enemy="0x10" x="19650" z="14000" radius="8000"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.kites,
+            vec![KiteLoop {
+                enemy: 0x10,
+                centre: (19650, 14000),
+                radius: 8000,
+            }]
+        );
+        for bad in [
+            r#"<bot format="2"><kite enemy="16" x="0" z="0" radius="0"/></bot>"#,
+            r#"<bot format="2"><kite enemy="16" x="0" radius="10"/></bot>"#,
+            r#"<bot format="2"><kite enemy="16" x="0" z="0" radius="10" r="1"/></bot>"#,
+            r#"<bot format="1"><kite enemy="16" x="0" z="0" radius="10"/></bot>"#,
         ] {
             assert!(parse(bad).is_err(), "{bad}");
         }

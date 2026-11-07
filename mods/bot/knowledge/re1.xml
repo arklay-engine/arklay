@@ -56,8 +56,9 @@
   <!-- Shotgun. near/side from the same test (slot 2 = 2600). headshot:
        zombie_reaction pops the head when displacement < 3000 with aim 0xC0
        (torso or up). weak: the shotgun post-hit gives 10 health back past
-       9000. Cadence not measured (the bench never fired it). -->
-  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="unknown"
+       9000. Cadence 37 ticks fire to fire (measured in 303, the bot's kite
+       stops: the pump). -->
+  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="37"
           headshot="3000" weak="9000" status_bit="yes"/>
 
   <!-- Grenade launcher with explosive rounds (item 0x07, rounds 0x10:
@@ -67,8 +68,9 @@
        900, measured from the player). Its height stages the aim byte: 0x40
        between the player's waist and head. A hit takes 100 from every
        enemy type's record it was measured on (DEFAULT_FIRST_RUN). Cadence
-       not measured. -->
-  <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="unknown"
+       27 ticks fire to fire, every loading (measured in 303, the bot's kite
+       stops). -->
+  <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="27"
           headshot="none" weak="none" status_bit="yes" reserve="yes"/>
   <!-- The same launcher loaded with acid rounds (item 0x08, rounds 0x11)
        or flame rounds (0x09, rounds 0x12): the menu's combine of other
@@ -77,9 +79,9 @@
        200 from a hunter (DEFAULT_FIRST_RUN row 67), flame 205 from the
        Black Tiger and 150 from Plant 42 (rows 48, 88); both take 100 from
        either Tyrant, as the explosive round does. -->
-  <weapon id="0x08" name="grenade launcher (acid)" near="0" side="900" cadence="unknown"
+  <weapon id="0x08" name="grenade launcher (acid)" near="0" side="900" cadence="27"
           headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
-  <weapon id="0x09" name="grenade launcher (flame)" near="0" side="900" cadence="unknown"
+  <weapon id="0x09" name="grenade launcher (flame)" near="0" side="900" cadence="27"
           headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
   <!-- Rocket launcher (item 0x0A, Brad's drop on the heliport). The rocket
        is a projectile (effect behaviour 45) that hits from its own
@@ -316,7 +318,24 @@
        hits take it to 200; the handgun, at 20 a hit and one slash taken
        every 70 ticks, emptied 96 health before the timer ran out), and the
        loadout carries it up from the lab (303's `stage`). Those four
-       rounds are kept for it (`save`) from every other fight. -->
+       rounds are kept for it (`save`) from every other fight.
+       It is kited (`<kite>`, 303's loop): enemy/0c's rooftop layer (behaviour
+       15) measures the Manhattan gap. It slashes inside 2700 (the claw's box
+       reached about 3500 straight-line), swipes inside 2000, thrusts inside
+       7000 only with the player behind it, and charges (behaviour 8) from
+       past 12000 while lined up. Its rush (rise 11, then 10) comes once a
+       countdown of 210 walking ticks runs out, and every hit on it restarts
+       the countdown. It walks about 80 to 120 a tick (measured in 303), under
+       the run's 0xD2. So the bot stops to shoot from 10000 (8500 once 150
+       ticks pass without a hit; farther for a slow gun, never past 11500),
+       lowers inside 7500 (6000 while the stop has not hit yet), quick-turns
+       and runs. It fires only while the gap left when the run can start
+       (after the recoil, the aim's drop and the quick turn: 30 to 40 ticks)
+       stays past 3500. A charge is run across. The rush homes in, and
+       its swing still turns, so the bot stands 1600 from it during the
+       rise, about 25 degrees off its facing line (`flank`), and runs past
+       its flank once the swing starts: no hit in 583 rushes across the
+       starts tested, against one in three from on its facing line. -->
   <enemy id="0x10" name="tyrant 2" policy="fight" stand="torso" downed="none"
          up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="600"
          prefer="0x0A" open="0x07" save="4">
@@ -326,6 +345,9 @@
     <keep weapon="0x08" min="3200" max="6000" damage="unknown"/>
     <keep weapon="0x09" min="3200" max="6000" damage="unknown"/>
     <keep weapon="0x0A" min="3000" max="9000" damage="900"/>
+    <kite walk="0x01" entrance="0x09" charge="0x08" rise="0x0B" rush="0x0A" speed="120"
+          cooldown="210" shoot="10000" urgent="8500" edge="11500" lower="7500" hold="6000"
+          commit="3500" flank="1600"/>
   </enemy>
 
   <!-- Black Tiger (the giant spider, 30C). enemy/04 run: 0x40 every frame,

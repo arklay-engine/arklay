@@ -1390,9 +1390,18 @@ end
 -- 19 ticks cannot.
 local DASH_TURN = C.FULL_TURN // 8
 local DASH_BAND = C.FULL_TURN // 64
+-- A target near straight behind keeps the turn's way: its error's sign
+-- flips tick to tick there, and an alternating turn stands still.
+local DASH_BEHIND = C.FULL_TURN * 3 // 8
+local dash_way = 1
 local function dash(bot, x, z)
     local f = bot:face_to(x, z)
     local err = f.angle_error or 0
+    if abs(err) > DASH_BEHIND then
+        err = abs(err) * dash_way
+    elseif err ~= 0 then
+        dash_way = err > 0 and 1 or -1
+    end
     local go = abs(err) < DASH_TURN
     -- A held aim (a knife waiting to swing) roots the bot: let go of it.
     bot:set_input({ up = go, run = go, right = err > DASH_BAND, left = err < -DASH_BAND,
@@ -1491,6 +1500,548 @@ local function spit_dodge(bot, s, player)
     return false
 end
 
+-- Kiting (a knowledge <kite>, a room <kite> loop: 303's Tyrant). RANGE
+-- sets the probes and margins: the room probe steps, the wall margin and
+-- the run's look-ahead.
+local RANGE = C.FIGHT_RANGE
+local KITE_DASH = C.WARP_DISTANCE * 2
+local KITE_TURN_WAIT = 2 * C.SECOND // 3
+local KITE_REACH = C.REACH + C.APPROACH // 2
+local KITE_FETCH_TICKS = 3 * C.SECOND
+local KITE_STEER_MAX = C.FULL_TURN // 12
+local KITE_QUICK_FROM = C.FULL_TURN * 5 // 16
+local KITE_FLANK_TURN = C.FULL_TURN // 6
+local KITE_FLANK_OFF = C.FULL_TURN // 14
+-- The tyrant's stand after a rush's or a charge's swing (its repause).
+local KITE_RECOVERY = C.SECOND // 2
+-- The handgun's cadence: a stop's distances are set for it.
+local KITE_FAST_CADENCE = 23
+local KITE_LATE_SCALE = 3
+local function manhattan(ax, az, bx, bz)
+    return abs(ax - bx) + abs(az - bz)
+end
+
+local function norm(x, z)
+    local len = (x * x + z * z) ^ 0.5
+    if len < 1 then
+        return 0, 0
+    end
+    return x / len, z / len
+end
+
+-- The engine angle of unit vector (ux, uz): the nearest of 64 headings.
+local function angle_of(ux, uz)
+    local best, best_dot = 0, -2
+    for j = 0, 63 do
+        local a = j * (C.FULL_TURN // 64)
+        local hx, hz = heading(a)
+        local dot = hx * ux + hz * uz
+        if dot > best_dot then
+            best, best_dot = a, dot
+        end
+    end
+    return best
+end
+
+-- The straight run along unit (ux, uz) the room leaves, probed at steps.
+local function kite_room(bot, player, ux, uz)
+    local free = 0
+    for _, r in ipairs({ RANGE // 2, RANGE, RANGE * 3 // 2 }) do
+        local path = bot:path((player.x + ux * r) // 1, (player.z + uz * r) // 1)
+        if path.status ~= "ok" or path.length > r * 1.15 then
+            break
+        end
+        free = r
+    end
+    return free
+end
+
+-- A run across `e`'s facing line, to the side the bot is on.
+local function kite_cross(bot, player, e)
+    local fx, fz = heading(e.angle)
+    local px, pz = player.x - e.x, player.z - e.z
+    local side = fx * pz - fz * px
+    local sign = side >= 0 and 1 or -1
+    for _, sg in ipairs({ sign, -sign }) do
+        local ux, uz = norm(-fz * sg + fx * 0.3, fx * sg + fz * 0.3)
+        if kite_room(bot, player, ux, uz) >= RANGE // 2 then
+            return ux, uz
+        end
+    end
+    return nil
+end
+
+-- The run heading: the best of 24 by the swing off straight away from `e`
+-- (weighted up as it closes), how far out of the deck's loop it leads, the
+-- room ahead and, close to it, any part toward it.
+local function kite_run_heading(bot, player, e, kite, loop)
+    local ax, az = norm(player.x - e.x, player.z - e.z)
+    local away = angle_of(ax, az)
+    local d = manhattan(player.x, player.z, e.x, e.z)
+    local close = d < kite.lower + 2 * C.APPROACH
+    local best, best_cost, bx, bz
+    for j = 0, 23 do
+        local a = j * C.FULL_TURN // 24
+        local ux, uz = heading(a)
+        local dev = abs(angle_delta(a, away))
+        local qx, qz = player.x + ux * RANGE * 2 // 3 - loop.x, player.z + uz * RANGE * 2 // 3 - loop.z
+        local rq = (qx * qx + qz * qz) ^ 0.5
+        local cost = dev * (close and 2 or 1) + (rq > loop.radius and (rq - loop.radius) or 0)
+        local toward = -(ux * ax + uz * az)
+        if close and toward > 0 then
+            cost = cost + toward * C.FULL_TURN
+        end
+        if not best_cost or cost < best_cost then
+            local room = kite_room(bot, player, ux, uz)
+            cost = cost + (room >= RANGE and 0 or (RANGE - room) * 2)
+            if not best_cost or cost < best_cost then
+                best, best_cost, bx, bz = a, cost, ux, uz
+            end
+        end
+    end
+    return bx, bz
+end
+
+-- The room's kiting loop (cached per room) and the kited enemy here.
+local function kite_target(bot, s, k)
+    local room = bot:room().id
+    if s.kite_room_id ~= room then
+        s.kite_room_id = room
+        local meta = bot:room_meta()
+        s.kite_loop = meta and meta.kites and meta.kites[1] or false
+    end
+    local loop = s.kite_loop
+    if not loop then
+        return nil
+    end
+    local entry = k.enemies[loop.enemy]
+    if not (entry and entry.kite) then
+        return nil
+    end
+    for _, row in ipairs(bot:enemies()) do
+        if row.id == loop.enemy and (row.health or 0) >= 0 then
+            return row, entry, loop
+        end
+    end
+    return nil
+end
+
+local function kite_step(bot, s, player)
+    local k = bot:knowledge()
+    local e, entry, loop = kite_target(bot, s, k)
+    if not e or e.action_behavior == entry.kite.entrance then
+        return false
+    end
+    local kite = entry.kite
+    if not s.kite then
+        s.kite = { mode = "run", aim = 0 }
+    end
+    local kk = s.kite
+    local now = bot:tick()
+    local d = manhattan(player.x, player.z, e.x, e.z)
+    local ab = e.action_behavior
+    local to_e = angle_of(norm(e.x - player.x, e.z - player.z))
+    local facing_err = abs(angle_delta(player.angle % C.FULL_TURN, to_e))
+    local weapon = bot:weapon()
+    -- The last hit on it (its health drops; at 200 it springs back).
+    if kk.health and e.health < kk.health then
+        kk.last_hit = now
+    end
+    kk.health = e.health
+
+    local function set_mode(mode, why)
+        if kk.mode ~= mode then
+            bot:log(string.format("kite: %s (%s) d=%d", mode, why, d))
+        end
+        kk.mode = mode
+    end
+    -- A quick turn: back + a run press until the turn starts, then wait it out.
+    if kk.mode == "turn" then
+        local turned = abs(angle_delta(player.angle % C.FULL_TURN, kk.turn_from))
+        kk.turn_ticks = kk.turn_ticks + 1
+        if player.locked then
+            bot:set_input({})
+            return true
+        end
+        if turned > C.FULL_TURN // 4 or kk.turn_ticks > KITE_TURN_WAIT then
+            if turned <= C.FULL_TURN // 4 then
+                bot:log("kite: quick turn did not start")
+            end
+            set_mode(kk.after_turn, "turned")
+            kk.aim = 0
+            kk.aim_start = now
+        else
+            bot:set_input({ down = true, run = true, run_pressed = true })
+            return true
+        end
+    end
+    local function quick_turn(next_mode)
+        kk.turn_from = player.angle % C.FULL_TURN
+        kk.turn_ticks = 0
+        kk.after_turn = next_mode
+        set_mode("turn", "to " .. next_mode)
+        bot:set_input({ down = true, run = true, run_pressed = true })
+        return true
+    end
+    -- A charge locks its facing for the swing: run across its line.
+    if ab == kite.charge then
+        local ux, uz = kite_cross(bot, player, e)
+        set_mode("cross", string.format("ab=%d as=%d", ab, e.action_state))
+        if ux then
+            dash(bot, player.x + ux * KITE_DASH, player.z + uz * KITE_DASH)
+        end
+        return true
+    end
+    -- A rise, then the rush: the rush homes in (a turn of 0x80 a tick) and
+    -- its swing still turns (0x48 a tick), so neither is outrun or run
+    -- across. Its turn is wide, though (a circle about 4000 across at the
+    -- swing's speed), so a run past its flank leaves the claw short. In the
+    -- rise the bot takes up a spot by its flank, faces the run's way (the
+    -- side with room), and runs once the swing starts.
+    -- The killing weapon already up (or rising: it roots the bot anyway)
+    -- when the rise starts: the rise stands nearly still, so the shot goes.
+    if ab == kite.rise and not kk.flank_run and bot:has_item(entry.prefer or -1)
+        and bot:weapon().equipped == entry.prefer and bot:weapon().behavior ~= 0 then
+        local w = bot:weapon()
+        local face = bot:face_to(e.x, e.z)
+        local err = face.angle_error or 0
+        local input = BotTactics.aim_input("torso")
+        input.right = err > FACE_BAND
+        input.left = err < -FACE_BAND
+        if w.behavior == C.HOLD_BEHAVIOR and abs(err) <= FACE_BAND * 2 then
+            input.fire = true
+            input.fire_pressed = true
+        end
+        set_mode("finish", "the rise stands still")
+        bot:set_input(input)
+        return true
+    end
+    if ab == kite.rise or ab == kite.rush then
+        local eu = ((player.x - e.x) ^ 2 + (player.z - e.z) ^ 2) ^ 0.5
+        local swing = ab == kite.rush and (e.action_state >= 2 or d < kite.lower - kite.hold + kite.flank)
+        -- The spot: kite.flank from it, KITE_FLANK_OFF off its facing line on
+        -- one side, and the run from there KITE_FLANK_TURN off the line back
+        -- to it, away from its facing line on that side. A spot near the
+        -- facing line was hit one swing in three; past 20 degrees off it,
+        -- none in 46 (303's bench).
+        local function flank_at(side)
+            local fx, fz = heading(e.angle)
+            local px, pz = fz, -fx
+            local oc, os = heading(KITE_FLANK_OFF)
+            os = -os
+            local ox, oz = fx * oc + px * os * side, fz * oc + pz * os * side
+            local sx, sz = e.x + ox * kite.flank, e.z + oz * kite.flank
+            local rc, rs = heading(KITE_FLANK_TURN)
+            rs = -rs
+            for _, turn in ipairs({ 1, -1 }) do
+                local hx, hz = -ox * rc + oz * rs * turn, -oz * rc - ox * rs * turn
+                if (hx * px + hz * pz) * side > 0 then
+                    return { sx = sx, sz = sz, x = hx, z = hz, side = side }
+                end
+            end
+        end
+        if not kk.flank then
+            local best, best_cost
+            for _, side in ipairs({ 1, -1 }) do
+                local c = flank_at(side)
+                local room = kite_room(bot, player, c.x, c.z)
+                local cost = (RANGE * 2 - room) + bot:distance(c.sx, c.sz)
+                if not best_cost or cost < best_cost then
+                    best, best_cost = c, cost
+                end
+            end
+            kk.flank = best
+            kk.rise_tick = now
+            bot:log(string.format("kite: rise: flank side %d d=%d eu=%d", best.side, d, eu // 1))
+        elseif not kk.flank_run then
+            kk.flank = flank_at(kk.flank.side)
+        end
+        local f = kk.flank
+        if kk.mode ~= "flank" then
+            set_mode("flank", string.format("ab=%d as=%d eu=%d", ab, e.action_state, eu // 1))
+        end
+        if swing or kk.flank_run then
+            if not kk.flank_run then
+                local fe = angle_delta(player.angle % C.FULL_TURN, angle_of(f.x, f.z))
+                bot:log(string.format("kite: flank run: eu=%d facing off %d as=%d rise %d ticks",
+                    eu // 1, fe, e.action_state, now - (kk.rise_tick or now)))
+            end
+            kk.flank_run = kk.flank_run or now
+            dash(bot, player.x + f.x * KITE_DASH, player.z + f.z * KITE_DASH)
+            return true
+        end
+        -- Take up the spot, then face the run's way.
+        if bot:distance(f.sx, f.sz) > C.APPROACH * 2 then
+            dash(bot, f.sx, f.sz)
+            return true
+        end
+        local face = bot:face_to(player.x + f.x * KITE_DASH, player.z + f.z * KITE_DASH)
+        local err = face.angle_error or 0
+        bot:set_input({ right = err > FACE_BAND, left = err < -FACE_BAND })
+        return true
+    end
+    if kk.flank then
+        kk.flank = nil
+        kk.flank_run = nil
+        set_mode("run", "rush over")
+    end
+    if kk.mode == "cross" then
+        set_mode("run", "threat over")
+    end
+    -- The rocket launcher dropped: go for it while safe.
+    local goal
+    if entry.prefer and not bot:has_item(entry.prefer) then
+        for _, g in ipairs(bot:world().frontier or {}) do
+            if g.kind == "item" and g.room == bot:room().id and g.item == entry.prefer then
+                goal = g
+            end
+        end
+    end
+    -- Fetch it while the tyrant is well off its way: run there, and press
+    -- the action key once the reach point is on it.
+    local fetch_ok = false
+    if goal and kk.mode ~= "aim" and kk.mode ~= "lower" and kk.mode ~= "turn" then
+        -- The run there (at the run's speed, the pickup pauses the room)
+        -- keeps clear of where the tyrant can walk meanwhile, and of its
+        -- line now.
+        local run = bot:distance(goal.x, goal.z)
+        local ticks = run / C.SPEED.run
+        local tg = ((e.x - goal.x) ^ 2 + (e.z - goal.z) ^ 2) ^ 0.5
+        local line = segment_dist2(e.x, e.z, player.x, player.z, goal.x, goal.z) ^ 0.5
+        local lead = (entry.reach or 0) + KITE_REACH
+        fetch_ok = tg - kite.speed * ticks > lead and line > lead
+            and (kk.mode == "fetch" or ticks < KITE_FETCH_TICKS)
+    end
+    if fetch_ok then
+        set_mode("fetch", "launcher clear")
+        local rx, rz = player.reach_x - goal.x, player.reach_z - goal.z
+        if rx * rx + rz * rz < KITE_REACH ^ 2 or bot:distance(goal.x, goal.z) < KITE_REACH then
+            bot:face_to(goal.x, goal.z)
+            bot:set_input({ action = true, action_pressed = (now % 2 == 0) })
+            return true
+        end
+        dash(bot, goal.x, goal.z)
+        return true
+    elseif kk.mode == "fetch" then
+        set_mode("run", "fetch off")
+    end
+    local gun = firearm(bot, k, e)
+    -- The stop's gun: the killing weapon when held; from past the charge's
+    -- edge, combat's own pick (the launcher's rounds land while the gap is
+    -- wide); nearer, the quickest gun with rounds (a known cadence: the
+    -- handgun), since a slow gun's recoil and pump leave no time to run
+    -- (303's shotgun: 33 ticks from the shot to the turn, the gap 7000 to
+    -- 2600).
+    local function stop_gun()
+        if gun == entry.prefer or d >= kite.edge then
+            return gun
+        end
+        local best, best_cadence
+        for _, row in ipairs(bot:menu().items or {}) do
+            local w = row.kind == "weapon" and k.weapons[row.item]
+            if w and not w.melee and w.cadence and entry.keep and entry.keep[row.item]
+                and held_rounds(bot, row) > 0 and (not best_cadence or w.cadence < best_cadence) then
+                best, best_cadence = row.item, w.cadence
+            end
+        end
+        return best or gun
+    end
+    -- A gun slower than the handgun drops its aim earlier: each tick of
+    -- cadence past KITE_FAST_CADENCE costs KITE_LATE_SCALE ticks the tyrant
+    -- walks before the run (the recoil outlasts the cadence's difference:
+    -- the launcher's 27 ticks, 1440 more). One slow enough to push that
+    -- to `shoot` (the shotgun's 37, with the pump; no cadence known) cannot
+    -- fit an ordinary stop: the run would start inside the slash. It is
+    -- fired from past the charge's edge, or while the tyrant stands out the
+    -- recovery after a rush or a charge (KITE_RECOVERY).
+    local function late(g)
+        local w = g and k.weapons[g]
+        if not w or g == entry.prefer then
+            return 0
+        end
+        if not w.cadence then
+            return kite.shoot
+        end
+        local extra = (w.cadence - KITE_FAST_CADENCE) * kite.speed * KITE_LATE_SCALE
+        return extra > 0 and extra or 0
+    end
+    local function slow(g)
+        return kite.lower + late(g) >= kite.shoot
+    end
+    if ab == kite.rush or ab == kite.charge then
+        kk.attacking = true
+    elseif kk.attacking then
+        kk.attacking = nil
+        kk.recovered = now
+    end
+    local recovering = kk.recovered and now - kk.recovered < KITE_RECOVERY
+    -- The gun a stop would take now (nil: no stop fits).
+    local stop = gun and stop_gun()
+    if stop and slow(stop) and not (d >= kite.edge or (recovering and d >= kite.urgent)) then
+        stop = nil
+    end
+    if kk.mode == "aim" then
+        -- The stop's gun while it has rounds (its loading and ammunition).
+        local rounds = 0
+        for _, row in ipairs(bot:menu().items or {}) do
+            if row.item == kk.gun then
+                rounds = held_rounds(bot, row)
+            end
+        end
+        if kk.gun and rounds > 0 then
+            gun = kk.gun
+        end
+        kk.gun = gun
+        if weapon.equipped ~= gun and gun then
+            BotMenu.equip(bot, gun, "kite equip")
+            return true
+        end
+        -- The killing weapon is committed to: its shot ends the fight.
+        -- A stop with no hit yet holds on closer: the hit is what keeps the
+        -- rush off.
+        -- (Only for a gun as quick as the handgun: a slower one's recoil
+        -- leaves no room for it.)
+        local lower_at = kite.lower
+        if (kk.last_hit or -1) < (kk.aim_start or now) and late(gun) == 0 then
+            lower_at = kite.hold
+        end
+        -- A slower gun drops its aim earlier: its recoil runs longer.
+        lower_at = lower_at + late(gun)
+        if slow(gun) then
+            lower_at = kite.lower + kite.lower - kite.hold
+        end
+        if gun == entry.prefer then
+            lower_at = kite.commit
+        end
+        if d < lower_at or not gun or (ab ~= kite.walk and ab ~= 0) then
+            set_mode("lower", string.format("close: gun=%s at %d ab=%d", tostring(gun), lower_at, ab))
+        else
+            -- Reload only with the gun held or down: a menu opened while the
+            -- last round's shot plays cancels it.
+            if weapon.clip <= 0 and (weapon.behavior == C.HOLD_BEHAVIOR or weapon.behavior == 0)
+                and menu_reload(bot, s, weapon) then
+                return true
+            end
+            local face = bot:face_to(e.x, e.z)
+            local err = face.angle_error or 0
+            local input = BotTactics.aim_input("torso")
+            input.right = err > FACE_BAND
+            input.left = err < -FACE_BAND
+            if weapon.behavior == C.HOLD_BEHAVIOR and abs(err) <= FACE_BAND * 2 then
+                input.fire = true
+                input.fire_pressed = true
+            end
+            bot:set_input(input)
+            return true
+        end
+    end
+    if kk.mode == "hold" and (d < kite.lower or stop) then
+        set_mode("lower", "hold over")
+    end
+    if kk.mode == "lower" then
+        if weapon.behavior ~= 0 then
+            bot:set_input({})
+            return true
+        end
+        -- The way to run decides the turn: a quick turn when it lies
+        -- behind, else a turn in place onto it.
+        local ux, uz = kite_run_heading(bot, player, e, kite, loop)
+        local delta = abs(angle_delta(angle_of(ux, uz), player.angle % C.FULL_TURN))
+        if delta > KITE_QUICK_FROM then
+            return quick_turn("run")
+        end
+        set_mode("run", string.format("turn in place %d", delta))
+        kk.free_turn = true
+    end
+    -- Far enough: stop, turn to it and shoot.
+    -- The rush comes `cooldown` walking ticks after its last hit: two
+    -- seconds short of it without one, a nearer stop.
+    local shoot_from = kite.shoot
+    if now - (kk.last_hit or now) > kite.cooldown - 2 * C.SECOND then
+        shoot_from = kite.urgent
+    end
+
+    -- A slower gun's stop starts its extra farther out (inside the edge).
+    if stop then
+        shoot_from = shoot_from + late(stop)
+        if shoot_from > kite.edge then
+            shoot_from = kite.edge
+        end
+    end
+    if stop and d >= shoot_from and (ab == kite.walk or ab == 0) and kk.mode == "run" then
+        kk.gun = stop
+        bot:log(string.format("kite: stop with gun %s (pick %s)", tostring(kk.gun), tostring(gun)))
+        if facing_err > C.FULL_TURN // 4 then
+            return quick_turn("aim")
+        end
+        set_mode("aim", "far")
+        kk.aim_start = now
+        return true
+    end
+    -- No gun: hold at the top of the band, run when it closes.
+    if not stop and d >= kite.shoot and kk.mode == "run" then
+        set_mode("hold", "no gun")
+        bot:face_to(e.x, e.z)
+        return true
+    end
+    if kk.mode == "hold" then
+        bot:face_to(e.x, e.z)
+        return true
+    end
+    set_mode("run", "")
+    -- The killing weapon, once held, is equipped on the run (the menu
+    -- pauses the room; the draw after it does not): a stop with it then
+    -- spends no ticks on the draw.
+    if entry.prefer and bot:has_item(entry.prefer) and weapon.equipped ~= entry.prefer
+        and d >= kite.shoot then
+        BotMenu.equip(bot, entry.prefer, "kite ready")
+        return true
+    end
+    -- An empty gun is reloaded on the run (the menu pauses the room), so
+    -- the next stop's aim is not spent on it.
+    if gun and weapon.equipped == gun and weapon.clip <= 0 and weapon.behavior == 0
+        and menu_reload(bot, s, weapon) then
+        return true
+    end
+    local ux, uz = kite_run_heading(bot, player, e, kite, loop)
+    -- Close to it, steer within the run's own turn (a turn in place stops
+    -- the run), through the clear heading nearest the one wanted. A turn
+    -- just planned (off the aim) runs free until it is done.
+    local cur = player.angle % C.FULL_TURN
+    local want = angle_of(ux, uz)
+    if kk.free_turn and abs(angle_delta(want, cur)) < DASH_TURN then
+        kk.free_turn = nil
+    end
+    -- A heading wanted past a right angle away is turned onto in place: the
+    -- run's turn could only swing it round through the tyrant's side.
+    if abs(angle_delta(want, cur)) > C.FULL_TURN // 4 then
+        kk.free_turn = true
+    end
+    if d < kite.lower + 2 * C.APPROACH and not kk.free_turn then
+        local best, best_cost
+        for off = -4, 4 do
+            local a = (cur + off * KITE_STEER_MAX // 4) % C.FULL_TURN
+            local hx, hz = heading(a)
+            local room = kite_room(bot, player, hx, hz)
+            local cost = abs(angle_delta(want, a)) + (room >= RANGE and 0 or (RANGE - room))
+            if not best_cost or cost < best_cost then
+                best, best_cost = a, cost
+            end
+        end
+        ux, uz = heading(best)
+    end
+    if goal then
+        -- Head for the launcher while the tyrant is not that way.
+        local gx, gz = norm(goal.x - player.x, goal.z - player.z)
+        local ex, ez = norm(e.x - player.x, e.z - player.z)
+        if gx * ex + gz * ez < 0.3 then
+            ux, uz = gx, gz
+        end
+    end
+    dash(bot, player.x + ux * KITE_DASH, player.z + uz * KITE_DASH)
+    return true
+end
+
 function BotTactics.step(bot, scene, player)
     local s = state()
     s.now = bot:tick()
@@ -1507,6 +2058,9 @@ function BotTactics.step(bot, scene, player)
         return false
     end
     if spit_dodge(bot, s, player) then
+        return true
+    end
+    if kite_step(bot, s, player) then
         return true
     end
     if player.state == 1 and dodge(bot, s, player) then
@@ -1539,6 +2093,7 @@ function BotTactics.step(bot, scene, player)
         s.avoid_until = nil
         s.focus = nil
         s.trap_room = nil
+        s.kite = nil
     end
     if bot:tick() < (s.calm_until or 0) and not s.active then
         return false

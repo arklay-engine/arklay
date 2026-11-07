@@ -2968,6 +2968,16 @@ impl UserData for BotCtx {
                 leaves.push(row)?;
             }
             table.set("leaves", leaves)?;
+            let kites = lua.create_table()?;
+            for fact in &meta.kites {
+                let row = lua.create_table()?;
+                row.set("enemy", fact.enemy)?;
+                row.set("x", fact.centre.0)?;
+                row.set("z", fact.centre.1)?;
+                row.set("radius", fact.radius)?;
+                kites.push(row)?;
+            }
+            table.set("kites", kites)?;
             Ok(Value::Table(table))
         });
 
