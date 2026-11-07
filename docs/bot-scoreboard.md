@@ -65,3 +65,9 @@ two batches of one commit match seed for seed.
 | b28-keyswap | 1c3b51c+H3 | H3: a key pickup boxes loadout ammo whose gun is not held | 7/17 | 18 | 57 | 87 | 206320 | 8 | NO | reject (7/17, 8 stalls) |
 | b29-rearmhere | 1c3b51c+J2 | J2: at a box here, a boxed reserve gun comes out while no held firearm has a round | 11/17 | 10 | 54 | 88 | 202680 | 6 | yes | reject (11/17: the launcher went in and out in a loop; deaths 10) |
 | b30-rearmhere2 | 1c3b51c+J2b | J2b: J2, and the only held firearm with a round is no spare gun | 14/17 | 10 | 57 | 88 | 200607.0 | 3 | yes | accept |
+| b31-E3-on-J2b | 329eae4+E3 | E3 re-run on J2b: red herbs kept and mixed | 8/17 | 19 | 63 | 111 | 199429.0 | 7 | NO | reject (8/17, default stalls in 304) |
+| b32-G1-on-J2b | 329eae4+G1 | G1 re-run on J2b: an empty frontier forces a met fight still pending elsewhere | 14/17 | 13 | 57 | 88 | 200607.0 | 2 | yes | reject (deaths 13>10: seed 16 forced into 40C with nothing to shoot) |
+| b33-G1b | 329eae4+G1b | G1b: G1, but not into a fight short of a gun or rounds | 14/17 | 10 | 57 | 88 | 200607.0 | 3 | yes | reject (identical to b30) |
+| b34-fightheal | 329eae4+K3 | K3: heal to the fight threshold in a room with a <fight> still to be won | 11/17 | 31 | 63 | 97 | 196216 | 2 | NO | reject (11/17, deaths 31>10, default dies) |
+| b35-fightheal2 | 329eae4+K3b | K3b: K3 only while no combat is active | 13/17 | 14 | 56 | 90 | 198534 | 3 | yes | reject (13/17: seed 4 dies 4 times; 303 deaths unchanged) |
+| b36-rearmtrip | 329eae4+J3 | J3: J2b's reserve-gun rearm as a box trip of its own | 13/17 | 14 | 57 | 88 | 206078 | 3 | yes | reject (13/17: seed 8 dies 5 times) |
