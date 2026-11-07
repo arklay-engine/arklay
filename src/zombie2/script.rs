@@ -807,20 +807,24 @@ impl UserData for Api {
             player2::set_part_flags(e.em().work(), part as u8, 0);
             Ok(())
         });
-        // Where `pSin_parts_ptr[part]` hangs from its parent.
-        // A part's place under its parent in place of the skeleton's, or the
-        // skeleton's again with no point.
+        // `Sa_parts_allmv`: the part's children placed by its morph's weights,
+        // as the model's morph data has them.
         methods.add_method_mut(
-            "set_joint_offset",
-            |_, e, (part, x, y, z): (u8, Option<i16>, Option<i16>, Option<i16>)| {
-                let offsets = &mut e.em().work().joint_offsets;
-                offsets.retain(|(index, _)| *index != part);
-                if let (Some(x), Some(y), Some(z)) = (x, y, z) {
-                    offsets.push((part, [x, y, z]));
-                }
+            "morph",
+            |_, e, (part, weights): (u8, mlua::Variadic<i16>)| {
+                let em = e.em();
+                let Some(morph) = em.mover.tick.morphs.iter().find(|morph| morph.part == part)
+                else {
+                    return Ok(());
+                };
+                let joints = morph.joint_offsets(&weights);
+                let offsets = &mut em.work().joint_offsets;
+                offsets.retain(|(index, _)| joints.iter().all(|(child, _)| child != index));
+                offsets.extend(joints);
                 Ok(())
             },
         );
+        // Where `pSin_parts_ptr[part]` hangs from its parent.
         methods.add_method_mut("part_offset", |_, e, part: usize| {
             let [x, y, z] = e
                 .em()

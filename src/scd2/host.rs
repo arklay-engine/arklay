@@ -1409,6 +1409,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::MRX_ID
             || id == crate::zombie2::ALLIGATOR_ID
             || id == crate::zombie2::G1_ID
+            || id == crate::zombie2::G2_ID
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
             || crate::zombie2::is_plant(id);

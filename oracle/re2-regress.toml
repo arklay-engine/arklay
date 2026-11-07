@@ -1195,3 +1195,17 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 2 --give 0:2:200 --give 1:5:6 --give 2:7:5 --give 3:0x14:30"
+
+# G2 (Em_31) in room 509, scenario A: off the lift from room 505, the player stands; G2 waits off stage
+# for the room's scene (oracle/re2.md, "G2")
+[[run]]
+name = "g2_wait_509"
+room = "509"
+character = 0
+sound = false
+ticks = 1400
+setup = { pos = [13248, -1800, -16378], angle = 3480, health = 200, rnd = 6114, camera = 5, flags = [[4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:13248:-1800:-16378:3480:5 --flag 4:99 --life 200"

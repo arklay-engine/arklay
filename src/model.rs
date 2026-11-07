@@ -191,6 +191,12 @@ pub struct PartMorph {
     pub part: u8,
     /// Each target's vertices, in the part's order.
     pub targets: Vec<Vec<[i16; 3]>>,
+    /// The part's children and where they sit under it at rest: the first
+    /// of the chunk's tables of joint positions.
+    pub joints: Vec<(u8, [i16; 3])>,
+    /// Where each target puts those children, from the table the high half
+    /// of its weight's word names, in the order of [`PartMorph::joints`].
+    pub joint_targets: Vec<Vec<[i16; 3]>>,
 }
 
 impl PartMorph {
@@ -210,6 +216,32 @@ impl PartMorph {
             }
         }
         shape
+    }
+
+    /// `Sa_parts_allmv`'s children: each at its place at rest, blended
+    /// through each target's place by its weight (`LoadAverage12`, where the
+    /// rest keeps 0xfff).
+    pub fn joint_offsets(&self, weights: &[i16]) -> Vec<(u8, [i16; 3])> {
+        let mut joints: Vec<(u8, [i32; 3])> = self
+            .joints
+            .iter()
+            .map(|&(child, at)| (child, at.map(i32::from)))
+            .collect();
+        for (target, &weight) in self.joint_targets.iter().zip(weights) {
+            if weight == 0 {
+                continue;
+            }
+            let weight = i32::from(weight);
+            for ((_, at), to) in joints.iter_mut().zip(target) {
+                *at = std::array::from_fn(|axis| {
+                    (at[axis] * (0xFFF - weight) + i32::from(to[axis]) * weight) >> 12
+                });
+            }
+        }
+        joints
+            .into_iter()
+            .map(|(child, at)| (child, at.map(|axis| axis as i16)))
+            .collect()
     }
 }
 

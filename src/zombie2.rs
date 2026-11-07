@@ -376,6 +376,9 @@ pub const SPIDER_ID: u8 = 0x25;
 /// G1, William Birkin's first form, `Em_30`, whose script is
 /// `enemy/30/enemy.lua`.
 pub const G1_ID: u8 = 0x30;
+/// G2, William Birkin's second form, `Em_31`, whose script is
+/// `enemy/31/enemy.lua`.
+pub const G2_ID: u8 = 0x31;
 /// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
 /// point of `+0x21b`.
 const G1_FLAGS: usize = 3;
@@ -1091,13 +1094,14 @@ impl Em<'_, '_, '_> {
         self.z.more_atd = rest.to_vec();
     }
 
-    /// `Em_30`, which leaves the rest to its script: `Root_ck` to the player
-    /// on every tick, then, unless the room is stopped, `Damage_cnt`, the
-    /// move, `Oba_ck_em` and `Sca_ck_em` (`0x400`).
+    /// `Em_30` and `Em_31`, which leave the rest to their scripts: `Root_ck`
+    /// to the player on every tick (G1's to its point while it limps away),
+    /// then, unless the room is stopped, `Damage_cnt`, the move, `Oba_ck_em`
+    /// and `Sca_ck_em` (`0x400`).
     fn run_g1(&mut self) {
         // `+0x21c`'s 8 sends `Root_ck` to the point its routine 9 chose, which
         // the script keeps in two of its fields.
-        if self.z.vars[G1_FLAGS] & 8 != 0 {
+        if self.mover.tick.id == G1_ID && self.z.vars[G1_FLAGS] & 8 != 0 {
             let [x, z] = [G1_ROOT_X, G1_ROOT_Z].map(|index| self.z.vars[index] as i16);
             self.root_ck_to([x, z], None);
         } else {
@@ -1233,7 +1237,7 @@ impl Em<'_, '_, '_> {
             self.run_mrx();
             return;
         }
-        if self.mover.tick.id == G1_ID {
+        if matches!(self.mover.tick.id, G1_ID | G2_ID) {
             self.run_g1();
             return;
         }

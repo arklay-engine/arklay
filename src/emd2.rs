@@ -36,8 +36,8 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::emd::{chunk_slice, parse_clips, parse_skeleton, read_u16, read_u32, vec3};
 use crate::model::{
-    AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, PartMorph, Plw, Texture8, Tmd,
-    TmdObject, TmdPrim,
+    AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, PartMorph, Plw, Skeleton,
+    Texture8, Tmd, TmdObject, TmdPrim,
 };
 use crate::{bmp, tim};
 
@@ -186,7 +186,7 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
         .collect::<Result<Vec<_>>>()?;
     let mesh = parse_md1(&data[chunks[7]..chunks[8]]).context("EMD mesh")?;
     let first = banks.remove(0);
-    let morphs = parse_morphs(&data[chunks[0]..chunks[1]], &mesh);
+    let morphs = parse_morphs(&data[chunks[0]..chunks[1]], &mesh, &skeleton);
     Ok(Emd {
         skeleton,
         keyframes: first.keyframes,
@@ -205,10 +205,22 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
 /// a shape, its number of targets and their weights. A shape's vertices are
 /// three `i16`s, padded to four bytes. Whatever doesn't fit its chunk or its
 /// part isn't a morph, and is left out.
-fn parse_morphs(chunk: &[u8], mesh: &Tmd) -> Vec<PartMorph> {
+fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph> {
     let word = |at: usize| read_u32(chunk, at).ok().map(|word| word as usize);
     let Some(mask) = word(0) else {
         return Vec::new();
+    };
+    // The tables of joint positions: where the first starts, and how far
+    // apart they are.
+    let (tables, table_len) = (word(4).unwrap_or(0), word(8).unwrap_or(0));
+    let joint_at = |table: usize, child: u8| -> Option<[i16; 3]> {
+        let start = tables
+            .checked_add(table.checked_mul(table_len)?)?
+            .checked_add(usize::from(child) * 6)?;
+        let bytes = chunk.get(start..start + 6)?;
+        Some(std::array::from_fn(|axis| {
+            i16::from_le_bytes([bytes[axis * 2], bytes[axis * 2 + 1]])
+        }))
     };
     let mut morphs = Vec::new();
     let mut at = 12;
@@ -245,9 +257,25 @@ fn parse_morphs(chunk: &[u8], mesh: &Tmd) -> Vec<PartMorph> {
         let Some(shapes) = shapes else {
             break;
         };
+        let children = skeleton.children.get(part).map_or(&[][..], Vec::as_slice);
+        let joints = children
+            .iter()
+            .filter_map(|&child| Some((child, joint_at(0, child)?)))
+            .collect::<Vec<_>>();
+        let joint_targets = (0..targets)
+            .map(|target| {
+                let table = word(at + 12 + target * 4).unwrap_or(0) >> 16;
+                joints
+                    .iter()
+                    .map(|&(child, rest)| joint_at(table, child).unwrap_or(rest))
+                    .collect()
+            })
+            .collect();
         morphs.push(PartMorph {
             part: part as u8,
             targets: shapes,
+            joints,
+            joint_targets,
         });
         at += (3 + targets) * 4;
     }
