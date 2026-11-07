@@ -302,6 +302,17 @@ impl BotMemory {
     }
 }
 
+/// `BOT_BOOT_IDLE`: ticks the bot idles at the start of the run (0 unset).
+fn boot_idle_ticks() -> u64 {
+    static TICKS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *TICKS.get_or_init(|| {
+        std::env::var("BOT_BOOT_IDLE")
+            .ok()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or(0)
+    })
+}
+
 /// The memory keys a reload keeps ([`BotMemory::keep_lessons`]).
 const LESSON_PREFIX: &str = "fight_met:";
 
@@ -4003,7 +4014,13 @@ impl BotRuntime {
                 )
             });
         }
-        let input = *self.shares.input.borrow();
+        let mut input = *self.shares.input.borrow();
+        // `BOT_BOOT_IDLE=N` (benchmark noise measurement only): no input for
+        // the run's first N ticks, a behaviour-neutral shift of every later
+        // tick (docs/bot-scoreboard.md, "noise floor").
+        if self.tick < boot_idle_ticks() {
+            input = BotInput::default();
+        }
         self.stats.observe_input(&input);
         self.shares
             .memory
