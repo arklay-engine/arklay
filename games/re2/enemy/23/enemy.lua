@@ -51,7 +51,8 @@ local BLOOD_END <const> = 29 -- `DWORD_0068950c`: the shotguns' blood's last tic
 local BLOOD_POINT <const> = 30 -- `DWORD_00689508`: weapon 4's point of `BLOOD_POINTS`.
 local BLAST_DIR <const> = 31 -- `DWORD_00689518`: where the blast throws it.
 local BLAST_PUSH <const> = 32 -- `WORD_00689522`: what the blast still adds to `Spd_x`.
-local LAST_VAR <const> = BLAST_PUSH
+local DIVE_ENDS <const> = 33 -- `+0x16b`: the ends of clip 1 since the dive.
+local LAST_VAR <const> = DIVE_ENDS
 
 -- `Rot_neck_em`'s neck: `Neck_no` 5, whose part has a rate of 20 and a limit
 -- of 560 (its `+0x9c` and `+0xa0`).
@@ -68,6 +69,9 @@ local LIFE_EXTRA <const> = 300
 
 -- `fg_room`'s bits that room 40A's script raises.
 local ROOM_BANK <const> = 5
+-- `fg_stop`'s 0x1000000, which holds the player's input.
+local STOP_BANK <const> = 2
+local STOP_INPUT <const> = 7
 
 -- The gas tank: room 40A's `obj_model_set` 1 (the original's object work 1, `DAT_0098a84c`).
 local TANK_OBJECT <const> = 1
@@ -522,8 +526,9 @@ local function knock(e)
     end
     e:player_goto_angle(dir, 0x600)
     -- `hard_mode` and `censorship_off` are clear: 40 before `Pl_life_down`'s
-    -- own scaling.
-    local down = 0x28
+    -- own scaling, or 20 once a hit has taken it below 25000 (`+0x218`'s
+    -- 0x20).
+    local down = e:var(FLAGS) & 0x20 ~= 0 and 0x14 or 0x28
     local result = e:pl_life_down(down)
     if result & 1 ~= 0 then
         e:pl_set_routine_at(2, 4)
@@ -1016,9 +1021,63 @@ local function explode(e)
     e:goto_angle(e:var(BLAST_DIR), 0x4B)
 end
 
--- `funcs_469D34`; going under at the corridor's end (2, `FUN_0046a2a0`, and
--- 3, `FUN_0046a430`) isn't ported.
-local HURTS <const> = { [0] = shrug, explode, nil, nil, flinch }
+-- `funcs_469D34`; going under while zapping (3, `FUN_0046a430`) isn't
+-- ported.
+-- `FUN_0046a2a0`: hurt at the corridor's end, it dives. It waits out the
+-- camera's `fg_status` 0x80, turns a quarter (or, while it turns, is put at
+-- the end, facing back), and plays clip 7 in cut 9, then clip 1 five times;
+-- after the fifth it is back in cut 8 and gone (`Type`'s 0x4000). The
+-- player's input is held throughout (`fg_stop`'s 0x1000000). The splash's
+-- sound (`0x20e0001`, the room's bank) isn't ported.
+local function dive(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_flag(STOP_BANK, STOP_INPUT, true)
+        e:set_status(0x110)
+        e:set_var(FLAGS, e:var(FLAGS) | 2)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:set_routine(2, 1)
+        return
+    end
+    if sub == 1 then
+        if e:status(0x80) then
+            return
+        end
+        e:pl_or_be_flg(0x80400)
+        e:cut_change(9)
+        if e:var(TURNING) == 0 then
+            e:set_angle((e:angle() - 0x400) & 0xFFFF)
+        else
+            local _, y = e:pos()
+            e:set_pos(-0x4E9D, y, -0x388)
+            e:set_angle(0xC00)
+        end
+        e:set_routine(2, 2)
+        sub = 2
+    end
+    if sub == 2 then
+        if mot_play_sp(e, 7, 0) ~= 0 then
+            e:set_var(DIVE_ENDS, 0)
+            e:set_routine(2, 3)
+        end
+    elseif sub == 3 then
+        local ends = (e:var(DIVE_ENDS) + mot_play_sp(e, 1, 7)) & 0xFF
+        e:set_var(DIVE_ENDS, ends)
+        if ends == 4 then
+            e:set_var(FLAGS, e:var(FLAGS) | 8)
+        elseif ends == 5 then
+            e:set_routine(2, 4)
+            e:cut_change(8)
+            e:clear_status(0x110)
+            e:set_flag(STOP_BANK, STOP_INPUT, false)
+            e:set_kind(e:kind() | 0x4000)
+            e:pl_clear_be_flg(0x80400)
+            mot_play_sp(e, 8, 0)
+        end
+    end
+end
+
+local HURTS <const> = { [0] = shrug, explode, dive, nil, flinch }
 
 -- `FUN_00469cf0`: `Routine_0` 2.
 local function hurt(e)

@@ -1156,7 +1156,9 @@ impl UserData for Api {
                 .banks
                 .get(usize::from(crate::scd2::host::STATUS_BANK))
                 .map_or(0, |words| words[0]);
-            Ok((word | world.status_or) & !world.status_and_not & bits as u32 != 0)
+            // The aim's `0x80` (`pl_mv_05`) is kept on the player.
+            let aim = if world.pl.holds_view() { 0x80 } else { 0 };
+            Ok((word | world.status_or | aim) & !world.status_and_not & bits as u32 != 0)
         });
         // `Flg_ck` of a flag bank, with what the script changed this tick.
         methods.add_method_mut("flag", |_, e, (bank, index): (u8, u8)| {
