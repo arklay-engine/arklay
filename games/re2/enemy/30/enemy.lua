@@ -9,8 +9,8 @@
 -- encounter's scene in room 303 (`Type` 0), where it waits until the room's
 -- event raises `Sce_free0`, then changes and goes on to routine 1, the
 -- fight's walk, which chooses its attacks: the lunge and slash (2 and 7),
--- with the pull from a wall (6) and the rearing up (8), are ported; the step
--- in (3), the charge (4), the swipe (5) and 9 aren't yet.
+-- with the pull from a wall (6) and the rearing up (8), the step in (3) and
+-- the charge (4) are ported; the swipe (5) and 9 aren't yet.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
 -- `e:set_var` are the fields of the original's work that the engine doesn't
@@ -304,13 +304,17 @@ local function arm_point(e, point)
 end
 
 -- `L_pos_ckXZM` on part 6.
-local function arm_reaches(e, point)
+local function arm_reaches_within(e, point, within)
     local x, _, z = arm_point(e, point)
     if x == nil then
         return false
     end
     local px, _, pz = e:player_pos()
-    return e:hypot(x - px, z - pz) < 900
+    return e:hypot(x - px, z - pz) < within
+end
+
+local function arm_reaches(e, point)
+    return arm_reaches_within(e, point, 900)
 end
 
 -- The hit: 30 life (45 in hard mode) and a fall on G1's own clips, backwards
@@ -451,6 +455,231 @@ local function pull_free(e)
     e:add_speed_xz()
 end
 
+-- Routine 3 (`0x48b6d0`): the step in, a short swing (clip 2) turning to the
+-- player. On its hit frames two points along part 6, as the last draw left
+-- it, hit an unhurt player within 800: 15 life (20 in hard mode or
+-- uncensored) and the fall forwards, turned round first (2,5,1 on clip 5).
+local STEP_NEAR <const> = { 0x1F4, 0x183, 0 }
+local STEP_FAR <const> = { 0x3E8, 0x183, 0 }
+
+local function drawn_arm_reaches(e, point, within)
+    local x, _, z = e:own_part_point(ARM, point[1], point[2], point[3])
+    if x == nil then
+        return false
+    end
+    local px, _, pz = e:player_pos()
+    return e:hypot(x - px, z - pz) < within
+end
+
+local function step_in(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(2, e:var(FLAGS) & 1 ~= 0 and 10 or 0, 0xF)
+        e:spd()
+        e:set_routine(2, 1)
+    elseif sub ~= 1 then
+        return
+    end
+    e:goto_player(8)
+    e:spd()
+    if e:joint(0x100) then
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, 0xF)
+    end
+    e:add_speed_xz()
+    if e:now_seq() & 0x30000 == 0 then
+        return
+    end
+    e:goto_player(0x10)
+    if not (drawn_arm_reaches(e, STEP_NEAR, 800) or drawn_arm_reaches(e, STEP_FAR, 800)) then
+        return
+    end
+    if e:pl_damage_cnt() ~= 0 then
+        return
+    end
+    e:pl_life_down(0xF, true)
+    e:pl_set_motion(5, 5, 3, 0x96, 0, 0, 0x12)
+    e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+    e:pl_set_routine(2, 5, 1, 0)
+    e:pl_set_sub1()
+    e:set_var(FLAGS, e:var(FLAGS) & 0xFFFE)
+    e:sound(6)
+end
+
+-- Routine 4 (the original's `0x48b8c0`): the charge. It closes in, walking
+-- backwards on its clip (1, or 12 with `FLAGS`' 1) at half speed past 0x960;
+-- from 0x7d1 to 0xce4 away and facing the player, its swing (clip 6) comes
+-- when `Timer0` runs out, or when `Timer1` does once it has faced them in
+-- that range, else it walks again (or rears up). On the swing's hit frames
+-- its arm strikes a wall (radius 200, at the arm's origin, on the frames with
+-- `0x10000`), which sends it to routine 6, or two points along the arm kill
+-- a player within 600 (`Pl_life_down` 500, the player to 6,0,0,0 on G1's
+-- clips). After a kill it waits, swings again over the body, and walks off.
+local CHARGE_NEAR <const> = { 0x12C, 0x183, 0 }
+local CHARGE_FAR <const> = { 0x44C, 0x183, 0 }
+
+local function charge_swing(e)
+    e:spd()
+    if e:joint(0x100) then
+        e:set_routine(2, 4)
+        if e:timer(3) == 0 then
+            e:routines(1, 1, 0, 0)
+            e:set_var(CNT_21A, 10)
+            if e:rnd() & 1 == 0 then
+                e:routines(1, 8, 0, 0)
+            end
+        end
+    end
+    e:add_speed_xz()
+    local seq = e:now_seq()
+    if seq & 0x30000 == 0 then
+        return
+    end
+    if seq & 0x10000 ~= 0 then
+        local x, y, z = e:part_point(ARM, 0, 0, 0)
+        if x ~= nil and e:sca_struck(x, y, z, 200, 0x8000) then
+            e:routines(1, 6, 0, 0)
+            e:set_var(CNT_21A, 0x1E)
+            -- Four sparks at the arm, not ported; the three `Rnd`s between
+            -- them are drawn.
+            e:rnd()
+            e:rnd()
+            e:rnd()
+            return
+        end
+    end
+    if not (arm_reaches_within(e, CHARGE_NEAR, 600) or arm_reaches_within(e, CHARGE_FAR, 600)) then
+        return
+    end
+    if e:player_life() < 0 then
+        return
+    end
+    -- `fg_system`'s `0x100` goes with the player's `MODE_HELD_DIE`.
+    e:pl_life_down(500, false)
+    e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+    e:pl_set_routine(6, 0, 0, 0)
+    e:pl_hold()
+    e:pl_set_sub1()
+    e:set_var(FLAGS, e:var(FLAGS) & 0xFFFE)
+    e:set_timer(3, 1)
+    e:sound(1)
+end
+
+local function charge(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(e:var(FLAGS) & 1 ~= 0 and 0xC or 1, 0, 0x1F)
+        e:set_routine(2, 1)
+        e:set_timer(0, 0x3C)
+        e:set_timer(1, 0x5A)
+        e:set_timer(3, 0)
+        sub = 1
+    end
+    if sub == 1 then
+        e:goto_player(0x20)
+        e:spd_reversed()
+        if e:hokan() > 0x14 then
+            e:set_speed_x(e:speed_x() // 2)
+        end
+        e:joint(0x80, true)
+        local far = e:distance()
+        if far > 0x960 then
+            e:set_speed_x(e:speed_x() // 2)
+        end
+        if e:timer(0) ~= 0 then
+            e:set_timer(0, e:timer(0) - 1)
+        end
+        local skip = false
+        if e:timer(0) == 0 then
+            if far < 0x7D1 then
+                skip = true
+            elseif far < 0xCE4 and player_ck(e, 0x100) == 0 then
+                e:set_routine(2, 2)
+            end
+        end
+        if not skip and far > 2000 and far < 0xCE4 and player_ck(e, 0x100) == 0 then
+            e:set_timer(3, 1)
+        end
+        local was = e:timer(1)
+        e:set_timer(1, was - 1)
+        if was == 0 then
+            if e:timer(3) == 0 then
+                e:routines(1, 1, 0, 0)
+                if e:rnd() & 1 == 0 then
+                    e:routines(1, 8, 0, 0)
+                end
+            else
+                e:set_routine(2, 2)
+            end
+            e:set_var(CNT_21A, 10)
+        end
+        e:add_speed_xz()
+    elseif sub == 2 or sub == 3 then
+        if sub == 2 then
+            e:clip(6, e:var(FLAGS) & 1 ~= 0 and 10 or 0, 0xF)
+            e:spd()
+            e:set_routine(2, 3)
+            e:set_timer(3, 0)
+        end
+        charge_swing(e)
+    elseif sub == 4 or sub == 5 then
+        if sub == 4 then
+            e:clip(1, 0, 0x1F)
+            e:set_routine(2, 5)
+            e:set_timer(0, 0x3C)
+        end
+        e:goto_player(0x20)
+        e:spd_reversed()
+        if e:hokan() > 0x14 then
+            e:set_speed_x(e:speed_x() // 2)
+        end
+        e:joint(0x80, true)
+        local was = e:timer(0)
+        e:set_timer(0, was - 1)
+        if was == 0 then
+            e:set_routine(2, 6)
+        end
+        e:add_speed_xz()
+    elseif sub == 6 or sub == 7 then
+        if sub == 6 then
+            e:clip(6, 0, 0xF)
+            e:set_routine(2, 7)
+            e:set_timer(3, 0)
+        end
+        e:spd()
+        if e:joint(0x100) then
+            e:set_routine(2, 8)
+        end
+        if e:now_seq() & 0x20000 ~= 0 and e:timer(3) == 0 then
+            -- Its blood at the player's parts 0 and 8 isn't ported.
+            e:sound(1)
+            e:set_timer(3, 1)
+        end
+        e:add_speed_xz()
+    elseif sub == 8 or sub == 9 then
+        if sub == 8 then
+            e:set_routine(2, 9)
+            e:clip(0x13, 0, 0x1F)
+        end
+        e:spd()
+        e:set_hokan(0x1C)
+        if e:joint(0x80) then
+            e:set_routine(2, e:routine(2) + 1)
+        end
+        e:add_speed_xz()
+    elseif sub == 10 or sub == 11 then
+        if sub == 10 then
+            e:clip(1, 0, 0x1F)
+            e:set_routine(2, 0xB)
+        end
+        local x, z = e:dest()
+        e:goto_point(x, z, -0x20)
+        e:spd()
+        e:joint(0x80)
+        e:add_speed_xz()
+    end
+end
+
 -- Routine 8 (`0x48c130`): it rears up (clip 17), turned toward the player,
 -- and raises `FLAGS`' 1, which plays its walk and its swings from their
 -- faster clips and frames; then it walks again.
@@ -479,6 +708,8 @@ local BEFORE <const> = { [1] = fight_ck }
 local AFTER <const> = {
     [1] = walk,
     [2] = swing,
+    [3] = step_in,
+    [4] = charge,
     [6] = pull_free,
     [7] = swing,
     [8] = rear,

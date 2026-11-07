@@ -607,8 +607,11 @@ impl UserData for Api {
         // clips, and their speed.
         methods.add_method_mut(
             "pl_set_motion",
-            |_, e, (clip, count, hokan, x, y, z): (i64, i64, i64, i64, i64, i64)| {
+            |_,
+             e,
+             (clip, count, hokan, x, y, z, neck): (i64, i64, i64, i64, i64, i64, Option<i64>)| {
                 let pl = &mut *e.em().world.pl;
+                pl.neck.flags |= neck.unwrap_or(0) as u8;
                 pl.bank = player2::Bank::Held;
                 pl.move_no = clip as u8;
                 pl.move_cnt = count as u8;
@@ -1291,6 +1294,28 @@ impl UserData for Api {
                 .map_or([0; 3], |matrix| matrix.t);
             Ok((t[0], t[1], t[2]))
         });
+        // A point along a part as the last draw left it (`Workm`), or nils
+        // before the first draw.
+        methods.add_method_mut(
+            "own_part_point",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let point = [x, y, z];
+                Ok(e.em()
+                    .z
+                    .parts
+                    .get(part)
+                    .copied()
+                    .flatten()
+                    .map_or((None, None, None), |m| {
+                        let [x, y, z] = std::array::from_fn(|axis| {
+                            let turned: i32 =
+                                (0..3).map(|i| i32::from(m.m[axis][i]) * point[i]).sum();
+                            m.t[axis] + (turned >> 12)
+                        });
+                        (Some(x), Some(y), Some(z))
+                    }))
+            },
+        );
         // `Neck_no`'s turn (`+0x98`).
         methods.add_method_mut("neck_turn", |_, e, ()| Ok(e.em().work().neck.turn[0]));
         methods.add_method_mut("set_neck_turn", |_, e, turn: i16| {

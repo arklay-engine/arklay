@@ -3687,6 +3687,10 @@ impl Mover<'_, '_> {
             self.em23_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::G1_ID {
+            self.em30_killed(held);
+            return;
+        }
         if matches!(
             held.holder_id,
             crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
@@ -4298,6 +4302,45 @@ impl Mover<'_, '_> {
         self.work.be_flg &= !0x1004;
         self.work.bank = Bank::Weapon;
         held.released = true;
+    }
+
+    /// `em_die_table[0x30]`'s `Routine_1` 0 (`0x48f7d0`): killed by G1's
+    /// charge, on its clip 7. Its blood at the player's parts (two effects a
+    /// frame below frame 10, each with a `Rnd`) and the parts its frame 5
+    /// hides aren't drawn, but their `Rnd`s are. Its `Routine_1` 2 and 3,
+    /// which the charge doesn't start, aren't ported.
+    fn em30_killed(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x400;
+        if self.work.routine[1] != 0 {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.bank = Bank::Held;
+                self.work.move_no = 7;
+                self.work.move_cnt = 0;
+                self.work.hokan = DAMAGE_BLEND;
+                self.work.routine[2] = 1;
+                self.work.neck.flags = 1;
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                *held.life = -1;
+                self.work.sounds.push(0x402_0001);
+            }
+            1 => {}
+            _ => return,
+        }
+        if self.work.move_cnt == 0x17 {
+            self.work.sounds.push(0x403_0001);
+        }
+        if self.work.move_cnt < 10 {
+            held.rnd.draw();
+            held.rnd.draw();
+        }
+        self.work.bank = Bank::Held;
+        if self.joint_move_late(LATE) {
+            self.work.be_flg |= 2;
+            self.work.routine[2] = 2;
+        }
     }
 
     /// `FUN_0045a880`: held from the front or the back, standing.

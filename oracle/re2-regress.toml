@@ -1061,13 +1061,13 @@ name = "g1_scene_303"
 room = "303"
 character = 2
 sound = false
-ticks = 2400
-# scenario B: the player walks into cut 2, the room's scene runs, and G1 waits, changes and goes for the player
+ticks = 2311
+# scenario B: the player walks into cut 2, the room's scene runs, and G1 waits, changes, goes for the player and kills them with its charge, to the game over
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
 input = "g1_scene_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1304, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
+expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
 
 [[run]]
@@ -1076,12 +1076,12 @@ room = "303"
 character = 2
 sound = false
 ticks = 2400
-# as g1_scene_303, but after the scene the player runs east, and G1 walks after them across the room
+# as g1_scene_303, but after the scene the player runs east, and G1 walks after them across the room, rears up and kills them with its charge
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
 input = "g1_flee_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1729, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
+expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
 
 [[run]]
@@ -1089,13 +1089,13 @@ name = "g1_hit_303"
 room = "303"
 character = 2
 sound = false
-ticks = 2400
-# as g1_scene_303, but after the scene the player walks into G1's lunge, falls back onto a wall, gets up and is hit again
+ticks = 2087
+# as g1_scene_303, but after the scene the player walks into G1's lunge, falls back onto a wall, gets up, is hit again and is killed by the charge, to the game over
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
 input = "g1_hit_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1330, fields = ["zm0"], note = "G1's charge (routine 4) isn't ported yet (docs/re2-deviations.md)" }
+expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
 
 [[run]]
@@ -1103,11 +1103,11 @@ name = "g1_hit_side_303"
 room = "303"
 character = 2
 sound = false
-ticks = 2400
-# as g1_scene_303, but after the scene the player turns and walks into G1's lunge from the side, and falls forwards
+ticks = 2085
+# as g1_scene_303, but after the scene the player turns and walks into G1's lunge from the side and falls forwards, is thrown again by its step in and is killed by the charge, to the game over
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
 input = "g1_hit_side_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1268, fields = ["zm0"], note = "G1's step in (routine 3) isn't ported yet (docs/re2-deviations.md)" }
+expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
