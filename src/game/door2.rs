@@ -66,8 +66,10 @@ impl GameState {
             if count == Some(0) {
                 use crate::scd2::host::door_message;
                 self.show_re2_door_message(door_message(DOOR_DISCARD_KEY));
-                // The extra `fg_stop |= Stop_data` after the request: the
-                // message already holds that byte.
+                // `fg_stop |= 0xFF000000` (`0x4E964F`): the hook runs before
+                // the moves, so the stop holds this tick's, where the
+                // message's own stop would only go up after them.
+                self.hold_re2_message_stop(0xFF00);
                 self.re2_key_lost = Some(KeyLost {
                     slot: state.slot,
                     first: false,
@@ -213,6 +215,8 @@ mod tests {
         assert_eq!(game.inventory[2], InventoryItem { id: 0x59, quantity: 0 });
         assert!(game.message.active);
         assert_eq!(game.message.id, shown(DOOR_DISCARD_KEY));
+        // `Key_lost` raises the stop itself, before this tick's moves.
+        assert_eq!(*game.re2.fg_stop_mut() & 0xFF00_0000, 0xFF00_0000);
         assert_eq!(
             game.re2_key_lost,
             Some(KeyLost {

@@ -3918,7 +3918,8 @@ impl GameSession {
                 .first_mut()
                 .map(|player| (player.pos, &mut player.health));
             re2.tick_effects(self.loaded.room.sca.as_ref(), player);
-            self.re2_sounds.played.clear();
+            // `played` was cleared at the top of the tick: a yes/no's cue
+            // the message update played (a door's discard question) stays.
             let cut = self.sound_cut();
             play_re2_sounds(
                 &mut self.music,

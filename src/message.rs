@@ -72,7 +72,7 @@
 //! a second message while one is up is refused, exactly like the original's
 //! `set_message_display`.
 
-use crate::font::Font;
+use crate::font::{ChoiceLayout, Font};
 use crate::items;
 use crate::render::{Framebuffer, Tint};
 use crate::text::Text;
@@ -271,6 +271,12 @@ pub struct MessageWindow {
     /// `Mess_set` clears it and the close leaves it, so it shows in the
     /// trace's `msg` only.
     typed: bool,
+    /// Where the message draws, when its request says rather than the
+    /// font: the first line's x and y (`Mess_set`'s `Pos_xy`).
+    origin: Option<(i32, i32)>,
+    /// Where a yes/no's choice draws, when its request says (`Branch_disp`'s
+    /// table entry), rather than the font.
+    choice_at: Option<ChoiceLayout>,
     /// The yes/no's cue this tick, for RE2: the answer's or the choice's move.
     choice_cue: Option<ChoiceCue>,
     previous: MessageInput,
@@ -329,6 +335,8 @@ impl Default for MessageWindow {
             selected_item: 0,
             menu_choice: 0,
             typed: false,
+            origin: None,
+            choice_at: None,
             choice_cue: None,
             previous: MessageInput::default(),
             actions: Vec::new(),
@@ -354,6 +362,14 @@ impl MessageWindow {
     /// menu-choice byte and the typed bit `0x40`.
     pub fn message_state(&self) -> u8 {
         self.menu_choice | if self.typed { 0x40 } else { 0 }
+    }
+
+    /// Place the requested message at `origin` (its first line's x and y)
+    /// and its yes/no's choice at `choice`, for a request whose position
+    /// isn't the font's (RE2's door messages, `Mess_set`'s attr `0x100`).
+    pub fn place(&mut self, origin: (i32, i32), choice: ChoiceLayout) {
+        self.origin = Some(origin);
+        self.choice_at = Some(choice);
     }
 
     /// Set RE2's typed bit (`fg_message & 0x40`), for a reset that keeps it.
@@ -419,6 +435,8 @@ impl MessageWindow {
         }
         self.menu_choice = 0x80;
         self.typed = false;
+        self.origin = None;
+        self.choice_at = None;
         self.id = Some(id);
         self.id_high = 0;
         self.pause = pause;
@@ -1003,8 +1021,9 @@ impl MessageWindow {
         } else {
             metrics.text_y
         };
+        let (left, row) = self.origin.unwrap_or((metrics.left_margin, row));
         let base_y = row + framebuffer.height as i32 - crate::render::HEIGHT as i32;
-        let mut x = metrics.left_margin;
+        let mut x = left;
         let mut y = base_y;
         let mut tint = Tint::from_clut_row(i32::from(self.clut_base));
         let mut cursor = Cursor::Message(self.render_start);
@@ -1022,7 +1041,7 @@ impl MessageWindow {
                 }
                 0x01 => cursor = next(cursor),
                 0x02 => {
-                    x = metrics.left_margin;
+                    x = left;
                     y += 16;
                     cursor = next(cursor);
                 }
@@ -1083,9 +1102,9 @@ impl MessageWindow {
                     );
                 }
             }
-            MessagePhase::YesNo if self.yes_no_shown && metrics.choice.is_some() => {
+            MessagePhase::YesNo if self.yes_no_shown && self.choice_at.or(metrics.choice).is_some() => {
                 // RE2's choice, on the line the question ended on.
-                let Some(choice) = metrics.choice else {
+                let Some(choice) = self.choice_at.or(metrics.choice) else {
                     return;
                 };
                 if self.char_timer & blink != 0 {

@@ -8935,8 +8935,21 @@ impl GameState {
     /// the dismissal puts `fg_stop` back.
     fn show_re2_door_message(&mut self, id: u8) {
         self.message.set_re2_timing(true, false);
+        let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
-        if self.message.active {
+        if shown && self.message.active {
+            // Attr `0x100` puts it at `0xB90022` (x 34, y 185), and its
+            // `{branch 0}` takes `choice_data_e`'s first entry (`0x52E554`):
+            // `Yes` at 210 and `No` 50 to its right, each cursor cell where
+            // the font's get-item choice has it against its label.
+            self.message.place(
+                (34, 185),
+                crate::font::ChoiceLayout {
+                    yes_x: 210,
+                    no_x: 260,
+                    cursor_dx: -18,
+                },
+            );
             self.re2_message_stop_pending = 0xFF00;
         }
     }
