@@ -1,0 +1,12 @@
+# The title from boot: down to SPECIAL and confirm it, then cancel (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+500 cancel
+503

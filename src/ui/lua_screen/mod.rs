@@ -1110,6 +1110,8 @@ fn no_draw() -> mlua::Error {
 }
 
 #[cfg(test)]
+mod re2_title_tests;
+#[cfg(test)]
 mod screen_tests;
 #[cfg(test)]
 mod tests;

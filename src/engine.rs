@@ -162,6 +162,10 @@ const WINDOW_WIDTH: i32 = WIDTH * SCALE;
 const FOLLOW_BODY_HEIGHT: i32 = 900;
 /// Fixed simulation step in milliseconds (30 Hz, the original frame rate).
 const TICK_MS: f64 = 1000.0 / 30.0;
+/// The core bank RE 2's title loads (`Title`'s `Snd_load_core(0x10)`).
+const TITLE_CORE_BANK: u8 = 0x10;
+/// The volume `Snd_se_on` gives a core sound on the title (`0x4EDA1E`).
+const TITLE_CORE_VOLUME: u8 = 0x6E;
 /// The original's non-gameplay frame-limiter period in milliseconds.
 ///
 /// The original paces at 33 ms while the game is active and at 16 ms while
@@ -8856,6 +8860,12 @@ struct App {
     prologue_pending: bool,
     /// One-shot cache for the UI cue sounds (`se/cursor.wav`, ...).
     ui_sfx_cache: SfxCache,
+    /// RE 2's sound banks for the screens outside play: the title's core
+    /// bank (`Snd_load_core(0x10)`), loaded on its first cue.
+    ui_banks: Option<crate::se2::Banks>,
+    /// The screens' core-bank cues since the trace last took them, as
+    /// `(kind, slot, volume, pan)`, the trace's `snd` field.
+    ui_sounds: Vec<(u8, u8, u8, i32)>,
     /// Whether the port-only debug room overlay is enabled for the gameplay
     /// sessions this app starts. Enabled by default; `--debug-menu` is
     /// retained for CLI compatibility.
@@ -8942,6 +8952,8 @@ impl App {
             pending_return_title: false,
             prologue_pending: false,
             ui_sfx_cache: SfxCache::default(),
+            ui_banks: None,
+            ui_sounds: Vec::new(),
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
@@ -9127,6 +9139,7 @@ impl App {
     /// (`audio`); capture runs leave `ui_music` closed and the queue is
     /// dropped, so their frames never depend on the sound device.
     fn play_ui_cues(&mut self, cues: Vec<ui::UiCue>) {
+        let cues = self.play_core_cues(cues);
         if cues.is_empty() || !self.audio {
             return;
         }
@@ -9150,6 +9163,55 @@ impl App {
                 mixer.play_menu_sfx(wav);
             }
         }
+    }
+
+    /// Play the RE 2 core-bank cues among `cues` (`Snd_se_on(0x4nn0000)`, at
+    /// the slot's volume, unpanned) and note them for the trace; the other
+    /// cues are returned for [`App::play_ui_cues`].
+    fn play_core_cues(&mut self, cues: Vec<ui::UiCue>) -> Vec<ui::UiCue> {
+        let (core, rest): (Vec<_>, Vec<_>) = cues
+            .into_iter()
+            .partition(|cue| matches!(cue, ui::UiCue::Core(_)));
+        if core.is_empty() {
+            return rest;
+        }
+        let App {
+            pack,
+            ui_banks,
+            ui_sounds,
+            ui_music,
+            ui_sfx_cache,
+            audio,
+            ..
+        } = self;
+        let banks = ui_banks.get_or_insert_with(|| {
+            let mut banks = crate::se2::Banks::new();
+            banks.load_core(pack, TITLE_CORE_BANK);
+            banks
+        });
+        if *audio && ui_music.is_none() {
+            *ui_music = Mixer::open();
+        }
+        for cue in core {
+            let ui::UiCue::Core(slot) = cue else {
+                continue;
+            };
+            let kind = crate::se2::Kind::Core;
+            if banks.stem(kind, slot).is_none() {
+                continue;
+            }
+            // `Snd_se_on` plays a core sound at 0x6E while `0x99CF6C` is
+            // clear, as `Title_init` leaves it until a game starts.
+            let volume = TITLE_CORE_VOLUME;
+            ui_sounds.push((kind.index() as u8, slot, volume, 0));
+            let (Some(mixer), Some(stem)) = (ui_music.as_mut(), banks.stem(kind, slot)) else {
+                continue;
+            };
+            if let Some(wav) = ui_sfx_cache.load_stem(pack, stem.to_string()) {
+                mixer.play_sfx(wav, crate::se2::volume_gain(volume), 0.0);
+            }
+        }
+        rest
     }
 
     /// Open the boot screen.
@@ -10500,6 +10562,9 @@ fn run_ui_impl(
             AppBoot::Boot | AppBoot::Title => {
                 // Reach the option menu, then let the fade settle.
                 app.open_title()?;
+                if trace.path.is_some() {
+                    return run_screen_trace(&mut app, &trace);
+                }
                 if play_app_script(&mut app, &trace)? {
                     return Ok(());
                 }
@@ -10723,6 +10788,97 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
         app.post_present();
     }
     Ok(true)
+}
+
+/// The `--ui title --trace` run: `options.ticks` app updates from the
+/// title's first tick with the scripted `--input`, each followed by a draw,
+/// one trace line and, on the `capture_every` cadence, a `f%05d.bmp` frame.
+/// The line carries the fields the RE 2 oracle's `--boot` record writes for
+/// the title (`ti`, `tlogo`, `tfade`, `snd`), from the values the title's
+/// script publishes; a tick off the title writes `ti=-`.
+fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()> {
+    use std::io::Write as _;
+    let Some(path) = options.path else {
+        return Ok(());
+    };
+    if options.capture_every > 0
+        && let Some(dir) = options.capture_dir
+    {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let file = std::fs::File::create(path)
+        .with_context(|| format!("failed to create {}", path.display()))?;
+    let mut out = std::io::BufWriter::new(file);
+    writeln!(out, "oracle-trace v1 engine=arklay")?;
+    let mut script_input = InputState::default();
+    app.ui_sounds.clear();
+    for index in 0..options.ticks {
+        let word = options.input.map_or(0, |script| script.word_at(index));
+        let tick = script_input.tick_scripted(word);
+        if let AppFlow::Quit = app.update(tick.ui, tick.player, tick.action)? {
+            break;
+        }
+        if let Mode::Play(session) = &mut app.mode {
+            session.movie = None;
+        }
+        app.pending_movie = None;
+        app.draw();
+        let sounds = std::mem::take(&mut app.ui_sounds);
+        writeln!(out, "{}", screen_trace_line(app, index, word, &sounds))?;
+        if options.capture_every > 0 && index % options.capture_every == 0 {
+            write_trace_capture(app, options, index)?;
+        }
+        app.post_present();
+    }
+    out.flush()?;
+    Ok(())
+}
+
+/// One [`run_screen_trace`] line.
+fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)]) -> String {
+    let mut line = format!("t={tick} room=1:0 pad={pad}");
+    if let Mode::Title(screen) = &app.mode {
+        let v = |key: &str| screen.value(key);
+        line.push_str(&format!(
+            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{}",
+            v("ti_fgsys") as u32,
+            v("ti_mv"),
+            v("ti_disp"),
+            v("ti_init"),
+            v("ti_sub"),
+            v("ti_menu"),
+            v("ti_step"),
+            v("ti_sel"),
+            v("ti_cur"),
+            v("ti_pulse"),
+            v("ti_slide"),
+            v("ti_demo"),
+            v("ti_flash"),
+            v("ti_logo"),
+            v("ti_logo_count"),
+            v("ti_fade_level"),
+            v("ti_fade_add"),
+            v("ti_fade_mode"),
+            v("ti_kido"),
+            v("ti_add"),
+        ));
+    } else {
+        line.push_str(" ti=-");
+    }
+    let snd: Vec<String> = sounds
+        .iter()
+        .map(|(kind, slot, volume, pan)| format!("{kind}:{slot:x}:{volume}:{pan}"))
+        .collect();
+    line.push_str(&format!(
+        " snd={}",
+        if snd.is_empty() {
+            "-".to_string()
+        } else {
+            snd.join("/")
+        }
+    ));
+    line
 }
 
 /// Apply the CLI authoring seams to the session an app boot just opened:

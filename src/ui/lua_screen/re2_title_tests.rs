@@ -1,0 +1,93 @@
+//! RE 2's title (`games/re2/ui/title.lua`) over a pack holding only the
+//! script, against the original's trace (`oracle/re2.md`, "The title").
+
+use super::*;
+
+use crate::pack::Pack;
+use crate::ui::{Screen, ScreenAction, UiCue, UiInput};
+
+fn pack() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| {
+        let mut writer = crate::pack::PackWriter::new();
+        writer
+            .add(
+                "ui/title.lua",
+                include_str!("../../../games/re2/ui/title.lua")
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .unwrap();
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    })
+}
+
+fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
+    UiContext {
+        authentic: false,
+        pack: pack(),
+        save_dir: dir,
+        font: None,
+        text: None,
+        ticks: 0,
+        cues: Default::default(),
+        game: None,
+    }
+}
+
+/// The trace's `ti` field from the values the script publishes.
+fn ti(screen: &LuaScreen) -> Vec<i64> {
+    [
+        "ti_mv", "ti_disp", "ti_init", "ti_sub", "ti_menu", "ti_step", "ti_sel", "ti_cur",
+        "ti_pulse", "ti_slide", "ti_demo",
+    ]
+    .iter()
+    .map(|key| screen.value(key))
+    .collect()
+}
+
+fn logo(screen: &LuaScreen) -> [i64; 3] {
+    [
+        screen.value("ti_flash"),
+        screen.value("ti_logo"),
+        screen.value("ti_logo_count"),
+    ]
+}
+
+#[test]
+fn the_title_opens_as_the_boot_reaches_it() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-title-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    // The original's ticks 189 to 191 (`title_menu`): `Title_init`'s white,
+    // step 5's logo slide, then the menu's first tick.
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen), [2, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(logo(&screen), [0, 240, -1]);
+    assert_eq!(screen.value("ti_fade_level"), 0x7F80);
+    assert_eq!(screen.value("ti_fade_mode"), 1);
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen), [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(logo(&screen), [52, -5, 21]);
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen), [2, 1, 1, 0, 0, 1, 0, 0, 2, 0, 1]);
+    assert_eq!(logo(&screen), [50, -8, 20]);
+    assert_eq!(screen.value("ti_fade_level"), 0);
+    // A press of down moves the cursor with the core bank's cursor cue.
+    for _ in 0..60 {
+        screen.update(&cx, UiInput::default());
+    }
+    let held = UiInput {
+        down: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, held);
+    assert_eq!(screen.value("ti_cur"), 1);
+    assert!(cx.cues.borrow().contains(&UiCue::Core(4)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
