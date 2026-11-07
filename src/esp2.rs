@@ -379,6 +379,23 @@ struct Slot {
     blocks: usize,
     /// `+0x14` while it falls: `Sca_ck_hit`'s height, under it at the last look.
     ground: i32,
+    /// `+0x4c`, the matrix `Esp_call` was given, kept for a slot whose
+    /// `0x400` has `Esp_pos` turn the offset by it; and the point on it.
+    hand: Option<([[i16; 3]; 3], [i32; 3])>,
+    local: [i16; 3],
+    /// `+0x42` as a word, as `Esp_1E` sets it: a count for the blocks after.
+    countdown: u16,
+}
+
+/// What `FUN_004d6150` writes over a grenade's first block, and the hand's
+/// matrix and point it was called with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Launch {
+    pub accel: i8,
+    pub velocity: [i16; 3],
+    pub matrix: [[i16; 3]; 3],
+    pub t: [i32; 3],
+    pub point: [i16; 3],
 }
 
 impl Slot {
@@ -427,6 +444,12 @@ pub struct Effects {
     /// The room's water areas, for `Esp_05`'s `Water_ck`: the caller sets them
     /// before a tick.
     pub water: Vec<crate::zombie2::WaterArea>,
+    /// The enemies, for what a grenade hits (`FUN_004d7e30`): the caller sets
+    /// them before a tick, and gives [`Self::blasts`] to the works after.
+    pub bodies: Vec<crate::weapon2::Target>,
+    pub blasts: Vec<crate::weapon2::BlastEffect>,
+    /// The player's `Type & 0xFFF`, which `Esp_11` reads.
+    pub weapon: u8,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -565,6 +588,17 @@ impl Effects {
             }
         }
         Some(first)
+    }
+
+    /// What `FUN_004d6150` writes over a grenade's first block once
+    /// `Esp_call` made it: its `+8` and `+0xc` to `+0x10`.
+    pub fn launch(&mut self, index: usize, launch: Launch) {
+        if let Some(slot) = self.slots.get_mut(index) {
+            slot.accel[0] = launch.accel;
+            slot.velocity = launch.velocity;
+            slot.hand = Some((launch.matrix, launch.t));
+            slot.local = launch.point;
+        }
     }
 
     /// A slot and those that die with it follow a matrix `Esp_call` was given.
@@ -755,6 +789,49 @@ impl Effects {
                     self.behave(index, id, sca);
                 } else {
                     self.slots[index].ground = ground.height;
+                }
+            }
+            0x11 => {
+                let bank = Arc::clone(&self.bank);
+                let delay = bank.sprites.get(&slot.kind).map_or(0, |s| s.frame(0x12)[2]);
+                let weapon = self.weapon;
+                let timer = if weapon & 0x1F == 9 {
+                    self.rnd() % 3 + 10
+                } else {
+                    0xF
+                };
+                let this = &mut self.slots[index];
+                this.generation = weapon.wrapping_sub(9);
+                this.anim = 0x16;
+                this.update = 0x0F;
+                this.flags = 0xB403;
+                this.tpage |= 0x20;
+                this.frame = 0x12;
+                this.delay = delay;
+                this.step = timer;
+                self.grenade_flight(index, sca);
+            }
+            0x0f => self.grenade_flight(index, sca),
+            // `Esp_16`: a puff of smoke left behind each tick, half again its size.
+            0x16 => {
+                let size = (u32::from(slot.size) * 0x96 / 100) as u16;
+                self.call(3, 0x0B, size, 0, slot.pos, true);
+            }
+            0x2f => self.grenade_burst(index),
+            0x13 => self.smoke_fade(index),
+            // `Esp_1E`: on from a random first frame, with `+0x1b` and a count
+            // by the row: 2 and 2 to 9 for row 4, 3 and 700 to 950 otherwise.
+            0x1e => {
+                self.next_block(index, true);
+                let row4 = slot.row == 4;
+                let draw = u16::from(self.rnd());
+                let this = &mut self.slots[index];
+                if row4 {
+                    this.generation = 2;
+                    this.countdown = (draw & 7) + 2;
+                } else {
+                    this.generation = 3;
+                    this.countdown = (draw % 6 + 0xE) * 0x32;
                 }
             }
             // `Esp_10`: start falling, on the ground below.
@@ -1193,6 +1270,207 @@ impl Effects {
         )
     }
 
+    /// `Esp_0F`: a grenade flies on until it reaches the water, hits a body,
+    /// or its time runs out, when it takes the behaviour `+2` names from
+    /// `+0x1b`'s row; against a wall it steps back and takes the one `+3`
+    /// names.
+    fn grenade_flight(&mut self, index: usize, sca: Option<&Sca>) {
+        let slot = self.slots[index];
+        let [x, y, z] = slot.pos.map(i32::from);
+        let level = crate::zombie2::water_ck(&self.water, x, z);
+        let then = |id: u8| (slot.generation as i8 as u8).wrapping_add(id);
+        if level != 0 && level < slot.pos[1] {
+            let pos = &mut self.slots[index].pos;
+            pos[1] = pos[1].wrapping_add(500);
+            let at = *pos;
+            self.call(0x1A, 5, 0x1C00, slot.dir, at, true);
+            self.behave(index, then(slot.start), sca);
+            return;
+        }
+        let timer = slot.step.wrapping_sub(1);
+        let ground = Self::ground(sca, slot.pos);
+        let this = &mut self.slots[index];
+        this.step = timer;
+        let under = ground.height.wrapping_sub(10) as u32;
+        this.ground = under as i32;
+        this.next_tpage = under as u16;
+        this.range = (under >> 16) as u16;
+        let word = 0x3_0009u32.wrapping_add(slot.generation as i8 as u32);
+        let mut rect = [-1400, 0, 350, 250];
+        let mut hit = false;
+        for y in [y + 1000, y - 1000] {
+            let blast = crate::weapon2::Blast {
+                at: [x, y, z],
+                dir: slot.dir,
+                word,
+            };
+            let effects = crate::weapon2::blast_ck(&blast, &mut rect, &mut self.bodies);
+            hit |= effects
+                .iter()
+                .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+            self.blasts.extend(effects);
+        }
+        if hit || timer == 0 {
+            self.slots[index].flags |= 0x80;
+            self.behave(index, then(slot.start), sca);
+            return;
+        }
+        if !ground.blocked && !ground.under_record {
+            return;
+        }
+        let this = &mut self.slots[index];
+        for axis in 0..3 {
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_sub(this.velocity[axis]);
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_add(this.velocity[axis] / -3);
+        }
+        Self::place(this);
+        self.behave(index, then(slot.count), sca);
+    }
+
+    /// `Esp_13`: smoke that hangs (`+0x1b` 3) for its count, shrinks for 30
+    /// to 37 ticks (2), then for 90 to 100 more a little faster (1), and goes
+    /// (0). With `+0x4a` set it also burns a body in reach (`Esp_28`) once
+    /// it's past 15 ticks and wider than the size.
+    fn smoke_fade(&mut self, index: usize) {
+        let slot = self.slots[index];
+        if slot.sway_limit != 0 {
+            if slot.range > 0xF && slot.scale[0] > 0x1000 {
+                self.fire_reach(index);
+            }
+            let this = &mut self.slots[index];
+            this.range = this.range.wrapping_add(1);
+        }
+        let shrink = |this: &mut Slot, across: u32, up: u32| {
+            this.scale[0] = (u32::from(this.scale[0]) * across / 1000) as u16;
+            this.scale[1] = (u32::from(this.scale[1]) * up / 1000) as u16;
+        };
+        match self.slots[index].generation {
+            0 => self.slots[index].kill(),
+            1 => {
+                let this = &mut self.slots[index];
+                if this.countdown == 0 {
+                    this.generation = 0;
+                } else {
+                    this.countdown -= 1;
+                    shrink(this, 0x3DE, 0x3D4);
+                }
+            }
+            2 => {
+                if self.slots[index].countdown == 0 {
+                    let draw = u16::from(self.rnd());
+                    let this = &mut self.slots[index];
+                    this.generation = 1;
+                    this.countdown = draw % 0xB + 0x5A;
+                } else {
+                    let this = &mut self.slots[index];
+                    this.countdown -= 1;
+                    shrink(this, 0x3F1, 0x3EA);
+                }
+            }
+            3 => {
+                if self.slots[index].countdown != 0 {
+                    self.slots[index].countdown -= 1;
+                } else {
+                    let draw = u16::from(self.rnd());
+                    let this = &mut self.slots[index];
+                    this.generation = 2;
+                    this.countdown = (draw & 7) + 0x1E;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `Esp_28`: a flame round's fire burns the first body in reach (the
+    /// weapon 0xA's third field), and stops spreading.
+    fn fire_reach(&mut self, index: usize) {
+        let slot = self.slots[index];
+        let at = slot.pos.map(i32::from);
+        let blast = crate::weapon2::Blast {
+            at: [at[0], at[1] - 100, at[2]],
+            dir: slot.dir,
+            word: 0x2002_000A,
+        };
+        let effects = crate::weapon2::blast_ck(&blast, &mut [-600, 0, 300, 150], &mut self.bodies);
+        let hit = effects
+            .iter()
+            .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+        self.blasts.extend(effects);
+        if hit {
+            let this = &mut self.slots[index];
+            this.start = 0x40;
+            this.count = 0;
+            this.velocity[0] = 0;
+            this.accel[0] = 0;
+            this.next_flags &= !2;
+        }
+    }
+
+    /// `Esp_2F`: a grenade's burst. The first tick it hurts the nearest body
+    /// below and above, and sets off the fire and smoke; four ticks on, the
+    /// last cloud, and it's gone.
+    fn grenade_burst(&mut self, index: usize) {
+        let slot = self.slots[index];
+        match slot.next_flags {
+            0 => {
+                let this = &mut self.slots[index];
+                this.flags = 0x8400;
+                this.anim = 0;
+                this.update = 0x2F;
+                let at = slot.pos.map(i32::from);
+                if slot.row == 0x0C {
+                    self.sounds.push((0x111_0001, slot.pos));
+                    let mut rect = [-2000, 0, 1000, 500];
+                    for y in [at[1], at[1] + 900] {
+                        let blast = crate::weapon2::Blast {
+                            at: [at[0], y, at[2]],
+                            dir: slot.dir,
+                            word: 0x1002_0009,
+                        };
+                        let effects = crate::weapon2::blast_ck(&blast, &mut rect, &mut self.bodies);
+                        self.blasts.extend(effects);
+                    }
+                } else {
+                    self.sounds.push((0x114_0001, slot.pos));
+                }
+                if slot.step == 0xFF {
+                    let pos = &mut self.slots[index].pos;
+                    pos[1] = pos[1].wrapping_sub(0x1D6);
+                }
+                let pos = self.slots[index].pos;
+                let size = (u32::from(slot.row) * 0xA00).wrapping_sub(0x7800) & 0xFFFF;
+                for word in [
+                    (size + 0x1700) | 0x31F_0000,
+                    (size + 0x1F00) | 0x40C_0000,
+                    (size + 0x1700) | 0x41D_0000,
+                ] {
+                    self.call(
+                        (word >> 24) as u8,
+                        (word >> 16) as u8,
+                        word as u16,
+                        0,
+                        pos,
+                        true,
+                    );
+                }
+                self.slots[index].next_flags = 1;
+            }
+            1..=3 => self.slots[index].next_flags += 1,
+            4 => {
+                if slot.step == 0xFF {
+                    let pos = &mut self.slots[index].pos;
+                    pos[1] = pos[1].wrapping_sub(600);
+                }
+                let pos = self.slots[index].pos;
+                self.call(4, 0x15, 0x2700, 0, pos, true);
+                self.slots[index].kill();
+            }
+            _ => {}
+        }
+    }
+
     /// The end of `Esp_2C` and `Esp_2D`: a little sideways, and the sound of it.
     fn bounce(&mut self, index: usize) {
         self.slots[index].velocity[2] = i16::from(self.rnd() & 3) * 3;
@@ -1241,6 +1519,16 @@ impl Effects {
         slot.last_pos = slot.pos;
         let [x, y, z] = slot.offset.map(i32::from);
         let [bx, by, bz] = slot.base;
+        if let (true, Some((m, t))) = (slot.flags & FLAG_NO_TURN != 0, slot.hand) {
+            let at: [i32; 3] = std::array::from_fn(|axis| {
+                i32::from(slot.local[axis].wrapping_add(slot.offset[axis]))
+            });
+            slot.pos = std::array::from_fn(|axis| {
+                let turned: i32 = (0..3).map(|i| i32::from(m[axis][i]) * at[i]).sum();
+                t[axis].wrapping_add(turned >> 12) as i16
+            });
+            return;
+        }
         if slot.flags & FLAG_NO_TURN != 0 {
             slot.pos = [
                 bx.wrapping_add(x as i16),

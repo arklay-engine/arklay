@@ -614,6 +614,27 @@ pub fn take_hit(
     zombie.damage_cnt = (zombie.damage_cnt & 0x80) | hit.count;
 }
 
+/// What a `FUN_004d7e30` writes to a body it tested or hit.
+pub fn take_blast(
+    character: &mut Character,
+    zombie: &mut Zombie,
+    blast: &crate::weapon2::BlastEffect,
+) {
+    let hit = match blast {
+        crate::weapon2::BlastEffect::Tested(_) => {
+            zombie.damage_flg &= 0xFF00;
+            return;
+        }
+        crate::weapon2::BlastEffect::Hit(hit) => hit,
+    };
+    zombie.life = zombie.life.wrapping_sub(hit.damage);
+    let dead = zombie.life < 0;
+    character.work.routine = [if dead { 3 } else { 2 }, hit.weapon, 0, 0];
+    zombie.damage_flg = zombie.damage_flg & 0xFF00 | u16::from(hit.flags);
+    zombie.damage_no = hit.damage_no;
+    zombie.damage_cnt = (zombie.damage_cnt & 0x80) | hit.count;
+}
+
 impl Zombie {
     /// The script's fields, for another work that reads them.
     pub fn vars(&self) -> [i32; VARS] {

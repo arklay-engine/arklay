@@ -779,8 +779,27 @@ local function bleed_shotgun(e, last)
     e:set_var(C231, (e:var(C231) + 1) & 0xFF)
 end
 
--- `FUN_0046af30`: a hit's blood, by the weapon. Weapons 9 to 0x13 aren't
--- fired in arklay, so only their rows that need no other effect are here.
+-- `FUN_0046b540`: four of effect `kind`'s `row` about the head (part 7),
+-- each from a point a little either way across and turned at random.
+local HEAD_BURSTS <const> = {
+    { 0, -400, 0, 0x2000 },
+    { 300, -300, 900, 0x2000 },
+    { -600, -200, -1000, 0x2000 },
+    { -400, -400, 200, 0x2800 },
+}
+
+local function head_burst(e, kind, row)
+    for _, point in ipairs(HEAD_BURSTS) do
+        local x = i8(e:rnd()) * 2 + point[1]
+        local dir = i8(e:rnd()) << 4
+        local wx, wy, wz = e:drawn_part_point(7, x, point[2], point[3])
+        e:call_effect(kind, row, point[4], i16(dir), i16(wx), i16(wy), i16(wz))
+    end
+end
+
+-- `FUN_0046af30`: a hit's blood, by the weapon. The blasts' rows also take
+-- the colours of 0x17 parts down to 0x60 (`FUN_0046b840`), which isn't
+-- ported, and the spark shot's (0xE, `FUN_0046b750`) isn't either.
 local function hit_blood(e)
     e:set_var(C231, 0)
     local weapon = e:var(HIT_BY)
@@ -792,6 +811,10 @@ local function hit_blood(e)
         bleed_shotgun(e, 4)
     elseif weapon == 8 then
         bleed_shotgun(e, 6)
+    elseif weapon == 9 or weapon == 0xA or weapon == 0x10 or weapon == 0x11 or weapon == 0x13 then
+        head_burst(e, 5, 4)
+    elseif weapon == 0xB then
+        head_burst(e, 4, 9)
     elseif weapon == 0x12 then
         bleed(e, 4, 0x2800, false)
     end

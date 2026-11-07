@@ -702,6 +702,21 @@ local function die_head(e)
     end
 end
 
+-- `FUN_00456a00`: a grenade's smoke off the body, and off the head's part 3
+-- while it's drawn. The darker colours it gives ten of the parts aren't ported.
+local function blast_smoke(e)
+    effect(e, 5, 3, 0x2710, angle(e), 0, 0, 200, 0)
+    if e:hidden_parts() & (1 << 3) == 0 then
+        effect(e, 5, 3, 0x13E8, angle(e), 3, 0, 200, 0)
+    end
+end
+
+-- The grenade's rounds and the rocket's: what `FUN_00456a00` is called for.
+local function blasted(e)
+    local weapon = e:routine(WEAPON)
+    return (weapon == 9 or weapon == 0x11) and e:kind() & TYPE_BURNT == 0
+end
+
 -- `FUN_00459780`: thrown down where it stands, sliding away from the shot.
 -- `Routine_1` of 0xC, the bowgun's, isn't ported.
 local function die_thrown(e)
@@ -931,6 +946,11 @@ local function die_standing(e)
         hit_blood(e, 0x1FA0, 0, angle(e))
         death_cry(e)
         e:set_timer(3, 0)
+        -- The flame and acid rounds' branches, and the spark shot's and the
+        -- flamethrower's, aren't ported.
+        if blasted(e) then
+            blast_smoke(e)
+        end
         e:set_speed_x(0xB)
     elseif routine == 2 then
         e:routines(7, 0, 0, 0)
@@ -1026,14 +1046,23 @@ local function die_torn(e)
     end
     local routine = e:routine(2)
     if routine == 0 then
-        if e:rnd() & 3 ~= 0 and not e:shot_high() then
+        local weapon = e:routine(WEAPON)
+        local blast = weapon == 9 or weapon == 0x11
+        if e:rnd() & 3 ~= 0 and not e:shot_high() and not blast then
+            e:set_var(BLAST, 1)
+            die_thrown(e)
+            return
+        end
+        if blasted(e) then
+            blast_smoke(e)
+        end
+        local shift = e:rnd() & 7
+        if (e:rnd() >> shift) & 3 ~= 0 and weapon == 9 then
             e:set_var(BLAST, 1)
             die_thrown(e)
             return
         end
         e:keep_arms()
-        e:rnd()
-        e:rnd()
         drop_flag(e, FLAG_FACE_DOWN)
         local back = e:damage_flg() & 0x20 ~= 0
         e:set_timer(3, back and 1 or 0)
@@ -1139,6 +1168,24 @@ local function die_rising(e)
     end
 end
 
+-- `funcs_458795`: `Em10_Die`'s routine by `Routine_1`, then `Damage_no`. The
+-- original's empty cells are never reached; a weapon not here stands to die.
+local DIES <const> = (function()
+    local S, D5, H, D2, T, TH, C = die_standing, dm05, die_head, dm02, die_torn, die_thrown, die_crawling
+    local magnum = { D5, H, S, D5, H, S, D5, H, S }
+    local rows = {
+        [5] = magnum,
+        [6] = magnum,
+        [7] = { D5, D2, S, D5, S, S, D5, S, S },
+        [8] = { D5, T, S, D5, TH, S, D5, S, S },
+        [9] = { D5, T, T, S, S, S, S, S, S },
+        [0xC] = { S, TH, S, S, TH, S, S, TH, S },
+        [0x11] = { D5, T, S, D5, TH, S, D5, S, S },
+        [0x13] = { C, C, C, C, C, C, C, C, C },
+    }
+    return rows
+end)()
+
 -- `Em10_Die`.
 local function em10_die(e)
     e:let_go()
@@ -1148,25 +1195,16 @@ local function em10_die(e)
     elseif has_flag(e, FLAG_RISING) then
         die_rising(e)
     elseif not has_flag(e, FLAG_DOWN) then
-        -- `funcs_458795`.
-        local weapon = e:routine(1)
-        local no = e:damage_no()
-        if weapon >= 5 and weapon <= 8 and (no == 0 or no == 3 or no == 6) then
-            dm05(e)
-        elseif weapon == 5 or weapon == 6 then
-            die_head(e)
-        elseif weapon == 7 and no == 1 then
-            dm02(e)
-        elseif weapon == 8 and no == 1 then
-            die_torn(e)
-        elseif weapon == 8 and no == 4 then
-            die_thrown(e)
-        else
-            die_standing(e)
-        end
+        local row = DIES[e:routine(WEAPON)]
+        local die = row and row[e:damage_no() + 1] or die_standing
+        die(e)
     else
         blood(e, 0, 8000, 0, 0, 0, 0, 0)
         sound_either(e, 0xB, 0xD)
+        -- The other weapons' calls here aren't ported.
+        if blasted(e) then
+            blast_smoke(e)
+        end
         e:routines(7, 9, 0, 0)
     end
 end

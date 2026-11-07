@@ -1029,6 +1029,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                             music_log.write(f"bgm_tbl {game.read(BGM_TBL, 284).hex()}\n")
                         for flag in args.flag:
                             set_flag(game, flag)
+                        if args.equip_load is not None:
+                            # Held before the warp's door, so the room's load
+                            # brings in its weapon files.
+                            game.write(EQUIPPED, bytes((0, 0, args.equip_load)))
+                            game.write(PL + PL_WEAPON, struct.pack("<H", args.equip_load))
                         if args.warp:
                             warp(game, args.warp)
                         for item in args.give:
@@ -1374,6 +1379,10 @@ def main() -> int:
         command.add_argument(
             "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",
             help="hold this weapon from the moment play is settled; give its slot with --give",
+        )
+        command.add_argument(
+            "--equip-load", type=lambda text: int(text, 0), default=None, metavar="ID",
+            help="hold this weapon before --warp's door, so the room loads its files; give its slot with --give",
         )
         command.add_argument(
             "--life", type=int, default=None, metavar="N",

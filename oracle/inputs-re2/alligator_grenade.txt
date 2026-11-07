@@ -1,0 +1,41 @@
+# room 40A: after the scene, turn round to face the alligator and fire the grenade launcher every 40 ticks (oracle/re2.md)
+820 right
+852
+854 aim
+900 aim fire
+904 aim
+940 aim fire
+944 aim
+980 aim fire
+984 aim
+1020 aim fire
+1024 aim
+1060 aim fire
+1064 aim
+1100 aim fire
+1104 aim
+1140 aim fire
+1144 aim
+1180 aim fire
+1184 aim
+1220 aim fire
+1224 aim
+1260 aim fire
+1264 aim
+1300 aim fire
+1304 aim
+1340 aim fire
+1344 aim
+1380 aim fire
+1384 aim
+1420 aim fire
+1424 aim
+1460 aim fire
+1464 aim
+1500 aim fire
+1504 aim
+1540 aim fire
+1544 aim
+1580 aim fire
+1584 aim
+1600
