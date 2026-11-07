@@ -224,6 +224,9 @@ impl UserData for Api {
             e.em().work().neck.flags = 0;
             Ok(())
         });
+        // A point given on `part`'s matrix as this tick's frame poses it, or
+        // nils without a pose of it (`drawn_part_point` reads the last
+        // draw's).
         methods.add_method_mut(
             "part_point",
             |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
@@ -1195,14 +1198,16 @@ impl UserData for Api {
                 Ok(())
             },
         );
-        // A point given on `part`'s matrix, as the last draw left it, in the
-        // world (`Rot_add_matrix`'s translation); and back (`MulLMatrix`'s).
+        // A point given on `part`'s matrix as the last draw left it (`Workm`),
+        // in the world (`Rot_add_matrix`'s translation), or nils before the
+        // first draw; `part_point` poses the part on this tick's frame instead.
+        // And back (`MulLMatrix`'s).
         methods.add_method_mut(
             "drawn_part_point",
             |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
                 let matrix = e.em().z.parts.get(part).copied().flatten();
                 let Some(matrix) = matrix else {
-                    return Ok((x, y, z));
+                    return Ok((None, None, None));
                 };
                 let at = [x, y, z];
                 let [wx, wy, wz] = std::array::from_fn(|row| {
@@ -1211,7 +1216,7 @@ impl UserData for Api {
                         .sum();
                     matrix.t[row].wrapping_add((turned >> 12) as i32)
                 });
-                Ok((wx, wy, wz))
+                Ok((Some(wx), Some(wy), Some(wz)))
             },
         );
         methods.add_method_mut(
@@ -1382,28 +1387,6 @@ impl UserData for Api {
                 .map_or([0; 3], |matrix| matrix.t);
             Ok((t[0], t[1], t[2]))
         });
-        // A point along a part as the last draw left it (`Workm`), or nils
-        // before the first draw.
-        methods.add_method_mut(
-            "own_part_point",
-            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
-                let point = [x, y, z];
-                Ok(e.em()
-                    .z
-                    .parts
-                    .get(part)
-                    .copied()
-                    .flatten()
-                    .map_or((None, None, None), |m| {
-                        let [x, y, z] = std::array::from_fn(|axis| {
-                            let turned: i32 =
-                                (0..3).map(|i| i32::from(m.m[axis][i]) * point[i]).sum();
-                            m.t[axis] + (turned >> 12)
-                        });
-                        (Some(x), Some(y), Some(z))
-                    }))
-            },
-        );
         // `Neck_no`'s turn (`+0x98`).
         methods.add_method_mut("neck_turn", |_, e, ()| Ok(e.em().work().neck.turn[0]));
         methods.add_method_mut("set_neck_turn", |_, e, turn: i16| {
@@ -1695,6 +1678,79 @@ impl UserData for Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The names a source registers through `add_method`, `add_function` or
+    /// their `_mut` forms, in order.
+    fn registered_names(source: &str) -> Vec<&str> {
+        let mut names = Vec::new();
+        for (at, _) in source.match_indices(".add_") {
+            let rest = &source[at + ".add_".len()..];
+            let kind_len = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            if !matches!(
+                &rest[..kind_len],
+                "method" | "method_mut" | "function" | "function_mut"
+            ) {
+                continue;
+            }
+            let Some(args) = rest[kind_len..].strip_prefix('(') else {
+                continue;
+            };
+            let Some(quoted) = args.trim_start().strip_prefix('"') else {
+                continue;
+            };
+            if let Some(end) = quoted.find('"') {
+                names.push(&quoted[..end]);
+            }
+        }
+        names
+    }
+
+    fn repeated_names<'a>(names: &[&'a str]) -> Vec<&'a str> {
+        let mut seen = std::collections::HashSet::new();
+        names
+            .iter()
+            .copied()
+            .filter(|name| !seen.insert(*name))
+            .collect()
+    }
+
+    /// mlua keeps the last of two methods registered under one name, so a
+    /// second registration silently replaces the first for every script.
+    #[test]
+    fn no_enemy_script_method_is_registered_twice() {
+        for (file, source) in [
+            ("src/zombie2/script.rs", include_str!("script.rs")),
+            ("src/enemy/lua.rs", include_str!("../enemy/lua.rs")),
+        ] {
+            // The tests' own samples below aren't registrations.
+            let code = source.split("#[cfg(test)]").next().unwrap_or(source);
+            let names = registered_names(code);
+            assert!(
+                names.len() > 100,
+                "{file}: only {} names found",
+                names.len()
+            );
+            assert_eq!(repeated_names(&names), Vec::<&str>::new(), "{file}");
+        }
+    }
+
+    #[test]
+    fn the_registration_scan_finds_a_repeated_name() {
+        let source = r#"
+            methods.add_method_mut("pos", |_, e, ()| Ok(()));
+            methods.add_method(
+                "part_point",
+                |_, e, ()| Ok(()),
+            );
+            methods.add_function("pos", |_, ()| Ok(()));
+            methods.add_meta_method(MetaMethod::ToString, |_, e, ()| Ok(()));
+        "#;
+        let names = registered_names(source);
+        assert_eq!(names, ["pos", "part_point", "pos"]);
+        assert_eq!(repeated_names(&names), ["pos"]);
+    }
 
     const SCRIPTS: [&str; 10] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),

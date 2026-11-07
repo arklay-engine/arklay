@@ -478,7 +478,7 @@ local STEP_NEAR <const> = { 0x1F4, 0x183, 0 }
 local STEP_FAR <const> = { 0x3E8, 0x183, 0 }
 
 local function drawn_arm_reaches(e, point, within)
-    local x, _, z = e:own_part_point(ARM, point[1], point[2], point[3])
+    local x, _, z = e:drawn_part_point(ARM, point[1], point[2], point[3])
     if x == nil then
         return false
     end
@@ -859,7 +859,7 @@ local function hit_blood(e, weapon)
         vy = i16(0x3BC - e:rnd() * 2)
     end
     local x, y, z = e:rot_apply(0, dir, 0, 100, vy, vz)
-    local px, py, pz = e:own_part_point(1, 0, 0, 0)
+    local px, py, pz = e:drawn_part_point(1, 0, 0, 0)
     if px == nil then
         px, py, pz = e:pos()
     end
@@ -898,7 +898,7 @@ local function spurt(e)
         sx, _, sz = e:rot_apply(0, dir, 0, -100, -500, 0)
     end
     local bx, _, bz = e:pos()
-    local _, part_y = e:own_part_point(2, 0, 0, 0)
+    local _, part_y = e:drawn_part_point(2, 0, 0, 0)
     local y = i16((part_y or 0) + oy)
     local function drop(x, z, step)
         local size = (0x65C - step * count) - e:rnd()
