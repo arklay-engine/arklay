@@ -1,0 +1,17 @@
+# room 200: take the 30 handgun rounds on the counter, then fire the handgun's last round, fire on empty, which reloads 18 from them, fire twice more and lower (oracle/re2.md, "Weapons")
+364 action
+368
+600 action
+604
+800 action
+804
+880 aim
+920 aim fire
+924 aim
+980 aim fire
+984 aim
+1100 aim fire
+1104 aim
+1160 aim fire
+1164 aim
+1220

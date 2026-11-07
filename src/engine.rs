@@ -1873,6 +1873,10 @@ const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 /// next, and the room's return and the main task's states take three more;
 /// every recording closes in the same ten.
 const RE2_STATUS_CLOSE_TICKS: u8 = 10;
+/// The status screen's open tick from which `Cut_no` reads 0.
+const RE2_STATUS_CUT_TICK: u8 = 6;
+/// The close's tick on which `Cut_no` is the room's again.
+const RE2_STATUS_UNCUT_TICK: u8 = 8;
 /// The open's tick on which the item box's page starts (`St_init01`'s step
 /// 0, after its loads).
 const RE2_BOX_START: u8 = 6;
@@ -4757,6 +4761,22 @@ impl GameSession {
         Some(re2_item_get_view(self.re2_item_ticks, closing))
     }
 
+    /// `Cut_no` for the trace: the get-item window's, and the status
+    /// screen's, which clears it from the open's sixth tick to the close's
+    /// eighth, as the window does, while the room isn't drawn.
+    fn re2_trace_cut(&self) -> usize {
+        let cut = self.game.re2_item_get_cut(self.loaded.room.current_cut);
+        if self.menu.is_none() || !self.game.is_re2_room {
+            return cut;
+        }
+        let cleared = match (self.re2_status_open, self.re2_status_close) {
+            (_, Some(close)) => close < RE2_STATUS_UNCUT_TICK,
+            (Some(open), None) => open >= RE2_STATUS_CUT_TICK,
+            (None, None) => false,
+        };
+        if cleared { 0 } else { cut }
+    }
+
     /// What RE2's status screen draws this frame, while it is up: the room
     /// or the screen and the fade over it.
     fn re2_status_view(&self) -> Option<Re2StatusView> {
@@ -5869,6 +5889,9 @@ impl GameSession {
                 // `Obj_model_set` on a slot in use would take it away.
                 let objects = self.game.objects.records.len();
                 self.game.objects.reset(objects);
+                // Nor does a scene the first pass started run on: what it put
+                // up in `fg_stop` (room 200's entry holding the input) goes.
+                *self.game.re2.fg_stop_mut() = 0;
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -7463,7 +7486,7 @@ impl GameSession {
             rseed,
             fade_counter: fade_counter as i16,
             fade_state,
-            cam: self.game.re2_item_get_cut(self.loaded.room.current_cut) as u8,
+            cam: self.re2_trace_cut() as u8,
             player_flags: self.game.player_flags,
             re2_player: self
                 .game

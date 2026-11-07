@@ -1322,6 +1322,16 @@ impl GameHost<'_> {
             params[..5].copy_from_slice(&[data[0], data[2], data[4], model, action]);
         } else {
             params[..6].copy_from_slice(&data);
+            // `Aot_reset` writes only the area's first three data words: an
+            // item's object and action bytes stay for a later reset to an
+            // item (room 101's shotgun, off at the load and back on Kendo's
+            // second check, is still picked up crouching).
+            let kept = if old.kind == RoomActionKind::Item {
+                [old.params[3], old.params[4]]
+            } else {
+                [old.params[6], old.params[7]]
+            };
+            params[6..].copy_from_slice(&kept);
         }
         self.game.room_actions[slot] = Some(area_action(
             slot as u8,
@@ -1795,10 +1805,20 @@ impl Host for GameHost<'_> {
             "aot_on" => {
                 if let Some(Some(action)) = self.game.room_actions.get(at(0) as usize).copied() {
                     self.game.fire_re2_area(action);
+                    // The scripts run after `Player_move`, and a crouching
+                    // pick-up's `Sce_Item` sets the routine there and then.
+                    if self.game.re2_crouch_start {
+                        self.game.tick_re2_crouch();
+                    }
                 }
             }
             "message_on" => {
                 self.game.show_re2_message(at(1) as u8);
+                // Its last two bytes, a word, are the `fg_stop` bits the
+                // message holds up while it shows: `0xFFFF` on a check in
+                // play, none in a scene.
+                let stop = u16::from_le_bytes([at(3) as u8, at(4) as u8]);
+                self.game.hold_re2_message_stop(stop);
             }
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
@@ -3082,6 +3102,56 @@ mod tests {
         assert_eq!(game.re2.player.routine, [1, 0, 0, 0]);
         assert_eq!((game.re2.player.move_no, game.re2.player.move_cnt), (2, 1));
         assert_eq!(game.item_count(0x14), 30);
+    }
+
+    #[test]
+    fn room_101s_shotgun_is_picked_up_crouching_from_the_scripts() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.player.routine = [1, 0, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        // Room 101's `main_00`: the shotgun's area, put out at once.
+        let set = [
+            11, 2, 49, 0, 0, -17422, -15899, 2000, 2000, 7, 5, 15, 255, 1,
+        ];
+        host.exec(0, lookup(0x4E).unwrap(), &set);
+        host.exec(0, lookup(0x46).unwrap(), &[11, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // `main_1D`, Kendo's second check: its first three words back, with
+        // four shells, and the area run.
+        host.exec(0, lookup(0x46).unwrap(), &[11, 2, 49, 7, 0, 4, 0, 15, 0]);
+        host.exec(0, lookup(0x47).unwrap(), &[11]);
+        // The action byte stayed: a crouch, set in the scripts' pass.
+        assert!(game.re2_item_get.is_none());
+        assert_eq!(game.re2.player.routine, [1, 6, 0, 0]);
+        game.re2.player.item_window = true;
+        game.tick_re2_crouch();
+        let (taken, _, _) = take_through_the_window(&mut game, false);
+        assert!(taken.is_some());
+        assert_eq!(game.item_count(7), 4);
+        // The close holds the next tick's keys, as a door's does.
+        assert!(game.re2.door_key_stop);
+    }
+
+    #[test]
+    fn a_checks_message_holds_fg_stop_until_it_is_dismissed() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        *game.re2.fg_stop_mut() = 0x0100_0000;
+        let mut host = GameHost { game: &mut game };
+        // A scene's line holds nothing.
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+        game.cancel_message();
+        // Kendo's body: `message_on(0, 18, 0, 255, 255)`.
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 18, 0, 255, 255]);
+        assert!(game.message.active);
+        assert_eq!(*game.re2.fg_stop_mut(), 0xFFFF_0000);
+        assert!(game.re2.player_stopped());
+        game.cancel_message();
+        assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
     }
 
     #[test]

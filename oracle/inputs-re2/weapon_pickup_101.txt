@@ -1,0 +1,176 @@
+# route_100_200.txt to room 101's counter, then into areas 3 and 2, which start the zombies' attack on Kendo; check his body twice and take the shotgun, take the handgun rounds on both shelves, EQUIP the shotgun, fire it out at each tilt and fire twice on empty (oracle/re2.md, "Weapons")
+0 up run
+25 right
+26 right
+27 up run
+52 up run
+65 right
+77 right
+85 up
+91 left
+103 left
+112 up run
+137 up run
+162 up run
+187 left
+188 left
+189 up run
+214 up run
+227 left
+239 left
+250 up
+256 right
+268 right
+271 up run
+288 right
+300 right
+311 up
+317 left
+329 left
+341 left
+342 up run
+367 up run
+392 left
+393 left
+394 up run
+419 left
+431 left
+443 up
+449 left
+461 left
+463 up
+469 left
+471 up
+475 left
+477 left
+478
+480 confirm
+482
+700 up
+760
+790 confirm
+792
+1300 up
+1330
+2480 down
+2482
+2490 left
+2540 up
+2680
+2685 right
+2690 up
+2895
+2900 left
+2904 up
+2980
+2995 left
+3008
+3012 up
+3074
+3080 right
+3106
+3110 up
+3160
+3700 left
+3702
+3705 up
+3733
+3745 right
+3755
+3758 up
+3820
+3832 left
+3838
+3841 up
+3922
+3934 left
+3945
+3948 up
+3968
+3980 right
+3999
+4010 action
+4014
+4090 action
+4094
+4150 action
+4154
+4400 action
+4404
+4600 action
+4604
+4620 right
+4629
+4632 up
+4700
+4712 right
+4727
+4730 up
+4807
+4819 left
+4829
+4832 up
+4875
+4887 left
+4901
+4904 up
+4978
+4995 right
+5006
+5015 action
+5019
+5260 action
+5264
+5460 action
+5464
+5475 right
+5489
+5492 up
+5555
+5567 right
+5574
+5577 up
+5627
+5639 right
+5641
+5644 up
+5658
+5672 left
+5678
+5688 action
+5692
+5930 action
+5934
+6130 action
+6134
+6150 left
+6173
+6176 up
+6231
+6251 start
+6255
+6287 down
+6291
+6307 confirm
+6311
+6327 confirm
+6331
+6367 start
+6371
+6427 aim
+6467 aim fire
+6471 aim
+6527 aim up
+6557 aim up fire
+6561 aim up
+6627 aim down
+6657 aim down fire
+6661 aim down
+6727 aim
+6757 aim fire
+6761 aim
+6857 aim fire
+6861 aim
+6917 aim fire
+6921 aim
+6981

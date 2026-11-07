@@ -199,6 +199,64 @@ boxes = [[0, 165, 232, 240]]
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 2:7:5 --give 3:0x15:10"
 
+# Room 101's pick-ups from a new game: the shotgun from Kendo's body after the zombies' attack, and the
+# handgun rounds on both shelves; then the shotgun fired out (oracle/re2.md, "Weapons"). No sound: the
+# attack's voice lines end by DirectSound's clock in a --sound record ("On Windows").
+[[run]]
+name = "weapon_pickup_101"
+room = "new"
+offset = 0
+sound = false
+ticks = 7100
+setup_script = "route_100_200.lua"
+input = "weapon_pickup_101.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,em"
+# room 100's door, and the head after each get-item window and the status screen's close, 1 to 3 units
+# high on the first ticks (oracle/re2.md, docs/re2-deviations.md, "The head after the get-item window")
+ignore = [
+    [790, "rng"],
+    [790, "rseed"],
+    [4611, "pneck"],
+    [4612, "pneck"],
+    [4613, "pneck"],
+    [4614, "pneck"],
+    [4615, "pneck"],
+    [5471, "pneck"],
+    [5472, "pneck"],
+    [5473, "pneck"],
+    [5474, "pneck"],
+    [5475, "pneck"],
+    [5476, "pneck"],
+    [5477, "pneck"],
+    [5478, "pneck"],
+    [6141, "pneck"],
+    [6142, "pneck"],
+    [6143, "pneck"],
+    [6144, "pneck"],
+    [6145, "pneck"],
+    [6377, "pneck"],
+    [6378, "pneck"],
+    [6379, "pneck"],
+    [6380, "pneck"],
+    [6381, "pneck"],
+]
+expect = "match"
+record = "--no-enemies --keep-enemy-in 101:0 --flag 4:135"
+
+# Room 200's handgun rounds on the counter, then a reload from them (oracle/re2.md, "Weapons").
+[[run]]
+name = "weapon_pickup_200"
+room = "200"
+setup_script = "weapon_pickup_200.lua"
+input = "weapon_pickup_200.txt"
+input_shift = 344
+ticks = 1300
+fields = "item"
+# no frames: from the warp the original's cut 0 is scrolled about 22 lines up, where arklay's --room start
+# has it at 0 (oracle/re2.md, "Weapons"); the reference keeps them
+expect = "match"
+record = "--no-enemies --warp 200:-8950:-1800:-700:3072 --flag 4:6 --life 200 --give 0:2:1"
+
 [[run]]
 name = "run_118"
 room = "102"
