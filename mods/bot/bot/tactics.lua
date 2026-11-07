@@ -773,6 +773,21 @@ end
 
 -- Whether the planner's walks should plan around the monsters: a run
 -- decision is in force, or the bot is sourcing ammunition.
+-- Whether combat would open a fight with enemy `id` (knowledge health,
+-- the room's live one when `health` is given): the gun firearm() picks,
+-- with the rounds the reserve leaves, has a band for it. Seed 4 took 30C's
+-- optional tiger fight holding grenades the Tyrant's reserve kept back, and
+-- combat ran past the tiger for 9000 ticks.
+function BotTactics.armed_for(bot, id, health)
+    local k = bot:knowledge()
+    local entry = k and k.enemies[id]
+    if not (entry and entry.keep) then
+        return false
+    end
+    local gun = firearm(bot, k, { id = id, slot = -1, health = health or entry.health })
+    return gun ~= nil and entry.keep[gun] ~= nil and not k.weapons[gun].melee
+end
+
 function BotTactics.avoiding()
     local s = state()
     return s.sourcing == true or (s.avoid_until or 0) > (s.now or 0)
@@ -1744,9 +1759,12 @@ function BotTactics.step(bot, scene, player)
         s.space = nil
     end
 
-    -- A swing or shot roots the bot, and a raised aim takes ticks to drop:
-    -- neither while a spitter may lock onto it. Face the target, aim down.
-    if BotTactics.spit_holds_fire(bot, player) then
+    -- A knife swing roots the bot about 25 ticks, and a raised aim takes
+    -- ticks to drop: neither while a spitter may lock onto it. Face the
+    -- target, aim down. A gun fires: holding it too, seeds 1 to 15 dodged
+    -- 30C's tiger for 9000 ticks without a shot and were bitten every fourth
+    -- dodge.
+    if melee and BotTactics.spit_holds_fire(bot, player) then
         s.aim_ticks = 0
         bot:face_to(target.x, target.z)
         return true
