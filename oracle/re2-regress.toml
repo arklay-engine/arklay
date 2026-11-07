@@ -1224,6 +1224,20 @@ expect = "match"
 record = "--warp 509:13248:-1800:-16378:3480:5 --flag 4:99 --life 200"
 
 [[run]]
+name = "g2_scene_509"
+room = "509"
+character = 0
+sound = false
+ticks = 981
+# room 509's scene: the player stands on the ground floor in the area that starts it (a warp, since the lift arrives on floor 1), and G2 changes and climbs down; it ends as G2 leaves routine 7 for the fight
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 200, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_scene_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 200"
+
+[[run]]
 name = "route_claire_a_fight"
 room = "new"
 character = 1

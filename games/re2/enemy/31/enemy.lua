@@ -6,8 +6,9 @@
 -- move runs by `Type & 0x3f`: 0 and 3 run `funcs_4908BB` (`0x52a480`) before
 -- the clip and `funcs_4908D2` (`0x52a4a8`) after it, by `Routine_1`. Of
 -- those, routine 7 (`0x4930b0`) is the change that room 509's scene starts:
--- it waits on clip 19 until the room's script raises `Sce_free0`'s bit 0.
--- The change itself and the fight aren't ported yet.
+-- it waits on clip 19 until the room's script raises `Sce_free0`'s bit 0,
+-- then changes and climbs down to the floor for the fight (routine 1), which
+-- isn't ported yet.
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
 -- `e:set_var` are the fields of the original's work that the engine doesn't
@@ -31,6 +32,10 @@ local W1 <const> = 12
 local W2A <const> = 13
 local W2B <const> = 14
 local W4 <const> = 15
+-- The `Size_y` of parts 3, 6, 7 and 8, which grow during the change, and
+-- which of them still grow (their `Be_flg`'s 0x400), as a bit per part.
+local SIZE <const> = { [3] = 16, [6] = 17, [7] = 18, [8] = 19 }
+local GROWING <const> = 20
 
 -- The init's life: normal, with `fg_system`'s `0x20`, and for the scene types.
 local LIFE <const> = 700
@@ -73,9 +78,8 @@ local function morph_4(e)
     e:morph(4, e:var(W4))
 end
 
--- `FUN_004903f0`. What it does to the parts' drawing (their colours, their
--- sizes and `Be_flg`'s 0x400 on parts 3, 6, 7 and 8) and its shadow aren't
--- modelled.
+-- `FUN_004903f0`. What it does to the parts' drawing (their colours, the
+-- sizes but parts 3, 6, 7 and 8's `Size_y`) and its shadow aren't modelled.
 local function init(e)
     e:routines(1, 0, 0, 0)
     e:set_damage_flg(0)
@@ -84,8 +88,12 @@ local function init(e)
     e:set_life(e:easy() and LIFE_EASY or LIFE)
     e:set_d_life(0)
     e:set_neck_flags(0)
-    for index = CNT_218, W4 do
+    for index = CNT_218, GROWING do
         e:set_var(index, 0)
+    end
+    for part, index in pairs(SIZE) do
+        e:set_var(index, 0x200)
+        e:set_var(GROWING, e:var(GROWING) | (1 << part))
     end
     e:set_var(CNT_21B, 5)
     e:set_var(REACH, 0x7D0)
@@ -110,20 +118,205 @@ local function init(e)
         e:set_timer(0, 0x3C)
         e:set_life(LIFE_SCENE)
         e:set_be_flg(e:be_flg() | 2)
+        e:set_var(GROWING, e:var(GROWING) & ~0x1C0)
         -- `+0x225`, the high byte of `REGEN`.
         e:set_var(REGEN, e:var(REGEN) | ((e:rnd() & 1) << 12))
         e:routines(1, 0, 3, 0)
     elseif low == 3 then
         e:set_life(LIFE_SCENE)
         e:set_be_flg(e:be_flg() | 10)
+        e:set_var(GROWING, e:var(GROWING) & ~0x1C0)
         e:routines(1, 9, 0, 0)
     end
 end
 
+-- Grow a part's `Size_y` by `step` while it still grows; it stops past
+-- 0xfff. Whether it grew.
+local function grow(e, part, step)
+    if e:var(GROWING) & (1 << part) == 0 then
+        return false
+    end
+    local size = i16(e:var(SIZE[part]) + step)
+    e:set_var(SIZE[part], size)
+    if size > 0xFFF then
+        e:set_var(GROWING, e:var(GROWING) & ~(1 << part))
+    end
+    return true
+end
+
+-- `Spd_get`, taken on the clip's second frame as well when it's on its first.
+local function spd_first(e, hokan)
+    e:spd()
+    if e:move_cnt() == 0 then
+        e:set_move_cnt(1)
+        e:spd()
+        if hokan then
+            e:set_hokan(hokan)
+        end
+        e:set_move_cnt(e:move_cnt() - 1)
+    end
+end
+
+local function add_w2(e, a, b)
+    e:set_var(W2A, i16(e:var(W2A) + a))
+    e:set_var(W2B, i16(e:var(W2B) + b))
+end
+
+-- `Routine_2` 2: clip 19 plays while part 2's two morphs sway.
+local function change_swell(e)
+    local count = e:move_cnt()
+    if count > 5 and count < 0x23 then
+        add_w2(e, (10 - count) * 8, count * 8 - 0x50)
+    end
+    if count > 0x23 and count < 0x3C then
+        add_w2(e, count * 4 - 0x8C, (0x23 - count) * 4)
+    end
+    if count > 0x3C and count < 0x4B then
+        add_w2(e, (0x3C - count) * 8, count * 8 - 0x1E0)
+    end
+    if count > 0x4B then
+        add_w2(e, count * 2 - 0x96, (0x4B - count) * 2)
+    end
+    local odd = count & 1
+    add_w2(e, odd * -0x78 + 0x3C, odd * 0x78 - 0x3C)
+    morph_2(e)
+    e:spd()
+    if e:joint(0x100) then
+        e:clip(0x14, 0, 0xF)
+        e:set_routine(2, 3)
+        e:set_timer(3, 0)
+        e:set_timer(0, 0)
+    end
+    e:add_speed_xz()
+end
+
+-- `Routine_2` 3: clip 0x14, part 2's morph runs to its second target and
+-- back, and part 3 grows; clip 0x15 once it has.
+local function change_grow(e)
+    spd_first(e, 0xF)
+    e:joint(0x100)
+    e:add_speed_xz()
+    local timer = i16(e:timer(0))
+    local flags = e:timer(3) & 0xFF
+    if timer > 0x1E and flags & 1 == 0 then
+        add_w2(e, (0x1E - timer) * 4, (timer - 0x1E) * 4)
+        if e:var(W2B) > 0x1000 then
+            e:set_var(W2B, 0x1000)
+            e:set_var(W2A, 0)
+            flags = flags | 1
+        end
+    end
+    if flags & 1 ~= 0 and flags & 4 == 0 then
+        e:set_var(W2B, i16(e:var(W2B) - 0x80))
+        if e:var(W2B) < 0 then
+            e:set_var(W2B, 0)
+            flags = flags | 4
+        end
+    end
+    e:set_timer(3, flags)
+    local odd = e:move_cnt() & 1
+    add_w2(e, odd * 0xF0 - 0x78, odd * -0xF0 + 0x78)
+    morph_2(e)
+    if timer == 0x29 then
+        -- `blood_censor` is taken as off.
+        e:effect(0, 3, 0x1FA0, i16(e:angle()), 3, 0, 0, 0)
+    end
+    if timer > 0x2D and grow(e, 3, (timer - 0x2D) * 2) and e:var(GROWING) & (1 << 3) == 0 then
+        e:clip(0x15, 0, 0xF)
+        e:set_routine(2, 4)
+        e:set_timer(3, 0)
+    end
+    e:set_timer(0, timer + 1)
+end
+
+-- `Routine_2` 4: clip 0x15, then clip 0x16.
+local function change_rise(e)
+    spd_first(e)
+    if e:joint(0x100) then
+        e:clip(0x16, 0, 0xF)
+        e:set_routine(2, 5)
+        e:set_timer(3, 0)
+        e:set_timer(0, 0)
+        e:set_neck_flags(e:neck_flags() & 0xFD)
+    end
+    e:add_speed_xz()
+end
+
+-- `Routine_2` 5: part 4's morph runs back to its base. What it does to
+-- `DWORD_0068968c` (the eye's light) isn't modelled.
+local function change_eye(e)
+    local was = e:timer(0)
+    local timer = i16(was + 1)
+    e:set_timer(0, timer)
+    if was == 0x2D then
+        e:set_timer(3, 0)
+        e:set_routine(2, 6)
+        e:set_neck_flags(e:neck_flags() | 2)
+    end
+    if timer > 0 and e:timer(3) & 1 == 0 then
+        e:set_var(W4, i16(e:var(W4) - timer * 0x10))
+        if e:var(W4) < 0 then
+            e:set_var(W4, 0)
+            e:set_timer(3, e:timer(3) | 1)
+        end
+    end
+    morph_4(e)
+end
+
+-- `Routine_2` 6: clip 0x16, parts 8, 6 and 7 grow in turn with a spurt of
+-- blood on each other frame.
+local function change_sprout(e)
+    local count = e:move_cnt()
+    for _, part in ipairs({ { 8, 0xF }, { 6, 0x14 }, { 7, 0x28 } }) do
+        local index, from = part[1], part[2]
+        if count > from and grow(e, index, (count - from) * 0x20) and count & 1 ~= 0 then
+            e:effect(0, 0x14, e:rnd() * 8 + 0x800, 0, index, -100, 100, 0)
+        end
+    end
+    e:spd()
+    if e:joint(0x100) then
+        e:set_sce_free(0, e:sce_free(0) | 2)
+        e:set_routine(2, 7)
+        e:set_timer(0, 0)
+        e:clip(0, 0, 0xFF)
+    end
+    e:add_speed_xz()
+end
+
+-- `Routine_2` 7: the scene's wait for `Sce_free0`'s bit 2, after which it
+-- steps off on clip 15.
+local function change_wait(e)
+    local timer = e:timer(0)
+    if i16(timer) > 0x1E then
+        e:joint(0x10)
+    end
+    e:set_timer(0, timer + 1)
+    if e:sce_free(0) & 4 ~= 0 then
+        e:set_routine(2, 8)
+        e:set_speed(200, 0, 0)
+        e:set_timer(0, 0)
+        e:clip(0xF, 0, 0)
+        e:joint(0x100)
+        e:sound(9)
+    end
+end
+
+-- `Routine_2` 8 and 9: the fall, down to the floor.
+local function fall(e)
+    local timer = i16(e:timer(0))
+    local _, y = e:pos()
+    y = y + timer * 0x1E
+    e:set_timer(0, timer + 1)
+    e:set_pos_y(y)
+    return y
+end
+
 -- Routine 7 (`0x4930b0`): the change, which room 509's scene starts. It
 -- holds clip 19's first frame (its `Routine_2` 0 and 1 don't play it) until
--- the room's script raises `Sce_free0`'s bit 0. What `Routine_2` 0 does to
--- the parts' drawing isn't modelled, and the change itself isn't ported yet.
+-- the room's script raises `Sce_free0`'s bit 0, then changes (2 to 6), waits
+-- for the script again (7), falls to the floor (8 and 9) and starts the
+-- fight (10). What it does to the parts' drawing (their sizes but the four
+-- in `SIZE`, and their `Be_flg`) isn't modelled.
 local function change(e)
     local sub = e:routine(2)
     if sub == 0 then
@@ -135,9 +328,45 @@ local function change(e)
         e:set_timer(2, 0)
         sub = 1
     end
-    if sub == 1 and e:sce_free(0) & 1 ~= 0 then
-        e:set_routine(2, 2)
+    if sub == 1 then
+        if e:sce_free(0) & 1 ~= 0 then
+            e:set_routine(2, 2)
+        end
+    elseif sub == 2 then
+        change_swell(e)
+    elseif sub == 3 then
+        change_grow(e)
+    elseif sub == 4 then
+        change_rise(e)
+    elseif sub == 5 then
+        change_eye(e)
+    elseif sub == 6 then
+        change_sprout(e)
+    elseif sub == 7 then
+        change_wait(e)
+    elseif sub == 8 then
+        if fall(e) > -2000 then
+            e:set_routine(2, 9)
+        end
+        e:add_speed_xz()
+    elseif sub == 9 then
+        if e:joint(0x100) then
+            e:set_routine(2, 10)
+            e:set_neck_flags(e:neck_flags() & 0xFD)
+        end
+        if fall(e) > -400 then
+            e:set_pos_y(0)
+        end
+        if e:move_cnt() < 0xC then
+            e:add_speed_xz()
+        end
+    elseif sub == 10 then
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, 10)
+        e:set_neck_flags(e:neck_flags() & 0xFD)
     end
+    -- The throb of parts 0 to 2's sizes isn't modelled, only its place.
+    e:set_timer(2, (e:timer(2) + 1) & 0x3F)
 end
 
 -- `funcs_4908BB` (before the clip) and `funcs_4908D2` (after it), by
