@@ -3,8 +3,15 @@
      clear) asks to connect the elevator; Yes sets scenario 45 (0x2D), the
      circuit half of 50C's elevator power. It connects without 50F's supply
      too, but the step waits for 50F's panel (scenario 46), so 45 set means
-     the elevator has power. -->
+     the elevator has power. 50C's switch then rides straight down to 514
+     and the Tyrant, whose death starts the self-destruct and turns 508's
+     door to 50B into a message (133), so under chris=save the step waits
+     for 512's cell to free Chris (common 0x4B) instead. That cell needs
+     50F's power too, so 0x4B set also means 46 is. -->
 <bot format="2">
-  <interact slot="1" bank="0" bit="45" after_bank="0" after_bit="46" label="the connection switch: the elevator's circuit"/>
+  <interact slot="1" bank="0" bit="45" after_bank="0" after_bit="46" when="chris=leave"
+            label="the connection switch: the elevator's circuit"/>
+  <interact slot="1" bank="0" bit="45" after_bank="1" after_bit="0x4B" when="chris=save"
+            label="the connection switch: the elevator's circuit"/>
   <answer choice="yes" slot="1" label="connect the elevator's power"/>
 </bot>
