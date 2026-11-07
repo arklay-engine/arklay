@@ -374,19 +374,26 @@
        knife cuts it, so it is fought first (30C's <fight>) with the grenade
        launcher: 60 a hit (row 46), four rounds. Without the launcher the
        spit is dodged: behaviour 13 throws three globs, one at the bot and
-       two fanned 0x80 or (three times in four) 0x100 off it, spawning 1000
-       ahead and flying 373 a tick (measured in 30C) and hitting within 600
-       every tick of the flight (effects drop_splat), so they cannot be
-       dodged once thrown. The tell is the bite's sub-state 4 (behaviour 12:
-       the facing locks), about 19 ticks before the next spit. Its bite
+       two fanned 0x80 or (three times in four) 0x100 off it, the tick after
+       the spit starts. Their lines fan out from 1700 ahead of its centre
+       on its facing, they show 2113 ahead (413 along each line) and fly
+       416 a tick (the projectiles' positions in 30C, four volleys), and hit
+       within 600 every tick of the flight (effects drop_splat), so they
+       cannot be dodged once thrown. Its picker (enemy/04 picker: every
+       frame of an idle, of a walk it started, and at the end of each bite)
+       spits along its facing the moment the player is inside 9000 (range)
+       and within 0x200 of it; a walk turns 0x10 a frame toward the player.
+       The tell is the bite's
+       sub-state 4 (behaviour 12: the facing locks), about 19 ticks before
+       the bite ends. Its bite
        tests the fangs within 0x514 of a head about 1000 ahead (with the
        player's own size, bites landed at 2690 to 2740 from its centre), so
        3000 is out of it. -->
   <enemy id="0x04" name="black tiger" policy="fight" stand="torso" downed="none"
          up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204"
          prefer="0x07">
-    <spit behavior="0x0D" tell="0x0C:4" fan="0x100" hit="600" spawn="1000" speed="373"
-          bite="3000"/>
+    <spit behavior="0x0D" tell="0x0C:4" fan="0x100" hit="600" spawn="2113" apex="1700" speed="416"
+          bite="3000" range="9000"/>
     <keep weapon="0x07" min="3200" max="6000" damage="60"/>
     <keep weapon="0x08" min="3200" max="6000" damage="60"/>
     <keep weapon="0x09" min="3200" max="6000" damage="205"/>

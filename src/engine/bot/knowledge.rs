@@ -157,11 +157,17 @@ pub struct Spit {
     pub hit: i32,
     /// The globs spawn this far ahead of the spitter (`spawn`)...
     pub spawn: i32,
+    /// ...on lines that fan out from this far ahead of it (`apex`, at most
+    /// `spawn`: the side globs spawn off the aim line already)...
+    pub apex: i32,
     /// ...and fly this far a tick (`speed`).
     pub speed: i32,
     /// The spitter's melee keep-away: a spot this far from its centre is
     /// out of its bite (`bite`).
     pub bite: i32,
+    /// The end of its tell and its idle spit only with the player this
+    /// close (`range`: the Black Tiger's picker).
+    pub range: i32,
 }
 
 /// A boss that no gun out-damages before it closes, kept at a distance
@@ -501,7 +507,9 @@ fn parse_kite(node: Node<'_, '_>) -> Result<Kite> {
 fn parse_spit(node: Node<'_, '_>) -> Result<Spit> {
     check_attributes(
         node,
-        &["behavior", "tell", "fan", "hit", "spawn", "speed", "bite"],
+        &[
+            "behavior", "tell", "fan", "hit", "spawn", "apex", "speed", "bite", "range",
+        ],
     )?;
     check_leaf(node)?;
     let tell = attr_text(node, "tell")?;
@@ -522,12 +530,21 @@ fn parse_spit(node: Node<'_, '_>) -> Result<Spit> {
         fan: attr(node, "fan")?,
         hit: attr(node, "hit")?,
         spawn: attr(node, "spawn")?,
+        apex: attr(node, "apex")?,
         speed: attr(node, "speed")?,
         bite: attr(node, "bite")?,
+        range: attr(node, "range")?,
     };
-    if spit.speed <= 0 || spit.hit <= 0 || spit.spawn < 0 || spit.bite < 0 {
+    if spit.speed <= 0
+        || spit.hit <= 0
+        || spit.spawn < 0
+        || spit.apex < 0
+        || spit.apex > spit.spawn
+        || spit.bite < 0
+        || spit.range <= 0
+    {
         bail!(
-            "{}: needs speed > 0, hit > 0, spawn >= 0 and bite >= 0",
+            "{}: needs speed > 0, hit > 0, 0 <= apex <= spawn, bite >= 0 and range > 0",
             at(node)
         );
     }
@@ -794,8 +811,10 @@ impl Knowledge {
                 row.set("fan", spit.fan)?;
                 row.set("glob_hit", spit.hit)?;
                 row.set("glob_spawn", spit.spawn)?;
+                row.set("glob_apex", spit.apex)?;
                 row.set("glob_speed", spit.speed)?;
                 row.set("bite_keep", spit.bite)?;
+                row.set("spit_range", spit.range)?;
             }
             if let Some(kite) = &enemy.kite {
                 let t = lua.create_table()?;
@@ -944,8 +963,8 @@ mod tests {
         let text = r#"<knowledge format="1">
             <enemy id="4" name="tiger" policy="fight" stand="torso" downed="none"
                 up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204">
-                <spit behavior="0x0D" tell="0x0C:4" fan="0x100" hit="600" spawn="1000"
-                    speed="373" bite="2600"/>
+                <spit behavior="0x0D" tell="0x0C:4" fan="0x100" hit="600" spawn="2100"
+                    apex="1700" speed="373" bite="2600" range="9000"/>
             </enemy>
         </knowledge>"#;
         let k = parse(text).unwrap();
@@ -956,16 +975,20 @@ mod tests {
                 tell: (0x0C, 4),
                 fan: 0x100,
                 hit: 600,
-                spawn: 1000,
+                spawn: 2100,
+                apex: 1700,
                 speed: 373,
                 bite: 2600,
+                range: 9000,
             })
         );
         assert!(parse(&text.replace("tell=\"0x0C:4\"", "tell=\"12\"")).is_err());
         assert!(parse(&text.replace("speed=\"373\"", "speed=\"0\"")).is_err());
+        assert!(parse(&text.replace("apex=\"1700\"", "apex=\"2200\"")).is_err());
+        assert!(parse(&text.replace(" apex=\"1700\"", "")).is_err());
         assert!(parse(&text.replace(" bite=\"2600\"", "")).is_err());
         assert!(parse(&text.replace("bite=", "bit=")).is_err());
-        let twice = text.replace("</enemy>", "<spit behavior=\"1\" tell=\"1:1\" fan=\"1\" hit=\"1\" spawn=\"1\" speed=\"1\" bite=\"1\"/></enemy>");
+        let twice = text.replace("</enemy>", "<spit behavior=\"1\" tell=\"1:1\" fan=\"1\" hit=\"1\" spawn=\"1\" apex=\"1\" speed=\"1\" bite=\"1\" range=\"1\"/></enemy>");
         assert!(parse(&twice).is_err());
     }
 

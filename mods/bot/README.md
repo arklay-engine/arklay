@@ -405,9 +405,12 @@ An optional `<spit>` child marks a ranged attack that cannot be dodged
 once thrown (30C's Black Tiger): `behavior` (the spit's action behaviour),
 `tell` (`behaviour:state`, where the facing locks before a spit), `fan`
 (the widest side glob's yaw off the aim), the glob's `hit` radius, `spawn`
-distance ahead of the spitter and `speed` a tick, and `bite` (the keep-away
-from its melee). The bot runs off the glob lines from the tell, and holds
-its fire while a lock could root it (`BotTactics.spit_holds_fire`).
+distance ahead of the spitter, `apex` (how far ahead of it the glob lines
+fan out from) and `speed` a tick, `bite` (the keep-away from its melee),
+and `range` (its tell's end and its idle spit only inside it). The bot
+runs off the glob lines from the tell, to the quickest spot its turn and
+run reach before the simulated globs pass, and holds its fire while a lock
+could root it (`BotTactics.spit_holds_fire`).
 An optional `<kite>` child marks a boss that is kept at a distance rather
 than stood and fought (303's and 513's Tyrants), in a room with a `<kite>`
 loop. It names action behaviours: `walk` (only then does the bot stop to
