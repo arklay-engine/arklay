@@ -11090,6 +11090,9 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     if let Mode::Play(session) = &mut app.mode {
         session.arm_new_game_boot();
         session.sound_device |= options.sound;
+        if let Some(path) = options.voice_ticks {
+            session.game.re2.voice_ticks = read_voice_ticks(path)?;
+        }
         if options.sound_wav.is_some() {
             session.music = Some(Mixer::capture());
             session.start_audio(&app.pack);
@@ -14856,6 +14859,24 @@ impl VoiceCache {
     }
 }
 
+/// `--voice-ticks`: one number a line, blank lines and `#` comments skipped.
+fn read_voice_ticks(path: &Path) -> Result<std::collections::VecDeque<u32>> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading --voice-ticks {}", path.display()))?;
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| {
+            line.parse::<u32>().with_context(|| {
+                format!(
+                    "--voice-ticks {}: {line:?} is not a tick count",
+                    path.display()
+                )
+            })
+        })
+        .collect()
+}
+
 /// `Cd_system_control`, once a line's `xa_on` has run. `Xa_control` holds
 /// `fg_status`'s voice bit for the line's length, plus a step to start and one
 /// to end. Without sound the executable measures that as half what the line
@@ -14870,9 +14891,16 @@ fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameStat
             let ticks = frames * TICKS_A_SECOND / wav.sample_rate.max(1) as usize;
             if sound { ticks } else { ticks / 2 }
         });
+        // The recording's own length, where the oracle gave it: the voice
+        // bit is up from `xa_on`'s tick to the tick it comes down.
+        let ticks = game
+            .re2
+            .voice_ticks
+            .pop_front()
+            .map_or(line as u32 + 3, |held| held + 1);
         game.re2.voice = VoiceLine {
             request: None,
-            ticks: line as u32 + 3,
+            ticks,
         };
         game.voice.request = Some(game::VoiceRequest {
             path,
@@ -19923,6 +19951,41 @@ mod tests {
         let (_, language, game) = persisted_options(file, &before, &after, after.graphics);
         assert_eq!(language.as_deref(), Some("de"));
         assert!(game.quick_turn);
+    }
+
+    #[test]
+    fn a_voice_line_holds_its_bit_for_the_recordings_length() {
+        use crate::scd2::host::STATUS_VOICE;
+        let dir = TempDir::new();
+        let path = dir.0.join("game.akpak");
+        PackWriter::new().write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let list = dir.0.join("voice.txt");
+        std::fs::write(&list, "# held ticks\n5\n\n7\n").unwrap();
+        let mut cache = VoiceCache::default();
+        let id = RoomId::parse("1000").unwrap();
+        let mut game = game::GameState::new(id, &RoomState::default());
+        game.re2.voice_ticks = read_voice_ticks(&list).unwrap();
+        assert_eq!(game.re2.voice_ticks, [5, 7]);
+
+        // `xa_on` raises the bit on its tick; the recording had it come down
+        // 5 ticks later, whatever the line's own length.
+        game.re2.voice.request = Some("voice/missing.wav".to_string());
+        game.re2.set_flag(1, STATUS_VOICE, 1);
+        let mut held = 0;
+        loop {
+            tick_re2_voice(true, &mut cache, &mut game, &pack);
+            if !game.re2.flag(1, STATUS_VOICE) {
+                break;
+            }
+            held += 1;
+        }
+        assert_eq!(held, 5);
+        assert_eq!(game.re2.voice_ticks, [7]);
+
+        assert!(read_voice_ticks(&dir.0.join("absent.txt")).is_err());
+        std::fs::write(&list, "5\nsoon\n").unwrap();
+        assert!(read_voice_ticks(&list).is_err());
     }
 
     struct TempDir(std::path::PathBuf);
@@ -25725,6 +25788,7 @@ mod tests {
                 input: None,
                 sound: false,
                 sound_wav: None,
+                voice_ticks: None,
             },
             Authoring {
                 load: Some(&saved),

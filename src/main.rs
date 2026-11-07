@@ -264,6 +264,14 @@ struct Cli {
     #[arg(long, value_name = "FILE", requires = "sound")]
     sound_wav: Option<PathBuf>,
 
+    /// With `--sound`, hold each RE2 voice line for the ticks FILE lists, one
+    /// number a line in the order the lines play, instead of the line's own
+    /// length: with sound the original ends a line by DirectSound's clock, so
+    /// its length in ticks depends on the recording's pace. The regression
+    /// runner writes it from the recording's `fg_status` voice bit
+    #[arg(long, value_name = "FILE", requires = "sound")]
+    voice_ticks: Option<PathBuf>,
+
     /// Write a frame BMP every N traced ticks; requires `--capture-dir` and
     /// `--trace`
     #[arg(
@@ -1404,6 +1412,7 @@ fn main() -> Result<()> {
                 input: input_script.as_ref(),
                 sound: cli.sound,
                 sound_wav: cli.sound_wav.as_deref(),
+                voice_ticks: cli.voice_ticks.as_deref(),
             };
             let authoring = arklay::engine::Authoring {
                 load: cli.load.as_deref(),
