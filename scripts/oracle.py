@@ -79,6 +79,8 @@ class Tick:
     inventory: str | None = None
     # RE2's item page: arklay's `ip`, the end of the original's `gi`.
     item_page: str | None = None
+    # RE2's `scene` field: `fg_status & 0x10`, arklay's `scene` or the original's `fgstat`.
+    scene: str | None = None
     # RE2's screens' own fields: the title's (`ti`, `tlogo`, `tfade`, a `--boot` record's) and the item box's (`ib`, `box`).
     screen: dict[str, str] = field(default_factory=dict)
 
@@ -89,7 +91,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box")
 
@@ -124,6 +126,16 @@ def item_page(fields: dict[str, str]) -> str | None:
         return None
     parts = fields["gi"].split(",")
     return ",".join([parts[4]] + parts[6:])
+
+
+def scene(fields: dict[str, str]) -> str | None:
+    """RE2's scene bit (`fg_status & 0x10`, the bars): arklay's `scene`, or
+    bit 4 of the original's `fgstat`."""
+    if "scene" in fields:
+        return fields["scene"]
+    if "fgstat" not in fields:
+        return None
+    return str((int(fields["fgstat"], 16) >> 4) & 1)
 
 
 def parse_trace(path: str) -> list[Tick]:
@@ -174,6 +186,7 @@ def parse_trace(path: str) -> list[Tick]:
                     sound=fields.get("snd"),
                     inventory=fields.get("inv"),
                     item_page=item_page(fields),
+                    scene=scene(fields),
                     screen={key: fields[key] for key in SCREEN_FIELDS if key in fields},
                 )
             )
@@ -210,6 +223,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("inv", tick.inventory))
     if tick.item_page is not None:
         items.append(("ip", tick.item_page))
+    if tick.scene is not None:
+        items.append(("scene", tick.scene))
     items.extend(sorted(tick.screen.items()))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.

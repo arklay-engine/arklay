@@ -85,6 +85,9 @@ pub struct TraceTick<'a> {
     /// RE2: the item box's lid and page and the box's slots, the oracle's
     /// `ib` and `box` fields.
     pub re2_item_box: Option<String>,
+    /// RE2: whether a scene is up, `fg_status & 0x10` (the bars' bit), the
+    /// trace's `scene` field.
+    pub re2_scene: Option<bool>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -261,6 +264,9 @@ impl TraceWriter {
         if let Some(fields) = &tick.re2_item_box {
             write!(self.out, " {fields}")?;
         }
+        if let Some(scene) = tick.re2_scene {
+            write!(self.out, " scene={}", u8::from(scene))?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -377,6 +383,7 @@ mod tests {
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,
+            re2_scene: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -429,6 +436,7 @@ mod tests {
                 re2_inventory: None,
                 re2_item_page: None,
                 re2_item_box: None,
+                re2_scene: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -476,6 +484,7 @@ mod tests {
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,
+            re2_scene: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -526,11 +535,14 @@ mod tests {
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,
+            re2_scene: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };
         writer.write_tick(&tick).unwrap();
         tick.re2_neck_position = Some("-9500,-2514,-20302".to_string());
+        writer.write_tick(&tick).unwrap();
+        tick.re2_scene = Some(true);
         writer.write_tick(&tick).unwrap();
         writer.flush().unwrap();
 
@@ -539,5 +551,7 @@ mod tests {
         let lines: Vec<&str> = text.lines().collect();
         assert!(lines[1].ends_with(" neck=0,8,0,0,0 pneck=- snd=-"));
         assert!(lines[2].ends_with(" neck=0,8,0,0,0 pneck=-9500,-2514,-20302 snd=-"));
+        assert!(!lines[2].contains("scene="));
+        assert!(lines[3].ends_with(" pneck=-9500,-2514,-20302 scene=1 snd=-"));
     }
 }
