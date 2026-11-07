@@ -62,6 +62,21 @@ local MOJI = {
     { 22, 76, 128, 80, 0, 0, 2 },
     { 150, 76, 128, 80, 0, 80, 2 },
     { 278, 76, 23, 80, 0, 160, 2 },
+    { 82, 150, 160, 15, 48, 29, 1 },
+    { 32, 168, 256, 13, 0, 151, 1 },
+    { 32, 184, 256, 16, 0, 221, 1 },
+    { 32, 203, 256, 13, 0, 123, 1 },
+    { 0, 8, 256, 88, 0, 0, 1 },
+    { 184, 8, 256, 88, 0, 88, 1 },
+    { 0, 8, 256, 88, 0, 0, 1 },
+    { 184, 8, 256, 88, 0, 88, 1 },
+    { 96, 172, 32, 16, 64, 239, 1 },
+    { 144, 172, 32, 16, 112, 239, 1 },
+    { 192, 172, 32, 16, 160, 239, 1 },
+    { 32, 195, 256, 13, 0, 123, 1 },
+    { 104, 151, 48, 12, 0, 32, 1 },
+    { 168, 151, 56, 12, 0, 44, 1 },
+    { 123, 132, 74, 12, 170, 96, 1 },
 }
 local LICENSE = 16
 local LOGO = 22
@@ -78,6 +93,8 @@ local MENU_ROWS, MENU_OUT = 0, 4
 local FG_REPEAT = 0x80000000
 local FG_ARRANGE = 0x40
 local FG_FROM_LOGO = 0x2
+local FG_EASY = 0x20
+local FG_NEW_GAME = 0x20000
 
 local s
 local pages
@@ -108,6 +125,17 @@ local function new_state()
         dim = 0,
         b8c = { [0] = 0, 0, 0 },
         slide_flag = 0,
+        -- The new-game choice: the character (`fg_status` bit 31), EASY
+        -- (`0x691B8E`) and what the cancel puts back (`0x689F1C`), HARD,
+        -- and the rows' slide flags (`Flg`, `0x689F18`).
+        claire = false,
+        easy = 0,
+        saved_easy = 0,
+        hard_mode = 0,
+        char_flag = 0,
+        diff_flag = 0,
+        -- `SuperHardSwitch`: this install's config has it, so HARD shows.
+        super_hard = true,
         -- SPECIAL's last column, for the up key from EXIT (0x5409E8).
         special_column = 2,
         demo = 0,
@@ -303,10 +331,22 @@ local function moji_select_mode(mode, no, dis, flg)
     end
 end
 
--- `Moji_Sel` (0x504000).
+local draw_difficulty
+
+-- `Moji_Sel` (0x504000): the rows, or once a new game is chosen the
+-- difficulty's.
 local function moji_sel()
     moji_license()
-    moji_select_mode(s.cur, s.cur, 0, 0)
+    if s.sel ~= 1 then
+        moji_select_mode(s.cur, s.cur, 0, 0)
+        return
+    end
+    draw_difficulty(s.cur)
+    if s.game_mode == 0 then
+        moji_select_mode(1, 1, 6, 0)
+    else
+        moji_select_mode(2, 2, 0x16, 0)
+    end
 end
 
 local function pulse()
@@ -531,12 +571,220 @@ local function special()
     moji_select_mode(3, 3, 0x25, s.slide_flag)
 end
 
--- The choices below the rows. ORIGINAL MODE and ARRANGE MODE lead to the
--- new-game choice (`ui/char_select.lua` in arklay), which takes over from
--- the title.
+-- The new-game choice's rows slide from ORIGINAL MODE (row 1, by 6) or
+-- ARRANGE MODE (row 2, by 0x16), as `0x689F25` says.
+local function game_rows(flag)
+    if s.game_mode == 0 then
+        moji_select_mode(1, 1, 6, flag)
+    else
+        moji_select_mode(2, 2, 0x16, flag)
+    end
+end
+
+-- `0x505C00`: the character row, LEON and CLAIRE (words 37 and 38), then
+-- EXIT (word 7), the lit one the character's or EXIT.
+local function draw_characters()
+    local lit = s.cur == 0 and (s.claire and 2 or 1) or 3
+    for k, entry in ipairs({ 37, 38, 7 }) do
+        local m = MOJI[entry]
+        draw_word_at(entry, k == lit and u8(s.pulse + 0x20) or 0x20, m[1], m[2])
+    end
+end
+
+-- `Moji_Game_mode` (0x505EA0): NORMAL and EASY (words 5 and 6), EXIT (7)
+-- and, with `SuperHardSwitch`, HARD (8), EXIT moving beside it.
+draw_difficulty = function(cur)
+    local lit
+    local rows = { 5, 6, 7 }
+    local exit_at = { MOJI[7][1], MOJI[7][3], MOJI[7][5], MOJI[7][6] }
+    if s.super_hard then
+        rows[4] = 8
+        exit_at = { 0xA8, 0x80, 0x80, 0x8A }
+        lit = cur + 1
+        if lit == 1 and s.easy == 0 then
+            lit = 0
+        end
+    else
+        exit_at = { 0x20, 0x100, 0, 0x7B }
+        lit = cur == 0 and (s.easy == 1 and 1 or 0) or 2
+    end
+    for k, entry in ipairs(rows) do
+        local m = MOJI[entry]
+        local colour = k - 1 == lit and u8(s.pulse + 0x20) or 0x20
+        local x, w, u, v = m[1], m[3], m[5], m[6]
+        if entry == 7 then
+            x, w, u, v = exit_at[1], exit_at[2], exit_at[3], exit_at[4]
+        end
+        for j, blend in ipairs({ m[7], 0 }) do
+            s.sprites[#s.sprites + 1] = {
+                page = 0, u = u, v = v, w = w, h = m[4],
+                x = x, y = m[2] + j - 1, colour = colour, blend = blend,
+            }
+        end
+    end
+end
+
+-- The character's choice (`0x504240`, pages 5 and 6): LEON or CLAIRE with
+-- the directions, or EXIT below them. The confirm on the character goes on
+-- to the difficulty (page 1 or 2) with no slide; EXIT and the cancel slide
+-- back to the rows.
+local function character_menu()
+    if s.step == 0 then
+        slide_start()
+        s.char_flag = 0
+        s.claire = false
+        slide_in()
+    elseif s.step == 1 then
+        slide_in()
+    elseif s.step == 2 then
+        if s.edge & PAD_DOWN ~= 0 and s.cur == 0 then
+            s.cur = 1
+            s.cue(SE_CURSOR)
+        elseif s.edge & PAD_UP ~= 0 and s.cur ~= 0 then
+            s.cur = s.cur - 1
+            s.cue(SE_CURSOR)
+        elseif s.cur == 0 then
+            if s.edge & PAD_LEFT ~= 0 and s.claire then
+                s.claire = false
+                s.cue(SE_CURSOR)
+            end
+            if s.edge & PAD_RIGHT ~= 0 and not s.claire then
+                s.claire = true
+                s.cue(SE_CURSOR)
+            end
+        end
+        pulse()
+        if s.key_trg & KEY_CANCEL ~= 0 then
+            s.cue(SE_CANCEL)
+            s.step = 3
+        elseif confirm() then
+            if s.cur == 1 then
+                s.cue(SE_CANCEL)
+                s.step = 3
+            else
+                s.cue(SE_DECIDE)
+                s.menu = s.menu - 4
+            end
+        end
+    elseif s.step == 3 then
+        s.char_flag = 1
+        if slide_out() then
+            s.cur = 1
+            s.menu = MENU_ROWS
+            s.step = 0
+        end
+    end
+    draw_characters()
+    game_rows(s.char_flag)
+end
+
+-- The difficulty (`0x5044D0`, pages 1 and 2): NORMAL or EASY with the
+-- directions, HARD below NORMAL with `SuperHardSwitch`, and EXIT. The
+-- confirm on a difficulty starts the game through the confirm's flash and
+-- fade (page 4, `Ti_Sel_mode` 1); EXIT and the cancel slide back to the rows.
+local function difficulty_menu()
+    if s.step == 0 then
+        slide_start()
+        s.saved_easy = s.easy
+        s.diff_flag = 0
+        slide_in()
+    elseif s.step == 1 then
+        slide_in()
+    elseif s.step == 2 then
+        local left, right = s.edge & PAD_LEFT ~= 0, s.edge & PAD_RIGHT ~= 0
+        local down, up = s.edge & PAD_DOWN ~= 0, s.edge & PAD_UP ~= 0
+        if s.super_hard then
+            if down then
+                if s.cur == 0 and s.easy == 0 then
+                    s.cur = 2
+                    s.cue(SE_CURSOR)
+                end
+                if s.cur == 0 and s.easy == 1 then
+                    s.cur = 1
+                    s.cue(SE_CURSOR)
+                end
+            end
+            if up then
+                if s.cur == 1 then
+                    s.cur = 0
+                    s.easy = 1
+                    s.cue(SE_CURSOR)
+                end
+                if s.cur == 2 then
+                    s.cur = 0
+                    s.easy = 0
+                    s.cue(SE_CURSOR)
+                end
+            end
+        else
+            if down and s.cur == 0 then
+                s.cur = 1
+                s.cue(SE_CURSOR)
+            end
+            if up and s.cur ~= 0 then
+                s.cur = s.cur - 1
+                s.cue(SE_CURSOR)
+            end
+        end
+        if s.cur == 0 then
+            if left and s.easy == 1 then
+                s.easy = 0
+                s.cue(SE_CURSOR)
+            end
+            if right and s.easy == 0 then
+                s.easy = 1
+                s.cue(SE_CURSOR)
+            end
+        elseif s.super_hard then
+            if left and s.cur == 1 then
+                s.cur = 2
+                s.cue(SE_CURSOR)
+            end
+            if right and s.cur == 2 then
+                s.cur = 1
+                s.cue(SE_CURSOR)
+            end
+        end
+        pulse()
+        if s.key_trg & KEY_CANCEL ~= 0 then
+            s.cue(SE_CANCEL)
+            s.step = 3
+            s.easy = s.saved_easy
+        end
+        if confirm() then
+            if s.cur == 1 then
+                s.cue(SE_CANCEL)
+                s.step = 3
+                s.easy = 0
+            else
+                if s.super_hard and s.cur == 2 then
+                    s.hard_mode = 1
+                elseif s.easy == 1 then
+                    s.fg_system = s.fg_system | FG_EASY
+                end
+                s.fg_system = s.fg_system | FG_NEW_GAME
+                s.sel = 1
+                s.menu = MENU_OUT
+            end
+        end
+    elseif s.step == 3 then
+        s.diff_flag = 1
+        if slide_out() then
+            s.cur = (s.menu == 2) and 2 or 1
+            s.menu = MENU_ROWS
+            s.step = 0
+        end
+    end
+    draw_difficulty(s.cur)
+    game_rows(s.diff_flag)
+end
+
+-- The choices below the rows.
 local function sub_menu(api)
     if s.menu == 5 or s.menu == 6 then
-        s.exit = "char_select"
+        character_menu()
+    elseif s.menu == 1 or s.menu == 2 then
+        difficulty_menu()
     elseif s.menu == 3 then
         special()
     end
@@ -562,6 +810,7 @@ local function title_init()
     s.demo = 0
     s.b8c[1] = 0
     s.b8c[2] = 0
+    s.easy = 0
     s.logo = i16(0xFFD2)
     s.flash = 0
     s.logo_count = -1
@@ -580,6 +829,16 @@ local function title_init()
     end
     moji_set_work()
     s.mv = s.mv + 1
+    if s.open_choice then
+        -- As ORIGINAL MODE's confirm leaves it (`Title_sel_menu`).
+        s.open_choice = nil
+        s.menu = 5
+        s.game_mode = 0
+        s.cur = 0
+        s.b8c[1] = 0
+        s.censorship_off = 0
+        s.step = 0
+    end
 end
 
 -- `Title_main`'s step 5 (0x503B20): the logo's slide from the top and the
@@ -712,6 +971,7 @@ local function title_main(api)
         s.exit = "save_load"
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
+        s.character = s.claire and 1 or 0
     elseif s.disp == 4 then
         -- OPTION: step 4 starts the option task (`0x44A040`) and leaves the
         -- title to start again from `Title_init` once it ends. arklay has no
@@ -776,7 +1036,10 @@ function M.open(api, args)
     -- it aren't ported.
     s.mv = 1
     s.init = 1
-    s.fg_system = FG_FROM_LOGO
+    -- From the boot, the white branch of `Title_init`; the new-game choice's
+    -- entry (`ui/char_select.lua`) fades in and opens on ORIGINAL MODE's.
+    s.fg_system = args and args.choice and 0 or FG_FROM_LOGO
+    s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
     moji_set_work()
     publish(api)

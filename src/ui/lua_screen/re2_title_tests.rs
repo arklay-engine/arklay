@@ -19,6 +19,14 @@ fn pack() -> &'static Pack {
                     .to_vec(),
             )
             .unwrap();
+        writer
+            .add(
+                "ui/char_select.lua",
+                include_str!("../../../games/re2/ui/char_select.lua")
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     })
 }
@@ -89,5 +97,40 @@ fn the_title_opens_as_the_boot_reaches_it() {
     screen.update(&cx, held);
     assert_eq!(screen.value("ti_cur"), 1);
     assert!(cx.cues.borrow().contains(&UiCue::Core(4)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_new_game_choice_opens_on_the_character_and_hands_off_leon() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-choice-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("char_select", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    for _ in 0..80 {
+        screen.update(&cx, UiInput::default());
+    }
+    // ORIGINAL MODE's character rows (menu 5), with no white from the boot.
+    assert_eq!(screen.value("ti_menu"), 5);
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    // LEON, then NORMAL: the difficulty (menu 1), then the hand-off.
+    screen.update(&cx, confirm);
+    for _ in 0..40 {
+        screen.update(&cx, UiInput::default());
+    }
+    assert_eq!(screen.value("ti_menu"), 1);
+    screen.update(&cx, confirm);
+    let mut action = None;
+    for _ in 0..400 {
+        if let crate::ui::ScreenResult::Done(done) = screen.update(&cx, UiInput::default()) {
+            action = Some(done);
+            break;
+        }
+    }
+    assert_eq!(action, Some(ScreenAction::NewGame { character: 0 }));
     let _ = std::fs::remove_dir_all(&dir);
 }

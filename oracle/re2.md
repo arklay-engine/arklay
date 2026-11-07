@@ -296,6 +296,16 @@ The boot shows the warning screen (`Capcom_logo`'s steps 5 to 7, fading in and o
 
 The words are drawn twice, once in blend 1 (added) and a line lower in blend 0 (averaged), and same-depth sprites are drawn last added first, as the original's ordering table does; the copyright line is opaque (`Moji_License` clears the sprite's code). The PC renderer expands the sheets' 5-bit colours as 8v + 7 and the background's as arklay does, and it draws fade blend 2 as a product (the frame times 1 - level / 255) rather than a subtraction, so `api:fade_tile` does too.
 
+## The new-game choice
+
+The original has no screen of its own for the choice: on the title, ORIGINAL MODE's or ARRANGE MODE's confirm plays the decide cue (core slot 6) and sets menu page 5 or 6, whose step 0 slides the rows away (`0x691B8A` up to 8 over 8 ticks) and shows LEON and CLAIRE with EXIT under them (`0x504240`, drawn by `0x505C00`); left and right pick the character, a confirm on it goes to the difficulty (page 1 or 2, with no slide: `0x5044D0`): NORMAL and EASY side by side, and under them EXIT and, with `SuperHardSwitch` on as in this install, HARD beside it (down goes from NORMAL to HARD and from EASY to EXIT). EXIT or the cancel key plays the cancel cue (slot 5) and slides back to the title's rows, the cursor on ORIGINAL MODE from the character and on the mode chosen from the difficulty. The difficulty's confirm plays the confirm's two cues, sets `fg_system` bit 17 and `Ti_Sel_mode` 1, and leaves through the title's white flash and slow fade; `Ti_Disp_add` 3 then starts the game. The runs compare `ti,tlogo,tfade,snd` as the `title_*` runs do (offset 189):
+
+- `newgame_leon.txt`: ORIGINAL MODE on tick 300 (the slide 301 to 308), LEON on 360, NORMAL on 420 (the flash from 421, the fade 437 to 689), and the hand-off on 690. Every field matches through 690; frames 0.10 (the original's 429 and 432 repeat the frame before, 14 and 16).
+- `newgame_claire.txt`: CLAIRE, then on the difficulty right to EASY, down to EXIT and back up, and EASY's confirm on 510; the hand-off on 780. Every field matches through 780; frames 0.04.
+- `newgame_back.txt`: into ORIGINAL MODE's choice, both characters, EXIT back to the rows on 490, then ARRANGE MODE, LEON, its difficulty down to HARD and back up, the cancel key back to the rows on 750, and a cancel on the rows, which does nothing. Every field matches over the 900 ticks; frames 0.05 (the original's 751 repeats 750).
+
+arklay's `ui/char_select.lua` opens `ui/title.lua` on ORIGINAL MODE's character rows, as the confirm leaves them, with no white from the boot; only the character is passed on to the game (`docs/re2-deviations.md`, "The new-game choice").
+
 ## The regression runner
 
 The original is deterministic, so a recording of it is made once and kept. `scripts/re2-regress.py` plays the runs in `oracle/re2-regress.toml` in arklay and compares each with its stored recording, with no Wine and no new recording. Run it for any change to RE 2's play, and read the lines it prints:

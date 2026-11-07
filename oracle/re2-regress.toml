@@ -913,3 +913,46 @@ frames = [360, 1099]
 frame_max_mean = 1.4
 expect = "match"
 record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 0:0x14:15 --box 1:0x0E:7:3 --box 2:0x26:1"
+
+# The new-game choice: ORIGINAL MODE, LEON and NORMAL; the title hands over to the new game on tick 690
+# (oracle/re2.md, "The new-game choice").
+[[run]]
+name = "newgame_leon"
+ui = "title"
+offset = 189
+ticks = 691
+input = "newgame_leon.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 690]
+expect = "match"
+record = ""
+
+# ORIGINAL MODE, CLAIRE and EASY, by way of EXIT; the title hands over on tick 780.
+[[run]]
+name = "newgame_claire"
+ui = "title"
+offset = 189
+ticks = 781
+input = "newgame_claire.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 780]
+expect = "match"
+record = ""
+
+# Into the choice and back out: ORIGINAL MODE's EXIT, then ARRANGE MODE's difficulty rows and the cancel key.
+[[run]]
+name = "newgame_back"
+ui = "title"
+offset = 189
+ticks = 900
+input = "newgame_back.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 899]
+expect = "match"
+record = ""
