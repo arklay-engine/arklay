@@ -40,6 +40,11 @@
 //! when the two characters' variants of a room number their AOT slots
 //! differently. [`load`] drops the other character's facts.
 //!
+//! Every fact element also takes an optional `when="NAME=VALUE ..."`: the
+//! fact holds only while the run's story parameters (`params/<game>.xml`,
+//! `--bot-param`) match, so one room file can steer each branch of the
+//! story. See [`super::params`].
+//!
 //! The merged pack resolves the file next to the room's other entries, so a
 //! mod's `room/117/bot.xml` overlays the base pack's copy (or adds one when the
 //! base has none).
@@ -47,6 +52,7 @@
 use anyhow::{Context, Result, bail};
 use roxmltree::{Document, Node};
 
+use super::params::{Params, When};
 use crate::budget;
 use crate::game::FLAG_BANK_COUNT;
 use crate::pack::Pack;
@@ -339,6 +345,10 @@ pub struct Answer {
     pub yes: bool,
     pub slot: Option<u8>,
     pub flag: Option<(u8, u8)>,
+    /// The prompt's message id (`message`, without the fast-reveal bit): a
+    /// prompt a scene opens, with no press and no flag to tell it apart
+    /// (308's "Will you go with him?", 23, then 24 or 25).
+    pub message: Option<u8>,
     pub label: Option<String>,
 }
 
@@ -387,8 +397,8 @@ pub struct PuzzleStep {
 ///
 /// An absent file is `Ok(None)`. A present file that is not UTF-8, not
 /// well-formed XML, or does not match the schema is an error naming the path.
-pub fn load(pack: &Pack, id: RoomId) -> Result<Option<RoomMeta>> {
-    load_for(pack, id, Some(jill(id.player_flag)))
+pub fn load(pack: &Pack, id: RoomId, params: &Params) -> Result<Option<RoomMeta>> {
+    load_for(pack, id, Some(jill(id.player_flag)), Some(params))
 }
 
 /// Whether a player flag is Jill's (bit 0 set), the value a fact's
@@ -398,7 +408,12 @@ pub fn jill(player_flag: u8) -> bool {
 }
 
 /// [`load`] keeping only the facts for `jill` (`None`: every fact).
-fn load_for(pack: &Pack, id: RoomId, jill: Option<bool>) -> Result<Option<RoomMeta>> {
+fn load_for(
+    pack: &Pack,
+    id: RoomId,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Option<RoomMeta>> {
     let path = format!("{}/bot.xml", id.dir());
     if !pack.contains(&path) {
         return Ok(None);
@@ -407,7 +422,9 @@ fn load_for(pack: &Pack, id: RoomId, jill: Option<bool>) -> Result<Option<RoomMe
         .read(&path)
         .with_context(|| format!("cannot read {path}"))?;
     let text = std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
-    parse_for(text, jill).map(Some).with_context(|| path)
+    parse_for(text, jill, params)
+        .map(Some)
+        .with_context(|| path)
 }
 
 /// One room's `<use>` fact, with the room it belongs to.
@@ -422,9 +439,9 @@ pub struct RoomUse {
 /// planner's index of where a held item has a use (`bot:use_facts()`).
 /// A file that does not parse is an error, as for [`load`]. With `jill`,
 /// only that character's facts (see [`parse_for`]).
-pub fn load_uses(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomUse>> {
+pub fn load_uses(pack: &Pack, jill: Option<bool>, params: Option<&Params>) -> Result<Vec<RoomUse>> {
     let mut uses = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         uses.extend(meta.uses.into_iter().map(|fact| RoomUse {
             room: id.clone(),
             fact,
@@ -451,9 +468,13 @@ pub struct RoomFight {
 
 /// Every room's `<fight>` facts, by room id then document order
 /// (`bot:fight_facts()`): the box loadout's index of the fights ahead.
-pub fn load_fights(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomFight>> {
+pub fn load_fights(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomFight>> {
     let mut fights = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         for fact in meta.interacts {
             if let Target::Fight {
                 enemy,
@@ -484,9 +505,13 @@ pub struct RoomHolds {
 
 /// Every room's `<holds>` facts, by room id then document order: the
 /// planner's index of where an item lies (`bot:item_facts()`).
-pub fn load_holds(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomHolds>> {
+pub fn load_holds(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomHolds>> {
     let mut holds = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         holds.extend(meta.holds.into_iter().map(|fact| RoomHolds {
             room: id.clone(),
             fact,
@@ -505,9 +530,13 @@ pub struct RoomRide {
 
 /// Every room's `<ride>` facts, by room id then document order
 /// (`bot:ride_facts()`).
-pub fn load_rides(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomRide>> {
+pub fn load_rides(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomRide>> {
     let mut rides = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         rides.extend(meta.rides.into_iter().map(|fact| RoomRide {
             room: id.clone(),
             fact,
@@ -526,9 +555,13 @@ pub struct RoomDoorVia {
 
 /// Every room's `<door>` facts, by room id then document order
 /// (`bot:door_facts()`).
-pub fn load_door_vias(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomDoorVia>> {
+pub fn load_door_vias(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomDoorVia>> {
     let mut doors = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         doors.extend(meta.doors.into_iter().map(|fact| RoomDoorVia {
             room: id.clone(),
             fact,
@@ -548,9 +581,13 @@ pub struct RoomAvoid {
 /// Every room's `<avoid>` facts, by room id then document order
 /// (`bot:avoid_facts()`): remote planning skips a door a gated avoid holds
 /// shut.
-pub fn load_avoids(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomAvoid>> {
+pub fn load_avoids(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomAvoid>> {
     let mut avoids = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         avoids.extend(meta.avoids.into_iter().map(|fact| RoomAvoid {
             room: id.clone(),
             fact,
@@ -570,9 +607,13 @@ pub struct RoomErrand {
 /// Every room's errand facts, by room id then document order: the planner's
 /// index of which room wants an item and which hands it over
 /// (`bot:errand_facts()`).
-pub fn load_errands(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomErrand>> {
+pub fn load_errands(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomErrand>> {
     let mut errands = Vec::new();
-    for (id, meta) in load_all(pack, jill)? {
+    for (id, meta) in load_all(pack, jill, params)? {
         errands.extend(meta.errands.into_iter().map(|fact| RoomErrand {
             room: id.clone(),
             fact,
@@ -582,7 +623,11 @@ pub fn load_errands(pack: &Pack, jill: Option<bool>) -> Result<Vec<RoomErrand>> 
 }
 
 /// Every room's parsed `bot.xml`, by room id (upper case).
-fn load_all(pack: &Pack, jill: Option<bool>) -> Result<Vec<(String, RoomMeta)>> {
+fn load_all(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<(String, RoomMeta)>> {
     let mut rooms: Vec<String> = pack
         .paths()
         .filter_map(|path| {
@@ -602,7 +647,7 @@ fn load_all(pack: &Pack, jill: Option<bool>) -> Result<Vec<(String, RoomMeta)>> 
             .with_context(|| format!("cannot read {path}"))?;
         let text =
             std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
-        let meta = parse_for(text, jill).with_context(|| path.clone())?;
+        let meta = parse_for(text, jill, params).with_context(|| path.clone())?;
         all.push((room.to_ascii_uppercase(), meta));
     }
     Ok(all)
@@ -611,12 +656,15 @@ fn load_all(pack: &Pack, jill: Option<bool>) -> Result<Vec<(String, RoomMeta)>> 
 /// Parse one `bot.xml` document, keeping every fact.
 #[cfg(test)]
 pub fn parse(text: &str) -> Result<RoomMeta> {
-    parse_for(text, None)
+    parse_for(text, None, None)
 }
 
 /// Parse one `bot.xml` document. With `jill`, a fact whose `character`
-/// names the other character is checked and then dropped.
-pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
+/// names the other character is checked and then dropped. With `params`, a
+/// fact whose `when` does not hold is dropped too (an undeclared name or
+/// value in it is an error); without, every `when` is only checked for
+/// syntax and the fact kept.
+pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Result<RoomMeta> {
     budget::check_len(text.len(), MAX_BYTES, "bot XML size")?;
     let document = Document::parse(text).map_err(|err| {
         anyhow::anyhow!(
@@ -687,10 +735,20 @@ pub fn parse_for(text: &str, jill: Option<bool>) -> Result<RoomMeta> {
         if character.is_some() && !fact {
             bail!("{}: unknown attribute `character`", at(child));
         }
-        let keep = match (character, jill) {
+        let when = match child.attribute("when") {
+            None => None,
+            Some(text) => Some(When::parse(text).with_context(|| at(child))?),
+        };
+        if when.is_some() && !fact {
+            bail!("{}: unknown attribute `when`", at(child));
+        }
+        let mut keep = match (character, jill) {
             (Some(only), Some(jill)) => only == jill,
             _ => true,
         };
+        if let (Some(when), Some(params)) = (&when, params) {
+            keep &= params.holds(when).with_context(|| at(child))?;
+        }
         match name {
             "puzzle" => {
                 let puzzle = parse_puzzle(child)?;
@@ -833,6 +891,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
             "done",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -867,6 +926,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             "opens",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -904,6 +964,7 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
             "until_bit",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -971,7 +1032,16 @@ fn parse_gate(node: Node<'_, '_>) -> Result<Option<Gate>> {
 fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
     check_attributes(
         node,
-        &["slot", "via", "bank", "bit", "while", "label", "character"],
+        &[
+            "slot",
+            "via",
+            "bank",
+            "bit",
+            "while",
+            "label",
+            "character",
+            "when",
+        ],
     )?;
     check_leaf(node)?;
     let slot: u8 = attr(node, "slot")?;
@@ -991,7 +1061,7 @@ fn parse_door(node: Node<'_, '_>) -> Result<DoorVia> {
 }
 
 fn parse_ride(node: Node<'_, '_>) -> Result<Ride> {
-    check_attributes(node, &["slot", "from", "label", "character"])?;
+    check_attributes(node, &["slot", "from", "label", "character", "when"])?;
     check_leaf(node)?;
     let slot: u8 = attr(node, "slot")?;
     let from = node
@@ -1006,7 +1076,7 @@ fn parse_ride(node: Node<'_, '_>) -> Result<Ride> {
 }
 
 fn parse_holds(node: Node<'_, '_>) -> Result<Holds> {
-    check_attributes(node, &["item", "label", "character"])?;
+    check_attributes(node, &["item", "label", "character", "when"])?;
     check_leaf(node)?;
     let item: u8 = attr(node, "item")?;
     if item == 0 {
@@ -1035,6 +1105,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "reveals",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -1114,6 +1185,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
             "optional",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -1158,6 +1230,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
             "after_bit",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -1174,7 +1247,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
 }
 
 fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["cut", "bank", "bit", "label", "character"])?;
+    check_attributes(node, &["cut", "bank", "bit", "label", "character", "when"])?;
     check_leaf(node)?;
     let flag = match (node.attribute("bank"), node.attribute("bit")) {
         (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
@@ -1199,7 +1272,16 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
 fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
     check_attributes(
         node,
-        &["choice", "slot", "bank", "bit", "label", "character"],
+        &[
+            "choice",
+            "slot",
+            "bank",
+            "bit",
+            "message",
+            "label",
+            "character",
+            "when",
+        ],
     )?;
     check_leaf(node)?;
     let yes = match attr_text(node, "choice")? {
@@ -1222,9 +1304,13 @@ fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
             at(node)
         ),
     };
-    if slot.is_none() && flag.is_none() {
+    let message = match node.attribute("message") {
+        Some(_) => Some(attr(node, "message")?),
+        None => None,
+    };
+    if slot.is_none() && flag.is_none() && message.is_none() {
         bail!(
-            "{}: <answer> needs a `slot` or a `bank`/`bit` flag",
+            "{}: <answer> needs a `slot`, a `bank`/`bit` flag or a `message`",
             at(node)
         );
     }
@@ -1232,6 +1318,7 @@ fn parse_answer(node: Node<'_, '_>) -> Result<Answer> {
         yes,
         slot,
         flag,
+        message,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1247,6 +1334,7 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
             "while",
             "unless_held",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -1270,7 +1358,15 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
 fn parse_keep_out(node: Node<'_, '_>) -> Result<KeepOut> {
     check_attributes(
         node,
-        &["slot", "reason", "bank", "bit", "while", "character"],
+        &[
+            "slot",
+            "reason",
+            "bank",
+            "bit",
+            "while",
+            "character",
+            "when",
+        ],
     )?;
     check_leaf(node)?;
     let reason = attr_text(node, "reason")?.to_string();
@@ -1285,7 +1381,7 @@ fn parse_keep_out(node: Node<'_, '_>) -> Result<KeepOut> {
 }
 
 fn parse_kite_loop(node: Node<'_, '_>) -> Result<KiteLoop> {
-    check_attributes(node, &["enemy", "x", "z", "radius", "character"])?;
+    check_attributes(node, &["enemy", "x", "z", "radius", "character", "when"])?;
     check_leaf(node)?;
     let radius: i32 = attr(node, "radius")?;
     if radius <= 0 {
@@ -1299,7 +1395,7 @@ fn parse_kite_loop(node: Node<'_, '_>) -> Result<KiteLoop> {
 }
 
 fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
-    check_attributes(node, &["slot", "bank", "bit", "label", "character"])?;
+    check_attributes(node, &["slot", "bank", "bit", "label", "character", "when"])?;
     check_leaf(node)?;
     Ok(Leave {
         slot: attr(node, "slot")?,
@@ -1312,7 +1408,7 @@ fn parse_errand(node: Node<'_, '_>) -> Result<Errand> {
     let name = node.tag_name().name();
     let deliver = name == "deliver";
     let place = if deliver { "cut" } else { "slot" };
-    let mut allowed = vec![place, "item", "bank", "bit", "label", "character"];
+    let mut allowed = vec![place, "item", "bank", "bit", "label", "character", "when"];
     if deliver {
         allowed.extend(["after_bank", "after_bit"]);
     }
@@ -1387,6 +1483,7 @@ fn parse_watch(node: Node<'_, '_>) -> Result<Watch> {
             "after_bit",
             "label",
             "character",
+            "when",
         ],
     )?;
     check_leaf(node)?;
@@ -1740,12 +1837,14 @@ mod tests {
                     yes: false,
                     slot: Some(6),
                     flag: None,
+                    message: None,
                     label: Some("do not drink".to_string()),
                 },
                 Answer {
                     yes: true,
                     slot: None,
                     flag: Some((4, 0x10)),
+                    message: None,
                     label: None,
                 },
             ]
@@ -2035,7 +2134,7 @@ mod tests {
         let old = r#"<bot><door slot="2" via="5"/></bot>"#;
         assert!(parse(old).is_err());
         let jill = r#"<bot format="2"><door slot="2" via="5" character="chris"/></bot>"#;
-        assert!(parse_for(jill, Some(true)).unwrap().doors.is_empty());
+        assert!(parse_for(jill, Some(true), None).unwrap().doors.is_empty());
     }
 
     #[test]
@@ -2253,7 +2352,7 @@ mod tests {
     #[test]
     fn the_use_index_lists_every_rooms_use_facts_by_room() {
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let uses = load_uses(&pack, Some(true)).unwrap();
+        let uses = load_uses(&pack, Some(true), None).unwrap();
         let rows: Vec<(&str, u8, u8)> = uses
             .iter()
             .map(|entry| (entry.room.as_str(), entry.fact.slot, entry.fact.item))
@@ -2292,14 +2391,14 @@ mod tests {
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));
         // Chris's 105 numbers the fireplace's gold-emblem zone 8, not 11.
-        let chris = load_uses(&pack, Some(false)).unwrap();
+        let chris = load_uses(&pack, Some(false), None).unwrap();
         let chris_105: Vec<(u8, u8, (u8, u8))> = chris
             .iter()
             .filter(|entry| entry.room == "105")
             .map(|entry| (entry.fact.slot, entry.fact.item, entry.fact.flag))
             .collect();
         assert_eq!(chris_105, vec![(8, 0x20, (1, 0xA8))]);
-        assert_eq!(load_uses(&pack, None).unwrap().len(), uses.len() + 1);
+        assert_eq!(load_uses(&pack, None, None).unwrap().len(), uses.len() + 1);
     }
 
     #[test]
@@ -2331,13 +2430,66 @@ mod tests {
         }
         // The index over the checked-in files: 102's broken shotgun.
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let holds = load_holds(&pack, Some(true)).unwrap();
+        let holds = load_holds(&pack, Some(true), None).unwrap();
         assert!(
             holds
                 .iter()
                 .any(|entry| entry.room == "102" && entry.fact.item == 0x1C),
             "{holds:?}"
         );
+    }
+
+    #[test]
+    fn when_keeps_a_fact_for_matching_story_parameters() {
+        let decls = super::super::params::parse(
+            r#"<params format="1">
+                <param name="richard" values="save|leave" default="save" label="l"/>
+                <param name="first" values="yes|no" default="yes" label="l"/>
+            </params>"#,
+        )
+        .unwrap();
+        let mut params = Params::new(decls);
+        let text = r#"<bot format="2">
+            <answer choice="yes" message="23" when="first=yes"/>
+            <answer choice="no" message="23" when="first=no"/>
+            <deliver item="0x42" cut="3" bank="1" bit="0x61" when="richard=save" character="jill"/>
+            <avoid slot="1" reason="x" when="richard!=save first=no"/>
+        </bot>"#;
+        // Without parameters every fact is kept (syntax checked only).
+        let all = parse(text).unwrap();
+        assert_eq!(
+            (all.answers.len(), all.errands.len(), all.avoids.len()),
+            (2, 1, 1)
+        );
+        let defaults = parse_for(text, Some(true), Some(&params)).unwrap();
+        assert_eq!(defaults.answers.len(), 1);
+        assert!(defaults.answers[0].yes);
+        assert_eq!(defaults.answers[0].message, Some(23));
+        assert_eq!((defaults.errands.len(), defaults.avoids.len()), (1, 0));
+        // `character` and `when` both have to hold.
+        assert!(
+            parse_for(text, Some(false), Some(&params))
+                .unwrap()
+                .errands
+                .is_empty()
+        );
+        params.set("richard", "leave").unwrap();
+        params.set("first", "no").unwrap();
+        let other = parse_for(text, Some(true), Some(&params)).unwrap();
+        assert!(!other.answers[0].yes);
+        assert_eq!((other.errands.len(), other.avoids.len()), (0, 1));
+        // An undeclared name or value fails, even on a fact the character
+        // drops; a bad `when` fails without parameters too.
+        for bad in [
+            r#"<bot format="2"><avoid slot="1" reason="x" when="richrd=save"/></bot>"#,
+            r#"<bot format="2"><avoid slot="1" reason="x" when="richard=sav" character="chris"/></bot>"#,
+        ] {
+            assert!(parse_for(bad, Some(true), Some(&params)).is_err(), "{bad}");
+        }
+        assert!(
+            parse(r#"<bot format="2"><avoid slot="1" reason="x" when="richard"/></bot>"#).is_err()
+        );
+        assert!(parse(r#"<bot><puzzle id="p" when="a=b"/></bot>"#).is_err());
     }
 
     #[test]
@@ -2352,14 +2504,14 @@ mod tests {
         </bot>"#;
         let all = parse(text).unwrap();
         assert_eq!((all.interacts.len(), all.uses.len()), (2, 2));
-        let jills = parse_for(text, Some(true)).unwrap();
+        let jills = parse_for(text, Some(true), None).unwrap();
         assert_eq!(jills.interacts.len(), 2);
         assert_eq!(
             jills.uses.iter().map(|u| u.slot).collect::<Vec<_>>(),
             vec![11]
         );
         assert_eq!((jills.avoids.len(), jills.answers.len()), (1, 0));
-        let chris = parse_for(text, Some(false)).unwrap();
+        let chris = parse_for(text, Some(false), None).unwrap();
         // The unconditioned camera step holds for both.
         assert_eq!(chris.interacts.len(), 1);
         assert_eq!(
@@ -2385,7 +2537,7 @@ mod tests {
         // A dropped fact is still checked.
         let typo =
             r#"<bot format="2"><use slot="1" item="0" bank="1" bit="1" character="chris"/></bot>"#;
-        assert!(parse_for(typo, Some(true)).is_err());
+        assert!(parse_for(typo, Some(true), None).is_err());
     }
 
     #[test]
@@ -2431,7 +2583,7 @@ mod tests {
     #[test]
     fn the_errand_index_lists_the_serum_errand() {
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let errands = load_errands(&pack, Some(true)).unwrap();
+        let errands = load_errands(&pack, Some(true), None).unwrap();
         let rooms: Vec<(&str, ErrandKind)> = errands
             .iter()
             .map(|entry| (entry.room.as_str(), entry.fact.kind))
@@ -2446,7 +2598,7 @@ mod tests {
             ]
         );
         assert!(
-            load_errands(&pack, Some(false)).unwrap().is_empty(),
+            load_errands(&pack, Some(false), None).unwrap().is_empty(),
             "Jill's only"
         );
     }
@@ -2504,7 +2656,7 @@ mod tests {
         let bad_choice = r#"<bot format="2"><answer choice="maybe" slot="1"/></bot>"#;
         assert!(error(bad_choice).contains("is not `yes` or `no`"));
         let no_target = r#"<bot format="2"><answer choice="yes"/></bot>"#;
-        assert!(error(no_target).contains("needs a `slot` or a `bank`/`bit` flag"));
+        assert!(error(no_target).contains("needs a `slot`, a `bank`/`bit` flag or a `message`"));
         let half_flag = r#"<bot format="2"><answer choice="yes" bank="1"/></bot>"#;
         assert!(error(half_flag).contains("both `bank` and `bit`"));
         let no_reason = r#"<bot format="2"><avoid slot="1"/></bot>"#;
@@ -2548,7 +2700,9 @@ mod tests {
         .unwrap();
 
         let pack = Pack::open(&temp.path).unwrap();
-        let meta = load(&pack, room_117()).unwrap().expect("the room metadata");
+        let meta = load(&pack, room_117(), &Params::default())
+            .unwrap()
+            .expect("the room metadata");
         assert_eq!(meta.puzzles[0].steps[0].slot, 8);
         assert_eq!(meta.puzzles[0].steps[0].walks, vec![[2900, 4100]]);
         assert_eq!(meta.puzzles[0].steps[0].face, Some([1850, 4100]));
@@ -2564,7 +2718,9 @@ mod tests {
             </bot>"#,
         )
         .unwrap();
-        let changed = load(&pack, room_117()).unwrap().unwrap();
+        let changed = load(&pack, room_117(), &Params::default())
+            .unwrap()
+            .unwrap();
         assert_eq!(changed.puzzles[0].steps[0].label, "changed");
         assert_eq!(changed.puzzles[0].steps[0].walks, Vec::<[i32; 2]>::new());
         assert_eq!(changed.puzzles[0].steps[0].face, Some([1, 2]));
@@ -2575,6 +2731,6 @@ mod tests {
             player_flag: 1,
             mansion2: false,
         };
-        assert_eq!(load(&pack, absent).unwrap(), None);
+        assert_eq!(load(&pack, absent, &Params::default()).unwrap(), None);
     }
 }

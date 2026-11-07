@@ -274,14 +274,9 @@ pub struct Knowledge {
     pub cures: Vec<Cure>,
 }
 
-/// The pack path of a game's knowledge file.
-pub fn path_for(game: &str) -> String {
-    format!("knowledge/{game}.xml")
-}
-
-/// Load the knowledge file for the pack's game, or `None` when the pack
-/// carries none.
-pub fn load(pack: &Pack) -> Result<Option<Knowledge>> {
+/// The games a per-game bot file is looked up for, first match wins: the
+/// pack's own id, then the games it and its layers build on.
+pub(super) fn games(pack: &Pack) -> Vec<String> {
     let mut games: Vec<String> = Vec::new();
     if let Some(manifest) = pack.manifest() {
         games.push(manifest.id.clone());
@@ -292,7 +287,18 @@ pub fn load(pack: &Pack) -> Result<Option<Knowledge>> {
             games.extend(manifest.base.clone());
         }
     }
-    for game in games {
+    games
+}
+
+/// The pack path of a game's knowledge file.
+pub fn path_for(game: &str) -> String {
+    format!("knowledge/{game}.xml")
+}
+
+/// Load the knowledge file for the pack's game, or `None` when the pack
+/// carries none.
+pub fn load(pack: &Pack) -> Result<Option<Knowledge>> {
+    for game in games(pack) {
         let path = path_for(&game);
         if !pack.contains(&path) {
             continue;

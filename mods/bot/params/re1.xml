@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The bot's story parameters for RE1: decisions the game leaves to the
+     player, so runs can be steered down each branch of the story.
+
+     Each <param> lists its `values` (separated by `|`) and its `default`,
+     the bot's usual choice. The bot-param option (NAME=VALUE) picks another value for
+     one run; a room fact in room/<id>/bot.xml with `when="NAME=VALUE"` holds
+     only while the parameter has that value (`NAME!=VALUE` and `a|b`
+     alternatives work too, and several conditions separated by spaces must
+     all hold); Lua reads the value as `bot:param(NAME)`. An undeclared name
+     or value is an error, on the command line and in a `when`. -->
+<params format="1">
+  <!-- 20D: Richard, poisoned by Yawn, waits for the serum from 100. `save`
+       brings it within his seven minutes; `leave` never does, so he dies
+       and the door to 20E opens once the timer runs out. -->
+  <param name="richard" values="save|leave" default="save"
+         label="bring poisoned Richard the serum in 20D"/>
+  <!-- 308: Barry's two prompts (room/308/bot.xml). cave_q1 answers "Will
+       you go with him?" (message 23); cave_q2 answers the second prompt,
+       "Do you want him to go first?" (24) after Yes or "Will you stay
+       here?" (25) after No. Yes, Yes and No, No send Barry ahead; Yes, No
+       is Barry's branch; No, Yes sends him off alone, and 502 plays "Tell
+       my family" (lab). -->
+  <param name="cave_q1" values="yes|no" default="yes"
+         label="308: go with Barry (message 23)"/>
+  <param name="cave_q2" values="yes|no" default="yes"
+         label="308: the second prompt (message 24 or 25)"/>
+  <!-- 308, after Barry goes ahead: `follow` walks after him through AOT 3
+       and door 1 (Barry's branch); `backtrack` keeps off door 1, so 307
+       plays "Tell my family" (cave) and Barry is gone. -->
+  <param name="cave_exit" values="follow|backtrack" default="follow"
+         label="308: follow Barry through door 1, or backtrack"/>
+</params>

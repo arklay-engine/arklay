@@ -223,6 +223,14 @@ struct Cli {
     #[arg(long, value_name = "N", requires = "bot")]
     bot_seed: Option<u32>,
 
+    /// Set one of the bot's story parameters for this run, steering a
+    /// decision the game leaves to the player (repeatable). The pack's
+    /// `params/<game>.xml` declares the names, values and defaults; room
+    /// facts with a matching `when` apply, and Lua reads `bot:param(name)`.
+    /// Example: `--bot-param richard=leave`
+    #[arg(long, value_name = "NAME=VALUE", value_parser = parse_bot_param, requires = "bot")]
+    bot_param: Vec<(String, String)>,
+
     /// End the bot run when the player enters this room: a three-digit room
     /// id such as `20D` (stage, then room, in hex). Lua reads it as
     /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
@@ -896,6 +904,12 @@ fn bot_save_dir() -> Result<PathBuf> {
     }
     fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     Ok(dir)
+}
+
+/// `--bot-param`: `NAME=VALUE`, checked against the pack's declarations
+/// when the bot attaches.
+fn parse_bot_param(text: &str) -> Result<(String, String), String> {
+    arklay::engine::parse_bot_param(text)
 }
 
 /// `--bot-risk`: a number in `0.0..=1.0`.
@@ -1722,6 +1736,7 @@ fn main() -> Result<()> {
                 risk: cli.bot_risk,
                 goal_room: cli.bot_goal_room.clone(),
                 seed: cli.bot_seed,
+                params: cli.bot_param.clone(),
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -2000,6 +2015,40 @@ mod tests {
         assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "x"]).is_err());
         assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "-1"]).is_err());
         assert!(parse(&["arklay", "game.akpak", "--bot-seed", "3"]).is_err());
+    }
+
+    #[test]
+    fn bot_params_repeat_and_need_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert!(
+            parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_param
+                .is_empty()
+        );
+        let cli = parse(&[
+            "arklay",
+            "game.akpak",
+            "--bot",
+            "--bot-param",
+            "richard=leave",
+            "--bot-param=go_first=no",
+        ])
+        .unwrap();
+        assert_eq!(
+            cli.bot_param,
+            vec![
+                ("richard".to_string(), "leave".to_string()),
+                ("go_first".to_string(), "no".to_string())
+            ]
+        );
+        for bad in ["richard", "richard=", "Richard=leave"] {
+            assert!(
+                parse(&["arklay", "game.akpak", "--bot", "--bot-param", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-param", "richard=leave"]).is_err());
     }
 
     #[test]
