@@ -32,7 +32,7 @@ const MAIN_SLOT: usize = 7;
 /// Pointer slot of the event SCD table.
 const EVENTS_SLOT: usize = 8;
 /// Pointer slot of the user procedure container (`gosub`), the port's own:
-/// only a standalone container ([`is_standalone`]) carries it. In an RDT the
+/// only a standalone container (`is_standalone`) carries it. In an RDT the
 /// slot points at other room data.
 pub const PROCS_SLOT: usize = 18;
 /// Smallest RDT prefix needed to read the three SCD pointers.
