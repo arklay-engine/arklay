@@ -2,7 +2,7 @@
 // Indexed TIM sampling through the primitive's CLUT row. The palette's alpha
 // marks the entries a semi-transparent packet blends: its STP entries, or
 // every entry of a row without a knock-out twin (`scene::palette_rgba`).
-// With an HD replacement (htexture) the colour comes from its layer for the
+// With an HD replacement (hires) the colour comes from its layer for the
 // CLUT row while the original index still decides transparency and STP.
 
 // Normalised texture coordinates and the shade in 0..1, as the software

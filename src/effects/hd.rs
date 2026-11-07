@@ -6,17 +6,17 @@
 //! renderer resolves HD art by hashing that composite. A pack can also name
 //! the pieces:
 //!
-//! - `htexture/room/<id>/effect/<slot>` covers sprite slot `<slot>`'s rows of
-//!   its page under CLUT row 0, and `htexture/room/<id>/effect/<slot>_<row>`
+//! - `hires/room/<id>/effect/<slot>` covers sprite slot `<slot>`'s rows of
+//!   its page under CLUT row 0, and `hires/room/<id>/effect/<slot>_<row>`
 //!   its rows of the variant page for CLUT row `<row>` (1 to 3);
-//! - `htexture/effect/NN` covers the shipped sheet `effect/NN` under the
+//! - `hires/effect/NN` covers the shipped sheet `effect/NN` under the
 //!   sprites.
 //!
 //! [`composite`] builds the HD version of one page from those images, at the
 //! largest scale among them. A page no name covers is left to the content
 //! hash, so a pack made for the composite keeps resolving exactly as before.
 
-use crate::htexture::{self, Replacement};
+use crate::hires::{self, Replacement};
 use crate::model::Texture8;
 use crate::pack::{AssetClass, Pack};
 use crate::state::{Image, RoomId};
@@ -25,7 +25,7 @@ use crate::state::{Image, RoomId};
 const MAX_SIDE: u32 = 8192;
 
 /// The named stem of sprite slot `slot`'s art under CLUT row `row`, relative
-/// to [`htexture::ROOT`] (`room/100/effect/00`, `room/100/effect/00_1`).
+/// to [`hires::ROOT`] (`room/100/effect/00`, `room/100/effect/00_1`).
 pub fn sprite_stem(id: RoomId, slot: usize, row: u8) -> String {
     let stem = format!("{}/effect/{slot:02x}", id.dir());
     if row == 0 {
@@ -35,17 +35,17 @@ pub fn sprite_stem(id: RoomId, slot: usize, row: u8) -> String {
     }
 }
 
-/// The HD image a pack names under [`htexture::ROOT`] (`stem` is
+/// The HD image a pack names under [`hires::ROOT`] (`stem` is
 /// `effect/1f`), decoded at its own size. A missing name is not reported;
 /// one that fails to decode is, on stderr.
 pub fn named_image(pack: &Pack, stem: &str) -> Option<Image> {
-    let path = format!("{}{stem}", htexture::ROOT);
+    let path = format!("{}{stem}", hires::ROOT);
     let asset = pack.read_asset(&path, AssetClass::Image).ok().flatten()?;
-    match htexture::load(pack, asset.path()) {
+    match hires::load(pack, asset.path()) {
         Ok(image) if usable(&image) => Some(image),
         Ok(_) => None,
         Err(err) => {
-            eprintln!("htexture: {err:#}");
+            eprintln!("hires: {err:#}");
             None
         }
     }
@@ -127,14 +127,12 @@ pub fn composite(
 
 /// The content-hash replacement of `page` and the page texels it covers.
 fn hashed_replacement(pack: &Pack, page: &Image) -> Option<(Image, [u32; 2])> {
-    let found = pack
-        .htexture()
-        .find_quietly(&htexture::image_candidates(page))?;
-    match htexture::load(pack, &found.path) {
+    let found = pack.hires().find_quietly(&hires::image_candidates(page))?;
+    match hires::load(pack, &found.path) {
         Ok(image) if usable(&image) => Some((image, found.frame)),
         Ok(_) => None,
         Err(err) => {
-            eprintln!("htexture: {err:#}");
+            eprintln!("hires: {err:#}");
             None
         }
     }
@@ -374,7 +372,7 @@ mod tests {
     fn a_named_image_resolves_by_its_stem_in_any_format() {
         let mut writer = crate::pack::PackWriter::new();
         let bmp = crate::bmp::encode_to_vec(&solid(4, 2, [7, 7, 7, 255])).unwrap();
-        writer.add("htexture/room/100/effect/00.bmp", bmp).unwrap();
+        writer.add("hires/room/100/effect/00.bmp", bmp).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let image = named_image(&pack, "room/100/effect/00").unwrap();
         assert_eq!((image.width, image.height), (4, 2));

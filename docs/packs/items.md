@@ -91,11 +91,11 @@ transparent 40x30 image.
 Two sheets of several items' art sit at the top of `item/`:
 `item/item_mix` and `item/medal`.
 
-For HD art, the per-item names are under `htexture/`:
+For HD art, the per-item names are under `hires/`:
 
 ```text
-htexture/item/0b/item.webp     the icon, covering its 40x30 cell
-htexture/item/0b/model.webp    the model's 256x256 page
+hires/item/0b/item.webp     the icon, covering its 40x30 cell
+hires/item/0b/model.webp    the model's 256x256 page
 ```
 
 ## Documents

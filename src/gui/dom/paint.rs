@@ -374,6 +374,15 @@ fn item(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>) {
             );
         }
         "save" => save_frame(p, rect, selected, node.prop("highlight").truthy()),
+        // A grid cell: a dim panel, or the selection band framing its
+        // picture when focused; its children are the picture and caption.
+        "card" => {
+            if selected {
+                p.canvas.fill_rect(rect, style::SELECTED_BAND);
+            } else {
+                p.canvas.fill_rect(rect, Color::rgba(0x20, 0x20, 0x20, 170));
+            }
+        }
         // A table row: its chrome only; its children are its cells.
         "row" => p.list_row(rect, selected),
         _ => {

@@ -828,7 +828,7 @@ end
         writer.add("art/bg.bmp", test_bmp()).unwrap();
         if let Some((hash, bytes)) = hd {
             writer
-                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
                 .unwrap();
         }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -836,7 +836,7 @@ end
     let picture =
         crate::ui::load_picture(&build(None), "art/bg", crate::assets::Geometry::Free, None)
             .unwrap();
-    let candidate = crate::htexture::image_candidates(&picture)[0];
+    let candidate = crate::hires::image_candidates(&picture)[0];
     let hd = crate::bmp::encode_to_vec(&crate::state::Image {
         width: 8,
         height: 8,
@@ -904,7 +904,7 @@ fn capture_entry_art(
         writer.add("art/bg.bmp", art.clone()).unwrap();
         if let Some((hash, bytes)) = hd {
             writer
-                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
                 .unwrap();
         }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -912,7 +912,7 @@ fn capture_entry_art(
     let picture =
         crate::ui::load_picture(&build(None), "art/bg", crate::assets::Geometry::Free, None)
             .unwrap();
-    let candidate = crate::htexture::image_candidates(&picture)[0];
+    let candidate = crate::hires::image_candidates(&picture)[0];
     let hd = crate::bmp::encode_to_vec(&crate::state::Image {
         width: 8,
         height: 8,
@@ -956,7 +956,7 @@ fn page_sprite_mirrored_whole_shows_its_art_over_the_keyed_clear_texels_too() {
         writer.add("art/keyed.tim", keyed_tim()).unwrap();
         if let Some((hash, bytes)) = hd {
             writer
-                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
                 .unwrap();
         }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -966,7 +966,7 @@ fn page_sprite_mirrored_whole_shows_its_art_over_the_keyed_clear_texels_too() {
     else {
         panic!("an indexed page");
     };
-    let candidate = crate::htexture::page_candidates(&page, 0)[0];
+    let candidate = crate::hires::page_candidates(&page, 0)[0];
     let hd = crate::bmp::encode_to_vec(&crate::state::Image {
         width: 8,
         height: 8,
@@ -1041,7 +1041,7 @@ end
         writer.add("art/plan.tim", tim.clone()).unwrap();
         if let Some((hash, bytes)) = hd {
             writer
-                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
                 .unwrap();
         }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -1051,7 +1051,7 @@ end
     else {
         panic!("an indexed page");
     };
-    let candidate = crate::htexture::page_candidates(&page, 0)[0];
+    let candidate = crate::hires::page_candidates(&page, 0)[0];
     let hd = crate::bmp::encode_to_vec(&crate::state::Image {
         width: 32,
         height: 16,
@@ -1348,15 +1348,15 @@ end
         Some([0, 0, 0]),
     )
     .unwrap();
-    let hash = crate::htexture::image_candidates(&per_item)[0].hash;
-    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
+    let hash = crate::hires::image_candidates(&per_item)[0].hash;
+    let hash_entry = Box::leak(format!("hires/misc/{hash:08X}.bmp").into_boxed_str());
     let fixture = art_pack(
         "item-icon-hd",
         source,
         vec![
             ("item/0b/item.bmp", solid_bmp(40, 30, [255, 0, 0])),
             (hash_entry, solid_bmp(40, 30, [0, 255, 0])),
-            ("htexture/item/0b/item.bmp", solid_bmp(80, 60, [0, 0, 255])),
+            ("hires/item/0b/item.bmp", solid_bmp(80, 60, [0, 0, 255])),
         ],
     );
     let mut screen = fixture.load();
@@ -1406,10 +1406,7 @@ end
         source,
         vec![
             ("item/01/item.bmp", solid_bmp(40, 30, [0, 255, 0])),
-            (
-                "htexture/data/item_all/00.bmp",
-                solid_bmp(80, 60, [0, 0, 255]),
-            ),
+            ("hires/data/item_all/00.bmp", solid_bmp(80, 60, [0, 0, 255])),
         ],
     );
     let mut screen = fixture.load();
@@ -1445,9 +1442,9 @@ end
         let crate::assets::Artwork::Indexed(texture) = page else {
             panic!("the dot page is indexed");
         };
-        crate::htexture::page_candidates(&texture, 0)[0].hash
+        crate::hires::page_candidates(&texture, 0)[0].hash
     };
-    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
+    let hash_entry = Box::leak(format!("hires/misc/{hash:08X}.bmp").into_boxed_str());
     let fixture = art_pack(
         "page-hash",
         source,
@@ -1482,11 +1479,11 @@ end
     let atlas = || ("item/01/item.bmp", solid_bmp(40, 30, [0, 255, 0]));
     let legacy = || {
         (
-            "htexture/data/item_all/00.bmp",
+            "hires/data/item_all/00.bmp",
             solid_bmp(100, 60, [255, 255, 0]),
         )
     };
-    let primary = || ("htexture/item/01/item.bmp", solid_bmp(120, 60, [0, 0, 255]));
+    let primary = || ("hires/item/01/item.bmp", solid_bmp(120, 60, [0, 0, 255]));
     let hd_size = |label: &str, entries: Vec<(&str, Vec<u8>)>| {
         let fixture = art_pack(label, source, entries);
         let mut screen = fixture.load();
@@ -1573,10 +1570,7 @@ end
         vec![
             ("item/02/model.tmd", tmd.clone()),
             ("item/02/model.bmp", page),
-            (
-                "htexture/item/02/model.bmp",
-                solid_bmp(512, 512, [0, 0, 255]),
-            ),
+            ("hires/item/02/model.bmp", solid_bmp(512, 512, [0, 0, 255])),
         ],
     );
     let mut screen = fixture.load();
@@ -1671,8 +1665,8 @@ end
         Some([0, 0, 0]),
     )
     .unwrap();
-    let icon_hash = crate::htexture::image_candidates(&icon)[0].hash;
-    let icon_entry = Box::leak(format!("htexture/misc/{icon_hash:08X}.bmp").into_boxed_str());
+    let icon_hash = crate::hires::image_candidates(&icon)[0].hash;
+    let icon_entry = Box::leak(format!("hires/misc/{icon_hash:08X}.bmp").into_boxed_str());
     let fixture = art_pack(
         "item-icon-hash",
         icon_source,
@@ -1696,8 +1690,8 @@ end
     let ivm = crate::ivm::sample_ivm();
     let (texture, _) = crate::ivm::split(&ivm).unwrap();
     let texture = crate::tim::decode_8bpp(texture).unwrap();
-    let page_hash = crate::htexture::page_candidates(&texture, 0)[0].hash;
-    let page_entry = Box::leak(format!("htexture/misc/{page_hash:08X}.bmp").into_boxed_str());
+    let page_hash = crate::hires::page_candidates(&texture, 0)[0].hash;
+    let page_entry = Box::leak(format!("hires/misc/{page_hash:08X}.bmp").into_boxed_str());
     let page = crate::bmp::encode_indexed_page(&texture, 0).unwrap();
     let source = r#"
 function update(api, input) end

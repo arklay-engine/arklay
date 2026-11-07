@@ -17,7 +17,7 @@ use crate::anim::{self, Mat4x3};
 use crate::assets::{Artwork, Geometry};
 use crate::budget;
 use crate::font::{GLYPH_HEIGHT, Tint};
-use crate::htexture::{self, Replacement};
+use crate::hires::{self, Replacement};
 use crate::ivm::Ivm;
 use crate::pack::{AssetClass, Pack};
 use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer, SpriteBlend};
@@ -81,12 +81,12 @@ pub(super) struct Assets {
     /// The HD replacement of each `(entry, CLUT row)` the entry-based draws
     /// (`api:background`, `api:sprite`, `api:sprite_region`) looked up.
     hd_entries: RefCell<HashMap<(String, usize), HdArt>>,
-    /// The named HD keys (`htexture/<stem>`) a handle's art answers to, most
+    /// The named HD keys (`hires/<stem>`) a handle's art answers to, most
     /// specific first.
     hd_names: RefCell<HashMap<usize, Vec<String>>>,
     /// The texel indices of each indexed page a recoloured HD draw
     /// (`api:page_lut`) used, shared by its draws.
-    indices: RefCell<HashMap<usize, Arc<htexture::Indices>>>,
+    indices: RefCell<HashMap<usize, Arc<hires::Indices>>>,
 }
 
 /// A looked-up HD replacement of screen art; `None` when the pack has none.
@@ -185,7 +185,7 @@ impl Assets {
     }
 
     /// The texel indices of indexed page `handle`, copied once.
-    fn indices(&self, handle: usize) -> mlua::Result<Arc<htexture::Indices>> {
+    fn indices(&self, handle: usize) -> mlua::Result<Arc<hires::Indices>> {
         if let Some(found) = self.indices.borrow().get(&handle) {
             return Ok(found.clone());
         }
@@ -194,7 +194,7 @@ impl Assets {
                 "art handle {handle} is not an indexed page"
             )));
         };
-        let indices = Arc::new(htexture::Indices {
+        let indices = Arc::new(hires::Indices {
             width: texture.width,
             height: texture.height,
             texels: texture.indices.clone(),
@@ -248,7 +248,7 @@ impl Assets {
         let named = self.hd_names.borrow().get(&handle).and_then(|names| {
             names
                 .iter()
-                .find_map(|name| htexture::named_replacement(pack, name, [size.0, size.1]))
+                .find_map(|name| hires::named_replacement(pack, name, [size.0, size.1]))
         });
         let found = match named {
             Some(found) => Some(found),
@@ -257,20 +257,18 @@ impl Assets {
                 // viewer's model), so skip hashing the art when there is
                 // nothing to find.
                 let candidates = match asset {
-                    _ if pack.htexture().is_empty() => Vec::new(),
+                    _ if pack.hires().is_empty() => Vec::new(),
                     Asset::Picture(image) | Asset::Page(Artwork::Rgba(image)) => {
-                        htexture::image_candidates(image)
+                        hires::image_candidates(image)
                     }
-                    Asset::Page(Artwork::Indexed(texture)) => {
-                        htexture::page_candidates(texture, row)
-                    }
-                    Asset::Model(model, _) => htexture::page_candidates(&model.texture, row),
+                    Asset::Page(Artwork::Indexed(texture)) => hires::page_candidates(texture, row),
+                    Asset::Model(model, _) => hires::page_candidates(&model.texture, row),
                 };
                 if candidates.is_empty() {
                     None
                 } else {
                     let (width, height) = size;
-                    htexture::replacement(pack, &candidates, || {
+                    hires::replacement(pack, &candidates, || {
                         format!("{width}x{height} screen art (row {row})")
                     })
                 }
@@ -288,11 +286,11 @@ impl Assets {
             return found.clone();
         }
         let found = match self.get(handle) {
-            Ok(Asset::Picture(image)) if !pack.htexture().is_empty() => {
+            Ok(Asset::Picture(image)) if !pack.hires().is_empty() => {
                 crop(image, cell).and_then(|crop| {
-                    let candidates = htexture::image_candidates(&crop);
+                    let candidates = hires::image_candidates(&crop);
                     let [x, y, w, h] = cell;
-                    htexture::replacement(pack, &candidates, || {
+                    hires::replacement(pack, &candidates, || {
                         format!("{w}x{h} screen art cell at ({x}, {y})")
                     })
                 })
@@ -324,14 +322,14 @@ impl Assets {
             return found.clone();
         }
         let candidates = match image {
-            _ if pack.htexture().is_empty() => Vec::new(),
-            Decoded::Rgba(image) => htexture::image_candidates(image),
-            Decoded::Indexed(texture) => htexture::page_candidates(texture, row),
+            _ if pack.hires().is_empty() => Vec::new(),
+            Decoded::Rgba(image) => hires::image_candidates(image),
+            Decoded::Indexed(texture) => hires::page_candidates(texture, row),
         };
         let found = if candidates.is_empty() {
             None
         } else {
-            htexture::replacement(pack, &candidates, || format!("{entry} (row {row})"))
+            hires::replacement(pack, &candidates, || format!("{entry} (row {row})"))
         };
         self.hd_entries.borrow_mut().insert(key, found.clone());
         found

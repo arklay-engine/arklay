@@ -10,7 +10,7 @@
 //!
 //! | CR file | pack entry |
 //! |---|---|
-//! | `hires/**` (HD textures and `cache/ROOM####.dat`) | `htexture/**` |
+//! | `hires/**` (HD textures and `cache/ROOM####.dat`) | `hires/**` |
 //! | `movie/*.mp4`, `movie/*.avi` | `movie/<film>.{mp4,avi}` |
 //! | `STAGEn/ROOM####.RDT` | `room/####/room.rdt` |
 //! | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (every variant of the room) |
@@ -822,7 +822,7 @@ fn classify(relative: &str, mod_roots: &[String]) -> Class {
     if let Some(index) = lower.iter().position(|part| part == "hires")
         && index + 1 < lower.len()
     {
-        return raw(format!("htexture/{}", lower[index + 1..].join("/")));
+        return raw(format!("hires/{}", lower[index + 1..].join("/")));
     }
 
     let parent = lower
@@ -1725,22 +1725,22 @@ mod tests {
         let map = mapped_entries(&paths, &[]);
         assert_eq!(
             one(&map, "hires/bgd/0a1b2c3d.webp"),
-            "htexture/bgd/0a1b2c3d.webp"
+            "hires/bgd/0a1b2c3d.webp"
         );
         assert_eq!(
             one(&map, "hires/cache/ROOM1000.dat"),
-            "htexture/cache/room1000.dat"
+            "hires/cache/room1000.dat"
         );
-        // Both item HD routes land under `htexture/`: the new per-item names
+        // Both item HD routes land under `hires/`: the new per-item names
         // and the legacy CR `ITEM_ALL`/`ITEM_M2` names.
-        assert_eq!(one(&map, "hires/Item/0B.webp"), "htexture/item/0b.webp");
+        assert_eq!(one(&map, "hires/Item/0B.webp"), "hires/item/0b.webp");
         assert_eq!(
             one(&map, "hires/Data/ITEM_ALL/05.webp"),
-            "htexture/data/item_all/05.webp"
+            "hires/data/item_all/05.webp"
         );
         assert_eq!(
             one(&map, "hires/Data/Item_m2/I00V.webp"),
-            "htexture/data/item_m2/i00v.webp"
+            "hires/data/item_m2/i00v.webp"
         );
         assert_eq!(one(&map, "movie/OJ.mp4"), "movie/00.mp4");
         assert_eq!(one(&map, "movie/Capcom.mp4"), "movie/17.mp4");

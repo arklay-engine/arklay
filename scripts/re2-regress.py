@@ -57,8 +57,18 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
         data = tomllib.load(handle)
     defaults = data.get("defaults", {})
     fieldsets = data.get("fields", {})
+    entries = list(data.get("run", []))
+    # More runs, one file each or one per family, in `<manifest stem>.d/`: a new
+    # run there doesn't touch the lines every other new run appends to.
+    for extra in sorted((path.parent / f"{path.stem}.d").glob("*.toml")):
+        with open(extra, "rb") as handle:
+            more = tomllib.load(handle)
+        unknown = set(more) - {"run"}
+        if unknown:
+            raise SystemExit(f"re2-regress: {extra} may only hold [[run]] tables, not {sorted(unknown)}")
+        entries.extend(more.get("run", []))
     runs = []
-    for entry in data.get("run", []):
+    for entry in entries:
         run = {**defaults, **entry}
         run.setdefault("ref", run["name"])
         fields = run.get("fields", "")

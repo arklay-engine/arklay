@@ -1,0 +1,2 @@
+# room 509 in scenario A: the player stands in the area that starts the room scene and lets G2 kill them (oracle/re2.md)
+2720

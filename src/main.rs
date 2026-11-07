@@ -1143,6 +1143,21 @@ fn write_pack_info(pack_path: &Path, pack: &Pack, out: &mut impl Write) -> Resul
                     writeln!(out, "  {label} {line}")?;
                 }
             }
+            if let Some(category) = &manifest.category {
+                writeln!(out, "  category: {category}")?;
+            }
+            if !manifest.authors.is_empty() {
+                writeln!(out, "  authors: {}", manifest.authors.join(", "))?;
+            }
+            for credit in &manifest.credits {
+                writeln!(out, "  credit: {credit}")?;
+            }
+            if let Some(homepage) = &manifest.homepage {
+                writeln!(out, "  homepage: {homepage}")?;
+            }
+            if let Some(thumbnail) = &manifest.thumbnail {
+                writeln!(out, "  thumbnail: {thumbnail}")?;
+            }
             if let Some(engine) = &manifest.engine {
                 writeln!(out, "  engine: {engine}")?;
             }

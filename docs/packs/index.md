@@ -165,7 +165,7 @@ may use at most 255 opaque colours. Formats: `webp`, `png`, `bmp`, `tim`.
 `shadow/kage` is the player's ground shadow. In an image with alpha, the
 alpha is the shadow's strength. Formats: `webp`, `png`, `bmp`, `tim`.
 
-### `htexture/`
+### `hires/`
 
 HD textures, found by a hash of the texture they replace. See
 [HD texture packs](../mods.md#hd-texture-packs).

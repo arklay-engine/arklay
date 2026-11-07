@@ -1,0 +1,209 @@
+# room 509 in scenario A: after the scene the player turns to G2 and shoots it with the magnum every 20 ticks, with Leon's other weapons (oracle/re2.md)
+912 right
+938
+940 aim
+960 aim fire
+965 aim
+980 aim fire
+985 aim
+1000 aim fire
+1005 aim
+1020 aim fire
+1025 aim
+1040 aim fire
+1045 aim
+1060 aim fire
+1065 aim
+1080 aim fire
+1085 aim
+1100 aim fire
+1105 aim
+1120 aim fire
+1125 aim
+1140 aim fire
+1145 aim
+1160 aim fire
+1165 aim
+1180 aim fire
+1185 aim
+1200 aim fire
+1205 aim
+1220 aim fire
+1225 aim
+1240 aim fire
+1245 aim
+1260 aim fire
+1265 aim
+1280 aim fire
+1285 aim
+1300 aim fire
+1305 aim
+1320 aim fire
+1325 aim
+1340 aim fire
+1345 aim
+1360 aim fire
+1365 aim
+1380 aim fire
+1385 aim
+1400 aim fire
+1405 aim
+1420 aim fire
+1425 aim
+1440 aim fire
+1445 aim
+1460 aim fire
+1465 aim
+1480 aim fire
+1485 aim
+1500 aim fire
+1505 aim
+1520 aim fire
+1525 aim
+1540 aim fire
+1545 aim
+1560 aim fire
+1565 aim
+1580 aim fire
+1585 aim
+1600 aim fire
+1605 aim
+1620 aim fire
+1625 aim
+1640 aim fire
+1645 aim
+1660 aim fire
+1665 aim
+1680 aim fire
+1685 aim
+1700 aim fire
+1705 aim
+1720 aim fire
+1725 aim
+1740 aim fire
+1745 aim
+1760 aim fire
+1765 aim
+1780 aim fire
+1785 aim
+1800 aim fire
+1805 aim
+1820 aim fire
+1825 aim
+1840 aim fire
+1845 aim
+1860 aim fire
+1865 aim
+1880 aim fire
+1885 aim
+1900 aim fire
+1905 aim
+1920 aim fire
+1925 aim
+1940 aim fire
+1945 aim
+1960 aim fire
+1965 aim
+1980 aim fire
+1985 aim
+2000 aim fire
+2005 aim
+2020 aim fire
+2025 aim
+2040 aim fire
+2045 aim
+2060 aim fire
+2065 aim
+2080 aim fire
+2085 aim
+2100 aim fire
+2105 aim
+2120 aim fire
+2125 aim
+2140 aim fire
+2145 aim
+2160 aim fire
+2165 aim
+2180 aim fire
+2185 aim
+2200 aim fire
+2205 aim
+2220 aim fire
+2225 aim
+2240 aim fire
+2245 aim
+2260 aim fire
+2265 aim
+2280 aim fire
+2285 aim
+2300 aim fire
+2305 aim
+2320 aim fire
+2325 aim
+2340 aim fire
+2345 aim
+2360 aim fire
+2365 aim
+2380 aim fire
+2385 aim
+2400 aim fire
+2405 aim
+2420 aim fire
+2425 aim
+2440 aim fire
+2445 aim
+2460 aim fire
+2465 aim
+2480 aim fire
+2485 aim
+2500 aim fire
+2505 aim
+2520 aim fire
+2525 aim
+2540 aim fire
+2545 aim
+2560 aim fire
+2565 aim
+2580 aim fire
+2585 aim
+2600 aim fire
+2605 aim
+2620 aim fire
+2625 aim
+2640 aim fire
+2645 aim
+2660 aim fire
+2665 aim
+2680 aim fire
+2685 aim
+2700 aim fire
+2705 aim
+2720 aim fire
+2725 aim
+2740 aim fire
+2745 aim
+2760 aim fire
+2765 aim
+2780 aim fire
+2785 aim
+2800 aim fire
+2805 aim
+2820 aim fire
+2825 aim
+2840 aim fire
+2845 aim
+2860 aim fire
+2865 aim
+2880 aim fire
+2885 aim
+2900 aim fire
+2905 aim
+2920 aim fire
+2925 aim
+2940 aim fire
+2945 aim
+2960 aim fire
+2965 aim
+2980 aim fire
+2985 aim
+3000

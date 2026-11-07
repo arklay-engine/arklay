@@ -82,6 +82,22 @@ lua = ["lua/demo.lua"]
 | `description` | Longer text, such as credits; `\n` breaks a line. Optional. |
 | `load_order` | Where the mod goes among the others: lower applies first, so a higher one wins a file both carry. Default `0`. |
 | `lua` | The mod's Lua hooks, in order. Left out or empty, every `lua/**.lua` file of the mod runs. |
+| `category` | The [mod catalog](#hosted-mods)'s category, e.g. `"High Definition"`, `"Audio"`, `"Cosmetic"`. Optional. |
+| `authors` | The people or teams who made the content. Optional. |
+| `credits` | Further acknowledgements (sources, contributors, thanks), one string each. Optional. |
+| `tags` | Free-form labels, one string each. Optional. |
+| `homepage` | The mod's home page URL. Optional. |
+| `thumbnail` | The entry holding a 4:3 preview picture (`"thumbnail.webp"`), shown in MODS > AVAILABLE. Optional. |
+
+A string array may run over several lines up to its closing `]`, which keeps
+long credit lists readable:
+
+```toml
+credits = [
+    "bserv: Barry's photo, inventory avatars and menus",
+    "TeamX: the PC HD mods and their mask tools",
+]
+```
 
 A mod may not set `start_room` or `region`. A mod without a manifest is
 refused.
@@ -91,6 +107,12 @@ refused.
 A mod, like a game pack, is either an `.akpak` file or a directory. A
 directory mod must hold `manifest.toml`, and it runs as it is: `arklay mod
 build` is only needed to share it as one file.
+
+A mod `.akpak` is read on demand: opening it reads only its header, table
+of contents and paths, and each entry is read from the file when it is asked
+for, so an HD or film pack of several gigabytes costs no memory until its art
+is drawn. A game pack is read whole (it serves every room load) and is capped
+at 2 GiB; a mod may be up to 64 GiB, and any one entry up to 1 GiB.
 
 ```sh
 # Explicit layers, repeatable; later load_order wins a shared entry. A mod may
@@ -144,9 +166,10 @@ the default: every discovered mod applies in `(load_order, id)` order. An
 Mods sort by the configured `order`, then by `(load_order, id)`; within one
 layer the existing ASCII case-insensitive lookup wins. Duplicate mod ids and
 duplicate layer paths are rejected, and a mod may only name a `base` matching
-the base pack's id. The exception is a mod holding nothing but `htexture/`
+the base pack's id. The exception is a mod holding nothing but `hires/`
 entries: textures replace by pixel hash, so once enabled it applies to every game
-pack, whatever its `base` says. With no layers at all the engine takes exactly the
+pack, whatever its `base` says. (The folder was called `htexture/` in
+0.1.0; a pack that still uses that name reads as `hires/`.) With no layers at all the engine takes exactly the
 single-pack path, so a run without `--mod` (and with no discovered mods) is
 byte-identical to earlier releases.
 
@@ -199,7 +222,7 @@ The film formats and codecs are listed in [Movies](packs/movies.md).
 | item definition | `item/0b/item.xml` | xml (see [Items](packs/items.md#the-definition)) | — |
 | item icon | `item/0b/item`, `item/44/item`, `item/6f/item` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
 | item viewer model | `item/0b/model.tmd` | tmd | the shipped mesh |
-| item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b/model` |
+| item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `hires/item/0b/model` |
 | enemy / player art | (inside `enemy/<id>/enemy*.emd`, `player/<id>/skin/<skin>.emd`) | — | override the whole model entry |
 | player character | `player/<id>/skin/<skin>.emd` (`00` own model, `01`/`02` alternate outfits), `player/<id>/weapon/<item>.emw` (weapon id `00` no weapon … `0a`, `6f` Ingram, `70` Minimi), `player/<id>/sound/<sound>.wav` (`00`-`03` hurt sounds, `04`-`07` their echoing copies); `<id>` is `00` Chris, `01` Jill, `02` Barry, `03` Rebecca | emd, emw; sounds as for `se/` | — |
 | scripted-character held weapon | `enemy/<id>/weapon/<behavior>.tmd` (entity id `20`-`2e`, the behavior byte `01`-`06`); a missing entry holds nothing | tmd | textured from the character's own page |
@@ -212,7 +235,7 @@ The film formats and codecs are listed in [Movies](packs/movies.md).
 | room definition | `room/100/room.xml` | xml (see [Rooms](packs/rooms.md#the-room-definition)); a raw RDT named for its variant, `room/100/jill-mansion1.rdt`, still loads | — |
 | room scripts | `room/100/room.scd` | scd | — |
 | room object / item model | `room/100/object/00.tmd`, `room/100/item/00.tmd` | tmd | the shipped mesh |
-| room model texture | `room/100/object/00.bmp`; HD replacements use `htexture/room/100/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
+| room model texture | `room/100/object/00.bmp`; HD replacements use `hires/room/100/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
 | room effect sprite | `room/100/effect/00.xml` + `.bmp` | xml; bmp (16-wide CLUT sheet), tim | the shipped sprite's |
 | room player animation | `room/100/anim/00.emr` + `.edd` | emr, edd | — |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
@@ -327,10 +350,10 @@ remapped to `0x000001`.
 
 ### Using them
 
-A mod replaces textures by these names under `htexture/`. On first use every image
-(`webp`, `png` or `bmp`) anywhere below `htexture/` is indexed by the first 8 hex
-digits of its file name, so `htexture/bgd/DD17F52F.webp`,
-`htexture/anything/DD17F52F.png` and `htexture/DD17F52F_3B.webp` all replace the
+A mod replaces textures by these names under `hires/`. On first use every image
+(`webp`, `png` or `bmp`) anywhere below `hires/` is indexed by the first 8 hex
+digits of its file name, so `hires/bgd/DD17F52F.webp`,
+`hires/anything/DD17F52F.png` and `hires/DD17F52F_3B.webp` all replace the
 texture hashing to `DD17F52F`; the subdirectories are only for organising files. When
 two files share a hash, a bare `<hash>` name wins over a suffixed `<hash>_XX` one.
 
@@ -373,12 +396,12 @@ and keeps the originals.
 Some masks cannot be named from their own texels: their hash depends on what the
 loader's surface held before the upload. An RE-ENHANCE pack ships the loader's
 `cache/ROOM*.dat` lists, little-endian words of each room's hashes in load order,
-and each camera's mask sits immediately before its background. `htexture` reads
+and each camera's mask sits immediately before its background. `hires` reads
 those lists and pairs a mask with the background hash that follows it. Together
 with the 131 that name themselves, this resolves 407 of the 431 masks RE-ENHANCE
 v2.0 ships.
 
-The rest belong to rooms or cameras the lists do not cover, so `htexture` pairs
+The rest belong to rooms or cameras the lists do not cover, so `hires` pairs
 them by shape. Each mask under a `mask/` directory that no camera uses yet is
 reduced to one texel per original texel (a texel is drawn when most of the HD
 texels over it are at least half opaque). Its coverage is then compared with the
@@ -391,7 +414,7 @@ art differs still compete, so a mask that fits both is left unpaired. On the 131
 picks the right camera for 130 and abstains on the last. It never picks a wrong
 one. It pairs all 24 remaining masks, so all 431 resolve from an unmodified
 `hires/` tree. Three cameras (`306_002`, `406_005`, `407_001`) have no mask in the
-pack. Matching runs once, when the pack's `htexture/` table is first built, and
+pack. Matching runs once, when the pack's `hires/` table is first built, and
 only for a pack with a `mask/` directory. It is spread over every core and takes
 about 0.7 to 0.9 seconds on 8 threads; most of that is hashing each camera's page
 and background.
@@ -403,7 +426,7 @@ A texture with no replacement is reported once on stderr, with every hash that w
 tried:
 
 ```text
-htexture: no replacement for 256x256 model page, CLUT row 1: 3D4A4499 ...
+hires: no replacement for 256x256 model page, CLUT row 1: 3D4A4499 ...
 ```
 
 A complete pack should report nothing while playing. Missing reports mean either the
@@ -418,7 +441,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 
 | CR file | Pack entry |
 | --- | --- |
-| `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
+| `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `hires/**` |
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
 | `STAGEn/ROOM####.RDT` | the room's folder, named for its variant: `room/<room>/<variant>.rdt` (`STAGE6/ROOM6031.RDT` is `room/103/jill-mansion2.rdt`, the original's stages 6 and 7 being the second mansion visit); the engine loads a raw RDT as well as the converted XML |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/<room>/cut/*.bmp`, `room/<room>/mask/*.bmp`, which every variant of the room reads |
@@ -463,6 +486,74 @@ arklay convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
 arklay convert-mod path/to/biorand/mod_biorand --out biorand.akpak
 arklay convert-mod re-hd.zip --root re1hd --base re1.akpak
 ```
+
+## Hosted mods
+
+The launcher's MODS screen has two tabs. **Installed** lists the discovered
+mods to enable, disable and reorder. **Available** lists a hosted mod catalog,
+as a grid of pictures or a list (V), filtered by game and category (F) and
+sorted (G); R fetches it again. A mod's details show its picture,
+description, size, authors and credits, and install it. An install downloads
+the pack to the primary data root's `mods` folder (on Windows
+`%LOCALAPPDATA%\arklay\mods`). There it is checked against the catalog's size
+and SHA-256 and against its own manifest before it replaces anything. An
+installed mod whose catalog version differs shows **Update**, on both tabs.
+Remove deletes the pack. A mod installed from a source folder is left alone:
+two layers may not share an id, so its details say to remove the folder first.
+
+The catalog is `ARKLAY_MOD_CATALOG`, else `[mods] catalog` in `arklay.toml`
+(a URL or a local path to an `index.json`), else Arklay's own hosted catalog,
+`https://pub-c49dad06a9fe4f2baacb873a181858b9.r2.dev/index.json`. Opening
+MODS fetches it; `catalog = "none"` (or `ARKLAY_MOD_CATALOG=none`) turns the
+hosted catalog off. To use another catalog:
+
+```toml
+[mods]
+catalog = "https://example.org/mods/index.json"
+```
+
+The catalog's `index.json` lists each mod's manifest fields plus where the
+pack is, how big it is and its SHA-256. Links are relative to the index, so a
+hosted tree moves as a whole (see `src/catalog.rs` for the full format):
+
+```json
+{
+  "format": 1,
+  "mods": [{
+    "id": "re1-shdp", "name": "Seamless HD Project", "version": "1.1",
+    "game": "re1", "kind": "mod", "category": "High Definition",
+    "authors": ["MoArtis", "Kayael", "Doze_D", "FrankWesker"],
+    "credits": ["..."], "homepage": "https://www.reshdp.com/re1/",
+    "url": "re1-shdp/1.1/re1-shdp.akpak", "size": 529808808, "sha256": "...",
+    "thumbnail": "re1-shdp/1.1/thumbnail.webp"
+  }]
+}
+```
+
+### Publishing the catalog
+
+Each hosted mod is authored as a mod source directory, `<build>/<id>/`, with
+its `manifest.toml` (name, version, category, authors, credits, homepage), a
+640x480 `thumbnail.webp` and its entries. Two scripts maintain them:
+
+- `scripts/import-mods.py [id...]` (re)fills a mod directory's content from
+  the archives the mod was released as, per the recipes in the script:
+  `convert-mod` over the files it selects, or plain copies. It keeps the
+  hand-written `manifest.toml` and thumbnail, and writes a minimal manifest
+  on a first import.
+- `scripts/publish-mods.py [id...]` builds every directory with
+  `arklay mod build` into the hosted tree and writes `index.json`:
+  `<id>/<version>/<id>.akpak` and its `thumbnail.webp`. A published version is
+  never replaced by different bytes, so caches can keep the packs for good.
+  To publish changed content, change the manifest's `version`: the upstream
+  release's version (`1.1`), with a suffix for a repackage of the same
+  release (`1.1-2`). Only `index.json` is rewritten in place, so serve it with
+  a short cache lifetime. `--skip` leaves mods out of the index.
+
+The defaults are `G:\arklay\raw` (the original archives),
+`G:\arklay\mods-build` (the mod directories) and `G:\arklay\mods` (the hosted
+tree, which mirrors the public URL); each script's `--help` lists the
+overrides.
 
 ## Determinism
 

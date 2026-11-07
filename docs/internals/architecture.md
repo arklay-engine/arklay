@@ -92,7 +92,7 @@ responsibility.
 | `render` | Presentation | Deterministic software rasterizer: framebuffer, models, masks, shadows, effect billboards, lighting |
 | `raster` | Presentation | The reference's 3D triangle pipeline reproduced step for step, for llvmpipe-exact pixels |
 | `gpu` | Presentation | Interactive SDL_GPU renderer for the gameplay scene (the default; software fallback); never used by captures, traces or tests of record |
-| `htexture` | Presentation | HD texture replacement by content hash (`htexture/`), including the loader cache-list mask pairing and RE2 per-page model skins |
+| `hires` | Presentation | HD texture replacement by content hash (`hires/`), including the loader cache-list mask pairing and RE2 per-page model skins |
 | `video` | Presentation | The `[graphics]` options, the 4:3 viewport fit and the F8 window steps |
 | `tween` | Presentation | Presentation tweening for render rates above the 30 Hz simulation |
 | `pacer` | Presentation | When the interactive loop presents a frame |

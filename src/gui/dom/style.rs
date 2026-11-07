@@ -47,6 +47,8 @@ pub fn row_height(kind: Kind, variant: &str) -> Option<f32> {
         (Kind::Item, "menu") => Some(68.0),
         (Kind::Item, "save") => Some(132.0),
         (Kind::Item, "dialog") => Some(52.0),
+        // A grid cell: as tall as its picture and caption.
+        (Kind::Item, "card") => None,
         (Kind::Item, _) | (Kind::Option(_), _) => Some(66.0),
         _ => None,
     }
@@ -57,6 +59,7 @@ pub fn list_gap(variant: &str) -> f32 {
     match variant {
         "menu" => 10.0,
         "save" => 12.0,
+        "cards" => 24.0,
         "dialog" => 8.0,
         _ => 0.0,
     }
@@ -67,6 +70,7 @@ pub fn item_padding(variant: &str) -> [f32; 4] {
     match variant {
         "save" => [14.0, 12.0, 14.0, 8.0],
         "menu" => [0.0, 0.0, 0.0, 40.0],
+        "card" => [10.0, 10.0, 12.0, 10.0],
         _ => [0.0, 24.0, 0.0, 30.0],
     }
 }
@@ -169,7 +173,7 @@ impl Ink {
 /// The ink inside an item of `variant`, selected or not.
 pub fn item_ink(variant: &str, selected: bool) -> Ink {
     match (variant, selected) {
-        ("save", true) => Ink {
+        ("save" | "card", true) => Ink {
             fg: SELECTED_TEXT,
             dim: SELECTED_DIM,
             rule: SELECTED_DIM,

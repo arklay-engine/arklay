@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One hosted mod: its picture and description beside its facts, credits
+     and what can be done with it. The host publishes `mod.*`: name,
+     thumbnail, description, game, category, version, size, authors,
+     credits (one per line), homepage, status and status_tone, the install
+     row's `action_label` (Install, Update, Reinstall; empty while it cannot
+     be installed), `installed` (whether Remove shows), `remove_question`
+     and `has_homepage`. -->
+<screen use="standard-screen" title="{mod.name}">
+  <text slot="header" variant="caption" text="{mod.game}" wrap="none"/>
+  <split>
+    <stack gap="medium">
+      <image aspect="4:3" src="{mod.thumbnail}"/>
+      <text text="{mod.description}"/>
+    </stack>
+    <stack gap="medium">
+      <field label="Version" value="{mod.version}" tone="value"/>
+      <field label="Category" value="{mod.category}" tone="value"/>
+      <field label="Download" value="{mod.size}" tone="value"/>
+      <field label="Status" value="{mod.status}" tone="{mod.status_tone}"/>
+      <field label="Made by" value="{mod.authors}" tone="value"/>
+      <text variant="value-dim" text="Credits" visible="{mod.credits}"/>
+      <text variant="detail" text="{mod.credits}"/>
+      <list height="auto">
+        <item text="{mod.action_label}" action="mod_install" visible="{mod.action_label}"/>
+        <item text="Remove" action="mod_remove" visible="{mod.installed}" confirm="{mod.remove_question}"/>
+        <item text="Open home page" action="mod_homepage" visible="{mod.has_homepage}"/>
+      </list>
+    </stack>
+  </split>
+</screen>

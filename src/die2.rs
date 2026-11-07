@@ -123,6 +123,9 @@ pub struct DieTick {
     pub cry: bool,
     /// `Die_move_end`: the task has exited.
     pub finished: bool,
+    /// `Die_move_fade_out`'s `fg_status` `0x100`: `Cut_check` stops, and the
+    /// camera keeps its cut from then on.
+    pub lock_cut: bool,
 }
 
 /// The `Die` task's variables.
@@ -231,6 +234,7 @@ impl Die {
             // `Die_move_fade_out`.
             0 => {
                 *re2.fg_stop_mut() |= 0x0200_0000;
+                out.lock_cut = true;
                 self.phase = if self.held { 1 } else { 2 };
             }
             // `Die_move_timer`.

@@ -93,9 +93,9 @@ or one sprite at a time:
 
 | Name | Replaces |
 |---|---|
-| `htexture/effect/<nn>` | sheet `nn`, under the room's sprites |
-| `htexture/room/<id>/effect/<slot>` | the rows of sprite `slot` |
-| `htexture/room/<id>/effect/<slot>_<row>` | those rows in palette row `row` (1 to 3) |
+| `hires/effect/<nn>` | sheet `nn`, under the room's sprites |
+| `hires/room/<id>/effect/<slot>` | the rows of sprite `slot` |
+| `hires/room/<id>/effect/<slot>_<row>` | those rows in palette row `row` (1 to 3) |
 
 The GPU renderer builds the HD page at the largest scale of the images it
 finds. A page with no named image is still replaced by its content hash.

@@ -2,7 +2,7 @@
 // Modes: 0 = textured (rgb * colour, alpha = colour.a), 1 = shadow (the
 // bilinear texel times the colour, alpha as coverage), 2 = clamped background
 // (opaque). Texture coordinates are texels for modes 0 and 2 and normalised
-// for mode 1. An HD replacement (htexture) is bound in place of the original
+// for mode 1. An HD replacement (hires) is bound in place of the original
 // with `scale` set to its texels per original texel; it is (1, 1) for the
 // original.
 

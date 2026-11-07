@@ -69,6 +69,20 @@ pub struct Manifest {
     pub version: Option<String>,
     /// Free-form description shown to players, e.g. credits or a seed.
     pub description: Option<String>,
+    /// The mod catalog's category for the pack, e.g. `High Definition`.
+    pub category: Option<String>,
+    /// The people or teams who made the pack's content.
+    pub authors: Vec<String>,
+    /// Further acknowledgements: sources, contributors, thanks.
+    pub credits: Vec<String>,
+    /// Free-form labels, e.g. [`TAG_OFFICIAL`] for a pack converted from a
+    /// retail game or [`TAG_RANDOMIZER`] for a generated one. The launcher
+    /// lists official game packs first.
+    pub tags: Vec<String>,
+    /// The pack's home page.
+    pub homepage: Option<String>,
+    /// The pack entry holding a 4:3 preview image, e.g. `thumbnail.webp`.
+    pub thumbnail: Option<String>,
     /// Whether this is the base pack or a mod.
     pub kind: PackKind,
     /// Mods: the base pack id this mod layers over.
@@ -107,7 +121,17 @@ pub struct Manifest {
     pub region: Option<Region>,
 }
 
+/// The tag of a pack converted from a retail game.
+pub const TAG_OFFICIAL: &str = "official";
+/// The tag of a pack a randomizer generated.
+pub const TAG_RANDOMIZER: &str = "randomizer";
+
 impl Manifest {
+    /// Whether the pack carries `tag` (compared without case).
+    pub fn has_tag(&self, tag: &str) -> bool {
+        self.tags.iter().any(|own| own.eq_ignore_ascii_case(tag))
+    }
+
     /// A base manifest for `id`.
     pub fn base(id: impl Into<String>) -> Self {
         Self {
@@ -116,6 +140,12 @@ impl Manifest {
             name: None,
             version: None,
             description: None,
+            category: None,
+            authors: Vec::new(),
+            credits: Vec::new(),
+            tags: Vec::new(),
+            homepage: None,
+            thumbnail: None,
             kind: PackKind::Base,
             base: None,
             load_order: 0,
@@ -149,6 +179,12 @@ impl Manifest {
         let mut name = None;
         let mut version = None;
         let mut description = None;
+        let mut category = None;
+        let mut authors = None;
+        let mut credits = None;
+        let mut tags = None;
+        let mut homepage = None;
+        let mut thumbnail = None;
         let mut kind = None;
         let mut base = None;
         let mut load_order = None;
@@ -198,6 +234,12 @@ impl Manifest {
                 "name" => name = Some(string_value(item, "name")?),
                 "version" => version = Some(string_value(item, "version")?),
                 "description" => description = Some(string_value(item, "description")?),
+                "category" => category = Some(non_empty_string(item, "category")?),
+                "authors" => authors = Some(string_array(item, "authors")?),
+                "credits" => credits = Some(string_array(item, "credits")?),
+                "tags" => tags = Some(string_array(item, "tags")?),
+                "homepage" => homepage = Some(non_empty_string(item, "homepage")?),
+                "thumbnail" => thumbnail = Some(non_empty_string(item, "thumbnail")?),
                 "kind" => {
                     let text = string_value(item, "kind")?;
                     kind = Some(match text.as_str() {
@@ -318,6 +360,12 @@ impl Manifest {
             name,
             version,
             description,
+            category,
+            authors: authors.unwrap_or_default(),
+            credits: credits.unwrap_or_default(),
+            tags: tags.unwrap_or_default(),
+            homepage,
+            thumbnail,
             kind,
             base,
             load_order: load_order.unwrap_or(0),
@@ -352,6 +400,25 @@ impl Manifest {
         }
         if let Some(description) = &self.description {
             write_pair(&mut out, "description", &quote(description));
+        }
+        if let Some(category) = &self.category {
+            write_pair(&mut out, "category", &quote(category));
+        }
+        for (key, values) in [
+            ("authors", &self.authors),
+            ("credits", &self.credits),
+            ("tags", &self.tags),
+        ] {
+            if !values.is_empty() {
+                let entries: Vec<String> = values.iter().map(|value| quote(value)).collect();
+                write_pair(&mut out, key, &format!("[{}]", entries.join(", ")));
+            }
+        }
+        if let Some(homepage) = &self.homepage {
+            write_pair(&mut out, "homepage", &quote(homepage));
+        }
+        if let Some(thumbnail) = &self.thumbnail {
+            write_pair(&mut out, "thumbnail", &quote(thumbnail));
         }
         write_pair(&mut out, "kind", &quote(self.kind.as_str()));
         if let Some(base) = &self.base {
@@ -427,7 +494,8 @@ pub(crate) fn parse_items(text: &str) -> Result<Vec<Item>> {
     let mut seen = HashSet::new();
     let mut section: Option<String> = None;
 
-    for (index, raw) in text.lines().enumerate() {
+    let mut lines = text.lines().enumerate();
+    while let Some((index, raw)) = lines.next() {
         let line = index + 1;
         budget::check_len(
             raw.len(),
@@ -456,6 +524,28 @@ pub(crate) fn parse_items(text: &str) -> Result<Vec<Item>> {
         }
 
         let (key, value) = split_key_value(content, line)?;
+        // An array may continue over the following lines up to its `]`.
+        let mut joined;
+        let mut value = value;
+        if value.starts_with('[') && !array_closed(value) {
+            joined = value.to_string();
+            loop {
+                let Some((_, raw)) = lines.next() else {
+                    bail!("manifest.toml line {line}: unterminated array");
+                };
+                budget::check_len(
+                    joined.len() + raw.len(),
+                    budget::MAX_MANIFEST_LINE,
+                    &format!("manifest.toml line {line} array length"),
+                )?;
+                joined.push(' ');
+                joined.push_str(strip_comment(raw).trim());
+                if array_closed(&joined) {
+                    break;
+                }
+            }
+            value = &joined;
+        }
         if !key
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
@@ -479,6 +569,28 @@ pub(crate) fn parse_items(text: &str) -> Result<Vec<Item>> {
     }
 
     Ok(items)
+}
+
+/// Whether `text` holds a `]` outside a string.
+fn array_closed(text: &str) -> bool {
+    let mut in_string = false;
+    let mut escaped = false;
+    for ch in text.chars() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+        } else if ch == '"' {
+            in_string = true;
+        } else if ch == ']' {
+            return true;
+        }
+    }
+    false
 }
 
 /// Remove a `#` comment that starts outside a string.
@@ -635,6 +747,20 @@ fn parse_array(text: &str, line: usize) -> Result<Vec<String>> {
 }
 
 /// Extract a required string manifest field.
+/// A string array of at most [`budget::MAX_MANIFEST_LUA`] values.
+fn string_array(item: Item, key: &str) -> Result<Vec<String>> {
+    let line = item.line;
+    let Value::Array(values) = item.value else {
+        bail!("manifest.toml line {line}: `{key}` must be a string array");
+    };
+    budget::check_len(
+        values.len(),
+        budget::MAX_MANIFEST_LUA,
+        "manifest list length",
+    )?;
+    Ok(values)
+}
+
 fn string_value(item: Item, key: &str) -> Result<String> {
     match item.value {
         Value::String(value) => Ok(value),
@@ -702,6 +828,7 @@ mod tests {
             start_angle: None,
             start_health: None,
             region: None,
+            ..Manifest::base("")
         }
     }
 
@@ -725,6 +852,7 @@ mod tests {
             start_angle: None,
             start_health: None,
             region: None,
+            ..Manifest::base("")
         }
     }
 
@@ -869,6 +997,12 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             name: Some("Demo mod".to_string()),
             version: Some("1.2.3".to_string()),
             description: None,
+            category: None,
+            authors: Vec::new(),
+            credits: Vec::new(),
+            tags: Vec::new(),
+            homepage: None,
+            thumbnail: None,
             kind: PackKind::Mod,
             base: Some("re1".to_string()),
             load_order: -7,
@@ -883,6 +1017,43 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             start_health: None,
             region: None,
         }
+    }
+
+    #[test]
+    fn catalog_fields_round_trip_and_arrays_span_lines() {
+        let text = "\
+[pack]
+format = 1
+id = \"re1-shdp\"
+name = \"Seamless HD Project\"
+version = \"1.1\"
+category = \"High Definition\"
+authors = [
+    \"MoArtis\",  # lead
+    \"Kayael\",
+]
+credits = [\"Gemini [Classic REbirth]\", \"TeamX\"]
+tags = [\"Official\"]
+homepage = \"https://www.reshdp.com/re1/\"
+thumbnail = \"thumbnail.webp\"
+kind = \"mod\"
+base = \"re1\"
+";
+        let manifest = Manifest::parse(text).unwrap();
+        assert_eq!(manifest.category.as_deref(), Some("High Definition"));
+        assert_eq!(manifest.authors, ["MoArtis", "Kayael"]);
+        assert_eq!(manifest.credits, ["Gemini [Classic REbirth]", "TeamX"]);
+        assert!(manifest.has_tag(TAG_OFFICIAL) && !manifest.has_tag(TAG_RANDOMIZER));
+        assert_eq!(
+            manifest.homepage.as_deref(),
+            Some("https://www.reshdp.com/re1/")
+        );
+        assert_eq!(manifest.thumbnail.as_deref(), Some("thumbnail.webp"));
+        assert_eq!(Manifest::parse(&manifest.render()).unwrap(), manifest);
+
+        let open = "format = 1\nid = \"x\"\nkind = \"base\"\nauthors = [\n  \"a\",\n";
+        let error = Manifest::parse(open).unwrap_err().to_string();
+        assert!(error.contains("line 4: unterminated array"), "{error}");
     }
 
     #[test]

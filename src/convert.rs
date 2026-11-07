@@ -2693,6 +2693,9 @@ mod hash_tests {
     }
 }
 /// The base pack's self-description.
+/// The base pack's preview picture, its converted title screen.
+pub const BASE_THUMBNAIL: &str = "ui/title.bmp";
+
 fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> manifest::Manifest {
     manifest::Manifest {
         format: manifest::FORMAT,
@@ -2715,6 +2718,10 @@ fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> m
         start_angle: None,
         start_health: None,
         region,
+        // The title screen: a 4:3 picture the launcher's PLAY grid shows.
+        thumbnail: Some(BASE_THUMBNAIL.to_string()),
+        tags: vec![manifest::TAG_OFFICIAL.to_string()],
+        ..manifest::Manifest::base(BASE_PACK_ID)
     }
 }
 
@@ -6511,7 +6518,7 @@ mod tests {
         };
         assert_eq!(colours(&after), colours(&before));
         let hashes = |texture: &crate::model::Texture8| -> Vec<u32> {
-            crate::htexture::page_candidates(texture, 0)
+            crate::hires::page_candidates(texture, 0)
                 .iter()
                 .map(|candidate| candidate.hash)
                 .collect()

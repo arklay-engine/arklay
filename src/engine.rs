@@ -1437,6 +1437,12 @@ impl Display {
         Ok(())
     }
 
+    /// Fill the window with black, on whichever renderer is current: the
+    /// launcher shows it while a game pack loads.
+    pub(crate) fn present_black(&mut self) -> Result<()> {
+        self.present(&Framebuffer::new())
+    }
+
     /// Upload the framebuffer and draw it scaled to the window.
     fn present(&mut self, framebuffer: &Framebuffer) -> Result<()> {
         self.present_layers(framebuffer, None)
@@ -1582,6 +1588,29 @@ impl Display {
     /// window.
     pub(crate) fn graphics(&self) -> Option<&Graphics> {
         self.graphics.as_ref()
+    }
+
+    /// Show a native-resolution GUI frame (the launcher's) over the whole
+    /// window, on whichever renderer is current: the GPU draws it as its GUI
+    /// layer over a black frame, as it does the in-game menu, and presents;
+    /// the software renderer uploads its pixels and flips.
+    pub(crate) fn present_canvas(&mut self, canvas: &gui::Canvas) -> Result<()> {
+        if let Backend::Gpu(gpu) = &mut self.backend {
+            let result = gpu
+                .set_native(Some(canvas))
+                .and_then(|()| gpu.present(&Framebuffer::new(), None));
+            return match result {
+                Ok(()) => Ok(()),
+                Err(err) => self.fall_back_to_software(&err),
+            };
+        }
+        // The canvas is premultiplied; over black that is its colour as is.
+        let mut rgba = canvas.pixels().into_owned();
+        for pixel in rgba.as_chunks_mut::<4>().0 {
+            pixel[3] = 255;
+        }
+        self.present_ui(canvas.width, canvas.height, &rgba)?;
+        self.show()
     }
 
     /// Upload a native-resolution UI frame and draw it one-to-one over the
@@ -4196,6 +4225,9 @@ impl GameSession {
             return;
         };
         let out = die.tick(&mut self.game.re2);
+        if out.lock_cut {
+            self.game.camera.locked = true;
+        }
         match out.fade {
             Some(crate::die2::DieFade::White(level)) => self.room_fade.set(1, 0, level),
             Some(crate::die2::DieFade::WhiteClear) => self.room_fade.set(1, -0xBBC, 0x7444),
@@ -10224,6 +10256,14 @@ impl App {
     /// [`App::draw`] into the app framebuffer as it is set up: a GPU frame
     /// records its 2D pass.
     fn draw_frame(&mut self) {
+        // A screen with a film queued over it (the title, once the boot
+        // logos end, queues the opening film) stays black until the film
+        // starts on the next tick, instead of showing for one frame.
+        if self.pending_movie.is_some() && !matches!(self.mode, Mode::Movie(_) | Mode::Play(_)) {
+            self.framebuffer.view = crate::video::aspect().centred();
+            self.framebuffer.clear();
+            return;
+        }
         let App {
             pack,
             save_dir,
@@ -15108,7 +15148,7 @@ impl Re2EffectPages {
 struct EffectPages {
     base: [Option<Image>; 4],
     variants: [Option<Image>; 12],
-    hd: [Option<crate::htexture::Replacement>; 16],
+    hd: [Option<crate::hires::Replacement>; 16],
 }
 
 /// Decoded effect pages for the current room, keyed by room id.
@@ -15226,8 +15266,8 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
 }
 
 /// Build the named HD composite of each effect page a pack names art for
-/// ([`effects::hd`]): the sheet `htexture/effect/NN` under a base page, and
-/// `htexture/room/<id>/effect/<slot>` (`_<row>` for a variant) over each
+/// ([`effects::hd`]): the sheet `hires/effect/NN` under a base page, and
+/// `hires/room/<id>/effect/<slot>` (`_<row>` for a variant) over each
 /// sprite's rows.
 fn build_effect_hd(pack: &Pack, id: RoomId, room: &effects::RoomEffects, pages: &mut EffectPages) {
     let stage = usize::from(id.stage_index());
@@ -19140,7 +19180,7 @@ fn render_frame_on(
     let mut page_refs: Vec<Option<&Image>> = Vec::with_capacity(16);
     page_refs.extend(pages.base.iter().map(Option::as_ref));
     page_refs.extend(pages.variants.iter().map(Option::as_ref));
-    let hd_refs: Vec<Option<&crate::htexture::Replacement>> =
+    let hd_refs: Vec<Option<&crate::hires::Replacement>> =
         pages.hd.iter().map(Option::as_ref).collect();
     if game.is_re2_room {
         // `Esp_trans_3d`'s two cuts that want their effects moved in depth.
@@ -22729,7 +22769,7 @@ mod tests {
         assert!(display.gpu().is_some(), "the UI layer presents on the GPU");
         // Frames with HD 2D art, over the scene and on a wider canvas, keep
         // presenting on the GPU.
-        let replacement = std::sync::Arc::new(crate::htexture::Replacement {
+        let replacement = std::sync::Arc::new(crate::hires::Replacement {
             image: crate::state::Image {
                 width: 64,
                 height: 64,
@@ -22765,10 +22805,10 @@ mod tests {
             },
             objects: Vec::new(),
         });
-        let model = std::sync::Arc::new(crate::htexture::Model {
+        let model = std::sync::Arc::new(crate::hires::Model {
             ivm: model,
             vertices: [[-1.0, 1.0], [1.0, 1.0], [-1.0, -1.0]]
-                .map(|[x, y]| crate::htexture::ModelVertex {
+                .map(|[x, y]| crate::hires::ModelVertex {
                     clip: [x, y, 0.5, 1.0],
                     uv: [0.0, 0.0],
                     shade: [1.0, 0.0, 0.0],
@@ -26382,7 +26422,7 @@ mod tests {
                 bmp::encode_to_vec(&test_image()).unwrap(),
             )
             .unwrap();
-        let mut hashes: Vec<u32> = crate::htexture::image_candidates(&back)
+        let mut hashes: Vec<u32> = crate::hires::image_candidates(&back)
             .iter()
             .map(|candidate| candidate.hash)
             .collect();
@@ -26390,7 +26430,7 @@ mod tests {
         hashes.dedup();
         for hash in hashes {
             writer
-                .add(&format!("htexture/bgd/{hash:08X}.bmp"), hd.clone())
+                .add(&format!("hires/bgd/{hash:08X}.bmp"), hd.clone())
                 .unwrap();
         }
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
@@ -30420,6 +30460,10 @@ off_0010:
                 )
                 .unwrap();
         }
+        // Title art, so a drawn title screen is not black.
+        writer
+            .add(crate::convert::BASE_THUMBNAIL, bmp_bytes.clone())
+            .unwrap();
         writer.write(&pack_path).unwrap();
         Pack::open(&pack_path).unwrap()
     }
@@ -30987,6 +31031,18 @@ off_0010:
         assert_eq!(seen, vec![28, 23], "the logos play in boot order");
         let pending = app.pending_movie.as_ref().expect("the title opening film");
         assert_eq!(pending.session.id(), 0);
+        // The title waits behind the queued film: the frame between the
+        // logos and the film is black, not a flash of the menu.
+        app.draw();
+        assert!(
+            app.framebuffer
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| pixel[..3] == [0, 0, 0]),
+            "the title showed before its opening film"
+        );
 
         // The opening film finishes and reopens the title without requeueing.
         let seen = run_app_until(&mut app, |app| {
@@ -34342,10 +34398,10 @@ off_0010:
         };
         let mut writer = crate::pack::PackWriter::new();
         writer
-            .add("htexture/room/100/effect/00.bmp", art([200, 0, 0, 255]))
+            .add("hires/room/100/effect/00.bmp", art([200, 0, 0, 255]))
             .unwrap();
         writer
-            .add("htexture/room/100/effect/00_1.bmp", art([0, 200, 0, 255]))
+            .add("hires/room/100/effect/00_1.bmp", art([0, 200, 0, 255]))
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let pages = build_effect_pages(&pack, id, &room);

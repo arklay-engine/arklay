@@ -458,7 +458,7 @@ fn the_mask_pages_carry_their_hd_names() {
     ] {
         let page = arklay::bmp::decode_mask(&pack.read(entry).unwrap()).unwrap();
         assert!(
-            arklay::htexture::image_candidates(&page)
+            arklay::hires::image_candidates(&page)
                 .iter()
                 .any(|candidate| candidate.hash == hash && candidate.frame == [256, 256]),
             "{entry} is named {hash:08X}"
@@ -484,7 +484,7 @@ fn the_hd_pack_names_most_backgrounds() {
     let (mut matched, mut unmatched) = (0, Vec::new());
     for path in pack.paths().filter(|path| path.contains("/cut/")) {
         let image = arklay::bmp::decode(&pack.read(path).unwrap()).unwrap();
-        let candidates = arklay::htexture::image_candidates(&image);
+        let candidates = arklay::hires::image_candidates(&image);
         if candidates
             .iter()
             .any(|candidate| names.contains(&candidate.hash))
@@ -658,7 +658,7 @@ fn the_hd_pack_names_most_model_pages() {
         let model = arklay::model_viewer::load(pack, entry).unwrap();
         let texture = &model.texture;
         for page in 0..(texture.width as usize / 128).min(texture.palettes.len() / 256) {
-            let candidates = arklay::htexture::page_candidates(texture, page);
+            let candidates = arklay::hires::page_candidates(texture, page);
             if candidates.iter().any(|candidate| {
                 candidate.origin == [page as u32 * 128, 0] && names.contains(&candidate.hash)
             }) {
@@ -685,7 +685,7 @@ fn the_hd_pack_names_most_model_pages() {
             continue;
         }
         composited += 1;
-        let candidates = arklay::htexture::page_candidates(texture, 1);
+        let candidates = arklay::hires::page_candidates(texture, 1);
         if candidates
             .iter()
             .any(|candidate| candidate.origin == [128, 0] && names.contains(&candidate.hash))

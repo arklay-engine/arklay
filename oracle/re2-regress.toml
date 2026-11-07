@@ -1279,6 +1279,49 @@ expect = "match"
 record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000"
 
 [[run]]
+name = "g2_kill_509"
+room = "509"
+character = 0
+sound = false
+ticks = 2720
+# as g2_fight_509 with 200 life: near death the player draws G2's dodges, and a grab kills them, to the game over
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 200, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_kill_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 200"
+
+[[run]]
+name = "g2_shotgun_509"
+room = "509"
+character = 0
+sound = false
+ticks = 3000
+# as g2_fight_509, but after the scene the player turns to G2 and shoots it with the shotgun every 30 ticks, with Leon's other weapons
+setup_script = "g2_shotgun_509.lua"
+input = "g2_shotgun_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000 --equip 7 --give 0:7:200 --give 1:2:15 --give 2:5:6 --give 3:0x15:30"
+
+
+[[run]]
+name = "g2_magnum_509"
+room = "509"
+character = 0
+sound = false
+ticks = 3000
+# as g2_fight_509, but after the scene the player turns to G2 and shoots it with the magnum every 20 ticks, with Leon's other weapons
+setup_script = "g2_magnum_509.lua"
+input = "g2_magnum_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000 --equip 5 --give 0:5:200 --give 1:2:15 --give 2:7:5 --give 3:0x16:30"
+
+[[run]]
 name = "route_claire_a_fight"
 room = "new"
 character = 1

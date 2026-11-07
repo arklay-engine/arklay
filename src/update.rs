@@ -166,8 +166,13 @@ pub fn download(
     if info.sha256.trim().is_empty() {
         bail!("the update feed has no checksum");
     }
-    let response = ureq::get(&info.url)
-        .timeout(Duration::from_secs(60))
+    // Connect and read timeouts, not one for the whole transfer: a slow link
+    // still finishes the download.
+    let response = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(30))
+        .timeout_read(Duration::from_secs(60))
+        .build()
+        .get(&info.url)
         .call()
         .with_context(|| format!("failed to download {}", info.url))?;
     let total = response

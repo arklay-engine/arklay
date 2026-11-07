@@ -232,5 +232,5 @@ The language is documented in [Room scripts](../scripting/room/index.md).
 ## HD textures
 
 An HD texture pack can name a room's model page by path instead of by
-hash: `htexture/room/<id>/object/<slot>` or `htexture/room/<id>/item/<slot>`,
+hash: `hires/room/<id>/object/<slot>` or `hires/room/<id>/item/<slot>`,
 covering the whole page (see [HD texture packs](../mods.md#hd-texture-packs)).

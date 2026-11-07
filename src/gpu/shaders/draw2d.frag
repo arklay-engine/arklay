@@ -16,7 +16,7 @@
 // 2: HD art times the colour, kept to the map's opaque atlas texels when
 //    `MASKED`.
 // 3: as 2, through the original page's indices and the recolouring rows of
-//    `lut` from `in_mode.y` (see `htexture::Recoloured`).
+//    `lut` from `in_mode.y` (see `hires::Recoloured`).
 // 4: a premultiplied image: the scene, a model's target.
 //
 // An `ADDITIVE` item writes zero alpha, so the blend adds its colour to the
