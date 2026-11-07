@@ -50,7 +50,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x4E | 0x52)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x4E | 0x52)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -960,6 +960,41 @@ impl Effects {
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
             0x52 => self.ripple_ring(index),
+            // `Esp_45`: a fire burning for 90 ticks, three flames (kind 0x26,
+            // a random one of the three rows from `row & 0xF8`) a tick, each
+            // turned a random step of 400; it dies down over its last 65.
+            0x45 => {
+                if slot.start == 0 {
+                    let this = &mut self.slots[index];
+                    this.flags = 0x8002;
+                    this.start = 1;
+                    this.count = 0x5A;
+                } else if slot.start != 1 {
+                    return;
+                }
+                if self.slots[index].count == 0 {
+                    self.slots[index].kill();
+                    return;
+                }
+                for _ in 0..3 {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    let row = (self.rnd() % 3).wrapping_add(slot.row & 0xF8);
+                    let this = self.slots[index];
+                    self.call(
+                        0x26,
+                        row,
+                        this.size,
+                        turn.wrapping_add(this.dir),
+                        this.base,
+                        true,
+                    );
+                }
+                let this = &mut self.slots[index];
+                if this.count < 0x41 {
+                    this.size = (u32::from(this.size) * 0x3BB / 1000) as u16;
+                }
+                this.count -= 1;
+            }
             // `Esp_4A`: ten ripples of row `row & 0xF8` at its size, each
             // turned a random step of 400, and it goes.
             0x4A => {
@@ -1822,6 +1857,32 @@ mod tests {
         }
         assert_eq!(lowest, -1000 - 300 - 290 - 260 - 230 - 190);
         assert_eq!(effects.slots[slot].base[1], -1000);
+        assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_tbl`'s `0x45` draws two for each of its three flames a tick for
+    /// 90 ticks, shrinking over the last 65, and goes.
+    #[test]
+    fn a_fire_throws_three_flames_a_tick_for_ninety_ticks() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x45;
+        let mut effects = Effects::default();
+        // Its flames' kind 0x26 isn't in this bank, so they draw and start nothing.
+        effects.enter_room(bank_of(0x18, &[block]));
+        let slot = effects.call(0x18, 0, 4000, 0, [0; 3], false).unwrap();
+        let mut rnd = crate::zombie2::Rnd::default();
+        for tick in 0..0x5A {
+            let mut expected = rnd;
+            for _ in 0..6 {
+                expected.draw();
+            }
+            effects.tick(&mut rnd, None);
+            assert_eq!(rnd, expected, "tick {tick}");
+        }
+        assert!(effects.slots[slot].size < 4000);
+        let before = rnd;
+        effects.tick(&mut rnd, None);
+        assert_eq!(rnd, before);
         assert!(!effects.slots[slot].live());
     }
 
