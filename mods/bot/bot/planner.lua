@@ -1285,6 +1285,12 @@ local function fight_due(bot, fight)
     if fight.bank and bot:flag(fight.bank, fight.bit) then
         return false
     end
+    -- Forced from an empty frontier (forgive_fight): due, ready or not.
+    local forced = plan().forced_fight
+    if forced and forced.room == fight.room
+        and ((plan().entries or {})[fight.room] or 0) < forced.entry then
+        return true
+    end
     -- A fight step that found its enemy and left it alive counts too: the
     -- bot left the room short of rounds or health, or a reload undid the
     -- fight and the marks with it (40C's Plant 42 after a death in 302).
@@ -2464,13 +2470,31 @@ local function forgive_fight(bot)
     local p = plan()
     local room = bot:room().id
     local forgiven = false
+    local remote_key, remote
     for key, m in pairs(p.marks) do
-        if m.room == room and m.reason:find("not ready for the fight", 1, true) then
-            p.marks[key] = nil
-            p.forced_fight = { room = room, entry = (p.entries or {})[room] }
-            forgiven = true
-            bot:log("frontier empty; fighting anyway: " .. key .. " (" .. m.reason .. ")")
+        if m.reason:find("not ready for the fight", 1, true) then
+            if m.room == room then
+                p.marks[key] = nil
+                p.forced_fight = { room = room, entry = (p.entries or {})[room] }
+                forgiven = true
+                bot:log("frontier empty; fighting anyway: " .. key .. " (" .. m.reason .. ")")
+            elseif not remote_key or key < remote_key then
+                remote_key, remote = key, m
+            end
         end
+    end
+    -- A fight held back in another room is walked to and fought on the next
+    -- entry (fight_due): 20C's Yawn 2, short of rounds, ended two runs on an
+    -- empty frontier in 216.
+    if not forgiven and remote and not (p.forced_fight and p.forced_fight.room == remote.room) then
+        for key, m in pairs(p.marks) do
+            if m.room == remote.room and m.reason:find("not ready for the fight", 1, true) then
+                p.marks[key] = nil
+            end
+        end
+        p.forced_fight = { room = remote.room, entry = ((p.entries or {})[remote.room] or 0) + 1 }
+        forgiven = true
+        bot:log("frontier empty; going to fight anyway: " .. remote_key .. " (" .. remote.reason .. ")")
     end
     return forgiven
 end
