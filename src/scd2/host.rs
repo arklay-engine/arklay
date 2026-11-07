@@ -56,6 +56,11 @@ pub struct Re2State {
     /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
     /// `Pad_set` has masked the pad with it.
     pub door_key_stop: bool,
+    /// The scripts opened a door this tick (`aot_on` on a door's area). The
+    /// original's scripts run after `Player_move` and its cut check, and
+    /// `Sce_Door` stops both from the next tick; the port runs the scripts
+    /// first, so the player, the cut and the characters sit this tick out.
+    pub script_door: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// Each task's `Speed_set`s: speeds of position and rotation, then what
@@ -510,6 +515,7 @@ impl Default for Re2State {
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
+            script_door: false,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
@@ -731,9 +737,10 @@ impl Re2State {
     }
 
     /// `fg_stop`'s second bit keeps `splayer_work` from running, and its third
-    /// the enemy slots.
+    /// the enemy slots. A door the scripts opened this tick has raised them all
+    /// before the enemies' pass ([`Self::script_door`]).
     pub fn character_stopped(&self, slot: usize) -> bool {
-        self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
+        self.script_door || self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
     }
 
     pub fn enemies_stopped(&self) -> bool {
@@ -2779,6 +2786,19 @@ mod tests {
         state.set_key(CONFIRM | FORWARD);
         assert_eq!(state.key, CONFIRM | FORWARD);
         assert_eq!(state.key_trg, 0);
+    }
+
+    #[test]
+    fn a_door_the_scripts_open_stops_every_character_for_the_tick() {
+        let mut state = Re2State::default();
+        assert!(!state.character_stopped(0));
+        assert!(!state.character_stopped(SPLAYER_SLOT));
+        // `Sce_Door` has raised `fg_stop` before the original's characters
+        // run on that tick: the enemies and `splayer_work` both sit it out.
+        state.script_door = true;
+        assert!(state.character_stopped(0));
+        assert!(state.character_stopped(5));
+        assert!(state.character_stopped(SPLAYER_SLOT));
     }
 
     #[test]

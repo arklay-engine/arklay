@@ -16017,7 +16017,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         id: context.game.id.player_flag,
         life: i32::from(context.game.entities[0].health),
         poisoned: context.game.re2.player.poisoned,
-        stopped: context.game.re2.player_stopped(),
+        stopped: context.game.re2.player_stopped() || context.game.re2.script_door,
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),
         targets: &targets,
@@ -16206,7 +16206,10 @@ fn tick_room_timed(
     if !context.game.is_re2_room && context.game.tick_countdown() {
         return None;
     }
+    let door_pending = context.game.transition_door.is_some();
     tick_re2_scripts(&mut context);
+    context.game.re2.script_door =
+        context.game.is_re2_room && !door_pending && context.game.transition_door.is_some();
     {
         let mut host = game::ScdGameHost::new(context.game);
         command_vm.run_main(&mut host);
@@ -16237,7 +16240,9 @@ fn tick_room_timed(
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
     let previous_cut = context.room.current_cut;
-    apply_camera(context.room, context.game, Some(context.player.pos));
+    if !context.game.re2.script_door {
+        apply_camera(context.room, context.game, Some(context.player.pos));
+    }
     if context.room.current_cut != previous_cut {
         // The effects projected above under the pre-switch camera; recompute
         // their stored screen/depth so the frame renders billboards against
