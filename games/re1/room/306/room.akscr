@@ -8,30 +8,30 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_USEITEM 0x01
-#define AOT_02_USEITEM 0x02
-#define AOT_03_MESSAGE 0x03
-#define AOT_04_USEITEM 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_ITEM 0x06
-#define AOT_07_USEITEM 0x07
+#define AOT_00_DOOR_30F 0x00
+#define AOT_01_USEITEM_CRANK_HOLE_ALT 0x01                  // Use-item spot with data 9,0,N; its role is not traced.
+#define AOT_02_USEITEM_CRANK_HOLE 0x02
+#define AOT_03_MESSAGE_CRANK_HOLE 0x03                      // The hexagonal hole; says the statue is in the way while it is.
+#define AOT_04_USEITEM_SWITCH 0x04                          // Floor switch: the player or the statue on it raises F_ROOM_SWITCH_PRESSED.
+#define AOT_05_USEITEM_SWITCH_STATUE 0x05                   // The same switch, for the statue only.
+#define AOT_06_ITEM_KEY_BOOK_DOOM_2_0 0x06
+#define AOT_07_USEITEM_STATUE_AT_CRANK 0x07                 // The statue in front of the crank hole.
 #define CAM_00 0x00
-#define CAM_01 0x01
+#define CAM_01_CRANK 0x01
 #define COL_02 0x02
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_23 0x23
-#define F_ROOM_24 0x24
-#define IMDL_00 0x00
+#define F_ROOM_BOOK_COVER_MOVING 0x02                       // The cover over the book is moving.
+#define F_ROOM_BOOK_COVER_RAISED 0x01                       // Guess: the cover over the book is raised.
+#define F_ROOM_CRANK_USED 0x21                              // The hexagonal crank was used on the hole (one frame).
+#define F_ROOM_PLAYER_ANIM_DONE 0x20                        // The player's animation finished (one frame).
+#define F_ROOM_STATUE_AT_CRANK 0x24                         // The statue blocks the crank hole (each frame).
+#define F_ROOM_STATUE_ON_SWITCH 0x23                        // The statue is on the floor switch (each frame): the book can be taken.
+#define F_ROOM_SWITCH_PRESSED 0x22                          // The player or the statue is on the floor switch (each frame).
+#define IMDL_00_KEY_BOOK_DOOM_2 0x00
 #define MSG_I_CANNOT_USE_THE_CRANK_BECAUSE 0x01
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
+#define OBJ_00_CRANK 0x00
+#define OBJ_01_SLIDING_WALL 0x01                            // Likely.
+#define OBJ_02_STATUE 0x02
+#define OBJ_03_BOOK_COVER 0x03                              // Guess: rises over the book while the switch is pressed.
 #define SE_17_SW_PUSH2 0x17
 #define SE_18_CRANK 0x18
 #define SE_19_R_PASS 0x19
@@ -39,92 +39,92 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10100, 5200, 1700, 2200, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
-    aot_set(AOT_02_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-    aot_set(AOT_03_MESSAGE, 5500, 10200, 500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_04_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
-    aot_set(AOT_05_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 35, 0, 1, 0);
-    item_aot_set(AOT_06_ITEM, 10000, 3200, 1000, 600, IT_3F_KEY_BOOK_DOOM_2, 1, IMDL_00, SCA_NONE, 11050, -2630, 3564, 2048, F_ITEM_306_KEY_BOOK_DOOM_2_0, SAT_MANUAL | SAT_PLAYER, 0);
-    aot_set(AOT_07_USEITEM, 5300, 8200, 1500, 2000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 36, 0, 1, 0);
-    obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_3C, FALSE))
+    door_aot_set(AOT_00_DOOR_30F, 10100, 5200, 1700, 2200, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_USEITEM_CRANK_HOLE_ALT, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
+    aot_set(AOT_02_USEITEM_CRANK_HOLE, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_03_MESSAGE_CRANK_HOLE, 5500, 10200, 500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_USEITEM_SWITCH, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_05_USEITEM_SWITCH_STATUE, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 35, 0, 1, 0);
+    item_aot_set(AOT_06_ITEM_KEY_BOOK_DOOM_2_0, 10000, 3200, 1000, 600, IT_3F_KEY_BOOK_DOOM_2, 1, IMDL_00_KEY_BOOK_DOOM_2, SCA_NONE, 11050, -2630, 3564, 2048, F_ITEM_306_KEY_BOOK_DOOM_2_0, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_set(AOT_07_USEITEM_STATUE_AT_CRANK, 5300, 8200, 1500, 2000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 36, 0, 1, 0);
+    obj(OBJ_00_CRANK, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_ITEM_PASSAGE_WALL_MOVED, FALSE))
     {
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8380, 0, 12840, 1024, 0, 300, 0, -300, 600, 620, 800, 1200);
+        obj(OBJ_01_SLIDING_WALL, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8380, 0, 12840, 1024, 0, 300, 0, -300, 600, 620, 800, 1200);
         inst_cfg(COL_LIST_00, COL_02, 0, 0, 0, 2, 2);
     }
     else
     {
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8380, 0, 9480, 1024, 0, 300, 0, -300, 600, 620, 800, 1200);
+        obj(OBJ_01_SLIDING_WALL, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8380, 0, 9480, 1024, 0, 300, 0, -300, 600, 620, 800, 1200);
     }
-    obj(OBJ_02, OF_ACTIVE, SCA_NONE, 3830, 0, 9722, 0, 0, 200, 0, -200, 400, 620, 600, 600);
-    obj(OBJ_03, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 10750, -2110, 3550, 2048, 0, 200, 0, -200, 400, 620, 600, 600);
-    aot_delete(AOT_06_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    evt_exec(0, TASK_09, on_enter);
+    obj(OBJ_02_STATUE, OF_ACTIVE, SCA_NONE, 3830, 0, 9722, 0, 0, 200, 0, -200, 400, 620, 600, 600);
+    obj(OBJ_03_BOOK_COVER, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 10750, -2110, 3550, 2048, 0, 200, 0, -200, 400, 620, 600, 600);
+    aot_delete(AOT_06_ITEM_KEY_BOOK_DOOM_2_0, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    evt_exec(0, TASK_09, set_book_model_angle);
 }
 
 proc main
 {
-    if (ck(FG_ROOM, F_ROOM_24, TRUE))
+    if (ck(FG_ROOM, F_ROOM_STATUE_AT_CRANK, TRUE))
     {
-        aot_delete(AOT_01_USEITEM, SCE_NONE, SAT_PLAYER);
-        aot_delete(AOT_02_USEITEM, SCE_NONE, SAT_PLAYER);
-        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
+        aot_delete(AOT_01_USEITEM_CRANK_HOLE_ALT, SCE_NONE, SAT_PLAYER);
+        aot_delete(AOT_02_USEITEM_CRANK_HOLE, SCE_NONE, SAT_PLAYER);
+        aot_reset(AOT_03_MESSAGE_CRANK_HOLE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
     }
     else
     {
-        aot_delete(AOT_01_USEITEM, SCE_USEITEM, SAT_PLAYER);
-        aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_PLAYER);
-        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
+        aot_delete(AOT_01_USEITEM_CRANK_HOLE_ALT, SCE_USEITEM, SAT_PLAYER);
+        aot_delete(AOT_02_USEITEM_CRANK_HOLE, SCE_USEITEM, SAT_PLAYER);
+        aot_reset(AOT_03_MESSAGE_CRANK_HOLE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
     }
     if (testitem(IT_1E_KEY_CRANK_HEXAGONAL))
     {
-        if (ck(FG_ROOM, F_ROOM_21, TRUE))
+        if (ck(FG_ROOM, F_ROOM_CRANK_USED, TRUE))
         {
-            evt_exec(0, TASK_09, from_main);
+            evt_exec(0, TASK_09, turn_crank);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_22, TRUE))
+    if (ck(FG_ROOM, F_ROOM_SWITCH_PRESSED, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_01, FALSE))
+        if (ck(FG_ROOM, F_ROOM_BOOK_COVER_RAISED, FALSE))
         {
-            if (ck(FG_ROOM, F_ROOM_02, FALSE))
+            if (ck(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, FALSE))
             {
-                evt_exec(0, TASK_09, from_main_2);
+                evt_exec(0, TASK_09, raise_book_cover);
                 se_play_3d(SND_BANK_ROOM, SE_17_SW_PUSH2, 0, SND_AT_POINT, 0, 8000, 3650);
                 se_play_3d(SND_BANK_ROOM, SE_1A_UNDERGAT, 0, SND_AT_POINT, 0, 9150, 3500);
-                set(FG_ROOM, F_ROOM_01, TRUE);
-                set(FG_ROOM, F_ROOM_02, TRUE);
+                set(FG_ROOM, F_ROOM_BOOK_COVER_RAISED, TRUE);
+                set(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, TRUE);
             }
         }
     }
-    else if (ck(FG_ROOM, F_ROOM_01, TRUE))
+    else if (ck(FG_ROOM, F_ROOM_BOOK_COVER_RAISED, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_02, FALSE))
+        if (ck(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, FALSE))
         {
-            evt_exec(0, TASK_09, from_main_3);
+            evt_exec(0, TASK_09, lower_book_cover);
             se_play_3d(SND_BANK_ROOM, SE_17_SW_PUSH2, 0, SND_AT_POINT, 0, 8000, 3650);
             se_play_3d(SND_BANK_ROOM, SE_1A_UNDERGAT, 0, SND_AT_POINT, 0, 9150, 3500);
-            set(FG_ROOM, F_ROOM_01, FALSE);
-            set(FG_ROOM, F_ROOM_02, TRUE);
+            set(FG_ROOM, F_ROOM_BOOK_COVER_RAISED, FALSE);
+            set(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, TRUE);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_23, TRUE))
+    if (ck(FG_ROOM, F_ROOM_STATUE_ON_SWITCH, TRUE))
     {
         if (ck(FG_ITEM, F_ITEM_306_KEY_BOOK_DOOM_2_0, TRUE))
         {
-            aot_delete(AOT_06_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_06_ITEM_KEY_BOOK_DOOM_2_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
     {
-        aot_delete(AOT_06_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_06_ITEM_KEY_BOOK_DOOM_2_0, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
-event on_enter
+event set_book_model_angle
 {
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_KEY_BOOK_DOOM_2);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, -2048, -3072);
     tw_end();
@@ -133,11 +133,11 @@ event on_enter
     evt_finish();
 }
 
-event from_main
+event turn_crank
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(2);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CRANK);
     evt_tween_begin_alt();
     tw_abs_pos(0, 5934, -2030, 10730);
     tw_end();
@@ -147,46 +147,46 @@ event from_main
         dir_set(0, 0, 3072, 0, 5110, 0, 10050);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
-        cutnext(CAM_01);
+        cutnext(CAM_01_CRANK);
         se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 5850, 10000);
-        evt_exec(0, TASK_09, from_main_sub1);
-        if (ck(FG_SCENARIO, F_SCENARIO_3C, FALSE))
+        evt_exec(0, TASK_09, turn_crank_handle);
+        if (ck(FG_SCENARIO, F_SCENARIO_ITEM_PASSAGE_WALL_MOVED, FALSE))
         {
-            evt_exec(0, TASK_09, from_main_sub2);
+            evt_exec(0, TASK_09, slide_wall_across);
         }
         else
         {
-            evt_exec(0, TASK_09, from_main_sub3);
+            evt_exec(0, TASK_09, slide_wall_back);
         }
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 5850, 10000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
+    act_anim_flags(ANIM_37, F_ROOM_PLAYER_ANIM_DONE, AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 5850, 10000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
+    act_anim_flags(ANIM_37, F_ROOM_PLAYER_ANIM_DONE, AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    evt_work_set(WK_OBJ, OBJ_00);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    evt_work_set(WK_OBJ, OBJ_00_CRANK);
     evt_tween_begin_alt();
     tw_abs_pos(0, 0, 0, 0);
     tw_end();
@@ -208,9 +208,9 @@ event from_main
     evt_finish();
 }
 
-event from_main_sub1
+event turn_crank_handle
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CRANK);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -584,10 +584,10 @@ event from_main_sub1
     evt_finish();
 }
 
-event from_main_sub2
+event slide_wall_across
 {
     se_play_3d(SND_BANK_ROOM, SE_19_R_PASS, 0, SND_AT_POINT, 0, 9150, 10000);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_SLIDING_WALL);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, -28);
     for (120)
@@ -598,15 +598,15 @@ event from_main_sub2
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_SCENARIO, F_SCENARIO_3C, TRUE);
+    set(FG_SCENARIO, F_SCENARIO_ITEM_PASSAGE_WALL_MOVED, TRUE);
     inst_cfg(COL_LIST_00, COL_02, 0, 7182, 8280, 9144, 11322);
     evt_finish();
 }
 
-event from_main_sub3
+event slide_wall_back
 {
     se_play_3d(SND_BANK_ROOM, SE_19_R_PASS, 0, SND_AT_POINT, 0, 9150, 10000);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_SLIDING_WALL);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 28);
     for (120)
@@ -617,14 +617,14 @@ event from_main_sub3
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_SCENARIO, F_SCENARIO_3C, FALSE);
+    set(FG_SCENARIO, F_SCENARIO_ITEM_PASSAGE_WALL_MOVED, FALSE);
     inst_cfg(COL_LIST_00, COL_02, 0, 0, 0, 2, 2);
     evt_finish();
 }
 
-event from_main_2
+event raise_book_cover
 {
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_BOOK_COVER);
     evt_tween_begin_alt();
     tw_set_pos(0, -80, 0);
     for (10)
@@ -635,13 +635,13 @@ event from_main_2
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_02, FALSE);
+    set(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, FALSE);
     evt_finish();
 }
 
-event from_main_3
+event lower_book_cover
 {
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_BOOK_COVER);
     evt_tween_begin_alt();
     tw_set_pos(0, 80, 0);
     for (10)
@@ -652,11 +652,11 @@ event from_main_3
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_02, FALSE);
+    set(FG_ROOM, F_ROOM_BOOK_COVER_MOVING, FALSE);
     evt_finish();
 }
 
-event event_07
+event crank_blocked_by_statue
 {
     run
     {

@@ -8,13 +8,14 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_ITEM 0x04
-#define AOT_05_ITEM 0x05
-#define AOT_07_MESSAGE 0x07
+#define AOT_00_DOOR_308_N 0x00
+#define AOT_01_DOOR_308_S 0x01
+#define AOT_02_DOOR_30A 0x02
+#define AOT_03_ITEM_AMMO_GRENADE_EXPLOSIVE_0 0x03
+#define AOT_04_ITEM_AMMO_SHOTGUN_1 0x04
+#define AOT_04_ITEM_HEAL_FIRST_AID_SPRAY_1 0x04
+#define AOT_05_ITEM_HEAL_FIRST_AID_SPRAY_0 0x05
+#define AOT_07_MESSAGE_GENERATOR 0x07
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_04 0x04
@@ -22,9 +23,11 @@
 #define ENEMY_00_NPC_BARRY_3 0x00
 #define ENEMY_01_HUNTER 0x01
 #define ENEMY_02_HUNTER 0x02
-#define F_ROOM_00 0x00
-#define IMDL_00 0x00
-#define IMDL_01 0x01
+#define F_ROOM_J_ANIM_DONE 0x00                             // Jill's, Barry's or the hunter's animation finished; nothing waits for it.
+#define IMDL_00_AMMO_GRENADE_EXPLOSIVE 0x00
+#define IMDL_00_HEAL_FIRST_AID_SPRAY 0x00
+#define IMDL_01_AMMO_SHOTGUN 0x01
+#define IMDL_01_HEAL_FIRST_AID_SPRAY 0x01
 #define MSG_VO_A00_01 0x00
 #define SE_07_HE_NOUT 0x07
 #define SE_17_MAGNUM 0x17
@@ -32,25 +35,25 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 1900, 25800, 2100, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 0, 3500, 2400, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 13900, 0, 2100, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_308_N, 1900, 25800, 2100, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_308_S, 0, 3500, 2400, 1900, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_30A, 13900, 0, 2100, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
-        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM, 25000, 19000, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 25500, -2130, 19500, 0, F_ITEM_309_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
-        item_aot_set(ITEM_ALT_ROT | AOT_05_ITEM, 25000, 20900, 1000, 1000, IT_41_HEAL_FIRST_AID_SPRAY, 1, IMDL_00, SCA_NONE, 25500, -2130, 21400, 0, F_ITEM_C_309_HEAL_FIRST_AID_SPRAY_0, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM_AMMO_SHOTGUN_1, 25000, 19000, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 25500, -2130, 19500, 0, F_ITEM_309_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(ITEM_ALT_ROT | AOT_05_ITEM_HEAL_FIRST_AID_SPRAY_0, 25000, 20900, 1000, 1000, IT_41_HEAL_FIRST_AID_SPRAY, 1, IMDL_00_HEAL_FIRST_AID_SPRAY, SCA_NONE, 25500, -2130, 21400, 0, F_ITEM_C_309_HEAL_FIRST_AID_SPRAY_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 25000, 19000, 1000, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00, SCA_NONE, 25500, -2130, 19500, 0, F_ITEM_309_AMMO_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
-        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM, 25000, 20900, 1000, 1000, IT_41_HEAL_FIRST_AID_SPRAY, 1, IMDL_01, SCA_NONE, 25500, -2130, 21400, 0, F_ITEM_J_309_HEAL_FIRST_AID_SPRAY_1, SAT_MANUAL | SAT_PLAYER, 0);
-        if (ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_BGM_207_A, FALSE))
+        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM_AMMO_GRENADE_EXPLOSIVE_0, 25000, 19000, 1000, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00_AMMO_GRENADE_EXPLOSIVE, SCA_NONE, 25500, -2130, 19500, 0, F_ITEM_309_AMMO_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM_HEAL_FIRST_AID_SPRAY_1, 25000, 20900, 1000, 1000, IT_41_HEAL_FIRST_AID_SPRAY, 1, IMDL_01_HEAL_FIRST_AID_SPRAY, SCA_NONE, 25500, -2130, 21400, 0, F_ITEM_J_309_HEAL_FIRST_AID_SPRAY_1, SAT_MANUAL | SAT_PLAYER, 0);
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_FOLLOWING, TRUE) && ck(FG_COMMON, F_COMMON_ENRICO_SHOT, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_53, TRUE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_FROM_30A, TRUE))
             {
                 enemy(EM_2D_NPC_BARRY_3, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3200, 0, 12460, 0, 2570, ENEMY_00_NPC_BARRY_3, ANIM_00, 0, EVAR_00);
             }
-            else if (ck(FG_COMMON, F_COMMON_57, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR, TRUE))
             {
                 enemy(EM_2D_NPC_BARRY_3, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1112, 0, 6165, 0, 27740, ENEMY_00_NPC_BARRY_3, ANIM_00, 0, EVAR_00);
             }
@@ -58,25 +61,25 @@ proc init
             {
                 enemy(EM_2D_NPC_BARRY_3, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 3232, 0, 3920, 0, 2790, ENEMY_00_NPC_BARRY_3, ANIM_00, 0, EVAR_00);
             }
-            set(FG_COMMON, F_COMMON_57, FALSE);
-            set(FG_COMMON, F_COMMON_53, FALSE);
-            aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
-            evt_exec(0, TASK_09, on_enter);
+            set(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR, FALSE);
+            set(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_FROM_30A, FALSE);
+            aot_reset(AOT_00_DOOR_308_N, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, north_door_with_barry, 0);
+            evt_exec(0, TASK_09, barry_follows);
         }
-        if (ck(FG_COMMON, F_COMMON_59, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_309_HUNTER_SCENE, TRUE))
         {
             enemy(EM_06_HUNTER, EB_C0, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-            aot_reset(AOT_02_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_02_door, 0);
+            aot_reset(AOT_02_DOOR_30A, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, barry_saves_jill, 0);
         }
-        if (ck(FG_COMMON, F_COMMON_5A, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_RAN_AFTER_GUNSHOT, TRUE))
         {
             enemy(EM_2D_NPC_BARRY_3, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1112, 0, 6165, 0, 27740, ENEMY_00_NPC_BARRY_3, ANIM_00, 0, EVAR_00);
             enemy(EM_06_HUNTER, EB_C0, NO_FLAG, SPAWN_FORCE, 2, 0, 3192, 0, 4300, 0, 16300, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
-            evt_exec(0, TASK_09, on_aot_02_door);
-            aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
+            evt_exec(0, TASK_09, barry_saves_jill);
+            aot_reset(AOT_00_DOOR_308_N, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, north_door_with_barry, 0);
         }
     }
-    if (ck(FG_COMMON, F_COMMON_BGM_207_A, TRUE))
+    if (ck(FG_COMMON, F_COMMON_ENRICO_SHOT, TRUE))
     {
         if (CHRIS)
         {
@@ -89,42 +92,42 @@ proc init
             enemy(EM_06_HUNTER, EB_00, F_ENEMY_309_HUNTER_1, SPAWN_FORCE, 2, 0, 0, 0, 9760, 0, 18180, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
         }
     }
-    aot_set(AOT_07_MESSAGE, 25600, 16400, 2000, 10100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE_GENERATOR, 25600, 16400, 2000, 10100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
 }
 
-event on_aot_02_door when (JILL)
+event barry_saves_jill when (JILL)
 {
     sleep(1);
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-        if (ck(FG_COMMON, F_COMMON_59, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_309_HUNTER_SCENE, TRUE))
         {
-            evt_exec(0, TASK_09, on_aot_02_door_sub2);
+            evt_exec(0, TASK_09, barry_saves_jill_at_30a_door);
         }
-        if (ck(FG_COMMON, F_COMMON_5A, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_RAN_AFTER_GUNSHOT, TRUE))
         {
-            evt_exec(0, TASK_09, on_aot_02_door_sub1);
+            evt_exec(0, TASK_09, barry_saves_jill_at_north_door);
         }
     }
     evt_finish();
 }
 
-event on_aot_02_door_sub1 when (JILL)
+event barry_saves_jill_at_north_door when (JILL)
 {
     run
     {
-        set(FG_COMMON, F_COMMON_5A, FALSE);
+        set(FG_COMMON, F_COMMON_J_RAN_AFTER_GUNSHOT, FALSE);
         cutnext(CAM_04);
         dir_set(0, 0, 384, 0, 6840, 0, 26510);
-        set(FG_COMMON, F_COMMON_58, TRUE);
+        set(FG_COMMON, F_COMMON_J_BARRY_FOLLOWING, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_07_HE_NOUT, 0, SND_AT_ENEMY, ENEMY_01_HUNTER, 0, 0);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_J_ANIM_DONE, 0);
     act_param_set(0, 1024);
     act_reset();
     evt_nop();
@@ -140,13 +143,13 @@ event on_aot_02_door_sub1 when (JILL)
     act_nop();
     act_nop();
     act_nop();
-    act_anim_set(AB_07, ANIM_10, F_ROOM_00);
+    act_anim_set(AB_07, ANIM_10, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     sleep(5);
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
     evt_actor_begin();
-    act_anim_seq(AB_03, 5940, 23540, F_ROOM_00);
+    act_anim_seq(AB_03, 5940, 23540, F_ROOM_J_ANIM_DONE);
     act_nop();
     act_reset();
     evt_nop();
@@ -158,19 +161,19 @@ event on_aot_02_door_sub1 when (JILL)
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2B, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2B, F_ROOM_J_ANIM_DONE, 0);
     act_motion_path(MOTION_33, 400, 300, 0, 80, 60);
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_07, ANIM_13, F_ROOM_00);
+    act_anim_set(AB_07, ANIM_13, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     sleep(5);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_08, ANIM_14, F_ROOM_00);
+    act_anim_set(AB_08, ANIM_14, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     run
@@ -185,13 +188,13 @@ event on_aot_02_door_sub1 when (JILL)
     sleep(5);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_07, ANIM_16, F_ROOM_00);
+    act_anim_set(AB_07, ANIM_16, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_08, ANIM_17, F_ROOM_00);
+    act_anim_set(AB_08, ANIM_17, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     run
@@ -205,7 +208,7 @@ event on_aot_02_door_sub1 when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2B, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2B, F_ROOM_J_ANIM_DONE, 0);
     act_motion_path(MOTION_32, 0, 300, 0, 0, 30);
     act_flag_op(EF_SET, EF_0001);
     act_reset();
@@ -213,13 +216,13 @@ event on_aot_02_door_sub1 when (JILL)
     sleep(100);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_09, ANIM_10, F_ROOM_00);
+    act_anim_set(AB_09, ANIM_10, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_00, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_ANIM_DONE, 0);
     act_motion_path(MOTION_31, -500, 0, 0, 40, 0);
     act_reset();
     evt_nop();
@@ -230,7 +233,7 @@ event on_aot_02_door_sub1 when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2C, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2C, F_ROOM_J_ANIM_DONE, 0);
     act_motion_path(MOTION_31, 200, 0, 0, 50, 0);
     act_reset();
     evt_nop();
@@ -262,25 +265,25 @@ event on_aot_02_door_sub1 when (JILL)
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_00, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_J_ANIM_DONE, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_00, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_J_ANIM_DONE, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_00, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_J_ANIM_DONE, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(40);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_00, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_J_ANIM_DONE, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     wait_message();
@@ -313,11 +316,11 @@ event on_aot_02_door_sub1 when (JILL)
     evt_finish();
 }
 
-event on_aot_02_door_sub2 when (JILL)
+event barry_saves_jill_at_30a_door when (JILL)
 {
     run
     {
-        set(FG_COMMON, F_COMMON_59, FALSE);
+        set(FG_COMMON, F_COMMON_J_BARRY_309_HUNTER_SCENE, FALSE);
         cutnext(CAM_00);
         dir_set(0, 0, 2048, 0, 13940, 0, 3120);
         pos_set(ENEMY_00_NPC_BARRY_3, 0, 2200, 0, 15400, 0, 4000);
@@ -325,7 +328,7 @@ event on_aot_02_door_sub2 when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2B, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2B, F_ROOM_J_ANIM_DONE, 0);
     act_motion_path(MOTION_33, 400, 300, 0, 80, 60);
     act_reset();
     evt_nop();
@@ -340,7 +343,7 @@ event on_aot_02_door_sub2 when (JILL)
     act_nop();
     act_nop();
     act_nop();
-    act_anim_set(AB_07, ANIM_10, F_ROOM_00);
+    act_anim_set(AB_07, ANIM_10, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     run
@@ -351,7 +354,7 @@ event on_aot_02_door_sub2 when (JILL)
     sleep(40);
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
     evt_actor_begin();
-    act_anim_seq(AB_03, 13400, 5000, F_ROOM_00);
+    act_anim_seq(AB_03, 13400, 5000, F_ROOM_J_ANIM_DONE);
     act_nop();
     act_reset();
     evt_nop();
@@ -360,7 +363,7 @@ event on_aot_02_door_sub2 when (JILL)
     sleep(5);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_08, ANIM_11, F_ROOM_00);
+    act_anim_set(AB_08, ANIM_11, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     run
@@ -375,7 +378,7 @@ event on_aot_02_door_sub2 when (JILL)
     sleep(15);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_set(AB_08, ANIM_11, F_ROOM_00);
+    act_anim_set(AB_08, ANIM_11, F_ROOM_J_ANIM_DONE);
     act_reset();
     evt_nop();
     run
@@ -389,7 +392,7 @@ event on_aot_02_door_sub2 when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2B, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2B, F_ROOM_J_ANIM_DONE, 0);
     act_motion(MOTION_10);
     act_nop();
     act_nop();
@@ -417,14 +420,14 @@ event on_aot_02_door_sub2 when (JILL)
     sleep(40);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_J_ANIM_DONE, 0);
     act_param_set(0, 3072);
     act_reset();
     evt_nop();
     sleep(40);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_3);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_00, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_J_ANIM_DONE, 0);
     act_param_set(0, 3072);
     act_reset();
     evt_nop();
@@ -452,22 +455,22 @@ event on_aot_02_door_sub2 when (JILL)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_02_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_02_DOOR_30A, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event on_aot_00_door when (JILL)
+event north_door_with_barry when (JILL)
 {
     run
     {
-        set(FG_COMMON, F_COMMON_57, TRUE);
-        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        set(FG_COMMON, F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR, TRUE);
+        aot_on(AOT_00_DOOR_308_N, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event on_enter when (JILL)
+event barry_follows when (JILL)
 {
     sleep(5);
     run

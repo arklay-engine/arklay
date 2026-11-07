@@ -119,8 +119,8 @@ mod tests {
         assert_eq!(names.label(7, 0x34).as_deref(), Some("106_INK_3"));
         assert_eq!(names.label(2, 0x12).as_deref(), Some("103_104"));
         assert!(names.get(0, 0x7B)[0].description.contains("cleared"));
-        // Placeholders and the engine's banks are not named here.
-        assert_eq!(names.label(1, 0x09), None);
+        // A bit no script uses, and the engine's banks, are not named here.
+        assert_eq!(names.label(1, 0x06), None);
         assert_eq!(names.label(5, 0x0F), None);
     }
 

@@ -8,26 +8,26 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define CAM_00 0x00
+#define AOT_00_DOOR_109 0x00
+#define AOT_01_DOOR_116 0x01
+#define CAM_00_CEILING_OVERHEAD 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
-#define CAM_03 0x03
-#define CAM_04 0x04
-#define ENEMY_00_NPC_BARRY 0x00
-#define ENEMY_01_NPC_BARRY 0x01
+#define CAM_03_CEILING_FROM_FLOOR 0x03
+#define CAM_04_BARRY_OUTSIDE 0x04
+#define ENEMY_00_BARRY_OUTSIDE 0x00                         // Barry in the passage: he talks, bangs and kicks the door in.
+#define ENEMY_01_BARRY_AT_DOOR 0x01                         // Guess: the Barry who shows in the broken doorway.
 #define FX_08 0x08
-#define F_ROOM_03 0x03
-#define F_ROOM_04 0x04
-#define F_ROOM_3F 0x3F
+#define F_ROOM_ANIM_DONE_UNUSED 0x3F                        // An animation-finished pulse no script waits on.
+#define F_ROOM_J_STEP_BACK_DONE 0x04                        // Jill stepped back from the door for Barry's kick.
+#define F_ROOM_J_WALK_OUT_DONE 0x03                         // Jill's walk out of the trap finished; nothing waits on it.
 #define MSG_VO_105_00 0x00
 #define MSG_VO_105_01 0x01
 #define MSG_VO_105_02 0x02
 #define MSG_VO_105_03 0x03
 #define MSG_VO_105_04 0x04
-#define OBJ_00 0x00
-#define OBJ_01 0x01
+#define OBJ_00_CEILING 0x00
+#define OBJ_01_DOOR_109 0x01                                // The door Barry kicks open.
 #define OBJ_02 0x02
 #define SE_17_KICKDOOR 0x17
 #define SE_18_LOCK_MIX 0x18
@@ -44,40 +44,40 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_109_115, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 5300, 1400, 2400, 1000, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_115_116, ROOM_116_LIVING_ROOM, 4850, 0, 10250, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1760, 0, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR_109, 900, 4000, 1350, 2500, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_109_115, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_116, 5300, 1400, 2400, 1000, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_115_116, ROOM_116_LIVING_ROOM, 4850, 0, 10250, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    obj(OBJ_00_CEILING, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01_DOOR_109, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1760, 0, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (CHRIS)
     {
         set(FG_LOCK, F_LOCK_115_116, TRUE);
-        if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_COMMON, F_COMMON_20, FALSE))
+        if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE))
         {
             set(FG_LOCK, F_LOCK_109_115, FALSE);
-            set(FG_LOCK, F_LOCK_02, FALSE);
+            set(FG_LOCK, F_LOCK_115_TRAP, FALSE);
             cut_auto(CUT_LOCKED);
-            setb(B_CAMERA, CAM_03, 0);
-            evt_exec(0, TASK_09, on_enter_2);
+            setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
+            evt_exec(0, TASK_09, ceiling_trap_no_rescue);
             dir_set(0, 0, 3072, 0, 5200, 0, 2500);
         }
         else
         {
             set(FG_LOCK, F_LOCK_109_115, TRUE);
-            set(FG_LOCK, F_LOCK_02, TRUE);
+            set(FG_LOCK, F_LOCK_115_TRAP, TRUE);
         }
     }
     else
     {
-        enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 6900, 0, 9600, ENEMY_00_NPC_BARRY, ANIM_00, 0, EVAR_00);
-        enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 450, 0, 5000, ENEMY_01_NPC_BARRY, ANIM_00, 0, EVAR_00);
+        enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 6900, 0, 9600, ENEMY_00_BARRY_OUTSIDE, ANIM_00, 0, EVAR_00);
+        enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 450, 0, 5000, ENEMY_01_BARRY_AT_DOOR, ANIM_00, 0, EVAR_00);
         if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
         {
-            set(FG_COMMON, F_COMMON_21, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, TRUE);
         }
         if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, TRUE))
         {
-            set(FG_COMMON, F_COMMON_21, TRUE);
+            set(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, TRUE);
         }
         if (ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE) && ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE))
         {
@@ -86,19 +86,19 @@ proc init
                 set(FG_LOCK, F_LOCK_109_115, FALSE);
                 set(FG_LOCK, F_LOCK_115_116, FALSE);
                 cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
+                setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
                 dir_set(0, 0, 3072, 0, 5200, -400, 2500);
-                evt_exec(0, TASK_09, on_enter);
+                evt_exec(0, TASK_09, jill_trap_start);
             }
-            else if (ck(FG_COMMON, F_COMMON_29, FALSE))
+            else if (ck(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE))
             {
                 set(FG_LOCK, F_LOCK_109_115, FALSE);
                 set(FG_LOCK, F_LOCK_115_116, FALSE);
                 cut_auto(CUT_LOCKED);
-                setb(B_CAMERA, CAM_03, 0);
+                setb(B_CAMERA, CAM_03_CEILING_FROM_FLOOR, 0);
                 dir_set(0, 0, 3072, 0, 5200, -400, 2500);
                 set(FG_LOCK, F_LOCK_115_116, TRUE);
-                evt_exec(0, TASK_09, on_enter_2);
+                evt_exec(0, TASK_09, ceiling_trap_no_rescue);
             }
             else
             {
@@ -114,13 +114,13 @@ proc init
     }
 }
 
-event event_00 when (JILL)
+event barry_answers_through_door when (JILL)
 {
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_UNUSED, 0);
     act_reset();
     evt_nop();
     sleep(10);
@@ -128,35 +128,35 @@ event event_00 when (JILL)
     message(MSG_VO_105_00, 0);
     wait_message();
     dir_set(0, 0, 1648, 0, 12700, 0, 15500);
-    cutnext(CAM_04);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    cutnext(CAM_04_BARRY_OUTSIDE);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY_OUTSIDE);
     evt_actor_begin();
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(30);
     act_reset();
     evt_nop();
     voice_play(VOICE_PLAY, VO_105_01);
     message(MSG_VO_105_01, 0);
-    evt_fork(TASK_09, event_0D, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_fork(TASK_09, barry_bangs_on_door, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY_OUTSIDE);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_26, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_26, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_26, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_UNUSED, AFL_02 | AFL_01);
     sleep(30);
     act_reset();
     evt_nop();
@@ -170,28 +170,28 @@ event event_00 when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(20);
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(14);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(8);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(20);
-    act_anim_flags(ANIM_24, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(15);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_UNUSED, 0);
     sleep(10);
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_UNUSED, 0);
     act_reset();
     evt_nop();
     wait_message();
-    evt_chain(event_01);
+    evt_chain(barry_kicks_door_in);
 }
 
-event event_01 when (JILL)
+event barry_kicks_door_in when (JILL)
 {
     run
     {
@@ -202,17 +202,17 @@ event event_01 when (JILL)
     sleep(50);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_04, 4900, 6900, F_ROOM_04);
+    act_anim_seq(AB_04, 4900, 6900, F_ROOM_J_STEP_BACK_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_04, FALSE));
-    evt_fork(TASK_09, event_09, 0);
+    while (ck(FG_ROOM, F_ROOM_J_STEP_BACK_DONE, FALSE));
+    evt_fork(TASK_09, barry_at_door_anim, 0);
     sleep(20);
-    se_play_3d(SND_BANK_ROOM, SE_17_KICKDOOR, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    se_play_3d(SND_BANK_ROOM, SE_17_KICKDOOR, 0, SND_AT_ENEMY, ENEMY_00_BARRY_OUTSIDE, 0, 0);
+    evt_work_set(WK_OBJ, OBJ_01_DOOR_109);
     evt_tween_begin_alt();
     tw_set_rot(0, 80, 0);
     for (18)
@@ -342,23 +342,23 @@ event event_01 when (JILL)
     evt_nop();
     run
     {
-        door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 4, DOOR_SND_02_DR_BRK, DOOR_00_DOOR00, 0, DOOR_LOCKED | F_LOCK_109_115, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        door_aot_set(AOT_00_DOOR_109, 900, 4000, 1350, 2500, 4, DOOR_SND_02_DR_BRK, DOOR_00_DOOR00, 0, DOOR_LOCKED | F_LOCK_109_115, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         voice_play(VOICE_PLAY, VO_105_04);
         message(MSG_VO_105_04, 0);
     }
     wait_message();
     set(FG_LOCK, F_LOCK_109_115, TRUE);
-    set(FG_COMMON, F_COMMON_20, TRUE);
+    set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 2000, 5400, F_ROOM_03);
+    act_anim_seq(AB_03, 2000, 5400, F_ROOM_J_WALK_OUT_DONE);
     act_reset();
     evt_finish();
 }
 
-event on_enter when (JILL)
+event jill_trap_start when (JILL)
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -8690, 4860);
     tw_end();
@@ -370,9 +370,9 @@ event on_enter when (JILL)
     evt_nop();
 }
 
-event event_03 when (JILL)
+event jill_trap_ceiling_starts when (JILL)
 {
-    set(FG_LOCK, F_LOCK_02, FALSE);
+    set(FG_LOCK, F_LOCK_115_TRAP, FALSE);
     sleep(15);
     se_play_3d(SND_BANK_ROOM, SE_18_LOCK_MIX, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(5);
@@ -392,7 +392,7 @@ event event_03 when (JILL)
     act_motion(MOTION_10);
     act_reset();
     evt_nop();
-    evt_exec(0, TASK_09, on_enter_sub1);
+    evt_exec(0, TASK_09, ceiling_starts_lowering);
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -406,7 +406,7 @@ event event_03 when (JILL)
     evt_nop();
 }
 
-event event_04 when (JILL)
+event jill_trap_ceiling_lowers when (JILL)
 {
     run
     {
@@ -414,7 +414,7 @@ event event_04 when (JILL)
         cutnext(CAM_02);
         cut_auto(CUT_FREE);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -10500, 4860);
     tw_end();
@@ -423,9 +423,9 @@ event event_04 when (JILL)
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        evt_exec(0, TASK_09, event_08);
+        evt_exec(0, TASK_09, jill_pushes_ceiling);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_set_pos(0, 7, 0);
     for (450)
@@ -436,8 +436,8 @@ event event_04 when (JILL)
     tw_nop();
     tw_end();
     evt_nop();
-    evt_fork(TASK_09, event_00, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_fork(TASK_09, barry_answers_through_door, 0);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_set_pos(0, 5, 0);
     for (10000)
@@ -451,9 +451,9 @@ event event_04 when (JILL)
     evt_finish();
 }
 
-event on_enter_2
+event ceiling_trap_no_rescue
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -8690, 4860);
     tw_end();
@@ -475,20 +475,20 @@ event on_enter_2
     {
         if (CHRIS)
         {
-            set(FG_COMMON, F_COMMON_20, TRUE);
+            set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE);
         }
         else
         {
-            set(FG_COMMON, F_COMMON_29, TRUE);
+            set(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, TRUE);
         }
-        set(FG_LOCK, F_LOCK_02, FALSE);
+        set(FG_LOCK, F_LOCK_115_TRAP, FALSE);
         if (CHRIS)
         {
-            evt_exec(0, TASK_09, on_enter_sub1);
+            evt_exec(0, TASK_09, ceiling_starts_lowering);
         }
         else
         {
-            evt_exec(0, TASK_09, on_enter_2_sub1);
+            evt_exec(0, TASK_09, jill_ceiling_starts_lowering);
         }
     }
     evt_work_set(WK_PLAYER, 0);
@@ -510,13 +510,13 @@ event on_enter_2
         cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -8600, 4860);
     tw_end();
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_set_pos(0, 10, 0);
     for (500)
@@ -531,11 +531,11 @@ event on_enter_2
     {
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        cutnext(CAM_00);
+        cutnext(CAM_00_CEILING_OVERHEAD);
     }
     evt_disable(TASK_06);
     evt_disable(TASK_07);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -6000, 4860);
     for (80)
@@ -564,7 +564,7 @@ event on_enter_2
     tw_end();
     evt_nop();
     set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     for (30)
     {
@@ -594,9 +594,9 @@ event on_enter_2
     evt_finish();
 }
 
-event event_06 when (JILL)
+event jill_ceiling_lowers_unused when (JILL)
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_set_pos(0, 5, 0);
     for (450)
@@ -610,19 +610,19 @@ event event_06 when (JILL)
     evt_finish();
 }
 
-event on_enter_sub1
+event ceiling_starts_lowering
 {
     if (CHRIS)
     {
-        evt_fork(TASK_07, on_enter_sub1_sub1, 0);
-        evt_fork(TASK_06, on_enter_sub1_sub2, 0);
+        evt_fork(TASK_07, ceiling_dust_corners, 0);
+        evt_fork(TASK_06, ceiling_dust_wait, 0);
     }
     else
     {
-        evt_fork(TASK_06, on_enter_sub1_sub1, 0);
-        evt_fork(TASK_07, on_enter_sub1_sub2, 0);
+        evt_fork(TASK_06, ceiling_dust_corners, 0);
+        evt_fork(TASK_07, ceiling_dust_wait, 0);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     if (CHRIS)
     {
@@ -646,7 +646,7 @@ event on_enter_sub1
     evt_finish();
 }
 
-event event_08 when (JILL)
+event jill_pushes_ceiling when (JILL)
 {
     sleep(100);
     evt_work_set(WK_PLAYER, 0);
@@ -657,53 +657,53 @@ event event_08 when (JILL)
     sleep(10);
     act_end();
     evt_nop();
-    evt_chain(event_08);
+    evt_chain(jill_pushes_ceiling);
 }
 
-event event_09 when (JILL)
+event barry_at_door_anim when (JILL)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY_AT_DOOR);
     evt_actor_begin();
     sleep(1);
-    act_anim_flags(ANIM_32, F_ROOM_3F, AFL_01);
+    act_anim_flags(ANIM_32, F_ROOM_ANIM_DONE_UNUSED, AFL_01);
     sleep(40);
     act_motion_path(MOTION_13, 4900, -8000, 4900, 100, 100);
     sleep(20);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_30, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_30, F_ROOM_ANIM_DONE_UNUSED, 0);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event on_enter_sub1_sub1
+event ceiling_dust_corners
 {
     run
     {
-        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -3060, 20, -3010, 0);
-        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -3060, 20, 3140, 0);
-        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 2940, 20, 3140, 0);
-        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 2940, 20, -3010, 0);
+        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -3060, 20, -3010, 0);
+        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -3060, 20, 3140, 0);
+        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2940, 20, 3140, 0);
+        effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2940, 20, -3010, 0);
     }
     sleep(20);
     if (CHRIS)
     {
-        evt_chain(on_enter_sub1_sub1);
+        evt_chain(ceiling_dust_corners);
     }
     else
     {
-        evt_chain(on_enter_sub1_sub1);
+        evt_chain(ceiling_dust_corners);
     }
     evt_nop();
     evt_nop();
 }
 
-event on_enter_sub1_sub2
+event ceiling_dust_wait
 {
     sleep(30);
 }
 
-event event_04_v2
+event ceiling_dust_random
 {
     run
     {
@@ -711,16 +711,16 @@ event event_04_v2
         {
             if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -560, 20, -3010, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -560, 20, -3010, 0);
             }
             else
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 690, 20, -3010, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 690, 20, -3010, 0);
             }
         }
         else
         {
-            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -1810, 20, -3010, 0);
+            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -1810, 20, -3010, 0);
         }
     }
     sleep(1);
@@ -730,16 +730,16 @@ event event_04_v2
         {
             if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -560, 20, 3140, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -560, 20, 3140, 0);
             }
             else
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 690, 20, 3140, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 690, 20, 3140, 0);
             }
         }
         else
         {
-            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -1810, 20, 3140, 0);
+            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -1810, 20, 3140, 0);
         }
     }
     sleep(1);
@@ -749,16 +749,16 @@ event event_04_v2
         {
             if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -3060, 20, -1550, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -3060, 20, -1550, 0);
             }
             else
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -3060, 20, 0, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -3060, 20, 0, 0);
             }
         }
         else
         {
-            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, -3060, 20, 1550, 0);
+            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, -3060, 20, 1550, 0);
         }
     }
     sleep(1);
@@ -768,52 +768,52 @@ event event_04_v2
         {
             if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 2920, 20, -1550, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2920, 20, -1550, 0);
             }
             else
             {
-                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 2920, 20, 0, 0);
+                effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2920, 20, 0, 0);
             }
         }
         else
         {
-            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00, 2920, 20, 1550, 0);
+            effect(FX_08, FX_ROW_14, FX_AT_OBJ | OBJ_00_CEILING, 2920, 20, 1550, 0);
         }
     }
     sleep(10);
     if (CHRIS)
     {
-        evt_chain(on_enter_sub1_sub2);
+        evt_chain(ceiling_dust_wait);
     }
     else
     {
-        evt_chain(event_04_v2);
+        evt_chain(ceiling_dust_random);
     }
     evt_nop();
     evt_nop();
 }
 
-event event_0D when (JILL)
+event barry_bangs_on_door when (JILL)
 {
     sleep(10);
-    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_BARRY_OUTSIDE, 0, 0);
     sleep(30);
-    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_BARRY_OUTSIDE, 0, 0);
     sleep(30);
-    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_1D_TAO_WALL, 0, SND_AT_ENEMY, ENEMY_00_BARRY_OUTSIDE, 0, 0);
     evt_finish();
 }
 
-event on_enter_2_sub1 when (JILL)
+event jill_ceiling_starts_lowering when (JILL)
 {
     snd_pan_vol_set(BGM_MAIN, 30, 30);
     bgm_play(BGM_SUB_1);
     sleep(45);
     snd_pan_vol_set(BGM_MAIN, 110, 110);
     bgm_play(BGM_MAIN);
-    evt_fork(TASK_06, on_enter_sub1_sub1, 0);
-    evt_fork(TASK_07, on_enter_sub1_sub2, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_fork(TASK_06, ceiling_dust_corners, 0);
+    evt_fork(TASK_07, ceiling_dust_wait, 0);
+    evt_work_set(WK_OBJ, OBJ_00_CEILING);
     evt_tween_begin_alt();
     tw_set_pos(0, 7, 0);
     for (140)

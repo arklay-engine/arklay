@@ -8,7 +8,7 @@
 #define MOVIE_04_HUNTER_AT_DOOR 0x04                        // dm4: a Hunter's view down a passage to a door (21C)
 #define MOVIE_05_FRONT_DOOR_DOG_JILL 0x05                   // dm1: a dog lunges in at the front door, Jill (106)
 #define MOVIE_06_HUNTER_RUN 0x06                            // dm6: a Hunter's view running into the mansion (10A)
-#define MOVIE_07_WATER_TANK_DRAINS 0x07                     // dm7: the water tank drains (40E)
+#define MOVIE_07_NEPTUNE_POV 0x07                           // dm7: a Neptune's view under water, closing on the player (40E)
 #define MOVIE_08_FOUNTAIN_OPENS 0x08                        // dm8: the fountain drains and opens (305)
 #define MOVIE_09_FRONT_DOOR_DOG_CHRIS 0x09                  // dm2: a dog lunges in at the front door, Chris (106)
 #define MOVIE_0B_TYRANT_WAKES_CHRIS 0x0B                    // dmb: the Tyrant wakes in its tank, Chris (513)

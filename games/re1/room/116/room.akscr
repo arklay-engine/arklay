@@ -8,17 +8,17 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_05_NONE 0x05
-#define AOT_06_NONE 0x06
-#define AOT_07_NONE 0x07
-#define AOT_08_MESSAGE 0x08
-#define AOT_09_MESSAGE 0x09
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define OBJ_00 0x00
+#define AOT_00_DOOR_115 0x00
+#define AOT_01_ITEM_WEAPON_SHOTGUN_0 0x01
+#define AOT_02_ITEM_KEY_BROKEN_SHOTGUN_1 0x02
+#define AOT_05_USEITEM_RACK_BROKEN_SHOTGUN 0x05             // Data 9,0,1: arms the broken shotgun for use on the rack.
+#define AOT_06_EVENT_RACK_SHOTGUN 0x06                      // Puts the shotgun back on the rack.
+#define AOT_07_MESSAGE_DOOR_BLOCKED 0x07                    // Replaces the 115 door while the ceiling is down; its text is missing.
+#define AOT_08_MESSAGE_URN 0x08
+#define AOT_09_MESSAGE_TAPESTRY 0x09
+#define IMDL_00_WEAPON_SHOTGUN 0x00
+#define IMDL_01_KEY_BROKEN_SHOTGUN 0x01
+#define OBJ_00_SHOTGUN_RACK 0x00
 #define SE_17_GATAN 0x17
 #define SE_18_SW_TRAP 0x18
 #define SE_19_CEILPRES 0x19
@@ -26,33 +26,33 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_115_116, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_WEAPON_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
-    swap_var(XFER_RESTORE, AOT_01_ITEM, B_0C);
-    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, IMDL_01, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
-    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
-    aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
-    aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 9500, 1300, 2000, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 0, 5000, 3600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR_115, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_115_116, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM_WEAPON_SHOTGUN_0, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00_WEAPON_SHOTGUN, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_WEAPON_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
+    swap_var(XFER_RESTORE, AOT_01_ITEM_WEAPON_SHOTGUN_0, B_0C);
+    item_aot_set(AOT_02_ITEM_KEY_BROKEN_SHOTGUN_1, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, IMDL_01_KEY_BROKEN_SHOTGUN, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00_SHOTGUN_RACK, OF_ACTIVE, SCA_NONE, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_USEITEM_RACK_BROKEN_SHOTGUN, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
+    aot_set(AOT_06_EVENT_RACK_SHOTGUN, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE_DOOR_BLOCKED, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE_URN, 9500, 1300, 2000, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE_TAPESTRY, 0, 5000, 3600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE))
     {
-        evt_exec(0, TASK_00, on_enter);
-        aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
-        aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        evt_exec(0, TASK_00, rack_raised_on_enter);
+        aot_delete(AOT_05_USEITEM_RACK_BROKEN_SHOTGUN, SCE_USEITEM, SAT_PLAYER);
+        aot_delete(AOT_06_EVENT_RACK_SHOTGUN, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_COMMON, F_COMMON_20, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE))
     {
-        evt_exec(0, TASK_09, on_enter_2);
-        aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        evt_exec(0, TASK_09, ceiling_down_sound);
+        aot_delete(AOT_00_DOOR_115, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE) && ck(FG_COMMON, F_COMMON_29, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE) && ck(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, TRUE))
     {
-        evt_exec(0, TASK_09, on_enter_2);
-        aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        evt_exec(0, TASK_09, ceiling_down_sound);
+        aot_delete(AOT_00_DOOR_115, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
@@ -60,7 +60,7 @@ proc main
 {
     if (testpickup(IT_03_WEAPON_SHOTGUN))
     {
-        evt_exec(0, TASK_09, from_main);
+        evt_exec(0, TASK_09, take_shotgun_rack_clicks);
     }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
@@ -68,21 +68,21 @@ proc main
         {
             set(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE);
             setbyte(0, 1, 0);
-            evt_exec(0, TASK_09, from_main_2);
-            evt_exec(0, TASK_09, from_main_3);
-            set(FG_COMMON, F_COMMON_20, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            evt_exec(0, TASK_09, rack_settles);
+            evt_exec(0, TASK_09, shotgun_placed_back);
+            set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE);
+            aot_delete(AOT_00_DOOR_115, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
             set(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE);
             setbyte(1, 1, 0);
-            evt_exec(0, TASK_09, from_main_2);
-            evt_exec(0, TASK_09, from_main_4);
-            set(FG_COMMON, F_COMMON_20, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            evt_exec(0, TASK_09, rack_settles);
+            evt_exec(0, TASK_09, broken_shotgun_placed);
+            set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE);
+            aot_delete(AOT_00_DOOR_115, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
@@ -91,31 +91,31 @@ proc main
         {
             set(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE);
             setbyte(0, 1, 0);
-            evt_exec(0, TASK_09, from_main_2);
-            evt_exec(0, TASK_09, from_main_3);
-            set(FG_COMMON, F_COMMON_29, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            evt_exec(0, TASK_09, rack_settles);
+            evt_exec(0, TASK_09, shotgun_placed_back);
+            set(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE);
+            aot_delete(AOT_00_DOOR_115, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
             set(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE);
             setbyte(1, 1, 0);
-            evt_exec(0, TASK_09, from_main_2);
-            evt_exec(0, TASK_09, from_main_4);
-            set(FG_COMMON, F_COMMON_29, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            evt_exec(0, TASK_09, rack_settles);
+            evt_exec(0, TASK_09, broken_shotgun_placed);
+            set(FG_COMMON, F_COMMON_J_CEILING_TRAP_SPRUNG, FALSE);
+            aot_delete(AOT_00_DOOR_115, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_MESSAGE_DOOR_BLOCKED, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
 }
 
-event from_main
+event take_shotgun_rack_clicks
 {
     se_play_3d(SND_BANK_ROOM, SE_17_GATAN, 0, SND_AT_POINT, 0, 5500, 7070);
     sleep(5);
     se_play_3d(SND_BANK_ROOM, SE_18_SW_TRAP, 0, SND_AT_POINT, 0, 5500, 7070);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_SHOTGUN_RACK);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -194,15 +194,15 @@ event from_main
     evt_next();
     tw_end();
     evt_nop();
-    aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
-    aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+    aot_delete(AOT_05_USEITEM_RACK_BROKEN_SHOTGUN, SCE_USEITEM, SAT_PLAYER);
+    aot_delete(AOT_06_EVENT_RACK_SHOTGUN, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     evt_finish();
 }
 
-event from_main_2
+event rack_settles
 {
     se_play_3d(SND_BANK_ROOM, SE_18_SW_TRAP, 0, SND_AT_POINT, 0, 5500, 7070);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_SHOTGUN_RACK);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -292,19 +292,19 @@ event from_main_2
     tw_finish();
 }
 
-event on_enter
+event rack_raised_on_enter
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_SHOTGUN_RACK);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10980, -3138, 6490);
     tw_finish();
 }
 
-event from_main_3
+event shotgun_placed_back
 {
-    aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
-    aot_delete(AOT_06_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    evt_work_set(WK_AOT, IMDL_00);
+    aot_delete(AOT_05_USEITEM_RACK_BROKEN_SHOTGUN, SCE_NONE, SAT_PLAYER);
+    aot_delete(AOT_06_EVENT_RACK_SHOTGUN, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_SHOTGUN);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -398,16 +398,16 @@ event from_main_3
     evt_next();
     tw_end();
     evt_next();
-    aot_delete(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+    aot_delete(AOT_01_ITEM_WEAPON_SHOTGUN_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     evt_finish();
 }
 
-event from_main_4
+event broken_shotgun_placed
 {
-    aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
-    aot_delete(AOT_06_NONE, SCE_NONE, SAT_PLAYER);
-    evt_work_set(WK_AOT, IMDL_01);
+    aot_delete(AOT_01_ITEM_WEAPON_SHOTGUN_0, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    aot_delete(AOT_05_USEITEM_RACK_BROKEN_SHOTGUN, SCE_NONE, SAT_PLAYER);
+    aot_delete(AOT_06_EVENT_RACK_SHOTGUN, SCE_NONE, SAT_PLAYER);
+    evt_work_set(WK_AOT, IMDL_01_KEY_BROKEN_SHOTGUN);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -504,19 +504,19 @@ event from_main_4
     evt_finish();
 }
 
-event event_05
+event place_shotgun_on_rack
 {
     run
     {
         require(item_ck(IT_03_WEAPON_SHOTGUN));
-        swap_var(XFER_HELD, AOT_01_ITEM, B_0C);
+        swap_var(XFER_HELD, AOT_01_ITEM_WEAPON_SHOTGUN_0, B_0C);
         setb(B_SELECTED_ITEM, IT_03_WEAPON_SHOTGUN, 0);
         set(FG_STATUS, F_STATUS_MENU_KEY_DEPLETED, TRUE);
     }
     evt_finish();
 }
 
-event on_enter_2
+event ceiling_down_sound
 {
     sleep(10);
     run

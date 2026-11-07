@@ -8,77 +8,77 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_MESSAGE 0x04
-#define AOT_05_MESSAGE 0x05
-#define AOT_06_USEITEM 0x06
-#define AOT_07_MESSAGE 0x07
-#define AOT_08_MESSAGE 0x08
-#define AOT_09_MESSAGE 0x09
-#define AOT_0A_MESSAGE 0x0A
-#define AOT_0B_MESSAGE 0x0B
-#define AOT_0C_MESSAGE 0x0C
-#define AOT_0D_USEITEM 0x0D
-#define AOT_0E_USEITEM 0x0E
-#define AOT_0F_MESSAGE 0x0F
-#define AOT_10_MESSAGE 0x10
-#define AOT_11_USEITEM 0x11
+#define AOT_00_DOOR_106 0x00
+#define AOT_01_DOOR_108 0x01
+#define AOT_02_ITEM_MAP_1F_0 0x02                           // Item 4E is the 1F map; it is taken through AOT_05's message.
+#define AOT_03_ITEM_INK_1 0x03
+#define AOT_04_MESSAGE_NO_TIME 0x04                         // Over the ink ribbon when playing as Rebecca (model 3).
+#define AOT_05_MESSAGE_MAP_1F 0x05                          // The map's spot: the take event, or "no time" as Rebecca.
+#define AOT_06_USEITEM_WATER_PICTURE_ZONE 0x06              // Raises F_ROOM_AT_WATER_PICTURE.
+#define AOT_07_MESSAGE_NOTHING 0x07                         // "Nothing unusual."
+#define AOT_08_MESSAGE_WOMAN_PICTURE 0x08
+#define AOT_09_MESSAGE_STEEP_SCENERY 0x09
+#define AOT_0A_MESSAGE_OIL_PAINTING 0x0A
+#define AOT_0B_MESSAGE_SCENERY_PICTURE 0x0B
+#define AOT_0C_MESSAGE_VARIOUS_PICTURES 0x0C
+#define AOT_0D_USEITEM_VARIOUS_PICTURES_ZONE 0x0D           // Raises F_ROOM_AT_VARIOUS_PICTURES.
+#define AOT_0E_USEITEM_SCENERY_PICTURE_ZONE 0x0E            // Raises F_ROOM_AT_SCENERY_PICTURE.
+#define AOT_0F_MESSAGE_WATER_PICTURE 0x0F                   // "A woman drawing water"
+#define AOT_10_MESSAGE_CHUBBY_WOMAN 0x10
+#define AOT_11_USEITEM_CHUBBY_WOMAN_ZONE 0x11               // Raises F_ROOM_AT_CHUBBY_WOMAN.
 #define CAM_03 0x03
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
-#define F_ROOM_3B 0x3B
-#define F_ROOM_3C 0x3C
-#define F_ROOM_3D 0x3D
-#define F_ROOM_3E 0x3E
-#define IMDL_00 0x00
-#define IMDL_01 0x01
+#define F_ROOM_AT_CHUBBY_WOMAN 0x3B                         // The player is in AOT_11's zone (one frame); main turns on the chubby woman picture's examine spot.
+#define F_ROOM_AT_SCENERY_PICTURE 0x3C                      // The player is in AOT_0E's zone (one frame); main turns on the scenery picture's examine spot.
+#define F_ROOM_AT_VARIOUS_PICTURES 0x3D                     // The player is in AOT_0D's zone (one frame); main turns on the "various pictures" examine spot.
+#define F_ROOM_AT_WATER_PICTURE 0x3E                        // The player is in AOT_06's zone (one frame); main turns on the "woman drawing water" examine spot.
+#define IMDL_00_MAP_1F 0x00
+#define IMDL_01_INK 0x01
 #define MSG_IT_IS_A_MAP_OF_1ST 0x09
 #define MSG_YOU_GOT_THE_MAP_OF_1ST 0x0A
-#define OBJ_00 0x00
+#define OBJ_00_STEP 0x00                                    // Likely: a pushable step the player can climb.
 #define OBJ_01 0x01
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 0, 4700, 2650, 4100, 9, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 15400, 2900, 2300, 2600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_107_108, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
-    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_107_UNKNOWN_4E_0, TRUE))
+    door_aot_set(AOT_00_DOOR_106, 0, 4700, 2650, 4100, 9, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_108, 15400, 2900, 2300, 2600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_107_108, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
+    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_107_MAP_1F_0, TRUE))
     {
-        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, IMDL_00, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_107_UNKNOWN_4E_0, 0, 0);
-        eml_rot(IMDL_00, -710, 0);
-        aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM_MAP_1F_0, 0, 0, 0, 0, IT_4E_MAP_1F, 1, IMDL_00_MAP_1F, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_107_MAP_1F_0, 0, 0);
+        eml_rot(IMDL_00_MAP_1F, -710, 0);
+        aot_set(AOT_05_MESSAGE_MAP_1F, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
     }
-    else if (ck(FG_ITEM, F_ITEM_107_UNKNOWN_4E_0, TRUE))
+    else if (ck(FG_ITEM, F_ITEM_107_MAP_1F_0, TRUE))
     {
-        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, IMDL_00, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_107_UNKNOWN_4E_0, 0, 0);
-        eml_rot(IMDL_00, -710, 0);
-        aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, on_aot_05_message, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM_MAP_1F_0, 0, 0, 0, 0, IT_4E_MAP_1F, 1, IMDL_00_MAP_1F, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_107_MAP_1F_0, 0, 0);
+        eml_rot(IMDL_00_MAP_1F, -710, 0);
+        aot_set(AOT_05_MESSAGE_MAP_1F, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, take_map_1f, 0, 0, 0);
     }
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_107_INK_1, TRUE))
     {
-        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_107_INK_1, 0, 0);
-        eml_rot(IMDL_01, 0, 950);
-        aot_set(AOT_04_MESSAGE, 12880, 12830, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM_INK_1, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01_INK, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_107_INK_1, 0, 0);
+        eml_rot(IMDL_01_INK, 0, 950);
+        aot_set(AOT_04_MESSAGE_NO_TIME, 12880, 12830, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     }
     else
     {
-        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_107_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
-        eml_rot(IMDL_01, 0, 950);
+        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM_INK_1, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01_INK, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_107_INK_1, SAT_MANUAL | SAT_PLAYER, 0);
+        eml_rot(IMDL_01_INK, 0, 950);
     }
-    aot_set(AOT_06_USEITEM, 7300, 6000, 500, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
-    aot_set(AOT_07_MESSAGE, 3400, 300, 2800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 7600, 300, 2200, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 11000, 300, 3500, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_0A_MESSAGE, 3300, 11300, 3700, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_0B_MESSAGE, 11200, 11300, 2600, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_0C_MESSAGE, 16400, 11000, 1900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_0D_USEITEM, 16400, 12100, 1900, 1400, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
-    aot_set(AOT_0E_USEITEM, 11200, 10000, 2600, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
-    aot_set(AOT_0F_MESSAGE, 7800, 6000, 1900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 255, 0, 0, 0);
-    aot_set(AOT_10_MESSAGE, 15200, 5500, 900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
-    aot_set(AOT_11_USEITEM, 13700, 6000, 1600, 1700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 59, 0, 1, 0);
-    obj(OBJ_PUSH_GRUNT | OBJ_00, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 12500, 0, 4600, 0, 285, 0, -285, 0, 725, 900, 990, 800);
+    aot_set(AOT_06_USEITEM_WATER_PICTURE_ZONE, 7300, 6000, 500, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
+    aot_set(AOT_07_MESSAGE_NOTHING, 3400, 300, 2800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE_WOMAN_PICTURE, 7600, 300, 2200, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE_STEEP_SCENERY, 11000, 300, 3500, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE_OIL_PAINTING, 3300, 11300, 3700, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE_SCENERY_PICTURE, 11200, 11300, 2600, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE_VARIOUS_PICTURES, 16400, 11000, 1900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_0D_USEITEM_VARIOUS_PICTURES_ZONE, 16400, 12100, 1900, 1400, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
+    aot_set(AOT_0E_USEITEM_SCENERY_PICTURE_ZONE, 11200, 10000, 2600, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
+    aot_set(AOT_0F_MESSAGE_WATER_PICTURE, 7800, 6000, 1900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 255, 0, 0, 0);
+    aot_set(AOT_10_MESSAGE_CHUBBY_WOMAN, 15200, 5500, 900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
+    aot_set(AOT_11_USEITEM_CHUBBY_WOMAN_ZONE, 13700, 6000, 1600, 1700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 59, 0, 1, 0);
+    obj(OBJ_PUSH_GRUNT | OBJ_00_STEP, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 12500, 0, 4600, 0, 285, 0, -285, 0, 725, 900, 990, 800);
     obj(OBJ_01, OF_ACTIVE, SCA_NONE, 14345, 0, 8795, 2048, 0, 540, 0, -540, 540, 1800, 1050, 1350);
     if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
@@ -94,68 +94,68 @@ proc main
 {
     if (cmpb(B_CHARACTER_MODEL, CMP_NE, 3))
     {
-        if (ck(FG_ITEM, F_ITEM_107_UNKNOWN_4E_0, TRUE))
+        if (ck(FG_ITEM, F_ITEM_107_MAP_1F_0, TRUE))
         {
             if (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
             {
-                aot_delete(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_05_MESSAGE_MAP_1F, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                aot_delete(AOT_05_MESSAGE, SCE_EVENT, 0);
+                aot_delete(AOT_05_MESSAGE_MAP_1F, SCE_EVENT, 0);
             }
         }
     }
-    else if (ck(FG_ITEM, F_ITEM_107_UNKNOWN_4E_0, TRUE))
+    else if (ck(FG_ITEM, F_ITEM_107_MAP_1F_0, TRUE))
     {
         if (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
         {
-            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_05_MESSAGE_MAP_1F, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
         }
         else
         {
-            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 0);
+            aot_delete(AOT_05_MESSAGE_MAP_1F, SCE_MESSAGE, 0);
         }
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
         set(FG_MAP, F_MAP_VISITED_11D, TRUE);
     }
-    if (ck(FG_ROOM, F_ROOM_3E, TRUE))
+    if (ck(FG_ROOM, F_ROOM_AT_WATER_PICTURE, TRUE))
     {
-        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0F_MESSAGE_WATER_PICTURE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, 0);
+        aot_delete(AOT_0F_MESSAGE_WATER_PICTURE, SCE_MESSAGE, 0);
     }
-    if (ck(FG_ROOM, F_ROOM_3D, TRUE))
+    if (ck(FG_ROOM, F_ROOM_AT_VARIOUS_PICTURES, TRUE))
     {
-        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-    }
-    else
-    {
-        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, 0);
-    }
-    if (ck(FG_ROOM, F_ROOM_3C, TRUE))
-    {
-        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0C_MESSAGE_VARIOUS_PICTURES, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, 0);
+        aot_delete(AOT_0C_MESSAGE_VARIOUS_PICTURES, SCE_MESSAGE, 0);
     }
-    if (ck(FG_ROOM, F_ROOM_3B, TRUE))
+    if (ck(FG_ROOM, F_ROOM_AT_SCENERY_PICTURE, TRUE))
     {
-        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0B_MESSAGE_SCENERY_PICTURE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, 0);
+        aot_delete(AOT_0B_MESSAGE_SCENERY_PICTURE, SCE_MESSAGE, 0);
+    }
+    if (ck(FG_ROOM, F_ROOM_AT_CHUBBY_WOMAN, TRUE))
+    {
+        aot_delete(AOT_10_MESSAGE_CHUBBY_WOMAN, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        aot_delete(AOT_10_MESSAGE_CHUBBY_WOMAN, SCE_MESSAGE, 0);
     }
 }
 
-event on_aot_05_message
+event take_map_1f
 {
     message(MSG_IT_IS_A_MAP_OF_1ST | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of 1ST FLOOR. Will you take it? You got the map of 1ST FLOOR."
     do
@@ -167,17 +167,17 @@ event on_aot_05_message
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_05_message_sub1);
+            evt_exec(0, TASK_09, take_map_1f_give);
         }
     }
     evt_finish();
 }
 
-event on_aot_05_message_sub1
+event take_map_1f_give
 {
-    aot_on(AOT_02_ITEM, SCE_F, 0);
+    aot_on(AOT_02_ITEM_MAP_1F_0, SCE_F, 0);
     sleep(1);
-    aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
+    aot_delete(AOT_05_MESSAGE_MAP_1F, SCE_NONE, 0);
     message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of 1ST FLOOR."
     evt_finish();
 }

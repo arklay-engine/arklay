@@ -450,7 +450,7 @@ mod tests {
             flag_name(&GROUPS[8], 0x34, &names),
             FlagName::Game("106_INK_3".into())
         );
-        assert_eq!(flag_name(&GROUPS[3], 0x7B, &names), FlagName::None);
+        assert_eq!(flag_name(&GROUPS[3], 0x10, &names), FlagName::None);
         // Without a pack's names the game groups show raw indices.
         assert_eq!(
             flag_name(&GROUPS[0], 0x7B, &FlagNames::default()),

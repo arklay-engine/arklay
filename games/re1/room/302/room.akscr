@@ -8,17 +8,17 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_DOOR 0x03
-#define AOT_04_USEITEM 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_MESSAGE 0x06
-#define AOT_07_EVENT 0x07
-#define AOT_08_EVENT 0x08
-#define AOT_09_MESSAGE 0x09
-#define AOT_0A_EVENT 0x0A
+#define AOT_00_DOOR_300 0x00                                // The elevator up; switched on by the ride.
+#define AOT_01_DOOR_301 0x01                                // The elevator up; switched on by the ride.
+#define AOT_02_DOOR_304 0x02
+#define AOT_03_DOOR_307 0x03
+#define AOT_04_USEITEM_BATTERY_ALT 0x04                     // Use-item spot with data 9,0,N; its role is not traced.
+#define AOT_05_USEITEM_BATTERY 0x05
+#define AOT_06_MESSAGE_BATTERY_SLOT 0x06
+#define AOT_07_EVENT_ELEVATOR_301 0x07
+#define AOT_08_EVENT_ELEVATOR_300 0x08                      // A "get power to the elevator" message until the battery is in.
+#define AOT_09_MESSAGE_FALLS 0x09
+#define AOT_0A_EVENT_LADDER 0x0A
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
@@ -31,99 +31,99 @@
 #define ENEMY_01_CERBERUS 0x01
 #define ENEMY_02_CERBERUS 0x02
 #define FX_02 0x02
-#define F_ROOM_00 0x00
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_03 0x03
-#define F_ROOM_04 0x04
-#define F_ROOM_05 0x05
-#define F_ROOM_06 0x06
-#define F_ROOM_07 0x07
-#define F_ROOM_21 0x21
+#define F_ROOM_BATTERY_USED 0x21                            // The battery was used on the winch (one frame).
+#define F_ROOM_CAM_0_SET 0x00                               // Camera 0's music is set (falls running).
+#define F_ROOM_CAM_1_SET 0x01                               // Camera 1's music is set (falls running).
+#define F_ROOM_CAM_2_SET 0x02                               // Camera 2's music is set (falls running).
+#define F_ROOM_CAM_3_SET 0x03                               // Camera 3's music is set (falls running).
+#define F_ROOM_CAM_4_SET 0x04                               // Camera 4's music is set (falls running).
+#define F_ROOM_CAM_5_SET 0x05                               // Camera 5's music is set (falls running).
+#define F_ROOM_CAM_6_SET 0x06                               // Camera 6's music is set (falls running).
+#define F_ROOM_CAM_7_SET 0x07                               // Camera 7's music is set (falls running).
 #define MSG_THERE_IS_A_LADDER 0x03
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
+#define OBJ_00_ELEVATOR_301 0x00
+#define OBJ_01_ELEVATOR_300 0x01
+#define OBJ_02_FALLS 0x02                                   // Guess: the falling water, which blocks the ladder while the gate is open.
+#define OBJ_03_BATTERY 0x03
 #define SE_17_BATTERY 0x17
 #define SE_21_ELVX1 0x21
 #define SE_23_ELVX2 0x23
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 19500, 4100, 2300, 1600, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_300_FIRST_HOUSE_OUT, 5000, 0, 11400, 0, UNLOCKED, SAT_MANUAL);
-    door_aot_set(AOT_01_DOOR, 20200, 27400, 2600, 2000, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_301_WATER_GATE, 3400, 0, 12800, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER);
-    door_aot_set(AOT_02_DOOR, 0, 21100, 3500, 2900, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_304_SECOND_HOUSE_GATE, 28600, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 13300, 27300, 2100, 2800, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_MANUAL);
-    aot_set(AOT_04_USEITEM, 17200, 1800, 1000, 500, SCE_USEITEM, SAT_PLAYER, 9, 0, 12, 0, 1, 0);
-    aot_set(AOT_05_USEITEM, 17200, 1800, 1000, 500, SCE_USEITEM, SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_32, TRUE))
+    door_aot_set(AOT_00_DOOR_300, 19500, 4100, 2300, 1600, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_300_FIRST_HOUSE_OUT, 5000, 0, 11400, 0, UNLOCKED, SAT_MANUAL);
+    door_aot_set(AOT_01_DOOR_301, 20200, 27400, 2600, 2000, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_301_WATER_GATE, 3400, 0, 12800, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER);
+    door_aot_set(AOT_02_DOOR_304, 0, 21100, 3500, 2900, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_304_SECOND_HOUSE_GATE, 28600, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR_307, 13300, 27300, 2100, 2800, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_MANUAL);
+    aot_set(AOT_04_USEITEM_BATTERY_ALT, 17200, 1800, 1000, 500, SCE_USEITEM, SAT_PLAYER, 9, 0, 12, 0, 1, 0);
+    aot_set(AOT_05_USEITEM_BATTERY, 17200, 1800, 1000, 500, SCE_USEITEM, SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_BATTERY_IN, TRUE))
     {
-        aot_set(AOT_06_MESSAGE, 17200, 1800, 1000, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        aot_set(AOT_06_MESSAGE_BATTERY_SLOT, 17200, 1800, 1000, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     }
     else
     {
-        aot_set(AOT_06_MESSAGE, 17200, 1800, 1000, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_06_MESSAGE_BATTERY_SLOT, 17200, 1800, 1000, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_30, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_301_DOWN, TRUE))
     {
-        aot_set(AOT_07_EVENT, 22400, 27900, 1300, 900, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
+        aot_set(AOT_07_EVENT_ELEVATOR_301, 22400, 27900, 1300, 900, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, ride_elevator_to_301, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_31, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_300_UP, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_32, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_BATTERY_IN, TRUE))
         {
-            aot_set(AOT_08_EVENT, 20000, 4200, 1000, 1200, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_08, 0, 0, 0);
+            aot_set(AOT_08_EVENT_ELEVATOR_300, 20000, 4200, 1000, 1200, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, ride_elevator_to_300, 0, 0, 0);
         }
         else
         {
-            aot_set(AOT_08_EVENT, 20000, 4200, 1000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+            aot_set(AOT_08_EVENT_ELEVATOR_300, 20000, 4200, 1000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
-        aot_set(AOT_09_MESSAGE, 14200, 23000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 247, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE_FALLS, 14200, 23000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 247, 0, 0, 0);
     }
-    aot_set(AOT_0A_EVENT, 13300, 27300, 2100, 2800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0a, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_30, TRUE))
+    aot_set(AOT_0A_EVENT_LADDER, 13300, 27300, 2100, 2800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, ladder_prompt, 0, 0, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_301_DOWN, TRUE))
     {
-        obj(OBJ_00, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 23150, 0, 29170, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00_ELEVATOR_301, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 23150, 0, 29170, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_31, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_300_UP, FALSE))
     {
-        obj(OBJ_01, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 20700, 0, 4960, 2024, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01_ELEVATOR_300, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 20700, 0, 4960, 2024, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
-        obj(OBJ_02, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14200, 0, 25500, 1024, 0, 0, 0, 0, 600, 2000, 1000, 2000);
+        obj(OBJ_02_FALLS, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14200, 0, 25500, 1024, 0, 0, 0, 0, 600, 2000, 1000, 2000);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_32, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_BATTERY_IN, TRUE))
     {
-        obj(OBJ_03, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 17660, -1550, 1710, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_03_BATTERY, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 17660, -1550, 1710, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     else
     {
-        obj(OBJ_03, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE, SCA_NONE, 0, -100, 0, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_03_BATTERY, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE, SCA_NONE, 0, -100, 0, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         effect(FX_02, FX_ROW_00, FX_AT_WORLD, 13900, -2400, 28100, 0);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_301_WATER_GATE))
     {
         dir_set(0, 0, 1024, 0, 23150, -2250, 29170);
-        eml_pos(OBJ_00, 0, 1024, 0, 23150, -2250, 29170);
+        eml_pos(OBJ_00_ELEVATOR_301, 0, 1024, 0, 23150, -2250, 29170);
         spd_set(ENT_PLAYER, -2250);
         snd_pan_vol_set(BGM_SUB_1, 75, 60);
-        evt_exec(0, TASK_09, on_enter);
+        evt_exec(0, TASK_09, arrive_from_301);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_300_FIRST_HOUSE_OUT))
     {
         dir_set(0, 0, 2048, 0, 20700, -2250, 4960);
-        eml_pos(OBJ_01, 0, 2024, 0, 20700, -2250, 4960);
+        eml_pos(OBJ_01_ELEVATOR_300, 0, 2024, 0, 20700, -2250, 4960);
         spd_set(ENT_PLAYER, -2250);
         snd_pan_vol_set(BGM_SUB_1, 55, 40);
-        evt_exec(0, TASK_09, on_enter_2);
+        evt_exec(0, TASK_09, arrive_from_300);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_304_SECOND_HOUSE_GATE))
     {
@@ -141,175 +141,175 @@ proc init
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_32, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_BATTERY_IN, FALSE))
     {
         if (testitem(IT_27_KEY_BATTERY))
         {
-            if (ck(FG_ROOM, F_ROOM_21, TRUE))
+            if (ck(FG_ROOM, F_ROOM_BATTERY_USED, TRUE))
             {
-                evt_exec(0, TASK_09, from_main);
+                evt_exec(0, TASK_09, install_battery);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
         {
-            if (ck(FG_ROOM, F_ROOM_00, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_0_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 75, 60);
-                set(FG_ROOM, F_ROOM_00, TRUE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
         {
-            if (ck(FG_ROOM, F_ROOM_01, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_1_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 75, 55);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, TRUE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
-            if (ck(FG_ROOM, F_ROOM_02, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_2_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 70, 70);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, TRUE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
         {
-            if (ck(FG_ROOM, F_ROOM_03, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_3_SET, FALSE))
             {
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, TRUE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
         {
-            if (ck(FG_ROOM, F_ROOM_04, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_4_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 80, 80);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, TRUE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
         {
-            if (ck(FG_ROOM, F_ROOM_05, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_5_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 55, 75);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, TRUE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
         {
-            if (ck(FG_ROOM, F_ROOM_06, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_6_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 60, 60);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, TRUE);
-                set(FG_ROOM, F_ROOM_07, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, FALSE);
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_GATE_OPEN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
         {
-            if (ck(FG_ROOM, F_ROOM_07, FALSE))
+            if (ck(FG_ROOM, F_ROOM_CAM_7_SET, FALSE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 55, 40);
-                set(FG_ROOM, F_ROOM_00, FALSE);
-                set(FG_ROOM, F_ROOM_01, FALSE);
-                set(FG_ROOM, F_ROOM_02, FALSE);
-                set(FG_ROOM, F_ROOM_03, FALSE);
-                set(FG_ROOM, F_ROOM_04, FALSE);
-                set(FG_ROOM, F_ROOM_05, FALSE);
-                set(FG_ROOM, F_ROOM_06, FALSE);
-                set(FG_ROOM, F_ROOM_07, TRUE);
+                set(FG_ROOM, F_ROOM_CAM_0_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_1_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_2_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_3_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_4_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_5_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_6_SET, FALSE);
+                set(FG_ROOM, F_ROOM_CAM_7_SET, TRUE);
             }
         }
     }
 }
 
-event event_00
+event unused_empty
 {
     evt_finish();
 }
 
-event on_aot_07
+event ride_elevator_to_301
 {
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_21_ELVX1, 0, SND_AT_POINT, 0, 23200, 28700);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         sys_multi(SYS_HIT, HIT_80);
-        evt_exec(0, TASK_09, on_aot_07_sub1);
-        evt_exec(0, TASK_09, on_aot_07_sub2);
+        evt_exec(0, TASK_09, ride_elevator_to_301_platform);
+        evt_exec(0, TASK_09, ride_elevator_up_player);
     }
     sleep(70);
     timer_setup(LIGHT_FADE_VEIL, 2176, FADE_R | FADE_G | FADE_B);
@@ -317,22 +317,22 @@ event on_aot_07
     run
     {
         setw(W_LIGHT_DELTA, 0);
-        aot_on(AOT_01_DOOR, SCE_DOOR, 129);
-        set(FG_SCENARIO, F_SCENARIO_30, FALSE);
+        aot_on(AOT_01_DOOR_301, SCE_DOOR, 129);
+        set(FG_SCENARIO, F_SCENARIO_ELEVATOR_301_DOWN, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_08
+event ride_elevator_to_300
 {
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_21_ELVX1, 0, SND_AT_POINT, 0, 20900, 5000);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         sys_multi(SYS_HIT, HIT_80);
-        evt_exec(0, TASK_09, on_aot_08_sub1);
-        evt_exec(0, TASK_09, on_aot_07_sub2);
+        evt_exec(0, TASK_09, ride_elevator_to_300_platform);
+        evt_exec(0, TASK_09, ride_elevator_up_player);
     }
     sleep(70);
     timer_setup(LIGHT_FADE_VEIL, 1024, FADE_R | FADE_G | FADE_B);
@@ -340,8 +340,8 @@ event on_aot_08
     run
     {
         setw(W_LIGHT_DELTA, 0);
-        aot_on(AOT_00_DOOR, SCE_DOOR, 129);
-        set(FG_SCENARIO, F_SCENARIO_31, TRUE);
+        aot_on(AOT_00_DOOR_300, SCE_DOOR, 129);
+        set(FG_SCENARIO, F_SCENARIO_ELEVATOR_300_UP, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
@@ -359,9 +359,9 @@ event on_aot_08
     evt_finish();
 }
 
-event on_aot_07_sub1
+event ride_elevator_to_301_platform
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_ELEVATOR_301);
     evt_tween_begin_alt();
     tw_set_pos(0, -25, 0);
     for (70)
@@ -375,9 +375,9 @@ event on_aot_07_sub1
     evt_finish();
 }
 
-event on_aot_08_sub1
+event ride_elevator_to_300_platform
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ELEVATOR_300);
     evt_tween_begin_alt();
     tw_set_pos(0, -25, 0);
     for (70)
@@ -391,7 +391,7 @@ event on_aot_08_sub1
     evt_finish();
 }
 
-event on_aot_07_sub2
+event ride_elevator_up_player
 {
     for (70)
     {
@@ -408,57 +408,57 @@ event on_aot_07_sub2
     evt_finish();
 }
 
-event from_main
+event install_battery
 {
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_BATTERY);
     evt_tween_begin_alt();
     tw_abs_pos(0, 17660, -1550, 1710);
     tw_end();
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-        aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-        aot_reset(AOT_08_EVENT, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, on_aot_08, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_BATTERY, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+        aot_reset(AOT_06_MESSAGE_BATTERY_SLOT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+        aot_reset(AOT_08_EVENT_ELEVATOR_300, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, ride_elevator_to_300, 0);
         se_play_3d(SND_BANK_ROOM, SE_17_BATTERY, 0, SND_AT_POINT, 0, 17700, 2500);
-        set(FG_SCENARIO, F_SCENARIO_32, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_ELEVATOR_BATTERY_IN, TRUE);
     }
     evt_finish();
 }
 
-event on_enter
+event arrive_from_301
 {
     sleep(1);
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_23_ELVX2, 0, SND_AT_POINT, 0, 23200, 28700);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        evt_exec(0, TASK_09, on_enter_sub1);
-        evt_exec(0, TASK_09, on_enter_sub2);
+        evt_exec(0, TASK_09, arrive_from_301_platform);
+        evt_exec(0, TASK_09, arrive_down_player);
     }
     sleep(100);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
-event on_enter_2
+event arrive_from_300
 {
     sleep(1);
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_23_ELVX2, 0, SND_AT_POINT, 0, 20900, 5000);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        evt_exec(0, TASK_09, on_enter_2_sub1);
-        evt_exec(0, TASK_09, on_enter_sub2);
+        evt_exec(0, TASK_09, arrive_from_300_platform);
+        evt_exec(0, TASK_09, arrive_down_player);
     }
     sleep(100);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
-event on_enter_sub1
+event arrive_from_301_platform
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_ELEVATOR_301);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (90)
@@ -472,9 +472,9 @@ event on_enter_sub1
     evt_finish();
 }
 
-event on_enter_2_sub1
+event arrive_from_300_platform
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ELEVATOR_300);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (90)
@@ -488,7 +488,7 @@ event on_enter_2_sub1
     evt_finish();
 }
 
-event on_enter_sub2
+event arrive_down_player
 {
     for (90)
     {
@@ -505,7 +505,7 @@ event on_enter_sub2
     evt_finish();
 }
 
-event on_aot_0a
+event ladder_prompt
 {
     run
     {
@@ -522,17 +522,17 @@ event on_aot_0a
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_0a_sub1);
+            evt_exec(0, TASK_09, ladder_descend);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_0a_sub2);
+            evt_exec(0, TASK_09, ladder_decline);
         }
     }
     evt_finish();
 }
 
-event on_aot_0a_sub1
+event ladder_descend
 {
     run
     {
@@ -544,14 +544,14 @@ event on_aot_0a_sub1
         {
             setb(B_CHARACTER_MODEL, 5, 0);
         }
-        door_aot_set(AOT_03_DOOR, 13300, 25300, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR_307, 13300, 25300, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_0a_sub2
+event ladder_decline
 {
     run
     {

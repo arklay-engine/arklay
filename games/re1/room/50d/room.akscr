@@ -8,9 +8,9 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define F_ROOM_18 0x18
+#define AOT_00_DOOR_501 0x00
+#define AOT_01_DOOR_303 0x01
+#define F_ROOM_RIDE_DONE 0x18                               // The elevator ride (shaking) finished.
 #define MSG_VO_016_06 0x00
 #define SE_17_ESCELV 0x17
 #define VO_016_06 0x52
@@ -18,58 +18,58 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, 0, ROOM_501_HELIPORT_PASSAGE, 3500, 0, 28000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, 0, STAGE_3 | ROOM_303_HELIPORT, 9000, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_501, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, 0, ROOM_501_HELIPORT_PASSAGE, 3500, 0, 28000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_303, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, 0, STAGE_3 | ROOM_303_HELIPORT, 9000, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     dir_set(0, 0, 2048, 0, 4600, 0, 4600);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_501_HELIPORT_PASSAGE))
     {
-        evt_exec(0, TASK_09, on_enter_2);
+        evt_exec(0, TASK_09, ride_up_to_heliport);
     }
     else
     {
-        evt_exec(0, TASK_09, on_enter);
+        evt_exec(0, TASK_09, ride_down_from_heliport);
     }
 }
 
-event on_enter
+event ride_down_from_heliport
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     se_play_3d(SND_BANK_ROOM, SE_17_ESCELV, 0, SND_AT_PLAYER, 0, 0, 0);
-    evt_fork(TASK_09, on_enter_sub1, 0);
+    evt_fork(TASK_09, elevator_shake, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    while (ck(FG_ROOM, F_ROOM_RIDE_DONE, FALSE));
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR_501, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event on_enter_2
+event ride_up_to_heliport
 {
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     se_play_3d(SND_BANK_ROOM, SE_17_ESCELV, 0, SND_AT_PLAYER, 0, 0, 0);
-    evt_fork(TASK_09, on_enter_sub1, 0);
+    evt_fork(TASK_09, elevator_shake, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    while (ck(FG_ROOM, F_ROOM_RIDE_DONE, FALSE));
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_01_DOOR_303, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event on_enter_sub1
+event elevator_shake
 {
     sleep(5);
     set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
@@ -84,11 +84,11 @@ event on_enter_sub1
     sleep(5);
     set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     sleep(60);
-    set(FG_ROOM, F_ROOM_18, TRUE);
+    set(FG_ROOM, F_ROOM_RIDE_DONE, TRUE);
     evt_finish();
 }
 
-event event_03
+event unused_voice_016_06
 {
     sleep(30);
     voice_play(VOICE_PLAY, VO_016_06);

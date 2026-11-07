@@ -8,30 +8,30 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_HIKIDASHI 0x03
-#define AOT_04_EVENT 0x04
-#define AOT_05_EVENT 0x05
-#define AOT_06_ITEM 0x06
-#define AOT_07_ITEM 0x07
-#define AOT_08_ITEM 0x08
-#define CAM_00 0x00
+#define AOT_00_DOOR_405 0x00
+#define AOT_01_DOOR_407 0x01
+#define AOT_02_DOOR_40D 0x02                                // The ladder down; armed when the player chooses to descend.
+#define AOT_03_HIKIDASHI_DRAWER 0x03
+#define AOT_04_EVENT_DORMITORY_SKETCH 0x04
+#define AOT_05_EVENT_LADDER 0x05
+#define AOT_06_ITEM_AMMO_SHOTGUN_0 0x06
+#define AOT_07_ITEM_FILE_PLANT_42_REPORT_1 0x07
+#define AOT_08_ITEM_MAP_DORMITORY 0x08                      // The dormitory map (item 0x52), given from the sketch.
+#define CAM_00_LADDER 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define CAM_05 0x05
-#define ENEMY_00_NPC_BARRY 0x00
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
+#define ENEMY_00_BARRY 0x00
+#define F_ROOM_J_BARRY_ANIM_DONE 0x21                       // Barry's animation finished (one frame).
+#define F_ROOM_J_PLAYER_ANIM_DONE 0x20                      // Jill's animation finished (one frame).
+#define IMDL_00_AMMO_SHOTGUN 0x00
+#define IMDL_01_FILE_PLANT_42_REPORT 0x01
+#define IMDL_02_MAP_DORMITORY 0x02
 #define MSG_A_DORMITORY_SKETCH 0x06
 #define MSG_THERE_IS_A_LADDER 0x07
 #define MSG_YOU_GOT_THE_MAP_OF_DORMITORY 0x09
-#define OBJ_00 0x00
-#define OBJ_01 0x01
+#define OBJ_00_CABINET_OVER_LADDER 0x00                     // Guess: pushable furniture over the ladder; already moved aside once 40D was visited.
+#define OBJ_01_CABINET 0x01                                 // Guess: the second pushable piece of furniture beside OBJ_00_CABINET_OVER_LADDER.
 #define SE_DOOR_00 0x00
 #define SE_DOOR_01 0x01
 #define VO_109_10 0x01
@@ -43,69 +43,69 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 300, 2000, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_03_HIKIDASHI, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 34, 0, 6, 0, 6, 0);
-    aot_set(AOT_04_EVENT, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
-    aot_set(AOT_05_EVENT, 12100, 8400, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
-    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 11030, -140, 1960, 0, F_ITEM_406_AMMO_SHOTGUN_0, 0, 0);
-    eml_rot(IMDL_00, 0, -1024);
+    door_aot_set(AOT_00_DOOR_405, 300, 2000, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_407, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_40D, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_03_HIKIDASHI_DRAWER, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 34, 0, 6, 0, 6, 0);
+    aot_set(AOT_04_EVENT_DORMITORY_SKETCH, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_dormitory_sketch, 0, 0, 0);
+    aot_set(AOT_05_EVENT_LADDER, 12100, 8400, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_ladder, 0, 0, 0);
+    item_aot_set(AOT_06_ITEM_AMMO_SHOTGUN_0, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO_SHOTGUN, SCA_NONE, 11030, -140, 1960, 0, F_ITEM_406_AMMO_SHOTGUN_0, 0, 0);
+    eml_rot(IMDL_00_AMMO_SHOTGUN, 0, -1024);
     setbyte(0, 0, 0);
-    item_aot_set(AOT_07_ITEM, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, IMDL_01, SCA_NONE, 13400, -710, 4940, 0, F_ITEM_406_FILE_PLANT_42_REPORT_1, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, IMDL_02, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_406_UNKNOWN_52_2, SAT_MANUAL | SAT_PLAYER, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_45, TRUE))
+    item_aot_set(AOT_07_ITEM_FILE_PLANT_42_REPORT_1, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, IMDL_01_FILE_PLANT_42_REPORT, SCA_NONE, 13400, -710, 4940, 0, F_ITEM_406_FILE_PLANT_42_REPORT_1, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_08_ITEM_MAP_DORMITORY, 0, 0, 1, 10, IT_52_MAP_DORMITORY, 1, IMDL_02_MAP_DORMITORY, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_406_MAP_DORMITORY_2, SAT_MANUAL | SAT_PLAYER, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_UNDER_PASSAGE_ENTERED, TRUE))
     {
-        obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 10180, 0, 8970, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
-        obj(OBJ_01, OF_10 | OF_ACTIVE, SCA_NONE, 10176, 0, 10220, 1024, 0, 300, 0, -300, 200, 1100, 1200, 600);
+        obj(OBJ_00_CABINET_OVER_LADDER, OF_10 | OF_ACTIVE, SCA_NONE, 10180, 0, 8970, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
+        obj(OBJ_01_CABINET, OF_10 | OF_ACTIVE, SCA_NONE, 10176, 0, 10220, 1024, 0, 300, 0, -300, 200, 1100, 1200, 600);
     }
     else
     {
-        obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 12907, 0, 8580, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
-        obj(OBJ_01, OF_10 | OF_ACTIVE, SCA_NONE, 10176, 0, 8580, 1024, 0, 300, 0, -300, 200, 1100, 1200, 600);
+        obj(OBJ_00_CABINET_OVER_LADDER, OF_10 | OF_ACTIVE, SCA_NONE, 12907, 0, 8580, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
+        obj(OBJ_01_CABINET, OF_10 | OF_ACTIVE, SCA_NONE, 10176, 0, 8580, 1024, 0, 300, 0, -300, 200, 1100, 1200, 600);
     }
     if (CHRIS)
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
-            aot_reset(AOT_03_HIKIDASHI, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
-            aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
-            aot_reset(AOT_07_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            aot_reset(AOT_03_HIKIDASHI_DRAWER, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            aot_reset(AOT_04_EVENT_DORMITORY_SKETCH, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            aot_reset(AOT_07_ITEM_FILE_PLANT_42_REPORT_1, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_B2, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_002_TALK, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_AE, TRUE))
+            if (ck(FG_COMMON, F_COMMON_J_OVERHEARD_BARRY_WESKER, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_B0, FALSE))
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_400, FALSE))
                 {
-                    if (ck(FG_COMMON, F_COMMON_B1, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_408, FALSE))
                     {
-                        evt_exec(0, TASK_09, on_enter);
+                        evt_exec(0, TASK_09, barry_talking_alone);
                     }
                 }
             }
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_3E, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_GUARDHOUSE_MAP_TAKEN, TRUE))
     {
-        aot_delete(AOT_04_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_EVENT_DORMITORY_SKETCH, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
     if (JILL)
     {
-        if (ck(FG_COMMON, F_COMMON_B2, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_BARRY_002_TALK, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_AE, TRUE))
+            if (ck(FG_COMMON, F_COMMON_J_OVERHEARD_BARRY_WESKER, TRUE))
             {
-                if (ck(FG_COMMON, F_COMMON_B0, FALSE))
+                if (ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_400, FALSE))
                 {
-                    if (ck(FG_COMMON, F_COMMON_B1, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_408, FALSE))
                     {
                         room_bgm_state_set(3, ROOM_406_ROOM_002, BGM_RELOAD | 1);
-                        enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 1, 0, 1550, 0, 13000, 0, 7550, ENEMY_00_NPC_BARRY, ANIM_00, 0, EVAR_00);
+                        enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 1, 0, 1550, 0, 13000, 0, 7550, ENEMY_00_BARRY, ANIM_00, 0, EVAR_00);
                     }
                 }
             }
@@ -113,17 +113,17 @@ proc init
     }
 }
 
-event event_00
+event empty_event
 {
     evt_finish();
 }
 
-event on_enter when (JILL)
+event barry_talking_alone when (JILL)
 {
     sleep(2);
     run
     {
-        set(FG_COMMON, F_COMMON_B2, TRUE);
+        set(FG_COMMON, F_COMMON_J_BARRY_002_TALK, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 4085, 0, 2800, 0, 3000);
@@ -134,7 +134,7 @@ event on_enter when (JILL)
     act_motion_path(MOTION_31, 700, 0, 0, 100, 0);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_31, 710, 0, 0, 100, 0);
     act_reset();
@@ -149,12 +149,12 @@ event on_enter when (JILL)
     run
     {
         cutnext(CAM_02);
-        evt_exec(0, TASK_09, on_enter_sub1);
-        evt_exec(0, TASK_09, on_enter_sub2);
+        evt_exec(0, TASK_09, barry_talking_alone_jill_walk);
+        evt_exec(0, TASK_09, barry_talking_alone_barry_walk);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 9100, 3100, F_ROOM_20);
+    act_anim_seq(AB_02, 9100, 3100, F_ROOM_J_PLAYER_ANIM_DONE);
     act_nop();
     act_motion(MOTION_10);
     act_reset();
@@ -163,17 +163,17 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_20, 0);
+    act_anim_flags(ANIM_20, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(10);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     bgm_play(BGM_MAIN);
@@ -183,19 +183,19 @@ event on_enter when (JILL)
         message(0, 0);
         voice_play(VOICE_PLAY, VO_109_10);
     }
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
@@ -206,45 +206,45 @@ event on_enter when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_20, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_20, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2A, F_ROOM_20, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     wait_message();
     run
     {
@@ -252,9 +252,9 @@ event on_enter when (JILL)
         message(2, 0);
         voice_play(VOICE_PLAY, VO_109_12);
     }
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_21, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_motion_path(MOTION_32, 0, 300, 0, 0, 30);
     act_reset();
     evt_nop();
@@ -262,22 +262,22 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     sleep(25);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     sleep(45);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_motion(MOTION_10);
     act_reset();
     evt_nop();
@@ -285,18 +285,18 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     sleep(25);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_21, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     wait_message();
     run
     {
@@ -305,85 +305,85 @@ event on_enter when (JILL)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_20, 0);
+    act_anim_flags(ANIM_25, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_20, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_20, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_27, F_ROOM_20, 0);
+    act_anim_flags(ANIM_27, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_20, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_28, F_ROOM_20, 0);
+    act_anim_flags(ANIM_28, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2A, F_ROOM_20, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     wait_message();
     run
     {
         message(4, 0);
         voice_play(VOICE_PLAY, VO_109_14);
     }
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_32, 0, 310, 0, 0, 20);
     sleep(50);
@@ -391,95 +391,95 @@ event on_enter when (JILL)
     act_reset();
     evt_nop();
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(40);
     act_motion_path(MOTION_33, 500, 310, 0, 90, 50);
     sleep(40);
     act_motion_path(MOTION_33, -500, 310, 0, 90, 50);
-    act_anim_flags(ANIM_22, F_ROOM_21, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(40);
     act_motion(MOTION_10);
     sleep(20);
-    act_anim_flags(ANIM_27, F_ROOM_21, 0);
+    act_anim_flags(ANIM_27, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_2A, F_ROOM_21, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     wait_message();
     cutnext(CAM_05);
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_02, 9900, 2800, F_ROOM_21);
+    act_anim_seq(AB_02, 9900, 2800, F_ROOM_J_BARRY_ANIM_DONE);
     act_nop();
     act_motion(MOTION_10);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_04, 8200, 3500, F_ROOM_20);
+    act_anim_seq(AB_04, 8200, 3500, F_ROOM_J_PLAYER_ANIM_DONE);
     act_nop();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 100, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 100, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_02, 2400, 2850, F_ROOM_21);
+    act_anim_seq(AB_02, 2400, 2850, F_ROOM_J_BARRY_ANIM_DONE);
     act_nop();
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_20, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_param_set(0, 1024);
     act_reset();
     evt_nop();
@@ -489,7 +489,7 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     sleep(20);
     cutnext(CAM_01);
     sleep(5);
@@ -498,20 +498,20 @@ event on_enter when (JILL)
         message(5, 0);
         voice_play(VOICE_PLAY, VO_109_15);
     }
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_31, 710, 0, 0, 100, 0);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_ANIM_DONE, FALSE));
     wait_message();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion(MOTION_10);
     act_reset();
@@ -521,7 +521,7 @@ event on_enter when (JILL)
     se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6388, 14000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_20, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_motion(MOTION_10);
     act_reset();
     evt_nop();
@@ -529,24 +529,24 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     sleep(15);
     run
     {
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6388, 14000);
-        pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 0, 0);
+        pos_set(ENEMY_00_BARRY, 0, 0, 0, 0, 0, 0);
     }
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_20, 0);
+    act_anim_flags(ANIM_20, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_J_PLAYER_ANIM_DONE, FALSE));
     cutnext(CAM_02);
     sleep(30);
     run
@@ -564,7 +564,7 @@ event on_enter when (JILL)
     evt_finish();
 }
 
-event on_enter_sub1 when (JILL)
+event barry_talking_alone_jill_walk when (JILL)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -576,29 +576,29 @@ event on_enter_sub1 when (JILL)
     sleep(25);
     act_motion_path(MOTION_33, -600, 0, 0, 160, 0);
     sleep(5);
-    act_anim_flags(ANIM_02, F_ROOM_20, 0);
+    act_anim_flags(ANIM_02, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event on_enter_sub2 when (JILL)
+event barry_talking_alone_barry_walk when (JILL)
 {
     sleep(45);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_02, 10500, 4600, F_ROOM_21);
+    act_anim_seq(AB_02, 10500, 4600, F_ROOM_J_BARRY_ANIM_DONE);
     act_nop();
     act_motion_path(MOTION_31, 600, 0, 0, 120, 0);
     sleep(40);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_02, F_ROOM_20, 0);
+    act_anim_flags(ANIM_02, F_ROOM_J_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event on_aot_04
+event examine_dormitory_sketch
 {
     run
     {
@@ -619,22 +619,22 @@ event on_aot_04
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_04_sub1);
+            evt_exec(0, TASK_09, take_dormitory_map);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_04_sub2);
+            evt_exec(0, TASK_09, leave_dormitory_map);
         }
     }
     evt_finish();
 }
 
-event on_aot_04_sub1
+event take_dormitory_map
 {
     run
     {
-        aot_on(AOT_08_ITEM, SCE_F, 0);
-        aot_delete(AOT_04_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_on(AOT_08_ITEM_MAP_DORMITORY, SCE_F, 0);
+        aot_delete(AOT_04_EVENT_DORMITORY_SKETCH, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         message(MSG_YOU_GOT_THE_MAP_OF_DORMITORY | MSG_FAST, 0); // "You got the map of DORMITORY."
     }
     do
@@ -645,22 +645,22 @@ event on_aot_04_sub1
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_SCENARIO, F_SCENARIO_3E, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_GUARDHOUSE_MAP_TAKEN, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_04_sub2
+event leave_dormitory_map
 {
     single(4) set(FG_RUN, 0, 0);
     raw(0x17, 0x00, 0xFF, 0x00);
 }
 
-event on_aot_05
+event examine_ladder
 {
     run
     {
-        cutnext(CAM_00);
+        cutnext(CAM_00_LADDER);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_THERE_IS_A_LADDER | MSG_FAST, 0); // "There's a ladder. Will you descend it? There is no time to check it."
     }
@@ -678,27 +678,27 @@ event on_aot_05
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_05_sub1);
+            evt_exec(0, TASK_09, descend_ladder);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_05_sub2);
+            evt_exec(0, TASK_09, leave_ladder);
         }
     }
     evt_finish();
 }
 
-event on_aot_05_sub1
+event descend_ladder
 {
     run
     {
-        door_aot_set(AOT_02_DOOR, 10000, 6400, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR_40D, 10000, 6400, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_05_sub2
+event leave_ladder
 {
     run
     {

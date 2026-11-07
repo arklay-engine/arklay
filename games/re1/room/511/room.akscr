@@ -8,16 +8,17 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_MESSAGE 0x01
-#define AOT_02_MESSAGE 0x02
-#define AOT_03_MESSAGE 0x03
-#define ENEMY_00_NPC_REBECCA 0x00
-#define ENEMY_00_NPC_WESKER 0x00
+#define AOT_00_DOOR_510 0x00
+#define AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH 0x01
+#define AOT_02_MESSAGE_ACTIVATOR 0x02                       // The self-destruct triggering system activator.
+#define AOT_03_MESSAGE_REBECCA_AT_ACTIVATOR 0x03            // Chris: "Rebecca is activating the triggering device."
+#define AOT_03_MESSAGE_WESKER_BODY 0x03                     // Jill: "What a miserable death..."
+#define ENEMY_00_REBECCA 0x00
+#define ENEMY_00_WESKER 0x00
 #define ENEMY_01_CHIMERA 0x01
 #define FX_1F 0x1F
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
+#define F_ROOM_OPERATOR_ANIM_DONE 0x18                      // Rebecca's (Wesker's in the Jill branches) animation at the activator finished; never waited on.
+#define F_ROOM_OPERATOR_STEP_DONE 0x19                      // One step of Rebecca's work at the activator finished.
 #define MSG_A_POWER_CONNECTION_SWITCH 0x03
 #define MSG_THE_POWER_FOR_THE_ELEVATOR_IS 0x06
 #define MSG_THE_POWER_IS_NOT_SUPPLIED_TO 0x04
@@ -26,56 +27,56 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 11300, 15800, 3000, 2900, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_MESSAGE, 17700, 8300, 2100, 1600, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
-    aot_set(AOT_02_MESSAGE, 5800, 4400, 2100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR_510, 11300, 15800, 3000, 2900, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH, 17700, 8300, 2100, 1600, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE_ACTIVATOR, 5800, 4400, 2100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_5A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, TRUE) && ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, FALSE))
         {
-            aot_set(AOT_03_MESSAGE, 6000, 3600, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 69, 0, 0, 0);
-            enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 6500, 0, 4100, ENEMY_00_NPC_REBECCA, ANIM_20, 1, EVAR_00);
-            evt_exec(0, TASK_09, on_enter_3);
+            aot_set(AOT_03_MESSAGE_REBECCA_AT_ACTIVATOR, 6000, 3600, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 69, 0, 0, 0);
+            enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 6500, 0, 4100, ENEMY_00_REBECCA, ANIM_20, 1, EVAR_00);
+            evt_exec(0, TASK_09, rebecca_works_activator);
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE))
+        if (ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE) && ck(FG_COMMON, F_COMMON_J_WENT_ON_WITH_BARRY, TRUE) && ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE))
         {
-            aot_set(AOT_03_MESSAGE, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
-            enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 9000, 0, 3726, ENEMY_00_NPC_WESKER, ANIM_00, 0, EVAR_00);
+            aot_set(AOT_03_MESSAGE_WESKER_BODY, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
+            enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 9000, 0, 3726, ENEMY_00_WESKER, ANIM_00, 0, EVAR_00);
             enemy(EM_09_CHIMERA, EB_03, F_ENEMY_511_CHIMERA_1, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
         }
     }
-    evt_exec(0, TASK_09, on_enter);
-    evt_exec(0, TASK_09, on_enter_2);
+    evt_exec(0, TASK_09, steam_jet_1);
+    evt_exec(0, TASK_09, steam_jet_2);
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, TRUE))
     {
-        aot_reset(AOT_02_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+        aot_reset(AOT_02_MESSAGE_ACTIVATOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
     }
     else
     {
-        aot_reset(AOT_02_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+        aot_reset(AOT_02_MESSAGE_ACTIVATOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_2D, TRUE) && ck(FG_SCENARIO, F_SCENARIO_2E, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_POWER_CONNECTED, TRUE) && ck(FG_SCENARIO, F_SCENARIO_POWER_PANEL_ON, TRUE))
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 69, 0);
+        aot_reset(AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 69, 0);
     }
-    else if (ck(FG_SCENARIO, F_SCENARIO_2D, FALSE))
+    else if (ck(FG_SCENARIO, F_SCENARIO_ELEVATOR_POWER_CONNECTED, FALSE))
     {
-        aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_message, 0);
+        aot_reset(AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, elevator_power_switch, 0);
     }
     else
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 69, 0);
+        aot_reset(AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 69, 0);
     }
 }
 
-event on_aot_01_message
+event elevator_power_switch
 {
     run
     {
@@ -100,8 +101,8 @@ event on_aot_01_message
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_01_message_sub1);
-            set(FG_SCENARIO, F_SCENARIO_2D, TRUE);
+            evt_exec(0, TASK_09, elevator_power_switch_connect);
+            set(FG_SCENARIO, F_SCENARIO_ELEVATOR_POWER_CONNECTED, TRUE);
         }
     }
     run
@@ -113,7 +114,7 @@ event on_aot_01_message
     evt_finish();
 }
 
-event on_aot_01_message_sub1
+event elevator_power_switch_connect
 {
     run
     {
@@ -126,7 +127,7 @@ event on_aot_01_message_sub1
     sleep(10);
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_2E, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_POWER_PANEL_ON, TRUE))
         {
             message(MSG_THE_POWER_FOR_THE_ELEVATOR_IS | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_ENTITIES); // "The power for the elevator is activated as the power supply and the circuit have been connected."
         }
@@ -149,7 +150,7 @@ event on_aot_01_message_sub1
     evt_finish();
 }
 
-event on_enter
+event steam_jet_1
 {
     sleep(119);
     run
@@ -162,11 +163,11 @@ event on_enter
         sleep(3);
     }
     evt_nop();
-    evt_chain(on_enter);
+    evt_chain(steam_jet_1);
     evt_finish();
 }
 
-event on_enter_2
+event steam_jet_2
 {
     sleep(240);
     run
@@ -178,273 +179,273 @@ event on_enter_2
         effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 13200, -2500, 5600, 770);
         sleep(3);
     }
-    evt_chain(on_enter_2);
+    evt_chain(steam_jet_2);
     evt_finish();
 }
 
-event on_enter_3
+event rebecca_works_activator
 {
     sleep(1);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub3, 0);
+        evt_fork(TASK_09, rebecca_works_activator_reach, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub3, 0);
+        evt_fork(TASK_09, rebecca_works_activator_reach, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     sleep(30);
     for (2)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(20);
     for (6)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(10);
     for (2)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
         sleep(2);
     }
     evt_nop();
     sleep(30);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub4, 0);
+        evt_fork(TASK_09, rebecca_works_activator_look, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub4, 0);
+        evt_fork(TASK_09, rebecca_works_activator_look, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub2, 0);
+        evt_fork(TASK_09, rebecca_works_activator_pause, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub2, 0);
+        evt_fork(TASK_09, rebecca_works_activator_pause, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     sleep(1);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub3, 0);
+        evt_fork(TASK_09, rebecca_works_activator_reach, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub3, 0);
+        evt_fork(TASK_09, rebecca_works_activator_reach, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     sleep(30);
     for (5)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(10);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, rebecca_works_activator_tap, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, rebecca_works_activator_tap, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
         if (CHRIS)
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         else
         {
-            evt_fork(TASK_09, on_enter_3_sub1, 0);
+            evt_fork(TASK_09, rebecca_works_activator_tap, 0);
         }
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_19, FALSE));
+        while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
     }
     evt_nop();
     sleep(40);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub5, 0);
+        evt_fork(TASK_09, rebecca_works_activator_step, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub5, 0);
+        evt_fork(TASK_09, rebecca_works_activator_step, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE);
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub6, 0);
+        evt_fork(TASK_09, rebecca_works_activator_idle, 0);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub6, 0);
+        evt_fork(TASK_09, rebecca_works_activator_idle, 0);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    evt_chain(on_enter_3);
+    while (ck(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, FALSE));
+    evt_chain(rebecca_works_activator);
     evt_finish();
 }
 
-event on_enter_3_sub1
+event rebecca_works_activator_tap
 {
     se_play_3d(SND_BANK_ROOM, SE_17_PANEL02, 0, SND_AT_POINT, 0, 6500, 4100);
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_18, 0);
+    act_anim_flags(ANIM_24, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, EF_0001);
     act_action_a(11);
     sleep(2);
     act_idle();
     act_nop();
     sleep(2);
-    act_anim_flags(ANIM_24, F_ROOM_18, 0);
+    act_anim_flags(ANIM_24, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, 0);
     act_action_a(6);
     sleep(2);
@@ -452,82 +453,82 @@ event on_enter_3_sub1
     act_nop();
     act_reset();
     evt_nop();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }
 
-event on_enter_3_sub2
+event rebecca_works_activator_pause
 {
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_18, 0);
+    act_anim_flags(ANIM_20, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, 0);
     sleep(15);
     act_idle();
     act_reset();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }
 
-event on_enter_3_sub3
+event rebecca_works_activator_reach
 {
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_18, 0);
+    act_anim_flags(ANIM_24, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, 0);
     sleep(8);
     act_idle();
     act_reset();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }
 
-event on_enter_3_sub4
+event rebecca_works_activator_look
 {
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub4_sub1, 0);
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_fork(TASK_09, rebecca_works_activator_look_turn, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub4_sub1, 0);
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_fork(TASK_09, rebecca_works_activator_look_turn, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_2A, F_ROOM_18, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, EF_0010);
     sleep(260);
     act_idle();
     act_reset();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }
 
-event on_enter_3_sub4_sub1
+event rebecca_works_activator_look_turn
 {
     sleep(60);
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
     act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 100, 75);
@@ -538,20 +539,20 @@ event on_enter_3_sub4_sub1
     evt_finish();
 }
 
-event on_enter_3_sub5
+event rebecca_works_activator_step
 {
     if (CHRIS)
     {
-        evt_fork(TASK_09, on_enter_3_sub5_sub1, 0);
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_fork(TASK_09, rebecca_works_activator_step_move, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_fork(TASK_09, on_enter_3_sub5_sub1, 0);
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_fork(TASK_09, rebecca_works_activator_step_move, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_18, 0);
+    act_anim_flags(ANIM_23, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, 0);
     sleep(11);
     act_idle();
@@ -559,20 +560,20 @@ event on_enter_3_sub5
     sleep(100);
     act_idle();
     act_reset();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }
 
-event on_enter_3_sub5_sub1
+event rebecca_works_activator_step_move
 {
     sleep(6);
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
     act_motion_path(MOTION_71, 600, 0, 2, 150, 75);
@@ -583,23 +584,23 @@ event on_enter_3_sub5_sub1
     evt_finish();
 }
 
-event on_enter_3_sub6
+event rebecca_works_activator_idle
 {
     if (CHRIS)
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+        evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     }
     else
     {
-        evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
+        evt_work_set(WK_ENEMY, ENEMY_00_WESKER);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_18, 0);
+    act_anim_flags(ANIM_21, F_ROOM_OPERATOR_ANIM_DONE, 0);
     act_flag_op(EF_SET, 0);
     sleep(25);
     sleep(30);
     act_idle();
     act_reset();
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_OPERATOR_STEP_DONE, TRUE);
     evt_finish();
 }

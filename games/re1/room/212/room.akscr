@@ -8,29 +8,31 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_03_EVENT 0x03
-#define CAM_02 0x02
-#define CAM_03 0x03
-#define CAM_04 0x04
+#define AOT_00_DOOR_211 0x00
+#define AOT_01_ITEM_AMMO_HANDGUN_0 0x01
+#define AOT_01_ITEM_WEAPON_GL_ACID_0 0x01
+#define AOT_03_EVENT_FOREST_BODY 0x03                       // Jill's game reuses it for talking to Barry again.
+#define CAM_02_FROM_DOOR 0x02                               // Likely.
+#define CAM_03_FOREST_CLOSEUP 0x03
+#define CAM_04_TERRACE_HIGH 0x04
 #define ENEMY_00_NPC_FORREST 0x00
-#define ENEMY_01 0x01
+#define ENEMY_01_BARRY 0x01
 #define ENEMY_01_CROW 0x01
 #define ENEMY_02_CROW 0x02
 #define ENEMY_03_CROW 0x03
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_23 0x23
-#define F_ROOM_24 0x24
-#define F_ROOM_25 0x25
-#define F_ROOM_26 0x26
-#define F_ROOM_27 0x27
-#define F_ROOM_28 0x28
-#define F_ROOM_29 0x29
-#define F_ROOM_3F 0x3F
-#define IMDL_00 0x00
+#define F_ROOM_ANIM_DONE_0 0x20                             // An animation finished (one frame); one of ten bits the terrace scenes hand out in turn to Jill, Barry and the crows.
+#define F_ROOM_ANIM_DONE_1 0x21                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_2 0x22                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_3 0x23                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_4 0x24                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_5 0x25                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_6 0x26                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_7 0x27                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_8 0x28                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_ANIM_DONE_9 0x29                             // Pool animation bit, as F_ROOM_ANIM_DONE_0.
+#define F_ROOM_PLAYER_ANIM_DONE 0x3F                        // The player's crouch at Forest's body finished; nothing waits on it.
+#define IMDL_00_AMMO_HANDGUN 0x00
+#define IMDL_00_WEAPON_GL_ACID 0x00
 #define MSG_FOREST 0x0E
 #define MSG_IT_IS_FOREST 0x0F
 #define MSG_VO_104_00 0x00
@@ -60,28 +62,28 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 16800, 26400, 2200, 2200, 3, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_211, 16800, 26400, 2200, 2200, 3, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (CHRIS)
     {
-        item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_C_212_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+        item_aot_set(AOT_01_ITEM_AMMO_HANDGUN_0, 23500, 19770, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_C_212_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         if (MANSION1)
         {
-            if (ck(FG_COMMON, F_COMMON_42, FALSE))
+            if (ck(FG_COMMON, F_COMMON_FOREST_FOUND, FALSE))
             {
-                aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
+                aot_set(AOT_03_EVENT_FOREST_BODY, 22600, 18000, 2900, 2250, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_forest_body, 0, 0, 0);
             }
         }
     }
     else
     {
-        item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, IT_07_WEAPON_GL_ACID, 6, IMDL_00, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_J_212_WEAPON_GL_ACID_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+        item_aot_set(AOT_01_ITEM_WEAPON_GL_ACID_0, 23500, 19770, 1000, 1000, IT_07_WEAPON_GL_ACID, 6, IMDL_00_WEAPON_GL_ACID, SCA_NONE, 24000, 0, 20270, 1542, F_ITEM_J_212_WEAPON_GL_ACID_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     }
     if (MANSION1)
     {
         enemy(EM_26_NPC_FORREST, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1936, 0, 25150, 0, 18700, ENEMY_00_NPC_FORREST, ANIM_00, 0, EVAR_00);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_42, FALSE))
+            if (ck(FG_COMMON, F_COMMON_FOREST_FOUND, FALSE))
             {
                 enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 19000, -3000, 20000, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
                 enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 19000, -4000, 20000, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
@@ -94,56 +96,56 @@ proc init
                 enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 21400, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
                 enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 18020, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
             }
-            evt_exec(0, TASK_09, on_enter_3);
-            evt_exec(0, TASK_09, on_enter_4);
+            evt_exec(0, TASK_09, crow_flaps_loop_a);
+            evt_exec(0, TASK_09, crow_flaps_loop_b);
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_21, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_TERRACE_READY, TRUE) && ck(FG_SCENARIO, F_SCENARIO_67, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_SANDWICH_TALK_DONE, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_TERRACE_READY, TRUE) && ck(FG_SCENARIO, F_SCENARIO_J_BARRY_TERRACE_MISSED, FALSE))
             {
                 if (ck(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, FALSE))
                 {
-                    enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 52, 0, 22680, 0, 26170, ENEMY_01, ANIM_00, 0, EVAR_00);
+                    enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 52, 0, 22680, 0, 26170, ENEMY_01_BARRY, ANIM_00, 0, EVAR_00);
                     if (ck(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, FALSE))
                     {
                         set(FG_COMMON, F_COMMON_J_BARRY_MET_ON_TERRACE, TRUE);
-                        evt_exec(0, TASK_09, on_enter_2);
+                        evt_exec(0, TASK_09, barry_terrace_scene);
                     }
                     else
                     {
                         room_bgm_state_set(1, ROOM_212_TERRACE, BGM_SUB_2_ON);
-                        pos_set(ENEMY_01, 0, 900, 0, 24000, 0, 21000);
-                        evt_exec(0, TASK_09, on_enter);
-                        aot_set(AOT_03_EVENT, 23000, 20000, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);
+                        pos_set(ENEMY_01_BARRY, 0, 900, 0, 24000, 0, 21000);
+                        evt_exec(0, TASK_09, barry_waits_on_terrace);
+                        aot_set(AOT_03_EVENT_FOREST_BODY, 23000, 20000, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, barry_terrace_talk_again, 0, 0, 0);
                     }
                 }
                 else
                 {
                     room_bgm_state_set(1, ROOM_212_TERRACE, BGM_SUB_2_ON);
-                    evt_exec(0, TASK_09, on_enter_3);
-                    evt_exec(0, TASK_09, on_enter_4);
+                    evt_exec(0, TASK_09, crow_flaps_loop_a);
+                    evt_exec(0, TASK_09, crow_flaps_loop_b);
                     room_bgm_state_set(1, ROOM_212_TERRACE, BGM_SUB_2_ON);
-                    enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 24000, -2000, 17800, ENEMY_01, ANIM_00, 0, EVAR_00);
+                    enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 24000, -2000, 17800, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 21400, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 18020, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
                 }
             }
             else
             {
-                set(FG_SCENARIO, F_SCENARIO_67, TRUE);
-                evt_exec(0, TASK_09, on_enter_3);
-                evt_exec(0, TASK_09, on_enter_4);
+                set(FG_SCENARIO, F_SCENARIO_J_BARRY_TERRACE_MISSED, TRUE);
+                evt_exec(0, TASK_09, crow_flaps_loop_a);
+                evt_exec(0, TASK_09, crow_flaps_loop_b);
                 if (ck(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, FALSE))
                 {
-                    enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 19000, -3000, 20000, ENEMY_01, ANIM_00, 0, EVAR_00);
+                    enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 19000, -3000, 20000, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 19100, -4000, 21000, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_82, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 19200, -3500, 20000, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
-                    aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
+                    aot_set(AOT_03_EVENT_FOREST_BODY, 22600, 18000, 2900, 2250, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_forest_body, 0, 0, 0);
                 }
                 else
                 {
                     room_bgm_state_set(1, ROOM_212_TERRACE, BGM_SUB_2_ON);
-                    enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 24000, -2000, 17800, ENEMY_01, ANIM_00, 0, EVAR_00);
+                    enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 24000, -2000, 17800, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 21400, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
                     enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 18020, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
                 }
@@ -156,12 +158,12 @@ proc init
         enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 24000, -2000, 17800, ENEMY_01_CROW, ANIM_00, 0, EVAR_00);
         enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 21400, ENEMY_02_CROW, ANIM_00, 0, EVAR_00);
         enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 22460, -2000, 18020, ENEMY_03_CROW, ANIM_00, 0, EVAR_00);
-        evt_exec(0, TASK_09, on_enter_3);
-        evt_exec(0, TASK_09, on_enter_4);
+        evt_exec(0, TASK_09, crow_flaps_loop_a);
+        evt_exec(0, TASK_09, crow_flaps_loop_b);
     }
 }
 
-event on_aot_03 when (MANSION1)
+event examine_forest_body when (MANSION1)
 {
     sleep(1);
     run
@@ -180,17 +182,17 @@ event on_aot_03 when (MANSION1)
     }
     run
     {
-        set(FG_COMMON, F_COMMON_42, TRUE);
+        set(FG_COMMON, F_COMMON_FOREST_FOUND, TRUE);
         if (JILL)
         {
             set(FG_COMMON, F_COMMON_J_BARRY_LEFT_TERRACE, TRUE);
         }
-        aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
-        cutnext(CAM_03);
+        aot_reset(AOT_03_EVENT_FOREST_BODY, SCE_NONE, 0, 0, 0, 0);
+        cutnext(CAM_03_FOREST_CLOSEUP);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(30);
@@ -206,15 +208,15 @@ event on_aot_03 when (MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
     sleep(30);
-    evt_fork(TASK_09, on_aot_03_sub1, 0);
-    evt_fork(TASK_09, on_aot_03_sub2, 0);
-    evt_fork(TASK_09, on_aot_03_sub3, 0);
-    cutnext(CAM_04);
+    evt_fork(TASK_09, crow_1_attacks, 0);
+    evt_fork(TASK_09, crow_2_attacks, 0);
+    evt_fork(TASK_09, crow_3_attacks, 0);
+    cutnext(CAM_04_TERRACE_HIGH);
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -227,18 +229,18 @@ event on_aot_03 when (MANSION1)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        cutnext(CAM_02);
+        cutnext(CAM_02_FROM_DOOR);
         cut_auto(CUT_FREE);
     }
     evt_finish();
 }
 
-event event_01 when (MANSION1)
+event unused_empty when (MANSION1)
 {
     evt_finish();
 }
 
-event on_aot_03_2 when (JILL && MANSION1)
+event barry_terrace_talk_again when (JILL && MANSION1)
 {
     run
     {
@@ -246,7 +248,7 @@ event on_aot_03_2 when (JILL && MANSION1)
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_71, 400, 0, 2, 40, 0);
     act_reset();
@@ -266,18 +268,18 @@ event on_aot_03_2 when (JILL && MANSION1)
     evt_finish();
 }
 
-event on_enter when (JILL && MANSION1)
+event barry_waits_on_terrace when (JILL && MANSION1)
 {
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE_0, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event event_04 when (JILL && MANSION1)
+event unused_forest_message when (JILL && MANSION1)
 {
     run
     {
@@ -299,57 +301,57 @@ event event_04 when (JILL && MANSION1)
     evt_finish();
 }
 
-event on_enter_2 when (JILL && MANSION1)
+event barry_terrace_scene when (JILL && MANSION1)
 {
     sleep(1);
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-        set(FG_COMMON, F_COMMON_42, TRUE);
+        set(FG_COMMON, F_COMMON_FOREST_FOUND, TRUE);
         set(FG_COMMON, F_COMMON_J_BARRY_FOREST_SCENE, TRUE);
     }
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2F, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2F, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_param_set(0, 2048);
     act_flag_op(EF_SET, EF_0002);
     act_reset();
     evt_nop();
     sleep(21);
-    evt_chain(event_06);
+    evt_chain(barry_terrace_turns);
     evt_finish();
 }
 
-event event_06 when (JILL && MANSION1)
+event barry_terrace_turns when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_10, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_10, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
-    se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_ENEMY, ENEMY_01, 0, 0);
-    evt_fork(TASK_09, event_07, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_ENEMY, ENEMY_01_BARRY, 0, 0);
+    evt_fork(TASK_09, barry_terrace_jill_approaches, 0);
     sleep(20);
-    evt_chain(event_08);
+    evt_chain(barry_terrace_line_1);
     evt_finish();
 }
 
-event event_07 when (JILL && MANSION1)
+event barry_terrace_jill_approaches when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 22680, 26170, F_ROOM_22);
+    act_anim_seq(AB_06, 22680, 26170, F_ROOM_ANIM_DONE_2);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_22, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_2, FALSE));
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_23, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE_3, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0002);
     act_reset();
     evt_nop();
@@ -357,27 +359,27 @@ event event_07 when (JILL && MANSION1)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_3, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_24, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_4, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_4, FALSE));
     evt_finish();
 }
 
-event event_08 when (JILL && MANSION1)
+event barry_terrace_line_1 when (JILL && MANSION1)
 {
     sleep(5);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_10, F_ROOM_25, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_10, F_ROOM_ANIM_DONE_5, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -385,13 +387,13 @@ event event_08 when (JILL && MANSION1)
     sleep(5);
     message(MSG_VO_104_00, 0);
     sleep(1);
-    evt_fork(TASK_09, event_09, 0);
+    evt_fork(TASK_09, barry_terrace_jill_steps, 0);
     wait_message();
-    evt_chain(event_0A);
+    evt_chain(barry_terrace_line_2);
     evt_finish();
 }
 
-event event_09 when (JILL && MANSION1)
+event barry_terrace_jill_steps when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -401,55 +403,55 @@ event event_09 when (JILL && MANSION1)
     sleep(35);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_26, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_6, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_26, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_6, FALSE));
     evt_finish();
 }
 
-event event_0A when (JILL && MANSION1)
+event barry_terrace_line_2 when (JILL && MANSION1)
 {
     sleep(4);
     voice_play(VOICE_PLAY, VO_104_01);
     sleep(5);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_71, 300, 0, 2, 50, 0);
     act_reset();
     evt_nop();
     message(MSG_VO_104_01, 0);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_27, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_7, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_27, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_7, FALSE));
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_28, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_8, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_8, FALSE));
     sleep(1);
-    evt_fork(TASK_09, event_0B, 0);
+    evt_fork(TASK_09, barry_terrace_jill_steps_back, 0);
     sleep(3);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_29, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_9, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -457,13 +459,13 @@ event event_0A when (JILL && MANSION1)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_29, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_9, FALSE));
     wait_message();
-    evt_chain(event_0C);
+    evt_chain(barry_terrace_jill_line);
     evt_finish();
 }
 
-event event_0B when (JILL && MANSION1)
+event barry_terrace_jill_steps_back when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -472,85 +474,85 @@ event event_0B when (JILL && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 21400, 26500, F_ROOM_20);
+    act_anim_seq(AB_02, 21400, 26500, F_ROOM_ANIM_DONE_0);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_0, FALSE));
     evt_finish();
 }
 
-event event_0C when (JILL && MANSION1)
+event barry_terrace_jill_line when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_26, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(8);
     voice_play(VOICE_PLAY, VO_104_02);
     sleep(5);
     message(MSG_VO_104_02, 0);
-    evt_fork(TASK_09, event_0D, 0);
+    evt_fork(TASK_09, barry_terrace_barry_reacts, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_23, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_3, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0002);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_24, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_4, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(24);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_25, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE_5, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0002);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_27, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE_7, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0002);
     act_reset();
     evt_nop();
     sleep(16);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_28, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_26, F_ROOM_ANIM_DONE_8, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_24, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_4, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     wait_message();
-    evt_chain(event_0E);
+    evt_chain(barry_terrace_barry_waits);
     evt_finish();
 }
 
-event event_0D when (JILL && MANSION1)
+event barry_terrace_barry_reacts when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2A, F_ROOM_25, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_5, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_5, FALSE));
     sleep(30);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_33, 500, 300, 0, 30, 10);
     act_reset();
@@ -559,10 +561,10 @@ event event_0D when (JILL && MANSION1)
     evt_finish();
 }
 
-event event_0E when (JILL && MANSION1)
+event barry_terrace_barry_waits when (JILL && MANSION1)
 {
     sleep(10);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion(MOTION_10);
     act_nop();
@@ -576,80 +578,80 @@ event event_0E when (JILL && MANSION1)
     act_reset();
     evt_nop();
     sleep(30);
-    evt_chain(event_0F);
+    evt_chain(barry_terrace_line_3);
     evt_finish();
 }
 
-event event_0F when (JILL && MANSION1)
+event barry_terrace_line_3 when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_26, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_6, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     voice_play(VOICE_PLAY, VO_104_03);
     sleep(15);
     message(MSG_VO_104_03, 0);
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_29, F_ROOM_27, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_29, F_ROOM_ANIM_DONE_7, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_27, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_7, FALSE));
     sleep(10);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_28, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE_8, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_8, FALSE));
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_29, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_9, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(18);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_20, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_0, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_13, 23700, -300, 22240, 30, 20);
     act_reset();
     evt_nop();
     sleep(3);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_idle();
     act_nop();
     act_reset();
     evt_nop();
     wait_message();
-    evt_fork(TASK_09, event_10, 0);
-    evt_chain(event_11);
+    evt_fork(TASK_09, barry_terrace_jill_waits, 0);
+    evt_chain(barry_terrace_barry_walks_to_forest);
     evt_finish();
 }
 
-event event_10 when (JILL && MANSION1)
+event barry_terrace_jill_waits when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -667,21 +669,21 @@ event event_10 when (JILL && MANSION1)
     sleep(80);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 23830, 24900, F_ROOM_22);
+    act_anim_seq(AB_02, 23830, 24900, F_ROOM_ANIM_DONE_2);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_chain(event_13);
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_2, FALSE));
+    evt_chain(barry_terrace_jill_walks_to_forest);
     evt_finish();
 }
 
-event event_11 when (JILL && MANSION1)
+event barry_terrace_barry_walks_to_forest when (JILL && MANSION1)
 {
-    cutnext(CAM_02);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    cutnext(CAM_02_FROM_DOOR);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion(MOTION_10);
     act_nop();
@@ -694,32 +696,32 @@ event event_11 when (JILL && MANSION1)
     act_nop();
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_02, 24400, 21000, F_ROOM_23);
+    act_anim_seq(AB_02, 24400, 21000, F_ROOM_ANIM_DONE_3);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_3, FALSE));
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_06, 23786, 18524, F_ROOM_24);
+    act_anim_seq(AB_06, 23786, 18524, F_ROOM_ANIM_DONE_4);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
-    evt_chain(event_12);
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_4, FALSE));
+    evt_chain(barry_terrace_barry_steps);
     evt_finish();
 }
 
-event event_12 when (JILL && MANSION1)
+event barry_terrace_barry_steps when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_32, 0, 300, 0, 0, 30);
     act_reset();
@@ -728,106 +730,106 @@ event event_12 when (JILL && MANSION1)
     evt_finish();
 }
 
-event event_13 when (JILL && MANSION1)
+event barry_terrace_jill_walks_to_forest when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 23510, 21710, F_ROOM_25);
+    act_anim_seq(AB_02, 23510, 21710, F_ROOM_ANIM_DONE_5);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_5, FALSE));
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 23786, 18524, F_ROOM_26);
+    act_anim_seq(AB_06, 23786, 18524, F_ROOM_ANIM_DONE_6);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_26, FALSE));
-    evt_chain(event_14);
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_6, FALSE));
+    evt_chain(barry_terrace_jill_kneels);
     evt_finish();
 }
 
-event event_14 when (JILL && MANSION1)
+event barry_terrace_jill_kneels when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_27, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_7, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_27, FALSE));
-    evt_chain(event_15);
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_7, FALSE));
+    evt_chain(barry_terrace_forest_closeup);
     evt_finish();
 }
 
-event event_15 when (JILL && MANSION1)
+event barry_terrace_forest_closeup when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_29, F_ROOM_28, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_29, F_ROOM_ANIM_DONE_8, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_8, FALSE));
     voice_play(VOICE_PLAY, VO_104_04);
     sleep(15);
     message(MSG_VO_104_04, 0);
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_71, 300, 0, 2, 30, 0);
     act_reset();
     evt_nop();
     sleep(26);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_29, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_9, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_29, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_9, FALSE));
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_20, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_0, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_0, FALSE));
     wait_message();
-    cutnext(CAM_03);
+    cutnext(CAM_03_FOREST_CLOSEUP);
     bgm_stop(BGM_MAIN);
     sleep(1);
     bgm_play(BGM_SUB_1);
     sleep(120);
     cutcurr(0);
-    evt_chain(event_16);
+    evt_chain(barry_terrace_jill_stands);
     evt_finish();
 }
 
-event event_16 when (JILL && MANSION1)
+event barry_terrace_jill_stands when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2C, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2C, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(1);
@@ -836,59 +838,59 @@ event event_16 when (JILL && MANSION1)
     act_motion_path(MOTION_32, 0, 300, 0, 0, 60);
     act_reset();
     evt_nop();
-    evt_chain(event_17);
+    evt_chain(barry_terrace_line_4);
     evt_finish();
 }
 
-event event_17 when (JILL && MANSION1)
+event barry_terrace_line_4 when (JILL && MANSION1)
 {
     voice_play(VOICE_PLAY, VO_104_05);
     sleep(15);
     message(MSG_VO_104_05, 0);
     wait_message();
     sleep(40);
-    evt_chain(event_18);
+    evt_chain(barry_terrace_line_5);
     evt_finish();
 }
 
-event event_18 when (JILL && MANSION1)
+event barry_terrace_line_5 when (JILL && MANSION1)
 {
     sleep(20);
     voice_play(VOICE_PLAY, VO_104_06);
     sleep(15);
     message(MSG_VO_104_06, 0);
     sleep(10);
-    evt_fork(TASK_09, event_19, 0);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_fork(TASK_09, barry_terrace_jill_turns, 0);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_22, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_2, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_22, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_2, FALSE));
     sleep(10);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_28, F_ROOM_23, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE_3, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_3, FALSE));
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_24, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE_4, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
-    evt_fork(TASK_09, event_1A, 0);
+    evt_fork(TASK_09, barry_terrace_jill_steps_2, 0);
     sleep(27);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_71, -300, 0, 4, 10, 0);
     act_reset();
@@ -897,7 +899,7 @@ event event_18 when (JILL && MANSION1)
     message(8, 0);
     wait_message();
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_31, 700, 0, 0, 30, 0);
     act_reset();
@@ -907,24 +909,24 @@ event event_18 when (JILL && MANSION1)
     sleep(15);
     message(MSG_VO_104_07, 0);
     wait_message();
-    evt_fork(TASK_09, event_1B, 0);
+    evt_fork(TASK_09, barry_terrace_barry_waits_2, 0);
     sleep(3);
-    evt_chain(event_1C);
+    evt_chain(barry_terrace_offer_launcher);
     evt_finish();
 }
 
-event event_19 when (JILL && MANSION1)
+event barry_terrace_jill_turns when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_25, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_5, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_5, FALSE));
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -935,7 +937,7 @@ event event_19 when (JILL && MANSION1)
     evt_finish();
 }
 
-event event_1A when (JILL && MANSION1)
+event barry_terrace_jill_steps_2 when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -945,10 +947,10 @@ event event_1A when (JILL && MANSION1)
     evt_finish();
 }
 
-event event_1B when (JILL && MANSION1)
+event barry_terrace_barry_waits_2 when (JILL && MANSION1)
 {
     sleep(30);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion(MOTION_10);
     act_nop();
@@ -964,7 +966,7 @@ event event_1B when (JILL && MANSION1)
     evt_finish();
 }
 
-event event_1C when (JILL && MANSION1)
+event barry_terrace_offer_launcher when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -984,64 +986,64 @@ event event_1C when (JILL && MANSION1)
     {
         if (cmpb(B_TOTAL_HELD, CMP_LT, 8))
         {
-            evt_exec(0, TASK_09, event_1D);
+            evt_exec(0, TASK_09, barry_terrace_take_launcher);
         }
         else
         {
-            evt_exec(0, TASK_09, event_23);
+            evt_exec(0, TASK_09, barry_terrace_end);
         }
     }
     evt_finish();
 }
 
-event event_1D when (JILL && MANSION1)
+event barry_terrace_take_launcher when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2F, F_ROOM_26, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2F, F_ROOM_ANIM_DONE_6, AFL_02 | AFL_01);
     act_param_set(0, 2048);
     act_reset();
     evt_nop();
     sleep(42);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 23710, 23220, F_ROOM_28);
+    act_anim_seq(AB_02, 23710, 23220, F_ROOM_ANIM_DONE_8);
     act_reset();
-    evt_chain(event_1E);
+    evt_chain(barry_terrace_launcher_line);
     evt_finish();
 }
 
-event event_1E when (JILL && MANSION1)
+event barry_terrace_launcher_line when (JILL && MANSION1)
 {
     voice_play(VOICE_PLAY, VO_104_09);
     sleep(15);
     message(MSG_VO_104_09, 0);
-    evt_fork(TASK_09, event_1F, 0);
+    evt_fork(TASK_09, barry_terrace_jill_turns_2, 0);
     sleep(80);
     message(12, 0);
     wait_message();
-    evt_fork(TASK_09, event_20, 0);
+    evt_fork(TASK_09, barry_terrace_barry_hands_over, 0);
     sleep(24);
-    evt_chain(event_22);
+    evt_chain(barry_terrace_give_launcher);
     evt_finish();
 }
 
-event event_1F when (JILL && MANSION1)
+event barry_terrace_jill_turns_2 when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2F, F_ROOM_29, 0);
+    act_anim_flags(ANIM_2F, F_ROOM_ANIM_DONE_9, 0);
     act_param_set(0, 2048);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event event_20 when (JILL && MANSION1)
+event barry_terrace_barry_hands_over when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE_0, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -1049,21 +1051,21 @@ event event_20 when (JILL && MANSION1)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    evt_chain(event_21);
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_0, FALSE));
+    evt_chain(barry_terrace_barry_steps_back);
     evt_finish();
 }
 
-event event_21 when (JILL && MANSION1)
+event barry_terrace_barry_steps_back when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_31, 700, -200, 0, 40, 20);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_21, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2E, F_ROOM_ANIM_DONE_1, AFL_02 | AFL_01);
     act_param_set(0, 1030);
     act_reset();
     evt_nop();
@@ -1071,39 +1073,39 @@ event event_21 when (JILL && MANSION1)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ANIM_DONE_1, FALSE));
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_22, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_2, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     evt_finish();
 }
 
-event event_22 when (JILL && MANSION1)
+event barry_terrace_give_launcher when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 23970, 22130, F_ROOM_23);
+    act_anim_seq(AB_02, 23970, 22130, F_ROOM_ANIM_DONE_3);
     act_reset();
     sleep(40);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_idle();
     act_nop();
     act_reset();
     evt_nop();
-    give_item(AOT_01_ITEM, 4, 129);
+    give_item(AOT_01_ITEM_WEAPON_GL_ACID_0, 4, 129);
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_next();
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    evt_chain(event_25);
+    evt_chain(barry_terrace_barry_turns_away);
     evt_finish();
 }
 
-event event_23 when (JILL && MANSION1)
+event barry_terrace_end when (JILL && MANSION1)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1130,20 +1132,20 @@ event event_23 when (JILL && MANSION1)
     set(FG_RUN, F_RUN_CONTROLS, TRUE);
     run
     {
-        aot_set(AOT_03_EVENT, 23400, 20400, 1100, 1400, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);
+        aot_set(AOT_03_EVENT_FOREST_BODY, 23400, 20400, 1100, 1400, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, barry_terrace_talk_again, 0, 0, 0);
     }
     evt_finish();
 }
 
-event event_24 when (JILL && MANSION1)
+event unused_empty_2 when (JILL && MANSION1)
 {
     evt_finish();
 }
 
-event event_25 when (JILL && MANSION1)
+event barry_terrace_barry_turns_away when (JILL && MANSION1)
 {
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
     act_motion(MOTION_10);
     act_nop();
@@ -1156,30 +1158,30 @@ event event_25 when (JILL && MANSION1)
     act_nop();
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_24, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2D, F_ROOM_ANIM_DONE_4, AFL_02 | AFL_01);
     act_param_set(0, 64506);
     act_reset();
     evt_nop();
     sleep(40);
-    evt_chain(event_26);
+    evt_chain(barry_terrace_barry_pose);
     evt_finish();
 }
 
-event event_26 when (JILL && MANSION1)
+event barry_terrace_barry_pose when (JILL && MANSION1)
 {
-    evt_work_set(WK_ENEMY, ENEMY_01);
+    evt_work_set(WK_ENEMY, ENEMY_01_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_25, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE_5, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(10);
-    evt_chain(event_23);
+    evt_chain(barry_terrace_end);
     evt_finish();
 }
 
-event on_aot_03_sub1 when (MANSION1)
+event crow_1_attacks when (MANSION1)
 {
     sleep(1);
     if (CHRIS)
@@ -1189,11 +1191,11 @@ event on_aot_03_sub1 when (MANSION1)
     }
     else
     {
-        eml_state(0, ENEMY_01, EML_BEHAVIOUR, EB_02);
-        evt_work_set(WK_ENEMY, ENEMY_01);
+        eml_state(0, ENEMY_01_CROW, EML_BEHAVIOUR, EB_02);
+        evt_work_set(WK_ENEMY, ENEMY_01_CROW);
     }
     evt_actor_begin();
-    act_anim_seq(AB_02, 23180, 21880, F_ROOM_20);
+    act_anim_seq(AB_02, 23180, 21880, F_ROOM_ANIM_DONE_0);
     act_nop();
     act_reset();
     evt_nop();
@@ -1204,18 +1206,18 @@ event on_aot_03_sub1 when (MANSION1)
     }
     else
     {
-        eml_state(0, ENEMY_01, EML_ACTION, AB_01);
+        eml_state(0, ENEMY_01_CROW, EML_ACTION, AB_01);
     }
     evt_finish();
 }
 
-event on_aot_03_sub2 when (MANSION1)
+event crow_2_attacks when (MANSION1)
 {
     sleep(10);
     eml_state(0, ENEMY_02_CROW, EML_BEHAVIOUR, EB_02);
     evt_work_set(WK_ENEMY, ENEMY_02_CROW);
     evt_actor_begin();
-    act_anim_seq(AB_02, 22000, 28000, F_ROOM_20);
+    act_anim_seq(AB_02, 22000, 28000, F_ROOM_ANIM_DONE_0);
     act_nop();
     act_reset();
     evt_nop();
@@ -1224,13 +1226,13 @@ event on_aot_03_sub2 when (MANSION1)
     evt_finish();
 }
 
-event on_aot_03_sub3 when (MANSION1)
+event crow_3_attacks when (MANSION1)
 {
     sleep(10);
     eml_state(0, ENEMY_03_CROW, EML_BEHAVIOUR, EB_02);
     evt_work_set(WK_ENEMY, ENEMY_03_CROW);
     evt_actor_begin();
-    act_anim_seq(AB_02, 23000, 20000, F_ROOM_20);
+    act_anim_seq(AB_02, 23000, 20000, F_ROOM_ANIM_DONE_0);
     act_nop();
     act_reset();
     evt_nop();
@@ -1239,7 +1241,7 @@ event on_aot_03_sub3 when (MANSION1)
     evt_finish();
 }
 
-event on_enter_3
+event crow_flaps_loop_a
 {
     sleep(50);
     se_play_3d(SND_BANK_ROOM, SE_18_RVPATA, 0, SND_AT_POINT, 0, 3000, 3000);
@@ -1257,21 +1259,21 @@ event on_enter_3
     {
         if (CHRIS)
         {
-            evt_chain(on_enter_3);
+            evt_chain(crow_flaps_loop_a);
         }
         else
         {
-            evt_chain(on_enter_3);
+            evt_chain(crow_flaps_loop_a);
         }
     }
     else
     {
-        evt_chain(on_enter_3);
+        evt_chain(crow_flaps_loop_a);
     }
     evt_finish();
 }
 
-event on_enter_4
+event crow_flaps_loop_b
 {
     sleep(30);
     se_play_3d(SND_BANK_ROOM, SE_19_RVPATB, 0, SND_AT_POINT, 0, 8000, 3000);
@@ -1289,16 +1291,16 @@ event on_enter_4
     {
         if (CHRIS)
         {
-            evt_chain(on_enter_4);
+            evt_chain(crow_flaps_loop_b);
         }
         else
         {
-            evt_chain(on_enter_4);
+            evt_chain(crow_flaps_loop_b);
         }
     }
     else
     {
-        evt_chain(on_enter_4);
+        evt_chain(crow_flaps_loop_b);
     }
     evt_finish();
 }

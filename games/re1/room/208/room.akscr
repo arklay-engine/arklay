@@ -8,27 +8,27 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_NONE 0x03
+#define AOT_00_DOOR_209 0x00
+#define AOT_01_DOOR_207 0x01
+#define AOT_02_DOOR_20A 0x02
+#define AOT_03_EVENT_ZOMBIE_BURSTS_IN 0x03                  // Starts as SCE_NONE in front of the 209 door; init arms it in place of the door.
 #define CAM_00 0x00
 #define ENEMY_00_ZOMBIE_GREEN 0x00
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_1A 0x1A
+#define F_ROOM_MONSTERS_FROZEN 0x18                         // Main froze the monsters until the zombie bursts in.
+#define F_ROOM_PLAYER_ANIM_DONE 0x19                        // The player's animation finished.
+#define F_ROOM_ZOMBIE_IN 0x1A                               // The zombie is in; the player stops watching it.
 #define SE_DOOR_00 0x00
 #define SE_DOOR_01 0x01
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 900, 3400, 1700, 1900, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 9, 0, ROOM_209_BEDROOM, 9100, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 5700, 6400, 1400, 1200, 2, DOOR_SND_00_DR_WD, DOOR_1D_DOOR01K, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 10200, 4000, 1400, 1100, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_03_NONE, 1000, 3900, 1100, 1200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR_209, 900, 3400, 1700, 1900, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 9, 0, ROOM_209_BEDROOM, 9100, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_207, 5700, 6400, 1400, 1200, 2, DOOR_SND_00_DR_WD, DOOR_1D_DOOR01K, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_20A, 10200, 4000, 1400, 1100, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_03_EVENT_ZOMBIE_BURSTS_IN, 1000, 3900, 1100, 1200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_05, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_DEER_ROOM_ZOMBIE_IN, TRUE))
         {
             enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_208_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
@@ -36,14 +36,14 @@ proc init
         {
             if (ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, FALSE))
             {
-                aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_00_DOOR_209, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_03_EVENT_ZOMBIE_BURSTS_IN, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
                 require(ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, FALSE));
-                aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-                aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_00_DOOR_209, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_03_EVENT_ZOMBIE_BURSTS_IN, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_208_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
@@ -54,46 +54,46 @@ proc main
 {
     if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
-        if (ck(FG_ROOM, F_ROOM_18, FALSE) && ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
+        if (ck(FG_ROOM, F_ROOM_MONSTERS_FROZEN, FALSE) && ck(FG_SCENARIO, F_SCENARIO_DEER_ROOM_ZOMBIE_IN, FALSE))
         {
-            evt_exec(0, TASK_09, from_main);
-            set(FG_ROOM, F_ROOM_18, TRUE);
+            evt_exec(0, TASK_09, freeze_monsters);
+            set(FG_ROOM, F_ROOM_MONSTERS_FROZEN, TRUE);
         }
     }
 }
 
-event event_00
+event zombie_bursts_in
 {
     run
     {
-        aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        set(FG_SCENARIO, F_SCENARIO_05, TRUE);
+        aot_delete(AOT_00_DOOR_209, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03_EVENT_ZOMBIE_BURSTS_IN, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_SCENARIO, F_SCENARIO_DEER_ROOM_ZOMBIE_IN, TRUE);
         set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, TRUE);
         if (ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, FALSE))
         {
             set(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, TRUE);
             set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, FALSE);
-            evt_exec(0, TASK_09, event_01);
+            evt_exec(0, TASK_09, zombie_bursts_in_player);
         }
         else
         {
             require(ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, FALSE));
             set(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, TRUE);
             set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, FALSE);
-            evt_exec(0, TASK_09, event_01);
+            evt_exec(0, TASK_09, zombie_bursts_in_player);
         }
     }
     evt_finish();
 }
 
-event event_01
+event zombie_bursts_in_player
 {
-    evt_fork(TASK_09, event_03, 0);
+    evt_fork(TASK_09, player_watches_zombie, 0);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 2200, 5500, F_ROOM_19);
+    act_anim_seq(AB_06, 2200, 5500, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 1024);
     act_flag_op(EF_OR, EF_0002);
@@ -101,22 +101,22 @@ event event_01
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6400, 6300);
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_19, AFL_01);
+    act_anim_flags(ANIM_2E, F_ROOM_PLAYER_ANIM_DONE, AFL_01);
     act_param_set(0, 1024);
     act_flag_op(EF_OR, EF_0002);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     run
@@ -126,7 +126,7 @@ event event_01
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6400, 6300);
         eml_state(0, ENEMY_00_ZOMBIE_GREEN, EML_BEHAVIOUR, EB_00);
         cutnext(CAM_00);
-        set(FG_ROOM, F_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_ZOMBIE_IN, TRUE);
     }
     sleep(30);
     cutcurr(0);
@@ -138,14 +138,14 @@ event event_01
     evt_finish();
 }
 
-event from_main
+event freeze_monsters
 {
     sleep(3);
     set(FG_RUN, F_RUN_MONSTERS, FALSE);
     evt_finish();
 }
 
-event event_03
+event player_watches_zombie
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -157,7 +157,7 @@ event event_03
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_ZOMBIE_IN, FALSE));
     act_motion(MOTION_10);
     act_nop();
     act_nop();

@@ -11,97 +11,98 @@
 //   and each use takes the name of its player's branch.
 
 #define F_SCENARIO_STAGE_VARIANT 0x00                       // Stage changes go to the +5 stage variants while set (engine).
-#define F_SCENARIO_01 0x01
-#define F_SCENARIO_02 0x02
-#define F_SCENARIO_03 0x03
-#define F_SCENARIO_04 0x04
-#define F_SCENARIO_05 0x05
-#define F_SCENARIO_08 0x08
-#define F_SCENARIO_09 0x09
-#define F_SCENARIO_0A 0x0A
+#define F_SCENARIO_LAB_ELEVATOR_POWERED 0x01                // The B4 elevator switch was pushed with both power bits set (50c); the elevator to 515 works.
+#define F_SCENARIO_113_BATHTUB_DRAINED 0x02                 // Chris drained the bathtub and the desk key is out (113); Jill's bathroom has no such scene.
+#define F_SCENARIO_GALLERY_PUZZLE_SOLVED 0x03               // The large gallery's picture switches were pressed in order: the frame fell and the star crest is out (117).
+#define F_SCENARIO_BOILER_DOGS_SCENE 0x04                   // Likely: the scripted Cerberus attack in 114 has played; the dogs then spawn in place.
+#define F_SCENARIO_DEER_ROOM_ZOMBIE_IN 0x05                 // A zombie from 207 burst into 208 (Jill; Chris's game sets it in 204 to skip the scene).
+#define F_SCENARIO_STOVE_LIT 0x08                           // The lighter lit 20B's stove and burned the paper off the 2F map.
+#define F_SCENARIO_RIGHT_STAIRS_VISITED 0x09                // Guess: set on entering 10B in the first mansion; lighting the 20B fireplace clears it, and once it is set again 20B has its zombies and no fire.
+#define F_SCENARIO_CANDLE_LIT 0x0A                          // The candle in 20F was lit with the lighter: the room is lit and its item can be taken.
 #define F_SCENARIO_BALCONY_STATUE_PUSHED 0x0B               // Statue pushed off the 2F balcony (202); the blue jewel lies by it in 105.
-#define F_SCENARIO_0C 0x0C
-#define F_SCENARIO_0D 0x0D
-#define F_SCENARIO_0E 0x0E
-#define F_SCENARIO_0F 0x0F
+#define F_SCENARIO_TIGER_MAGNUM_TAKEN 0x0C                  // The magnum was taken from the tiger statue (10D) after the red jewel went in.
+#define F_SCENARIO_TIGER_WIND_CREST_TAKEN 0x0D              // The wind crest was taken from the tiger statue (10D) after the blue jewel went in.
+#define F_SCENARIO_TIGER_RED_JEWEL_SET 0x0E                 // The red jewel is in the tiger's eye and the statue has turned to offer the magnum (10D); cleared when it is taken.
+#define F_SCENARIO_TIGER_BLUE_JEWEL_SET 0x0F                // The blue jewel is in the tiger's eye and the statue has turned to offer the wind crest (10D); cleared when it is taken.
 #define F_SCENARIO_YAWN_BITE 0x10                           // Set by the Yawn's bite (engine).
 #define F_SCENARIO_KENNETH_EXAMINED 0x11                    // Removes Kenneth's examine spot in 104. Never set: no script or engine code writes it.
-#define F_SCENARIO_12 0x12
-#define F_SCENARIO_ITEM_13_GATE 0x13                        // Item 0x13 cannot be used while set (engine).
-#define F_SCENARIO_14 0x14
+#define F_SCENARIO_AQUARIUM_DRAINED 0x12                    // The switch behind 20A's shelf drained the aquarium; it can now be pushed.
+#define F_SCENARIO_V_JOLT_ON_ROOTS 0x13                     // The V-JOLT was used on the roots (40F); the engine then rejects item 0x13, the empty bottle.
+#define F_SCENARIO_300_VISITED 0x14                         // Room 300 was entered; Brad's first radio call rings only on that first visit, with the radio.
 #define F_SCENARIO_CHEMICAL_MIXED 0x16                      // A chemical combine was done (engine).
-#define F_SCENARIO_17 0x17
-#define F_SCENARIO_18 0x18
-#define F_SCENARIO_1B 0x1B
-#define F_SCENARIO_1C 0x1C
-#define F_SCENARIO_1D 0x1D
+#define F_SCENARIO_LIBRARY_ENTERED 0x17                     // The library (216) was entered; a hunter now waits in 11A.
+#define F_SCENARIO_304_VARIANT_VISITED 0x18                 // Room 304 was entered in the stage variant; Brad's second radio call rings only on that visit, with the radio.
+#define F_SCENARIO_EAGLE_MEDAL_PLACED 0x1B                  // The eagle medal is in the fountain (305).
+#define F_SCENARIO_WOLF_MEDAL_PLACED 0x1C                   // The wolf medal is in the fountain (305).
+#define F_SCENARIO_FOUNTAIN_OPEN 0x1D                       // Both medals placed: the fountain has opened onto the stairs down (305).
 #define F_SCENARIO_PANEL_VARIANT_A 0x1E                     // Picks the passcode panel's starting state (engine).
 #define F_SCENARIO_PANEL_VARIANT_B 0x1F                     // Picks the passcode panel's starting state (engine).
 #define F_SCENARIO_INTERACTIVE_SCREEN 0x20                  // An interactive screen is up (engine).
 #define F_SCENARIO_PANEL_SOLVED 0x21                        // The lab passcode panel is solved (engine).
-#define F_SCENARIO_23 0x23
-#define F_SCENARIO_24 0x24
-#define F_SCENARIO_25 0x25
-#define F_SCENARIO_26 0x26
-#define F_SCENARIO_27 0x27
-#define F_SCENARIO_28 0x28
+#define F_SCENARIO_WATER_DRAINED 0x23                       // The 411 lever drained the guardhouse water (40D, 40E, 40F, 411).
+#define F_SCENARIO_BLANK_BOOK_SHELVED 0x24                  // The blank book was put in the V-JOLT report's gap on room 003's shelf (40A).
+#define F_SCENARIO_BOOKCASE_SLID_ASIDE 0x25                 // Likely: room 003's bookcase stands slid aside (40A); cleared when the player steps into the gap toward 40C.
+#define F_SCENARIO_BOOKCASE_SLIDE_PLAYED 0x26               // The bookcase slide scene in room 003 has played (40A).
+#define F_SCENARIO_YAWN_2_APPEARED 0x27                     // Yawn burst into 20C (its second appearance).
+#define F_SCENARIO_FIREPLACE_LADDER_OPEN 0x28               // The switch in 20C's fireplace slid it aside: the ladder down to 21A is open.
 #define F_SCENARIO_PLANT42_DEAD 0x29                        // Plant 42 is dead (engine).
 #define F_SCENARIO_ALT_OUTFIT 0x2A                          // The alternate outfit (engine).
-#define F_SCENARIO_2B 0x2B
-#define F_SCENARIO_2D 0x2D
-#define F_SCENARIO_2E 0x2E
-#define F_SCENARIO_2F 0x2F
-#define F_SCENARIO_30 0x30
-#define F_SCENARIO_31 0x31
-#define F_SCENARIO_32 0x32
-#define F_SCENARIO_33 0x33
-#define F_SCENARIO_34 0x34
-#define F_SCENARIO_35 0x35
-#define F_SCENARIO_36 0x36
-#define F_SCENARIO_WESKER_LATE_ANIM 0x37                    // Wesker's later animation set (engine).
-#define F_SCENARIO_38 0x38
-#define F_SCENARIO_39 0x39
-#define F_SCENARIO_3A 0x3A
-#define F_SCENARIO_3C 0x3C
-#define F_SCENARIO_3D 0x3D
-#define F_SCENARIO_3E 0x3E
-#define F_SCENARIO_3F 0x3F
-#define F_SCENARIO_40 0x40
-#define F_SCENARIO_41 0x41
-#define F_SCENARIO_42 0x42
-#define F_SCENARIO_43 0x43
-#define F_SCENARIO_44 0x44
-#define F_SCENARIO_45 0x45
-#define F_SCENARIO_46 0x46
+#define F_SCENARIO_SELF_DESTRUCT_ON 0x2B                    // The lab's self-destruct sequence is running (511's panel, 505 for Chris alone, 514 for Jill).
+#define F_SCENARIO_ELEVATOR_POWER_CONNECTED 0x2D            // The elevator power connection switch was connected (511).
+#define F_SCENARIO_POWER_PANEL_ON 0x2E                      // The power panel turned on the blacked-out areas (50f).
+#define F_SCENARIO_WATER_GATE_OPEN 0x2F                     // The water gate is open (301 crank): the channel there is drained and the water runs down the 302 falls.
+#define F_SCENARIO_ELEVATOR_301_DOWN 0x30                   // The 301-302 elevator is down at 302.
+#define F_SCENARIO_ELEVATOR_300_UP 0x31                     // The 300-302 elevator is up at 300.
+#define F_SCENARIO_ELEVATOR_BATTERY_IN 0x32                 // The battery is in the 300-302 elevator's winch (302).
+#define F_SCENARIO_KITCHEN_DOOR_FILM_SEEN 0x33              // The film at the 21C door to 110 has played; that door is open.
+#define F_SCENARIO_PASS_CODE_1_ENTERED 0x34                 // Pass code 01 was entered at 508's double lock panel.
+#define F_SCENARIO_PASS_CODE_2_ENTERED 0x35                 // Pass code 02 was entered at 508's double lock panel.
+#define F_SCENARIO_PASS_CODE_3_ENTERED 0x36                 // Pass code 03 was entered at 508's double lock panel.
+#define F_SCENARIO_TYRANT_1_DEAD 0x37                       // The first Tyrant died (513); the engine then gives Wesker his later animation (larger shadow, anim 0x30).
+#define F_SCENARIO_BOXES_SUNK_BIT1 0x38                     // Boxes pushed into the 40D channel, high bit of a 0-3 count (with F_SCENARIO_BOXES_SUNK_BIT0).
+#define F_SCENARIO_BOXES_SUNK_BIT0 0x39                     // Boxes pushed into the 40D channel, low bit of a 0-3 count (with F_SCENARIO_BOXES_SUNK_BIT1).
+#define F_SCENARIO_ARMOR_SHOWCASE_OPEN 0x3A                 // Both armors cover 205's gas holes and the switch opened the showcase with the sun crest.
+#define F_SCENARIO_ITEM_PASSAGE_WALL_MOVED 0x3C             // Likely: the crank slid the wall in the item passage (306) across; cranking again slides it back.
+#define F_SCENARIO_30B_BOULDER_ROLLED 0x3D                  // The boulder in the rock passage (30B) has rolled.
+#define F_SCENARIO_GUARDHOUSE_MAP_TAKEN 0x3E                // The dormitory map was taken from the sketch in room 002 (406).
+#define F_SCENARIO_SLIDES_SHOWN 0x3F                        // The slides were shown on 504's projector.
+#define F_SCENARIO_STUDY_VISITED 0x40                       // Set on the first visit to the study (119); nothing reads it.
+#define F_SCENARIO_LIBRARY_SWITCH_ON 0x41                   // The wall switch in 217 is on (it toggles): sprite 7 shows and the floor spot can be examined.
+#define F_SCENARIO_ADDERS_IN_30D 0x42                       // Reached the cave save room (30E) or the crank passage (30F): adders now appear in 30D.
+#define F_SCENARIO_402_BATHTUB_DRAINED 0x43                 // The bathtub in room 001's bathroom was unplugged; the control room key lies in it (402).
+#define F_SCENARIO_PLANT42_ROOM_ENTERED 0x44                // 40C has been entered: the 408 door to it opens instead of showing a message.
+#define F_SCENARIO_UNDER_PASSAGE_ENTERED 0x45               // 40D has been entered: 406 keeps its shelves pushed off the ladder.
+#define F_SCENARIO_J_PASS_NUMBER_ENTERED 0x46               // Jill entered the pass number at 201's keypad: the door to 214 opens.
 #define F_SCENARIO_YAWN_SERUM 0x47                          // Serum marker: the first Yawn poisons only while clear (engine).
 #define F_SCENARIO_PLANT42_OBJ_ACK 0x48                     // Plant 42 objective seen: stops the guardhouse map highlight.
 #define F_SCENARIO_SERUM1_OBJ_ACK 0x49                      // Serum objective 1 seen: stops the mansion map highlight.
 #define F_SCENARIO_SERUM2_OBJ_ACK 0x4A                      // Serum objective 2 seen: stops the mansion map highlight.
-#define F_SCENARIO_4B 0x4B
-#define F_SCENARIO_4C 0x4C
-#define F_SCENARIO_4D 0x4D
-#define F_SCENARIO_4E 0x4E
-#define F_SCENARIO_4F 0x4F
-#define F_SCENARIO_50 0x50
-#define F_SCENARIO_51 0x51
-#define F_SCENARIO_52 0x52
+#define F_SCENARIO_CRANK_TURNS_BIT0 0x4A                    // Bit 0 of the crank passage's (30F) wall rotation count; 30F's reuse of F_SCENARIO_SERUM2_OBJ_ACK.
+#define F_SCENARIO_CRANK_TURNS_BIT1 0x4B                    // Bit 1 of the crank passage's (30F) wall rotation count; bit 0 is 0x4A.
+#define F_SCENARIO_30F_BOULDER_ROLLED 0x4C                  // The crank passage's (30F) boulder has rolled down the corridor.
+#define F_SCENARIO_204_MAP_SHOWN 0x4D                       // Likely: after Richard was found, entering 204 opened the map-item display once.
+#define F_SCENARIO_C_REBECCA_MAP_SHOWN 0x4E                 // Chris: Likely: the map screen opened once as Rebecca's serum run began (20D).
+#define F_SCENARIO_HIDDEN_LIBRARY_ENTERED 0x4F              // The hidden library (218) was entered; 216's bookshelf stays pushed aside.
+#define F_SCENARIO_DOUBLE_LOCK_OPENED 0x50                  // All three pass codes were entered and 508's double lock opened (plays its sound once).
+#define F_SCENARIO_PLANT_HOLE_BLOCKED 0x51                  // Likely: the pushable block stands over the plant tentacle's hole in the entrance passage (400); rewritten every frame there.
+#define F_SCENARIO_WATER_GATE_OPENED_ONCE 0x52              // The water gate was opened once; its "water is running down the opposite side" message has played (301).
 #define F_SCENARIO_MONSTER_PLANT_HITS 0x5B                  // The monster plant took three or more hits (engine).
-#define F_SCENARIO_5C 0x5C
-#define F_SCENARIO_5D 0x5D
-#define F_SCENARIO_5E 0x5E
-#define F_SCENARIO_60 0x60
-#define F_SCENARIO_61 0x61
-#define F_SCENARIO_62 0x62
-#define F_SCENARIO_63 0x63
-#define F_SCENARIO_64 0x64
-#define F_SCENARIO_65 0x65
-#define F_SCENARIO_66 0x66
-#define F_SCENARIO_67 0x67
-#define F_SCENARIO_68 0x68
-#define F_SCENARIO_69 0x69
-#define F_SCENARIO_6A 0x6A
-#define F_SCENARIO_6B 0x6B
-#define F_SCENARIO_6C 0x6C
+#define F_SCENARIO_PLANT_NO_DAMAGE_SHOWN 0x5C               // The greenhouse plant's "It does not seem to cause any damage" message was shown (10C).
+#define F_SCENARIO_F_PASSAGE_HUNTER_AMBUSH 0x5D             // The hunter's ambush in the F passage (103) has played; it then spawns awake.
+#define F_SCENARIO_TRAP_PASSAGE_HUNTER_AMBUSH 0x5E          // The hunter's ambush in the trap passage (109) has played; it then spawns awake.
+#define F_SCENARIO_HELIPORT_SEEN 0x60                       // The heliport was seen from the 218 window.
+#define F_SCENARIO_ROCK_PASSAGE_AMBUSH 0x61                 // The hunters' ambush in the rock passage (30B) has started.
+#define F_SCENARIO_BOULDER_BGM 0x62                         // The boulder chase just ended: 30B keeps the after-chase music until 30C clears it.
+#define F_SCENARIO_505_50C_LAMP_UNLOCKED 0x63               // The lamp at 505's power room door shows it unlocked (set once F_LOCK_505_50C is set).
+#define F_SCENARIO_LAB_ELEVATOR_LIGHT_SET 0x64              // Guess: 50c swapped the elevator switch's light effect and camera nodes once after the elevator was powered.
+#define F_SCENARIO_CELL_DOOR_TALK 0x65                      // The player talked to the captive partner through 50B's cell door.
+#define F_SCENARIO_504_PILLAR_MOVED 0x66                    // The switch behind 504's wall panel was pushed; the pillar moved, freeing the power room key.
+#define F_SCENARIO_J_BARRY_TERRACE_MISSED 0x67              // Jill: Jill reached the terrace when Barry's scene was not due; it can no longer play (212).
+#define F_SCENARIO_LIBRARY_STATUE_PLACED 0x68               // The statue was pushed onto its spot in 217; the bookshelf slid aside to show the MO disk.
+#define F_SCENARIO_SUN_CREST_PLACED 0x69                    // The sun crest is in the roofed passage's panel (11A).
+#define F_SCENARIO_STAR_CREST_PLACED 0x6A                   // The star crest is in the roofed passage's panel (11A).
+#define F_SCENARIO_MOON_CREST_PLACED 0x6B                   // The moon crest is in the roofed passage's panel (11A).
+#define F_SCENARIO_WIND_CREST_PLACED 0x6C                   // The wind crest is in the roofed passage's panel (11A).
 #define F_SCENARIO_DC_BEST_ENDING 0x7A                      // Director's Cut: ADVANCED cleared with the best ending; the Colt Python is unlimited (engine).
 #define F_SCENARIO_SECOND_PLAYTHROUGH 0x7B                  // A run has been cleared; enemies, damage and endings use their second-playthrough variants.
 #define F_SCENARIO_HAS_LOCKPICK 0x7C                        // Jill took Barry's lockpick (106); desks take it instead of the small key.
@@ -119,87 +120,102 @@
 #define F_COMMON_C_RESEARCHER_WILL_TAKEN 0x07               // Chris: the Researcher's Will was taken (20A).
 #define F_COMMON_J_RESEARCHER_WILL_TAKEN 0x08               // Jill: the Researcher's Will was taken (20A).
 #define F_COMMON_C_HALL_RIBBON_TAKEN 0x08                   // Chris: the hall ink ribbon was taken; the spot is a typewriter (106).
-#define F_COMMON_09 0x09
+#define F_COMMON_J_TANK_NEPTUNES_SHOWN 0x09                 // Jill: the Neptunes have shown up in the 40E tank (on reaching its south end, or by the film at the west doors).
 #define F_COMMON_J_BARRY_FOREST_SCENE 0x0A                  // Likely: the terrace scene with Barry and Forest's body (212); blocks the hall acid rounds scene.
 #define F_COMMON_J_HALL_RIBBON_GONE 0x0B                    // No ink ribbon in the hall: taken (106), or set at a first Jill new game.
-#define F_COMMON_20 0x20
-#define F_COMMON_21 0x21
-#define F_COMMON_RADIO_TAB_GATE 0x22                        // Story gate for the radio tab (engine).
-#define F_COMMON_JILL_SERUM_OBJ1 0x23                       // Jill: serum 1 needed (map highlight); 303 and 307 reuse the bit.
-#define F_COMMON_JILL_SERUM_OBJ2 0x24                       // Jill: serum 2 needed; 303 reuses the bit.
-#define F_COMMON_25 0x25
-#define F_COMMON_26 0x26
-#define F_COMMON_27 0x27
-#define F_COMMON_28 0x28
-#define F_COMMON_29 0x29
-#define F_COMMON_2A 0x2A
-#define F_COMMON_2B 0x2B
-#define F_COMMON_2C 0x2C
-#define F_COMMON_CHRIS_SERUM_OBJ1 0x2D                      // Chris: serum 1 needed (map highlight).
-#define F_COMMON_CHRIS_SERUM_OBJ2 0x2E                      // Chris: serum 2 needed (map highlight).
-#define F_COMMON_2F 0x2F
-#define F_COMMON_30 0x30
-#define F_COMMON_31 0x31
-#define F_COMMON_32 0x32
-#define F_COMMON_33 0x33
-#define F_COMMON_34 0x34
-#define F_COMMON_35 0x35
-#define F_COMMON_36 0x36
-#define F_COMMON_37 0x37
+#define F_COMMON_CEILING_TRAP_SPRUNG 0x20                   // The ceiling trap in 115 went off and the player got out: Chris ran, Jill was saved by Barry (109 then plays Barry's scenes); Chris clears it by putting a shotgun back on 116's rack. 303 also clears it, in dead code.
+#define F_COMMON_J_BARRY_SANDWICH_TALK_DONE 0x21            // Jill: Barry's "Jill sandwich" talk in 109 has played, or 115 skipped it after an earlier Barry scene; 212 needs it clear.
+#define F_COMMON_C_REBECCA_RADIO_CALL_DUE 0x21              // Chris: Rebecca's radio call is due: armed by the hunter film in 10A, played and cleared on the next room or 10A hunter kill.
+#define F_COMMON_J_CARRIED_TO_SAVE_ROOM 0x22                // Jill: Barry carried the poisoned Jill to the save room (20E); 100 plays her waking and clears it. The engine reads it for the radio tab.
+#define F_COMMON_C_REBECCA_IN_SAVE_ROOM 0x22                // Chris: Rebecca waits in the save room (100) instead of coming along; her radio calls (101, 109, 117, 119, 11A) need it. The engine reads it for the radio tab.
+#define F_COMMON_J_RICHARD_NEEDS_SERUM 0x23                 // Jill: Richard needs the serum (20D); cleared when it is taken in 100. Drives the 1F map highlight (engine).
+#define F_COMMON_C_REBECCA_101_ATTACK_OVER 0x23             // Chris: Likely: Rebecca's Hunter attack in 101 is over, or she was lost to it (307).
+#define F_COMMON_J_JILL_NEEDS_SERUM 0x24                    // Jill: Jill was poisoned alone (20E) and needs the serum from 100.
+#define F_COMMON_C_REBECCA_MET 0x24                         // Chris: Chris met Rebecca in the save room (100).
+#define F_COMMON_J_BARRY_RESCUED_FROM_PIT 0x25              // Barry came back to 20C's pit with a rope and gave Jill the pass number (opens 201's keypad door).
+#define F_COMMON_J_PIT_SCENE_STARTED 0x26                   // Jill: Jill looked into 20C's pit and Barry's rope scene began.
+#define F_COMMON_C_YAWN_1_DEAD 0x26                         // Chris: Set in 210 once Yawn is dead; nothing in Chris's game reads it.
+#define F_COMMON_J_BARRY_405_SCENE 0x27                     // Jill: Guess: Barry's guardhouse passage scene (405) has played; 40C then skips his Plant 42 talk.
+#define F_COMMON_C_YAWN_WAKE_UP_DUE 0x27                    // Chris: the Yawn knocked Chris out (20E); he wakes in 100 to Rebecca's treatment scene.
+#define F_COMMON_J_HUNTER_FILM_SEEN 0x28                    // Jill: the hunter film in the back passage (10A) has played.
+#define F_COMMON_C_REBECCA_HEAL_COUNT_0 0x28                // Chris: bit 0 of how often Rebecca treated Chris in 100 (bit 1 is F_COMMON_C_REBECCA_HEAL_COUNT_1); at three she says it was the last dose.
+#define F_COMMON_J_CEILING_TRAP_SPRUNG 0x29                 // Jill: Likely: the 115 ceiling trap was set off; cleared when a shotgun goes back on the 116 rack.
+#define F_COMMON_C_REBECCA_HEAL_COUNT_1 0x29                // Chris: bit 1 of how often Rebecca treated Chris in 100.
+#define F_COMMON_C_REBECCA_FIRST_HEAL_OFFER 0x2A            // Rebecca's first offer to treat Chris (100) has been armed; later visits get the shorter offer.
+#define F_COMMON_C_HUNTER_FILM_SEEN 0x2B                    // The hunter film in the back passage (10A) has played.
+#define F_COMMON_C_REBECCA_JUST_SPOKE 0x2C                  // Likely: Rebecca has just answered Chris (take-along question, or the second-mansion reunion); she repeats it until Chris reaches 103 or 201.
+#define F_COMMON_C_RICHARD_NEEDS_SERUM 0x2D                 // Chris: Richard needs the serum (20D); cleared when it is taken in 100. Drives the 1F map highlight (engine).
+#define F_COMMON_C_CHRIS_NEEDS_SERUM 0x2E                   // Chris: Chris was poisoned (20E) and needs the serum from 100 (map highlight, engine).
+#define F_COMMON_C_REBECCA_UNDER_ATTACK 0x2F                // The hunter is attacking Rebecca in 101; leaving for 100, 102, 103 or 201 before killing it gets her killed.
+#define F_COMMON_C_REBECCA_KILLED 0x30                      // The hunter killed Rebecca (Chris left 101 during the attack, or 307 found the call unanswered); 101 shows her body.
+#define F_COMMON_C_REBECCA_SAVED_TALK 0x31                  // The hunter attacking Rebecca in 101 is dead; her thank-you talk there is pending.
+#define F_COMMON_C_REBECCA_CALL_IN_TIME 0x32                // Chris reached 101 in time after Rebecca's radio call (W_04 180 or less); she is safe in 100.
+#define F_COMMON_C_REBECCA_CALL_TOO_LATE 0x33               // Chris reached 101 too late after Rebecca's radio call (or 307 found it unanswered): the hunter attack plays.
+#define F_COMMON_C_REBECCA_REUNION_DONE 0x34                // Rebecca's reunion talk in 100 (Chris came in time) has played.
+#define F_COMMON_C_REBECCA_BODY_EXAMINED 0x35               // Chris examined Rebecca's body in 101 after killing the hunter.
+#define F_COMMON_C_REBECCA_UPSTAIRS_CALL 0x36               // Likely: the radio call says Rebecca is upstairs (set in 10A after the Richard rooms 20D/20E); her 2F rescue (206, 307) follows.
+#define F_COMMON_C_PLANT42_ROOM_ENTERED 0x37                // Chris: 40C has been entered once; its first entry starts the Plant 42 scene.
 #define F_COMMON_PLANT42_OBJ 0x38                           // Plant 42 objective open: the guardhouse map highlight.
-#define F_COMMON_39 0x39
-#define F_COMMON_3A 0x3A
-#define F_COMMON_3B 0x3B
-#define F_COMMON_3C 0x3C
-#define F_COMMON_3D 0x3D
-#define F_COMMON_40 0x40
-#define F_COMMON_41 0x41
-#define F_COMMON_42 0x42
+#define F_COMMON_C_REBECCA_ASK_PENDING 0x39                 // Chris has met Rebecca (100); she waits by the door until he answers whether to take her along.
+#define F_COMMON_C_BACK_AT_GUARDHOUSE_GATE 0x3A             // Chris reached the guardhouse gate (304) in the stage variant; Rebecca no longer waits in the drug storehouse (409).
+#define F_COMMON_C_REBECCA_STOREROOM_TALK 0x3B              // Chris: Rebecca's first talk and heal offer in the drug storeroom has played (409); later visits get the short offer.
+#define F_COMMON_C_REBECCA_OFFERED_HELP 0x3C                // Rebecca already offered treatment on this visit to 100; cleared on entering 101.
+#define F_COMMON_C_PLANT42_INTRO_SEEN 0x3D                  // Chris: the Plant 42 scene with Rebecca played (40C); 408 and 409 then place Rebecca.
+#define F_COMMON_L_PASSAGE_WINDOW_1_BROKEN 0x40             // The first Cerberus has jumped in through the L passage's north window (108).
+#define F_COMMON_L_PASSAGE_WINDOW_2_BROKEN 0x41             // The second Cerberus has jumped in through the L passage's east window (108).
+#define F_COMMON_FOREST_FOUND 0x42                          // Forest's body on the terrace was found: Chris's crow attack or Jill's scene with Barry (212); 211 then calls the blood Forest's.
 #define F_COMMON_YAWN_POISONED 0x43                         // Poisoned by the Yawn; cleared by the serum (engine).
-#define F_COMMON_44 0x44
-#define F_COMMON_45 0x45
-#define F_COMMON_46 0x46
-#define F_COMMON_47 0x47
-#define F_COMMON_BGM_207_A 0x48                             // Music condition for room 207 (engine).
-#define F_COMMON_49 0x49
-#define F_COMMON_4A 0x4A
-#define F_COMMON_SECOND_SURVIVOR 0x4B                       // Ending: a second survivor (engine).
-#define F_COMMON_4C 0x4C
-#define F_COMMON_4D 0x4D
-#define F_COMMON_4E 0x4E
+#define F_COMMON_STUFFED_ROOM_LIGHTS_OFF 0x44               // The stuffed room's light switch is off: the cameras go dark and the red jewel glints in the deer head (215).
+#define F_COMMON_HELIPORT_PASSAGE_TALK 0x45                 // The player's voice line on first entering 501's passage has played.
+#define F_COMMON_ELEVATOR_BATTERY_SET 0x46                  // The battery is in 501's elevator socket; only Jill's script sets it.
+#define F_COMMON_CAVE_BRIDGE_TURNED 0x47                    // The crank turned the bridge over the hole in the ladder passage (307); cranking again reopens the hole.
+#define F_COMMON_ENRICO_SHOT 0x48                           // Enrico was shot (30A); the engine also reads it for 207's music.
+#define F_COMMON_ENRICO_SEARCHED 0x49                       // Enrico's body was searched and his handgun rounds taken (30A); removes the examine spot.
+#define F_COMMON_500_501_LAMP_UNLOCKED 0x4A                 // The lamp at 500's door to 501 shows it unlocked (set once F_LOCK_500_501 is set).
+#define F_COMMON_CELL_RESCUED 0x4B                          // Jill (Chris's game) or Chris (Jill's game) was freed from the cell (512); the ending takes them along (engine).
+#define F_COMMON_TYRANT_PARTNER_SCENE_DONE 0x4C             // The partner's scene in 514 after the first Tyrant fight played (Chris: Rebecca gets up; Jill: Barry and the self-destruct).
+#define F_COMMON_J_BARRY_SPLIT_AFTER_TYRANT 0x4D            // Jill: after the Tyrant, Barry rode up with Jill and left her at the elevator (50c); 515 stops spawning him.
+#define F_COMMON_J_CAME_FROM_500 0x4E                       // Jill: Jill last came this way from 500 (set there late in the game, cleared in 503); 502's Chris then waits instead of walking in.
 #define F_COMMON_J_BARRY_TERRACE_READY 0x4F                 // Guess: arms Barry's terrace event (212); set in 105 after the lockpick scene, and in 107 and 204.
-#define F_COMMON_50 0x50
-#define F_COMMON_51 0x51
-#define F_COMMON_52 0x52
-#define F_COMMON_53 0x53
-#define F_COMMON_54 0x54
-#define F_COMMON_BGM_207_B 0x55                             // Music condition for room 207 (engine).
-#define F_COMMON_56 0x56
-#define F_COMMON_57 0x57
-#define F_COMMON_58 0x58
-#define F_COMMON_59 0x59
-#define F_COMMON_5A 0x5A
-#define F_COMMON_5B 0x5B
-#define F_COMMON_BGM_207_C 0x5C                             // Music condition for room 207 (engine).
-#define F_COMMON_5D 0x5D
+#define F_COMMON_J_BACK_IN_308_AFTER_ENRICO 0x50            // Likely: Jill came back to 308 after Enrico's death; Barry no longer waits investigating in 30A.
+#define F_COMMON_J_BEEN_TO_501 0x51                         // Jill: Jill has been to 501 (set there, cleared in 502); 500's Barry then waits instead of calling out.
+#define F_COMMON_J_WAITED_FOR_BARRY 0x52                    // Jill chose to stay behind while Barry went on alone (308); he turns up again in 502.
+#define F_COMMON_J_BARRY_FOLLOWS_FROM_30A 0x53              // Jill left 30A with Barry following: he enters 309 by the 30A door.
+#define F_COMMON_J_BARRY_PHOTO_SCENE 0x54                   // Jill: Barry's scene with his family photo at the 502 ladder has played; nothing tests it.
+#define F_COMMON_J_BARRY_DIED 0x55                          // Jill: Barry died in the caves (307); the engine also reads it for 207's music.
+#define F_COMMON_J_POISON_COLLAPSE_DONE 0x56                // Jill: Jill's Yawn-poison collapse in front of the attic has played (20E).
+#define F_COMMON_J_BARRY_FOLLOWS_NORTH_DOOR 0x57            // Jill took the north door between 308 and 309 with Barry following: he enters by that door.
+#define F_COMMON_J_BARRY_FOLLOWING 0x58                     // Barry follows Jill through the caves (308, 309, 30A).
+#define F_COMMON_J_BARRY_309_HUNTER_SCENE 0x59              // Jill: Guess: one of the 308 choices with Barry arms a scene at the 309 door with Barry and a hunter; 309 clears it.
+#define F_COMMON_C_REBECCA_RAN_FOR_SERUM 0x59               // Chris: Rebecca went for the serum when the Yawn poisoned Chris (20E); 10A and 40C check it.
+#define F_COMMON_J_RAN_AFTER_GUNSHOT 0x5A                   // Jill: Jill went after Barry's gunshot (308); Barry saves her from a hunter on entering 309.
+#define F_COMMON_C_REBECCA_50C_SCENE 0x5A                   // Chris: Likely: Rebecca's scene in front of the lab elevator (50C) has played; she waits in 511 instead of 515.
+#define F_COMMON_J_WENT_ON_WITH_BARRY 0x5B                  // Jill: Jill went on with Barry in the caves (308: went with him, or ran after his gunshot); he turns up in the lab.
+#define F_COMMON_C_JILL_502_SCENE 0x5B                      // Chris: Likely: Jill's first scene in the ladder room (502) has played.
+#define F_COMMON_J_BARRY_WENT_AHEAD 0x5C                    // Jill: Barry went on alone at the fork (308); the engine also reads it for 207's music.
+#define F_COMMON_C_SELF_DESTRUCT_ALARM_SEEN 0x5C            // Chris: the self-destruct alarm scene in 505 has played.
+#define F_COMMON_J_BARRY_MET_IN_CAVES 0x5D                  // Jill: Barry's meeting scene in the branch passage has played (308).
+#define F_COMMON_C_REBECCA_SERUM_QUICK 0x5D                 // Chris: Likely: Rebecca brought Chris the serum quickly (timer W_04 under 200) (20E).
 #define F_COMMON_J_BARRY_LEFT_TERRACE 0x5E                  // Jill: Likely: Barry has left the terrace (212 spawns him while clear).
-#define F_COMMON_5E 0x5E                                    // Chris: Not yet traced (Richard/serum rooms 20D/20E).
+#define F_COMMON_C_POISON_SCENE_DONE 0x5E                   // Chris: Chris's Yawn-poison scene in front of the attic is over: cured by Rebecca, carried to the save room, or carrying on alone (20E).
 #define F_COMMON_J_BARRY_MET_ON_TERRACE 0x5F                // Jill: Likely: met Barry on the terrace (212).
-#define F_COMMON_5F 0x5F                                    // Chris: Not yet traced (Richard/serum rooms 20D/20E).
-#define F_COMMON_60 0x60
-#define F_COMMON_61 0x61
-#define F_COMMON_62 0x62
-#define F_COMMON_63 0x63
-#define F_COMMON_64 0x64
-#define F_COMMON_65 0x65
-#define F_COMMON_66 0x66
-#define F_COMMON_67 0x67
-#define F_COMMON_68 0x68
-#define F_COMMON_69 0x69
-#define F_COMMON_6A 0x6A
-#define F_COMMON_6B 0x6B
-#define F_COMMON_6C 0x6C
-#define F_COMMON_6D 0x6D
+#define F_COMMON_C_REBECCA_SERUM_RUN 0x5F                   // Chris: Rebecca is out fetching the serum for the poisoned Chris; play switches to her (20E, 20D).
+#define F_COMMON_CLOSET_ZOMBIE_RELEASED 0x60                // Taking the Keeper's Diary in 10E opened the closet and let its zombie out.
+#define F_COMMON_RICHARD_SCENE_OVER 0x61                    // Richard's poison scene is resolved: he got the serum or died (20D); Chris's game also sets it to skip the scene.
+#define F_COMMON_RICHARD_FOUND 0x62                         // Richard was found poisoned in the pillar passage; the serum objective starts (20D).
+#define F_COMMON_RICHARD_SERUM_IN_TIME 0x63                 // The serum reached Richard in time (timer W_04 at most 420) (20D).
+#define F_COMMON_RICHARD_DIED 0x64                          // Richard died: the serum took too long (20D).
+#define F_COMMON_RICHARD_THEME_ON 0x65                      // Richard's music has started; 20D comes back with it playing.
+#define F_COMMON_RICHARD_SCENE_LEFT 0x66                    // Likely: the player left 20D after Richard's scene; the partner stops waiting by Richard.
+#define F_COMMON_J_GAS_HOLE_1_COVERED 0x67                  // Jill: 507's first gas hole is covered (mirrored each frame).
+#define F_COMMON_C_REBECCA_HUNTER_IN_TIME 0x67              // Chris: Likely: in time for Rebecca: the hunter attacks her in 206.
+#define F_COMMON_J_GAS_HOLE_2_COVERED 0x68                  // Jill: 507's second gas hole is covered (mirrored each frame).
+#define F_COMMON_C_REBECCA_HUNTER_TOO_LATE 0x68             // Chris: Likely: too late for Rebecca: the hunter kills her in 206.
+#define F_COMMON_C_MORGUE_VENT_A_COVERED 0x69               // Chris: something covers 507's first poison gas vent (updated every frame there).
+#define F_COMMON_C_MORGUE_VENT_B_COVERED 0x6A               // Chris: something covers 507's second poison gas vent (updated every frame there).
+#define F_COMMON_C_LEFT_REBECCA_TO_HUNTER 0x6B              // Chris left 206 while the hunter attacked Rebecca; she dies (her scream plays in 204).
+#define F_COMMON_C_REBECCA_HUNTER_DONE 0x6C                 // Rebecca's hunter scene in 206 is over, or was skipped.
+#define F_COMMON_C_SAVED_REBECCA_FROM_HUNTER 0x6D           // Chris killed the hunter in 206 in time and Rebecca survived.
 #define F_COMMON_J_BARRY_DINING_ENTRY 0xA0                  // Jill: Barry's walk into the dining room has played (105).
 #define F_COMMON_C_MUSIC_SCORE_GIVEN 0xA0                   // Chris: the music score was given to Rebecca at the piano (10F); her playing is heard in 104.
 #define F_COMMON_J_BARRY_LEFT_DINING 0xA1                   // Jill: Likely: Barry's dining room scenes are over; he no longer appears there (105).
@@ -209,33 +225,34 @@
 #define F_COMMON_J_BARRY_DOOR_TALK 0xA3                     // Jill: Likely: Barry's talk at the dining room's hall door (105).
 #define F_COMMON_C_BAR_GOLD_EMBLEM_TAKEN 0xA3               // Chris: the gold emblem was taken from the bar (10F).
 #define F_COMMON_C_BAR_WOOD_EMBLEM_SET 0xA4                 // The wooden emblem is in the bar's slot (10F).
-#define F_COMMON_A5 0xA5
-#define F_COMMON_A6 0xA6
+#define F_COMMON_J_PIANO_PLAYED 0xA5                        // Jill: Jill played the Moonlight Sonata and the bar's hidden wall opened (10F).
+#define F_COMMON_J_BAR_GOLD_EMBLEM_OUT 0xA6                 // Jill: the gold emblem is out of the bar's slot: taken and not put back (10F).
+#define F_COMMON_C_GREENHOUSE_PLANT_DEAD 0xA6               // Chris: the greenhouse plant was killed with herbicide (10C).
 #define F_COMMON_J_BAR_WOOD_EMBLEM_SET 0xA7                 // Jill: the wooden emblem is in the bar's slot (10F).
 #define F_COMMON_C_FIREPLACE_WOOD_EMBLEM 0xA7               // Chris: the wooden emblem is on the dining room fireplace (105); set at new game (106).
 #define F_COMMON_C_FIREPLACE_GOLD_EMBLEM 0xA8               // The gold emblem is on the dining room fireplace; the clock moves aside (105).
 #define F_COMMON_J_GREENHOUSE_PLANT_DEAD 0xA9               // Jill: the greenhouse plant was killed with herbicide (10C).
 #define F_COMMON_C_REBECCA_LEFT_BAR 0xA9                    // Chris: Likely: Rebecca has left the bar (10F, 100).
 #define F_COMMON_J_FIREPLACE_WOOD_EMBLEM 0xAA               // Jill: the wooden emblem is on the dining room fireplace (105); set at new game (106).
-#define F_COMMON_AA 0xAA                                    // Chris: Not yet traced (guardhouse 408 scene).
+#define F_COMMON_C_REBECCA_AFTER_PLANT42 0xAA               // Chris: Rebecca's talk in the honeycomb passage after Plant 42 died has played (408); she hands over Richard's radio if Chris has none.
 #define F_COMMON_J_FIREPLACE_GOLD_EMBLEM 0xAB               // Jill: the gold emblem is on the dining room fireplace; the clock moves aside (105).
-#define F_COMMON_AB 0xAB                                    // Chris: Not yet traced (guardhouse 405 scene).
+#define F_COMMON_C_WESKER_GUARDHOUSE_MET 0xAB               // Chris: Wesker's wasp rescue and talk in the centre passage has played (405).
 #define F_COMMON_J_ENTERED_TEA_ROOM 0xAC                    // Jill: Jill has entered 104 on the first mansion visit.
-#define F_COMMON_AC 0xAC                                    // Chris: Not yet traced (lab 508/50B scene).
+#define F_COMMON_C_JILL_WENT_AHEAD 0xAC                     // Chris: the rescued Jill went on ahead from 508; 508 and 50B no longer spawn her.
 #define F_COMMON_J_KENNETH_ZOMBIE_DEAD 0xAD                 // Jill: Barry shot Kenneth's zombie, in either of its 105 scenes.
-#define F_COMMON_AD 0xAD                                    // Chris: Not yet traced (guardhouse 408 scene).
-#define F_COMMON_AE 0xAE
-#define F_COMMON_AF 0xAF
-#define F_COMMON_B0 0xB0
-#define F_COMMON_B1 0xB1
-#define F_COMMON_B2 0xB2
-#define F_COMMON_B3 0xB3
+#define F_COMMON_C_PLANT42_MAP_SHOWN 0xAD                   // Chris: Likely: 408 raised the map-item display once while the Plant 42 objective was open.
+#define F_COMMON_J_OVERHEARD_BARRY_WESKER 0xAE              // Jill: Jill overheard Wesker and Barry through room 002's door (405); arms Barry's scene in 406.
+#define F_COMMON_J_WESKER_GUARDHOUSE_MET 0xAF               // Jill: Wesker's wasp rescue and talk in the centre passage has played (405).
+#define F_COMMON_J_BARRY_002_MISSED_400 0xB0                // Jill: Jill went to 400 after overhearing the voices; Barry's room 002 scene no longer plays (406).
+#define F_COMMON_J_BARRY_002_MISSED_408 0xB1                // Jill: Jill went to 408 after overhearing the voices; Barry's room 002 scene no longer plays (406).
+#define F_COMMON_J_BARRY_002_TALK 0xB2                      // Jill: Barry's "talking to myself" scene in room 002 has played (406); picks Wesker's later 405 talk, also read by 40C.
+#define F_COMMON_J_CHRIS_WENT_AHEAD 0xB3                    // Jill: the rescued Chris went on ahead from 508; 508 and 50B no longer spawn him.
 #define F_COMMON_J_ZOMBIE_SHOT_AT_DOOR 0xB4                 // Barry shot Kenneth's zombie at the 104 door before Jill went in (105); 104 then has Kenneth's other model and no ammo.
-#define F_COMMON_PARTNER_ALIVE 0xC0                         // Ending: the partner survived (engine).
+#define F_COMMON_PARTNER_LOST 0xC0                          // Barry (Jill) or Rebecca (Chris) is dead or gone; the ending leaves them off the helicopter (engine).
 
 #define F_LOCK_109_115 0x00
 #define F_LOCK_115_116 0x01
-#define F_LOCK_02 0x02
+#define F_LOCK_115_TRAP 0x02                                // Guess: a third lock of the 115 ceiling trap; no door reads it. Cleared when the trap starts, set otherwise.
 #define F_LOCK_109_114 0x04
 #define F_LOCK_106_111 0x05                                 // Armor key.
 #define F_LOCK_104_10F 0x06                                 // Sword key.
@@ -258,9 +275,9 @@
 #define F_LOCK_21B_21C 0x1B
 #define F_LOCK_500_501 0x1C
 #define F_LOCK_505_50C 0x1D
-#define F_LOCK_24 0x24
-#define F_LOCK_25 0x25
-#define F_LOCK_26 0x26
+#define F_LOCK_40E_410 0x24                                 // The 411 button unlocked the 40E door to the arms storehouse.
+#define F_LOCK_503_504 0x25                                 // Released by the lab computer (506, first door).
+#define F_LOCK_508_509 0x26                                 // Released by the lab computer (506, second door).
 #define F_LOCK_307_30B 0x27
 #define F_LOCK_307_308 0x28
 #define F_LOCK_405_406 0x29
@@ -480,7 +497,7 @@
 #define F_ITEM_106_AMMO_GRENADE_ACID_1 0x0E                 // Given by Barry; 203 gives the same rounds as model 0.
 #define F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0 0x0F // Shotgun shells for Chris, explosive rounds for Jill.
 #define F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1 0x10 // One flag for different items by variant: FILE_RESEARCHERS_WILL_1 model 1, FILE_RESEARCHERS_WILL_2 model 1.
-#define F_ITEM_11 0x11
+#define F_ITEM_20B_MAP_2F_ON_WALL 0x11                      // Likely: the 2F map still hangs over 20B's stove; taking it clears the bit.
 #define F_ITEM_108_AMMO_HANDGUN_1 0x13
 #define F_ITEM_10F_KEY_EMBLEM_WOOD_0 0x14
 #define F_ITEM_10F_KEY_EMBLEM_GOLD_1 0x15
@@ -534,14 +551,14 @@
 #define F_ITEM_303_KEY_FLARE_1 0x49
 #define F_ITEM_217_KEY_MO_DISK_0 0x4D
 #define F_ITEM_40A_FILE_V_JOLT_REPORT_0 0x4E
-#define F_ITEM_300_UNKNOWN_50_0 0x4F
+#define F_ITEM_300_MAP_GARDEN_0 0x4F
 #define F_ITEM_50A_FILE_RESEARCHERS_LETTER_0 0x51
 #define F_ITEM_509_FILE_PASS_CODE_01_0 0x52
 #define F_ITEM_509_FILE_FAX_1 0x53
 #define F_ITEM_216_FILE_SCRAPBOOK_0 0x54
 #define F_ITEM_20C_KEY_RADIO_0 0x55
 #define F_ITEM_20C_FILE_PASS_NUMBER_0 0x56
-#define F_ITEM_57 0x57
+#define F_ITEM_20D_KEY_RADIO_0 0x57                         // Likely: Richard's radio; Chris's serum scene clears it as Richard hands it over (20D).
 #define F_ITEM_40C_KEY_MANSION_HELMET_0 0x58
 #define F_ITEM_20F_INK_2 0x59
 #define F_ITEM_510_FILE_PASS_CODE_03_0 0x5A
@@ -566,7 +583,7 @@
 #define F_ITEM_410_KEY_GUARDHOUSE_003_4 0x72
 #define F_ITEM_215_FILE_ORDERS_1 0x74
 #define F_ITEM_307_FILE_BARRYS_PICTURE_0 0x75               // Also in 502.
-#define F_ITEM_30F_UNKNOWN_51_0 0x76
+#define F_ITEM_30F_MAP_UNDERGROUND_0 0x76
 #define F_ITEM_306_KEY_BOOK_DOOM_2_0 0x77
 #define F_ITEM_40A_INK_2 0x78
 #define F_ITEM_216_AMMO_MAGNUM_1 0x79
@@ -581,12 +598,12 @@
 #define F_ITEM_410_AMMO_SHOTGUN_1 0x83
 #define F_ITEM_10C_HEAL_HERB_GREEN_3 0x84
 #define F_ITEM_406_FILE_PLANT_42_REPORT_1 0x86
-#define F_ITEM_406_UNKNOWN_52_2 0x87
+#define F_ITEM_406_MAP_DORMITORY_2 0x87
 #define F_ITEM_504_FILE_SECURITY_SYSTEM_1 0x88
 #define F_ITEM_504_KEY_LAB_POWER_ROOM_0 0x89
 #define F_ITEM_112_HEAL_HERB_GREEN_0 0x8E
 #define F_ITEM_112_HEAL_HERB_GREEN_1 0x8F
-#define F_ITEM_107_UNKNOWN_4E_0 0x91
+#define F_ITEM_107_MAP_1F_0 0x91
 #define F_ITEM_10E_AMMO_HANDGUN_0 0x92
 #define F_ITEM_507_AMMO_MAGNUM_1 0x94
 #define F_ITEM_211_KEY_DESK_0 0x95

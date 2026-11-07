@@ -8,65 +8,65 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_ITEM 0x04
-#define AOT_05_EVENT 0x05
-#define AOT_06_MESSAGE 0x06
-#define AOT_07_EVENT 0x07
-#define AOT_08_ITEM 0x08
-#define AOT_09_MESSAGE 0x09
+#define AOT_00_DOOR_408 0x00
+#define AOT_01_DOOR_40B 0x01
+#define AOT_02_DOOR_40C 0x02                                // Behind the bookcase; turned on from the gap.
+#define AOT_03_ITEM_FILE_V_JOLT_REPORT_0 0x03               // The white book on the shelf.
+#define AOT_04_ITEM_KEY_BOOK_BLANK_1 0x04
+#define AOT_05_EVENT_BOOKSHELF 0x05                         // The red books; a use spot for the blank book once the report is taken.
+#define AOT_06_MESSAGE_BOOKSHELF 0x06
+#define AOT_07_EVENT_BOOKCASE_GAP 0x07
+#define AOT_08_ITEM_INK_2 0x08
+#define AOT_09_HIKIDASHI_DRAWER 0x09                        // A drawer (the ink ribbon); for Rebecca, "There is no time to check it."
 #define CAM_02 0x02
-#define CAM_03 0x03
-#define CAM_04 0x04
-#define CAM_05 0x05
-#define F_ROOM_01 0x01
-#define F_ROOM_18 0x18
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
+#define CAM_03_BOOKSHELF 0x03
+#define CAM_04_BOOKSHELF_CLOSEUP 0x04
+#define CAM_05_BOOKCASE 0x05
+#define F_ROOM_BOOKCASE_SLID 0x18                           // The bookcase slide finished; nothing reads it.
+#define F_ROOM_UNUSED_01 0x01                               // Never set; would make the slide close the bookcase.
+#define IMDL_00_FILE_V_JOLT_REPORT 0x00
+#define IMDL_01_KEY_BOOK_BLANK 0x01
+#define IMDL_02_INK 0x02
 #define MSG_A_ROW_OF_RED_BOOKS 0x03
 #define MSG_NOW_A_BOOK_IS_MISSING 0x04
-#define OBJ_00 0x00
-#define OBJ_01 0x01
+#define OBJ_00_BOOKCASE 0x00
+#define OBJ_01_SHELVED_BLANK_BOOK 0x01
 #define SE_17_SLIDE_BK 0x17
 
 proc init
 {
     set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-    door_aot_set(AOT_00_DOOR, 800, 2100, 1500, 1600, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 17800, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 2300, 3700, 2000, 1600, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_40B_ROOM_003_BATHROOM, 3400, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 3, DOOR_SND_00_DR_WD, DOOR_20_DOOR06K, 5, 0, ROOM_40C_PLANT_BOSS_ROOM, 2800, 0, 13600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_69_FILE_V_JOLT_REPORT, 1, IMDL_00, SCA_NONE, 11944, -2030, 10604, 2048, F_ITEM_40A_FILE_V_JOLT_REPORT_0, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_3E_KEY_BOOK_BLANK, 1, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_40A_KEY_BOOK_BLANK_1, SAT_MANUAL | SAT_PLAYER, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_25, TRUE))
+    door_aot_set(AOT_00_DOOR_408, 800, 2100, 1500, 1600, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 17800, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_40B, 2300, 3700, 2000, 1600, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_40B_ROOM_003_BATHROOM, 3400, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_40C, 0, 0, 1, 1, 3, DOOR_SND_00_DR_WD, DOOR_20_DOOR06K, 5, 0, ROOM_40C_PLANT_BOSS_ROOM, 2800, 0, 13600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_03_ITEM_FILE_V_JOLT_REPORT_0, 0, 0, 1, 1, IT_69_FILE_V_JOLT_REPORT, 1, IMDL_00_FILE_V_JOLT_REPORT, SCA_NONE, 11944, -2030, 10604, 2048, F_ITEM_40A_FILE_V_JOLT_REPORT_0, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM_KEY_BOOK_BLANK_1, 0, 0, 1, 1, IT_3E_KEY_BOOK_BLANK, 1, IMDL_01_KEY_BOOK_BLANK, SCA_NONE, 0, 0, 0, 0, F_ITEM_40A_KEY_BOOK_BLANK_1, SAT_MANUAL | SAT_PLAYER, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, TRUE))
     {
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_10 | OF_ACTIVE, SCA_NONE, 14600, 0, 3090, 2048, 0, -540, 0, 540, 540, 3240, 700, 1500);
+        obj(OBJ_00_BOOKCASE, OF_NOT_PUSHABLE | OF_10 | OF_ACTIVE, SCA_NONE, 14600, 0, 3090, 2048, 0, -540, 0, 540, 540, 3240, 700, 1500);
     }
     else
     {
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_10 | OF_ACTIVE, SCA_NONE, 14600, 0, 5250, 2048, 0, -540, 0, 540, 540, 3240, 700, 1500);
+        obj(OBJ_00_BOOKCASE, OF_NOT_PUSHABLE | OF_10 | OF_ACTIVE, SCA_NONE, 14600, 0, 5250, 2048, 0, -540, 0, 540, 540, 3240, 700, 1500);
     }
-    obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_EVENT, 11300, 9600, 1100, 1700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 11300, 9600, 1100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
-    aot_set(AOT_07_EVENT, 14500, 4200, 1200, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
-    item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 11170, -480, 2310, 3840, F_ITEM_40A_INK_2, 0, 0);
-    eml_rot(IMDL_00, 0, 1024);
+    obj(OBJ_01_SHELVED_BLANK_BOOK, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_EVENT_BOOKSHELF, 11300, 9600, 1100, 1700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_red_books, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE_BOOKSHELF, 11300, 9600, 1100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
+    aot_set(AOT_07_EVENT_BOOKCASE_GAP, 14500, 4200, 1200, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, enter_bookcase_gap, 0, 0, 0);
+    item_aot_set(AOT_08_ITEM_INK_2, 0, 0, 1, 1, IT_2F_KEY_INK_RIBBON, 3, IMDL_02_INK, SCA_NONE, 11170, -480, 2310, 3840, F_ITEM_40A_INK_2, 0, 0);
+    eml_rot(IMDL_00_FILE_V_JOLT_REPORT, 0, 1024);
     setbyte(2, 0, 0);
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
     {
-        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_09_HIKIDASHI_DRAWER, 10500, 1600, 1100, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
     else
     {
-        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 35, 0, 8, 0, 6, 0);
+        aot_set(AOT_09_HIKIDASHI_DRAWER, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 35, 0, 8, 0, 6, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_24, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_BLANK_BOOK_SHELVED, TRUE))
     {
-        evt_exec(0, TASK_09, on_enter);
+        evt_exec(0, TASK_09, show_shelved_blank_book);
     }
 }
 
@@ -74,74 +74,74 @@ proc main
 {
     if (testitem(IT_3E_KEY_BOOK_BLANK))
     {
-        set(FG_SCENARIO, F_SCENARIO_24, TRUE);
-        evt_exec(0, TASK_09, on_enter);
+        set(FG_SCENARIO, F_SCENARIO_BLANK_BOOK_SHELVED, TRUE);
+        evt_exec(0, TASK_09, show_shelved_blank_book);
     }
     if (ck(FG_ITEM, F_ITEM_40A_FILE_V_JOLT_REPORT_0, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_24, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_BLANK_BOOK_SHELVED, TRUE))
         {
-            aot_delete(AOT_05_EVENT, SCE_NONE, SAT_PLAYER);
-            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
-            if (ck(FG_SCENARIO, F_SCENARIO_26, FALSE))
+            aot_delete(AOT_05_EVENT_BOOKSHELF, SCE_NONE, SAT_PLAYER);
+            aot_reset(AOT_06_MESSAGE_BOOKSHELF, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
+            if (ck(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLIDE_PLAYED, FALSE))
             {
-                if (ck(FG_ROOM, F_ROOM_01, TRUE))
+                if (ck(FG_ROOM, F_ROOM_UNUSED_01, TRUE))
                 {
-                    evt_exec(0, TASK_09, from_main_2);
+                    evt_exec(0, TASK_09, slide_bookcase_shut);
                 }
                 else
                 {
-                    evt_exec(0, TASK_09, from_main);
+                    evt_exec(0, TASK_09, bookcase_slide_scene);
                 }
-                set(FG_SCENARIO, F_SCENARIO_26, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLIDE_PLAYED, TRUE);
             }
-            if (ck(FG_SCENARIO, F_SCENARIO_25, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, TRUE))
             {
-                aot_delete(AOT_07_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_07_EVENT_BOOKCASE_GAP, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_07_EVENT_BOOKCASE_GAP, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
             }
         }
         else
         {
-            aot_reset(AOT_05_EVENT, SCE_USEITEM, SAT_PLAYER, 9, 35, 1);
-            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-            aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            aot_reset(AOT_05_EVENT_BOOKSHELF, SCE_USEITEM, SAT_PLAYER, 9, 35, 1);
+            aot_reset(AOT_06_MESSAGE_BOOKSHELF, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+            aot_delete(AOT_07_EVENT_BOOKCASE_GAP, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
     {
-        aot_reset(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05, 0);
-        aot_delete(AOT_06_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        aot_reset(AOT_05_EVENT_BOOKSHELF, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, examine_red_books, 0);
+        aot_delete(AOT_06_MESSAGE_BOOKSHELF, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_EVENT_BOOKCASE_GAP, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03_BOOKSHELF))
         {
-            evt_exec(0, TASK_09, from_main_4);
+            evt_exec(0, TASK_09, place_report_for_cam_03);
         }
-        else if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
+        else if (cmpb(B_CAMERA, CMP_EQ, CAM_04_BOOKSHELF_CLOSEUP))
         {
-            evt_exec(0, TASK_09, from_main_5);
+            evt_exec(0, TASK_09, place_report_for_cam_04);
         }
     }
     if (testpickup(IT_69_FILE_V_JOLT_REPORT))
     {
-        evt_exec(0, TASK_09, from_main_3);
+        evt_exec(0, TASK_09, book_missing_message);
     }
 }
 
-event on_aot_07
+event enter_bookcase_gap
 {
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_25, FALSE);
-        aot_on(AOT_02_DOOR, SCE_DOOR, 129);
+        set(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, FALSE);
+        aot_on(AOT_02_DOOR_40C, SCE_DOOR, 129);
     }
     evt_finish();
 }
 
-event from_main
+event bookcase_slide_scene
 {
     run
     {
@@ -154,20 +154,20 @@ event from_main
     sleep(10);
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_25, TRUE);
-        if (ck(FG_ROOM, F_ROOM_01, TRUE))
+        set(FG_SCENARIO, F_SCENARIO_BOOKCASE_SLID_ASIDE, TRUE);
+        if (ck(FG_ROOM, F_ROOM_UNUSED_01, TRUE))
         {
-            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, slide_bookcase_shut);
         }
         else
         {
-            evt_exec(0, TASK_09, from_main_sub1);
+            evt_exec(0, TASK_09, slide_bookcase_open);
         }
     }
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_05);
+        cutnext(CAM_05_BOOKCASE);
     }
     sleep(60);
     run
@@ -178,7 +178,7 @@ event from_main
     sleep(60);
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_BOOKSHELF);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
@@ -189,14 +189,14 @@ event from_main
     evt_finish();
 }
 
-event from_main_sub1
+event slide_bookcase_open
 {
     run
     {
-        set(FG_ROOM, F_ROOM_18, FALSE);
+        set(FG_ROOM, F_ROOM_BOOKCASE_SLID, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_17_SLIDE_BK, 0, SND_AT_POINT, 0, 14600, 5350);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOOKCASE);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, -27);
     for (80)
@@ -207,13 +207,13 @@ event from_main_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_18, TRUE);
+    set(FG_ROOM, F_ROOM_BOOKCASE_SLID, TRUE);
     evt_finish();
 }
 
-event on_enter
+event show_shelved_blank_book
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_SHELVED_BLANK_BOOK);
     evt_tween_begin_alt();
     tw_abs_pos(0, 11784, -1970, 10664);
     tw_abs_rot(0, -170, 2048, 3042);
@@ -222,14 +222,14 @@ event on_enter
     evt_finish();
 }
 
-event from_main_2
+event slide_bookcase_shut
 {
     run
     {
-        set(FG_ROOM, F_ROOM_18, FALSE);
+        set(FG_ROOM, F_ROOM_BOOKCASE_SLID, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_17_SLIDE_BK, 0, SND_AT_POINT, 0, 14600, 5350);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOOKCASE);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 27);
     for (80)
@@ -240,11 +240,11 @@ event from_main_2
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_18, TRUE);
+    set(FG_ROOM, F_ROOM_BOOKCASE_SLID, TRUE);
     evt_finish();
 }
 
-event on_aot_05
+event examine_red_books
 {
     run
     {
@@ -265,21 +265,21 @@ event on_aot_05
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
+            aot_on(AOT_03_ITEM_FILE_V_JOLT_REPORT_0, SCE_DOCUMENT, 0);
         }
     }
     evt_finish();
 }
 
-event from_main_3
+event book_missing_message
 {
     message(MSG_NOW_A_BOOK_IS_MISSING | MSG_FAST, RUN_8000 | RUN_4000 | RUN_2000 | RUN_1000 | RUN_0800 | RUN_0400 | RUN_DEMO | RUN_CONTROLS | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES); // "Now a book is missing."
     evt_finish();
 }
 
-event from_main_4
+event place_report_for_cam_03
 {
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_FILE_V_JOLT_REPORT);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, 2208, 1024);
     tw_abs_pos(0, 12024, -2030, 10604);
@@ -288,9 +288,9 @@ event from_main_4
     evt_finish();
 }
 
-event from_main_5
+event place_report_for_cam_04
 {
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_FILE_V_JOLT_REPORT);
     evt_tween_begin_alt();
     tw_abs_pos(0, 11784, -1970, 10664);
     tw_abs_rot(0, -170, 2048, 3042);

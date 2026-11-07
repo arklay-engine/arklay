@@ -8,37 +8,37 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_03_MESSAGE 0x03
-#define AOT_04_EVENT 0x04
-#define CAM_01 0x01
-#define CAM_02 0x02
-#define CAM_04 0x04
-#define CAM_05 0x05
-#define CAM_06 0x06
+#define AOT_00_DOOR_20E 0x00
+#define AOT_01_ITEM_KEY_CREST_MOON_0 0x01
+#define AOT_02_ITEM_AMMO_SHOTGUN_1 0x02
+#define AOT_03_MESSAGE_BOOKS 0x03
+#define AOT_04_EVENT_SNAKE_HOLE 0x04
+#define CAM_01_TOWARD_DOOR 0x01                             // Guess.
+#define CAM_02_FROM_DOOR 0x02                               // Likely: reaching it starts the Yawn's entrance.
+#define CAM_04_FAR_END 0x04
+#define CAM_05_HOLE_CLOSEUP 0x05
+#define CAM_06_DOWN_ATTIC 0x06                              // Likely.
 #define ENEMY_00_YAWN_1 0x00
-#define F_ROOM_0F 0x0F
-#define F_ROOM_1E 0x1E
-#define F_ROOM_1F 0x1F
-#define IMDL_00 0x00
-#define IMDL_01 0x01
+#define F_ROOM_BACK_TO_CAM_04 0x1F                          // Cut back to camera 4 next frame, after the hole closeup.
+#define F_ROOM_YAWN_BGM_ON 0x0F                             // The Yawn's music is playing: ramp it down once the Yawn is dead.
+#define F_ROOM_YAWN_INTRO_DONE 0x1E                         // The Yawn's entrance has played or is not needed this visit.
+#define IMDL_00_KEY_CREST_MOON 0x00
+#define IMDL_01_AMMO_SHOTGUN 0x01
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3200, 2200, 2400, 2100, 1, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 3712, 23040, 1792, 2000, IT_2C_KEY_CREST_MOON, 1, IMDL_00, SCA_NONE, 4670, 0, 24400, 0, F_ITEM_210_KEY_CREST_MOON_0, 0, ITEM_SPARKLE | 32);
-    eml_rot(IMDL_00, 3230, 0);
-    item_aot_set(AOT_02_ITEM, 3840, 13568, 1280, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 4370, -1540, 14120, -1200, F_ITEM_210_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
-    aot_set(AOT_03_MESSAGE, 2300, 4500, 2000, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR_20E, 3200, 2200, 2400, 2100, 1, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM_KEY_CREST_MOON_0, 3712, 23040, 1792, 2000, IT_2C_KEY_CREST_MOON, 1, IMDL_00_KEY_CREST_MOON, SCA_NONE, 4670, 0, 24400, 0, F_ITEM_210_KEY_CREST_MOON_0, 0, ITEM_SPARKLE | 32);
+    eml_rot(IMDL_00_KEY_CREST_MOON, 3230, 0);
+    item_aot_set(AOT_02_ITEM_AMMO_SHOTGUN_1, 3840, 13568, 1280, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 4370, -1540, 14120, -1200, F_ITEM_210_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_set(AOT_03_MESSAGE_BOOKS, 2300, 4500, 2000, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_210_KEY_CREST_MOON_0, TRUE))
     {
-        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
+        aot_set(AOT_04_EVENT_SNAKE_HOLE, 3712, 23040, 1792, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_snake_hole, 0, 0, 0);
     }
     else
     {
-        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_EVENT_SNAKE_HOLE, 3712, 23040, 1792, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
@@ -49,10 +49,10 @@ proc init
         else
         {
             enemy(EM_0D_YAWN_1, EB_02, F_ENEMY_210_YAWN_1_0, SPAWN_FORCE, 2, 0, 1024, 0, 11000, 0, 10000, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
-            set(FG_ROOM, F_ROOM_1E, TRUE);
+            set(FG_ROOM, F_ROOM_YAWN_INTRO_DONE, TRUE);
             if (ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE))
             {
-                evt_exec(0, TASK_09, on_enter);
+                evt_exec(0, TASK_09, yawn_bgm_start);
             }
         }
     }
@@ -75,46 +75,46 @@ proc main
         {
             if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
-                set(FG_COMMON, F_COMMON_26, TRUE);
+                set(FG_COMMON, F_COMMON_C_YAWN_1_DEAD, TRUE);
             }
-            if (ck(FG_ROOM, F_ROOM_0F, TRUE))
+            if (ck(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE))
             {
-                set(FG_ROOM, F_ROOM_0F, FALSE);
+                set(FG_ROOM, F_ROOM_YAWN_BGM_ON, FALSE);
                 bgm_volume_ramp(BGM_MAIN, -95, 30);
             }
         }
-        if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        if (ck(FG_ROOM, F_ROOM_YAWN_INTRO_DONE, FALSE) && ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02_FROM_DOOR))
         {
-            set(FG_ROOM, F_ROOM_1E, TRUE);
+            set(FG_ROOM, F_ROOM_YAWN_INTRO_DONE, TRUE);
             set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
-            evt_exec(0, TASK_09, from_main);
+            evt_exec(0, TASK_09, yawn_entrance);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_1F, TRUE))
+    if (ck(FG_ROOM, F_ROOM_BACK_TO_CAM_04, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1F, FALSE);
-        cutnext(CAM_04);
+        set(FG_ROOM, F_ROOM_BACK_TO_CAM_04, FALSE);
+        cutnext(CAM_04_FAR_END);
     }
 }
 
-event from_main
+event yawn_entrance
 {
     run
     {
         bgm_play(BGM_MAIN);
-        set(FG_ROOM, F_ROOM_0F, TRUE);
+        set(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        cutnext(CAM_04);
+        cutnext(CAM_04_FAR_END);
         dir_set(0, 0, 0, 0, 11130, 0, 2640);
     }
     sleep(20);
     eml_state(0, ENEMY_00_YAWN_1, EML_BEHAVIOUR, EB_00);
     sleep(33);
-    cutnext(CAM_06);
+    cutnext(CAM_06_DOWN_ATTIC);
     sleep(200);
     run
     {
-        cutnext(CAM_01);
+        cutnext(CAM_01_TOWARD_DOOR);
         dir_set(0, 0, 2910, 0, 11434, 0, 8043);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
@@ -122,21 +122,21 @@ event from_main
     evt_finish();
 }
 
-event on_aot_04
+event examine_snake_hole
 {
     run
     {
         set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
-        cutnext(CAM_05);
+        cutnext(CAM_05_HOLE_CLOSEUP);
     }
     sleep(30);
     run
     {
-        set(FG_ROOM, F_ROOM_1F, TRUE);
+        set(FG_ROOM, F_ROOM_BACK_TO_CAM_04, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_01_ITEM, SCE_ITEM, 0);
+        aot_on(AOT_01_ITEM_KEY_CREST_MOON_0, SCE_ITEM, 0);
     }
     sleep(1);
     run
@@ -144,7 +144,7 @@ event on_aot_04
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         if (ck(FG_ITEM, F_ITEM_210_KEY_CREST_MOON_0, FALSE))
         {
-            aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
+            aot_reset(AOT_04_EVENT_SNAKE_HOLE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         }
     }
     sleep(1);
@@ -157,10 +157,10 @@ event on_aot_04
     evt_finish();
 }
 
-event on_enter
+event yawn_bgm_start
 {
     sleep(1);
     bgm_play(BGM_MAIN);
-    set(FG_ROOM, F_ROOM_0F, TRUE);
+    set(FG_ROOM, F_ROOM_YAWN_BGM_ON, TRUE);
     evt_finish();
 }

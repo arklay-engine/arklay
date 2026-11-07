@@ -8,81 +8,81 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_NONE 0x04
-#define AOT_05_MESSAGE 0x05
-#define AOT_06_MESSAGE 0x06
+#define AOT_00_DOOR_103 0x00
+#define AOT_01_ITEM_AMMO_HANDGUN_0 0x01
+#define AOT_02_ITEM_AMMO_SHOTGUN_1 0x02
+#define AOT_03_ITEM_FILE_KEEPERS_DIARY_2 0x03               // First an event: taking the diary lets the closet zombie out.
+#define AOT_04_NONE_DUMMY 0x04                              // A 10 by 10 SCE_NONE spot; its role is not traced.
+#define AOT_05_MESSAGE_NOTHING_SPECIAL 0x05                 // "Nothing special."
+#define AOT_06_MESSAGE_NOTHING_USEFUL 0x06                  // "None of them looks useful."
 #define CAM_02 0x02
-#define CAM_03 0x03
+#define CAM_03_DESK 0x03                                    // Likely: the desk with the diary.
 #define COL_08 0x08
 #define COL_09 0x09
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
-#define F_ROOM_00 0x00
-#define F_ROOM_02 0x02
-#define F_ROOM_05 0x05
-#define F_ROOM_20 0x20
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
+#define F_ROOM_CLOSET_OPEN_COLLISION 0x00                   // Main has moved the collision for the open closet (once).
+#define F_ROOM_CLOSET_ZOMBIE_DEAD 0x05                      // The closet zombie died and the normal music came back (once).
+#define F_ROOM_MAP_ANIM_DONE 0x20                           // The player's animation in the unused map event finished (one frame).
+#define F_ROOM_PLAYER_ANIM_DONE 0x02                        // The player's animation finished (one frame).
+#define IMDL_00_AMMO_HANDGUN 0x00
+#define IMDL_01_AMMO_SHOTGUN 0x01
+#define IMDL_02_FILE_KEEPERS_DIARY 0x02
 #define MSG_IT_IS_A_MAP_OF_1ST_WILL_YOU_TAKE_IT_01 0x01
 #define MSG_YOU_GOT_THE_MAP_OF_1ST 0x04
-#define OBJ_00 0x00
-#define OBJ_01 0x01
+#define OBJ_00_CLOSET_DOOR_0 0x00                           // The closet door that swings open when the zombie comes out.
+#define OBJ_01_CLOSET_DOOR_1 0x01                           // The closet's other door.
 #define SE_17_CLST_OP 0x17
 #define SE_18_CLST_HIT 0x18
 #define SE_19_CLST_BAD 0x19
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 7700, 9800, 1300, 1800, 1, DOOR_SND_00_DR_WD, DOOR_1C_DOOR00K, 3, 0, ROOM_103_F_PASSAGE, 2700, 0, 10800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_103, 7700, 9800, 1300, 1800, 1, DOOR_SND_00_DR_WD, DOOR_1C_DOOR00K, 3, 0, ROOM_103_F_PASSAGE, 2700, 0, 10800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_10E_AMMO_HANDGUN_0, TRUE))
     {
-        item_aot_set(AOT_01_ITEM, 3550, 7140, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 4450, -600, 8040, 0, F_ITEM_10E_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_01_ITEM_AMMO_HANDGUN_0, 3550, 7140, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 4450, -600, 8040, 0, F_ITEM_10E_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_COMMON, F_COMMON_60, TRUE))
+    if (ck(FG_COMMON, F_COMMON_CLOSET_ZOMBIE_RELEASED, TRUE))
     {
         if (ck(FG_ITEM, F_ITEM_10E_AMMO_SHOTGUN_1, TRUE))
         {
             if (CHRIS)
             {
-                item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+                item_aot_set(AOT_02_ITEM_AMMO_SHOTGUN_1, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
             }
             else
             {
-                item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, 512, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+                item_aot_set(AOT_02_ITEM_AMMO_SHOTGUN_1, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 2300, 0, 2800, 512, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
             }
         }
         if (ck(FG_ITEM, F_ITEM_10E_FILE_KEEPERS_DIARY_2, TRUE))
         {
             if (CHRIS)
             {
-                item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02_FILE_KEEPERS_DIARY, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
             }
             else
             {
-                item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, -612, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02_FILE_KEEPERS_DIARY, SCA_NONE, 7440, -1265, 3000, -612, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
             }
         }
-        aot_set(AOT_04_NONE, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 3036, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 864, 0, 0, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_04_NONE_DUMMY, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00_CLOSET_DOOR_0, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 3036, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01_CLOSET_DOOR_1, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 864, 0, 0, 0, 0, 0, 0, 0, 0);
         if (ck(FG_ENEMY, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, FALSE))
         {
             enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_RESTORE, 2, 0, 512, 0, 2320, 0, 4000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
     }
-    if (ck(FG_COMMON, F_COMMON_60, FALSE))
+    if (ck(FG_COMMON, F_COMMON_CLOSET_ZOMBIE_RELEASED, FALSE))
     {
-        item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
-        aot_reset(AOT_02_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
-        item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
-        aot_reset(AOT_03_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_03_item, 0);
-        aot_set(AOT_04_NONE, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM_AMMO_SHOTGUN_1, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01_AMMO_SHOTGUN, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_10E_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
+        aot_reset(AOT_02_ITEM_AMMO_SHOTGUN_1, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        item_aot_set(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02_FILE_KEEPERS_DIARY, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_10E_FILE_KEEPERS_DIARY_2, SAT_MANUAL | SAT_PLAYER, 0);
+        aot_reset(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, diary_closet_zombie, 0);
+        aot_set(AOT_04_NONE_DUMMY, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00_CLOSET_DOOR_0, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01_CLOSET_DOOR_1, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         if (CHRIS)
         {
             enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_80, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_RESTORE, 2, 0, 512, 0, 25000, -10000, 25000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
@@ -92,26 +92,26 @@ proc init
             enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_80, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, SPAWN_RESTORE, 2, 0, 512, 0, 15000, -10000, 3950, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
     }
-    aot_set(AOT_05_MESSAGE, 4400, 12700, 2400, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 2020, 9700, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE_NOTHING_SPECIAL, 4400, 12700, 2400, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE_NOTHING_USEFUL, 2020, 9700, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
 }
 
 proc main
 {
-    if (ck(FG_COMMON, F_COMMON_60, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+    if (ck(FG_COMMON, F_COMMON_CLOSET_ZOMBIE_RELEASED, TRUE) && ck(FG_ROOM, F_ROOM_CLOSET_OPEN_COLLISION, FALSE))
     {
-        set(FG_ROOM, F_ROOM_00, TRUE);
+        set(FG_ROOM, F_ROOM_CLOSET_OPEN_COLLISION, TRUE);
         inst_cfg(COL_LIST_03, COL_08, CF_2 | CF_1, 1000, 5630, 5000, 7000);
         inst_cfg(COL_LIST_03, COL_09, CF_2 | CF_1, 1000, 100, 5000, 2400);
     }
-    if (ck(FG_ENEMY, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, TRUE) && ck(FG_ROOM, F_ROOM_05, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_10E_ZOMBIE_GROUNDSKEEPER_0, TRUE) && ck(FG_ROOM, F_ROOM_CLOSET_ZOMBIE_DEAD, FALSE))
     {
-        set(FG_ROOM, F_ROOM_05, TRUE);
-        evt_exec(0, TASK_04, from_main);
+        set(FG_ROOM, F_ROOM_CLOSET_ZOMBIE_DEAD, TRUE);
+        evt_exec(0, TASK_04, closet_zombie_dead_music);
     }
 }
 
-event on_aot_03_item
+event diary_closet_zombie
 {
     run
     {
@@ -120,14 +120,14 @@ event on_aot_03_item
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 7400, 2640, F_ROOM_02);
+    act_anim_seq(AB_06, 7400, 2640, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_02, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_idle();
     act_nop();
     act_motion_path(MOTION_13, 7900, -1300, 3300, 32, 32);
@@ -141,7 +141,7 @@ event on_aot_03_item
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_03);
+        cutnext(CAM_03_DESK);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -164,22 +164,22 @@ event on_aot_03_item
     evt_nop();
     run
     {
-        set(FG_COMMON, F_COMMON_60, TRUE);
+        set(FG_COMMON, F_COMMON_CLOSET_ZOMBIE_RELEASED, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         if (MANSION1)
         {
             eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_STATUS, EML_STATUS_SET | 1);
         }
         eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_BEHAVIOUR, EB_00);
-        aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 1, 1, 0);
-        aot_reset(AOT_03_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 7, on_aot_03_item_2, 0);
-        aot_reset(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        aot_reset(AOT_02_ITEM_AMMO_SHOTGUN_1, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 1, 1, 0);
+        aot_reset(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 7, diary_becomes_document, 0);
+        aot_reset(AOT_04_NONE_DUMMY, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         bgm_play(BGM_SUB_2);
     }
     evt_next();
     evt_nop();
-    evt_fork(TASK_01, on_aot_03_item_sub1, 0);
-    evt_fork(TASK_02, on_aot_03_item_sub2, 0);
+    evt_fork(TASK_01, diary_closet_zombie_door_1, 0);
+    evt_fork(TASK_02, diary_closet_zombie_door_0, 0);
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_17_CLST_OP, 0, SND_AT_POINT, 0, 2700, 4000);
@@ -197,7 +197,7 @@ event on_aot_03_item
         evt_nop();
     }
     sleep(5);
-    evt_fork(TASK_03, on_aot_03_item_sub3, 0);
+    evt_fork(TASK_03, diary_closet_zombie_player_turns, 0);
     sleep(29);
     run
     {
@@ -213,9 +213,9 @@ event on_aot_03_item
     evt_finish();
 }
 
-event on_aot_03_item_sub1
+event diary_closet_zombie_door_1
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_CLOSET_DOOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 60, 0);
     tw_rot_add();
@@ -259,7 +259,7 @@ event on_aot_03_item_sub1
     tw_end();
     evt_nop();
     se_play_3d(SND_BANK_ROOM, SE_18_CLST_HIT, 0, SND_AT_POINT, 0, 4040, 2120);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_CLOSET_DOOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -30, 0);
     tw_rot_add();
@@ -286,9 +286,9 @@ event on_aot_03_item_sub1
     evt_finish();
 }
 
-event on_aot_03_item_sub2
+event diary_closet_zombie_door_0
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CLOSET_DOOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -60, 0);
     tw_rot_add();
@@ -338,7 +338,7 @@ event on_aot_03_item_sub2
     tw_end();
     evt_nop();
     se_play_3d(SND_BANK_ROOM, SE_19_CLST_BAD, 0, SND_AT_POINT, 0, 4040, 6540);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_CLOSET_DOOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 30, 0);
     tw_rot_add();
@@ -365,11 +365,11 @@ event on_aot_03_item_sub2
     evt_finish();
 }
 
-event on_aot_03_item_sub3
+event diary_closet_zombie_player_turns
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2F, F_ROOM_02, 0);
+    act_anim_flags(ANIM_2F, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_SET, EF_0002);
     act_param_set(0, 2048);
     for (41)
@@ -381,7 +381,7 @@ event on_aot_03_item_sub3
     evt_finish();
 }
 
-event from_main
+event closet_zombie_dead_music
 {
     bgm_volume_ramp(BGM_SUB_2, -95, 30);
     sleep(30);
@@ -391,7 +391,7 @@ event from_main
     evt_finish();
 }
 
-event event_05
+event take_map_1f_unused
 {
     run
     {
@@ -401,7 +401,7 @@ event event_05
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, 0);
+    act_anim_flags(ANIM_09, F_ROOM_MAP_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
@@ -415,14 +415,14 @@ event event_05
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            aot_reset(AOT_02_ITEM, SCE_F, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
-            aot_on(AOT_02_ITEM, SCE_F, 0);
+            aot_reset(AOT_02_ITEM_AMMO_SHOTGUN_1, SCE_F, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
+            aot_on(AOT_02_ITEM_AMMO_SHOTGUN_1, SCE_F, 0);
             message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, RUN_CONTROLS | RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of 1ST FLOOR."
         }
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, 0);
+    act_anim_flags(ANIM_09, F_ROOM_MAP_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -438,9 +438,9 @@ event event_05
     evt_finish();
 }
 
-event on_aot_03_item_2
+event diary_becomes_document
 {
-    aot_reset(AOT_03_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
-    aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
+    aot_reset(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+    aot_on(AOT_03_ITEM_FILE_KEEPERS_DIARY_2, SCE_DOCUMENT, 0);
     evt_finish();
 }

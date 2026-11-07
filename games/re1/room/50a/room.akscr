@@ -8,68 +8,68 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_EVENT 0x02
-#define AOT_03_EVENT 0x03
-#define AOT_04_MESSAGE 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_ITEM 0x06
-#define AOT_07_ITEM 0x07
-#define AOT_08_ITEM 0x08
-#define AOT_0A_MESSAGE 0x0A
-#define AOT_0B_MESSAGE 0x0B
+#define AOT_00_DOOR_508 0x00
+#define AOT_01_ITEM_FILE_RESEARCHERS_LETTER_0 0x01
+#define AOT_02_EVENT_WALL_SWITCH 0x02                       // Guess: a second light switch, for a lamp.
+#define AOT_03_EVENT_LIGHT_SWITCH 0x03                      // The switch by the door.
+#define AOT_04_MESSAGE_PICTURE 0x04                         // "Something is written on the picture..." (too dark, from camera 2).
+#define AOT_05_USEITEM_SWITCH_BLOCK 0x05                    // Guess: raises F_ROOM_WALL_SWITCH_BLOCKED while an object stands on it.
+#define AOT_06_ITEM_AMMO_HANDGUN_1 0x06
+#define AOT_07_ITEM_AMMO_HANDGUN_2 0x07
+#define AOT_08_ITEM_HEAL_HERB_GREEN_3 0x08
+#define AOT_0A_MESSAGE_USED_RECENTLY 0x0A                   // "It seems someone used this only recently."
+#define AOT_0B_MESSAGE_AIR_CONDITIONER 0x0B
 #define CAM_00 0x00
 #define CAM_02 0x02
 #define CAM_03 0x03
 #define CAM_04 0x04
 #define CAM_06 0x06
 #define CAM_07 0x07
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_1A 0x1A
-#define F_ROOM_1B 0x1B
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
-#define IMDL_03 0x03
+#define F_ROOM_LIGHT_FLICKER_DONE 0x1A                      // The lights finished flickering.
+#define F_ROOM_LIGHT_SWITCH_ON 0x18                         // The door light switch is in its pushed state (toggles).
+#define F_ROOM_WALL_SWITCH_BLOCKED 0x1B                     // Use-item spot 5's pulse; main then turns the wall switch off for a frame.
+#define F_ROOM_WALL_SWITCH_ON 0x19                          // The wall switch is in its pushed state (toggles).
+#define IMDL_00_FILE_RESEARCHERS_LETTER 0x00
+#define IMDL_01_AMMO_HANDGUN 0x01
+#define IMDL_02_AMMO_HANDGUN 0x02
+#define IMDL_03_HEAL_HERB_GREEN 0x03
 #define MSG_JOHN 0x01
 #define MSG_THERE_IS_A_SWITCH 0x00
-#define OBJ_00 0x00
+#define OBJ_00_WALL_SWITCH_BLOCK 0x00                       // Guess: stands in front of the wall switch.
 #define SE_17_SW_BTN 0x17
 #define ZONE_16 0x16
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, IMDL_00, SCA_NONE, 11880, -1500, 5020, 0, F_ITEM_50A_FILE_RESEARCHERS_LETTER_0, SAT_MANUAL | SAT_PLAYER, 0);
-    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 8200, 0, 2252, 3072, 0, -270, 0, 270, 270, 4680, 1350, 630);
-    aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
-    aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 130, 0, 68, 1, 0, 0);
-    aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 27, 0, 1, 0);
-    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_50A_AMMO_HANDGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_50A_AMMO_HANDGUN_2, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_03, SCA_NONE, 2600, 0, 4500, 0, F_ITEM_50A_HEAL_HERB_GREEN_3, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 68, 1, 0, 0);
-    aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 68, 1, 0, 0);
-    eml_rot(IMDL_00, 2042, 0);
+    door_aot_set(AOT_00_DOOR_508, 10100, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM_FILE_RESEARCHERS_LETTER_0, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, IMDL_00_FILE_RESEARCHERS_LETTER, SCA_NONE, 11880, -1500, 5020, 0, F_ITEM_50A_FILE_RESEARCHERS_LETTER_0, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00_WALL_SWITCH_BLOCK, OF_ACTIVE, SCA_NONE, 8200, 0, 2252, 3072, 0, -270, 0, 270, 270, 4680, 1350, 630);
+    aot_set(AOT_02_EVENT_WALL_SWITCH, 8200, 1600, 600, 600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, press_wall_switch, 0, 0, 0);
+    aot_set(AOT_03_EVENT_LIGHT_SWITCH, 8200, 10500, 1300, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, press_light_switch, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE_PICTURE, 1100, 4500, 1000, 3500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 130, 0, 68, 1, 0, 0);
+    aot_set(AOT_05_USEITEM_SWITCH_BLOCK, 7000, 700, 3000, 2300, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 27, 0, 1, 0);
+    item_aot_set(AOT_06_ITEM_AMMO_HANDGUN_1, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_01_AMMO_HANDGUN, SCA_NONE, 0, 0, 0, 0, F_ITEM_50A_AMMO_HANDGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_07_ITEM_AMMO_HANDGUN_2, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_02_AMMO_HANDGUN, SCA_NONE, 0, 0, 0, 0, F_ITEM_50A_AMMO_HANDGUN_2, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_08_ITEM_HEAL_HERB_GREEN_3, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_03_HEAL_HERB_GREEN, SCA_NONE, 2600, 0, 4500, 0, F_ITEM_50A_HEAL_HERB_GREEN_3, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    aot_set(AOT_0A_MESSAGE_USED_RECENTLY, 6500, 9600, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 68, 1, 0, 0);
+    aot_set(AOT_0B_MESSAGE_AIR_CONDITIONER, 3500, 10600, 900, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 68, 1, 0, 0);
+    eml_rot(IMDL_00_FILE_RESEARCHERS_LETTER, 2042, 0);
     scene_setup(0, 6400, 8600, 12000);
     set(FG_STATUS, F_STATUS_MIRROR_ENABLE, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_ROOM, F_ROOM_1B, FALSE))
+    if (ck(FG_ROOM, F_ROOM_WALL_SWITCH_BLOCKED, FALSE))
     {
-        aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_02_EVENT_WALL_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_02_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        set(FG_ROOM, F_ROOM_1B, FALSE);
+        aot_delete(AOT_02_EVENT_WALL_SWITCH, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_WALL_SWITCH_BLOCKED, FALSE);
     }
-    if (ck(FG_ROOM, F_ROOM_19, TRUE))
+    if (ck(FG_ROOM, F_ROOM_WALL_SWITCH_ON, TRUE))
     {
         msgnode_set(ZONE_16, CAM_06, CAM_07);
     }
@@ -79,24 +79,24 @@ proc main
     }
     if (testpickup(IT_68_FILE_RESEARCHERS_LETTER))
     {
-        evt_exec(0, TASK_09, from_main);
+        evt_exec(0, TASK_09, read_letter_password);
     }
-    aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    aot_delete(AOT_04_MESSAGE_PICTURE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+        aot_reset(AOT_04_MESSAGE_PICTURE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+        aot_reset(AOT_04_MESSAGE_PICTURE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
+        aot_reset(AOT_04_MESSAGE_PICTURE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
     }
 }
 
-event on_aot_02
+event press_wall_switch
 {
     run
     {
@@ -122,15 +122,15 @@ event on_aot_02
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_PLAYER, 0, 0, 0);
-            if (ck(FG_ROOM, F_ROOM_19, FALSE))
+            if (ck(FG_ROOM, F_ROOM_WALL_SWITCH_ON, FALSE))
             {
-                evt_exec(0, TASK_09, on_aot_02_sub1);
-                set(FG_ROOM, F_ROOM_19, TRUE);
+                evt_exec(0, TASK_09, wall_switch_on);
+                set(FG_ROOM, F_ROOM_WALL_SWITCH_ON, TRUE);
             }
             else
             {
-                evt_exec(0, TASK_09, on_aot_02_sub2);
-                set(FG_ROOM, F_ROOM_19, FALSE);
+                evt_exec(0, TASK_09, wall_switch_off);
+                set(FG_ROOM, F_ROOM_WALL_SWITCH_ON, FALSE);
             }
         }
         else
@@ -144,7 +144,7 @@ event on_aot_02
     evt_finish();
 }
 
-event on_aot_02_sub1
+event wall_switch_on
 {
     run
     {
@@ -164,7 +164,7 @@ event on_aot_02_sub1
     evt_finish();
 }
 
-event on_aot_02_sub2
+event wall_switch_off
 {
     run
     {
@@ -184,7 +184,7 @@ event on_aot_02_sub2
     evt_finish();
 }
 
-event on_aot_03
+event press_light_switch
 {
     run
     {
@@ -210,15 +210,15 @@ event on_aot_03
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_PLAYER, 0, 0, 0);
-            if (ck(FG_ROOM, F_ROOM_18, FALSE))
+            if (ck(FG_ROOM, F_ROOM_LIGHT_SWITCH_ON, FALSE))
             {
-                evt_exec(0, TASK_09, on_aot_03_sub1);
-                set(FG_ROOM, F_ROOM_18, TRUE);
+                evt_exec(0, TASK_09, light_switch_on);
+                set(FG_ROOM, F_ROOM_LIGHT_SWITCH_ON, TRUE);
             }
             else
             {
-                evt_exec(0, TASK_09, on_aot_03_sub2);
-                set(FG_ROOM, F_ROOM_18, FALSE);
+                evt_exec(0, TASK_09, light_switch_off);
+                set(FG_ROOM, F_ROOM_LIGHT_SWITCH_ON, FALSE);
             }
         }
         else
@@ -232,7 +232,7 @@ event on_aot_03
     evt_finish();
 }
 
-event on_aot_03_sub1
+event light_switch_on
 {
     run
     {
@@ -244,28 +244,28 @@ event on_aot_03_sub1
     sleep(1);
     run
     {
-        if (ck(FG_ROOM, F_ROOM_19, TRUE))
+        if (ck(FG_ROOM, F_ROOM_WALL_SWITCH_ON, TRUE))
         {
-            evt_exec(0, TASK_09, on_aot_03_sub1_sub1);
+            evt_exec(0, TASK_09, light_flicker_with_wall_light);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_03_sub1_sub2);
+            evt_exec(0, TASK_09, light_flicker_alone);
         }
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, FALSE));
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, FALSE));
     run
     {
-        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, FALSE);
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
@@ -274,7 +274,7 @@ event on_aot_03_sub1
     evt_finish();
 }
 
-event on_aot_03_sub2
+event light_switch_off
 {
     run
     {
@@ -293,7 +293,7 @@ event on_aot_03_sub2
     evt_finish();
 }
 
-event event_06
+event player_idle
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -305,11 +305,11 @@ event event_06
     evt_finish();
 }
 
-event on_aot_03_sub1_sub1
+event light_flicker_with_wall_light
 {
     run
     {
-        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, FALSE);
         timer_setup(LIGHT_FADE_01, 10000, FADE_B);
     }
     sleep(2);
@@ -324,7 +324,7 @@ event on_aot_03_sub1_sub1
     run
     {
         setw(W_LIGHT_DELTA, 0);
-        if (ck(FG_ROOM, F_ROOM_19, TRUE))
+        if (ck(FG_ROOM, F_ROOM_WALL_SWITCH_ON, TRUE))
         {
             setw(W_LIGHT_STATE, 10000);
         }
@@ -332,16 +332,16 @@ event on_aot_03_sub1_sub1
         {
             setw(W_LIGHT_STATE, 0);
         }
-        set(FG_ROOM, F_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_03_sub1_sub2
+event light_flicker_alone
 {
     run
     {
-        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, FALSE);
         require(cmpw(8, W_1C, CMP_GE, 0));
         return;
     }
@@ -359,12 +359,12 @@ event on_aot_03_sub1_sub2
     run
     {
         timer_setup(LIGHT_FADE_VEIL, -10000, FADE_R | FADE_G | FADE_B);
-        set(FG_ROOM, F_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_LIGHT_FLICKER_DONE, TRUE);
     }
     evt_finish();
 }
 
-event from_main
+event read_letter_password
 {
     sleep(1);
     message(MSG_JOHN | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "John. ADA..."

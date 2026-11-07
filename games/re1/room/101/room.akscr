@@ -8,28 +8,28 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_DOOR 0x03
-#define AOT_05_MESSAGE 0x05
+#define AOT_00_DOOR_100 0x00
+#define AOT_01_DOOR_102 0x01
+#define AOT_02_DOOR_103 0x02
+#define AOT_03_DOOR_201 0x03
+#define AOT_05_MESSAGE_REBECCA 0x05                         // Rebecca's spot: her body's "........." or her talk event.
 #define CAM_03 0x03
 #define CAM_04 0x04
-#define CAM_05 0x05
+#define CAM_05_REBECCA 0x05
 #define ENEMY_00_HUNTER 0x00
-#define ENEMY_00_NPC_REBECCA_2 0x00
+#define ENEMY_00_REBECCA 0x00
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define ENEMY_01_HUNTER 0x01
 #define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
 #define ENEMY_02_HUNTER 0x02
 #define ENEMY_02_ZOMBIE_GROUNDSKEEPER 0x02
 #define FX_00 0x00
-#define F_ROOM_1B 0x1B
-#define F_ROOM_1C 0x1C
-#define F_ROOM_1D 0x1D
-#define F_ROOM_1E 0x1E
-#define F_ROOM_3E 0x3E
-#define F_ROOM_3F 0x3F
+#define F_ROOM_ANIM_DONE 0x3F                               // Raised when an actor's animation ends (one frame); nothing waits for it.
+#define F_ROOM_C_ATTACK_AT_CAM_03 0x1E                      // The hunter attack on Rebecca starts when Chris reaches camera 3.
+#define F_ROOM_C_HUNTER_ANIM_DONE 0x3E                      // The hunter's animation finished (one frame); nothing waits for it.
+#define F_ROOM_C_MOURN_ON_KILL 0x1C                         // Rebecca is dead: when the hunter dies, her body's spot becomes Chris's mourning event.
+#define F_ROOM_C_SAVE_ON_KILL 0x1D                          // When the hunter dies, Rebecca counts as saved and her talk spot opens.
+#define F_ROOM_C_STOP_MUSIC_ON_KILL 0x1B                    // When the hunter dies, main fades out the attack music.
 #define MSG_VO_007_0D_63 0x0A
 #define MSG_VO_00C_12 0x00
 #define MSG_VO_00C_13 0x01
@@ -59,10 +59,10 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 7600, 7700, 2400, 1500, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 14000, 17200, 2000, 1500, 2, DOOR_SND_00_DR_WD, DOOR_1D_DOOR01K, 5, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_101_102, ROOM_102_VACANT_ROOM, 3400, 0, 9200, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 19400, 19000, 2000, 2700, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_103_F_PASSAGE, 2400, 0, 24800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 4700, 2500, 2605, 1300, 0, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_2 | ROOM_201_2F_LEFT_STAIRS, 14100, 0, 11500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_100, 7600, 7700, 2400, 1500, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_102, 14000, 17200, 2000, 1500, 2, DOOR_SND_00_DR_WD, DOOR_1D_DOOR01K, 5, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_101_102, ROOM_102_VACANT_ROOM, 3400, 0, 9200, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_103, 19400, 19000, 2000, 2700, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_103_F_PASSAGE, 2400, 0, 24800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR_201, 4700, 2500, 2605, 1300, 0, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_2 | ROOM_201_2F_LEFT_STAIRS, 14100, 0, 11500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_08, F_ENEMY_101_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 3136, 0, 9520, 0, 19044, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
@@ -70,7 +70,7 @@ proc init
         enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_08, F_ENEMY_101_ZOMBIE_GROUNDSKEEPER_2, SPAWN_FORCE, 2, 0, 2144, 0, 13096, 0, 7312, ENEMY_02_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_3C, FALSE);
+            set(FG_COMMON, F_COMMON_C_REBECCA_OFFERED_HELP, FALSE);
         }
     }
     else
@@ -78,44 +78,44 @@ proc init
         room_bgm_state_set(5, 1, BGM_OFF);
         if (CHRIS)
         {
-            if (ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_CALL_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_C_REBECCA_CALL_TOO_LATE, FALSE))
             {
                 if (cmpw(0, W_04, CMP_GT, 180))
                 {
-                    set(FG_COMMON, F_COMMON_33, TRUE);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_CALL_TOO_LATE, TRUE);
                 }
                 else
                 {
-                    set(FG_COMMON, F_COMMON_32, TRUE);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_CALL_IN_TIME, TRUE);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_30, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_KILLED, TRUE))
             {
                 room_bgm_state_set(5, 1, BGM_RELOAD);
-                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2576, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_04, 29, EVAR_00);
-                aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
-                if (ck(FG_COMMON, F_COMMON_35, FALSE))
+                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2576, 0, 13096, 0, 2888, ENEMY_00_REBECCA, ANIM_04, 29, EVAR_00);
+                aot_set(AOT_05_MESSAGE_REBECCA, 12569, 2380, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_BODY_EXAMINED, FALSE))
                 {
-                    set(FG_ROOM, F_ROOM_1C, TRUE);
+                    set(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, TRUE);
                 }
                 enemy(EM_06_HUNTER, EB_27, F_ENEMY_101_HUNTER_0, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
             }
-            if (ck(FG_COMMON, F_COMMON_31, TRUE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, TRUE))
             {
                 room_bgm_state_set(5, 1, BGM_RELOAD | 1);
-                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 13096, 0, 2888, ENEMY_00_NPC_REBECCA_2, ANIM_31, 1, EVAR_00);
-                aot_set(AOT_05_MESSAGE, 12569, 2380, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05_message, 0, 0, 0);
+                enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 13096, 0, 2888, ENEMY_00_REBECCA, ANIM_31, 1, EVAR_00);
+                aot_set(AOT_05_MESSAGE_REBECCA, 12569, 2380, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, rebecca_saved_talk, 0, 0, 0);
             }
-            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, TRUE) && ck(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_101_ATTACK_OVER, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_33, TRUE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_CALL_TOO_LATE, TRUE))
                 {
                     set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-                    set(FG_ROOM, F_ROOM_1E, TRUE);
-                    set(FG_ROOM, F_ROOM_1D, TRUE);
+                    set(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, TRUE);
+                    set(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, TRUE);
                     room_bgm_state_set(5, 1, BGM_RELOAD | 1);
-                    enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 9329, 0, 6214, ENEMY_00_NPC_REBECCA_2, ANIM_31, 59, EVAR_00);
-                    aot_set(AOT_05_MESSAGE, 12000, 2650, 1800, 1800, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
+                    enemy(EM_2C_NPC_REBECCA_2, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2385, 0, 9329, 0, 6214, ENEMY_00_REBECCA, ANIM_31, 59, EVAR_00);
+                    aot_set(AOT_05_MESSAGE_REBECCA, 12000, 2650, 1800, 1800, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
                     enemy(EM_06_HUNTER, EB_67, F_ENEMY_101_HUNTER_0, SPAWN_FORCE, 2, 0, 608, 0, 7874, 0, 7822, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
                 }
                 else
@@ -124,7 +124,7 @@ proc init
                     enemy(EM_06_HUNTER, EB_17, F_ENEMY_101_HUNTER_1, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
                 }
             }
-            if (ck(FG_COMMON, F_COMMON_RADIO_TAB_GATE, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, FALSE))
             {
                 enemy(EM_06_HUNTER, EB_17, F_ENEMY_101_HUNTER_0, SPAWN_FORCE, 2, 0, 3000, 0, 4067, 0, 17454, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
                 enemy(EM_06_HUNTER, EB_17, F_ENEMY_101_HUNTER_1, SPAWN_FORCE, 2, 0, 2664, 0, 12480, 0, 3562, ENEMY_02_HUNTER, ANIM_00, 0, EVAR_00);
@@ -140,57 +140,57 @@ proc init
 
 proc main when (CHRIS && MANSION2)
 {
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_1E, TRUE))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1E, FALSE);
+        set(FG_ROOM, F_ROOM_C_ATTACK_AT_CAM_03, FALSE);
         set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
         cutnext(CAM_04);
-        evt_exec(0, TASK_09, from_main);
+        evt_exec(0, TASK_09, rebecca_hunter_attack);
     }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_1D, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1D, FALSE);
-        set(FG_COMMON, F_COMMON_2F, FALSE);
-        set(FG_COMMON, F_COMMON_31, TRUE);
-        aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message, 0);
+        set(FG_ROOM, F_ROOM_C_SAVE_ON_KILL, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_UNDER_ATTACK, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, TRUE);
+        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_saved_talk, 0);
     }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_1C, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1C, FALSE);
-        aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_2, 0);
+        set(FG_ROOM, F_ROOM_C_MOURN_ON_KILL, FALSE);
+        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, mourn_rebecca, 0);
     }
-    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_1B, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_101_HUNTER_0, TRUE) && ck(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1B, FALSE);
+        set(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, FALSE);
         bgm_volume_ramp(BGM_MAIN, -96, 1);
-        evt_exec(0, TASK_09, from_main_2);
+        evt_exec(0, TASK_09, hunter_dead_stop_music);
     }
 }
 
-event from_main when (CHRIS && MANSION2)
+event rebecca_hunter_attack when (CHRIS && MANSION2)
 {
     run
     {
-        set(FG_ROOM, F_ROOM_1B, TRUE);
+        set(FG_ROOM, F_ROOM_C_STOP_MUSIC_ON_KILL, TRUE);
         bgm_play(BGM_MAIN);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-        set(FG_COMMON, F_COMMON_2F, TRUE);
-        set(FG_COMMON, F_COMMON_JILL_SERUM_OBJ1, TRUE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_UNDER_ATTACK, TRUE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_101_ATTACK_OVER, TRUE);
         dir_set(0, 0, 272, 0, 2744, 0, 7000);
         pos_set(ENEMY_01_HUNTER, 0, 256, 0, 4219, 0, 7747);
     }
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    evt_fork(TASK_09, from_main_sub1, 0);
-    evt_fork(TASK_09, from_main_sub2, 0);
-    evt_fork(TASK_09, from_main_sub5, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_rebecca, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_hunter, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_footsteps, 0);
     sleep(100);
-    cutnext(CAM_05);
+    cutnext(CAM_05_REBECCA);
     sleep(200);
-    evt_fork(TASK_09, from_main_sub3, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_chris, 0);
     voice_play(VOICE_PLAY, VO_00C_11);
     wait_message();
-    evt_fork(TASK_09, from_main_sub4, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_hunter_slash, 0);
     sleep(40);
     run
     {
@@ -204,11 +204,11 @@ event from_main when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event from_main_sub1 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_rebecca when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_31, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_31, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_tween_begin_alt();
@@ -219,8 +219,8 @@ event from_main_sub1 when (CHRIS && MANSION2)
         evt_next();
     }
     tw_end();
-    pos_set(ENEMY_00_NPC_REBECCA_2, 0, 2688, 0, 11405, 0, 5254);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    pos_set(ENEMY_00_REBECCA, 0, 2688, 0, 11405, 0, 5254);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_tween_begin_alt();
     tw_set_pos(10, 0, -30);
     for (70)
@@ -231,13 +231,13 @@ event from_main_sub1 when (CHRIS && MANSION2)
     tw_end();
     evt_actor_begin();
     act_nop();
-    act_anim_flags(ANIM_30, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_30, F_ROOM_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(40);
     evt_actor_begin();
     act_nop();
-    act_anim_flags(ANIM_31, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_31, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_tween_begin_alt();
@@ -255,27 +255,27 @@ event from_main_sub1 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event from_main_sub2 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hunter when (CHRIS && MANSION2)
 {
     evt_work_set(WK_ENEMY, ENEMY_01_HUNTER);
     evt_actor_begin();
-    act_anim_seq(AB_02, 10281, 5748, F_ROOM_3E);
+    act_anim_seq(AB_02, 10281, 5748, F_ROOM_C_HUNTER_ANIM_DONE);
     act_reset();
     sleep(100);
     pos_set(ENEMY_01_HUNTER, 0, 808, 0, 9431, 0, 7822);
     sleep(65);
     eml_state(0, ENEMY_01_HUNTER, EML_ACTION, AB_0D);
-    evt_fork(TASK_09, from_main_sub2_sub1, 0);
+    evt_fork(TASK_09, rebecca_hunter_attack_hit, 0);
     sleep(60);
     eml_state(0, ENEMY_01_HUNTER, EML_ACTION, AB_12);
     evt_finish();
 }
 
-event from_main_sub3 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_chris when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, AFL_02 | AFL_01);
     act_flag_op(EF_SET, EF_0002);
     sleep(5);
     act_reset();
@@ -289,71 +289,71 @@ event from_main_sub3 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event from_main_sub4 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hunter_slash when (CHRIS && MANSION2)
 {
     eml_state(0, ENEMY_01_HUNTER, EML_ACTION, AB_16);
     sleep(38);
     evt_finish();
 }
 
-event on_aot_05_message when (CHRIS && MANSION2)
+event rebecca_saved_talk when (CHRIS && MANSION2)
 {
     run
     {
         bgm_play(BGM_SUB_1);
-        cutnext(CAM_05);
+        cutnext(CAM_05_REBECCA);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_COMMON, F_COMMON_31, FALSE);
-        aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
+        set(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, FALSE);
+        aot_delete(AOT_05_MESSAGE_REBECCA, SCE_NONE, 0);
         dir_set(0, 0, 592, 0, 12132, 0, 4876);
-        pos_set(ENEMY_00_NPC_REBECCA_2, 0, 2672, 0, 13096, 0, 2888);
+        pos_set(ENEMY_00_REBECCA, 0, 2672, 0, 13096, 0, 2888);
     }
-    evt_fork(TASK_09, on_aot_05_message_sub1, 0);
-    evt_fork(TASK_09, on_aot_05_message_sub2, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_rebecca_1, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_1, 0);
     voice_play(VOICE_PLAY, VO_00C_12);
     message(MSG_VO_00C_12, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub3, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_rebecca_2, 0);
     voice_play(VOICE_PLAY, VO_00C_13);
     message(MSG_VO_00C_13, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub4, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_2, 0);
     voice_play(VOICE_PLAY, VO_00C_14);
     message(MSG_VO_00C_14, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub5, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_both, 0);
     voice_play(VOICE_PLAY, VO_00C_15);
     message(MSG_VO_00C_15, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub6, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_3, 0);
     voice_play(VOICE_PLAY, VO_00C_16);
     message(MSG_VO_00C_16, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub7, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_4, 0);
     voice_play(VOICE_PLAY, VO_00C_18);
     message(MSG_VO_00C_18, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub8, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_rebecca_3, 0);
     voice_play(VOICE_PLAY, VO_00C_19);
     message(MSG_VO_00C_19, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub9, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_5, 0);
     voice_play(VOICE_PLAY, VO_00C_1A);
     message(MSG_VO_00C_1A, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub10, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_rebecca_4, 0);
     voice_play(VOICE_PLAY, VO_00C_1B);
     message(MSG_VO_00C_1B, 0);
     wait_message();
-    evt_fork(TASK_09, on_aot_05_message_sub11, 0);
+    evt_fork(TASK_09, rebecca_saved_talk_chris_6, 0);
     voice_play(VOICE_PLAY, VO_00C_1C);
     message(MSG_VO_00C_1C, 0);
     wait_message();
     sleep(10);
     run
     {
-        aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_3, 0);
+        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_ill_do_my_best, 0);
         cutnext(CAM_04);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
@@ -362,113 +362,113 @@ event on_aot_05_message when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event on_aot_05_message_sub1 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_1 when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_32, F_ROOM_ANIM_DONE, 0);
     sleep(100);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub2 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_1 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub3 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_2 when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub4 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_2 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(35);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub5 when (CHRIS && MANSION2)
+event rebecca_saved_talk_both when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_24, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_71, 300, 0, 1, 30, 0);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_finish();
 }
 
-event on_aot_05_message_sub6 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_3 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_24, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_22, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(35);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub7 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_4 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(10);
     act_reset();
@@ -477,62 +477,62 @@ event on_aot_05_message_sub7 when (CHRIS && MANSION2)
     evt_actor_begin();
     act_nop();
     sleep(30);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub8 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_3 when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_0A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_0A, F_ROOM_ANIM_DONE, 0);
     sleep(50);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub9 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_5 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_24, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_24, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_29, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_29, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE, 0);
     sleep(35);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub10 when (CHRIS && MANSION2)
+event rebecca_saved_talk_rebecca_4 when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_0A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_0A, F_ROOM_ANIM_DONE, 0);
     sleep(50);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_message_sub11 when (CHRIS && MANSION2)
+event rebecca_saved_talk_chris_6 when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_26, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(30);
-    act_anim_flags(ANIM_2F, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2F, F_ROOM_ANIM_DONE, 0);
     act_param_set(0, 2048);
     sleep(45);
     act_idle();
@@ -540,27 +540,27 @@ event on_aot_05_message_sub11 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event on_aot_05_message_2 when (CHRIS && MANSION2)
+event mourn_rebecca when (CHRIS && MANSION2)
 {
     run
     {
         bgm_play(BGM_MAIN);
-        cutnext(CAM_05);
+        cutnext(CAM_05_REBECCA);
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_COMMON, F_COMMON_31, FALSE);
-        set(FG_COMMON, F_COMMON_35, TRUE);
-        aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
+        set(FG_COMMON, F_COMMON_C_REBECCA_SAVED_TALK, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_BODY_EXAMINED, TRUE);
+        aot_delete(AOT_05_MESSAGE_REBECCA, SCE_NONE, 0);
         dir_set(0, 0, 592, 0, 12132, 0, 4876);
     }
     sleep(1);
-    evt_fork(TASK_09, on_aot_05_message_2_sub1, 0);
+    evt_fork(TASK_09, mourn_rebecca_chris, 0);
     voice_play(VOICE_PLAY, VO_00C_10);
     wait_message();
     sleep(230);
     run
     {
-        aot_reset(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 255, 0);
+        aot_reset(AOT_05_MESSAGE_REBECCA, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 255, 0);
         cutnext(CAM_04);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
@@ -569,20 +569,20 @@ event on_aot_05_message_2 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event on_aot_05_message_2_sub1 when (CHRIS && MANSION2)
+event mourn_rebecca_chris when (CHRIS && MANSION2)
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_37, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_37, F_ROOM_ANIM_DONE, 0);
     sleep(202);
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_REBECCA, 0, 0, 0);
     act_reset();
     evt_nop();
     sys_multi(SYS_FORCE_ACTION);
     sleep(70);
     evt_actor_begin();
     act_nop();
-    act_anim_flags(ANIM_09, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_09, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(52);
     act_motion(MOTION_10);
@@ -590,11 +590,11 @@ event on_aot_05_message_2_sub1 when (CHRIS && MANSION2)
     act_finish();
 }
 
-event on_aot_05_message_3 when (CHRIS && MANSION2)
+event rebecca_ill_do_my_best when (CHRIS && MANSION2)
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
-    evt_fork(TASK_09, on_aot_05_message_3_sub1, 0);
+    evt_fork(TASK_09, rebecca_ill_do_my_best_rebecca, 0);
     voice_play(VOICE_PLAY, VO_007_0D_63);
     message(MSG_VO_007_0D_63, 0);
     wait_message();
@@ -603,48 +603,48 @@ event on_aot_05_message_3 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event on_aot_05_message_3_sub1 when (CHRIS && MANSION2)
+event rebecca_ill_do_my_best_rebecca when (CHRIS && MANSION2)
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA_2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_0A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_0A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(80);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event from_main_sub2_sub1 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_hit when (CHRIS && MANSION2)
 {
     sleep(8);
-    se_play_3d(SND_BANK_ROOM, SE_0B, 0, SND_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_0B, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
     single(10) effect(FX_00, FX_ROW_00, FX_AT_WORLD, 13096, -1000, 0, 0);
     raw(0x48, 0x0B, 0x00, 0x04, 0xFF, 0x00);
 }
 
-event from_main_sub5 when (CHRIS && MANSION2)
+event rebecca_hunter_attack_footsteps when (CHRIS && MANSION2)
 {
     for (5)
     {
-        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0);
+        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
         sleep(18);
-        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0);
+        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
         sleep(13);
     }
     evt_nop();
-    se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
     sleep(60);
     for (6)
     {
-        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_NPC_REBECCA_2, 0, 0);
+        se_play_3d(SND_BANK_ROOM, SE_0F, 0, SND_AT_ENEMY, ENEMY_00_REBECCA, 0, 0);
         sleep(14);
     }
     evt_nop();
     evt_finish();
 }
 
-event from_main_2 when (CHRIS && MANSION2)
+event hunter_dead_stop_music when (CHRIS && MANSION2)
 {
     sleep(1);
     bgm_stop(BGM_MAIN);

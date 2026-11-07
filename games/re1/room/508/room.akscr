@@ -8,23 +8,23 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_DOOR 0x03
-#define AOT_04_EVENT 0x04
+#define AOT_00_DOOR_505 0x00
+#define AOT_01_DOOR_509 0x01
+#define AOT_02_DOOR_50A 0x02
+#define AOT_03_DOOR_50B 0x03                                // The double-locked door; opened by the three pass codes.
+#define AOT_04_EVENT_PASS_CODE_PANEL 0x04
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define CAM_03 0x03
-#define CAM_04 0x04
+#define CAM_04_PASS_CODE_PANEL 0x04
 #define ENEMY_00_NPC_CHRIS 0x00
 #define ENEMY_00_NPC_JILL 0x00
 #define FX_0A 0x0A
-#define F_ROOM_05 0x05
-#define F_ROOM_06 0x06
-#define F_ROOM_07 0x07
-#define F_ROOM_21 0x21
+#define F_ROOM_CODE_1_LAMP_LIT 0x05                         // Pass code 01's lamp was switched on this visit.
+#define F_ROOM_CODE_2_LAMP_LIT 0x06                         // Pass code 02's lamp was switched on this visit.
+#define F_ROOM_CODE_3_LAMP_LIT 0x07                         // Pass code 03's lamp was switched on this visit.
+#define F_ROOM_SURVIVOR_ANIM_DONE 0x21                      // The rescued Chris's or Jill's animation finished (one frame).
 #define MSG_A_PASS_CODE_PANEL 0x00
 #define MSG_IT_IS_ELECTRONICALLY_LOCKED 0x04
 #define MSG_IT_IS_LOCKED_05 0x05
@@ -40,76 +40,76 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 19500, 2400, 2100, 2500, 6, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 10700, 4800, 2300, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 17700, 800, 1400, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 200, 2500, 2100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR_505, 19500, 2400, 2100, 2500, 6, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_509, 10700, 4800, 2300, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_50A, 17700, 800, 1400, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR_50B, 200, 2500, 2100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, TRUE))
     {
         if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
         {
             if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, TRUE))
             {
-                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04_2, 0, 0, 0);
+                aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel_no_codes, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
+                aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
             }
         }
         else
         {
-            aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
+            aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
         }
     }
     else
     {
-        aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
+        aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_34, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, FALSE))
     {
         effect(FX_0A, FX_ROW_00, FX_AT_WORLD, 2230, -3000, 5300, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_35, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, FALSE))
     {
         effect(FX_0A, FX_ROW_01, FX_AT_WORLD, 2440, -3000, 5300, 0);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_36, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, FALSE))
     {
         effect(FX_0A, FX_ROW_02, FX_AT_WORLD, 2650, -3000, 5300, 0);
     }
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-                evt_exec(0, TASK_09, on_enter);
+                evt_exec(0, TASK_09, survivor_goes_ahead);
             }
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_CHRIS_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-                evt_exec(0, TASK_09, on_enter);
+                evt_exec(0, TASK_09, survivor_goes_ahead);
             }
         }
     }
-    if (ck(FG_LOCK, F_LOCK_26, FALSE))
+    if (ck(FG_LOCK, F_LOCK_508_509, FALSE))
     {
-        aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door, 0);
+        aot_reset(AOT_01_DOOR_509, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, electronic_lock, 0);
     }
-    aot_reset(AOT_03_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_03_door, 0);
+    aot_reset(AOT_03_DOOR_50B, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, double_lock, 0);
     if (CHRIS)
     {
-        if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 4056, 0, 3100, 0, 4300, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -117,9 +117,9 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_CHRIS_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_SECOND_SURVIVOR, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 4056, 0, 3100, 0, 4300, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
             }
@@ -129,51 +129,51 @@ proc init
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_34, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_05, FALSE))
+        if (ck(FG_ROOM, F_ROOM_CODE_1_LAMP_LIT, FALSE))
         {
-            set(FG_ROOM, F_ROOM_05, TRUE);
+            set(FG_ROOM, F_ROOM_CODE_1_LAMP_LIT, TRUE);
             effect(FX_0A, FX_ROW_08, FX_AT_WORLD, 2230, -3000, 5300, 0);
             effect_kill_b(FX_0A, FX_ROW_00);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_35, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_06, FALSE))
+        if (ck(FG_ROOM, F_ROOM_CODE_2_LAMP_LIT, FALSE))
         {
-            set(FG_ROOM, F_ROOM_06, TRUE);
+            set(FG_ROOM, F_ROOM_CODE_2_LAMP_LIT, TRUE);
             effect(FX_0A, FX_ROW_09, FX_AT_WORLD, 2440, -3000, 5300, 0);
             effect_kill_b(FX_0A, FX_ROW_01);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_36, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_07, FALSE))
+        if (ck(FG_ROOM, F_ROOM_CODE_3_LAMP_LIT, FALSE))
         {
-            set(FG_ROOM, F_ROOM_07, TRUE);
+            set(FG_ROOM, F_ROOM_CODE_3_LAMP_LIT, TRUE);
             effect(FX_0A, FX_ROW_0A, FX_AT_WORLD, 2650, -3000, 5300, 0);
             effect_kill_b(FX_0A, FX_ROW_02);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_34, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_35, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_36, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE))
             {
-                aot_delete(AOT_03_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_03_DOOR_50B, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             }
         }
     }
 }
 
-event event_00
+event unused_empty
 {
     evt_finish();
 }
 
-event on_enter
+event survivor_goes_ahead
 {
     sleep(1);
     run
@@ -182,11 +182,11 @@ event on_enter
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         if (CHRIS)
         {
-            set(FG_COMMON, F_COMMON_AC, TRUE);
+            set(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, TRUE);
         }
         else
         {
-            set(FG_COMMON, F_COMMON_B3, TRUE);
+            set(FG_COMMON, F_COMMON_J_CHRIS_WENT_AHEAD, TRUE);
         }
     }
     sleep(20);
@@ -202,11 +202,11 @@ event on_enter
     evt_actor_begin();
     if (CHRIS)
     {
-        act_anim_seq(AB_03, 12200, 4450, F_ROOM_21);
+        act_anim_seq(AB_03, 12200, 4450, F_ROOM_SURVIVOR_ANIM_DONE);
     }
     else
     {
-        act_anim_seq(AB_03, 18600, 4300, F_ROOM_21);
+        act_anim_seq(AB_03, 18600, 4300, F_ROOM_SURVIVOR_ANIM_DONE);
     }
     act_reset();
     if (JILL)
@@ -220,7 +220,7 @@ event on_enter
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
     if (CHRIS)
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -230,7 +230,7 @@ event on_enter
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_21, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_SURVIVOR_ANIM_DONE, 0);
     act_param_set(0, 1024);
     act_reset();
     evt_nop();
@@ -238,7 +238,7 @@ event on_enter
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
     if (CHRIS)
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -280,20 +280,20 @@ event on_enter
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_SURVIVOR_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
     wait_message();
     if (CHRIS)
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
         evt_actor_begin();
-        act_anim_flags(ANIM_2D, F_ROOM_21, 0);
+        act_anim_flags(ANIM_2D, F_ROOM_SURVIVOR_ANIM_DONE, 0);
         act_param_set(0, 64512);
         act_motion(MOTION_10);
         act_reset();
@@ -302,10 +302,10 @@ event on_enter
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_21, FALSE));
+        while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
         evt_actor_begin();
-        act_anim_seq(AB_03, 18600, 4300, F_ROOM_21);
+        act_anim_seq(AB_03, 18600, 4300, F_ROOM_SURVIVOR_ANIM_DONE);
         act_reset();
     }
     sleep(20);
@@ -315,7 +315,7 @@ event on_enter
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_21, FALSE));
+        while (ck(FG_ROOM, F_ROOM_SURVIVOR_ANIM_DONE, FALSE));
         sleep(20);
     }
     else
@@ -347,13 +347,13 @@ event on_enter
     evt_finish();
 }
 
-event on_aot_04
+event pass_code_panel
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-        cutnext(CAM_04);
+        cutnext(CAM_04_PASS_CODE_PANEL);
         message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
     }
     do
@@ -363,12 +363,12 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_34, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
-                set(FG_SCENARIO, F_SCENARIO_34, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE);
                 se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
@@ -380,12 +380,12 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_35, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
-                set(FG_SCENARIO, F_SCENARIO_35, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE);
                 se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
@@ -397,12 +397,12 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_36, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
-                set(FG_SCENARIO, F_SCENARIO_36, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE);
                 se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
@@ -414,15 +414,15 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_34, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE))
         {
-            if (ck(FG_SCENARIO, F_SCENARIO_35, TRUE))
+            if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE))
             {
-                if (ck(FG_SCENARIO, F_SCENARIO_36, TRUE))
+                if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE))
                 {
-                    if (ck(FG_SCENARIO, F_SCENARIO_50, FALSE))
+                    if (ck(FG_SCENARIO, F_SCENARIO_DOUBLE_LOCK_OPENED, FALSE))
                     {
-                        set(FG_SCENARIO, F_SCENARIO_50, TRUE);
+                        set(FG_SCENARIO, F_SCENARIO_DOUBLE_LOCK_OPENED, TRUE);
                         se_play_3d(SND_BANK_ROOM, SE_18_DBROCK, 0, SND_AT_POINT, 0, 2300, 4850);
                     }
                 }
@@ -440,13 +440,13 @@ event on_aot_04
     evt_finish();
 }
 
-event on_aot_04_2
+event pass_code_panel_no_codes
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-        cutnext(CAM_04);
+        cutnext(CAM_04_PASS_CODE_PANEL);
         message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
     }
     do
@@ -474,7 +474,7 @@ event on_aot_04_2
     evt_finish();
 }
 
-event on_aot_01_door
+event electronic_lock
 {
     run
     {
@@ -491,7 +491,7 @@ event on_aot_01_door
     evt_finish();
 }
 
-event on_aot_03_door
+event double_lock
 {
     run
     {
