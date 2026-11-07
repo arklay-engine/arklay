@@ -18,6 +18,8 @@
 #                        /home/ted/repos/arklay/target/bot-pack/re1.akpak)
 #   -t, --timeout SEC    per-run timeout         (BATCH_TIMEOUT, default 1100)
 #       --max-ticks N    --bot-max-ticks         (BATCH_MAX_TICKS, default 400000)
+#   -P, --param K=V      --bot-param, repeatable (BATCH_PARAMS, space-separated K=V list):
+#                        a story decision (mods/bot/params/re1.xml declares them)
 #       --no-build       skip `cargo build --profile test-release`
 #
 # Output: <out>/<name>/seed-<s>.log (large, ~30 MB), seed-<s>.saves/, and
@@ -30,7 +32,7 @@ here="$PWD"
 case "${1:-}" in
   compare) shift; exec python3 -I scripts/bot-batch-summary.py compare "$@" ;;
   summary) shift; exec python3 -I scripts/bot-batch-summary.py summary "$@" ;;
-  -h|--help) sed -n 2,26p "$0"; exit 0 ;;
+  -h|--help) sed -n 2,28p "$0"; exit 0 ;;
 esac
 
 NAME="${BATCH_NAME:-$(date +%Y%m%d-%H%M%S)}"
@@ -41,6 +43,7 @@ JOBS="${BATCH_JOBS:-$(nproc)}"
 PACK="${BOT_PACK:-/home/ted/repos/arklay/target/bot-pack/re1.akpak}"
 TIMEOUT="${BATCH_TIMEOUT:-1100}"
 MAX_TICKS="${BATCH_MAX_TICKS:-400000}"
+PARAMS="${BATCH_PARAMS:-}"
 BUILD=1
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +55,7 @@ while [ $# -gt 0 ]; do
     -p|--pack) PACK="${2:?}"; shift ;;
     -t|--timeout) TIMEOUT="${2:?}"; shift ;;
     --max-ticks) MAX_TICKS="${2:?}"; shift ;;
+    -P|--param) PARAMS="${PARAMS:+$PARAMS }${2:?}"; shift ;;
     --no-build) BUILD=0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -83,11 +87,11 @@ BIN="$here/target/test-release/arklay"
 DIR="$OUT/$NAME"
 mkdir -p "$DIR"
 DIR="$(cd "$DIR" && pwd)"
-printf 'pack=%s\nrisk=%s\nseeds=%s\nmax_ticks=%s\ncommit=%s\n' \
-  "$PACK" "$RISK" "$(echo $seed_list | tr ' ' ',')" "$MAX_TICKS" \
+printf 'pack=%s\nrisk=%s\nseeds=%s\nmax_ticks=%s\nparams=%s\ncommit=%s\n' \
+  "$PACK" "$RISK" "$(echo $seed_list | tr ' ' ',')" "$MAX_TICKS" "$PARAMS" \
   "$(git rev-parse --short HEAD 2>/dev/null)" > "$DIR/batch.txt"
 
-export BIN PACK RISK MAX_TICKS TIMEOUT DIR here
+export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS
 run_one() {
   s="$1"
   rm -rf "$DIR/seed-$s.saves"; mkdir -p "$DIR/seed-$s.saves"
@@ -95,8 +99,10 @@ run_one() {
   # Seed 0 is the default run: no --bot-seed, the game's own RNG.
   seed_arg=(--bot-seed "$s")
   [ "$s" = 0 ] && seed_arg=()
+  param_arg=()
+  for p in $PARAMS; do param_arg+=(--bot-param "$p"); done
   ( cd "$here" && timeout "$TIMEOUT" "$BIN" "$PACK" --mod mods/bot --bot --bot-headless \
-      --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" "${seed_arg[@]}" \
+      --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" "${seed_arg[@]}" "${param_arg[@]}" \
       --save-dir "$DIR/seed-$s.saves" ) > "$DIR/seed-$s.log" 2>&1
   code=$?
   echo "exit=$code secs=$(( $(date +%s) - start ))" > "$DIR/seed-$s.exit"
@@ -105,6 +111,6 @@ run_one() {
 }
 export -f run_one
 
-echo "batch $NAME: seeds $(echo $seed_list | tr ' ' ',') risk $RISK jobs $JOBS -> $DIR"
+echo "batch $NAME: seeds $(echo $seed_list | tr ' ' ',') risk $RISK${PARAMS:+ params $PARAMS} jobs $JOBS -> $DIR"
 echo "$seed_list" | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
 python3 -I scripts/bot-batch-summary.py summary "$DIR" | tee "$DIR/summary.txt"

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Story flags that mark a scene or a branch in Jill's game, for the
+     coverage report (scripts/bot-coverage.py). Bank 0 is scenario, bank 1
+     common; a run logs each change as `story: common 0x61 set`. Not read by
+     the engine.
+
+     The ending is select_id(common 0xC0, common 0x4B) at the 303 escape
+     (src/ending.rs): 0xC0 clear and 0x4B clear, Barry; 0x4B set, Best; 0xC0
+     set, Bad; both set, Chris. -->
+<story format="1">
+  <flag bank="1" bit="0x05" label="106: Barry's lockpick (Master of Unlocking)"/>
+  <flag bank="1" bit="0x07" label="118: Barry's acid rounds (Get chemical first)"/>
+  <flag bank="1" bit="0x5F" label="212: Barry at Forest's body"/>
+  <flag bank="1" bit="0x0A" label="212: You don't have a weapon"/>
+  <flag bank="0" bit="0x67" label="212: Forest alone"/>
+  <flag bank="1" bit="0x20" label="115: Jill Sandwich, Barry's rescue"/>
+  <flag bank="1" bit="0x29" label="115: the ceiling trap"/>
+  <flag bank="1" bit="0x08" label="20A: There's a page missing"/>
+  <flag bank="1" bit="0xAE" label="405: WHAT ABOUT MY FAMILY (the voices)"/>
+  <flag bank="1" bit="0xB2" label="406: Barry's scene"/>
+  <flag bank="1" bit="0x43" label="210: Yawn's poison"/>
+  <flag bank="1" bit="0x22" label="20E: the poison collapse"/>
+  <flag bank="1" bit="0x24" label="100: the second serum"/>
+  <flag bank="1" bit="0x63" label="20D: Richard saved"/>
+  <flag bank="1" bit="0x64" label="20D: Richard dead"/>
+  <flag bank="0" bit="0x7F" label="the radio from Richard"/>
+  <flag bank="0" bit="0x16" label="V-JOLT made"/>
+  <flag bank="0" bit="0x13" label="40F: V-JOLT poured"/>
+  <flag bank="0" bit="0x29" label="40C: Plant 42 dead"/>
+  <flag bank="1" bit="0x26" label="20C: Now I've done it (the rope snaps)"/>
+  <flag bank="1" bit="0x25" label="20C: Barry back with the rope"/>
+  <flag bank="1" bit="0x5D" label="308: Barry finds the hole"/>
+  <flag bank="1" bit="0x5C" label="308: Barry goes ahead (Yes, Yes or No, No)"/>
+  <flag bank="1" bit="0x59" label="308: Barry goes with Jill (Yes, No)"/>
+  <flag bank="1" bit="0x52" label="308: Barry goes alone (No, Yes)"/>
+  <flag bank="1" bit="0x5A" label="308: Follow Immediately"/>
+  <flag bank="1" bit="0x5B" label="Barry's branch"/>
+  <flag bank="1" bit="0x48" label="30A: Enrico without Barry"/>
+  <flag bank="1" bit="0x55" label="307: Tell my family (cave)"/>
+  <flag bank="0" bit="0x37" label="513: the Tyrant dead"/>
+  <flag bank="0" bit="0x2B" label="514: the self-destruct"/>
+  <flag bank="1" bit="0x54" label="502: Tell my family (lab)"/>
+  <flag bank="0" bit="0x34" label="508: pass-code lamp 1"/>
+  <flag bank="0" bit="0x35" label="508: pass-code lamp 2"/>
+  <flag bank="0" bit="0x36" label="508: pass-code lamp 3"/>
+  <flag bank="0" bit="0x50" label="508: the cell door opens"/>
+  <flag bank="0" bit="0x65" label="50B: Chris through the bars"/>
+  <flag bank="1" bit="0x4B" label="512: Chris freed"/>
+  <flag bank="1" bit="0xC0" label="Barry gone"/>
+</story>

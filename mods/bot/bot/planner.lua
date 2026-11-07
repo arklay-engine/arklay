@@ -2767,6 +2767,22 @@ function BotPlanner.step(bot)
         p.goal = nil
         return
     end
+    -- A door an <avoid> holds shut since the goal was chosen (its gate came
+    -- to hold on the way: 308's door 1 once Barry goes ahead, for a
+    -- backtrack) is dropped, not walked through.
+    -- (A door avoided already when chosen is reached another way, through
+    -- a <door via>: 302's elevator.)
+    if goal.kind == "door" then
+        local avoid = BotPuzzle.avoided(bot, goal.slot)
+        if goal.avoided_at_start == nil then
+            goal.avoided_at_start = avoid ~= nil
+        end
+        if avoid and not goal.avoided_at_start then
+            bot:log(string.format("goal dropped: door slot %d is avoided now: %s", goal.slot, avoid))
+            p.goal = nil
+            return
+        end
+    end
     local status
     if goal.job.camera then
         status = BotNav.visit_camera(bot, goal.job)

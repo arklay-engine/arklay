@@ -38,7 +38,7 @@ end
 local function answer_prompt(bot, scene, s, tick)
     local want = "yes"
     if BotPuzzle and BotPuzzle.answer then
-        want = BotPuzzle.answer(bot) or "yes"
+        want = BotPuzzle.answer(bot, scene) or "yes"
     end
     if s.prompt_logged ~= tick - 1 then
         bot:log(string.format("prompt: answering %s (cursor on %s)", want,

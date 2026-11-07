@@ -437,15 +437,19 @@ function BotPuzzle.pressed(bot, slot)
     BOT_STATE.last_press = { room = bot:room().id, slot = slot, tick = bot:tick() }
 end
 
--- The answer for the prompt on screen: "yes", "no" or nil (no fact).
-function BotPuzzle.answer(bot)
+-- The answer for the prompt on screen: "yes", "no" or nil (no fact). A
+-- fact's slot, flag and message id (the prompt's, less the fast-reveal bit)
+-- must all match where given.
+function BotPuzzle.answer(bot, scene)
     local last = BOT_STATE.last_press
     local room = bot:room().id
+    local message = scene and scene.message and (scene.message & ~BotConst.MESSAGE_FAST)
     for _, fact in ipairs(meta(bot).answers or {}) do
         local slot_ok = fact.slot == nil
             or (last and last.room == room and last.slot == fact.slot)
         local flag_ok = fact.bank == nil or bot:flag(fact.bank, fact.bit)
-        if slot_ok and flag_ok then
+        local message_ok = fact.message == nil or fact.message == message
+        if slot_ok and flag_ok and message_ok then
             return fact.choice
         end
     end

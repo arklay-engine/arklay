@@ -30,6 +30,9 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 
 # --bot-goal-room ROOM finishes the run on entering ROOM (three hex digits).
 
+# --bot-param NAME=VALUE (repeatable) steers a story decision for this run;
+# see "Story parameters" below. Example: --bot-param richard=leave
+
 # Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
 ```
@@ -776,6 +779,7 @@ leaves the game session.
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
 | `bot:world()` | The observed world model: rooms, doors, items, action presses and the frontier. Read-only; see [World model](#world-model). |
 | `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight-or-run, save and critical-health thresholds. |
+| `bot:param(name)` | The story parameter's value for this run, a string (`params/re1.xml`, `--bot-param`). An undeclared name is an error. |
 | `bot:saves()` | The run's saves, read-only: `{count, slot, room, tick, reloads, deaths, deaths_since_save, needs_ribbon, ribbons}`. `slot` (0-based), `room` and `tick` describe the latest save the engine's save screen wrote and are `nil` before the first. `needs_ribbon` is the character's ink ribbon rule and `ribbons` the held count. |
 | `bot:goal_room()` | The `--bot-goal-room` id (uppercase, such as `"20D"`), or `nil`. |
 | `bot:cameras()` | The current room's camera switch zones: `{from, to, x, z}` rows, `x`/`z` the zone's corner mean. Each cut group's header record is skipped. |
@@ -911,7 +915,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<fight>` | `enemy`, `bank`, `bit`, optional `after_bank` + `after_bit` (and `after_while="clear"`), optional `stage`, optional `optional="yes"`, optional `label` | With an `after` flag the step holds the sequence as for `<interact>`. With `optional="yes"` the sequence passes the step while no held gun has rounds and a knowledge band for the enemy (30C's Black Tiger: the bot dodges its spit while the knife cuts the web). With `stage` (one room-id character), the box loadout readies the fight's weapon from that stage too (303's Tyrant, reached by the lab's escape lift). Stay in the room and fight entity id `enemy` until flag `bank`/`bit` is set: walk to 4500 units from the part with the most health (for an enemy with `parts="yes"`, the weakest live part: Plant 42's vines before its body), face it and let the combat layer shoot (5-minute timeout). One step of the `<interact>` sequence, for a boss that never comes to the player. An enemy fought with a hand weapon (`melee`) holds the sequence until that weapon is held, and is walked up to inside the weapon's band instead. |
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
-| `<answer>` | `choice` (`yes` or `no`), `slot` and/or `bank`+`bit`, optional `label` | At the yes/no prompt opened by AOT `slot` (or identified by the flag), choose `choice`. At least one of `slot` or the flag is required; `bank` and `bit` go together. |
+| `<answer>` | `choice` (`yes` or `no`), any of `slot`, `bank`+`bit` and `message`, optional `label` | At the yes/no prompt opened by AOT `slot`, while flag `bank`/`bit` is set, and/or showing message id `message` (less the fast-reveal bit), choose `choice`; every given key must match. `message` tells apart prompts a scene opens with no press and no flag between them (308's Barry prompts 23, 24 and 25). At least one key is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state; remote planning reads every room's avoids (`bot:avoid_facts()`) and never heads for a door one holds shut. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
 | `<push>` | `object`, `slot`, optional `direction` (and `clear="full"` or `until="stop"`) or `axis`, optional `bank` + `bit`, optional `after_bank` + `after_bit`, optional `reveals`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, 400 and 300 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter, or with `clear="full"` its far edge (an object pushed out of another one's way). With `until="stop"` it is pushed that way until it stalls against a wall, whatever the zone. Without a direction, `axis` (`x` or `z`) lines the centre up with the zone on that axis only. Such a step is also done once the zone is gone or the item it names was taken. With `bank` and `bit` (both or neither) the step is also done once that flag is set: a zone event that takes the object away (a statue that falls). A push the bot stops for a fight or a heal walks back behind the object before it measures a stall. With an `after` flag the step holds the sequence until that flag is set, as for `<interact>` (306's box waits for the crank). With `reveals` (the item AOT slot the puzzle makes live), a full inventory holds the step until a slot is free (306's box resets once the slab is cranked). |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `until_bank` + `until_bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done, or clear with `done="clear"`. With an `after` flag the use is open only while that flag is set, and with an `until` flag only while that flag is clear, so one item can take one zone twice (301's crank drains the pool, then fills it after Plant 42). A use whose menu closes by itself counts as done when the item stays held: the cranks are picked up with quantity 0 and never used up. A use that goes in but leaves its done flag clear is tried again at once, up to three times, for a piece that turns one step a use (30F's crank). |
@@ -931,6 +935,39 @@ fact then holds for that character only (player flag bit 0: 1 Jill, 0 Chris).
 The engine drops the other character's facts before `bot:room_meta()` and
 `bot:use_facts()` see them, so a room whose two variants number their AOT
 slots differently lists each character's facts side by side.
+
+#### Story parameters
+
+A story parameter is a decision the game leaves to the player (bring Richard
+the serum, answer Barry's prompt, free a cell), so that runs can be steered
+down each branch of the story for regression and oracle testing.
+`params/re1.xml` declares each one with its allowed `values` and a `default`,
+the choice the bot makes without being told:
+
+```xml
+<params format="1">
+  <param name="richard" values="save|leave" default="save"
+         label="bring poisoned Richard the serum in 20D"/>
+</params>
+```
+
+`--bot-param NAME=VALUE` (repeatable) picks another value for one run, and
+every fact element takes `when="NAME=VALUE"`: the fact holds only while the
+parameter has that value. `NAME!=VALUE` negates, `a|b` lists alternatives,
+and several conditions separated by spaces must all hold
+(`when="richard=leave barry=yes"`). The engine drops facts whose `when` does
+not hold before Lua sees them, as for `character`. Lua reads a value as
+`bot:param(NAME)`. An undeclared name or value is an error on the command
+line, in a `when` (a unit test loads every shipped room file with the
+declarations) and in `bot:param`. The run log starts with the run's values
+(`params: richard=leave`).
+
+Coverage: every run logs each story flag it changes, scenario (bank 0) and
+common (bank 1) bits, as `story: common 0x61 set`. `scripts/bot-coverage.sh`
+runs one batch per parameter combination (the list in the script is the
+regression set) and `scripts/bot-coverage.py report` prints each batch's
+story flags, the flags only it reached, and the union; `diff A B` compares
+two batches. `bot-batch.sh -P NAME=VALUE` passes a parameter to a batch.
 
 ```xml
 <bot format="2">

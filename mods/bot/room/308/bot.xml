@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 308, the cave where Barry finds the hole (Jill). Entered with common
+     0x25 set (Barry came back with the rope in 20C) and 0x5D clear, the init
+     spawns Barry and runs on_enter, which sets 0x5D and plays his "let's go
+     together". The scene asks two yes/no prompts with no press and no flag
+     between them, so the answers key on the message id:
+
+       23 "Will you go with him?" (event_01), then
+       24 "Do you want him to go first?" after Yes (event_02), or
+       25 "Will you stay here?" after No (event_05).
+
+       Yes, Yes and No, No: event_03 / event_07 set common 0x5C (Barry goes
+         ahead) and arm AOT 3. Walking through AOT 3 and leaving by door 1
+         on the same visit runs on_aot_01_door_2: 0x5A and 0x5B set, 0x5C
+         cleared (Follow: Barry's branch). Any other exit keeps 0x5C
+         (Backtrack): the next 307 entry plays "Tell my family" (cave) and
+         sets 0xC0 (Barry gone).
+       Yes, No: event_04 sets 0x58, 0x59 and 0x5B (Barry goes with Jill).
+       No, Yes: event_06 sets 0x52; 502 then plays "Tell my family" (lab).
+
+     Story parameters cave_q1, cave_q2 and cave_exit (params/re1.xml) pick
+     the branch. Without them: Yes, Yes, Follow. -->
+<bot format="2">
+  <answer message="23" choice="yes" when="cave_q1=yes" label="go with Barry"/>
+  <answer message="23" choice="no" when="cave_q1=no" label="do not go with Barry"/>
+  <answer message="24" choice="yes" when="cave_q2=yes" label="let Barry go first"/>
+  <answer message="24" choice="no" when="cave_q2=no" label="go first, Barry behind"/>
+  <answer message="25" choice="yes" when="cave_q2=yes" label="stay here"/>
+  <answer message="25" choice="no" when="cave_q2=no" label="take another way"/>
+  <avoid slot="1" bank="1" bit="0x5C" while="set" when="cave_exit=backtrack"
+         reason="backtrack: door 1 behind Barry would follow him"/>
+</bot>

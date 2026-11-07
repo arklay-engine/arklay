@@ -20,6 +20,9 @@ mod knowledge;
 #[cfg(test)]
 mod lua_lint;
 mod meta;
+mod params;
+
+pub use params::parse_assignment as parse_bot_param;
 mod stats;
 mod steer;
 mod world;
@@ -45,6 +48,12 @@ use crate::weapons::WeaponState;
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
+/// The flag banks whose changes the run log records (`story: ...`): bank 0
+/// (scenario) and bank 1 (common), where the story's scenes and branches
+/// leave their marks.
+const STORY_BANKS: usize = 2;
+const STORY_BANK_NAMES: [&str; STORY_BANKS] = ["scenario", "common"];
+
 /// The default `--bot-risk`: how much danger the planner may accept, 0..=1.
 pub const DEFAULT_RISK: f64 = 0.25;
 
@@ -68,6 +77,9 @@ pub struct BotOptions {
     /// The game-RNG seed (`--bot-seed`); `None` leaves the game's own random
     /// stream untouched.
     pub seed: Option<u32>,
+    /// The story parameters picked for this run (`--bot-param NAME=VALUE`),
+    /// checked against the pack's `params/<game>.xml` when the bot attaches.
+    pub params: Vec<(String, String)>,
 }
 
 /// The game RNG state for the `session`th session of a `--bot-seed` run
@@ -93,6 +105,7 @@ impl Default for BotOptions {
             risk: DEFAULT_RISK,
             goal_room: None,
             seed: None,
+            params: Vec::new(),
         }
     }
 }
@@ -2733,6 +2746,8 @@ struct BotCtx {
     tick: u64,
     /// The `--bot-risk` setting.
     risk: f64,
+    /// The story parameters (`params/<game>.xml`, `--bot-param`).
+    params: Rc<params::Params>,
     /// The `--bot-goal-room` setting.
     goal_room: Option<Rc<str>>,
     shares: BotShares,
@@ -2929,6 +2944,7 @@ impl UserData for BotCtx {
                 row.set("slot", fact.slot)?;
                 row.set("bank", fact.flag.map(|(bank, _)| bank))?;
                 row.set("bit", fact.flag.map(|(_, bit)| bit))?;
+                row.set("message", fact.message)?;
                 row.set("label", fact.label.as_deref())?;
                 answers.push(row)?;
             }
@@ -3110,6 +3126,15 @@ impl UserData for BotCtx {
         });
 
         methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
+
+        // `bot:param(name)`: the story parameter's value for this run. An
+        // undeclared name is an error, so a typo in a route fails loudly.
+        methods.add_method("param", |_lua, bot, name: String| {
+            bot.params
+                .get(&name)
+                .map(str::to_string)
+                .ok_or_else(|| mlua::Error::RuntimeError(format!("unknown bot parameter `{name}`")))
+        });
 
         methods.add_method("knowledge", |lua, bot, ()| match &bot.knowledge {
             Some(knowledge) => knowledge.to_lua(lua),
@@ -3878,6 +3903,13 @@ pub struct BotRuntime {
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
     risk: f64,
+    /// The story parameters: declared in `params/<game>.xml`, set by
+    /// `--bot-param`; kept across [`Self::reset`].
+    params: Rc<params::Params>,
+    /// The story flag banks (scenario, common) as the last tick saw them:
+    /// each bit that changes is logged (`story: ...`), the coverage record
+    /// of which scenes and branches a run played.
+    story: Option<[game::FlagBank; STORY_BANKS]>,
     /// The `--bot-goal-room` setting; kept across [`Self::reset`].
     goal_room: Option<Rc<str>>,
     /// Run statistics for `--bot-stats`.
@@ -3915,6 +3947,8 @@ impl BotRuntime {
             avoid_facts: Rc::default(),
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
+            params: Rc::new(params::load(pack, &[])?),
+            story: None,
             goal_room: None,
             stats: stats::BotStats::default(),
             save_log: SaveLog::default(),
@@ -3930,6 +3964,45 @@ impl BotRuntime {
     pub fn with_goal_room(mut self, room: Option<&str>) -> Self {
         self.goal_room = room.map(|room| Rc::from(room.to_ascii_uppercase()));
         self
+    }
+
+    /// Log each story flag (scenario and common banks) that changed since the
+    /// last tick: `story: scenario 0x2B set`. The first tick of a session
+    /// only records the banks. A reload logs the bits the loaded save
+    /// differs in, so a run's union of `set` lines is the scenes it reached.
+    fn observe_story(&mut self, snapshot: &SessionSnapshot) {
+        let now: [game::FlagBank; STORY_BANKS] = std::array::from_fn(|bank| snapshot.flags[bank]);
+        if let Some(before) = &self.story {
+            let room = snapshot.room.room3();
+            for (bank, name) in STORY_BANK_NAMES.iter().enumerate() {
+                if before[bank] == now[bank] {
+                    continue;
+                }
+                for sel in 0..=u8::MAX {
+                    let (was, is) = (before[bank].bit(sel), now[bank].bit(sel));
+                    if was != is {
+                        let what = if is { "set" } else { "cleared" };
+                        self.shares.memory.borrow_mut().log(format!(
+                            "tick {} room {room}: story: {name} {sel:#04X} {what}",
+                            self.tick
+                        ));
+                    }
+                }
+            }
+        }
+        self.story = Some(now);
+    }
+
+    /// Set the story parameters (`--bot-param NAME=VALUE`, repeatable): each
+    /// name and value must be declared in the pack's `params/<game>.xml`.
+    pub fn with_params(mut self, pack: &Pack, overrides: &[(String, String)]) -> Result<Self> {
+        self.params = Rc::new(params::load(pack, overrides)?);
+        Ok(self)
+    }
+
+    /// The run's story parameters, `name=value` in declaration order.
+    pub fn params_summary(&self) -> String {
+        self.params.summary()
     }
 
     /// Set the planner's risk setting (`--bot-risk`), clamped to `0..=1`.
@@ -3968,20 +4041,24 @@ impl BotRuntime {
         self.tick = self.tick.saturating_add(1);
         let room_id = session.loaded.id;
         if self.meta_room != Some(room_id) {
-            self.meta = meta::load(pack, room_id)?.map(Rc::new);
+            self.meta = meta::load(pack, room_id, &self.params)?.map(Rc::new);
             self.meta_room = Some(room_id);
         }
         let jill = meta::jill(room_id.player_flag);
         if self.uses.as_ref().is_none_or(|(held, _)| *held != jill) {
-            self.uses = Some((jill, Rc::new(meta::load_uses(pack, Some(jill))?)));
-            self.holds = Rc::new(meta::load_holds(pack, Some(jill))?);
-            self.fights = Rc::new(meta::load_fights(pack, Some(jill))?);
-            self.rides = Rc::new(meta::load_rides(pack, Some(jill))?);
-            self.errands = Rc::new(meta::load_errands(pack, Some(jill))?);
-            self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill))?);
-            self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill))?);
+            self.uses = Some((
+                jill,
+                Rc::new(meta::load_uses(pack, Some(jill), Some(&self.params))?),
+            ));
+            self.holds = Rc::new(meta::load_holds(pack, Some(jill), Some(&self.params))?);
+            self.fights = Rc::new(meta::load_fights(pack, Some(jill), Some(&self.params))?);
+            self.rides = Rc::new(meta::load_rides(pack, Some(jill), Some(&self.params))?);
+            self.errands = Rc::new(meta::load_errands(pack, Some(jill), Some(&self.params))?);
+            self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
+            self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill), Some(&self.params))?);
         }
         let snapshot = SessionSnapshot::build(session);
+        self.observe_story(&snapshot);
         self.stats.observe_snapshot(self.tick, &snapshot);
         let saved = self.observe_saves(&snapshot);
         {
@@ -4016,6 +4093,7 @@ impl BotRuntime {
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
+            params: self.params.clone(),
             goal_room: self.goal_room.clone(),
             shares: self.shares.share(),
         };
@@ -4171,6 +4249,7 @@ impl BotRuntime {
     /// rather than reusing the old VM's route state.
     pub fn reset(&mut self, pack: &Pack) -> Result<()> {
         self.shares = BotShares::default();
+        self.story = None;
         self.tick = 0;
         self.stats = stats::BotStats::default();
         self.save_log = SaveLog::default();
@@ -4316,6 +4395,7 @@ mod tests {
             "path",
             "world",
             "risk",
+            "param",
             "goal_room",
             "cameras",
             "saves",
@@ -5369,6 +5449,7 @@ mod tests {
             knowledge: None,
             tick: 1,
             risk: 0.6,
+            params: Rc::default(),
             goal_room: Some(Rc::from("20D")),
             shares,
         })
@@ -6526,6 +6607,7 @@ mod tests {
             knowledge: None,
             tick: 1,
             risk: 0.25,
+            params: Rc::default(),
             goal_room: None,
             shares: BotShares::default(),
         })

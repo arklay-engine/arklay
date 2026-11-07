@@ -14,5 +14,5 @@
      and the door opens either way. -->
 <bot format="2">
   <deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62"
-           character="jill" label="the serum to Richard"/>
+           character="jill" when="richard=save" label="the serum to Richard"/>
 </bot>
