@@ -3643,6 +3643,15 @@ impl GameSession {
             }
             let was_active = self.game.message.active;
             self.open_re2_item_screen(pack);
+            if self.game.re2_item_get_stopped_frame() {
+                crate::character2::tick_stopped(
+                    &mut self.game,
+                    &self.loaded.room,
+                    pack,
+                    &mut self.npc_models,
+                    Some(&mut self.enemy_lua),
+                );
+            }
             if let Some(cue) = self.game.tick_re2_item_get() {
                 self.play_re2_status_sounds(pack, &[cue]);
             }
@@ -15428,6 +15437,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         vm.tick(&mut host);
     }
     context.game.re2.clear_tick_flags();
+    context.game.re2.clear_enemy_areas();
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
