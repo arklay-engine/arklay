@@ -2,7 +2,7 @@
 
 This page is the reference for RE 1 `.akscr` room scripts: the files, the
 language, the room variants, the names a script can use and every
-instruction. [`.akscr` scripts](../index.md) covers what the RE 1 and RE 2
+instruction. [Room scripts](../index.md) covers what the RE 1 and RE 2
 dialects share.
 
 An RE 1 room has three kinds of script, run by two virtual machines:

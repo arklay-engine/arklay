@@ -1140,7 +1140,7 @@ fn real_captures_stay_deterministic_and_audio_free() {
 
 #[test]
 fn integration_deviations_are_documented() {
-    let deviations = include_str!("../../docs/m13-deviations.md");
+    let deviations = include_str!("../../docs/internals/deviations/m13.md");
     for topic in [
         "Weapon banks",
         "Enemy position type 2",

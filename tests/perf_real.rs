@@ -5,7 +5,7 @@
 //!  ARKLAY_RE1_PACK=/path/to/re1.akpak \
 //!  cargo test --profile test-release --test perf_real -- --ignored --nocapture`
 //!
-//! The budgets and their measurement are recorded in `docs/performance.md`.
+//! The budgets and their measurement are recorded in `docs/internals/performance.md`.
 //! `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget so a deliberately
 //! lower value fails the test, exactly as the milestone acceptance requires.
 //! The test lives in its own binary, not in `tests/real`, so the other
@@ -30,7 +30,7 @@ const LOAD_BUDGET_MS: f64 = 60.0;
 const RENDER_BUDGET_MS: f64 = 30.0;
 /// Sum of the script/entity/player update phases over 600 ticks. Raised by
 /// the enemy milestone: the pack's Lua scripts run on every scripted entity
-/// tick and load on the room's first tick (see `docs/performance.md`).
+/// tick and load on the room's first tick (see `docs/internals/performance.md`).
 const UPDATE_BUDGET_MS: f64 = 25.0;
 /// Wall clock for the whole 600-tick run, process start included.
 const ROOM_600_BUDGET_MS: u64 = 5_000;

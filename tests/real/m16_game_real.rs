@@ -44,7 +44,7 @@ const SLICE_OPCODES: [u8; 12] = [
 ];
 
 /// The only placeholder arms the shipped corpus still dispatches, intentional
-/// and named in `docs/m16-deviations.md`: `0x05` with an out-of-range flag
+/// and named in `docs/internals/deviations/m16.md`: `0x05` with an out-of-range flag
 /// bank. Any other op reaching a placeholder arm fails the audit.
 const KNOWN_PLACEHOLDERS: [u8; 1] = [0x05];
 

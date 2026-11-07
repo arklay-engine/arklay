@@ -108,16 +108,16 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # voice lines work. The title, the new-game choice, the inventory, the status
 # screen and the item box are drawn from the original's art. Leon A's route from
 # the new game to the main hall matches the original tick for tick, zombies
-# included, apart from the differences in docs/re2-deviations.md. Zombies,
+# included, apart from the differences in docs/internals/deviations/re2.md. Zombies,
 # lickers, dogs, crows, Mr. X, the plants and the spiders are ported; the
 # alligator is in progress and the G forms are to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
-# and plays its sounds and films (see issue #244 and docs/re2-deviations.md);
+# and plays its sounds and films (see issue #244 and docs/internals/deviations/re2.md);
 # --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
 # seeds, ...) into a mod pack in the per-user mods directory; see
-# docs/modding.md for the mapping
+# docs/mods.md for the mapping
 cargo run -- convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
 
 # List every pack entry with its size, then the entry count and total bytes
@@ -200,7 +200,7 @@ cargo run -- re1.akpak --ending 1
 
 # Frame-time report for a 600-tick room run: per-tick min/avg/p95/max, the
 # load/update/effect/render phase totals and the entity/effect high-water
-# marks. Needs no --capture; the budgets live in docs/performance.md. Adding
+# marks. Needs no --capture; the budgets live in docs/internals/performance.md. Adding
 # --frame-rate 120 also times the frames a 120 fps display would draw between
 # the ticks against the per-frame budget
 cargo run -- re1.akpak --room 100 --ticks 600 --stats
@@ -272,7 +272,7 @@ cargo run -- re1.akpak --no-mods --room 100
 # roaming %APPDATA%\arklay\mods and the install directory's) and the legacy
 # <config dir>/mods. Only top-level *.akpak files and mod directories are
 # candidates. `[mods]` in arklay.toml enables,
-# disables and orders them by manifest id (see docs/modding.md).
+# disables and orders them by manifest id (see docs/mods.md).
 cargo run -- re1.akpak --room 100
 
 # Inspect a pack's manifest, layers and merged entries
@@ -298,15 +298,18 @@ cargo run -- scd build games/re1/room/103/room.akscr --room 6031 --region jpn --
 cargo run -- re1.akpak --room 106 --mansion2
 ```
 
-`docs/modding.md` documents the manifest grammar, the replacement formats and
-their override table, the mod source convention, the
-language-file overrides and the sandboxed Lua hook API; `docs/akscr/`
-documents the `.akscr` script language and the `.s` grammar
-(`docs/akscr/index.md`, `docs/akscr/re1/` and `docs/akscr/re2/`, with a page per opcode); `docs/language.md`
-documents the `language/<tag>.txt` format, the key registry, the fallback chain
-and the missing-glyph box; `docs/m15-deviations.md` records the deliberate
-limits (whole-room script replacement, sandbox, error/budget policy). A run
-without any layer stays byte-identical to a pre-M15 run, Lua or not.
+The documentation is an mdbook in `docs/` (`mdbook serve docs`), published at
+<https://arklay-engine.github.io/arklay/>. `docs/packs/` has a page per pack
+folder (the manifest, rooms, items, enemies, fonts, language files and the
+rest), with each folder's file formats and naming; `docs/mods.md` documents
+mod layering, the replacement formats, HD texture packs, `mod build` and
+`convert-mod`; `docs/scripting/` is the Lua API and the `.akscr` room script
+language (`docs/scripting/room/re1/` and `docs/scripting/room/re2/`, with a
+page per opcode); `docs/internals/` holds the architecture, status,
+performance budgets and the recorded deviations, such as
+`docs/internals/deviations/m15.md`'s limits on mods (whole-room script
+replacement, sandbox, error/budget policy). A run without any layer stays
+byte-identical to a pre-M15 run, Lua or not.
 
 `convert-game` and `extract` report progress on stderr as a single bar for the
 whole command. `convert-game` runs its asset categories (rooms, camera cuts,
@@ -385,7 +388,7 @@ a message that times itself out. In the interactive window the
 native-resolution GUI draws that message's text centred along the bottom edge,
 in place of the original's message window, with the chosen size, colour and
 background band, and the speaker's name in front when the language file names
-one (see [docs/language.md](docs/language.md#subtitles)). `subtitles = false`
+one (see [docs/packs/language.md](docs/packs/language.md#subtitles)). `subtitles = false`
 hides these lines; their timing still runs. The French, German, Spanish,
 Italian, Finnish and Japanese texts carry subtitle text. The USA release's
 English (and the Russian seed) keeps only the timing, so
@@ -629,16 +632,16 @@ cargo run -- re1.akpak --mod crloadsave.akpak
 The ignored `tests/real/m16_ui_real.rs` golden harness compares sampled
 room/message/NPC/UI frames against a locally generated set when
 `ARKLAY_RE1_GOLDEN` points at it; the set is never committed and is a
-regression/cross-check, not an independent oracle. `docs/m16-deviations.md`
+regression/cross-check, not an independent oracle. `docs/internals/deviations/m16.md`
 lists every approximation M16 leaves.
 
 ## Hardening and release
 
-- `docs/architecture.md` maps every module, the fixed 30 Hz frame flow, the
+- `docs/internals/architecture.md` maps every module, the fixed 30 Hz frame flow, the
   trust boundaries, the per-format budget caps and the engine invariants.
-- `docs/status.md` is the milestone/format/verification matrix;
-  `docs/m17-deviations.md` records what the hardening tooling does not prove.
-- `docs/performance.md` records the frame-time budgets and the reference
+- `docs/internals/status.md` is the milestone/format/verification matrix;
+  `docs/internals/deviations/m17.md` records what the hardening tooling does not prove.
+- `docs/internals/performance.md` records the frame-time budgets and the reference
   machine; `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget in the
   ignored performance test.
 - The local check has tiers (`AGENTS.md` has the full policy):

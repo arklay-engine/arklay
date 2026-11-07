@@ -8000,7 +8000,7 @@ impl GameState {
     /// `room_action_effect` (handler 0x0B): raise the effect-zone bit, which
     /// shifts every footstep sound column by -3. The original also spawns a
     /// dust billboard under a moving player; that cosmetic half is not ported
-    /// (documented in `docs/m13-deviations.md`).
+    /// (documented in `docs/internals/deviations/m13.md`).
     fn raise_effect_zone(&mut self) {
         self.flags[5].apply(MSF2_EFFECT_ZONE, 0);
     }

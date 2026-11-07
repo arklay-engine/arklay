@@ -14,7 +14,7 @@
 ---load screens, the debug menu, the launcher) are not
 ---[screen scripts](screen.md): they are retained screens written in XML
 ---markup (`assets/ui/*.xml`), built into a node tree that the engine lays
----out, paints and drives. See "GUI screen markup" in `docs/architecture.md`
+---out, paints and drives. See "GUI screen markup" in `docs/internals/architecture.md`
 ---for the elements, bindings and actions.
 ---
 ---A screen whose root names a script, `<screen script="name.lua">`, runs it

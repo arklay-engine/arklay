@@ -8,9 +8,9 @@ pack, so the engine has no hard-coded game data.
 
 This document is the map: the modules and their responsibilities, the frame
 data flow, the trust boundaries, the format inventory with each reader's
-budget, the engine invariants and the test taxonomy. `docs/status.md` records
+budget, the engine invariants and the test taxonomy. `docs/internals/status.md` records
 what is implemented and what the project knows it still approximates;
-`docs/m17-deviations.md` records what the hardening milestone does not prove.
+`docs/internals/deviations/m17.md` records what the hardening milestone does not prove.
 
 ## Module map
 
@@ -173,7 +173,7 @@ mod layers. `language::Catalog` resolves the selected tag (the `--language`
 flag, then the OS locale, then `en-US`), `charset` encodes the value into the
 font's byte stream, and `text::Text` is the facade the message machine, the
 menus and the overlays call. The format, the key registry, the fallback chain
-and the mod story live in [`language.md`](language.md).
+and the mod story live in [`language.md`](../packs/language.md).
 
 ## The fixed 30 Hz tick and the frame data flow
 
@@ -415,7 +415,7 @@ Arklay's input class determines what the code may assume:
 
 Each row names the reader, the policy cap applied at the trust boundary and
 where the format is exercised. Caps are policy numbers chosen from the shipped
-corpus with headroom and recorded in `docs/performance.md`; they are not
+corpus with headroom and recorded in `docs/internals/performance.md`; they are not
 claims about the original.
 
 | Format | Entry point | Cap | Tests |
@@ -452,7 +452,7 @@ claims about the original.
 `arklay verify` maps entry paths to these readers, requires every RDT camera's
 `room/<id>/cut/<camera>.bmp` to be present, and counts unknown entries as
 *opaque*; `--strict` upgrades an unknown extension to a failure. The
-status matrix in `docs/status.md` records the counts a fresh verify reports for
+status matrix in `docs/internals/status.md` records the counts a fresh verify reports for
 the shipped packs.
 
 ## The GPU renderer

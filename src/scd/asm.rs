@@ -3084,7 +3084,7 @@ off_0006:
         // The reader tolerates payloads 2 and 3 (an inline command truncated
         // to less than its two-byte minimum), but a valid `evt_single` carries
         // one complete command, so the assembler's floor is 4. Documented in
-        // docs/m15-deviations.md.
+        // docs/internals/deviations/m15.md.
         for payload in ["2", "3"] {
             let error = assemble(&format!(
                 "\
