@@ -6,8 +6,15 @@ use super::vm::{Host, Step};
 use crate::game::{Door, GameState, ROOM_ACTION_SLOTS, RoomAction, RoomActionKind};
 use crate::state::Zone;
 
-/// The flag banks `ck` and `set` index (`Flg_addr`).
-const BANKS: usize = 32;
+/// The flag banks `ck` and `set` index: every entry of `Flg_addr`
+/// (`0x53B218`), 0 to 39. The original's banks overlap in memory (bank 9,
+/// `fg_map`, is five words long and bank 35's second word is its first),
+/// while each bank here is eight words of its own, so an index past a bank's
+/// real size doesn't alias as the original's would. No script uses one.
+pub const BANKS: usize = 40;
+/// The banks a save from before the map's banks holds, 0 to 31; a save
+/// keeps banks 32 to 39 after the rest of its fields.
+const SAVE_BANKS: usize = 32;
 
 /// RE2's script state, which has no RE1 counterpart.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -311,11 +318,14 @@ impl PartialEq for Characters {
 impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_CHOICE + 2;
+const SAVE_LEN: usize = SAVE_LEN_NO_MAP + (BANKS - SAVE_BANKS) * 8 * 4;
+/// A save from before banks 32 to 39 (the map's, `fg_map_c`, `fg_map_i`,
+/// `fg_item_2` and the floors').
+const SAVE_LEN_NO_MAP: usize = SAVE_LEN_NO_CHOICE + 2;
 /// A save from before the new-game choice's two bytes.
 const SAVE_LEN_NO_CHOICE: usize = SAVE_LEN_NO_BOX + crate::game::itembox2::BOX_SLOTS * 3;
 /// A save from before the item box's slots.
-const SAVE_LEN_NO_BOX: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
+const SAVE_LEN_NO_BOX: usize = (SAVE_BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
 /// A save from before the personal item's two bytes.
 const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN_NO_BOX - 2;
 
@@ -607,7 +617,11 @@ impl Re2State {
     /// table. The rest belongs to the room, and the room's init rebuilds it.
     pub fn to_save_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(SAVE_LEN);
-        for word in self.banks.iter().flatten().chain(&self.door_locks) {
+        for word in self.banks[..SAVE_BANKS]
+            .iter()
+            .flatten()
+            .chain(&self.door_locks)
+        {
             out.extend_from_slice(&word.to_le_bytes());
         }
         for var in &self.vars {
@@ -622,6 +636,9 @@ impl Re2State {
         out.extend(self.item_box.iter().flatten());
         out.push(u8::from(self.hard_mode));
         out.push(u8::from(self.censorship_off));
+        for word in self.banks[SAVE_BANKS..].iter().flatten() {
+            out.extend_from_slice(&word.to_le_bytes());
+        }
         out
     }
 
@@ -637,6 +654,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_MAP
             && bytes.len() != SAVE_LEN_NO_CHOICE
             && bytes.len() != SAVE_LEN_NO_BOX
             && bytes.len() != SAVE_LEN_NO_PERSONAL
@@ -648,10 +666,14 @@ impl Re2State {
             .0
             .iter()
             .map(|raw| u32::from_le_bytes(*raw));
-        for word in self.banks.iter_mut().flatten().chain(&mut self.door_locks) {
+        for word in self.banks[..SAVE_BANKS]
+            .iter_mut()
+            .flatten()
+            .chain(&mut self.door_locks)
+        {
             *word = words.next()?;
         }
-        let rest = &bytes[(BANKS * 8 + 2) * 4..];
+        let rest = &bytes[(SAVE_BANKS * 8 + 2) * 4..];
         let (vars, rest) = rest.split_at(512);
         for (var, raw) in self.vars.iter_mut().zip(vars.as_chunks::<2>().0) {
             *var = u16::from_le_bytes(*raw);
@@ -682,6 +704,16 @@ impl Re2State {
             .unwrap_or(&[]);
         self.hard_mode = choice.first().is_some_and(|&byte| byte != 0);
         self.censorship_off = choice.get(1).is_some_and(|&byte| byte != 0);
+        // A save from before them loads with the map's banks clear.
+        let mut map = bytes
+            .get(SAVE_LEN_NO_MAP..)
+            .unwrap_or(&[])
+            .as_chunks::<4>()
+            .0
+            .iter();
+        for word in self.banks[SAVE_BANKS..].iter_mut().flatten() {
+            *word = map.next().map_or(0, |raw| u32::from_le_bytes(*raw));
+        }
         Some(())
     }
 
@@ -3474,6 +3506,55 @@ mod tests {
         assert_eq!(action.kind, RoomActionKind::Item);
         assert_eq!(action.params[..5], [83, 1, 156, 255, 1]);
         assert_eq!(game.re2.gates[8].parent, Some(0xC2));
+    }
+
+    #[test]
+    fn the_banks_reach_every_flg_addr_entry() {
+        let mut state = Re2State::default();
+        state.set_flag(33, 2, 1);
+        state.set_flag(35, 4, 1);
+        state.set_flag(39, 0, 1);
+        assert!(state.flag(33, 2) && state.flag(35, 4) && state.flag(39, 0));
+        assert!(!state.flag(40, 0));
+        state.set_flag(40, 0, 1);
+        assert!(!state.flag(40, 0));
+    }
+
+    #[test]
+    fn a_save_keeps_the_map_banks() {
+        let mut state = Re2State::default();
+        for (bank, index) in [(9, 0x1F), (32, 1), (33, 2), (35, 4), (34, 7), (31, 3)] {
+            state.set_flag(bank, index, 1);
+        }
+        state.vars[5] = 77;
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.banks, state.banks);
+        assert_eq!(loaded.vars[5], 77);
+        // A save from before them loads with banks 32 to 39 clear.
+        let mut old = Re2State::default();
+        old.set_flag(33, 5, 1);
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_MAP]).unwrap();
+        assert!(
+            old.banks[SAVE_BANKS..]
+                .iter()
+                .flatten()
+                .all(|&word| word == 0)
+        );
+        assert_eq!(old.banks[..SAVE_BANKS], state.banks[..SAVE_BANKS]);
+        assert_eq!(old.vars[5], 77);
+    }
+
+    #[test]
+    fn a_script_reaches_the_map_banks() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let mut host = GameHost { game: &mut game };
+        host.set_flag(33, 2, 1);
+        assert!(host.flag(33, 2));
+        assert!(game.re2.flag(33, 2));
     }
 
     #[test]
