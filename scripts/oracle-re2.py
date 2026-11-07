@@ -73,6 +73,23 @@ ROOM = 0x0098EB16
 CUT = 0x0098EB18
 RANDOM = 0x00988610  # `Rnd`'s state
 RANDOM_BASE = 0x00695E58  # `Sce_rnd_set`'s state
+# The title (`Title`, `0x5035B0`) and its task, task 0 of `Tasks` (0x24 bytes
+# each: +8 the init step, +9 the sub-step).
+TASKS = 0x0068A220
+TITLE_MV_STATE = 0x00691B80  # `title_mv_state`, the step `Title_mv` runs
+TITLE_DISP = 0x00691B81  # `Ti_Disp_add`, `Title_main`'s step
+TITLE_MENU = 0x00691B82  # the menu's page, then its step
+TITLE_SEL_MODE = 0x00691B86  # `Ti_Sel_mode`
+TITLE_CUR = 0x00691B87  # `Ti_Cur`
+TITLE_PULSE = 0x00691B88  # the cursor's pulse
+TITLE_SLIDE = 0x00691B8A  # the menu's slide count
+TITLE_DEMO = 0x00691B90  # `demo_countdown`
+TITLE_KIDO = 0x00691B92  # `Ti_kido`
+TITLE_ADD = 0x00691B94  # `Ti_Add`
+TITLE_FLASH = 0x00691B96  # the white tiles' level
+TITLE_LOGO = 0x00691B98  # the logo's offset
+TITLE_LOGO_COUNT = 0x00691B9C  # the logo's slide count
+FADE = 0x0098F07C  # `Fade_set`'s slot 0: level, step, mode
 
 ENTITY_ROUTINES = 0x04
 ENTITY_ID = 0x08
@@ -1053,11 +1070,85 @@ def read_pace(path: Path) -> dict[int, float]:
     return pace
 
 
+def title_trace(game: Game) -> str:
+    """The title's state (`Title`, `0x5035B0`): its task's steps, the menu's and the fade's."""
+    task = game.read(TASKS, 0x14)
+    fade = game.read(FADE, 0x10)
+    kido, add = struct.unpack_from("<hh", fade, 0)
+    return (
+        f"ti={game.u8(TITLE_MV_STATE)},{game.u8(TITLE_DISP)},{task[8]},{task[9]},"
+        f"{game.u8(TITLE_MENU)},{game.u8(TITLE_MENU + 1)},{game.u8(TITLE_SEL_MODE)},{game.u8(TITLE_CUR)},"
+        f"{game.u8(TITLE_PULSE)},{game.u8(TITLE_SLIDE)},{game.u16(TITLE_DEMO)} "
+        f"tlogo={game.i16(TITLE_FLASH)},{game.i16(TITLE_LOGO)},{game.i32s(TITLE_LOGO_COUNT, 1)[0]} "
+        f"tfade={kido},{add},{fade[4]},{game.u16(TITLE_KIDO)},{game.u16(TITLE_ADD)}"
+    )
+
+
+def boot_trace_line(game: Game, tick: int, pad: int) -> str:
+    """One tick from boot, before play: the title's state, the sound and the music."""
+    fields = [
+        f"t={tick}",
+        f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",
+        f"pad={pad}",
+        f"fgsys={game.u32(FG_SYSTEM):08x}",
+        title_trace(game),
+        music_trace(game),
+        "snd=" + ("/".join(game.sounds) or "-"),
+    ]
+    game.sounds.clear()
+    return " ".join(fields)
+
+
+def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
+    """Record `args.ticks` ticks from boot, the title's included: `--input`'s ticks count from boot."""
+    entries = parse_input(Path(args.input) if args.input else None)
+    if args.shot_dir:
+        Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
+    sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
+    session.wants_pictures = bool(args.shot_dir and args.shot_every)
+    tick_log = open(trace_path.with_suffix(".ticks"), "w", newline="\n") if args.sound else None
+    try:
+        with open(trace_path, "w", newline="\n") as trace:
+            trace.write("oracle-trace v1 engine=ref\n")
+            game = session.game
+            game.seize_threads()
+            original = game.u8(BREAK_PAD)
+            game.write(BREAK_PAD, b"\xcc")
+            game.watch_sounds()
+            started = time.monotonic()
+            cursor = 0
+            pad = 0
+            tick = 0
+            while tick <= args.ticks:
+                tid, regs = game.run_to_break()
+                # This stop is the end of the tick before it.
+                if tick > 0:
+                    trace.write(boot_trace_line(game, tick - 1, pad) + "\n")
+                    if tick_log:
+                        tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
+                    if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
+                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png")
+                while cursor < len(entries) and entries[cursor][0] <= tick:
+                    pad = entries[cursor][1]
+                    cursor += 1
+                tick += 1
+                regs.rax = pad
+                game.resume_from_break(tid, regs, original)
+            print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
+    finally:
+        session.close()
+
+
 def game_root(args: argparse.Namespace) -> Path:
     return Path(args.game or os.environ.get("ARKLAY_RE2_ROOT", ""))
 
 
 def record_command(args: argparse.Namespace) -> int:
+    if args.boot:
+        record_boot(args, Path(args.trace), Path(args.work).resolve())
+        return 0
     record(args, Path(args.trace), Path(args.work).resolve(), args.tick_delay)
     return 0
 
@@ -1259,6 +1350,10 @@ def main() -> int:
     command.add_argument("--ticks", type=int, required=True)
     command.add_argument("--trace", required=True)
     command.add_argument("--tick-delay", type=float, default=0.0)
+    command.add_argument(
+        "--boot", action="store_true",
+        help="trace from boot, the title included: --input's ticks count from boot, and no title route is played",
+    )
     command.set_defaults(func=record_command)
 
     command = commands.add_parser("scenario", help="record the original, run arklay, compare")

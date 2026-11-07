@@ -827,5 +827,76 @@ ignore = [
     [7325, "pneck"],
     [7326, "pneck"],
 ]
+
+# The title from boot (oracle/re2.md, "The title"): the original reaches `Title_init` on tick 189, which is arklay's
+# tick 0 of `--ui title`.
+[[run]]
+name = "title_menu"
+ui = "title"
+offset = 189
+ticks = 700
+input = "title_menu.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 699]
+expect = "match"
+record = ""
+
+# LOAD GAME: the confirm's flash and fade to black; the title hands over to the load screen on tick 530.
+[[run]]
+name = "title_load"
+ui = "title"
+offset = 189
+ticks = 531
+input = "title_load.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 529]
+expect = "match"
+record = ""
+
+# OPTION: the decide cue and a fade to black; the title hands over to the option task on tick 409, which arklay
+# doesn't have (docs/re2-deviations.md, "The title").
+[[run]]
+name = "title_option"
+ui = "title"
+offset = 189
+ticks = 409
+input = "title_option.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 408]
+expect = "match"
+record = ""
+
+# SPECIAL: its row slides up and the five extras show under it; the cancel slides back to the rows.
+[[run]]
+name = "title_special"
+ui = "title"
+offset = 189
+ticks = 700
+input = "title_special.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 699]
+expect = "match"
+record = ""
+
+# No input: the idle count reaches 0x708 at tick 1990, the screen fades to black over 128 ticks, and on tick 2118 the
+# title hands over to the attract demo (arklay's own reel; docs/re2-deviations.md, "The title").
+[[run]]
+name = "title_demo"
+ui = "title"
+offset = 189
+ticks = 2119
+input = "title_demo.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 2118]
 expect = "match"
 record = ""

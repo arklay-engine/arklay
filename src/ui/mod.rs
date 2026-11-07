@@ -175,6 +175,9 @@ pub enum UiCue {
     /// A current-room bank sound (`play_sfx(2, slot)`): the slot of the
     /// loaded room's sound-table row, which only the session can resolve.
     RoomSound(u8),
+    /// An RE 2 core-bank slot (`Snd_se_on(0x4nn0000)`), from the bank the
+    /// screen's game loaded (the title's `Snd_load_core(0x10)`).
+    Core(u8),
 }
 
 impl UiCue {
@@ -193,7 +196,7 @@ impl UiCue {
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
             UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
             UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
-            UiCue::RoomSound(_) => None,
+            UiCue::RoomSound(_) | UiCue::Core(_) => None,
         }
     }
 }

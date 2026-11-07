@@ -1395,6 +1395,52 @@ impl Framebuffer {
         }
     }
 
+    /// A PlayStation tile of grey `level` over `dst` in semi-transparency
+    /// `mode`, as RE 2's fades and flashes draw (`System_trans`): 0 averages
+    /// it with the frame, 1 adds it, 2 takes it away and 3 adds a quarter of
+    /// it, each channel clamped. The PC's renderer takes mode 2 away as a
+    /// product, the frame times `1 - level / 255` (rounded), and the
+    /// recordings show it so. A recorded (GPU) frame takes the nearest
+    /// blend it has: a black or white veil of the same weight.
+    pub fn psx_tile(&mut self, dst: [i32; 4], mode: u8, level: u8) {
+        let [x, y, width, height] = dst;
+        if self.list.is_some() {
+            let alpha = f32::from(level) / 255.0;
+            let colour = match mode & 3 {
+                2 => [0.0, 0.0, 0.0, alpha],
+                0 => [alpha, alpha, alpha, 0.5],
+                _ => [1.0, 1.0, 1.0, alpha],
+            };
+            self.record_solid(
+                [x, y, x.saturating_add(width), y.saturating_add(height)],
+                colour,
+            );
+            return;
+        }
+        let start_x = x.max(0) as usize;
+        let start_y = y.max(0) as usize;
+        let end_x = x.saturating_add(width).min(self.width as i32).max(0) as usize;
+        let end_y = y.saturating_add(height).min(self.height as i32).max(0) as usize;
+        let level = u32::from(level);
+        for row in start_y..end_y {
+            for column in start_x..end_x {
+                let offset = (row * self.width as usize + column) * 4;
+                let Some(pixel) = self.rgba.get_mut(offset..offset + 3) else {
+                    continue;
+                };
+                for channel in pixel {
+                    let value = u32::from(*channel);
+                    *channel = match mode & 3 {
+                        0 => (value + level) / 2,
+                        1 => (value + level).min(255),
+                        2 => (value * (255 - level) + 127) / 255,
+                        _ => (value + level / 4).min(255),
+                    } as u8;
+                }
+            }
+        }
+    }
+
     /// Rasterize a one-pixel line from `(x0, y0)` to `(x1, y1)`, clipped to
     /// the framebuffer (like [`Self::fill_rect`], it ignores the sprite clip).
     ///
@@ -5102,6 +5148,22 @@ pub fn mesh_depth(meshes: &[EntityMesh<'_>], camera: &Camera, width: u32, height
 mod tests {
     use super::*;
     use crate::model::{TmdObject, TmdPrim};
+
+    #[test]
+    fn a_psx_tile_blends_in_each_semi_transparency_mode() {
+        let mut framebuffer = Framebuffer::new();
+        let at = |framebuffer: &Framebuffer, x: usize| framebuffer.rgba[x * 4..x * 4 + 3].to_vec();
+        framebuffer.fill_rect([0, 0, 8, 1], [100, 200, 250, 255]);
+        framebuffer.psx_tile([0, 0, 2, 1], 0, 40);
+        framebuffer.psx_tile([2, 0, 2, 1], 1, 40);
+        framebuffer.psx_tile([4, 0, 2, 1], 2, 210);
+        framebuffer.psx_tile([6, 0, 1, 1], 3, 40);
+        assert_eq!(at(&framebuffer, 0), [70, 120, 145], "averaged");
+        assert_eq!(at(&framebuffer, 2), [140, 240, 255], "added, clamped");
+        assert_eq!(at(&framebuffer, 4), [18, 35, 44], "taken away as a product");
+        assert_eq!(at(&framebuffer, 6), [110, 210, 255], "a quarter added");
+        assert_eq!(at(&framebuffer, 7), [100, 200, 250], "outside the tile");
+    }
 
     #[test]
     fn draw_line_covers_the_quad_and_skips_offscreen_pixels() {

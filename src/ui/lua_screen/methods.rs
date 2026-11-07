@@ -325,6 +325,12 @@ impl UserData for Api<'_> {
             Ok(())
         });
 
+        // An RE 2 core-bank slot (`Snd_se_on(0x4nn0000)`): the title's cues.
+        methods.add_method("core_sound", |_lua, api, slot: u8| {
+            api.cx.play_cue(UiCue::Core(slot));
+            Ok(())
+        });
+
         // A current-room bank sound (`play_sfx(2, slot)`); the session
         // resolves the slot through the loaded room's sound table.
         methods.add_method("room_sound", |_lua, api, slot: u8| {

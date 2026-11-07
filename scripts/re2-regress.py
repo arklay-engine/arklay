@@ -228,7 +228,10 @@ def run_one(run: dict, ctx: dict) -> dict:
 
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
-    if run.get("setup_script"):
+    screen = run.get("ui", "game")
+    if screen != "game":
+        setup = None
+    elif run.get("setup_script"):
         setup = INPUTS / run["setup_script"]
     else:
         setup = out / f"{name}.setup.lua"
@@ -239,7 +242,7 @@ def run_one(run: dict, ctx: dict) -> dict:
     else:
         input_path = INPUTS / run["input"]
     for needed in (setup, input_path):
-        if not needed.exists():
+        if needed is not None and not needed.exists():
             result["problems"].append(f"{needed.name} is missing")
             result["text"] = "setup or input missing"
             return result
@@ -249,14 +252,21 @@ def run_one(run: dict, ctx: dict) -> dict:
     frames_dir = out / f"{name}.frames"
     # `room = "new"` starts arklay's new game, as the original's record does, with no `--room`.
     start = [] if run["room"] == "new" else ["--room", str(run["room"]), "--player", str(run.get("player", 0))]
-    command = [
-        str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
-        "--character", str(run.get("character", 0)),
-        "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
-        "--setup-script", str(setup), "--input", str(input_path),
-    ]
-    if run.get("sound", True):
-        command.append("--sound")
+    if screen != "game":
+        # A screen before play (`ui = "title"`): arklay boots it, and the reference is a `--boot` record.
+        command = [
+            str(ctx["arklay"]), str(ctx["pack"]), "--ui", screen,
+            "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace), "--input", str(input_path),
+        ]
+    else:
+        command = [
+            str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
+            "--character", str(run.get("character", 0)),
+            "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
+            "--setup-script", str(setup), "--input", str(input_path),
+        ]
+        if run.get("sound", True):
+            command.append("--sound")
     if want_frames:
         frames_dir.mkdir(parents=True, exist_ok=True)
         command += ["--capture-every", "1", "--capture-dir", str(frames_dir)]
@@ -371,6 +381,8 @@ def record_run(run: dict, args, refs: Path) -> int:
     ]
     if run.get("sound", True):
         command.append("--sound")
+    if run.get("ui", "game") != "game":
+        command.append("--boot")
     if run.get("frames"):
         command += ["--shot-dir", str(dest / "frames"), "--shot-every", "1"]
     command += shlex.split(run["record"])

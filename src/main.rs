@@ -1327,10 +1327,14 @@ fn main() -> Result<()> {
                     .ui
                     .as_deref()
                     .is_some_and(|screen| !matches!(screen, "game" | "demo" | "font"));
+            // `--ui title --trace` traces the title's ticks (the RE 2 oracle's
+            // `--boot` record).
+            let title_trace = tracing && cli.ui.as_deref() == Some("title");
             if let Some(screen) = &cli.ui
                 && cli.ticks > 0
                 && ((screen != "game" && screen != "demo") || !tracing)
                 && !app_script
+                && !title_trace
             {
                 bail!(
                     "--ticks with --ui is only supported for `--ui game` with --trace, or an \
@@ -1362,10 +1366,10 @@ fn main() -> Result<()> {
             // valid trace target like `--ui game`/`--ui demo`.
             if tracing
                 && cli.room.is_none()
-                && !matches!(cli.ui.as_deref(), Some("game" | "demo"))
+                && !matches!(cli.ui.as_deref(), Some("game" | "demo" | "title"))
                 && (cli.load.is_none() || cli.ui.is_some())
             {
-                bail!("--trace is only supported for --room or --ui game/demo");
+                bail!("--trace is only supported for --room or --ui game/demo/title");
             }
             if cli.input.is_some() && !tracing && !app_script {
                 bail!("--input requires --trace (or an app --ui screen with --capture-dir)");

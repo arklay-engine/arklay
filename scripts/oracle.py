@@ -79,6 +79,8 @@ class Tick:
     inventory: str | None = None
     # RE2's item page: arklay's `ip`, the end of the original's `gi`.
     item_page: str | None = None
+    # RE2's title (`ti`, `tlogo`, `tfade`): a `--boot` record's screen state.
+    screen: dict[str, str] = field(default_factory=dict)
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -87,7 +89,9 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade"}
+# A screen's own fields, compared only when named.
+SCREEN_FIELDS = ("ti", "tlogo", "tfade")
 
 
 def normalize_room(stage: str, room: str) -> str:
@@ -153,11 +157,11 @@ def parse_trace(path: str) -> list[Tick]:
                 Tick(
                     t=int(fields["t"]),
                     room=normalize_room(stage, room),
-                    rng=fields["rng"],
-                    rseed=fields["rseed"],
-                    fade=normalize_fade(fields["fade"]),
+                    rng=fields.get("rng", "-"),
+                    rseed=fields.get("rseed", "-"),
+                    fade=normalize_fade(fields.get("fade", "0:-1")),
                     player=player_values,
-                    cam=fields["cam"],
+                    cam=fields.get("cam", "-"),
                     entities=entities,
                     frame_hash=fields.get("f", ""),
                     motion=fields.get("mot"),
@@ -170,6 +174,7 @@ def parse_trace(path: str) -> list[Tick]:
                     sound=fields.get("snd"),
                     inventory=fields.get("inv"),
                     item_page=item_page(fields),
+                    screen={key: fields[key] for key in SCREEN_FIELDS if key in fields},
                 )
             )
     return ticks
@@ -205,6 +210,7 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("inv", tick.inventory))
     if tick.item_page is not None:
         items.append(("ip", tick.item_page))
+    items.extend(sorted(tick.screen.items()))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):

@@ -394,6 +394,32 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         },
     );
 
+    // `fade_tile(mode, level[, x, y, w, h])`: RE 2's fade, a grey tile of
+    // `level` over the frame (or the rect) in PlayStation blend `mode` (0
+    // average, 1 add, 2 subtract, 3 a quarter added).
+    #[allow(clippy::type_complexity)]
+    methods.add_method_mut(
+        "fade_tile",
+        |_lua,
+         api,
+         (mode, level, x, y, w, h): (
+            i64,
+            i64,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+        )| {
+            let framebuffer = api.framebuffer.as_deref_mut().ok_or_else(no_draw)?;
+            let dst = match (x, y, w, h) {
+                (Some(x), Some(y), Some(w), Some(h)) => rect(x, y, w, h),
+                _ => rect(0, 0, framebuffer.width as i32, framebuffer.height as i32),
+            };
+            framebuffer.psx_tile(dst, byte(mode), byte(level));
+            Ok(())
+        },
+    );
+
     methods.add_method_mut(
         "blend_black_rect",
         |_lua, api, (x, y, w, h, alpha): (i32, i32, i32, i32, i64)| {
