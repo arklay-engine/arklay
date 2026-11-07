@@ -77,6 +77,57 @@ pub trait SaveScreen: Screen {
     fn native_canvas(&self) -> Option<&gui::Canvas> {
         None
     }
+
+    /// What a player sees on the screen, for the player bot's read-only
+    /// view; `None` for a screen that keeps no readable state (the bot
+    /// cannot drive it).
+    fn bot_view(&self) -> Option<SaveScreenView> {
+        None
+    }
+}
+
+/// The save/load screen as a player sees it, read from the shipped script's
+/// `M.state` without running any of its code.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SaveScreenView {
+    /// Save mode (a typewriter); load mode otherwise.
+    pub save: bool,
+    /// The script's stage: `idle`, `confirm_overwrite`, `save_anim`,
+    /// `error` or `fade_out`.
+    pub stage: String,
+    /// The highlighted row: `0..8` the slots, then the autosave rows, then
+    /// the exit row.
+    pub cursor: i64,
+    /// The exit row's index.
+    pub exit_row: i64,
+    /// Whether each numbered slot holds a save.
+    pub slots: Vec<bool>,
+    /// The zero-based numbered slot each row writes or loads (`-1` for a
+    /// row outside the slots), for a screen whose rows are not the slots in
+    /// order; `None` when row `i` is slot `i`.
+    pub rows: Option<Vec<i64>>,
+    /// The open yes/no question's highlighted answer (`true` on YES), for
+    /// a screen whose question does not open on YES; `None` otherwise.
+    pub answer: Option<bool>,
+}
+
+/// The bot's pad presses on a native screen, as the key events a player's
+/// keyboard gives it: each press edge becomes one navigation key, so a bot
+/// press does exactly what a player press does.
+pub fn pad_events(ui: &super::UiInput) -> Vec<gui::GuiEvent> {
+    use gui::input::{Device, GuiKey, PadStyle};
+    [
+        (ui.up, GuiKey::Up),
+        (ui.down, GuiKey::Down),
+        (ui.left, GuiKey::Left),
+        (ui.right, GuiKey::Right),
+        (ui.confirm, GuiKey::Confirm),
+        (ui.cancel, GuiKey::Cancel),
+    ]
+    .into_iter()
+    .filter(|&(pressed, _)| pressed)
+    .map(|(_, key)| gui::GuiEvent::Key(key, Device::Gamepad(PadStyle::Xbox)))
+    .collect()
 }
 
 /// A screen drawn at the window's resolution: the app hands it the menus'

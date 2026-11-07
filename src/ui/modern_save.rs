@@ -16,12 +16,14 @@ use anyhow::Result;
 use crate::assets::{self, Artwork, Geometry};
 use crate::gui;
 use crate::gui::canvas::Picture;
-use crate::gui::save_screen::{self, SaveLoadScreen, SaveMode, SaveRequest, SaveRow};
+use crate::gui::save_screen::{self, SaveFocus, SaveLoadScreen, SaveMode, SaveRequest, SaveRow};
 use crate::render::Framebuffer;
 use crate::save::{self, SaveFile};
 use crate::state::{Image, RoomId};
 
-use super::save_load::{NativeScreen, SaveOutcome, SaveScreen, consume_snapshot_ribbon};
+use super::save_load::{
+    NativeScreen, SaveOutcome, SaveScreen, SaveScreenView, consume_snapshot_ribbon,
+};
 use super::{Screen, ScreenAction, ScreenResult, UiContext, UiInput};
 
 /// The widest a room thumbnail is kept.
@@ -60,6 +62,8 @@ pub struct ModernSaveScreen {
     standalone: bool,
     result: Option<ScreenResult>,
     outcome: Option<SaveOutcome>,
+    /// Where the cursor rested after the last input, for the bot's view.
+    focus: SaveFocus,
 }
 
 impl ModernSaveScreen {
@@ -86,6 +90,7 @@ impl ModernSaveScreen {
             standalone: cx.game.is_none(),
             result: None,
             outcome: None,
+            focus: SaveFocus::None,
         };
         screen.open(cx)?;
         Ok(screen)
@@ -124,6 +129,13 @@ impl ModernSaveScreen {
             }
         }
         None
+    }
+
+    /// Remember where the cursor rests, for [`SaveScreen::bot_view`].
+    fn note_focus(&mut self) {
+        if let Some(screen) = &mut self.gui {
+            self.focus = screen.focus();
+        }
     }
 
     /// Write the pending block to `path`, then leave.
@@ -196,6 +208,7 @@ impl Screen for ModernSaveScreen {
             Kind::Save { .. } => SaveMode::Save,
         };
         self.gui = Some(SaveLoadScreen::new(mode, rows)?);
+        self.note_focus();
         Ok(())
     }
 
@@ -223,6 +236,53 @@ impl SaveScreen for ModernSaveScreen {
     fn native_canvas(&self) -> Option<&gui::Canvas> {
         self.gui.as_ref().map(SaveLoadScreen::canvas)
     }
+
+    /// The list in the classic screen's terms: `cursor` is the highlighted
+    /// row, and `rows` names the numbered slot each row writes or loads
+    /// (save mode's first row is the new save, which takes the first free
+    /// file).
+    fn bot_view(&self) -> Option<SaveScreenView> {
+        let save = matches!(self.kind, Kind::Save { .. });
+        let mut rows: Vec<i64> = Vec::with_capacity(self.files.len() + 1);
+        if save {
+            let (_, slot) = free_file(&self.save_dir);
+            rows.push(slot.map_or(-1, |slot| slot as i64));
+        }
+        rows.extend(
+            self.files
+                .iter()
+                .map(|listed| listed.slot.map_or(-1, |slot| slot as i64)),
+        );
+        let mut slots = vec![false; save::SAVE_SLOT_COUNT];
+        for slot in self.files.iter().filter_map(|listed| listed.slot) {
+            slots[slot] = true;
+        }
+        let offset = usize::from(save);
+        let (stage, cursor, answer) = match self.focus {
+            _ if self.result.is_some() => ("fade_out", -1, None),
+            SaveFocus::Dialog { yes } => (
+                if save {
+                    "confirm_overwrite"
+                } else {
+                    "confirm_load"
+                },
+                -1,
+                Some(yes),
+            ),
+            SaveFocus::Create => ("idle", 0, None),
+            SaveFocus::Row(index) => ("idle", (index + offset) as i64, None),
+            SaveFocus::None => ("idle", -1, None),
+        };
+        Some(SaveScreenView {
+            save,
+            stage: stage.to_string(),
+            cursor,
+            exit_row: rows.len() as i64,
+            slots,
+            rows: Some(rows),
+            answer,
+        })
+    }
 }
 
 impl NativeScreen for ModernSaveScreen {
@@ -247,10 +307,12 @@ impl NativeScreen for ModernSaveScreen {
             return Vec::new();
         };
         let requests = screen.handle(events);
-        requests
+        let sounds = requests
             .into_iter()
             .filter_map(|request| self.request(request))
-            .collect()
+            .collect();
+        self.note_focus();
+        sounds
     }
 
     fn draw(&mut self, width: u32, height: u32, gpu: bool) -> bool {
@@ -436,4 +498,209 @@ fn opaque(image: Image) -> Picture {
 fn pair(picture: Picture) -> PicturePair {
     let grey = save_screen::greyscale(&picture);
     (Arc::new(picture), Arc::new(grey))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pack::Pack;
+    use crate::ui::save_load::pad_events;
+
+    /// A fresh save directory, removed when dropped.
+    struct Dir(PathBuf);
+
+    impl Dir {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("arklay-modern-save-{}-{label}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for Dir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn pack() -> &'static Pack {
+        use std::sync::OnceLock;
+        static PACK: OnceLock<Pack> = OnceLock::new();
+        PACK.get_or_init(|| {
+            let mut writer = crate::pack::PackWriter::new();
+            writer.add("unused", Vec::new()).unwrap();
+            Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+        })
+    }
+
+    fn context(dir: &Dir) -> UiContext<'_> {
+        UiContext {
+            authentic: false,
+            pack: pack(),
+            save_dir: &dir.0,
+            font: None,
+            text: None,
+            ticks: 0,
+            cues: Default::default(),
+            game: None,
+        }
+    }
+
+    /// A directory holding saves in numbered slots 0 and 2.
+    fn two_saves(label: &str) -> Dir {
+        let dir = Dir::new(label);
+        save::save(&dir.0, 0, &SaveFile::default()).unwrap();
+        save::save(&dir.0, 2, &SaveFile::default()).unwrap();
+        dir
+    }
+
+    /// One bot press, as the engine hands it to the native screen.
+    fn press(screen: &mut ModernSaveScreen, set: impl FnOnce(&mut UiInput)) {
+        let mut ui = UiInput::default();
+        set(&mut ui);
+        let events = pad_events(&ui);
+        assert_eq!(events.len(), 1);
+        screen.handle(&events);
+    }
+
+    fn view(screen: &ModernSaveScreen) -> SaveScreenView {
+        screen.bot_view().expect("the modern screen is readable")
+    }
+
+    #[test]
+    fn the_modern_screens_publish_the_classic_view() {
+        let dir = two_saves("view");
+        let mut cx = context(&dir);
+        let screen = ModernSaveScreen::open_save(&mut cx, SaveFile::default(), false).unwrap();
+        let saving = view(&screen);
+        assert!(saving.save);
+        assert_eq!(saving.stage, "idle");
+        // The cursor opens on the new save row, which takes slot 1.
+        assert_eq!(saving.cursor, 0);
+        let rows = saving.rows.clone().unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0], 1);
+        let mut listed = rows[1..].to_vec();
+        listed.sort();
+        assert_eq!(listed, [0, 2]);
+        assert_eq!(saving.exit_row, 3);
+        assert_eq!(
+            saving.slots,
+            [true, false, true, false, false, false, false, false]
+        );
+        assert_eq!(saving.answer, None);
+
+        let screen = ModernSaveScreen::open_load(&mut cx).unwrap();
+        let loading = view(&screen);
+        assert!(!loading.save);
+        assert_eq!(loading.stage, "idle");
+        assert_eq!(loading.cursor, 0);
+        let mut listed = loading.rows.clone().unwrap();
+        listed.sort();
+        assert_eq!(listed, [0, 2]);
+        assert_eq!(loading.slots, saving.slots);
+    }
+
+    #[test]
+    fn pad_presses_move_the_cursor_and_overwrite_a_save() {
+        let dir = two_saves("overwrite");
+        let mut cx = context(&dir);
+        let mut screen = ModernSaveScreen::open_save(&mut cx, SaveFile::default(), false).unwrap();
+        let rows = view(&screen).rows.unwrap();
+        let target = rows.iter().rposition(|&slot| slot == 2).unwrap() as i64;
+        while view(&screen).cursor < target {
+            let before = view(&screen).cursor;
+            press(&mut screen, |ui| ui.down = true);
+            assert_eq!(view(&screen).cursor, before + 1);
+        }
+        press(&mut screen, |ui| ui.up = true);
+        assert_eq!(view(&screen).cursor, target - 1);
+        press(&mut screen, |ui| ui.down = true);
+        assert_eq!(view(&screen).cursor, target);
+        // Writing over a save asks first, on NO.
+        press(&mut screen, |ui| ui.confirm = true);
+        let asking = view(&screen);
+        assert_eq!(asking.stage, "confirm_overwrite");
+        assert_eq!(asking.answer, Some(false));
+        press(&mut screen, |ui| ui.left = true);
+        assert_eq!(view(&screen).answer, Some(true));
+        press(&mut screen, |ui| ui.confirm = true);
+        assert_eq!(view(&screen).stage, "fade_out");
+        let cx = context(&dir);
+        assert_eq!(
+            screen.update(&cx, UiInput::default()),
+            ScreenResult::Done(ScreenAction::Resume)
+        );
+        assert_eq!(
+            screen.take_outcome(),
+            Some(SaveOutcome {
+                slot: Some(2),
+                ink_ribbon: false,
+            })
+        );
+    }
+
+    #[test]
+    fn a_pad_confirm_on_the_new_save_row_writes_the_first_free_slot() {
+        let dir = two_saves("create");
+        let mut cx = context(&dir);
+        let mut screen = ModernSaveScreen::open_save(&mut cx, SaveFile::default(), false).unwrap();
+        press(&mut screen, |ui| ui.confirm = true);
+        let cx = context(&dir);
+        assert_eq!(
+            screen.update(&cx, UiInput::default()),
+            ScreenResult::Done(ScreenAction::Resume)
+        );
+        assert_eq!(
+            screen.take_outcome().and_then(|outcome| outcome.slot),
+            Some(1)
+        );
+        assert!(dir.0.join("savedat2.dat").exists());
+    }
+
+    #[test]
+    fn a_pad_cancel_leaves_and_a_pad_confirm_loads_the_highlighted_row() {
+        let dir = two_saves("load");
+        let mut cx = context(&dir);
+        let mut screen = ModernSaveScreen::open_load(&mut cx).unwrap();
+        let rows = view(&screen).rows.unwrap();
+        press(&mut screen, |ui| ui.down = true);
+        press(&mut screen, |ui| ui.confirm = true);
+        let cx = context(&dir);
+        assert_eq!(
+            screen.update(&cx, UiInput::default()),
+            ScreenResult::Done(ScreenAction::LoadGame {
+                slot: rows[1] as usize
+            })
+        );
+        let mut cx = context(&dir);
+        let mut screen = ModernSaveScreen::open_load(&mut cx).unwrap();
+        press(&mut screen, |ui| ui.cancel = true);
+        let cx = context(&dir);
+        assert_eq!(
+            screen.update(&cx, UiInput::default()),
+            ScreenResult::Done(ScreenAction::Title)
+        );
+    }
+
+    #[test]
+    fn pad_events_map_each_press_to_one_key() {
+        let ui = UiInput {
+            up: true,
+            confirm: true,
+            held_down: true,
+            ..UiInput::default()
+        };
+        let keys: Vec<gui::GuiKey> = pad_events(&ui)
+            .into_iter()
+            .map(|event| match event {
+                gui::GuiEvent::Key(key, _) => key,
+                other => panic!("not a key: {other:?}"),
+            })
+            .collect();
+        assert_eq!(keys, [gui::GuiKey::Up, gui::GuiKey::Confirm]);
+        assert!(pad_events(&UiInput::default()).is_empty());
+    }
 }

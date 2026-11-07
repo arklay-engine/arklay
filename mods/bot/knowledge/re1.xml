@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Combat knowledge for the RE1 base game (and every pack generated from it,
+  such as the BioRand packs). The bot reads it through bot:knowledge().
+
+  Each value is read from the engine or the enemy scripts, or measured by
+  a test; the comment on each entry says which. A value nobody measured is
+  `unknown` and reaches the Lua as nil.
+
+  The hit rule the poses follow (src/combat.rs, apply_weapon_damage_with):
+  a candidate is skipped unless (status_flags & aim_flags & 0xE0) != 0 and
+  hit_state == 0. The pad picks aim_flags (src/weapons.rs, gun_hold_input):
+  up held = 0x80 ("up"), down held = 0x20 ("down"), neither = 0x40
+  ("torso"). detect_gun also refuses aim 0x80 on the zombie ids 0x00, 0x01
+  and 0x11 unless the weapon is the shotgun.
+
+  Attributes:
+    weapon: near = the cone starts this far ahead of the player; side = the
+      cone's half width past the enemy radius; cadence = ticks between shots;
+      headshot = inside this distance a torso/up shotgun hit pops a zombie's
+      head; weak = past this distance the shotgun hit may do less damage;
+      status_bit = the aim direction must match the enemy's status bit.
+      melee (optional) = a hand weapon: no rounds; held only for an enemy that
+      prefers it. staple (optional) = the firearm whose ammunition is the
+      most common (the handgun): never boxed to make room. reserve
+      (optional) = scarce rounds (the launchers): picked only for an enemy
+      that prefers it or when no other gun covers the kill. variant_of
+      (optional) = the weapon this is another loading of (the launcher
+      with acid or flame rounds): it counts as that weapon.
+    enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
+      downed = the pose for a downed or crawling enemy; up = which weapons an
+      aim-up shot can hit it with; reach = the distance its attack starts at;
+      crawl_reach = the same for a crawler; grabs = it holds the player;
+      outrun = Jill's run (210 a tick) beats its chase; speed = its chase
+      speed in units a tick; health = its largest
+      starting health; prefer (optional) = the weapon to fight it with
+      whenever it is held with the rounds for a kill; open (optional) = the
+      weapon that opens its fight while the preferred one is not held;
+      save (optional, needs open) = rounds of the open weapon no other
+      fight spends while its fight is undone; head (optional) = a torso or
+      up shotgun hit inside the weapon's headshot distance pops its head,
+      so the bot walks in for it. <keep> is the distance band to hold with one weapon
+      (outside the reach, inside the hit range) and the health one hit takes:
+      DEFAULT_FIRST_RUN's damage column (record weapon_adj + id * 10), plus
+      what zombie_reaction takes off for Jill's handgun (3, or 7 on 0x02).
+-->
+<knowledge format="1" game="re1">
+  <!-- Handgun. near/side measured by combat.rs
+       gun_cone_is_a_forward_strip_from_650_as_wide_as_the_range (Jill's
+       DEFAULT_RANGES slot 1 = 1300); the cone has no far limit. Cadence
+       measured in the re1 bench: 23 ticks from a fire press to the weapon's
+       return to the hold behaviour 0x13 (the bot's "cadence" log line, the
+       same in every room). -->
+  <weapon id="0x02" name="handgun" near="650" side="1300" cadence="23"
+          headshot="none" weak="none" status_bit="yes" staple="yes"/>
+  <!-- Shotgun. near/side from the same test (slot 2 = 2600). headshot:
+       zombie_reaction pops the head when displacement < 3000 with aim 0xC0
+       (torso or up). weak: the shotgun post-hit gives 10 health back past
+       9000. Cadence not measured (the bench never fired it). -->
+  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="unknown"
+          headshot="3000" weak="9000" status_bit="yes"/>
+
+  <!-- Grenade launcher with explosive rounds (item 0x07, rounds 0x10:
+       the engine's weapon + 9). The round is a projectile (effect behaviour
+       43) that runs the damage pipeline from its own position, so the cone
+       values are the fire-frame detector's (Jill's DEFAULT_RANGES slot 6 =
+       900, measured from the player). Its height stages the aim byte: 0x40
+       between the player's waist and head. A hit takes 100 from every
+       enemy type's record it was measured on (DEFAULT_FIRST_RUN). Cadence
+       not measured. -->
+  <weapon id="0x07" name="grenade launcher" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes"/>
+  <!-- The same launcher loaded with acid rounds (item 0x08, rounds 0x11)
+       or flame rounds (0x09, rounds 0x12): the menu's combine of other
+       rounds onto it changes its item, and the rounds it held are lost, so
+       only an empty launcher takes them (BotInventory.load_now). Acid takes
+       200 from a hunter (DEFAULT_FIRST_RUN row 67), flame 205 from the
+       Black Tiger and 150 from Plant 42 (rows 48, 88); both take 100 from
+       either Tyrant, as the explosive round does. -->
+  <weapon id="0x08" name="grenade launcher (acid)" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
+  <weapon id="0x09" name="grenade launcher (flame)" near="0" side="900" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes" variant_of="0x07"/>
+  <!-- Rocket launcher (item 0x0A, Brad's drop on the heliport). The rocket
+       is a projectile (effect behaviour 45) that hits from its own
+       position with aim 0x40; the cone values are Jill's DEFAULT_RANGES
+       slot 9 (1100). A hit takes 900 (DEFAULT_FIRST_RUN). Its four
+       rockets are the clip; no ammunition item refills it. -->
+  <weapon id="0x0A" name="rocket launcher" near="0" side="1100" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes"/>
+  <!-- Knife. detect_knife: a radial reach of the range (Jill's
+       DEFAULT_RANGES slot 0 = 500) plus the enemy radius, measured from a
+       point 380 ahead of Jill. melee: no rounds; it is held only for an enemy
+       that prefers it (the web). -->
+  <weapon id="0x01" name="knife" near="0" side="500" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" melee="yes"/>
+  <!-- Zombie. lib/zombie.lua state_check: 0x40 while standing, 0x80 inside
+       3000, 0x20 inside 4500; a crawler (behavior_flags & 2) or a spent
+       poise has 0x20 only. chase_player attacks at angular distance 1500,
+       pushed_back (crawler) at 2200; attack() holds the player
+       (player_state 5). HEALTH table max 99. Chase walk 45 a tick against
+       Jill's run 210, so it can be outrun. prefer the shotgun (all three
+       zombies): a head pop inside 3000 ends it in one or two shells, where
+       the handgun takes nine rounds; zombies took about 80 handgun rounds
+       of a run that ran dry in the guardhouse. A plain grenade (row 6:
+       201) kills one in a shot: spent only while more than `spare` rounds
+       are held, as the corridor zombie the bot cannot pass (213's grabbed
+       it on six passes) is worth one, and the lab's fights the rest. -->
+  <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+  </enemy>
+  <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
+  <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+  </enemy>
+  <!-- Green zombie: the same driver as 0x00. -->
+  <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         head="yes">
+    <keep weapon="0x02" min="2000" max="4000" damage="12"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="53"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="95"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+  </enemy>
+
+  <!-- Cerberus. enemy/02 behavior_run: 0x40 always, 0x20 inside 5000 until
+       it crouches to leap, never 0x80. consider_attack leaps from under 5000
+       when facing the player; leap_airborne bites at reach 1000. It mauls
+       (a hold) only below 13 player health. Chase run caps at 240, above
+       Jill's 210: it cannot be outrun, so it is fought. HEALTH max 122;
+       handgun 20 a hit plus the 7 zombie_reaction takes off a dog for
+       Jill's handgun (its reaction is the zombie one). The grenade
+       launcher's round takes 200 (row 26). -->
+  <enemy id="0x02" name="cerberus" policy="fight" stand="torso" downed="none"
+         up="no" reach="1000" grabs="yes" outrun="no" speed="240" health="122">
+    <keep weapon="0x02" min="1500" max="5000" damage="27"/>
+    <keep weapon="0x03" min="1500" max="2800" damage="40"/>
+    <keep weapon="0x07" min="1500" max="5000" damage="200"/>
+    <keep weapon="0x08" min="1500" max="5000" damage="100"/>
+    <keep weapon="0x09" min="1500" max="5000" damage="100"/>
+  </enemy>
+
+  <!-- Web spinner. enemy/03 run: 0x40 always, 0x20 inside 4000, never 0x80;
+       a ceiling spawn has no aim bit until its drop lands. Its lunge touch
+       hurts but does not hold. Lunge start distance (7000/7500 pickers) is
+       the lunge, not a reach: reach unknown. HEALTH max 119. Grenade
+       launcher 100 a hit (DEFAULT_FIRST_RUN row 36). -->
+  <enemy id="0x03" name="web spinner" policy="fight" stand="torso" downed="none"
+         up="no" reach="unknown" grabs="no" outrun="unknown" speed="unknown" health="119">
+    <keep weapon="0x02" min="2500" max="5000" damage="20"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="40"/>
+    <keep weapon="0x07" min="2500" max="5000" damage="100"/>
+    <keep weapon="0x08" min="2500" max="5000" damage="100"/>
+    <keep weapon="0x09" min="2500" max="5000" damage="200"/>
+  </enemy>
+
+  <!-- Crow. enemy/05 rebuilds the bits from its height every frame: above
+       4500 only 0x80 (inside 5000), 2000..4500 0x40, below 1500 0x20 only;
+       its flight script states clear them all (untargetable). So the pose
+       comes from the live bits: stand unknown. The peck starts inside 1500
+       and rides the player (behaviour 0xB). Health max 52, handgun 26. It is
+       not worth stopping for: pass. -->
+  <enemy id="0x05" name="crow" policy="pass" stand="unknown" downed="none"
+         up="yes" reach="1500" grabs="yes" outrun="unknown" speed="unknown" health="52">
+    <keep weapon="0x02" min="1500" max="5000" damage="26"/>
+  </enemy>
+
+  <!-- Hunter. enemy/06 state_run: 0x40, 0x20 inside 4000, 0x80 only with
+       the player lower; ledge jump and back step clear the bits. The swipe
+       starts under 3000 (reach test 800); the pounce from 6400 holds the
+       player. HEALTH max 111; handgun 14, shotgun 32 a hit. Run speed not
+       settled (0x28 chase, 0xF0 approach). It hits for 10 a swipe while a
+       handgun takes eight shots and the shotgun four, trading hits at its
+       swipe's range (two hunters in 308 took the bot from 96 to dead with
+       the shotgun out). The grenade launcher kills from past the swipe:
+       acid in one round (200), explosive or flame in two (100), and is
+       fired while the rounds the bosses need are left
+       (BotTactics.saved_rounds); its band is the Tyrant's. The shotgun
+       stays preferred: preferring the launcher sent the box loadout after
+       it from every stage and spent the bosses' rounds on hunters. -->
+  <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
+         up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111"
+         prefer="0x03">
+    <keep weapon="0x02" min="3200" max="6000" damage="14"/>
+    <keep weapon="0x03" min="1800" max="2800" damage="32"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="200"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="100"/>
+  </enemy>
+
+  <!-- Yawn's first fight (entity 0x0D, the 210 attic; the enemy/0d machine,
+       the same bits as the rematch below). Its health starts at 0x0BEA
+       (3050) and it flees under 0x0AF0 (2800): health here is the 250 that
+       drives it off. Its bite takes 10 and poisons (common 0x43, the serum
+       fetch). Handgun 30, shotgun 40, grenade launcher 80 a hit
+       (DEFAULT_FIRST_RUN rows 131, 132, 136). Passing it while taking the
+       moon crest cost about 80 health in a run; fighting it with the
+       handgun cost the same 82 and 9 rounds (it bites from 1200..1400,
+       inside the 4000 its aim bit needs, so most of the fight goes
+       unaimed), so it is passed. -->
+  <enemy id="0x0D" name="yawn 1" policy="pass" stand="torso" downed="none"
+         up="no" reach="4000" grabs="no" outrun="unknown" speed="unknown" health="250">
+    <keep weapon="0x02" min="4300" max="8000" damage="30"/>
+    <keep weapon="0x03" min="4300" max="8000" damage="40"/>
+    <keep weapon="0x07" min="4300" max="8000" damage="80"/>
+  </enemy>
+  <!-- Yawn's rematch (entity 0x12, 20C on the second mansion visit; enemy/12
+       runs the enemy/0d machine). state_check sets 0x40 only while the
+       player is 4000 or more away and never 0x80 in the juvenile form, so it
+       is shot torso from outside 4000: the reach given keeps that band. The
+       grown form keeps 0x80 inside 4000 (status 0x91 after nine shotgun
+       hits), so an aim-up shot hits it there (up="yes"): with up="no" the
+       bot held no pose for 9000 ticks at 1800 and the run ended stuck. The
+       bite starts under 2000 and the grown form swallows (a hold). HEALTH
+       0x012C (0x0190 on a second playthrough); handgun 30, shotgun 40 a hit
+       (DEFAULT_FIRST_RUN rows 181 and 182), grenade launcher 80 (row 186).
+       prefer the launcher: the handgun took thirteen rounds and 70 health
+       in a run. -->
+  <enemy id="0x12" name="yawn 2" policy="fight" stand="torso" downed="none"
+         up="yes" reach="4000" grabs="yes" outrun="unknown" speed="unknown" health="400"
+         prefer="0x07">
+    <keep weapon="0x02" min="4300" max="8000" damage="30"/>
+    <keep weapon="0x03" min="4300" max="8000" damage="40"/>
+    <keep weapon="0x07" min="4300" max="8000" damage="80"/>
+    <keep weapon="0x08" min="4300" max="8000" damage="130"/>
+    <keep weapon="0x09" min="4300" max="8000" damage="50"/>
+  </enemy>
+
+  <!-- Plant 42 (the guardhouse boss, 40C). enemy/08: one body entity (no
+       behavior bit 0; health 0x28 + 100) and its vine blocks (bit 0; 0x28)
+       hang from the ceiling at y -7000. state_check sets 0x40 every frame
+       and 0x80 inside 10000 of the player, so a torso shot hits it from
+       anywhere in the room; the SCD state (behavior 0x40) clears the bits
+       until the room hands the fight over. The body's collision radius is
+       2000. Its vines sweep and grab from above (16 or 25 a sweep, 15 or 8
+       a hold); they hit from about 6400 (observed), so the reach is 6500
+       and the band 6800 to 7600 stands outside it: the vines never touch
+       the bot there, and only the acid dripping from the ceiling is left to
+       step out of. Past about 8800 the shotgun's pellets take half (10, not
+       20). It never moves. A handgun hit takes 15 (observed) and holds that
+       part's hit_state about 120 ticks, during which a shot hits the next
+       free part nearest the aim. The body takes no hit (hit_state 1) while
+       more than one vine lives: each vine hit counts the shared pool down.
+       parts="yes" makes the bot hold fire while every part is reacting (a
+       shot then hits nothing) and fire at the first free one.
+       Enemy bit 96 is the body's (40C's init, enemy index 0).
+       DEFAULT_FIRST_RUN rows 81, 82 and 86: handgun 15, shotgun 20, grenade
+       launcher 50 on paper, but no launcher round has ever hit the body:
+       the round is a projectile that lands short of the hanging body's
+       radius (every logged launcher fight on it: 0 hits in 9 to 12 rounds),
+       and only its vines take one. The shotgun's seven hits kill it, so it
+       is preferred and the launcher's rounds are kept for the Tyrants. The
+       health given is the body's 140 and its five vines' 40 each: a shot
+       goes to whichever part it meets, so the readiness check counts the
+       rounds for all of them (11 handgun rounds met it and ran dry on the
+       vines, four deaths). -->
+  <enemy id="0x08" name="plant 42" policy="fight" stand="torso" downed="none"
+         up="yes" reach="6500" grabs="yes" outrun="no" speed="0" health="340" parts="yes"
+         prefer="0x03">
+    <keep weapon="0x02" min="6800" max="7600" damage="15"/>
+    <keep weapon="0x03" min="6800" max="7600" damage="20"/>
+  </enemy>
+
+  <!-- Tyrant (the lab encounter, 513). enemy/0c: state 1 sets status 0x40
+       every frame and never 0x20 or 0x80, so torso shots hit it. The
+       decision layer (behaviour 14) slashes inside 0xA8C (2700) and swipes
+       inside 2000, the reach given; neither holds the player. HEALTH 0xDC;
+       handgun 20, shotgun 30 a hit (DEFAULT_FIRST_RUN rows 121 and 122). Its
+       walk is root motion (about 113 a tick measured in 513, faster than
+       the backward walk), so the fight is a damage race: each slash takes
+       12 and knocks the player 1300 to 2000 back, about every 36 ticks
+       while it is close. The shotgun's eight hits win it where the
+       handgun's eleven lose it (measured in 513). The grenade launcher's
+       round takes 100 (row 126), so three kill it: it is preferred, and the
+       box loadout brings it to the fight. The slash's 2700 is the
+       Manhattan sum of the axis gaps (web_distance), so a diagonal gap of
+       2000 is still outside it. Enemy bit 112 (0x70) is set by its death
+       (513's init). -->
+  <enemy id="0x0C" name="tyrant" policy="fight" stand="torso" downed="none"
+         up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="220"
+         prefer="0x07">
+    <keep weapon="0x02" min="3500" max="8000" damage="20"/>
+    <keep weapon="0x03" min="3200" max="5000" damage="30"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="100"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="100"/>
+  </enemy>
+
+  <!-- Tyrant on the heliport (303), entity 0x10: the same machine as 0x0C
+       (enemy/10 runs enemy/0c) with health 600 and the rooftop decision
+       layer (behaviour 15): the slash inside 2700 and the swipe inside
+       2000 as in the lab, a thrust inside 7000 while it is turned away and
+       a charge from past 12000. Below 201 health it raises room flag 0x1F
+       and stays at 200, which has Brad drop the rocket launcher (303's
+       main); so does a 1800-tick timer from its entrance. Only the rocket
+       (900, row 169) finishes it: it is preferred, and the fight waits for
+       its pickup once the drop shows. Enemy bit 0x59 is set by its death
+       (303's init). The other bands are the lab's; their damages (rows 161,
+       162 and 166: 20, 30, 100) are left `unknown`, since no other gun can
+       finish it and a kill count from them would raise those guns' ammo
+       floors for the whole game. The grenade launcher opens the fight
+       (`open`): until the drop, any explosive rounds it has go first (four
+       hits take it to 200; the handgun, at 20 a hit and one slash taken
+       every 70 ticks, emptied 96 health before the timer ran out), and the
+       loadout carries it up from the lab (303's `stage`). Those four
+       rounds are kept for it (`save`) from every other fight. -->
+  <enemy id="0x10" name="tyrant 2" policy="fight" stand="torso" downed="none"
+         up="no" reach="2700" grabs="no" outrun="unknown" speed="unknown" health="600"
+         prefer="0x0A" open="0x07" save="4">
+    <keep weapon="0x02" min="3500" max="8000" damage="unknown"/>
+    <keep weapon="0x03" min="3200" max="5000" damage="unknown"/>
+    <keep weapon="0x07" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="unknown"/>
+    <keep weapon="0x0A" min="3000" max="9000" damage="900"/>
+  </enemy>
+
+  <!-- Black Tiger (the giant spider, 30C). enemy/04 run: 0x40 every frame,
+       never 0x20 or 0x80 outside its attack states. The picker commits to
+       the bite inside 5000 (the reach given) and spits from anywhere it is
+       lined up inside 9000 (12 and the 0x02 poison a hit), so it cannot be
+       outrun. The bite costs 20. HEALTH 0xCC; handgun 14, shotgun 40 a hit
+       (DEFAULT_FIRST_RUN rows 41 and 42). It spits about every 80 ticks
+       and each volley knocks the aim down (measured in 30C: two shotgun hits
+       in 700 ticks for 66 health), so the handgun and shotgun lose the race
+       and have no band here. Its spit knocks the bot off the web while the
+       knife cuts it, so it is fought first (30C's <fight>) with the grenade
+       launcher: 60 a hit (row 46), four rounds. -->
+  <enemy id="0x04" name="black tiger" policy="fight" stand="torso" downed="none"
+         up="no" reach="5000" grabs="no" outrun="no" speed="unknown" health="204"
+         prefer="0x07">
+    <keep weapon="0x07" min="3200" max="6000" damage="60"/>
+    <keep weapon="0x08" min="3200" max="6000" damage="60"/>
+    <keep weapon="0x09" min="3200" max="6000" damage="205"/>
+  </enemy>
+
+  <!-- The spider web over 30C's door to 30D. enemy/13: state 1 sets 0x40
+       every frame; only the knife and the fire weapons cut it (the guns'
+       hits do nothing). Health 0x37; the knife's record takes 10 a hit
+       (combat.rs the web knife record). Its SCA radius is 500 and the knife
+       point is 380 ahead of Jill, so a swing reaches it from about 1380
+       (the band keeps a margin). It never moves or attacks. Enemy bit 138
+       is its death flag (30C's init, enemy index 1). -->
+  <enemy id="0x13" name="web" policy="fight" stand="torso" downed="none"
+         up="no" reach="unknown" grabs="no" outrun="yes" speed="0" health="55"
+         prefer="0x01">
+    <keep weapon="0x01" min="0" max="1300" damage="10"/>
+  </enemy>
+
+  <!-- Poison cures, from the engine's item definitions
+       (games/re1/item/<id>/item.xml effects; a unit test keeps this list
+       equal to them). poison = the 0x02 health-status drain (2 health every
+       120 ticks; `cure_poison`); serious = the 0x20 bit (`cure_serious_poison`,
+       the serum); heals = the item also restores health. Listed cheapest
+       first: the plain blue herb before the
+       mixes that also heal, so a mix is kept for its healing. The blue herbs
+       grow only from stage 3 (the guardhouse) on; the serum is a scripted
+       handover. -->
+  <cure item="0x45" poison="poison" heals="no"/>
+  <cure item="0x48" poison="poison" heals="yes"/>
+  <cure item="0x4B" poison="poison" heals="yes"/>
+  <cure item="0x49" poison="poison" heals="yes"/>
+  <cure item="0x42" poison="serious" heals="no"/>
+</knowledge>

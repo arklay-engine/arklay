@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 30A, the cave chamber where Enrico waits (Jill's route). AOT 2 is a
+     body-probe trigger in front of him: walking into it runs his scene,
+     which sets common 0x48, hands over the hex crank (0x1E, AOT 9) and
+     lets the hunters out on the way back. -->
+<bot format="2">
+  <interact slot="2" bank="1" bit="0x48" character="jill" label="Enrico's scene"/>
+</bot>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 201 (2F west landing), Jill on the second mansion visit. Door 1 to 214
+     shares its zone with AOT 5, a numeric key panel. Until scenario 0x46
+     is set, room init switches the door off, so pressing there runs
+     on_aot_05. Without the pass number (common 0x25, from Barry's rope in
+     20C) it answers "You don't know the pass number."; with it, the panel
+     sets 0x46 and turns the door on around the player. Later entries switch
+     AOT 5 off, and the door is a plain door. -->
+<bot format="2">
+  <interact slot="5" bank="0" bit="0x46" after_bank="1" after_bit="0x25" character="jill"
+            label="the pass number into the key panel"/>
+</bot>

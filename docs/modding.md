@@ -753,6 +753,70 @@ The checked-in `mods/hd/` is the replacement-format reference: a 2x PNG room
 background, a UI page shipped as both PNG and WebP, and an OGG Vorbis BGM
 track, with no game assets either.
 
+### Watching a mod while it runs
+
+`--watch` keeps a running interactive game in sync with the applied source
+directories. Start it on an interactive boot (`--ui game`, `--ui title`,
+`--room` or a continue); it is rejected with `--capture`, `--trace`, `--input`,
+`--save-out` and `--bot-headless`, which have no interactive loop to reload
+into.
+
+```sh
+# Edit mods/bot/bot/init.lua (or a lua/**.lua hook) while the game runs.
+arklay re1.akpak --mod mods/bot --bot --watch
+```
+
+The watcher polls the base pack and every layered source directory. It scans
+every `.lua` file and every `bot.xml` file below them, but only these classes
+are reloaded:
+
+- **`lua/**.lua` hooks** load into a fresh VM. Hook globals reset, exactly as
+  when the session opened; `on_init` then `on_room_load` run over the live game
+  state and current room. The room's init script is not re-run, so the room,
+  session and inventory stay where they are. The app's cached save/load screen
+  registration is refreshed from the reloaded `on_init` too.
+- **`bot/**.lua` route** re-executes its chunks in the same Lua state. Globals
+  survive, and the runtime keeps its tick counter and remembered
+  memory/navigation. A route should keep its progress in a global, as the
+  checked-in `mods/bot` route does with `BOT_STATE = BOT_STATE or {...}`. A
+  chunk that fails to run leaves the previous `on_bot_tick` callable.
+- **`room/<id>/bot.xml` metadata** invalidates the bot runtime's cached room
+  metadata. The next tick reparses the file and `bot:room_meta()` returns the
+  new puzzles. The room, its script and its assets are not reloaded. An invalid
+  edit is reported where the bot tick is, and the previous parse is not kept.
+
+A room's metadata lives next to its other files and is optional; the merged
+pack resolves it like any other entry. The first format is:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<bot format="1">
+  <puzzle id="paintings" title="117 large gallery painting order">
+    <step slot="3" bank="4" bit="0x1A" label="117 painting 1/7 newborn">
+      <walk x="19500" z="8100"/>
+      <face x="19500" z="7200"/>
+    </step>
+  </puzzle>
+</bot>
+```
+
+`puzzle` takes `id` and optional `title`; `step` takes `slot`, `bank`, `bit`
+and `label`, any number of `<walk x="..." z="..."/>` points, and at most one
+`<face .../>`. `bit` is the flag selector passed to `bot:flag` (for example
+`0x1A`, not bit number 26). `slot` and `bit` are bytes, `bank` must be below
+10, and coordinates are signed 32-bit integers. Unknown elements and attributes
+are errors naming the source line, so a typo in a hand-edited file fails
+loudly. `bot:room_meta()` exposes the parsed data as a read-only Lua table, or
+`nil` when the room has no metadata; it cannot write game state.
+
+Room XML, RDT/room scripts, room assets, screen scripts, enemy scripts and
+`.akpak` layers are not reloaded: they need a room reload or a restart. The
+pack's entry list is also built when the pack opens, so editing an existing
+file reloads, a newly added file is not seen until a restart, and deleting a
+`bot/` chunk is a reload error that leaves the previous route running. With
+`--watch` off, none of this runs and the game is byte-identical to a run
+without the flag.
+
 ## Room music
 
 The room-BGM tables are static game data, loaded once when the session starts

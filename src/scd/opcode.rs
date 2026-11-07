@@ -341,6 +341,86 @@ pub mod variant {
     pub const FLAG_MANSION2: u8 = 0;
 }
 
+/// Flag bank 5 bits the port adds, in the range BioRand reserves (`0xC0` to
+/// `0xFF`; the originals' scripts use only the bits below it). A generated pack
+/// raises the ones it needs, so a room's script can test them by name:
+/// `if (ITEM_RANDOMIZER)`, `if (!LOCK_RANDOMIZER)`. A variant build folds each
+/// test to the flag being clear, so the retail bytes hold.
+pub mod system {
+    /// The pack is a generated game: a manifest with a `seed` raises it.
+    pub const RANDOMIZER: u8 = 0xC0;
+    /// Doors are randomized (`doors/random`).
+    pub const DOOR_RANDOMIZER: u8 = 0xC1;
+    /// Enemies are randomized (`enemies/random`).
+    pub const ENEMY_RANDOMIZER: u8 = 0xC2;
+    /// Items are randomized (`items/random`).
+    pub const ITEM_RANDOMIZER: u8 = 0xC3;
+    /// Locks are randomized (`locks/random`).
+    pub const LOCK_RANDOMIZER: u8 = 0xC4;
+    /// Cutscenes are disabled (`cutscenes/disable`); patches.md section E
+    /// lists the guards on this flag.
+    pub const CUTSCENES_DISABLED: u8 = 0xC5;
+    /// `progression/tyrant2` is Always, so the rooftop Tyrant is forced
+    /// (patches.md section B, `ForceHelipadTyrant`).
+    pub const FORCE_TYRANT2: u8 = 0xC6;
+    /// The generated game reaches the laboratory.
+    pub const LAB: u8 = 0xC7;
+    /// BioRand patches 16 to 21: the whole lock byte is the lock flag index,
+    /// for 256 lock flags (patches.md section A).
+    pub const BR_LOCK_FULL_BYTE: u8 = 0xC8;
+    /// BioRand patches 5 and 6: Neptune can die (Cerberus's death routine) and
+    /// takes weapon damage.
+    pub const BR_NEPTUNE_KILLABLE: u8 = 0xC9;
+    /// BioRand patch 7: under door randomization, Yawn's bite gives ordinary
+    /// poison, which a blue herb cures, with no trip to room 100.
+    pub const BR_YAWN_POISON: u8 = 0xCA;
+    /// BioRand patches 8 and 9: the extra blue herb mixes, two of which are
+    /// BioRand's own (patches.md section A).
+    pub const BR_HERB_MIXES: u8 = 0xCB;
+    /// BioRand patches 11 to 13: ink reads scenario flag 122 for both
+    /// characters.
+    pub const BR_INK_FLAG: u8 = 0xCC;
+    /// BioRand patch 1: no attract demo from the title screen.
+    pub const BR_NO_TITLE_DEMO: u8 = 0xCD;
+
+    /// Every system flag, by the name scripts and manifests give it.
+    pub const BY_NAME: [(&str, u8); 14] = [
+        ("RANDOMIZER", RANDOMIZER),
+        ("DOOR_RANDOMIZER", DOOR_RANDOMIZER),
+        ("ENEMY_RANDOMIZER", ENEMY_RANDOMIZER),
+        ("ITEM_RANDOMIZER", ITEM_RANDOMIZER),
+        ("LOCK_RANDOMIZER", LOCK_RANDOMIZER),
+        ("CUTSCENES_DISABLED", CUTSCENES_DISABLED),
+        ("FORCE_TYRANT2", FORCE_TYRANT2),
+        ("LAB", LAB),
+        ("BR_LOCK_FULL_BYTE", BR_LOCK_FULL_BYTE),
+        ("BR_NEPTUNE_KILLABLE", BR_NEPTUNE_KILLABLE),
+        ("BR_YAWN_POISON", BR_YAWN_POISON),
+        ("BR_HERB_MIXES", BR_HERB_MIXES),
+        ("BR_INK_FLAG", BR_INK_FLAG),
+        ("BR_NO_TITLE_DEMO", BR_NO_TITLE_DEMO),
+    ];
+
+    /// The proof of concept's `RANDOMIZER`, `DOOR_RANDOMIZER` and
+    /// `ENEMY_RANDOMIZER`, before they moved to `0xC0`: a pack it generated
+    /// (a seed and no `biorand_flags`) tests these bits, so the engine raises
+    /// them for such a pack, and clears them for any other.
+    pub const PROOF_OF_CONCEPT: [u8; 3] = [0xF0, 0xF1, 0xF2];
+
+    /// Every bank-5 bit the engine sets or clears from a pack's manifest.
+    pub fn managed() -> impl Iterator<Item = u8> {
+        BY_NAME.iter().map(|&(_, bit)| bit).chain(PROOF_OF_CONCEPT)
+    }
+
+    /// The bit of the system flag `name` names, or `None` for any other name.
+    pub fn bit_named(name: &str) -> Option<u8> {
+        BY_NAME
+            .iter()
+            .find(|(known, _)| *known == name)
+            .map(|&(_, bit)| bit)
+    }
+}
+
 /// Whether the room variant `current` (one bit of each dimension) matches
 /// `mask`: in every dimension where the mask sets any bit, `current`'s bit
 /// is one of them. A dimension the mask leaves clear always matches.
@@ -513,6 +593,27 @@ mod tests {
                 _ => 1,
             })
             .sum()
+    }
+
+    #[test]
+    fn system_flags_are_distinct_bits_in_the_reserved_range() {
+        for (index, (name, bit)) in system::BY_NAME.iter().enumerate() {
+            assert!((0xC0..=0xFF).contains(bit), "{name} is outside 0xC0..=0xFF");
+            assert_eq!(system::bit_named(name), Some(*bit), "{name}");
+            for (other, other_bit) in &system::BY_NAME[..index] {
+                assert!(other != name && other_bit != bit, "{name} repeats {other}");
+            }
+        }
+        for bit in system::PROOF_OF_CONCEPT {
+            assert!(
+                (0xD0..=0xFF).contains(&bit),
+                "{bit:#x} is outside the spare bits"
+            );
+            assert!(system::BY_NAME.iter().all(|&(_, named)| named != bit));
+        }
+        assert_eq!(system::managed().count(), system::BY_NAME.len() + 3);
+        assert_eq!(system::bit_named("NOT_A_FLAG"), None);
+        assert_eq!(system::bit_named("lab"), None, "names are exact");
     }
 
     #[test]

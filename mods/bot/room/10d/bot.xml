@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 10D tiger statue. The statue's SCE_USEITEM probe (AOT 2) arms the blue
+     jewel's (0x21) and the red jewel's (0x22) use flags while the reach
+     point is on it. USE the blue jewel there: the statue turns, scenario
+     0x0F is set and the wind crest (0x29, item AOT 3) becomes a pickup;
+     taking it turns the statue back. The red jewel turns it the other way
+     (scenario 0x0E) to the magnum (item AOT 4); the red jewel lies in the
+     second mansion visit. The two item AOTs have no player bit until their
+     turn, so the bot sees them as dormant. -->
+<bot format="2">
+  <use slot="2" item="0x21" bank="0" bit="0x0F" label="blue jewel in the tiger's eye"/>
+  <use slot="2" item="0x22" bank="0" bit="0x0E" label="red jewel in the tiger's eye"/>
+</bot>
