@@ -104,15 +104,14 @@ impl CommandVm {
             let next = insn.offset + insn.bytes.len();
             match &insn.decoded {
                 Decoded::Command(op) => match op.op {
-                    // A procedure's `end 0` returns from it at any depth, as
-                    // the original's `end` ends a block. An init or main
-                    // block's `end 0` inside an `if` leaves only the `if`.
+                    // `end 0` ends the block at any depth: the original's
+                    // `cmd_block_end` zeroes the `if` nesting count, so
+                    // `run_command_functions` skips the branch-stack unwind
+                    // and moves on to the next block. A procedure's returns
+                    // to its caller.
                     0x00 => {
-                        if self.depth <= base || calls > 0 {
-                            return BlockExit::Done;
-                        }
-                        self.depth -= 1;
-                        self.pc = self.branch_stack[self.depth];
+                        self.depth = base;
+                        return BlockExit::Done;
                     }
                     0x01 => {
                         self.push_branch(if_target(insn));
@@ -712,8 +711,9 @@ impl EventVm {
     }
 
     /// Run one straight-line command block with the command VM's flow rules.
-    /// `calls` is how many `gosub` procedures are running, 0 outside one; a
-    /// procedure's `end 0` returns from it at any depth.
+    /// `calls` is how many `gosub` procedures are running, 0 outside one.
+    /// `end 0` ends the block (or returns from the procedure) at any depth,
+    /// as in [`CommandVm`].
     fn run_command_flow(&self, insns: &[Rc<Insn>], host: &mut impl ScdHost, calls: usize) {
         let mut pc = 0usize;
         let mut branch_stack: Vec<usize> = Vec::new();
@@ -730,15 +730,7 @@ impl EventVm {
             };
             let next = pc + 1;
             match op.op {
-                0x00 => {
-                    if calls == 0
-                        && let Some(resume) = branch_stack.pop()
-                    {
-                        pc = resume;
-                        continue;
-                    }
-                    return;
-                }
+                0x00 => return,
                 0x01 => {
                     let target = if_target(insn);
                     branch_stack.push(self.index_of(insns, target).unwrap_or(insns.len()));
@@ -1382,8 +1374,10 @@ mod tests {
         assert_eq!(host.flag_calls.len(), 1);
     }
 
+    /// `end` inside an `if` body ends the whole block, as the original's
+    /// `cmd_block_end` does: it skips the branch-stack unwind.
     #[test]
-    fn end_unwinds_branch_stack() {
+    fn end_inside_an_if_ends_the_block() {
         let insns = vec![
             command(0x1000, &IF, 2, vec![jump(0x08, 0x100A)]),
             command(0x1002, &CK, 4, vec![value(0), value(1), value(0)]),
@@ -1398,7 +1392,7 @@ mod tests {
         host.flag_results.push_back(true);
         vm.run_init(&mut host);
         assert!(host.class_names("flags").is_empty());
-        assert_eq!(host.class_names("flow"), vec!["nop"]);
+        assert!(host.class_names("flow").is_empty());
     }
 
     #[test]

@@ -1243,8 +1243,8 @@ event on_enter
   the enclosing `if` body, or ends the block at the top level.
 - `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
   section (`proc init noreturn`) or `run` block (`run noreturn`) says
-  otherwise. In `proc init`, `proc main` and `run` blocks, a `return;` inside
-  an `if` body leaves that body; in a procedure it returns from the procedure.
+  otherwise. `return;` ends its block at any depth, inside `if` bodies too,
+  as the original's `end` does; in a procedure it returns to the caller.
 - `NAME();` calls procedure `proc NAME` (above).
 - In an event, `evt_*`/`act_*`/`tw_*` mnemonics are event-VM instructions and
   any other call is a command run through `evt_single`; `single(N) name(...)`

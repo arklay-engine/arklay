@@ -1383,3 +1383,46 @@ fn only_a_standalone_container_carries_procedures() {
     container[1] = 1;
     assert!(reader::parse(&container).unwrap().procs.is_empty());
 }
+
+/// `return;` ends the whole block from inside an `if`, as the original's
+/// `end` does (it skips the branch-stack unwind), in a main block and in an
+/// event's `run` block; the next block still runs.
+#[test]
+fn return_ends_the_block_at_any_depth() {
+    let text = "#version 1
+proc main
+{
+    if (ck(FG_ROOM, 0, FALSE))
+    {
+        if (ck(FG_ROOM, 1, FALSE))
+        {
+            nop(1);
+            return;
+        }
+        nop(98);
+    }
+    nop(99);
+}
+
+event start
+{
+    run
+    {
+        if (ck(FG_ROOM, 0, FALSE))
+        {
+            nop(2);
+            return;
+        }
+        nop(97);
+    }
+    run
+    {
+        nop(3);
+    }
+    evt_finish();
+}
+";
+    let scripts = reader::parse(&compile(text).unwrap().to_container().unwrap()).unwrap();
+    assert_eq!(run_nops(&scripts, 0, None), [1]);
+    assert_eq!(run_nops(&scripts, 0, Some(0)), [2, 3]);
+}
