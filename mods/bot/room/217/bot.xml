@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 217, the library (second mansion visit). The MO disk (AOT 5) lies
+     behind the bookshelf (object 1, not pushable), out of reach of every
+     approach. The statue (object 0) pushed onto the floor mark, the object
+     probe AOT 3 (100 x 100 by the south wall), runs on_aot_03: scenario
+     0x68 is set and the bookshelf slides south off the disk. The init then
+     stands the statue on the mark and the shelf aside on later entries.
+     The light switch (AOT 1, scenario 0x41) only lights the room. -->
+<bot format="2">
+  <push object="0" slot="3" bank="0" bit="0x68" label="the statue onto the floor mark: the bookshelf slides off the MO disk"/>
+</bot>

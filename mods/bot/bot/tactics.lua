@@ -537,6 +537,28 @@ local function fight_rounds(bot, k, fight, base)
     return entry.save or kill or 0
 end
 
+-- Rounds of weapon `base` the <fight>s of the current stage still to be
+-- won need, met or not (a fact's `stage`, else its room's): each one's
+-- `save`, else the kill at its `base` band's damage. A death trap that an
+-- ordinary gun can clear leaves them (513's Tyrant, from 505's zombies).
+local function stage_fight_rounds(bot, k, base)
+    local stage = string.sub(bot:room().id, 1, 1)
+    local total = 0
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = k.enemies[fight.enemy]
+        local here = (fight.stage or string.sub(fight.room, 1, 1)) == stage
+        if here and entry and (entry.prefer == base or entry.open == base)
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            local band = entry.keep and entry.keep[base]
+            local damage = band and band.damage
+            local kill = damage and damage > 0 and entry.health
+                and entry.health // damage + 1
+            total = total + (entry.save or kill or 0)
+        end
+    end
+    return total
+end
+
 -- Rounds of weapon `base` (every loading of it: knowledge variant_of)
 -- kept from the monster `enemy_id`: the met <fight>s still to be won that
 -- prefer or open with it, plus the general reserve for a reserve gun. A
@@ -667,10 +689,16 @@ local function firearm(bot, k, enemy, crowd, trap)
                 - keep
             -- A death trap spends everything: the bosses are no use dead.
             -- The launcher's last flame round goes first, then the reload
-            -- loads the explosives.
+            -- loads the explosives. Only the kills of this stage's <fight>s
+            -- still to be won stay, while an ordinary gun holds the rounds
+            -- for the whole crowd: 505's zombies took the flame rounds 513's
+            -- Tyrant then lacked, and the handgun lost that fight four times.
             if trap then
                 spare = family_rounds(bot, k, base)
                 row.rounds = spare
+                if finish then
+                    spare = spare - stage_fight_rounds(bot, k, base)
+                end
             end
             if spare < row.rounds then
                 row.rounds = spare
