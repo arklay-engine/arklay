@@ -51,8 +51,8 @@ const ROOM_MORGUE: u8 = 0x07;
 /// Whether this room's death fades immediately instead of running the
 /// 90-frame delay (the Yawn rooms and the Neptune water tank).
 pub fn immediate_fade(id: RoomId) -> bool {
-    (id.stage == STAGE_MANSION_2F && !id.mansion2 && id.room == ROOM_ATTIC)
-        || (id.stage == STAGE_MANSION_2F && id.mansion2 && id.room == ROOM_LESSON)
+    let yawn_room = if id.mansion2 { ROOM_LESSON } else { ROOM_ATTIC };
+    (id.stage == STAGE_MANSION_2F && id.room == yawn_room)
         || (id.stage == STAGE_GUARDHOUSE && id.room == ROOM_WATER_TANK)
 }
 

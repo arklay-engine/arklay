@@ -27,14 +27,13 @@ pub fn tick(
     for slot in run_order() {
         // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
         let stopped = game.re2.character_stopped(slot);
-        if stopped
-            && !game
-                .re2
-                .characters
-                .0
-                .get(slot)
-                .is_some_and(|character| character.as_deref().is_some_and(|c| c.zombie.is_some()))
-        {
+        let zombie = game
+            .re2
+            .characters
+            .0
+            .get(slot)
+            .is_some_and(|character| character.as_deref().is_some_and(|c| c.zombie.is_some()));
+        if stopped && !zombie {
             continue;
         }
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
