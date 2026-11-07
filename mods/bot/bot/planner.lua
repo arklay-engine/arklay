@@ -1544,7 +1544,7 @@ end
 -- the ammunition the equipped gun needs (`ammo`). Returns the bonus and a
 -- label tag (nil for a plain item). A heal item gets the plain bonus,
 -- unless `hurt` (the item heals and the bot needs a heal): HEAL_BONUS.
-function BotPlanner.item_bonus(item, kind, ammo, needed, hurt)
+function BotPlanner.item_bonus(item, kind, ammo, needed, hurt, guns)
     if hurt and kind == "heal" then
         return ITEM_BONUS + HEAL_BONUS, "heal: hurt with none held"
     end
@@ -1553,6 +1553,11 @@ function BotPlanner.item_bonus(item, kind, ammo, needed, hurt)
     end
     if ammo and item == ammo then
         return ITEM_BONUS + AMMO_BONUS, "ammunition"
+    end
+    -- Under the floor, a gun the bot has none of (`guns`,
+    -- BotInventory.new_guns) brings its clip.
+    if ammo and guns and guns[item] then
+        return ITEM_BONUS + AMMO_BONUS, "a gun, the ammunition low"
     end
     return ITEM_BONUS, nil
 end
@@ -2152,8 +2157,11 @@ local function choose(bot)
                 ammos[other] = true
             end
         end
+        -- A gun the bot has none of comes with its clip
+        -- (BotInventory.new_guns).
+        local guns = BotInventory.new_guns(bot)
         for _, goal in ipairs(world.frontier) do
-            if goal.kind == "item" and ammos[goal.item]
+            if goal.kind == "item" and (ammos[goal.item] or guns[goal.item])
                 and not blocked(bot, "item", goal.room, goal.slot, true)
                 and (goal.room == room or route(bot, world, room, goal.room)) then
                 known = known + 1
@@ -2346,6 +2354,7 @@ local function choose(bot)
             gun_rounds[bot:ammo_for(id)] = true
         end
     end
+    local new_guns = BotInventory.new_guns(bot)
     local function consider_frontier(allow_unfit)
         for _, goal in ipairs(world.frontier) do
             -- A remote item that would not fit is no trip: arriving full only
@@ -2375,7 +2384,7 @@ local function choose(bot)
                         heals = (hurt and heals == true)
                             or (cure_now ~= nil and cure_now[goal.item] == true)
                         local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
-                            needed, heals)
+                            needed, heals, new_guns)
                         local left = plan().marks[mark_key("item", goal.room, goal.slot)]
                         if not tag and left and left.reason:find("inventory full", 1, true) then
                             -- An item an open <use> needs, left behind on a
@@ -2752,20 +2761,27 @@ end
 -- the self-destruct, which unlocks the lab's exit and 50B's cell door,
 -- only when entered after the Tyrant's death; with every other goal of
 -- the lab done before that fight, nothing led back there and the run
--- ended in 513. Each room is revisited once per story signature, so this
--- ends. Returns whether a revisit target was set.
+-- ended in 513. A room is revisited only in a story state it was never
+-- entered or left in, once per signature, so this ends: flags a room's
+-- script sets and clears as the bot walks (the caves' 0x30 and 0x31, in
+-- 301 and 302) bring back states already seen, and with barry_early=chemical
+-- the bot circled 300, 301 and 302 on them until the run timed out.
+-- Returns whether a revisit target was set.
 function BotPlanner.revisit_room(bot)
     local p = plan()
     local room = bot:room().id
     local world = bot:world()
     local sig = story_sig(bot)
     local seen = p.story_seen or {}
+    local function seen_in(id)
+        return seen[id] ~= nil and seen[id][sig] == true
+    end
     p.revisited = p.revisited or {}
     local stage = string.sub(room, 1, 1)
     local best, best_steps = nil, nil
     for _, r in ipairs(world.rooms or {}) do
         if r.visited and r.id ~= room and string.sub(r.id, 1, 1) == stage
-            and seen[r.id] ~= sig and not p.revisited[r.id .. "|" .. sig] then
+            and not seen_in(r.id) and not p.revisited[r.id .. "|" .. sig] then
             local steps = route(bot, world, room, r.id)
             if steps and steps[1] and (not best or #steps < #best_steps
                 or (#steps == #best_steps and r.id < best)) then
@@ -2800,10 +2816,10 @@ end
 local function note_story(p, bot, room_id)
     local sig = story_sig(bot)
     p.story_seen = p.story_seen or {}
-    if p.last_room then
-        p.story_seen[p.last_room] = sig
+    for _, id in pairs({ last = p.last_room, here = room_id }) do
+        p.story_seen[id] = p.story_seen[id] or {}
+        p.story_seen[id][sig] = true
     end
-    p.story_seen[room_id] = sig
 end
 
 fight_forced = function(bot, room)
@@ -3007,7 +3023,17 @@ function BotPlanner.step(bot)
             if forgiven > 0 then
                 p.goal = choose(bot)
             elseif waiting then
-                return
+                -- A room left before the story changed is entered again
+                -- before the wait for a message door (BotPlanner.revisit_room):
+                -- 508's lamps freed 50F's power panel, and the bot idled at
+                -- 50C's dark elevator door, retrying it with ever longer
+                -- waits until the run timed out.
+                while not p.goal and BotPlanner.revisit_room(bot) do
+                    p.goal = choose(bot)
+                end
+                if not p.goal then
+                    return
+                end
             end
         end
         if not p.goal and forgive_fight(bot) then

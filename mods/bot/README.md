@@ -249,8 +249,14 @@ Priorities, highest first:
    may carry the player through it (310's lift down to 500). Then
    each visited room of this stage that the bot left before the story
    flags (scenario and common banks) last changed is entered again,
-   nearest first, once per story state (`frontier empty; entering room X
-   again`): its init may now play a scene or open a door. 514 starts the
+   nearest first, once per story state and only in a state it was never
+   entered or left in (`frontier empty; entering room X again`): its init
+   may now play a scene or open a door. Flags a room's script sets and
+   clears as the bot walks (the caves' scenario 0x30 and 0x31) bring back
+   states already seen, so they lead nowhere new: the bot circled 300, 301
+   and 302 on them until the run timed out. A revisit also comes before
+   the wait for a door a room event made a message: 508's lamps freed
+   50F's power panel while the bot idled at 50C's dark elevator door. 514 starts the
    self-destruct, which unlocks the lab's exit, only when entered after
    the Tyrant's death; with the lab's other goals done before that fight,
    nothing else led back there. Then
@@ -516,15 +522,18 @@ rounded up: three kills at risk 0, two and a half at the default 0.25, one
 at risk 1, where `shots` is the most hits one kill of a `fight` monster
 takes with the weapon in the knowledge file (`health // damage + 1`:
 9 for the re1 handgun, 4 for the shotgun). Below it, the way-out ranking
-takes a reachable frontier item of that ammunition 60 reach cheaper, and
-the planner logs `ammo low: R rounds under the floor F; N known ammo
+takes a reachable frontier item of that ammunition 60 reach cheaper (and
+so a firearm the bot has none of, held, boxed or as another loading,
+`BotInventory.new_guns`: it comes with its clip; `a gun, the ammunition
+low`), and the planner logs `ammo low: R rounds under the floor F; N known ammo
 item(s)`. Ammunition seen in a room is taken there anyway (step 4), so the
 bonus matters for ammunition left behind (full inventory, a failed
 approach).
 
 The sourcing rule (`BotSurvival.sourcing`). Under the floor, with no
 ammunition of that kind the planner can still reach (a frontier pickup it
-has not given up on, with a route, or the remembered item box holding it),
+has not given up on, with a route, or the remembered item box holding it;
+a frontier firearm the bot has none of counts too),
 the bot is sourcing ammunition (`ammo low: ...; sourcing`):
 
 - the way-out ranking takes a door into a room not yet entered
@@ -730,6 +739,11 @@ drives the box screen with pad input only.
   none), and at least `MAKE_ROOM_HURT` (24) health missing: the largest
   heal stack is used, as `BotSurvival` heals. 219 left twelve grenade
   rounds behind at 56/96 health with four heal stacks held.
+- Under the equipped gun's floor, a frontier firearm the bot has none of
+  (`BotInventory.new_guns`) is a needed pickup, so the soft deposits make
+  room for it: with `barry_early=chemical`, 212's grenade launcher met a
+  full inventory of keys, herbs and the knife, stayed on the floor for
+  100k ticks, and the handgun ran dry in the mansion.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
@@ -798,7 +812,14 @@ drives the box screen with pad input only.
   empty comes back with its boxed shells when the handgun runs dry. The
   rearm counts the slots it takes (the gun, and its ammunition when
   boxed) and waits while a key or `<use>` pickup needs the free slots;
-  otherwise the swap would put the gun straight back.
+  otherwise the swap would put the gun straight back. At a box in this
+  room while sourcing ammunition, a `reserve` gun (the launcher), held or
+  boxed, comes out with one kind of rounds the box holds for any of its
+  loadings while none of them is held (`rearm: sourcing, and the box holds
+  a reserve gun's rounds`; no trip is made for it), and the planner loads
+  the empty launcher with them: 502's swap boxed the empty launcher for
+  the MO disks beside its acid and flame rounds, and the bot met 509's
+  four zombies with four handgun rounds.
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and
