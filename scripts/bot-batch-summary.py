@@ -3,6 +3,7 @@
 
   bot-batch-summary.py summary <batch-dir>
   bot-batch-summary.py compare <batch-dir-A> <batch-dir-B>
+  bot-batch-summary.py row <batch-dir> <commit> <change> <verdict>
 
 Per run: completed (a `FINISH game completed...` line), deaths (lines with
 `died:`), hits (`damage health A -> B` with A-B > 2), ticks. Hits are also
@@ -62,10 +63,32 @@ def load(batch):
     return runs
 
 
+def pct(values, q):
+    """The q-th percentile (nearest rank) of values, or None."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = max(1, -(-q * len(ordered) // 100))
+    return ordered[int(rank) - 1]
+
+
+def stalled(run):
+    """A run the bot ended on its own without the ending, or that timed out:
+    a loop, a stuck room, an empty frontier, the tick cap or an error."""
+    return not run["completed"] and "dead" not in run["finish"]
+
+
 def aggregate(runs):
     done = [r for r in runs.values() if r["completed"]]
     hits = [r["hits"] for r in done]
+    every = [r["hits"] for r in runs.values()]
+    default = runs.get(0)
     agg = dict(
+        median_hits_all=statistics.median(every) if every else None,
+        p90_hits_all=pct(every, 90),
+        median_ticks=statistics.median([r["ticks"] for r in done]) if done else None,
+        stalls=sum(1 for r in runs.values() if stalled(r)),
+        default_completed=None if default is None else default["completed"],
         runs=len(runs), completed=len(done),
         completion_rate=round(len(done) / len(runs), 3) if runs else 0,
         median_hits=statistics.median(hits) if hits else None,
@@ -108,8 +131,21 @@ def summary(batch):
         completed=a["completed"], completion_rate=a["completion_rate"],
         median_hits=a["median_hits"], mean_hits=a["mean_hits"],
         deaths=a["deaths"], hits_all=a["hits_all"],
+        median_hits_all=a["median_hits_all"], p90_hits_all=a["p90_hits_all"],
+        median_ticks=a["median_ticks"], stalls=a["stalls"],
+        default_completed=a["default_completed"],
         hits_per_seed={str(s): r["hits"] for s, r in runs.items()}),
         separators=(",", ":")))
+
+
+def row(batch, commit, change, verdict):
+    """One docs/bot-scoreboard.md table row for a batch."""
+    a = aggregate(load(batch))
+    default = {None: "-", True: "yes", False: "NO"}[a["default_completed"]]
+    print(f"| {os.path.basename(os.path.normpath(batch))} | {commit} | {change} | "
+          f"{a['completed']}/{a['runs']} | {a['deaths']} | {fmt(a['median_hits_all'])} | "
+          f"{fmt(a['p90_hits_all'])} | {fmt(a['median_ticks'])} | {a['stalls']} | "
+          f"{default} | {verdict} |")
 
 
 def compare(a_dir, b_dir):
@@ -119,7 +155,10 @@ def compare(a_dir, b_dir):
     for label, key in (("runs", "runs"), ("completed", "completed"),
                        ("completion rate", "completion_rate"),
                        ("median hits", "median_hits"), ("mean hits", "mean_hits"),
-                       ("deaths", "deaths"), ("hits (all runs)", "hits_all")):
+                       ("deaths", "deaths"), ("hits (all runs)", "hits_all"),
+                       ("median hits all", "median_hits_all"),
+                       ("p90 hits all", "p90_hits_all"),
+                       ("median ticks", "median_ticks"), ("stalls", "stalls")):
         x, y = a[key], b[key]
         d = round(y - x, 2) if x is not None and y is not None else None
         print(f"{label:<18} {fmt(x):>8} {fmt(y):>8} {fmt(d):>8}")
@@ -145,5 +184,7 @@ if __name__ == "__main__":
         summary(sys.argv[2])
     elif len(sys.argv) == 4 and sys.argv[1] == "compare":
         compare(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 6 and sys.argv[1] == "row":
+        row(*sys.argv[2:])
     else:
         sys.exit(__doc__)

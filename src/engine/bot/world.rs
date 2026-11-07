@@ -529,6 +529,7 @@ pub(super) mod tests {
                 collision_flags: 0,
                 grabbed: false,
                 health_status: 0,
+                animation: 0,
             },
             scene: SceneSnapshot {
                 mode: "play",
@@ -554,6 +555,7 @@ pub(super) mod tests {
             doors: Vec::new(),
             objects: Vec::new(),
             enemies: Vec::new(),
+            projectiles: Vec::new(),
             weapon: WeaponSnapshot {
                 equipped: None,
                 weapon: 0,
