@@ -14,7 +14,7 @@
 
 proc init when (MANSION2)
 {
-    set(FG_STATUS, F_STATUS_3D, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
     door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     dir_set(0, 0, 0, 0, 2500, 0, 3300);
@@ -68,13 +68,13 @@ event on_enter_sub1 when (MANSION2)
 {
     bgm_play(BGM_MAIN);
     sleep(5);
-    set(FG_STATUS, F_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
     sleep(10);
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     sleep(150);
-    set(FG_STATUS, F_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
     sleep(40);
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     sleep(30);
     set(FG_ROOM, F_ROOM_18, TRUE);
     evt_finish();

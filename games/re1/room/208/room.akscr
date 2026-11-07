@@ -30,22 +30,22 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_05, TRUE))
         {
-            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_208_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
         else
         {
-            if (ck(FG_ENEMY, F_ENEMY_14, FALSE))
+            if (ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, FALSE))
             {
                 aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                require(ck(FG_ENEMY, F_ENEMY_13, FALSE));
+                require(ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, FALSE));
                 aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
-            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+            enemy(EM_11_ZOMBIE_GREEN, EB_04, F_ENEMY_208_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
         }
     }
 }
@@ -69,18 +69,18 @@ event event_00
         aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         set(FG_SCENARIO, F_SCENARIO_05, TRUE);
-        set(FG_ENEMY, F_ENEMY_17, TRUE);
-        if (ck(FG_ENEMY, F_ENEMY_14, FALSE))
+        set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, TRUE);
+        if (ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, FALSE))
         {
-            set(FG_ENEMY, F_ENEMY_14, TRUE);
-            set(FG_ENEMY, F_ENEMY_17, FALSE);
+            set(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_1, TRUE);
+            set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, FALSE);
             evt_exec(0, TASK_09, event_01);
         }
         else
         {
-            require(ck(FG_ENEMY, F_ENEMY_13, FALSE));
-            set(FG_ENEMY, F_ENEMY_13, TRUE);
-            set(FG_ENEMY, F_ENEMY_17, FALSE);
+            require(ck(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, FALSE));
+            set(FG_ENEMY, F_ENEMY_207_ZOMBIE_GREEN_0, TRUE);
+            set(FG_ENEMY, F_ENEMY_208_ZOMBIE_GREEN_0, FALSE);
             evt_exec(0, TASK_09, event_01);
         }
     }

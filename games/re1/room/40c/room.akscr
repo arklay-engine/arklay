@@ -75,7 +75,7 @@ proc init
     door_aot_set(AOT_00_DOOR, 1100, 8000, 1500, 3900, 11, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 26000, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_MESSAGE, 1000, 12400, 1500, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 255, 0, 0, 0);
     aot_set(AOT_02_USEITEM, 9800, 16600, 2200, 1200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
-    item_aot_set(AOT_03_ITEM, 9800, 17700, 2200, 1800, IT_36_KEY_MANSION_HELMET, 3, IMDL_00, SCA_NONE, 10550, -460, 18010, 1024, F_ITEM_58, 0, 0);
+    item_aot_set(AOT_03_ITEM, 9800, 17700, 2200, 1800, IT_36_KEY_MANSION_HELMET, 3, IMDL_00, SCA_NONE, 10550, -460, 18010, 1024, F_ITEM_40C_KEY_MANSION_HELMET_0, 0, 0);
     eml_rot(IMDL_00, 250, -2020);
     if (CHRIS)
     {
@@ -92,7 +92,7 @@ proc init
         set(FG_ROOM, F_ROOM_0A, TRUE);
         if (ck(FG_COMMON, F_COMMON_37, FALSE))
         {
-            enemy(EM_08_PLANT_42, EB_40, F_ENEMY_60, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+            enemy(EM_08_PLANT_42, EB_40, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 11200, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 11200, -7000, 11200, ENEMY_03_PLANT_42, ANIM_00, 0, EVAR_00);
@@ -100,32 +100,32 @@ proc init
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 1500, 0, 10800, -7000, 10400, ENEMY_05_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_23_NPC_REBECCA, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2500, 0, 27200, 0, 13500, ENEMY_06_NPC_REBECCA, ANIM_2A, 0, EVAR_00);
         }
-        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, TRUE))
+        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE))
         {
             enemy(EM_08_PLANT_42, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10800, 200, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
             room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_OFF);
             set(FG_ROOM, F_ROOM_0A, FALSE);
         }
-        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE))
+        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, TRUE))
         {
-            enemy(EM_08_PLANT_42, EB_46, F_ENEMY_60, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+            enemy(EM_08_PLANT_42, EB_46, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 1524, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 10800, -7000, 11200, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 512, 0, 11200, -7000, 11200, ENEMY_03_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_45, NO_FLAG, SPAWN_FORCE, 2, 0, 3072, 0, 10400, -7000, 10800, ENEMY_04_PLANT_42, ANIM_00, 0, EVAR_00);
             enemy(EM_08_PLANT_42, EB_41, NO_FLAG, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10400, ENEMY_05_PLANT_42, ANIM_00, 0, EVAR_00);
         }
-        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, FALSE))
+        if (ck(FG_COMMON, F_COMMON_37, TRUE) && ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, FALSE) && ck(FG_COMMON, F_COMMON_PLANT42_OBJ, FALSE))
         {
             if (ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE))
             {
-                enemy(EM_08_PLANT_42, EB_08, F_ENEMY_60, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+                enemy(EM_08_PLANT_42, EB_08, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 2024, 0, 10800, -7000, 11200, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_05, NO_FLAG, SPAWN_FORCE, 2, 0, 3572, 0, 10400, -7000, 10400, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
             }
             else
             {
-                enemy(EM_08_PLANT_42, EB_00, F_ENEMY_60, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+                enemy(EM_08_PLANT_42, EB_00, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 1524, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 10800, -7000, 11200, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 512, 0, 11200, -7000, 11200, ENEMY_03_PLANT_42, ANIM_00, 0, EVAR_00);
@@ -190,12 +190,12 @@ proc init
             set(FG_ROOM, F_ROOM_0F, FALSE);
             set(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE);
         }
-        if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, FALSE))
         {
             room_bgm_state_set(3, ROOM_40C_PLANT_BOSS_ROOM, BGM_MAIN_ON);
             set(FG_ROOM, F_ROOM_0A, TRUE);
         }
-        if (ck(FG_ENEMY, F_ENEMY_60, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, FALSE))
         {
             if (ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, FALSE))
             {
@@ -206,7 +206,7 @@ proc init
                     enemy(EM_2B_NPC_BARRY_2_STARS, EB_05, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 10000, 0, 30000, ENEMY_06_NPC_BARRY_2_STARS, ANIM_2A, 0, EVAR_00);
                     evt_exec(0, TASK_09, on_enter_2_jill);
                 }
-                enemy(EM_08_PLANT_42, EB_00, F_ENEMY_60, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+                enemy(EM_08_PLANT_42, EB_00, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10800, -7000, 11200, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 11200, -7000, 11200, ENEMY_03_PLANT_42, ANIM_00, 0, EVAR_00);
@@ -215,7 +215,7 @@ proc init
             }
             else
             {
-                enemy(EM_08_PLANT_42, EB_08, F_ENEMY_60, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
+                enemy(EM_08_PLANT_42, EB_08, F_ENEMY_40C_PLANT_42_0, SPAWN_FORCE, 2, 0, 3572, 0, 10800, -7000, 10800, ENEMY_00_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_01, NO_FLAG, SPAWN_FORCE, 2, 0, 0, 0, 11200, -7000, 10800, ENEMY_01_PLANT_42, ANIM_00, 0, EVAR_00);
                 enemy(EM_08_PLANT_42, EB_05, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 10400, -7000, 11200, ENEMY_02_PLANT_42, ANIM_00, 0, EVAR_00);
             }
@@ -241,9 +241,9 @@ proc init
 
 proc main
 {
-    if (ck(FG_ROOM, F_ROOM_3E, TRUE) && ck(FG_ITEM, F_ITEM_58, TRUE))
+    if (ck(FG_ROOM, F_ROOM_3E, TRUE) && ck(FG_ITEM, F_ITEM_40C_KEY_MANSION_HELMET_0, TRUE))
     {
-        if (ck(FG_ENEMY, F_ENEMY_60, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE))
         {
             aot_delete(AOT_06_MESSAGE, SCE_MESSAGE, 0);
             aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
@@ -254,11 +254,11 @@ proc main
             aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_60, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE))
     {
         set(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, TRUE);
     }
-    if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0A, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_0A, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
     {
         set(FG_ROOM, F_ROOM_0B, TRUE);
         if (CHRIS)
@@ -270,7 +270,7 @@ proc main
             evt_exec(0, TASK_09, from_main_2);
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_09, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_09, TRUE) && ck(FG_ROOM, F_ROOM_0B, FALSE))
     {
         set(FG_ROOM, F_ROOM_0B, TRUE);
         if (CHRIS)
@@ -284,9 +284,9 @@ proc main
     }
     if (CHRIS)
     {
-        if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_58, TRUE))
+            if (ck(FG_ITEM, F_ITEM_40C_KEY_MANSION_HELMET_0, TRUE))
             {
                 aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
@@ -300,9 +300,9 @@ proc main
     }
     else
     {
-        if (ck(FG_ENEMY, F_ENEMY_60, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, TRUE) && ck(FG_ROOM, F_ROOM_0D, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_58, TRUE))
+            if (ck(FG_ITEM, F_ITEM_40C_KEY_MANSION_HELMET_0, TRUE))
             {
                 aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
@@ -313,7 +313,7 @@ proc main
                 aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
             }
         }
-        if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
+        if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_40C_PLANT_42_0, FALSE) && ck(FG_SCENARIO, F_SCENARIO_PLANT42_DEAD, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
         {
             set(FG_ROOM, F_ROOM_0E, TRUE);
             set(FG_RUN, F_RUN_CONTROLS, FALSE);

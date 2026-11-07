@@ -84,8 +84,8 @@ proc init
     door_aot_set(AOT_01_DOOR, 10000, 14500, 2400, 2500, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_306_ITEM_PASSAGE, 9400, 0, 6300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 28700, 14000, 4900, 3100, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30D_STRAIGHT_PASSAGE, 4100, 0, 4300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_EVENT, 21800, 0, 4200, 4500, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_03, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_51_UNKNOWN_51, 1, IMDL_00, SCA_NONE, 1950, -2550, 24070, 0, F_ITEM_76, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_05_ITEM, 2300, 18000, 1000, 3000, IT_28_KEY_MO_DISK, 1, IMDL_01, SCA_NONE, 2600, -1000, 18830, -1400, F_ITEM_FB, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_51_UNKNOWN_51, 1, IMDL_00, SCA_NONE, 1950, -2550, 24070, 0, F_ITEM_30F_UNKNOWN_51_0, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_05_ITEM, 2300, 18000, 1000, 3000, IT_28_KEY_MO_DISK, 1, IMDL_01, SCA_NONE, 2600, -1000, 18830, -1400, F_ITEM_30F_KEY_MO_DISK_1, SAT_MANUAL | SAT_PLAYER, 0);
     obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3400, -2160, 24000, 0, 0, 0, 0, 0, 0, 2300, 2900, 2100);
     obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 17270, -2310, 23970, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_02, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 24300, 0, 2360, -1024, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -106,15 +106,15 @@ proc init
     {
         set(FG_ROOM, F_ROOM_17, TRUE);
     }
-    if (ck(FG_ITEM, F_ITEM_76, TRUE))
+    if (ck(FG_ITEM, F_ITEM_30F_UNKNOWN_51_0, TRUE))
     {
         set(FG_ROOM, F_ROOM_1F, TRUE);
         aot_set(AOT_0C_EVENT, 1350, 23190, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0c, 0, 0, 0);
     }
     set(FG_SCENARIO, F_SCENARIO_42, TRUE);
-    set(FG_STATUS, F_STATUS_3D, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
     set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-    set(FG_STATUS, F_STATUS_3C, TRUE);
+    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_305_FOUNTAIN))
     {
         evt_exec(0, TASK_09, on_enter);
@@ -165,7 +165,7 @@ proc main
             set(FG_MAP, F_MAP_VISITED_312, TRUE);
         }
     }
-    if (ck(FG_ITEM, F_ITEM_76, FALSE) && ck(FG_ROOM, F_ROOM_1F, TRUE))
+    if (ck(FG_ITEM, F_ITEM_30F_UNKNOWN_51_0, FALSE) && ck(FG_ROOM, F_ROOM_1F, TRUE))
     {
         set(FG_ROOM, F_ROOM_1F, FALSE);
         message(MSG_YOU_GOT_THE_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of UNDER GROUND."
@@ -404,7 +404,7 @@ event event_00
         aot_delete(AOT_07_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_0C_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_0D_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     }
     evt_finish();
 }
@@ -1108,7 +1108,7 @@ event event_01
             inst_cfg(COL_LIST_00, COL_07, 0, 27396, 24552, 31338, 28188);
         }
         objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        set(FG_STATUS, F_STATUS_3E, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
         set(FG_ROOM, F_ROOM_0E, TRUE);
         set(FG_ROOM, F_ROOM_0F, TRUE);
         set(FG_ROOM, F_ROOM_10, TRUE);
@@ -1283,8 +1283,8 @@ event from_main
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
@@ -1313,8 +1313,8 @@ event from_main_2
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
@@ -1343,8 +1343,8 @@ event from_main_3
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
@@ -1352,10 +1352,10 @@ event from_main_3
 
 event event_06
 {
-    set(FG_STATUS, F_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
     set(FG_ROOM, F_ROOM_0A, TRUE);
     sleep(20);
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     set(FG_ROOM, F_ROOM_0B, TRUE);
     sleep(4);
     evt_chain(event_06);
@@ -1463,7 +1463,7 @@ event from_main_4
             set(FG_SCENARIO, F_SCENARIO_4B, FALSE);
         }
         eml_pos(OBJ_03, 0, 0, 0, 1, 1, 1);
-        set(FG_STATUS, F_STATUS_11, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
         set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
         set(FG_ROOM, F_ROOM_15, TRUE);
         aot_on(AOT_06_USEITEM, SCE_USEITEM, 1);
@@ -1476,7 +1476,7 @@ event from_main_4_sub1
 {
     run
     {
-        set(FG_STATUS, F_STATUS_3E, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17_R_PASS, 0, SND_AT_POINT, 0, 17000, 24050);
     }
     evt_work_set(WK_OBJ, OBJ_01);
@@ -1502,7 +1502,7 @@ event from_main_4_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     evt_finish();
 }
 

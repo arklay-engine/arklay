@@ -26,17 +26,17 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_01, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_00, SAT_MANUAL | SAT_PLAYER, 0);
+    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_115_116, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_WEAPON_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
     swap_var(XFER_RESTORE, AOT_01_ITEM, B_0C);
-    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, IMDL_01, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_01, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, IMDL_01, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
     obj(OBJ_00, OF_ACTIVE, SCA_NONE, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
     aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
     aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     aot_set(AOT_08_MESSAGE, 9500, 1300, 2000, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 0, 5000, 3600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    if (ck(FG_ITEM, F_ITEM_01, FALSE) && ck(FG_ITEM, F_ITEM_00, FALSE))
+    if (ck(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, FALSE) && ck(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, FALSE))
     {
         evt_exec(0, TASK_00, on_enter);
         aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
@@ -66,7 +66,7 @@ proc main
     {
         if (testitem(IT_03_WEAPON_SHOTGUN))
         {
-            set(FG_ITEM, F_ITEM_00, TRUE);
+            set(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE);
             setbyte(0, 1, 0);
             evt_exec(0, TASK_09, from_main_2);
             evt_exec(0, TASK_09, from_main_3);
@@ -76,7 +76,7 @@ proc main
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
-            set(FG_ITEM, F_ITEM_01, TRUE);
+            set(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE);
             setbyte(1, 1, 0);
             evt_exec(0, TASK_09, from_main_2);
             evt_exec(0, TASK_09, from_main_4);
@@ -89,7 +89,7 @@ proc main
     {
         if (testitem(IT_03_WEAPON_SHOTGUN))
         {
-            set(FG_ITEM, F_ITEM_00, TRUE);
+            set(FG_ITEM, F_ITEM_116_WEAPON_SHOTGUN_0, TRUE);
             setbyte(0, 1, 0);
             evt_exec(0, TASK_09, from_main_2);
             evt_exec(0, TASK_09, from_main_3);
@@ -99,7 +99,7 @@ proc main
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
-            set(FG_ITEM, F_ITEM_01, TRUE);
+            set(FG_ITEM, F_ITEM_116_KEY_BROKEN_SHOTGUN_1, TRUE);
             setbyte(1, 1, 0);
             evt_exec(0, TASK_09, from_main_2);
             evt_exec(0, TASK_09, from_main_4);
@@ -511,7 +511,7 @@ event event_05
         require(item_ck(IT_03_WEAPON_SHOTGUN));
         swap_var(XFER_HELD, AOT_01_ITEM, B_0C);
         setb(B_SELECTED_ITEM, IT_03_WEAPON_SHOTGUN, 0);
-        set(FG_STATUS, F_STATUS_12, TRUE);
+        set(FG_STATUS, F_STATUS_MENU_KEY_DEPLETED, TRUE);
     }
     evt_finish();
 }

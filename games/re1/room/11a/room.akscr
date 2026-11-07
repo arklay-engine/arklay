@@ -53,7 +53,7 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 4700, 2700, 1800, 2300, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 8000, 24500, 1500, 2100, 2, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_17, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 8000, 24500, 1500, 2100, 2, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_11A_11B, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (MANSION1)
     {
         aot_set(AOT_02_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
@@ -69,7 +69,7 @@ proc init
         {
             if (ck(FG_SCENARIO, F_SCENARIO_HAS_RADIO, FALSE))
             {
-                item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, IMDL_00, SCA_NONE, 4785, 0, 8990, 0, F_ITEM_3B, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, IMDL_00, SCA_NONE, 4785, 0, 8990, 0, F_ITEM_11A_KEY_RADIO_0, SAT_MANUAL | SAT_PLAYER, 0);
                 aot_reset(AOT_06_NONE, SCE_NONE, 0, 0, 0, 0);
                 set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
             }
@@ -110,13 +110,13 @@ proc init
         {
             objtbl_b_set(TBL_OBJ, OBJ_03, 0);
         }
-        enemy(EM_02_CERBERUS, EB_03, F_ENEMY_2E, SPAWN_FORCE, 2, 0, 1536, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        enemy(EM_02_CERBERUS, EB_03, F_ENEMY_11A_CERBERUS_0, SPAWN_FORCE, 2, 0, 1536, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
     }
     else if (CHRIS)
     {
         if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_2F, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_COMMON, F_COMMON_21, TRUE))
         {
@@ -139,7 +139,7 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_2F, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
         }
     }
 }
@@ -177,9 +177,9 @@ proc main when (MANSION1)
         set(FG_ROOM, F_ROOM_01, TRUE);
         evt_exec(0, TASK_00, from_main_6);
     }
-    if (ck(FG_LOCK, F_LOCK_17, FALSE) && ck(FG_SCENARIO, F_SCENARIO_69, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6C, TRUE))
+    if (ck(FG_LOCK, F_LOCK_11A_11B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_69, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6C, TRUE))
     {
-        set(FG_LOCK, F_LOCK_17, TRUE);
+        set(FG_LOCK, F_LOCK_11A_11B, TRUE);
         evt_exec(0, TASK_01, from_main_7);
     }
 }
@@ -424,7 +424,7 @@ event from_main_chris_mansion2 when (CHRIS && MANSION2)
     act_reset();
     run
     {
-        set(FG_ITEM, F_ITEM_3B, FALSE);
+        set(FG_ITEM, F_ITEM_11A_KEY_RADIO_0, FALSE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);

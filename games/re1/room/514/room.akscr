@@ -4637,8 +4637,8 @@ event on_enter_3 when (JILL)
         set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_COMMON, F_COMMON_4C, TRUE);
         set(FG_SCENARIO, F_SCENARIO_2B, TRUE);
-        set(FG_LOCK, F_LOCK_2C, TRUE);
-        set(FG_LOCK, F_LOCK_1C, TRUE);
+        set(FG_LOCK, F_LOCK_50B_512, TRUE);
+        set(FG_LOCK, F_LOCK_500_501, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

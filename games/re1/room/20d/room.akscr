@@ -111,21 +111,21 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 1300, 12900, 3400, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_204_C_PASSAGE, 12500, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 12000, 1100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 2700, 0, 2900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_ITEM, F_ITEM_28, TRUE))
+    if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
     {
         if (MANSION1)
         {
-            item_aot_set(AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 10, 0, 10, 0, F_ITEM_28, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 10, 0, 10, 0, F_ITEM_20D_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
             aot_reset(AOT_02_ITEM, SCE_NONE, 0, 0, 0, 0);
         }
         else
         {
-            item_aot_set(ITEM_ALT_ROT | AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 8300, 0, 3600, 0, F_ITEM_28, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(ITEM_ALT_ROT | AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 8300, 0, 3600, 0, F_ITEM_20D_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
     }
-    if (ck(FG_ITEM, F_ITEM_C5, TRUE))
+    if (ck(FG_ITEM, F_ITEM_20D_HEAL_HERB_GREEN_1, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 5800, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 6700, 0, 6900, 0, F_ITEM_C5, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+        item_aot_set(AOT_03_ITEM, 5800, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 6700, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     }
     if (MANSION1)
     {
@@ -191,7 +191,7 @@ proc init
                     enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2560, 0, 9850, 0, 3000, ENEMY_01_NPC_REBECCA, ANIM_3D, 0, EVAR_01);
                     aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_3, 0, 0, 0);
                 }
-                else if (ck(FG_ITEM, F_ITEM_28, TRUE))
+                else if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
                 {
                     aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
                 }
@@ -232,7 +232,7 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_61, TRUE))
             {
-                if (ck(FG_ITEM, F_ITEM_28, TRUE))
+                if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
                 {
                     aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04_4, 0, 0, 0);
                 }
@@ -258,15 +258,15 @@ proc init
             }
         }
     }
-    if (ck(FG_ITEM, F_ITEM_C6, TRUE))
+    if (ck(FG_ITEM, F_ITEM_20D_HEAL_HERB_GREEN_2, TRUE))
     {
         if (MANSION1)
         {
-            item_aot_set(AOT_05_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_C6, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(AOT_05_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
         else
         {
-            item_aot_set(AOT_04_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_C6, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(AOT_04_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
     }
 }
@@ -276,7 +276,7 @@ proc main when (CHRIS && MANSION1)
     if (ck(FG_COMMON, F_COMMON_5F, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4E, FALSE))
     {
         set(FG_SCENARIO, F_SCENARIO_4E, TRUE);
-        set(FG_STATUS, F_STATUS_16, TRUE);
+        set(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE);
     }
     if (ck(FG_COMMON, F_COMMON_61, FALSE))
     {
@@ -320,16 +320,16 @@ proc main when (CHRIS && MANSION1)
             }
         }
     }
-    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_03, TRUE))
+    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_03, TRUE))
     {
-        set(FG_RUN, F_RUN_18, TRUE);
+        set(FG_RUN, F_RUN_0080, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
     }
-    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE))
+    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE))
     {
         set(FG_ROOM, F_ROOM_03, TRUE);
     }
-    if (ck(FG_STATUS, F_STATUS_16, TRUE))
+    if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE))
     {
         set(FG_ROOM, F_ROOM_02, TRUE);
     }

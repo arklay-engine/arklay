@@ -151,7 +151,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_PARTNER_ALIVE, TRUE))
         {
-            item_aot_set(AOT_02_ITEM, 9975, 7464, 2000, 2000, IT_37_KEY_LAB_MASTER, 2, IMDL_00, OBJ_06, 0, 0, 0, 0, F_ITEM_5F, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_5 | 16 | ITEM_REACH);
+            item_aot_set(AOT_02_ITEM, 9975, 7464, 2000, 2000, IT_37_KEY_LAB_MASTER, 2, IMDL_00, OBJ_06, 0, 0, 0, 0, F_ITEM_513_KEY_LAB_MASTER_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_5 | 16 | ITEM_REACH);
         }
         aot_set(AOT_03_MESSAGE, 8600, 6500, 1600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     }
@@ -159,7 +159,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_5B, FALSE))
         {
-            item_aot_set(AOT_02_ITEM, 9975, 7464, 2000, 2000, IT_37_KEY_LAB_MASTER, 2, IMDL_00, OBJ_06, 0, 0, 0, 0, F_ITEM_5F, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_5 | 16 | ITEM_REACH);
+            item_aot_set(AOT_02_ITEM, 9975, 7464, 2000, 2000, IT_37_KEY_LAB_MASTER, 2, IMDL_00, OBJ_06, 0, 0, 0, 0, F_ITEM_513_KEY_LAB_MASTER_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_5 | 16 | ITEM_REACH);
             aot_set(AOT_03_MESSAGE, 8600, 6500, 1600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
         }
         else
@@ -172,7 +172,7 @@ proc init
             }
         }
     }
-    item_aot_set(AOT_04_ITEM, 6000, 30000, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 6668, 0, 30866, 2688, F_ITEM_CF, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_2 | ITEM_REACH);
+    item_aot_set(AOT_04_ITEM, 6000, 30000, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 6668, 0, 30866, 2688, F_ITEM_513_AMMO_HANDGUN_1, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_2 | ITEM_REACH);
     obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 8180, -520, 22320, 0, 1, 1, 1, 1, 1, 1, 1, 1);
     obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 8180, -520, 19080, 0, 1, 1, 1, 1, 1, 1, 1, 1);
     obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 8180, -520, 15840, 0, 1, 1, 1, 1, 1, 1, 1, 1);
@@ -198,7 +198,7 @@ proc init
                 objtbl_b_set(TBL_OBJ, OBJ_06, 0);
                 objtbl_b_set(TBL_ITEM, IMDL_00, 0);
             }
-            else if (ck(FG_ITEM, F_ITEM_5F, TRUE))
+            else if (ck(FG_ITEM, F_ITEM_513_KEY_LAB_MASTER_0, TRUE))
             {
                 objtbl_b_set(TBL_OBJ, OBJ_06, OF_ACTIVE);
                 objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
@@ -212,7 +212,7 @@ proc init
         if (ck(FG_ROOM, F_ROOM_07, FALSE))
         {
             enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 565, 0, 7340, 0, 10250, ENEMY_00_NPC_WESKER_2, ANIM_32, 14, EVAR_00);
-            enemy(EM_0C_TYRANT_1, EB_40, F_ENEMY_70, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
+            enemy(EM_0C_TYRANT_1, EB_40, F_ENEMY_513_TYRANT_1_1, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
             eml_state(0, ENEMY_00_NPC_WESKER_2, EML_ACTION, AB_0B);
             dir_set(0, 0, 613, 0, 8139, 0, 8994);
             sys_multi(SYS_UNEQUIP);
@@ -248,7 +248,7 @@ proc init
                 objtbl_b_set(TBL_OBJ, OBJ_06, 0);
                 objtbl_b_set(TBL_ITEM, IMDL_00, 0);
             }
-            else if (ck(FG_ITEM, F_ITEM_5F, TRUE))
+            else if (ck(FG_ITEM, F_ITEM_513_KEY_LAB_MASTER_0, TRUE))
             {
                 objtbl_b_set(TBL_OBJ, OBJ_06, OF_ACTIVE);
                 objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
@@ -269,13 +269,13 @@ proc init
             if (ck(FG_COMMON, F_COMMON_5B, FALSE))
             {
                 enemy(EM_2E_NPC_WESKER_2, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 565, 0, 7340, 0, 10250, ENEMY_00, ANIM_32, 14, EVAR_00);
-                enemy(EM_0C_TYRANT_1, EB_40, F_ENEMY_70, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
+                enemy(EM_0C_TYRANT_1, EB_40, F_ENEMY_513_TYRANT_1_1, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
                 eml_state(0, ENEMY_00, EML_ACTION, AB_0B);
             }
             else
             {
                 enemy(EM_2D_NPC_BARRY_3, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 3470, 0, 14555, ENEMY_00, ANIM_00, 0, EVAR_00);
-                enemy(EM_0C_TYRANT_1, EB_41, F_ENEMY_70, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
+                enemy(EM_0C_TYRANT_1, EB_41, F_ENEMY_513_TYRANT_1_1, SPAWN_FORCE, 2, 0, 3072, 0, 10700, 0, 7000, ENEMY_01_TYRANT_1, ANIM_00, 0, EVAR_00);
                 eml_state(0, ENEMY_00, EML_ACTION, AB_0B);
             }
         }
@@ -319,14 +319,14 @@ proc main
 {
     if (CHRIS)
     {
-        if (ck(FG_ITEM, F_ITEM_5F, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
+        if (ck(FG_ITEM, F_ITEM_513_KEY_LAB_MASTER_0, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
         {
             set(FG_ROOM, F_ROOM_02, TRUE);
             objtbl_b_set(TBL_OBJ, OBJ_06, 0);
         }
         if (ck(FG_ROOM, F_ROOM_07, FALSE))
         {
-            if (ck(FG_ENEMY, F_ENEMY_70, TRUE))
+            if (ck(FG_ENEMY, F_ENEMY_513_TYRANT_1_1, TRUE))
             {
                 if (ck(FG_ROOM, F_ROOM_03, FALSE))
                 {
@@ -358,7 +358,7 @@ proc main
     {
         if (ck(FG_COMMON, F_COMMON_5B, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_5F, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
+            if (ck(FG_ITEM, F_ITEM_513_KEY_LAB_MASTER_0, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
             {
                 set(FG_ROOM, F_ROOM_02, TRUE);
                 objtbl_b_set(TBL_OBJ, OBJ_06, 0);
@@ -366,7 +366,7 @@ proc main
         }
         if (ck(FG_COMMON, F_COMMON_5B, FALSE) && ck(FG_ROOM, F_ROOM_07, FALSE))
         {
-            if (ck(FG_ENEMY, F_ENEMY_70, TRUE))
+            if (ck(FG_ENEMY, F_ENEMY_513_TYRANT_1_1, TRUE))
             {
                 if (ck(FG_ROOM, F_ROOM_03, FALSE))
                 {
@@ -395,7 +395,7 @@ proc main
         }
         if (ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
         {
-            if (ck(FG_ENEMY, F_ENEMY_70, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
+            if (ck(FG_ENEMY, F_ENEMY_513_TYRANT_1_1, TRUE) && ck(FG_ROOM, F_ROOM_03, FALSE))
             {
                 set(FG_ROOM, F_ROOM_03, TRUE);
                 set(FG_SCENARIO, F_SCENARIO_WESKER_LATE_ANIM, TRUE);
@@ -403,7 +403,7 @@ proc main
             }
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_70, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_513_TYRANT_1_1, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
     {
         set(FG_ROOM, F_ROOM_08, TRUE);
         if (CHRIS)

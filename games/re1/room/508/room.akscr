@@ -44,11 +44,11 @@ proc init
     door_aot_set(AOT_01_DOOR, 10700, 4800, 2300, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 17700, 800, 1400, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_03_DOOR, 200, 2500, 2100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_ITEM, F_ITEM_52, TRUE))
+    if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, TRUE))
     {
-        if (ck(FG_ITEM, F_ITEM_62, TRUE))
+        if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
         {
-            if (ck(FG_ITEM, F_ITEM_5A, TRUE))
+            if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, TRUE))
             {
                 aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04_2, 0, 0, 0);
             }
@@ -365,7 +365,7 @@ event on_aot_04
     {
         if (ck(FG_SCENARIO, F_SCENARIO_34, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_52, FALSE))
+            if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_34, TRUE);
@@ -382,7 +382,7 @@ event on_aot_04
     {
         if (ck(FG_SCENARIO, F_SCENARIO_35, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_62, FALSE))
+            if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_35, TRUE);
@@ -399,7 +399,7 @@ event on_aot_04
     {
         if (ck(FG_SCENARIO, F_SCENARIO_36, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_5A, FALSE))
+            if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_36, TRUE);

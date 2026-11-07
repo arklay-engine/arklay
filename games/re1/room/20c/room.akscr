@@ -123,20 +123,20 @@ proc init when (MANSION2)
     }
     if (ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
     {
-        enemy(EM_12_YAWN_2, EB_84, F_ENEMY_3E, SPAWN_FORCE, 2, 0, 2048, 0, 13000, 0, 11150, ENEMY_00_YAWN_2, ANIM_00, 0, EVAR_00);
+        enemy(EM_12_YAWN_2, EB_84, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 2048, 0, 13000, 0, 11150, ENEMY_00_YAWN_2, ANIM_00, 0, EVAR_00);
     }
     else
     {
-        enemy(EM_12_YAWN_2, EB_06, F_ENEMY_3E, SPAWN_FORCE, 2, 0, 3072, 0, 5300, 0, 17500, ENEMY_00_YAWN_2, ANIM_00, 0, EVAR_00);
+        enemy(EM_12_YAWN_2, EB_06, F_ENEMY_20C_YAWN_2_0, SPAWN_FORCE, 2, 0, 3072, 0, 5300, 0, 17500, ENEMY_00_YAWN_2, ANIM_00, 0, EVAR_00);
         inst_cfg(COL_LIST_03, COL_02, 0, 252, 1856, 4284, 6008);
-        if (ck(FG_ENEMY, F_ENEMY_3E, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
         {
             evt_exec(0, TASK_09, on_enter);
         }
     }
     if (CHRIS)
     {
-        if (ck(FG_ENEMY, F_ENEMY_3E, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
         {
             room_bgm_state_set(6, 12, BGM_MAIN_ON);
         }
@@ -152,7 +152,7 @@ proc init when (MANSION2)
     }
     else
     {
-        if (ck(FG_ENEMY, F_ENEMY_3E, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
         {
             aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, on_aot_03, 0, 0, 0);
         }
@@ -190,8 +190,8 @@ proc init when (MANSION2)
     aot_set(AOT_06_USEITEM, 19000, 2570, 1400, 2080, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
     if (JILL)
     {
-        item_aot_set(AOT_07_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 0, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_55, SAT_UNDER | SAT_PLAYER, 0);
-        item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_63_FILE_PASS_NUMBER, 0, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_56, SAT_UNDER | SAT_PLAYER, 0);
+        item_aot_set(AOT_07_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 0, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_KEY_RADIO_0, SAT_UNDER | SAT_PLAYER, 0);
+        item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_63_FILE_PASS_NUMBER, 0, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_20C_FILE_PASS_NUMBER_0, SAT_UNDER | SAT_PLAYER, 0);
         aot_set(AOT_09_EVENT, 23550, 2500, 1000, 2000, SCE_EVENT, 0, 9, 0, on_aot_09, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_28, FALSE))
@@ -255,20 +255,20 @@ proc main when (MANSION2)
 {
     if (CHRIS)
     {
-        if (ck(FG_ENEMY, F_ENEMY_3E, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE))
         {
             aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
     {
-        if (ck(FG_ENEMY, F_ENEMY_3E, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
+        if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
         {
             aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             set(FG_ROOM, F_ROOM_08, TRUE);
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_3E, TRUE) && ck(FG_ROOM, F_ROOM_07, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, TRUE) && ck(FG_ROOM, F_ROOM_07, TRUE))
     {
         bgm_volume_ramp(BGM_SUB_1, -96, 30);
         set(FG_ROOM, F_ROOM_07, FALSE);

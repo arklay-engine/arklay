@@ -80,17 +80,17 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
-    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_201_214, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-    item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_47, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_303_WEAPON_ROCKET_LAUNCHER_0, SAT_MANUAL | SAT_PLAYER, 0);
     aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 200, 0, F_ITEM_49, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 200, 0, F_ITEM_303_KEY_FLARE_1, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 0, 0, F_ITEM_49, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 0, 0, F_ITEM_303_KEY_FLARE_1, SAT_MANUAL | SAT_PLAYER, 0);
     }
     objtbl_b_set(TBL_ITEM, IMDL_01, 0);
     aot_set(AOT_04_USEITEM, 8500, 24000, 7500, 8500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
@@ -112,7 +112,7 @@ proc init
     objtbl_b_set(TBL_OBJ, OBJ_05, 0);
     obj(OBJ_06, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 13250, 0, 28250, 0, 0, 0, 0, 0, 0, 1000, 2750, 4250);
     obj(OBJ_07, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 9000, 0, 2310, 0, 0, 0, 0, 0, 0, 300, 200, 250);
-    enemy(EM_10_TYRANT_2, EB_80, F_ENEMY_59, SPAWN_FORCE, 2, 0, 800, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, ANIM_00, 0, EVAR_00);
+    enemy(EM_10_TYRANT_2, EB_80, F_ENEMY_303_TYRANT_2_0, SPAWN_FORCE, 2, 0, 800, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, ANIM_00, 0, EVAR_00);
     cut_auto(CUT_LOCKED);
     setb(B_CAMERA, CAM_07, 0);
     if (item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER))
@@ -182,12 +182,12 @@ proc main
             }
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_59, TRUE) && ck(FG_ROOM, F_ROOM_0A, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_303_TYRANT_2_0, TRUE) && ck(FG_ROOM, F_ROOM_0A, FALSE))
     {
         set(FG_ROOM, F_ROOM_0A, TRUE);
         bgm_stop(BGM_SUB_2);
-        set(FG_STATUS, F_STATUS_24, FALSE);
-        set(FG_STATUS, F_STATUS_26, TRUE);
+        set(FG_STATUS, F_STATUS_COUNTDOWN_ACTIVE, FALSE);
+        set(FG_STATUS, F_STATUS_ROOM_SPRITES_OFF, TRUE);
         effect_clear(0);
         task_kill(TASK_01);
         task_kill(TASK_02);
@@ -329,8 +329,8 @@ event from_main
         set(FG_RUN, F_RUN_ENTITIES, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_EFFECTS, FALSE);
-        set(FG_RUN, F_RUN_1B, FALSE);
-        set(FG_RUN, F_RUN_1A, FALSE);
+        set(FG_RUN, F_RUN_0010, FALSE);
+        set(FG_RUN, F_RUN_0020, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_05);
@@ -529,8 +529,8 @@ event from_main
         set(FG_RUN, F_RUN_ENTITIES, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_EFFECTS, TRUE);
-        set(FG_RUN, F_RUN_1B, TRUE);
-        set(FG_RUN, F_RUN_1A, TRUE);
+        set(FG_RUN, F_RUN_0010, TRUE);
+        set(FG_RUN, F_RUN_0020, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
@@ -2714,8 +2714,8 @@ event from_main_6
     sleep(70);
     run
     {
-        set(FG_STATUS, F_STATUS_07, TRUE);
-        set(FG_STATUS, F_STATUS_20, TRUE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
+        set(FG_STATUS, F_STATUS_DEATH_VARIANT, TRUE);
     }
     evt_finish();
 }
@@ -2925,8 +2925,8 @@ event from_main_3_sub6
     sleep(100);
     run
     {
-        set(FG_STATUS, F_STATUS_07, TRUE);
-        set(FG_STATUS, F_STATUS_20, TRUE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
+        set(FG_STATUS, F_STATUS_DEATH_VARIANT, TRUE);
     }
     evt_finish();
 }

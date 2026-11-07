@@ -44,7 +44,7 @@ proc init
         {
             aot_set(AOT_03_MESSAGE, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
             enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 9000, 0, 3726, ENEMY_00_NPC_WESKER, ANIM_00, 0, EVAR_00);
-            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_B5, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_511_CHIMERA_1, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
         }
     }
     evt_exec(0, TASK_09, on_enter);

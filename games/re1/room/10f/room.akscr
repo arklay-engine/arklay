@@ -113,26 +113,26 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE))
         {
-            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_10F_KEY_EMBLEM_WOOD_0, SAT_MANUAL | SAT_PLAYER, 0);
         }
         else
         {
-            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_10F_KEY_EMBLEM_WOOD_0, SAT_MANUAL | SAT_PLAYER, 0);
         }
     }
     else
     {
         if (ck(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE))
         {
-            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_10F_KEY_EMBLEM_WOOD_0, SAT_MANUAL | SAT_PLAYER, 0);
         }
         else
         {
-            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_14, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_10F_KEY_EMBLEM_WOOD_0, SAT_MANUAL | SAT_PLAYER, 0);
         }
     }
-    item_aot_set(AOT_04_ITEM, 8100, 18800, 1500, 1000, IT_20_KEY_EMBLEM_GOLD, 1, IMDL_01, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_15, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_05_ITEM, 17000, 11500, 800, 1000, IT_23_KEY_MUSIC_SCORE, 0, IMDL_02, SCA_NONE, 17250, -3000, 11550, 1250, F_ITEM_07, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM, 8100, 18800, 1500, 1000, IT_20_KEY_EMBLEM_GOLD, 1, IMDL_01, SCA_NONE, 9220, -560, 19550, 1024, F_ITEM_10F_KEY_EMBLEM_GOLD_1, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_05_ITEM, 17000, 11500, 800, 1000, IT_23_KEY_MUSIC_SCORE, 0, IMDL_02, SCA_NONE, 17250, -3000, 11550, 1250, F_ITEM_10F_KEY_MUSIC_SCORE_2, SAT_MANUAL | SAT_PLAYER, 0);
     aot_set(AOT_06_USEITEM, 8100, 18800, 1500, 1000, SCE_USEITEM, SAT_PLAYER, 9, 0, 4, 0, 1, 0);
     if (CHRIS)
     {
@@ -277,7 +277,7 @@ proc main
             {
                 if (ck(FG_ROOM, F_ROOM_23, TRUE))
                 {
-                    set(FG_ITEM, F_ITEM_14, TRUE);
+                    set(FG_ITEM, F_ITEM_10F_KEY_EMBLEM_WOOD_0, TRUE);
                     set(FG_COMMON, F_COMMON_C_BAR_WOOD_EMBLEM_SET, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
                     aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
@@ -289,7 +289,7 @@ proc main
             {
                 if (ck(FG_ROOM, F_ROOM_22, TRUE))
                 {
-                    set(FG_ITEM, F_ITEM_15, TRUE);
+                    set(FG_ITEM, F_ITEM_10F_KEY_EMBLEM_GOLD_1, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_01, OF_ACTIVE);
                     aot_delete(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
                     evt_exec(0, TASK_09, from_main_4_chris);
@@ -363,7 +363,7 @@ proc main
             {
                 if (ck(FG_ROOM, F_ROOM_22, TRUE))
                 {
-                    set(FG_ITEM, F_ITEM_14, TRUE);
+                    set(FG_ITEM, F_ITEM_10F_KEY_EMBLEM_WOOD_0, TRUE);
                     set(FG_COMMON, F_COMMON_J_BAR_WOOD_EMBLEM_SET, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
                     aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
@@ -375,7 +375,7 @@ proc main
             {
                 if (ck(FG_ROOM, F_ROOM_21, TRUE))
                 {
-                    set(FG_ITEM, F_ITEM_15, TRUE);
+                    set(FG_ITEM, F_ITEM_10F_KEY_EMBLEM_GOLD_1, TRUE);
                     objtbl_b_set(TBL_ITEM, IMDL_01, OF_ACTIVE);
                     aot_delete(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
                     evt_exec(0, TASK_09, from_main_3);

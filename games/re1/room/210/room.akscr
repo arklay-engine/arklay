@@ -28,11 +28,11 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 3200, 2200, 2400, 2100, 1, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 3712, 23040, 1792, 2000, IT_2C_KEY_CREST_MOON, 1, IMDL_00, SCA_NONE, 4670, 0, 24400, 0, F_ITEM_81, 0, ITEM_SPARKLE | 32);
+    item_aot_set(AOT_01_ITEM, 3712, 23040, 1792, 2000, IT_2C_KEY_CREST_MOON, 1, IMDL_00, SCA_NONE, 4670, 0, 24400, 0, F_ITEM_210_KEY_CREST_MOON_0, 0, ITEM_SPARKLE | 32);
     eml_rot(IMDL_00, 3230, 0);
-    item_aot_set(AOT_02_ITEM, 3840, 13568, 1280, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 4370, -1540, 14120, -1200, F_ITEM_82, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_02_ITEM, 3840, 13568, 1280, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 4370, -1540, 14120, -1200, F_ITEM_210_AMMO_SHOTGUN_1, SAT_MANUAL | SAT_PLAYER, 0);
     aot_set(AOT_03_MESSAGE, 2300, 4500, 2000, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    if (ck(FG_ITEM, F_ITEM_81, TRUE))
+    if (ck(FG_ITEM, F_ITEM_210_KEY_CREST_MOON_0, TRUE))
     {
         aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
     }
@@ -44,19 +44,19 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_YAWN_BITE, FALSE))
         {
-            enemy(EM_0D_YAWN_1, EB_80, F_ENEMY_18, SPAWN_FORCE, 2, 0, 0, 0, 4500, 0, 24500, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
+            enemy(EM_0D_YAWN_1, EB_80, F_ENEMY_210_YAWN_1_0, SPAWN_FORCE, 2, 0, 0, 0, 4500, 0, 24500, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
         }
         else
         {
-            enemy(EM_0D_YAWN_1, EB_02, F_ENEMY_18, SPAWN_FORCE, 2, 0, 1024, 0, 11000, 0, 10000, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
+            enemy(EM_0D_YAWN_1, EB_02, F_ENEMY_210_YAWN_1_0, SPAWN_FORCE, 2, 0, 1024, 0, 11000, 0, 10000, ENEMY_00_YAWN_1, ANIM_00, 0, EVAR_00);
             set(FG_ROOM, F_ROOM_1E, TRUE);
-            if (ck(FG_ENEMY, F_ENEMY_18, FALSE))
+            if (ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE))
             {
                 evt_exec(0, TASK_09, on_enter);
             }
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_18, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE))
     {
         room_bgm_state_set(1, ROOM_210_ATTIC, BGM_RELOAD);
     }
@@ -71,7 +71,7 @@ proc main
 {
     if (ck(FG_SCENARIO, F_SCENARIO_STAGE_VARIANT, FALSE))
     {
-        if (ck(FG_ENEMY, F_ENEMY_18, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, TRUE))
         {
             if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
@@ -83,7 +83,7 @@ proc main
                 bgm_volume_ramp(BGM_MAIN, -95, 30);
             }
         }
-        if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_18, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02))
+        if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_210_YAWN_1_0, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
             set(FG_ROOM, F_ROOM_1E, TRUE);
             set(FG_STATUS, F_STATUS_CAMERA_DEFER, FALSE);
@@ -142,7 +142,7 @@ event on_aot_04
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        if (ck(FG_ITEM, F_ITEM_81, FALSE))
+        if (ck(FG_ITEM, F_ITEM_210_KEY_CREST_MOON_0, FALSE))
         {
             aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         }

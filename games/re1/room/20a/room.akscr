@@ -76,13 +76,13 @@ proc init
     aot_set(AOT_06_USEITEM, 6800, 4000, 800, 4000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
     if (CHRIS)
     {
-        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_0F, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_0F, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_0F, FALSE))
+    if (ck(FG_ITEM, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, FALSE))
     {
         aot_reset(AOT_04_MESSAGE, SCE_NONE, 0, 0, 0, 0);
     }
@@ -92,13 +92,13 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
@@ -110,30 +110,30 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
                 eml_rot(IMDL_01, 2048, 0);
                 aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
+                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
                 set(FG_ROOM, F_ROOM_22, TRUE);
             }
         }
     }
     if (USA)
     {
-        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_20A_INK_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_20A_INK_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
     obj(OBJ_00, OF_ACTIVE, SCA_NONE, 7470, 0, 5850, 2048, 0, 930, 0, -930, 240, 10000, 640, 1170);
     if (ck(FG_SCENARIO, F_SCENARIO_12, TRUE))

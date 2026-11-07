@@ -37,10 +37,10 @@ proc init
     door_aot_set(AOT_00_DOOR, 10200, 600, 1900, 2600, 0, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_302_FALLS, 14600, 0, 26000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 13800, 2300, 2100, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_308_BRANCH_PASSAGE, 2600, 0, 16500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR, 2400, 600, 2800, 2600, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30B_ROCK_PASSAGE, 23100, 0, 18700, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    set(FG_STATUS, F_STATUS_3D, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
     if (JILL)
     {
-        item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_6A_FILE_BARRYS_PICTURE, 0, IMDL_00, SCA_NONE, 30000, 30000, 30000, 0, F_ITEM_75, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_6A_FILE_BARRYS_PICTURE, 0, IMDL_00, SCA_NONE, 30000, 30000, 30000, 0, F_ITEM_307_FILE_BARRYS_PICTURE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     if (ck(FG_COMMON, F_COMMON_47, FALSE))
     {
@@ -106,7 +106,7 @@ proc init
         aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         aot_set(AOT_07_TYPEWRITER, 6500, 17800, 2800, 1100, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
-    set(FG_STATUS, F_STATUS_3C, TRUE);
+    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
 }
 
 proc main
@@ -140,7 +140,7 @@ event from_main
     tw_end();
     evt_nop();
     sleep(1);
-    set(FG_STATUS, F_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
     for (16)
     {
         evt_work_set(WK_PLAYER, 0);
@@ -161,7 +161,7 @@ event from_main
         sleep(36);
     }
     evt_nop();
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -176,7 +176,7 @@ event from_main
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_11, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
     }
     run
     {

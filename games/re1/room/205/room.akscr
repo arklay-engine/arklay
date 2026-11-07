@@ -57,7 +57,7 @@ proc init
     aot_set(AOT_06_MESSAGE, 1000, 2000, 18400, 3300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_07_MESSAGE, 4385, 6736, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_08_MESSAGE, 13535, 6736, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_09_ITEM, 1400, 6200, 2200, 2300, IT_2E_KEY_CREST_SUN, 1, IMDL_00, SCA_NONE, 2090, 0, 6590, 1024, F_ITEM_24, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_09_ITEM, 1400, 6200, 2200, 2300, IT_2E_KEY_CREST_SUN, 1, IMDL_00, SCA_NONE, 2090, 0, 6590, 1024, F_ITEM_205_KEY_CREST_SUN_0, SAT_MANUAL | SAT_PLAYER, 0);
     obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_01, OF_ACTIVE, SCA_NONE, 8795, 0, 7886, 2048, 0, 0, 0, 0, 450, 1980, 450, 450);
     obj(OBJ_02, OF_ACTIVE, SCA_NONE, 14035, 0, 6190, 0, 0, 0, 0, 0, 450, 1980, 450, 450);
@@ -72,7 +72,7 @@ proc init
     if (ck(FG_SCENARIO, F_SCENARIO_3A, TRUE))
     {
         set(FG_ROOM, F_ROOM_1B, TRUE);
-        if (ck(FG_ITEM, F_ITEM_24, TRUE))
+        if (ck(FG_ITEM, F_ITEM_205_KEY_CREST_SUN_0, TRUE))
         {
             aot_delete(AOT_09_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
         }
@@ -108,7 +108,7 @@ proc main
             {
                 evt_exec(0, TASK_09, from_main);
             }
-            if (ck(FG_ITEM, F_ITEM_24, TRUE))
+            if (ck(FG_ITEM, F_ITEM_205_KEY_CREST_SUN_0, TRUE))
             {
                 aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_09_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
@@ -422,7 +422,7 @@ event from_main_5
     sleep(10);
     run
     {
-        if (ck(FG_STATUS, F_STATUS_19, FALSE))
+        if (ck(FG_STATUS, F_STATUS_OBJECT_PUSH, FALSE))
         {
             set(FG_RUN, F_RUN_READY, TRUE);
         }

@@ -100,7 +100,7 @@ proc init
         obj(OBJ_08, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 2810, 0, 11530, 1024, -450, 0, 450, 0, 1620, 400, 2500, 1000);
     }
     set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
-    set(FG_STATUS, F_STATUS_3C, TRUE);
+    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
     evt_exec(0, TASK_00, on_enter_3);
     evt_exec(0, TASK_01, on_enter_4);
     evt_exec(0, TASK_02, on_enter);
@@ -494,7 +494,7 @@ event from_main
     {
         snd_pan_vol_set(BGM_SUB_1, 45, 35);
         bgm_play(BGM_SUB_1);
-        set(FG_STATUS, F_STATUS_11, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
     }
     evt_work_set(WK_OBJ, OBJ_02);
     evt_tween_begin_alt();
@@ -585,7 +585,7 @@ event from_main_2
             bgm_stop(BGM_SUB_1);
         }
     }
-    set(FG_STATUS, F_STATUS_11, TRUE);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
     evt_work_set(WK_OBJ, OBJ_06);
     evt_tween_begin_alt();
     tw_abs_pos(0, 0, 0, 0);

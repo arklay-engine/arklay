@@ -42,13 +42,13 @@ proc init when (MANSION2)
     door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
     aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
-    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 2320, -1200, 10020, 2048, F_ITEM_1D, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, IMDL_01, SCA_NONE, 4850, -1210, 8180, -1100, F_ITEM_74, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 2320, -1200, 10020, 2048, F_ITEM_215_AMMO_SHOTGUN_0, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, IMDL_01, SCA_NONE, 4850, -1210, 8180, -1100, F_ITEM_215_FILE_ORDERS_1, SAT_MANUAL | SAT_PLAYER, 0);
     eml_rot(IMDL_01, 380, 2280);
-    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, IMDL_02, SCA_NONE, 8200, -5690, 14130, 0, F_ITEM_1E, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, IMDL_02, SCA_NONE, 8200, -5690, 14130, 0, F_ITEM_215_KEY_JEWEL_RED_2, SAT_MANUAL | SAT_PLAYER, 0);
     eml_rot(IMDL_02, 0, -1024);
     setbyte(2, 0, 0);
-    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, IMDL_03, SCA_NONE, 2280, -1200, 9120, 0, F_ITEM_C8, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, IMDL_03, SCA_NONE, 2280, -1200, 9120, 0, F_ITEM_215_AMMO_MAGNUM_3, SAT_MANUAL | SAT_PLAYER, 0);
     obj(OBJ_00, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 6720, 0, 10440, 0, 576, 0, -576, 0, 540, 900, 1000, 540);
     if (ck(FG_COMMON, F_COMMON_44, FALSE))
     {
@@ -58,7 +58,7 @@ proc init when (MANSION2)
     else
     {
         msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
-        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
         {
             effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
         }
@@ -72,7 +72,7 @@ proc init when (MANSION2)
 
 proc main when (MANSION2)
 {
-    if (ck(FG_STATUS, F_STATUS_18, TRUE))
+    if (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
     {
         aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
@@ -86,19 +86,19 @@ proc main when (MANSION2)
         aot_delete(AOT_04_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_ITEM, F_ITEM_1E, FALSE))
+    if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, FALSE))
     {
         aot_delete(AOT_02_EVENT, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_1D, FALSE))
+    if (ck(FG_ITEM, F_ITEM_215_AMMO_SHOTGUN_0, FALSE))
     {
         aot_delete(AOT_03_ITEM, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_74, FALSE))
+    if (ck(FG_ITEM, F_ITEM_215_FILE_ORDERS_1, FALSE))
     {
         aot_delete(AOT_04_ITEM, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_C8, FALSE))
+    if (ck(FG_ITEM, F_ITEM_215_AMMO_MAGNUM_3, FALSE))
     {
         aot_delete(AOT_05_ITEM, SCE_NONE, 0);
     }
@@ -156,7 +156,7 @@ event on_aot_01_sub1 when (MANSION2)
 {
     run
     {
-        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
         {
             effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
         }
@@ -171,7 +171,7 @@ event on_aot_01_sub2 when (MANSION2)
 {
     run
     {
-        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
         {
             effect_kill_a(0);
         }
@@ -301,7 +301,7 @@ event on_aot_02_sub2_sub2 when (MANSION2)
     evt_disable(TASK_07);
     run
     {
-        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        if (ck(FG_ITEM, F_ITEM_215_KEY_JEWEL_RED_2, TRUE))
         {
             effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
         }

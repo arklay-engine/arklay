@@ -56,15 +56,15 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10800, 0, 2200, 2200, 6, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, DOOR_LOCKED | F_LOCK_2D, ROOM_505_O_PASSAGE, 16600, 0, 4200, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 10800, 0, 2200, 2200, 6, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, DOOR_LOCKED | F_LOCK_505_507, ROOM_505_O_PASSAGE, 16600, 0, 4200, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 20000, 0, 2600, 2700, 9, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, 0, ROOM_50C_FRONT_OF_ELEVATOR, 6100, 0, 18000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_ITEM, F_ITEM_7B, TRUE))
+    if (ck(FG_ITEM, F_ITEM_507_HEAL_HERB_RED_0, TRUE))
     {
-        item_aot_set(AOT_02_ITEM, 23930, 1380, 1800, 1800, IT_43_HEAL_HERB_RED, 1, IMDL_00, SCA_NONE, 24830, -1500, 2280, 0, F_ITEM_7B, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_02_ITEM, 23930, 1380, 1800, 1800, IT_43_HEAL_HERB_RED, 1, IMDL_00, SCA_NONE, 24830, -1500, 2280, 0, F_ITEM_507_HEAL_HERB_RED_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_94, TRUE))
+    if (ck(FG_ITEM, F_ITEM_507_AMMO_MAGNUM_1, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 13200, 9860, 1800, 1800, IT_0E_AMMO_MAGNUM, 6, IMDL_01, SCA_NONE, 14100, -2890, 10760, 0, F_ITEM_94, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+        item_aot_set(AOT_03_ITEM, 13200, 9860, 1800, 1800, IT_0E_AMMO_MAGNUM, 6, IMDL_01, SCA_NONE, 14100, -2890, 10760, 0, F_ITEM_507_AMMO_MAGNUM_1, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
     }
     aot_set(AOT_04_MESSAGE, 25000, 6000, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 1, 1, 0, 0);
     aot_set(AOT_05_MESSAGE, 16600, 11900, 1380, 820, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 1, 1, 0, 0);
@@ -76,13 +76,13 @@ proc init
     aot_set(AOT_0B_MESSAGE, 2300, 9100, 8700, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 1, 1, 0, 0);
     aot_set(AOT_0C_USEITEM, 2520, 5720, 2300, 1800, SCE_USEITEM, SAT_PLAYER, 9, 0, 20, 0, 1, 0);
     aot_set(AOT_0D_MESSAGE, 2520, 5720, 2300, 1800, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_ITEM, F_ITEM_62, TRUE))
+    if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
     {
-        item_aot_set(AOT_0E_ITEM, 0, 0, 1, 1, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_62, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_0E_ITEM, 0, 0, 1, 1, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_507_FILE_PASS_CODE_02_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_7C, TRUE))
+    if (ck(FG_ITEM, F_ITEM_507_AMMO_SHOTGUN_3, TRUE))
     {
-        item_aot_set(AOT_0F_ITEM, 23540, 7100, 1900, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_03, SCA_NONE, 24280, -1630, 7540, 2270, F_ITEM_7C, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_0F_ITEM, 23540, 7100, 1900, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_03, SCA_NONE, 24280, -1630, 7540, 2270, F_ITEM_507_AMMO_SHOTGUN_3, SAT_MANUAL | SAT_PLAYER, 0);
     }
     obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 22226, -500, 9880, 0, 0, 0, 0, 0, 650, 900, 900, 900);
     obj(OBJ_01, OF_10 | OF_ACTIVE, SCA_NONE, 22210, -500, 7780, 0, 0, 0, 0, 0, 650, 900, 900, 900);
@@ -106,7 +106,7 @@ proc main
         set(FG_ROOM, F_ROOM_06, TRUE);
         evt_exec(0, TASK_02, from_main_3);
     }
-    if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_STATUS, F_STATUS_18, TRUE))
+    if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE))
     {
         aot_reset(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 5, on_aot_09, 0);
     }
@@ -228,7 +228,7 @@ proc main
     {
         evt_exec(0, TASK_07, event_07);
     }
-    if (ck(FG_ITEM, F_ITEM_62, TRUE))
+    if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
     {
         aot_reset(AOT_0D_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 257, 0);
         aot_reset(AOT_0C_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
@@ -257,7 +257,7 @@ event from_main
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_18, TRUE));
+        while (ck(FG_STATUS, F_STATUS_DOOR_TRANSITION, TRUE));
     }
     while (ck(FG_ROOM, F_ROOM_24, FALSE));
     evt_nop();
@@ -290,7 +290,7 @@ event from_main
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_27, TRUE));
+        while (ck(FG_STATUS, F_STATUS_DOOR_ANGLE_STEP, TRUE));
         do
         {
             evt_next();
@@ -458,7 +458,7 @@ event on_aot_09_sub1
     {
         spd_set(ENT_PLAYER, 0);
         dir_set(0, 0, 2048, 0, 11800, 0, 6800);
-        set(FG_STATUS, F_STATUS_18, FALSE);
+        set(FG_STATUS, F_STATUS_DOOR_TRANSITION, FALSE);
         msg_list(0, 8760, -2500, 9040, 130, 130, 130, LIGHT_KIND_00, 10495, 6680, -2600, 9240, 130, 130, 130, LIGHT_KIND_00, 10895, 7600, -2800, 9240, 130, 130, 130, LIGHT_KIND_00, 9935, 1135, 1135, 1120);
     }
     sleep(20);
