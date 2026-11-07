@@ -3260,6 +3260,12 @@ pub struct GameState {
     /// `(room, slot)` pairs kept (room as `0xSRR`, stage digit and room).
     /// `None` leaves the enemies alone.
     pub re2_no_enemies: Option<Vec<(u16, usize)>>,
+    /// A setup script's `Dest` for the next zombie a room's `sce_em_set` puts
+    /// in a slot (`set_re2_enemy_dest`), as `(room, slot, [x, z])` with the
+    /// room as in `re2_no_enemies`. Neither `Sce_em_set` nor `Em10_Init` sets
+    /// `Dest`, so the original's new work starts with whatever its memory
+    /// held, which arklay doesn't model; each entry is used once.
+    pub re2_enemy_dest: Vec<(u16, usize, [i16; 2])>,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3734,6 +3740,7 @@ impl Default for GameState {
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
             re2_no_enemies: None,
+            re2_enemy_dest: Vec::new(),
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,
