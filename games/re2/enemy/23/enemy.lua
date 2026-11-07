@@ -109,6 +109,14 @@ local function mot_play_sp(e, clip, hokan)
     return 0
 end
 
+-- `Mot_play`: as `Mot_play_sp`, but without the clip's speed.
+local function mot_play(e, clip)
+    if e:move_no() ~= clip then
+        e:clip(clip, 0, 0)
+    end
+    return e:joint(0x1000) and 1 or 0
+end
+
 local function count_down(e, index)
     local value = e:var(index)
     if value ~= 0 then
@@ -328,9 +336,58 @@ local function corner_wait(e)
     end
 end
 
+-- `FUN_004691c0`: at the corridor's end it takes the player under. The cut
+-- is 0xE while zapping, which isn't modelled; `fg_system`'s `0x100` is
+-- `pl_held_kill`, and its `0x4000000`, which starts `Die`, is the end of
+-- `pl_hold_back_die`.
+local function kill(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:set_status(0x100)
+        e:cut_change(7)
+        e:hide_object(TANK_OBJECT)
+        e:set_var(FLAGS, (e:var(FLAGS) | 2) & 0xFFFB)
+        e:pl_set_routine(5, 0, 0, 0)
+        e:set_player_life(-1)
+        e:pl_hold_back_die()
+        local _, y, z = e:pos()
+        local x = -0x5A26
+        e:set_pos(x, y, z)
+        e:set_var(JAW_B, 0)
+        e:set_var(JAW_A, 0)
+        e:set_var(SNAP, 0)
+        e:pl_hold()
+        e:set_player_xz(x + 0x2993, -0x393)
+        e:set_be_flg(e:be_flg() | 0x100A)
+        e:pl_or_be_flg(0x1008)
+        e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+        e:set_routine(2, 1)
+        sub = 1
+    end
+    if sub == 1 then
+        mot_play_sp(e, 4, 0)
+        if e:move_cnt() == 0xD then
+            e:pl_held_kill()
+            e:pl_set_base()
+            e:set_routine(2, 2)
+            e:pl_set_timer(0, 1)
+            e:set_player_angle(e:angle())
+        end
+    elseif sub == 2 then
+        e:null_pos_set(0)
+        if mot_play_sp(e, 5, 0) ~= 0 then
+            e:pl_or_be_flg(0x80000)
+            e:set_routine(2, 3)
+        end
+    elseif sub == 3 then
+        e:null_pos_set(0)
+        mot_play(e, 0xB)
+    end
+end
+
 -- `funcs_468CEB` and `funcs_468D18`, by `Routine_1`.
 local BEFORE <const> = { [1] = swim_ck, [2] = swim_ck }
-local AFTER <const> = { [0] = enter, rest, swim, turn, nil, nil, nil, corner_wait }
+local AFTER <const> = { [0] = enter, rest, swim, turn, kill, nil, nil, corner_wait }
 
 -- `FUN_00468ce0`.
 local function move(e)

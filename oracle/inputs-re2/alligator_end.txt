@@ -1,0 +1,5 @@
+# room 40A: after the scene, run along the corridor and up its second leg to the far end, and wait there for the alligator (oracle/re2.md)
+822 up run
+859 up run right
+877 up run
+1010
