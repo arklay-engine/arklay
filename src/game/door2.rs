@@ -104,8 +104,10 @@ mod tests {
     use crate::se2::SoundId;
 
     fn game_with(items: &[(u8, u8)]) -> GameState {
-        let mut game = GameState::default();
-        game.is_re2_room = true;
+        let mut game = GameState {
+            is_re2_room: true,
+            ..GameState::default()
+        };
         for &(id, quantity) in items {
             game.inventory.push(InventoryItem { id, quantity });
         }
