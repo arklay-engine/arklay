@@ -600,6 +600,17 @@ function BotInventory.context(bot)
         if pending and BotNav.fight_met(bot, fight) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
+            -- A hand weapon is the only way through its fight (the step
+            -- holds until it is held): a needed pickup, worth a spare
+            -- gun's slot like a key (ctx.required). 30C's web met a full
+            -- inventory of guns, rounds, the crank and the medal with
+            -- both knives out of reach, one boxed and one on its floor,
+            -- and the run ended on an empty frontier. Held, a second one
+            -- is no more use.
+            if row.melee and not bot:has_item(prefer) then
+                ctx.required = ctx.required or {}
+                ctx.required[prefer] = true
+            end
             local ammo = bot:ammo_for(prefer)
             if ammo then
                 ctx.loadout[ammo] = true
@@ -891,12 +902,17 @@ function BotInventory.needed_pickups(bot, ctx, skip)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
             local kind, merge = bot:item_kind(goal.item)
-            local needed = kind == "key" or ctx.uses[goal.item]
+            -- A required hand weapon (ctx.required) counts here only while
+            -- none is boxed: the box's loadout withdrawal counts that one,
+            -- and one slot takes either.
+            local required = ctx.required and ctx.required[goal.item]
+                and not BotInventory.remembered(bot)[goal.item]
+            local needed = kind == "key" or ctx.uses[goal.item] or required
                 or (ctx.gun_ammo and ctx.gun_ammo[goal.item])
                 or ctx.ammo_low == goal.item
             if needed and not (merge and bot:has_item(goal.item)) then
                 n = n + 1
-                if kind == "key" or ctx.uses[goal.item] then
+                if kind == "key" or ctx.uses[goal.item] or required then
                     progress = progress + 1
                 end
             end
@@ -950,6 +966,10 @@ function BotInventory.make_room(bot, ctx, items, skip)
                 end
                 if why == LOADOUT then
                     ctx.heals_may_go = true
+                    -- A required hand weapon swaps out a spare gun.
+                    if ctx.required and ctx.required[item] then
+                        ctx.swap = true
+                    end
                 end
             end
         end
