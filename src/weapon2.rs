@@ -267,6 +267,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
         G1_ID => &G1_DAMAGE,
+        G2_ID => &G2_DAMAGE,
         // `Em_26` points at `Em_25`'s rows.
         SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
         ALLIGATOR_ID => &ALLIGATOR_DAMAGE,
@@ -447,6 +448,48 @@ const G1_DAMAGE: [Damage; 7] = [
         damage: 0x0501_545A,
         stun: 0x078F_1E0A,
         heights: SHOTGUN_HEIGHTS,
+    },
+];
+
+const G2_ID: u8 = crate::zombie2::G2_ID;
+const G2_HANDGUN: [i32; 6] = [-5000, -2000, -6000, 2000, -500, 3000];
+const G2_SHOTGUN: [i32; 6] = [-5000, 500, -6000, 2000, -500, 3000];
+/// The same rows for `Em_31` (`0x536b50`).
+const G2_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x0130_5015,
+        stun: 0x0285_0A14,
+        heights: G2_HANDGUN,
+    },
+    Damage {
+        damage: 0x0130_5015,
+        stun: 0x0285_0A14,
+        heights: G2_HANDGUN,
+    },
+    Damage {
+        damage: 0x0130_5015,
+        stun: 0x0000_0014,
+        heights: G2_HANDGUN,
+    },
+    Damage {
+        damage: 0x0551_605A,
+        stun: 0x078F_1E0A,
+        heights: G2_HANDGUN,
+    },
+    Damage {
+        damage: 0x0691_A469,
+        stun: 0x078F_1E0A,
+        heights: G2_HANDGUN,
+    },
+    Damage {
+        damage: 0x03C1_0446,
+        stun: 0x078F_1E0A,
+        heights: G2_SHOTGUN,
+    },
+    Damage {
+        damage: 0x0501_545A,
+        stun: 0x078F_1E0A,
+        heights: G2_SHOTGUN,
     },
 ];
 

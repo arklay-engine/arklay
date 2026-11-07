@@ -3725,7 +3725,11 @@ impl Mover<'_, '_> {
             return;
         }
         if held.holder_id == crate::zombie2::G2_ID {
-            self.em31_held(held);
+            if self.work.routine[0] == MODE_HELD_DIE {
+                self.em31_killed(held);
+            } else {
+                self.em31_held(held);
+            }
             return;
         }
         if matches!(
@@ -4481,6 +4485,59 @@ impl Mover<'_, '_> {
         let [x, _, z] = held.holder;
         let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
         self.player.angle = goto(self.player.angle, target, 0x100);
+    }
+
+    /// `FUN_00496180`, `em_die_table[0x31]`'s `Routine_1` 0: killed in G2's
+    /// claws, on its clip 0 from `Null_pos_set` turned half round, then 30
+    /// ticks' wait. Its blood at the player's parts (an `Esp_call` each fourth
+    /// frame from frame 8 and two at frames 0x59 and 0x62, with their `Rnd`s,
+    /// which are drawn), the parts its frame 10 hides, `fg_status`' `0x40` and
+    /// frame 0x59's and 0x62's footfall sound aren't ported.
+    fn em31_killed(&mut self, held: &mut Held<'_>) {
+        if self.work.routine[1] != 0 {
+            return;
+        }
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.bank = Bank::Held;
+                    self.held_clip(0, 7);
+                    self.work.damage_cnt |= DAMAGE_LOCK;
+                    self.work.neck.flags = 1;
+                    self.work.routine[2] = 1;
+                }
+                if self.work.move_cnt == 10 {
+                    self.work.sounds.push(0x403_0001);
+                }
+                self.work.bank = Bank::Held;
+                self.null_pos_set(0x800);
+                let ended = self.joint_move_late(0x200);
+                self.work.routine[2] += u8::from(ended);
+                let count = self.work.move_cnt;
+                if count > 6 && count & 3 == 0 {
+                    for _ in 0..3 {
+                        held.rnd.draw();
+                    }
+                }
+                if count == 0x59 || count == 0x62 {
+                    for _ in 0..10 {
+                        held.rnd.draw();
+                    }
+                }
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.timers[0] = 0x1E;
+                    self.work.routine[2] = 3;
+                }
+                let was = self.work.timers[0];
+                self.work.timers[0] = was.wrapping_sub(1);
+                if was == 0 {
+                    self.work.routine[2] = 4;
+                }
+            }
+            _ => {}
+        }
     }
 
     /// `FUN_0045a880`: held from the front or the back, standing.
