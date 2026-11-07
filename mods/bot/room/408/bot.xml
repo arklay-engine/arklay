@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 408 guardhouse hub. Init sets door 1 to 409 (the drug storehouse), but
-     the same init then resets AOT 1 to message 143 on every entry, and the
-     main deletes the door outright once scenario 0x21 is set: 409 is never
-     reached from here. Each retry walks the bot back through the room's
-     wasps. -->
+<!-- 408 guardhouse hub. Init sets door 1 to 409 (the drug storehouse),
+     then resets AOT 1 to message 143 ("It's locked.") on every entry; the
+     main turns it back into the door once scenario 0x21 is set. 0x21 is
+     the number panel beside the door: AOT 4 raises the interactive-screen
+     gate (scenario 0x20) and init's system bit 0x1D picks the panel
+     (src/engine/passcode_panel.rs). Lighting all nine keys sets 0x21.
+     Until then the door is avoided: each retry walked the bot back through
+     the room's wasps. The panel is only for the V-JOLT branch, once the
+     V-JOLT report (40A, item bit 0x4E) is taken: before it, 409's taps give
+     only water. -->
 <bot format="2">
-  <avoid slot="1" reason="the door to 409 is always message 143"/>
+  <avoid slot="1" bank="0" bit="0x21" while="clear"
+         reason="the door to 409 is message 143 until the number panel is solved"/>
+  <interact slot="4" bank="0" bit="0x21" after_bank="7" after_bit="0x4E" after_while="clear"
+            when="vjolt=yes" label="the number panel beside the door to 409"/>
 </bot>

@@ -25,6 +25,7 @@ COMBOS=(
   "cave-no-yes:cave_q1=no"                     # Barry alone: Tell my family (lab)
   "cave-no-no:cave_q1=no cave_q2=no"           # Barry ahead (as Yes, Yes), Follow
   "cave-backtrack:cave_exit=backtrack"         # Tell my family (cave)
+  "vjolt:vjolt=yes"                            # V-JOLT on Plant 42's root, no Barry in 40C
 )
 
 NAME="coverage-$(date +%Y%m%d-%H%M%S)"

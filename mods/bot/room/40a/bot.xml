@@ -5,10 +5,14 @@
      (0x3E, from 401): using it sets scenario 0x24, the bookcase slides
      aside (scenario 0x25 set) and AOT 7 in the gap behind it becomes the
      event that turns on door 2, the passage to 40C, Plant 42's room. 40C's
-     init sets scenario 0x44, which opens 408's door 3 to 40C for later. -->
+     init sets scenario 0x44, which opens 408's door 3 to 40C for later.
+     On the V-JOLT branch (vjolt=yes) the red book waits for scenario 0x13
+     (V-JOLT poured in 40F), so the plant is met weakened. -->
 <bot format="2">
   <interact slot="5" bank="7" bit="0x4E" done="clear" label="the bookshelf's document"/>
   <answer choice="yes" slot="5" label="look closer at the bookshelf"/>
-  <use slot="5" item="0x3E" bank="0" bit="0x24" label="the red book on the shelf"/>
+  <use slot="5" item="0x3E" bank="0" bit="0x24" when="vjolt=no" label="the red book on the shelf"/>
+  <use slot="5" item="0x3E" bank="0" bit="0x24" after_bank="0" after_bit="0x13" when="vjolt=yes"
+       label="the red book, once V-JOLT is on the root (40F)"/>
   <interact slot="7" bank="0" bit="0x44" after_bank="0" after_bit="0x25" label="the passage behind the bookcase"/>
 </bot>

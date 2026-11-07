@@ -86,6 +86,32 @@ pub struct RoomMeta {
     pub keep_outs: Vec<KeepOut>,
     pub leaves: Vec<Leave>,
     pub kites: Vec<KiteLoop>,
+    pub taps: Vec<Tap>,
+    pub brews: Vec<Brew>,
+}
+
+/// `<tap slot item>`: pressing AOT `slot` (an event that asks first) fills
+/// one held empty bottle with `item`: 409's water and UMB taps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Tap {
+    pub slot: u8,
+    pub item: u8,
+    pub label: Option<String>,
+}
+
+/// `<brew item bottle bank bit [after_bank after_bit after_while]>`: make
+/// `item` here by filling `bottle`s at the room's taps and mixing them in
+/// the menu, done once flag `bank`/`bit` is set or `item` is held. With an
+/// `after` flag the brew waits for it (set, or clear with
+/// `after_while="clear"`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Brew {
+    pub item: u8,
+    pub bottle: u8,
+    pub flag: (u8, u8),
+    pub after: Option<(u8, u8)>,
+    pub after_clear: bool,
+    pub label: Option<String>,
 }
 
 /// `<kite enemy x z radius>`: the loop the bot runs while it keeps enemy
@@ -622,6 +648,35 @@ pub fn load_errands(
     Ok(errands)
 }
 
+/// One room's `<brew>` fact, with the room it belongs to and that room's
+/// `<tap>` facts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomBrew {
+    /// The room id as `bot:room().id` spells it (`"409"`).
+    pub room: String,
+    pub fact: Brew,
+    pub taps: Vec<Tap>,
+}
+
+/// Every room's `<brew>` facts, by room id then document order
+/// (`bot:brew_facts()`): what the inventory keeps for a brew from any room.
+pub fn load_brews(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomBrew>> {
+    let mut brews = Vec::new();
+    for (id, meta) in load_all(pack, jill, params)? {
+        let taps = meta.taps;
+        brews.extend(meta.brews.into_iter().map(|fact| RoomBrew {
+            room: id.clone(),
+            fact,
+            taps: taps.clone(),
+        }));
+    }
+    Ok(brews)
+}
+
 /// Every room's parsed `bot.xml`, by room id (upper case).
 fn load_all(
     pack: &Pack,
@@ -719,6 +774,8 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 | "keep_out"
                 | "leave"
                 | "kite"
+                | "tap"
+                | "brew"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -822,6 +879,18 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 let fact = parse_keep_out(child)?;
                 if keep {
                     meta.keep_outs.push(fact);
+                }
+            }
+            "tap" => {
+                let fact = parse_tap(child)?;
+                if keep {
+                    meta.taps.push(fact);
+                }
+            }
+            "brew" => {
+                let fact = parse_brew(child)?;
+                if keep {
+                    meta.brews.push(fact);
                 }
             }
             "leave" => {
@@ -1394,6 +1463,55 @@ fn parse_kite_loop(node: Node<'_, '_>) -> Result<KiteLoop> {
     })
 }
 
+fn parse_tap(node: Node<'_, '_>) -> Result<Tap> {
+    check_attributes(node, &["slot", "item", "label", "character", "when"])?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    if item == 0 {
+        bail!("{}: <tap> `item` must not be 0 (no item)", at(node));
+    }
+    Ok(Tap {
+        slot: attr(node, "slot")?,
+        item,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
+    check_attributes(
+        node,
+        &[
+            "item",
+            "bottle",
+            "bank",
+            "bit",
+            "after_bank",
+            "after_bit",
+            "after_while",
+            "label",
+            "character",
+            "when",
+        ],
+    )?;
+    check_leaf(node)?;
+    let item: u8 = attr(node, "item")?;
+    let bottle: u8 = attr(node, "bottle")?;
+    if item == 0 || bottle == 0 {
+        bail!(
+            "{}: <brew> `item` and `bottle` must not be 0 (no item)",
+            at(node)
+        );
+    }
+    Ok(Brew {
+        item,
+        bottle,
+        flag: (bank_attr(node)?, attr(node, "bit")?),
+        after: after_flag(node)?,
+        after_clear: parse_after_while(node)?,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
 fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
     check_attributes(node, &["slot", "bank", "bit", "label", "character", "when"])?;
     check_leaf(node)?;
@@ -1923,6 +2041,56 @@ mod tests {
     }
 
     #[test]
+    fn tap_and_brew_name_the_drug_store_chemistry() {
+        let text = r#"<bot format="2">
+            <tap slot="8" item="0x14" label="water"/>
+            <brew item="0x1B" bottle="0x13" bank="0" bit="0x13"
+                  after_bank="7" after_bit="0x4E" after_while="clear" label="V-JOLT"/>
+            <brew item="0x1A" bottle="0x13" bank="0" bit="0x13"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(
+            meta.taps,
+            vec![Tap {
+                slot: 8,
+                item: 0x14,
+                label: Some("water".to_string()),
+            }]
+        );
+        assert_eq!(
+            meta.brews,
+            vec![
+                Brew {
+                    item: 0x1B,
+                    bottle: 0x13,
+                    flag: (0, 0x13),
+                    after: Some((7, 0x4E)),
+                    after_clear: true,
+                    label: Some("V-JOLT".to_string()),
+                },
+                Brew {
+                    item: 0x1A,
+                    bottle: 0x13,
+                    flag: (0, 0x13),
+                    after: None,
+                    after_clear: false,
+                    label: None,
+                },
+            ]
+        );
+        for bad in [
+            r#"<bot format="2"><tap slot="8"/></bot>"#,
+            r#"<bot format="2"><tap slot="8" item="0"/></bot>"#,
+            r#"<bot format="1"><tap slot="8" item="0x14"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bank="0" bit="1"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_bank="7"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_while="clear"/></bot>"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
     fn kite_names_an_enemy_and_its_loop() {
         let text = r#"<bot format="2">
             <kite enemy="0x10" x="19650" z="14000" radius="8000"/>
@@ -2335,6 +2503,32 @@ mod tests {
     }
 
     #[test]
+    fn the_brew_index_carries_each_rooms_taps() {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        let shipped = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot/params/re1.xml"),
+        )
+        .unwrap();
+        let mut params = Params::new(super::super::params::parse(&shipped).unwrap());
+        // The brew is the V-JOLT branch's: the default drops it.
+        assert!(
+            load_brews(&pack, Some(true), Some(&params))
+                .unwrap()
+                .is_empty()
+        );
+        params.set("vjolt", "yes").unwrap();
+        let brews = load_brews(&pack, Some(true), Some(&params)).unwrap();
+        let rows: Vec<(&str, u8, Vec<u8>)> = brews
+            .iter()
+            .map(|entry| {
+                let taps = entry.taps.iter().map(|tap| tap.item).collect();
+                (entry.room.as_str(), entry.fact.item, taps)
+            })
+            .collect();
+        assert_eq!(rows, vec![("409", 0x1B, vec![0x14, 0x15, 0x16])]);
+    }
+
+    #[test]
     fn checked_in_use_facts_parse() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot/room");
         let mut seen = 0;
@@ -2382,7 +2576,11 @@ mod tests {
                 ("307", 4, 0x1E),
                 ("30F", 6, 0x1E),
                 ("30F", 6, 0x1E),
+                // Both branches' red book (vjolt=no and vjolt=yes): no
+                // parameters were given, so every `when` holds.
                 ("40A", 5, 0x3E),
+                ("40A", 5, 0x3E),
+                ("40F", 2, 0x1B),
                 ("501", 4, 0x27),
                 ("507", 12, 0x28),
                 ("509", 3, 0x28),

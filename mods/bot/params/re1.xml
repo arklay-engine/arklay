@@ -15,6 +15,14 @@
        and the door to 20E opens once the timer runs out. -->
   <param name="richard" values="save|leave" default="save"
          label="bring poisoned Richard the serum in 20D"/>
+  <!-- The guardhouse's Plant 42. `no` takes the bookcase passage in 40A
+       to 40C and fights the full plant there. `yes` solves 408's number
+       panel (scenario 0x21 opens the door to 409), mixes V-JOLT in 409's
+       drug store, pours it on the root in 40F (scenario 0x13) and only then
+       opens 40A's bookcase: 40C's init then loads the plant already
+       weakened (scenario 0x29) and Barry's rescue is skipped. -->
+  <param name="vjolt" values="no|yes" default="no"
+         label="make V-JOLT in 409 and pour it on Plant 42's root in 40F"/>
   <!-- 308: Barry's two prompts (room/308/bot.xml). cave_q1 answers "Will
        you go with him?" (message 23); cave_q2 answers the second prompt,
        "Do you want him to go first?" (24) after Yes or "Will you stay

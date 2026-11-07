@@ -71,6 +71,10 @@ function on_bot_tick(bot)
     if BotTerminal.step(bot, scene) then
         return
     end
+    -- So does 408's number panel, once its prompt is answered.
+    if BotPanel.step(bot, scene) then
+        return
+    end
     -- An inventory job owns the pad until the menu is closed again.
     if BotMenu.step(bot) then
         return
