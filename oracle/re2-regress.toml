@@ -910,6 +910,19 @@ expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200 --equip 5 --give 0:5:200"
 
 [[run]]
+name = "alligator_drag_40a"
+room = "40A"
+sound = false
+# as alligator_scene_40a, then the player runs up the corridor and stops just inside its second leg: the alligator's reach catches them as it turns (FUN_00469750) and drags them under (player routine 5,1). Both games end the room at the game over on tick 1380
+ticks = 1380
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_drag.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
 name = "route_100_200_fight"
 room = "new"
 offset = 0
