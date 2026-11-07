@@ -45,6 +45,7 @@
 ---    25/enemy.lua                    the giant spider (Em_25)
 ---    26/enemy.lua                    the young spiders (Em_26)
 ---    2a/enemy.lua                    Mr. X (Em_2A)
+---    2d/enemy.lua                    room 205's bodies in the walls (Em_2D)
 ---    2e/enemy.lua, 39/enemy.lua      the ivy and the poison ivy: ivy.update(e)
 ---    2f/enemy.lua                    the ivy's vines (Em_2F)
 ---    30/enemy.lua, 31/enemy.lua      G1 and G2 (Em_30, Em_31)
@@ -55,7 +56,7 @@
 ---```
 ---
 ---The engine only hands a body to a script for these ids: `0x10` to `0x21`,
----`0x22` and `0x24` (lickers), `0x23`, `0x25`, `0x26`, `0x2A`, `0x2E`, `0x2F`,
+---`0x22` and `0x24` (lickers), `0x23`, `0x25`, `0x26`, `0x2A`, `0x2D`, `0x2E`, `0x2F`,
 ---`0x39`, `0x30` and `0x31`. Any other enemy id a room places isn't modelled
 ---yet and takes no slot. An id the pack carries no script for leaves its
 ---bodies standing: the engine still runs its own part of the tick, but nothing
@@ -141,10 +142,11 @@
 ---| Alligator (`0x23`) | the parts as the last draw left them | its three boxes from its head |
 ---| Giant spider (`0x25`) | the ground, leg 1's foot, the posed parts | its floor from its height, pushes, walls (mask `0x600`) |
 ---| Young spiders (`0x26`) | the ground, the posed parts | its floor, then pushes and walls unless it killed itself |
+---| Room 205's bodies (`0x2D`) | `Root_ck`, even while the room is stopped; the parts as the last draw left them | pushes (`Oba_ck_em`) only; it is never pushed itself (`Be_flg` `0x4`) |
 ---| G1, G2 (`0x30`, `0x31`) | `Root_ck` (G1's to its own point while it limps away) | pushes, walls, the posed parts |
 ---| Ivy, vines (`0x2E`, `0x2F`, `0x39`) | | pushes, walls, the parts its vines hang from |
 ---
----Every family except the plants also counts `Damage_cnt` down by one before
+---Every family except the plants and room 205's bodies also counts `Damage_cnt` down by one before
 ---the call while its low seven bits are non-zero.
 ---
 ---## Keep no state in Lua
@@ -1252,6 +1254,15 @@ function Re2EnemyApi:tongue_owner() end
 ---Claim or give back the room's tongue.
 ---@param owner integer
 function Re2EnemyApi:set_tongue_owner(owner) end
+
+---The wait before room 205's bodies groan again on a wake: one per room
+---(`BYTE_00689610`), cleared by each body's init.
+---@return integer ticks
+function Re2EnemyApi:groan_wait() end
+
+---Set the wake groan's wait (truncated to a byte).
+---@param ticks integer
+function Re2EnemyApi:set_groan_wait(ticks) end
 
 ---Place the parts the licker's boxes follow (parts 0 and 1) at the body, as
 ---its init does. Licker only.

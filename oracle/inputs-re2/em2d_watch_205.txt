@@ -1,0 +1,19 @@
+# room 205 in scenario A, from the door from room 206 with 4:48 set: walk north and east into event 4's area and stand about 2100 south of the east wall's five bodies while they come out, turn their heads and go back in; then walk west and south down the west corridor's east wall into event 3's area and stand three times, so that its five come out two, one and two at a time, never within their reach (oracle/re2.md, "Em_2D")
+344 up
+366
+374 right
+387
+394 up
+444
+564 left
+590
+598 up
+764
+772 left
+786
+794 up
+824
+1064 up
+1079
+1324 up
+1332

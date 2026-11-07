@@ -3125,7 +3125,10 @@ mod tests {
             // A leader counts down before the init clears them.
             assert_eq!((em.get("groan"), em.get("room_enemy")), (0, 0));
             assert_eq!(em.1, vec![0]);
-            assert_eq!((em.get("hokan"), em.get("joints"), em.get("box")), (0, 1, 800));
+            assert_eq!(
+                (em.get("hokan"), em.get("joints"), em.get("box")),
+                (0, 1, 800)
+            );
         }
     }
 
@@ -3136,7 +3139,10 @@ mod tests {
         let wall = "ANGLE = 1024; POS = { -12100, -2480, -7000 }";
         let em = run_em2d(0x10, &[0x2B], 2, wall);
         assert_eq!((em.get("x"), em.get("z")), (-12100, -6600));
-        assert_eq!((em.get("r2"), em.get("dc"), em.get("timer")), (1, 0x80, 0xA));
+        assert_eq!(
+            (em.get("r2"), em.get("dc"), em.get("timer")),
+            (1, 0x80, 0xA)
+        );
         assert_eq!((em.get("move_no"), em.get("hokan")), (0, 0xF));
         let west = "ANGLE = 0; POS = { -27150, -2580, -12350 }";
         let em = run_em2d(0x10, &[0x2B], 2, west);
@@ -3245,7 +3251,10 @@ mod tests {
             // `SquareRoot0` comes from a table, so the edges are approximate.
             let em = at(880);
             assert_eq!((em.get("r1"), em.get("r2")), (3, 1));
-            assert_eq!((em.get("move_no"), em.get("hokan"), em.get("frame")), (3, 0xF, 1));
+            assert_eq!(
+                (em.get("move_no"), em.get("hokan"), em.get("frame")),
+                (3, 0xF, 1)
+            );
             assert_eq!(at(920).get("r1"), 1);
         }
     }
@@ -3257,11 +3266,17 @@ mod tests {
         let setup = "ROUTINES = { [0] = 1, 5, 0, 0 }; ANGLE = 1024; POS = { 0, 0, -7000 };
             CLIP_LEN = 3";
         let em = run_em2d(0, &[0x07], 1, setup);
-        assert_eq!((em.2.clone(), em.get("move_no"), em.get("hokan")), (vec![6], 4, 0xF));
+        assert_eq!(
+            (em.2.clone(), em.get("move_no"), em.get("hokan")),
+            (vec![6], 4, 0xF)
+        );
         assert_eq!((em.get("z"), em.get("dc"), em.get("r1")), (-6970, 0x80, 5));
         let em = run_em2d(0, &[0x07], 3, setup);
         assert_eq!(em.get("z"), -6910);
-        assert_eq!((em.get("timer"), em.get("hidden"), em.get("be")), (0x07 + 0x1E, 0x7FFE, 3));
+        assert_eq!(
+            (em.get("timer"), em.get("hidden"), em.get("be")),
+            (0x07 + 0x1E, 0x7FFE, 3)
+        );
         let routines = [em.get("r0"), em.get("r1"), em.get("r2"), em.get("r3")];
         assert_eq!((routines, em.get("life")), ([1, 7, 0, 0], -1));
         let later = run_em2d(0, &[0x07], 10, setup);
@@ -3307,7 +3322,10 @@ mod tests {
     fn an_em2d_holds_while_another_body_grabs() {
         let setup = "ROUTINES = { [0] = 1, 6, 0, 0 }; PL_DC = 0x80";
         let em = run_em2d(0, &[], 1, setup);
-        assert_eq!((em.get("r2"), em.get("move_no"), em.get("joints")), (1, 5, 0));
+        assert_eq!(
+            (em.get("r2"), em.get("move_no"), em.get("joints")),
+            (1, 5, 0)
+        );
         let em = run_em2d(0, &[], 3, setup);
         assert_eq!((em.get("r2"), em.get("joints")), (1, 2));
         let setup = "ROUTINES = { [0] = 1, 6, 1, 0 }";
