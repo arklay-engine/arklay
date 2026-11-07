@@ -956,3 +956,32 @@ fields = "ti,tlogo,tfade,snd"
 frames = [189, 899]
 expect = "match"
 record = ""
+
+# ARRANGE MODE, CLAIRE and EASY: `tsel` follows `censorship_off` and the bits the choice sets; the title hands over on
+# tick 740 (oracle/re2.md, "The new-game choice").
+[[run]]
+name = "newgame_arrange_easy"
+ui = "title"
+offset = 189
+ticks = 741
+input = "newgame_arrange_easy.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tsel,snd"
+frames = [189, 740]
+expect = "match"
+record = ""
+
+# ARRANGE MODE, LEON and HARD: `hard_mode` and `censorship_off` both set; the title hands over on tick 720.
+[[run]]
+name = "newgame_arrange_hard"
+ui = "title"
+offset = 189
+ticks = 721
+input = "newgame_arrange_hard.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tsel,snd"
+frames = [189, 720]
+expect = "match"
+record = ""

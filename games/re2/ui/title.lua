@@ -972,6 +972,14 @@ local function title_main(api)
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
         s.character = s.claire and 1 or 0
+        -- What the game starts with besides the character: the difficulty
+        -- confirm's EASY bit and `hard_mode`, and ARRANGE MODE's
+        -- `censorship_off`, which the new game's setup keeps in its saved work.
+        s.choice = {
+            easy = s.fg_system & FG_EASY ~= 0,
+            hard_mode = s.hard_mode ~= 0,
+            censorship_off = s.censorship_off ~= 0,
+        }
     elseif s.disp == 4 then
         -- OPTION: step 4 starts the option task (`0x44A040`) and leaves the
         -- title to start again from `Title_init` once it ends. arklay has no
@@ -1004,6 +1012,8 @@ local function publish(api)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)
+    api:set("ti_hard_mode", s.hard_mode)
+    api:set("ti_censorship_off", s.censorship_off)
 end
 
 local function any_saves(api, args)
@@ -1077,7 +1087,7 @@ function M.update(api, input)
         local exit = s.exit
         s.exit = nil
         if exit == "new_game" then
-            api:exit("new_game", s.character or 0)
+            api:exit("new_game", s.character or 0, s.choice)
         else
             api:exit(exit)
         end

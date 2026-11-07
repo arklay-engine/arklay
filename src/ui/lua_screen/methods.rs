@@ -434,9 +434,9 @@ impl UserData for Api<'_> {
 
         methods.add_method_mut(
             "exit",
-            |_lua, api, (action, arg): (Option<String>, Option<i64>)| {
+            |_lua, api, (action, arg, choice): (Option<String>, Option<i64>, Option<Table>)| {
                 if let Some(name) = action {
-                    api.host.action = Some(action_of(&name, arg)?);
+                    api.host.action = Some(action_of(&name, arg, choice.as_ref())?);
                 }
                 api.host.exited = true;
                 Ok(())

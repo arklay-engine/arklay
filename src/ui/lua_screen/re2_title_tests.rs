@@ -131,6 +131,64 @@ fn the_new_game_choice_opens_on_the_character_and_hands_off_leon() {
             break;
         }
     }
-    assert_eq!(action, Some(ScreenAction::NewGame { character: 0 }));
+    assert_eq!(
+        action,
+        Some(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn arrange_mode_on_hard_hands_off_its_choice() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-arrange-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    // `newgame_arrange_hard.txt` from `Title_init` (the original's tick 189):
+    // down twice to ARRANGE MODE, LEON, down to HARD, and its confirm.
+    let down = UiInput {
+        down: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    let presses = [
+        (71, down),
+        (111, down),
+        (141, confirm),
+        (191, confirm),
+        (231, down),
+        (261, confirm),
+    ];
+    let mut action = None;
+    for tick in 0..700 {
+        let input = presses
+            .iter()
+            .find(|(at, _)| *at == tick)
+            .map_or_else(UiInput::default, |(_, input)| *input);
+        if let crate::ui::ScreenResult::Done(done) = screen.update(&cx, input) {
+            action = Some(done);
+            break;
+        }
+    }
+    assert_eq!(
+        action,
+        Some(ScreenAction::NewGame {
+            character: 0,
+            choice: crate::ui::NewGameChoice {
+                easy: false,
+                hard_mode: true,
+                censorship_off: true,
+            },
+        })
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

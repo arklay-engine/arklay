@@ -83,6 +83,11 @@ pub struct Re2State {
     /// `Item_boxwork` (`0x98ED60`): the item box's 64 slots, `[id, count,
     /// mark]`, the mark 3 for a two-slot weapon.
     pub item_box: [[u8; 3]; crate::game::itembox2::BOX_SLOTS],
+    /// The title's `hard_mode` and `censorship_off` as the new game's setup
+    /// keeps them in the saved work (`0x98EF2C`, `0x98EF2D`, `FUN_004b73c0`);
+    /// a load puts them back (`Title_game_init`).
+    pub hard_mode: bool,
+    pub censorship_off: bool,
     /// The room music table (`bgm_tbl`).
     pub bgm: crate::bgm2::BgmTable,
     /// The main music playing.
@@ -297,11 +302,22 @@ impl PartialEq for Characters {
 impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_BOX + crate::game::itembox2::BOX_SLOTS * 3;
+const SAVE_LEN: usize = SAVE_LEN_NO_CHOICE + 2;
+/// A save from before the new-game choice's two bytes.
+const SAVE_LEN_NO_CHOICE: usize = SAVE_LEN_NO_BOX + crate::game::itembox2::BOX_SLOTS * 3;
 /// A save from before the item box's slots.
 const SAVE_LEN_NO_BOX: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
 /// A save from before the personal item's two bytes.
 const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN_NO_BOX - 2;
+
+/// `fg_system`'s `0x20`: EASY.
+const FG_SYSTEM_EASY: u8 = 26;
+/// `fg_system`'s `0x40`: `censorship_off`'s bit.
+const FG_SYSTEM_CENSORSHIP_OFF: u8 = 25;
+/// `fg_system`'s `0x80000`: EASY with `censorship_off`.
+const FG_SYSTEM_EASY_CENSORSHIP_OFF: u8 = 12;
+/// `fg_status`'s `0x4000000`: EASY's.
+const FG_STATUS_EASY: u8 = 5;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -503,6 +519,8 @@ impl Default for Re2State {
             scenario_b: false,
             personal_item: [0; 2],
             item_box: [[0; 3]; crate::game::itembox2::BOX_SLOTS],
+            hard_mode: false,
+            censorship_off: false,
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
@@ -544,6 +562,8 @@ impl Re2State {
         out.push(u8::from(self.scenario_b));
         out.extend_from_slice(&self.personal_item);
         out.extend(self.item_box.iter().flatten());
+        out.push(u8::from(self.hard_mode));
+        out.push(u8::from(self.censorship_off));
         out
     }
 
@@ -559,6 +579,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_CHOICE
             && bytes.len() != SAVE_LEN_NO_BOX
             && bytes.len() != SAVE_LEN_NO_PERSONAL
         {
@@ -598,7 +619,31 @@ impl Re2State {
                 *value = boxed.get(index * 3 + byte).copied().unwrap_or(0);
             }
         }
+        let choice = rest
+            .get(7 + crate::game::itembox2::BOX_SLOTS * 3..)
+            .unwrap_or(&[]);
+        self.hard_mode = choice.first().is_some_and(|&byte| byte != 0);
+        self.censorship_off = choice.get(1).is_some_and(|&byte| byte != 0);
         Some(())
+    }
+
+    /// The title's new-game choice, as the original's game starts with it:
+    /// the difficulty confirm's EASY (`fg_system`'s `0x20`) and `hard_mode`,
+    /// ARRANGE MODE's `censorship_off` and the title's `fg_system` `0x40` for
+    /// it (`Title_sel_menu`), and `Title_game_init`'s new-game step, which
+    /// raises `fg_status`'s `0x4000000` under EASY and `fg_system`'s
+    /// `0x80000` under EASY with `censorship_off`.
+    pub fn start_new_game(&mut self, easy: bool, hard_mode: bool, censorship_off: bool) {
+        self.set_flag(0, FG_SYSTEM_EASY, u8::from(easy));
+        self.set_flag(0, FG_SYSTEM_CENSORSHIP_OFF, u8::from(censorship_off));
+        self.set_flag(
+            0,
+            FG_SYSTEM_EASY_CENSORSHIP_OFF,
+            u8::from(easy && censorship_off),
+        );
+        self.set_flag(STATUS_BANK, FG_STATUS_EASY, u8::from(easy));
+        self.hard_mode = hard_mode;
+        self.censorship_off = censorship_off;
     }
 
     /// Whether a script holds the player's input, or a door has just handed
@@ -3168,6 +3213,30 @@ mod tests {
         let mut old = Re2State::default();
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_BOX]).unwrap();
         assert_eq!(old.item_box[0], [0; 3]);
+    }
+
+    #[test]
+    fn the_new_game_choice_sets_the_flags_and_survives_a_save() {
+        let mut state = Re2State::default();
+        state.start_new_game(true, false, true);
+        assert_eq!(state.banks[0][0], 0x0008_0060);
+        assert_eq!(state.banks[usize::from(STATUS_BANK)][0], 0x0400_0000);
+        assert!(state.censorship_off && !state.hard_mode);
+        let mut hard = Re2State::default();
+        hard.start_new_game(false, true, false);
+        assert_eq!(hard.banks[0][0], 0);
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert!(loaded.censorship_off && !loaded.hard_mode);
+        assert_eq!(loaded.banks[0][0], 0x0008_0060);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&hard.to_save_bytes()).unwrap();
+        assert!(loaded.hard_mode && !loaded.censorship_off);
+        // A save from before the two bytes loads with both clear.
+        let mut old = Re2State::default();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_CHOICE]).unwrap();
+        assert!(!old.censorship_off && !old.hard_mode);
     }
 
     #[test]
