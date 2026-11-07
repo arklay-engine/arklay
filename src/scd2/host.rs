@@ -398,7 +398,7 @@ fn hard_item_count(item: u8, count: u8) -> u8 {
 
 /// `Sce_Item`'s rewrite of an item area's count (`0x4E96E4`), which it
 /// writes back into the area, before the check sees it: ARRANGE MODE's ink
-/// ribbons come two at a time, then HARD's table ([`hard_item_count`]).
+/// ribbons come two at a time, then HARD's table (`hard_item_count`).
 ///
 /// The take ([`st_get_item_count`]) applies HARD's table to the same area
 /// again, and the table isn't idempotent for the handgun rounds: an area of
