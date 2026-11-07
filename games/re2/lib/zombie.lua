@@ -2252,8 +2252,7 @@ local function mv_eat(e)
         end
         joint_planted(e, 0x200, true)
         if e:now_seq() & SEQ_BLOOD ~= 0 then
-            -- `Esp_call`'s direction.
-            e:rnd()
+            blood(e, 0, 0x13D0, rnd_dir(e), 8, 200, 0, 0)
         end
         if e:kind() & TYPE_HELD == 0 then
             e:set_routine(2, 3)
