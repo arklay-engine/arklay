@@ -2,7 +2,8 @@
 --
 -- `Em_23` runs `Routine_0` from `funcs_4687AE` (`0x527e18`): 0 is the init
 -- (`FUN_00468a10`), 1 the move (`FUN_00468ce0`) and 2 the hit
--- (`FUN_00469cf0`), of which the shrug and the flinch are ported; the death
+-- (`FUN_00469cf0`), of which the shrug, the flinch and the gas tank's blast
+-- are ported, but not going under at the corridor's end; the death
 -- (3, `FUN_0046a6d0`) isn't ported yet. The
 -- move runs `funcs_468CEB` before its clip and `funcs_468D18` after it, by
 -- `Routine_1`: 0 the entry (`FUN_00468d30`), 1 the rest (`FUN_00469010`), 2
@@ -37,7 +38,7 @@ local NECK_X <const> = 18 -- `Neck_point_x` to `_z` (`+0x170`), which `Rot_neck`
 local NECK_Y <const> = 19
 local NECK_Z <const> = 20
 local TIMER0 <const> = 21 -- `Timer0` (`+0x158`): the snap's count.
-local BLOOD <const> = 22 -- `+0x234`: what runs each tick: 1 `FUN_0046b1c0`, 2 `FUN_0046b670`.
+local BLOOD <const> = 22 -- `+0x234`: what runs each tick: 1 `FUN_0046b1c0`, 2 `FUN_0046b670`, 3 `FUN_0046b2b0`.
 local TANK_T <const> = 23 -- `+0x15a`: the count of `FUN_004697f0`'s steps.
 -- The gas tank's place on part 6, once the jaws hold it: the original's
 -- object work 1 `Pos_x` to `_z` with its parent matrix on that part.
@@ -48,7 +49,9 @@ local HIT_BY <const> = 27 -- `+0x230`: the weapon (`Routine_1`) of the last hit.
 local HURT <const> = 28 -- `+0x1d2`: `FUN_00469d40`'s pick of `funcs_469D34`.
 local BLOOD_END <const> = 29 -- `DWORD_0068950c`: the shotguns' blood's last tick.
 local BLOOD_POINT <const> = 30 -- `DWORD_00689508`: weapon 4's point of `BLOOD_POINTS`.
-local LAST_VAR <const> = BLOOD_POINT
+local BLAST_DIR <const> = 31 -- `DWORD_00689518`: where the blast throws it.
+local BLAST_PUSH <const> = 32 -- `WORD_00689522`: what the blast still adds to `Spd_x`.
+local LAST_VAR <const> = BLAST_PUSH
 
 -- `Rot_neck_em`'s neck: `Neck_no` 5, whose part has a rate of 20 and a limit
 -- of 560 (its `+0x9c` and `+0xa0`).
@@ -791,9 +794,174 @@ local function flinch(e)
     end
 end
 
--- `funcs_469D34`; the explosion (1, `FUN_00469e90`) and going under at the
--- corridor's end (2, `FUN_0046a2a0`, and 3, `FUN_0046a430`) aren't ported.
-local HURTS <const> = { [0] = shrug, nil, nil, nil, flinch }
+-- An effect at a point on `part`, as the last draw left it (`Esp_call` on
+-- the part's `Workm`).
+local function effect_at(e, kind, row, size, dir, part, x, y, z)
+    local wx, wy, wz = e:drawn_part_point(part, x, y, z)
+    e:call_effect(kind, row, size, i16(dir), i16(wx), i16(wy), i16(wz))
+end
+
+-- `FUN_0046b2b0`: the blast's blood and fire from the jaws and the head, a
+-- burst a tick for its first eight ticks; then it counts to 0x40 and stops.
+local function blast_blood(e)
+    local count = e:var(C231)
+    if count == 0 then
+        e:set_var(BLOOD, 3)
+        e:set_var(C231, 1)
+        return
+    end
+    if count <= 8 then
+        if count == 1 then
+            local x = i8(e:rnd()) * 2 + 300
+            local y = i8(e:rnd()) * 2
+            local z = i8(e:rnd()) * 4 + 200
+            effect_at(e, 0x26, 3, 0x2000, 0, 6, x, y, z)
+        end
+        local x = i8(e:rnd()) * 4 + 300
+        local y = i8(e:rnd()) * 2
+        local z = i8(e:rnd()) * 2 + 200
+        effect_at(e, 0, 6, 0x4000, i8(e:rnd()) << 4, 7, x, y, z)
+        x = i8(e:rnd()) * 4 + 300
+        y = i8(e:rnd()) * 2
+        z = i8(e:rnd()) * 2 + 200
+        effect_at(e, 0, 3, 0x4000, i8(e:rnd()) << 4, 7, x, y, z)
+        x = i8(e:rnd()) * 2 + 300
+        y = i8(e:rnd()) * 2
+        z = i8(e:rnd()) * 4 + 200
+        effect_at(e, 8, 2, 0x4000, i8(e:rnd()) << 4, 6, x, y, z)
+        effect_at(e, 8, 2, 0x4000, i8(e:rnd()) << 4, 6, x, y, z)
+    end
+    if count == 0x40 then
+        e:set_var(BLOOD, 0)
+    end
+    e:set_var(C231, (count + 1) & 0xFF)
+end
+
+-- `FUN_0046abd0`: the tank's six blasts (effect 3, row 0xF), placed on the
+-- tank as if it weren't turned.
+local TANK_BLASTS <const> = {
+    { 0x2000, 0, -0xAF0, 0 },
+    { 0x3000, 300, -0x834, 0 },
+    { 0x3000, 0, -0x2BC, 0 },
+    { 0x2000, 0, 0, 300 },
+    { 0x2000, 0, -0x578, -200 },
+    { 0x3000, -500, -400, 200 },
+}
+local function tank_blasts(e)
+    local tx, ty, tz = e:object_pos(TANK_OBJECT)
+    for _, blast in ipairs(TANK_BLASTS) do
+        e:call_effect(3, 0xF, blast[1], 0, i16(tx + blast[2]), i16(ty + blast[3]), i16(tz + blast[4]))
+    end
+end
+
+-- `FUN_00469e90`: the tank goes off in its jaws. It dies (`Em_dead_flg_on`),
+-- is thrown back on clip 9 a little to the side of where it faced, its head
+-- blown and the camera shaken, and lies dead; `fg_room`'s 0x1e is raised.
+local function explode(e)
+    local sub = e:routine(2)
+    if sub == 2 then
+        e:set_var(FLAGS, e:var(FLAGS) & 0xFB)
+        e:set_routine(2, 3)
+        return
+    elseif sub == 3 then
+        e:set_kind(e:kind() | 0x4000)
+        e:set_flag(ROOM_BANK, 0x1E, true)
+        e:set_var(JAW_B, 0)
+        e:set_var(JAW_A, 0)
+        e:set_var(SNAP, 0)
+        e:clear_status(0x100)
+        return
+    elseif sub == 0 then
+        e:sound(4)
+        e:set_died()
+        e:set_status(0x100)
+        local x, _, z = e:pos()
+        local cut = e:cut()
+        if (cut == 6 or cut == 0xD) and z < -0x33F4 then
+            e:set_var(FLAGS, e:var(FLAGS) | 0x40)
+            e:pl_or_be_flg(0x80400)
+            e:cut_change(5)
+        else
+            e:set_var(FLAGS, e:var(FLAGS) & 0xBF)
+        end
+        e:set_status(4)
+        e:set_var(FLAGS, e:var(FLAGS) | 2)
+        e:set_var(SHAKE, 1)
+        e:set_var(TANK, 0xD)
+        e:set_var(JAW_B, 0)
+        e:set_var(JAW_A, 0)
+        e:set_var(SNAP, 0)
+        e:set_be_flg(e:be_flg() | 0x80A)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        -- The tank's `Workm` back to the world's, and `Om_explosion_set`;
+        -- the head's `FUN_0046b700`. The parts they throw aren't ported.
+        blast_blood(e)
+        tank_blasts(e)
+        e:set_var(BLAST_DIR, (e:angle() + 0xA0) & 0xFFFF)
+        -- `Timer3`: the ticks the burst tank is still drawn.
+        e:set_timer(3, 9)
+        local angle = e:angle()
+        if angle == 0xC00 then
+            if z > -3000 then
+                z = -3000
+            end
+            if e:move_no() == 2 then
+                angle = (e:move_cnt() << 9) // 0x96 + 0xC00
+            elseif e:move_no() == 3 then
+                angle = angle + (e:move_cnt() << 9) // 0x96 + 0x200
+            end
+            e:set_angle(angle & 0xFFFF)
+        end
+        if x > -0x5AFF then
+            z = z - 1000
+        end
+        local _, y = e:pos()
+        e:set_pos(x, y, z)
+        e:set_routine(2, 1)
+        e:set_var(BLAST_PUSH, 0x28)
+        e:set_speed_x(-500)
+    elseif sub ~= 1 then
+        return
+    end
+    if mot_play_sp(e, 9, 0) ~= 0 then
+        if e:var(FLAGS) & 0x40 ~= 0 then
+            e:set_var(FLAGS, e:var(FLAGS) & 0xBF)
+            -- 0xD while zapping, which isn't modelled.
+            e:cut_change(6)
+            e:pl_clear_be_flg(0x80400)
+        end
+        e:set_routine(2, e:routine(2) + 1)
+    end
+    if e:move_cnt() == 0x1F then
+        e:set_status(4)
+        e:set_var(SHAKE, 1)
+    end
+    if e:timer(3) < 1 then
+        e:hide_object(TANK_OBJECT)
+    else
+        e:set_timer(3, e:timer(3) - 1)
+    end
+    local push = e:var(BLAST_PUSH)
+    e:set_speed_x(i16(e:speed_x() + push))
+    if push ~= 0 then
+        e:set_var(BLAST_PUSH, push - 2)
+    end
+    e:add_speed_xz_at(0x800)
+    local x, y, z = e:pos()
+    if e:var(BLAST_DIR) == 0xCA0 then
+        if x ~= -0x64C8 then
+            x = approach_one(x, -0x64C8, 200)
+        end
+    elseif z ~= 600 then
+        z = approach_one(z, 600, 200)
+    end
+    e:set_pos(x, y, z)
+    e:goto_angle(e:var(BLAST_DIR), 0x4B)
+end
+
+-- `funcs_469D34`; going under at the corridor's end (2, `FUN_0046a2a0`, and
+-- 3, `FUN_0046a430`) isn't ported.
+local HURTS <const> = { [0] = shrug, explode, nil, nil, flinch }
 
 -- `FUN_00469cf0`: `Routine_0` 2.
 local function hurt(e)
@@ -853,6 +1021,8 @@ function update(e)
         blood(e)
     elseif callback == 2 then
         bleed_shotgun(e, e:var(BLOOD_END))
+    elseif callback == 3 then
+        blast_blood(e)
     end
     count_down(e, C233)
     count_down(e, HIT_WAIT)

@@ -786,6 +786,8 @@ pub struct World<'a> {
     pub sub1: bool,
     /// `scd_var_cut`, the camera's cut as the tick began.
     pub camera_cut: u8,
+    /// Room objects a script took away.
+    pub hidden_objects: Vec<usize>,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.

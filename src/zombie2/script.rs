@@ -982,6 +982,10 @@ impl UserData for Api {
             e.em().world.pl.be_flg |= bits as u32;
             Ok(())
         });
+        methods.add_method_mut("pl_clear_be_flg", |_, e, bits: i64| {
+            e.em().world.pl.be_flg &= !(bits as u32);
+            Ok(())
+        });
         methods.add_method_mut("pl_set_timer", |_, e, (index, value): (usize, i64)| {
             let timer = e.em().world.pl.timers.get_mut(index);
             *timer.ok_or_else(|| mlua::Error::RuntimeError(format!("no timer {index}")))? =
@@ -1157,6 +1161,11 @@ impl UserData for Api {
             Ok((x, y, z))
         });
         methods.add_method_mut("cut", |_, e, ()| Ok(e.em().world.camera_cut));
+        // A room object's `Be_flg` cleared: it's gone (`Om_explosion_set`'s end).
+        methods.add_method_mut("hide_object", |_, e, index: usize| {
+            e.em().world.hidden_objects.push(index);
+            Ok(())
+        });
         methods.add_method_mut(
             "set_object_pos",
             |_, e, (index, x, y, z): (usize, i32, i32, i32)| {
