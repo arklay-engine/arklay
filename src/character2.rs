@@ -1041,6 +1041,19 @@ pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Opti
     Some(joint_meshes)
 }
 
+/// A `Game_loop` pass under `fg_stop` outside the room's own tick (the
+/// get-item window's first and last frames): each enemy does its `Root_ck`
+/// and nothing else.
+pub fn tick_stopped(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+    lua: Option<&mut crate::enemy::LuaEnemyHost>,
+) {
+    run_load_stop(game, room, pack, npc_models, lua);
+}
+
 /// The tick the load's `fg_stop` ends: the enemies do no more than a `Root_ck`.
 fn run_load_stop(
     game: &mut GameState,

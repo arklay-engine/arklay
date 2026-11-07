@@ -231,8 +231,8 @@ pub struct Character {
     pub with_room: bool,
     /// `+0x1F0`: how far it was from the player when it last ran.
     pub distance: u32,
-    /// `+0xB` (member 9): the last area `Sce_at_check`'s enemy pass found it
-    /// in, [`NO_AREA`] until it's been in one.
+    /// `+0xB` (member 9): the area `Sce_at_check`'s enemy pass last found it
+    /// in, [`NO_AREA`] once the scripts' pass after it has ended.
     pub area: u8,
     /// `pSub1_kan_t_ptr` once a zombie has hold of it: that zombie's own.
     pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
@@ -732,6 +732,17 @@ impl Re2State {
         }
         for flag in std::mem::take(&mut self.unmodelled_arrivals) {
             self.raise_room_flag(flag);
+        }
+    }
+
+    /// `Sce_work_clr_at`, at the end of `Sce_scheduler_main`'s pass: every
+    /// enemy in play forgets its area, so a script sees only the one the last
+    /// `Sce_at` found it in.
+    pub fn clear_enemy_areas(&mut self) {
+        for character in self.characters.0.iter_mut().flatten() {
+            if character.be_flg & 1 != 0 {
+                character.area = NO_AREA;
+            }
         }
     }
 
@@ -2737,9 +2748,10 @@ mod tests {
     /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
     /// body probe): `Sce_at_check`'s enemy pass puts the area in the zombie's
     /// `+0xB`, which the room's script reads as member 9, and in the script's
-    /// body-area variable. It keeps the area once the zombie has left.
+    /// body-area variable. The scripts' pass ends with `Sce_work_clr_at`, which
+    /// clears it, so once the zombie has left the next probe leaves none.
     #[test]
-    fn an_enemy_area_is_kept_as_the_enemys_member_nine() {
+    fn an_enemy_area_is_the_enemys_member_nine_until_the_scripts_pass() {
         let mut game = GameState::default();
         game.is_re2_room = true;
         exec(
@@ -2760,9 +2772,14 @@ mod tests {
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
         assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
-        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
+        game.re2.clear_enemy_areas();
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
+        game.re2.clear_enemy_areas();
+        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
     }
 
     /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives

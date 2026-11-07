@@ -539,7 +539,7 @@ input = "run_102_arklay.txt"
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
 # the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
 ignore = [[790, "rng"], [790, "rseed"], [3052, "rng"], [3052, "rseed"]]
-expect = { tick = 4700, fields = ["rng", "rseed", "zm1"], note = "room 102 zombie slot 1 takes routine 10 where the original stays in 1, with the player about 4800 units away (docs/re2-deviations.md, Player)" }
+expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
 [[run]]

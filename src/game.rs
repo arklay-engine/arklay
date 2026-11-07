@@ -925,6 +925,8 @@ const ITEM_GET_ASK_TICK: u8 = 7;
 const ITEM_GET_TAKE_TICK: u8 = 19;
 const ITEM_GET_REFUSE_TICKS: u8 = 15;
 const ITEM_GET_CLOSE_TICKS: u8 = 10;
+/// The open's first ticks, before its fade hands the frame to the window.
+const ITEM_GET_FADE_TICKS: u8 = 3;
 /// The window's screen saves `Cut_no` and sets it to 0 on this tick of the
 /// open (`0x501CD9`), and puts it back on this tick of the close
 /// (`0x502027`).
@@ -8576,6 +8578,21 @@ impl GameState {
             ticks: 0,
             fly: item_get2::Fly::default(),
         });
+    }
+
+    /// Whether the get-item window's next tick is still a `Game_loop` frame,
+    /// with `fg_stop` up so only the enemies' `Root_ck` runs: the three while
+    /// game mode 1 starts the fade and mode 2 waits for it (`0x4BFB36`), and
+    /// the last, where mode 3 hands the player back and mode 5 starts.
+    pub fn re2_item_get_stopped_frame(&self) -> bool {
+        self.re2_item_get.is_some_and(|get| {
+            let tick = get.ticks.saturating_add(1);
+            match get.phase {
+                Re2ItemGetPhase::Open => tick <= ITEM_GET_FADE_TICKS,
+                Re2ItemGetPhase::Close => tick == ITEM_GET_CLOSE_TICKS,
+                _ => false,
+            }
+        })
     }
 
     /// One tick of the get-item window, before its message's. Returns the
