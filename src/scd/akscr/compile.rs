@@ -39,7 +39,8 @@ pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Resul
 /// `load`.
 pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled> {
     let preprocessed = preprocess(text, build, load)?;
-    let sections = parse(&preprocessed.text, &preprocessed.defines, build)?;
+    let Parsed { sections, procs } = parse(&preprocessed.text, &preprocessed.defines, build)?;
+    check_recursion(&sections, &procs)?;
     let mut source = Source::default();
     let mut pad_events = Vec::new();
     let mut init_done = false;
@@ -52,8 +53,10 @@ pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled
         {
             continue;
         }
-        let items = lower_section(section, build)?;
+        let items = lower_section(section, build, &procs)?;
         match section.kind {
+            // Procedures may stand anywhere; they are numbered in order.
+            SectionKind::Proc(_) => source.procs.push(items),
             SectionKind::Init => {
                 if init_done {
                     bail!(
@@ -106,11 +109,11 @@ pub(super) fn section_bytes(text: &str, defines: &HashMap<String, i64>) -> Resul
     } else {
         format!("#version 1\n{text}")
     };
-    let sections = parse(&text, defines, build)?;
+    let Parsed { sections, procs } = parse(&text, defines, build)?;
     let [section] = sections.as_slice() else {
         bail!("expected exactly one section");
     };
-    let items = lower_section(section, build)?;
+    let items = lower_section(section, build, &procs)?;
     let event = matches!(section.kind, SectionKind::Event(_));
     asm::assemble_stream(&items, event, !holds(section.nopad, build))
 }
@@ -407,6 +410,8 @@ fn asm_block(
 enum SectionKind {
     Init,
     Main,
+    /// A user procedure (`proc NAME`), which `NAME();` calls: `gosub N`.
+    Proc(u8),
     Event(u8),
 }
 
@@ -542,7 +547,13 @@ fn substitute(line: &str, defines: &HashMap<String, i64>) -> String {
 /// so a reference that survives the fold fails to encode.
 const ABSENT_EVENT: i64 = -1;
 
-fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec<Section>> {
+/// A parsed script: its sections and the user procedures' numbers by name.
+struct Parsed {
+    sections: Vec<Section>,
+    procs: HashMap<String, u8>,
+}
+
+fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Parsed> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
     let mut defines = defines.clone();
@@ -552,12 +563,36 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
     // Event names stand for their index, so any event may name any other.
     // A variant's build numbers only the events its RDT carries; the
     // runtime build numbers every event in order.
+    // A user procedure is numbered in the order it stands in.
     let mut depth = 0usize;
     let mut events = 0i64;
+    let mut procs = HashMap::new();
     for (pos, token) in tokens.iter().enumerate() {
         match &token.tok {
             Tok::Punct("{") => depth += 1,
             Tok::Punct("}") => depth = depth.saturating_sub(1),
+            Tok::Ident(word) if depth == 0 && word == "proc" => {
+                let Some(Token {
+                    tok: Tok::Ident(name),
+                    line,
+                    ..
+                }) = tokens.get(pos + 1)
+                else {
+                    continue;
+                };
+                if name == "init" || name == "main" {
+                    continue;
+                }
+                if defines.contains_key(name) || is_engine_name(name) {
+                    bail!("line {line}: procedure name `{name}` is already defined");
+                }
+                let Ok(index) = u8::try_from(procs.len()) else {
+                    bail!("line {line}: a script has at most 256 procedures");
+                };
+                if procs.insert(name.clone(), index).is_some() {
+                    bail!("line {line}: procedure `{name}` is already defined");
+                }
+            }
             Tok::Ident(word) if depth == 0 && word == "event" => {
                 let Some(Token {
                     tok: Tok::Ident(name),
@@ -581,7 +616,7 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
                 } else {
                     ABSENT_EVENT
                 };
-                if defines.insert(name.clone(), index).is_some() {
+                if defines.insert(name.clone(), index).is_some() || procs.contains_key(name) {
                     bail!("line {line}: event name `{name}` is already defined");
                 }
                 if present {
@@ -595,13 +630,98 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
         tokens,
         pos: 0,
         defines,
+        procs,
     };
     parser.version()?;
     let mut sections = Vec::new();
     while parser.peek().tok != Tok::Eof {
         sections.push(parser.section()?);
     }
-    Ok(sections)
+    Ok(Parsed {
+        sections,
+        procs: parser.procs,
+    })
+}
+
+/// Reject a procedure that calls itself, directly or through others: the
+/// calls nest without end.
+fn check_recursion(sections: &[Section], procs: &HashMap<String, u8>) -> Result<()> {
+    fn calls(body: &[Stmt], procs: &HashMap<String, u8>, out: &mut Vec<(u8, usize)>) {
+        for stmt in body {
+            match stmt {
+                Stmt::Call(call) | Stmt::Single { call, .. } => {
+                    if let Some(&index) = procs.get(&call.name) {
+                        out.push((index, call.line));
+                    }
+                }
+                Stmt::If {
+                    then, otherwise, ..
+                }
+                | Stmt::Variant {
+                    then, otherwise, ..
+                } => {
+                    calls(then, procs, out);
+                    calls(otherwise.as_deref().unwrap_or_default(), procs, out);
+                }
+                Stmt::Run { body, .. } | Stmt::For { body, .. } | Stmt::DoWhile { body, .. } => {
+                    calls(body, procs, out);
+                }
+                Stmt::Return { .. } | Stmt::Require(_) | Stmt::Asm(_) | Stmt::Raw { .. } => {}
+            }
+        }
+    }
+    let mut graph: HashMap<u8, Vec<(u8, usize)>> = HashMap::new();
+    for section in sections {
+        if let SectionKind::Proc(index) = section.kind {
+            let mut out = Vec::new();
+            calls(&section.body, procs, &mut out);
+            graph.insert(index, out);
+        }
+    }
+    let name = |index: u8| {
+        procs
+            .iter()
+            .find(|(_, value)| **value == index)
+            .map_or("?", |(name, _)| name.as_str())
+    };
+    // Depth-first from every procedure, keeping the path to report.
+    fn visit(
+        index: u8,
+        graph: &HashMap<u8, Vec<(u8, usize)>>,
+        path: &mut Vec<u8>,
+        done: &mut Vec<u8>,
+    ) -> Option<(Vec<u8>, usize)> {
+        if done.contains(&index) {
+            return None;
+        }
+        path.push(index);
+        for &(callee, line) in graph.get(&index).map_or(&[][..], Vec::as_slice) {
+            if path.contains(&callee) {
+                return Some((path.clone(), line));
+            }
+            if let Some(found) = visit(callee, graph, path, done) {
+                return Some(found);
+            }
+        }
+        path.pop();
+        done.push(index);
+        None
+    }
+    let mut done = Vec::new();
+    let mut indices: Vec<u8> = graph.keys().copied().collect();
+    indices.sort_unstable();
+    for index in indices {
+        if let Some((path, line)) = visit(index, &graph, &mut Vec::new(), &mut done) {
+            let chain: Vec<&str> = path.iter().map(|&index| name(index)).collect();
+            bail!(
+                "line {line}: procedure `{}` calls itself ({} -> {})",
+                chain[0],
+                chain.join(" -> "),
+                chain[0]
+            );
+        }
+    }
+    Ok(())
 }
 
 struct Parser {
@@ -609,6 +729,8 @@ struct Parser {
     pos: usize,
     /// `#define`s, the builtins and the event names.
     defines: HashMap<String, i64>,
+    /// The user procedures' numbers, by name.
+    procs: HashMap<String, u8>,
 }
 
 impl Parser {
@@ -712,7 +834,10 @@ impl Parser {
                 match name.as_str() {
                     "init" => SectionKind::Init,
                     "main" => SectionKind::Main,
-                    _ => return self.error(&name_token, "`init` or `main`"),
+                    _ => match self.procs.get(&name) {
+                        Some(&index) => SectionKind::Proc(index),
+                        None => return self.error(&name_token, "a procedure name"),
+                    },
                 }
             }
             "event" => {
@@ -743,6 +868,13 @@ impl Parser {
             } else {
                 break;
             }
+        }
+        if matches!(kind, SectionKind::Proc(_)) && (noreturn.is_some() || when != 0) {
+            bail!(
+                "line {}: a procedure takes no `noreturn` or `when`; test the variant with `if` \
+                 inside it",
+                token.line
+            );
         }
         let body = self.block()?;
         Ok(Section {
@@ -989,14 +1121,20 @@ impl Parser {
 // ---------------------------------------------------------------------------
 
 /// Lower one section to assembler items.
-fn lower_section(section: &Section, build: Build) -> Result<Vec<Item>> {
+fn lower_section(
+    section: &Section,
+    build: Build,
+    procs: &HashMap<String, u8>,
+) -> Result<Vec<Item>> {
     let mut lowerer = Lowerer {
         build,
+        procs,
         items: Vec::new(),
         pending: Vec::new(),
         next_label: 0,
     };
     match section.kind {
+        SectionKind::Proc(_) => lowerer.command_block(&section.body, false, section.line)?,
         SectionKind::Init | SectionKind::Main if build.variant().is_some() => {
             let noreturn = holds(section.noreturn, build);
             lowerer.command_block(&section.body, noreturn, section.line)?;
@@ -1064,15 +1202,17 @@ fn lower_section(section: &Section, build: Build) -> Result<Vec<Item>> {
     Ok(lowerer.items)
 }
 
-struct Lowerer {
+struct Lowerer<'a> {
     build: Build,
+    /// The user procedures' numbers, by name.
+    procs: &'a HashMap<String, u8>,
     items: Vec<Item>,
     /// Labels for the next item.
     pending: Vec<String>,
     next_label: usize,
 }
 
-impl Lowerer {
+impl Lowerer<'_> {
     fn label(&mut self) -> String {
         self.next_label += 1;
         format!("__akscr_{}", self.next_label)
@@ -1244,6 +1384,31 @@ impl Lowerer {
 
     /// A plain command statement; flow opcodes must use the statement forms.
     fn command_call(&mut self, call: &Call) -> Result<()> {
+        if let Some(&index) = self.procs.get(&call.name) {
+            if !call.args.is_empty() {
+                bail!(
+                    "line {}, column {}: procedure `{}` takes no arguments",
+                    call.line,
+                    call.col,
+                    call.name
+                );
+            }
+            self.push(
+                "gosub",
+                vec![Arg::Num(i64::from(index))],
+                call.line,
+                call.col,
+            );
+            return Ok(());
+        }
+        if call.name == "gosub" {
+            bail!(
+                "line {}, column {}: call a procedure by its name: `proc NAME {{ ... }}` and \
+                 `NAME();`",
+                call.line,
+                call.col
+            );
+        }
         if matches!(
             call.name.as_str(),
             "end" | "if" | "else" | "endif" | "variant_if" | "variant_jump"

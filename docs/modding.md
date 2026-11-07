@@ -897,7 +897,9 @@ into a standalone container that `room/{id}/room.scd` and the engine both
 read through the RDT pointer-table ABI. `--list` also writes a `.lst`
 listing. The assembler accepts exactly the disassembler's grammar, including
 `.block` section markers, `off_XXXX` labels, `db` trailing chunks, the named
-operand constants and the variable-width commands; a script override replaces
+operand constants and the variable-width commands. A `.procs` section, after
+`.main` and before the events, holds the user procedures as `.block`s, block N
+being what `gosub N` runs (see the `.akscr` procedures below). A script override replaces
 the whole room's init/main/event scripts, so a demo room's vanilla doors and
 events are inert.
 
@@ -952,15 +954,51 @@ second visit) and the release is the pack's. A test is a jump that keeps the
 `if` nesting as it was, so a `return;` or `require(...)` inside one acts as
 it would without it.
 
-A section only some variants carry says so with `when`, and a section flag
-that holds for only some takes their test:
+A section flag that holds for only some variants takes their test:
 
 ```c
-proc main when (CHRIS && MANSION2)
 proc init noreturn (MANSION2)
-event on_enter_jill when (JILL)
 event event_05 nopad (MANSION1)
 ```
+
+The exporter also marks a section only some RDTs carry with `when`
+(`proc main when (CHRIS && MANSION2)`, `event on_enter_jill when (JILL)`), so
+that a build for one RDT leaves the section out and matches its bytes. The
+checked-in scripts do not use it: an `if` inside the section says the same.
+In the runtime build `when` on an event changes nothing (the build carries
+every event), and on `proc init` or `proc main` it is the same as wrapping
+the body in an `if`.
+
+A script can split its code into procedures:
+
+```c
+proc main
+{
+    if (MANSION1)
+    {
+        kenneth_zombie_checks();
+    }
+}
+
+proc kenneth_zombie_checks
+{
+    if (ck(FG_SCENARIO, F_SCENARIO_KENNETH_EXAMINED, TRUE))
+    {
+        aot_delete(AOT_04_EVENT_KENNETH, SCE_NONE, SAT_PLAYER);
+    }
+}
+```
+
+`proc NAME` with any name but `init` and `main` is a procedure, and `NAME();`
+runs it and comes back, from `proc init`, `proc main`, another procedure or an
+event (a `run` block, or on its own as an event statement). A procedure may
+stand anywhere in the script, takes no arguments and no `noreturn` or `when`
+(test the variant with an `if` inside it), and may not call itself, directly
+or through others. Its `return;` returns to the caller from any depth, and so
+does a failed condition at its top level and its end. A call compiles to the
+port's `gosub N` (opcode 0x54), and the procedures to a container the
+original's RDTs have no room for, so a script with procedures runs only in the
+port; a build for one RDT variant carries them too.
 
 `arklay scd export-rooms usa=<install> jpn=<install> eur=<install> --out
 games/re1/room` decompiles each installation's RDTs and writes one script per
@@ -1205,7 +1243,9 @@ event on_enter
   the enclosing `if` body, or ends the block at the top level.
 - `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
   section (`proc init noreturn`) or `run` block (`run noreturn`) says
-  otherwise.
+  otherwise. In `proc init`, `proc main` and `run` blocks, a `return;` inside
+  an `if` body leaves that body; in a procedure it returns from the procedure.
+- `NAME();` calls procedure `proc NAME` (above).
 - In an event, `evt_*`/`act_*`/`tw_*` mnemonics are event-VM instructions and
   any other call is a command run through `evt_single`; `single(N) name(...)`
   forces the payload length. `run { }` is an inline command block

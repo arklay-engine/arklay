@@ -41,6 +41,8 @@ const INIT_SLOT: usize = 6;
 const MAIN_SLOT: usize = 7;
 /// Pointer slot of the event SCD table.
 const EVENTS_SLOT: usize = 8;
+/// Pointer slot of the user procedure container.
+const PROCS_SLOT: usize = reader::PROCS_SLOT;
 /// Number of data pointers in the RDT pointer table.
 const POINTER_COUNT: usize = 19;
 /// Header size: the full zeroed pointer table, so no data byte is ever
@@ -56,6 +58,8 @@ pub struct Assembled {
     pub main: Vec<Block>,
     /// Event scripts in table order.
     pub events: Vec<Stream>,
+    /// Blocks of the user procedure container (`gosub N` runs block N).
+    pub procs: Vec<Block>,
 }
 
 impl Assembled {
@@ -81,7 +85,12 @@ impl Assembled {
             .iter()
             .map(event_body)
             .collect::<Result<Vec<_>>>()?;
-        let layout = container_layout(&init_bodies, &main_bodies, &event_bodies)?;
+        let proc_bodies = self
+            .procs
+            .iter()
+            .map(block_body)
+            .collect::<Result<Vec<_>>>()?;
+        let layout = container_layout(&init_bodies, &main_bodies, &proc_bodies, &event_bodies)?;
 
         let mut out = vec![0u8; layout.total];
         if let Some(base) = layout.init_base {
@@ -91,6 +100,10 @@ impl Assembled {
         if let Some(base) = layout.main_base {
             write_slot(&mut out, MAIN_SLOT, base)?;
             write_container(&mut out, &layout.main_blocks, &main_bodies);
+        }
+        if let Some(base) = layout.procs_base {
+            write_slot(&mut out, PROCS_SLOT, base)?;
+            write_container(&mut out, &layout.procs_blocks, &proc_bodies);
         }
         if let Some(base) = layout.events_base {
             write_slot(&mut out, EVENTS_SLOT, base)?;
@@ -134,6 +147,11 @@ pub(crate) fn assemble_source(source: &Source, pad_events: &[bool]) -> Result<As
         finished.push(finish_block(block, false)?);
     }
     let main_count = finished.len() - init_count;
+    for block in &source.procs {
+        finished.push(finish_block(block, false)?);
+    }
+    let proc_count = finished.len() - init_count - main_count;
+    let blocks_count = init_count + main_count + proc_count;
     for (index, items) in source.events.iter().enumerate() {
         let pad = pad_events.get(index).copied().unwrap_or(false);
         finished.push(finish_event(items, pad)?);
@@ -147,11 +165,15 @@ pub(crate) fn assemble_source(source: &Source, pad_events: &[bool]) -> Result<As
         .iter()
         .map(|stream| stream.body.clone())
         .collect();
-    let event_bodies: Vec<Vec<u8>> = finished[init_count + main_count..]
+    let proc_bodies: Vec<Vec<u8>> = finished[init_count + main_count..blocks_count]
         .iter()
         .map(|stream| stream.body.clone())
         .collect();
-    let layout = container_layout(&init_bodies, &main_bodies, &event_bodies)?;
+    let event_bodies: Vec<Vec<u8>> = finished[blocks_count..]
+        .iter()
+        .map(|stream| stream.body.clone())
+        .collect();
+    let layout = container_layout(&init_bodies, &main_bodies, &proc_bodies, &event_bodies)?;
 
     let mut assembled = Assembled::default();
     for (index, stream) in finished[..init_count].iter().enumerate() {
@@ -175,8 +197,21 @@ pub(crate) fn assemble_source(source: &Source, pad_events: &[bool]) -> Result<As
             trailing: stream.trailing.clone(),
         });
     }
+    for (index, stream) in finished[init_count + main_count..blocks_count]
+        .iter()
+        .enumerate()
+    {
+        assembled.procs.push(Block {
+            offset: layout.procs_blocks[index],
+            size: u16::try_from(stream.body.len() + 2).map_err(|_| {
+                anyhow::anyhow!("procedure block at line {} is too large", stream.line)
+            })?,
+            insns: rebase(stream.insns.clone(), layout.procs_blocks[index] + 2),
+            trailing: stream.trailing.clone(),
+        });
+    }
     if layout.events_base.is_some() {
-        for (index, stream) in finished[init_count + main_count..].iter().enumerate() {
+        for (index, stream) in finished[blocks_count..].iter().enumerate() {
             let start = layout.events[index];
             assembled.events.push(Stream {
                 kind: StreamKind::Event(u8::try_from(index).map_err(|_| {
@@ -247,6 +282,8 @@ struct ContainerLayout {
     init_blocks: Vec<usize>,
     main_base: Option<usize>,
     main_blocks: Vec<usize>,
+    procs_base: Option<usize>,
+    procs_blocks: Vec<usize>,
     events_base: Option<usize>,
     events: Vec<usize>,
     total: usize,
@@ -257,6 +294,7 @@ struct ContainerLayout {
 fn container_layout(
     init: &[Vec<u8>],
     main: &[Vec<u8>],
+    procs: &[Vec<u8>],
     events: &[Vec<u8>],
 ) -> Result<ContainerLayout> {
     let mut layout = ContainerLayout {
@@ -264,21 +302,23 @@ fn container_layout(
         init_blocks: Vec::new(),
         main_base: None,
         main_blocks: Vec::new(),
+        procs_base: None,
+        procs_blocks: Vec::new(),
         events_base: None,
         events: Vec::new(),
         total: CONTAINER_HEADER,
     };
     let mut pos = CONTAINER_HEADER;
-    for (label, bodies) in [("init", init), ("main", main)] {
+    for (label, bodies) in [("init", init), ("main", main), ("procedure", procs)] {
         if bodies.is_empty() {
             continue;
         }
         align4(&mut pos);
         let base = pos;
-        let blocks = if label == "init" {
-            &mut layout.init_blocks
-        } else {
-            &mut layout.main_blocks
+        let blocks = match label {
+            "init" => &mut layout.init_blocks,
+            "main" => &mut layout.main_blocks,
+            _ => &mut layout.procs_blocks,
         };
         for body in bodies {
             u16::try_from(body.len() + 2)
@@ -287,11 +327,11 @@ fn container_layout(
             pos += 2 + body.len();
         }
         pos += 2;
-        if label == "init" {
-            layout.init_base = Some(base);
-        } else {
-            layout.main_base = Some(base);
-        }
+        *match label {
+            "init" => &mut layout.init_base,
+            "main" => &mut layout.main_base,
+            _ => &mut layout.procs_base,
+        } = Some(base);
     }
     if !events.is_empty() {
         align4(&mut pos);
@@ -409,6 +449,7 @@ pub(crate) struct Item {
 enum Section {
     Init,
     Main,
+    Procs,
     Event(u8),
 }
 
@@ -418,6 +459,8 @@ pub(crate) struct Source {
     pub(crate) init: Vec<Vec<Item>>,
     pub(crate) main: Vec<Vec<Item>>,
     pub(crate) events: Vec<Vec<Item>>,
+    /// The user procedure blocks, in `gosub` index order.
+    pub(crate) procs: Vec<Vec<Item>>,
 }
 
 /// Parse every line of `text` into sections, blocks and items.
@@ -426,6 +469,7 @@ fn parse_source(text: &str) -> Result<Source> {
     let mut version_seen = false;
     let mut init_seen = false;
     let mut main_seen = false;
+    let mut procs_seen = false;
     let mut current: Option<Section> = None;
     let mut items: Vec<Item> = Vec::new();
     let mut block_started = false;
@@ -491,6 +535,22 @@ fn parse_source(text: &str) -> Result<Source> {
                     main_seen = true;
                     current = Some(Section::Main);
                 }
+                "procs" => {
+                    require_version(version_seen, line_no, indent, line)?;
+                    flush_items(&mut source, current, &mut items, block_started);
+                    block_started = false;
+                    if procs_seen {
+                        bail!("line {line_no}, column {}: duplicate .procs", indent + 1);
+                    }
+                    if !source.events.is_empty() {
+                        bail!(
+                            "line {line_no}, column {}: .procs must come before the events",
+                            indent + 1
+                        );
+                    }
+                    procs_seen = true;
+                    current = Some(Section::Procs);
+                }
                 "event" => {
                     require_version(version_seen, line_no, indent, line)?;
                     flush_items(&mut source, current, &mut items, block_started);
@@ -524,8 +584,15 @@ fn parse_source(text: &str) -> Result<Source> {
                             items.clear();
                             block_started = true;
                         }
+                        Some(Section::Procs) => {
+                            if block_started {
+                                source.procs.push(std::mem::take(&mut items));
+                            }
+                            items.clear();
+                            block_started = true;
+                        }
                         Some(Section::Event(_)) => bail!(
-                            "line {line_no}, column {}: .block is only valid in .init/.main",
+                            "line {line_no}, column {}: .block is only valid in .init/.main/.procs",
                             indent + 1
                         ),
                         None => bail!(
@@ -556,7 +623,10 @@ fn parse_source(text: &str) -> Result<Source> {
         };
 
         if let Some(item) = parse_item_line(raw, line_no, &mut pending_labels)? {
-            if matches!(current, Some(Section::Init | Section::Main)) {
+            if matches!(
+                current,
+                Some(Section::Init | Section::Main | Section::Procs)
+            ) {
                 block_started = true;
             }
             items.push(item);
@@ -641,6 +711,9 @@ fn flush_items(
         }
         Some(Section::Main) if block_started || !items.is_empty() => {
             source.main.push(std::mem::take(items));
+        }
+        Some(Section::Procs) if block_started || !items.is_empty() => {
+            source.procs.push(std::mem::take(items));
         }
         Some(Section::Event(_)) => {
             if let Some(last) = source.events.last_mut() {

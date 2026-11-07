@@ -93,6 +93,14 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     name_events(&mut sections, first_event);
 
     let mut out = String::from("#version 1\n");
+    // The decompiler reads the original RDTs, which have no procedures; a
+    // port container's are not rendered, so say so rather than drop them.
+    if !scripts.procs.is_empty() {
+        out.push_str(&format!(
+            "// This container's {} user procedures (`gosub`) are not decompiled.\n",
+            scripts.procs.len()
+        ));
+    }
     if !names.includes().is_empty() {
         out.push('\n');
         for path in names.includes() {

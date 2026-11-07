@@ -8423,9 +8423,7 @@ fn scripts_raise_screen_border(scripts: &scd::ir::Scripts) -> bool {
                 .eq([5, i64::from(game::MSF2_SCREEN_BORDER), 0])
     };
     scripts
-        .init
-        .iter()
-        .chain(&scripts.main)
+        .command_blocks()
         .any(|block| block.insns.iter().any(raises))
         || scripts
             .events

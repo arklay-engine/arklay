@@ -1197,3 +1197,189 @@ event on_aot
     );
     assert!(lifted.contains("    if (USA)\n"), "{lifted}");
 }
+
+/// The `nop` operands `scripts` runs: main once, or with `event`, that
+/// event's first step, for the room variant `bits`.
+fn run_nops(scripts: &Scripts, bits: u8, event: Option<u8>) -> Vec<i64> {
+    use crate::scd::host::{ScdHost, StepResult};
+    use crate::scd::ir::Operand;
+    use crate::scd::opcode::Op;
+    struct Host {
+        bits: u8,
+        nops: Vec<i64>,
+    }
+    impl ScdHost for Host {
+        fn on_flow(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
+            if op.op == 0x0E {
+                self.nops.push(operands[0].value);
+            }
+            StepResult::Continue
+        }
+        fn room_variant(&mut self) -> u8 {
+            self.bits
+        }
+        // Every flag is clear: the test passes when it asks for clear
+        // (`FALSE`, operand 1), as `GameState::flag_test` does.
+        fn flag_test(&mut self, _bank: u8, _bit: u8, expected: bool) -> bool {
+            expected
+        }
+    }
+    let mut host = Host {
+        bits,
+        nops: Vec::new(),
+    };
+    match event {
+        None => crate::scd::vm::CommandVm::new(scripts).run_main(&mut host),
+        Some(event) => {
+            let mut vm = crate::scd::vm::EventVm::new(scripts);
+            vm.start(0, event);
+            vm.step(&mut host);
+        }
+    }
+    host.nops
+}
+
+/// A procedure runs where it is called and comes back: its `return` (at any
+/// depth), a failed condition at its top level and its end each leave only
+/// the procedure.
+#[test]
+fn procedures_run_where_they_are_called() {
+    let text = "#version 1
+proc main
+{
+    nop(1);
+    first();
+    nop(6);
+    if (ck(FG_ROOM, 0, FALSE))
+    {
+        second();
+        nop(8);
+    }
+    if (JILL)
+    {
+        nop(9);
+    }
+}
+
+proc first
+{
+    nop(2);
+    second();
+    nop(4);
+    if (ck(FG_ROOM, 0, FALSE))
+    {
+        nop(5);
+        return;
+    }
+    nop(99);
+}
+
+proc second
+{
+    nop(3);
+    require(ck(FG_ROOM, 0, TRUE));
+    nop(98);
+}
+";
+    let container = compile(text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    assert_eq!(scripts.procs.len(), 2);
+    // `first` is procedure 0 and `second` procedure 1, in source order.
+    assert_eq!(block_bytes(&scripts.main[0])[2..4], [0x54, 0x00]);
+    let chris = crate::scd::opcode::variant::CHRIS;
+    let jill = crate::scd::opcode::variant::JILL;
+    assert_eq!(run_nops(&scripts, chris, None), [1, 2, 3, 4, 5, 6, 3, 8]);
+    assert_eq!(run_nops(&scripts, jill, None), [1, 2, 3, 4, 5, 6, 3, 8, 9]);
+    // A room variant's build carries the procedures too.
+    let folded = round(text);
+    assert_eq!(folded.procs.len(), 2);
+    assert_eq!(run_nops(&folded, chris, None), [1, 2, 3, 4, 5, 6, 3, 8]);
+}
+
+/// An event's `run` block, and a bare call in an event, run a procedure
+/// like a command block does.
+#[test]
+fn events_call_procedures() {
+    let text = "#version 1
+event start
+{
+    run
+    {
+        nop(1);
+        body();
+        nop(3);
+    }
+    body();
+    evt_finish();
+}
+
+proc body
+{
+    nop(2);
+}
+";
+    let scripts = reader::parse(&compile(text).unwrap().to_container().unwrap()).unwrap();
+    assert_eq!(run_nops(&scripts, 0, Some(0)), [1, 2, 3, 2]);
+}
+
+/// The `.s` form carries the procedures as a `.procs` section, which
+/// assembles back to the same container.
+#[test]
+fn procedures_round_trip_through_assembly() {
+    let text = "#version 1
+proc main
+{
+    tick();
+}
+
+proc tick
+{
+    nop(7);
+}
+";
+    let container = compile(text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    let source = crate::scd::disasm::render(&scripts, &container);
+    assert!(source.contains(".procs\n.block\n"), "{source}");
+    let again = asm::assemble(&source).unwrap().to_container().unwrap();
+    assert_eq!(again, container);
+}
+
+#[test]
+fn procedure_errors_name_the_line() {
+    let error = compile_error(
+        "#version 1\nproc main\n{\n    a();\n}\nproc a\n{\n    b();\n}\nproc b\n{\n    a();\n}\n",
+    );
+    assert!(error.contains("calls itself (a -> b -> a)"), "{error}");
+    let error = compile_error("#version 1\nproc a\n{\n    a();\n}\n");
+    assert!(
+        error.contains("line 4") && error.contains("calls itself"),
+        "{error}"
+    );
+    let error = compile_error("#version 1\nproc main\n{\n    a(1);\n}\nproc a\n{\n}\n");
+    assert!(
+        error.contains("line 4") && error.contains("takes no arguments"),
+        "{error}"
+    );
+    let error = compile_error("#version 1\nproc a when (JILL)\n{\n}\n");
+    assert!(
+        error.contains("line 2") && error.contains("no `noreturn` or `when`"),
+        "{error}"
+    );
+    let error = compile_error("#version 1\nproc main\n{\n    gosub(0);\n}\n");
+    assert!(error.contains("call a procedure by its name"), "{error}");
+    let error = compile_error("#version 1\nproc a\n{\n}\nevent a\n{\n    evt_finish();\n}\n");
+    assert!(error.contains("`a` is already defined"), "{error}");
+}
+
+/// An RDT's procedure slot holds other room data, so only a standalone
+/// container's is read.
+#[test]
+fn only_a_standalone_container_carries_procedures() {
+    let text = "#version 1\nproc main\n{\n    tick();\n}\nproc tick\n{\n    nop(7);\n}\n";
+    let mut container = compile(text).unwrap().to_container().unwrap();
+    assert_eq!(reader::parse(&container).unwrap().procs.len(), 1);
+    // An RDT counts its cameras in the header.
+    container[1] = 1;
+    assert!(reader::parse(&container).unwrap().procs.is_empty());
+}

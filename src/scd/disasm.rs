@@ -38,7 +38,7 @@ const DB_CHUNK: usize = 16;
 /// entry is an undecodable dead slot. This table matches the operand split of
 /// the original tool, which differs from the decoder's own signature for some
 /// opcodes (e.g. `aot_set` splits its trailing words into bytes).
-pub(super) const COMMAND_SIG: [&str; 84] = [
+pub(super) const COMMAND_SIG: [&str; 85] = [
     "end:u",
     "if:l",
     "else:l",
@@ -123,6 +123,7 @@ pub(super) const COMMAND_SIG: [&str; 84] = [
     "variant_if:uL",
     "variant_jump:L",
     "message_long:uUU",
+    "gosub:u",
 ];
 
 /// Original-tool display signatures for event state 0 (0x00-0x09).
@@ -277,6 +278,23 @@ fn render_with(scripts: &Scripts, style: Style) -> String {
             &block.trailing,
             block.offset + 2,
         );
+    }
+
+    // The port's user procedures, which only its own containers carry.
+    if !scripts.procs.is_empty() {
+        emitter.blank();
+        emitter.raw(".procs");
+        for block in &scripts.procs {
+            if style == Style::Assembly {
+                emitter.raw(".block");
+            }
+            emit_insns(
+                &mut emitter,
+                &block.insns,
+                &block.trailing,
+                block.offset + 2,
+            );
+        }
     }
 
     for stream in &scripts.events {
@@ -818,6 +836,7 @@ mod tests {
             init: vec![block(0x0FE, vec![insn])],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         }
     }
 
@@ -922,6 +941,7 @@ mod tests {
             init: vec![block(0x100, insns)],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -967,6 +987,7 @@ off_0210:
                 insns,
                 trailing: vec![0xAA, 0xBB],
             }],
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1008,6 +1029,7 @@ off_0210:
                 insns,
                 trailing: Vec::new(),
             }],
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1044,6 +1066,7 @@ off_0210:
             init: vec![block(0x100, insns)],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1082,6 +1105,7 @@ off_0302:
                 insns,
                 trailing: Vec::new(),
             }],
+            procs: Vec::new(),
         };
         scripts.events[0].insns[0].operands = vec![operand(0x06, Some(0x606))];
         let expected = "\

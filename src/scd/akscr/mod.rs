@@ -1,8 +1,9 @@
 //! `.akscr` room scripts: structured source for a room's SCD streams.
 //!
 //! A script holds one `proc init` / `proc main` section per command block
-//! (in container order) and one `event NAME` section per event script, each
-//! name standing for the event's number. The decompiler renders the original
+//! (in container order), one `event NAME` section per event script, each
+//! name standing for the event's number, and any number of user procedures,
+//! `proc NAME`, which `NAME();` calls (`gosub`, the port's own). The decompiler renders the original
 //! bytecode as code, naming game data from a game's `inc/*.akinc` defines
 //! ([`Names`]), and the compiler turns it back into byte-identical streams.
 //!
@@ -55,6 +56,11 @@
 //!   abandons the enclosing `if` body, or the whole block at the top level.
 //! - `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
 //!   section or `run` is marked `noreturn`.
+//! - `NAME();` runs user procedure `proc NAME` and comes back: `gosub N`, N
+//!   counting the procedures in source order, which the container keeps in
+//!   a procedure list of its own. A procedure takes no arguments, `noreturn`
+//!   or `when`, and may not call itself; its `return;` (at any depth), a
+//!   failed condition at its top level and its end return to the caller.
 //!
 //! Event scripts:
 //!
@@ -76,9 +82,10 @@
 //! One merged script covers every variant of a room. `if (JILL)`,
 //! `if (MANSION2)`, `if (!JPN)` (variant names joined by `&&`, with `else`)
 //! test the player, the mansion visit and the release as the room runs, in
-//! command code and at the top of an event; a section only some RDTs carry
-//! has `when (...)`, and `noreturn` / `nopad` may hold for some variants
-//! only (`noreturn (MANSION2)`). The runtime build ([`Build::Runtime`])
+//! command code and at the top of an event. The exporter marks a section
+//! only some RDTs carry with `when (...)`, so a variant's build can leave it
+//! out (the checked-in scripts test with `if` instead), and `noreturn` /
+//! `nopad` may hold for some variants only (`noreturn (MANSION2)`). The runtime build ([`Build::Runtime`])
 //! compiles the tests to variant jumps; a build for one RDT variant
 //! ([`Build::Variant`], [`compile_variant`]) folds them away. A script has no
 //! preprocessor choices of its own.

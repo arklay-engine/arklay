@@ -1,6 +1,6 @@
 //! RE1 SCD opcode tables.
 //!
-//! Three separate opcode spaces exist: the command VM (0x00-0x50), the event
+//! Three separate opcode spaces exist: the command VM (0x00-0x54), the event
 //! VM state-0 table (0x00-0x09) with the shared control ops (0xF4-0xFF), and
 //! the two event sub-ISAs entered from state 0: actor (state 1) and tween
 //! (state 2). Operand signatures use one character per operand:
@@ -44,7 +44,7 @@ const fn op(
     }
 }
 
-/// The command-VM opcode table, indexed by opcode (0x00-0x53).
+/// The command-VM opcode table, indexed by opcode (0x00-0x54).
 ///
 /// 0x26 and 0x2E are dead slots: the original handler returns without
 /// consuming anything, so the interpreter spins. They are kept as zero-width
@@ -59,7 +59,12 @@ const fn op(
 /// (a zero byte, the word, the pause word), whose high byte reaches the room
 /// messages past the 64 that `message`'s id byte does
 /// ([`crate::text::message_index`]).
-pub const COMMAND_OPS: [Op; 84] = [
+///
+/// 0x54 is the port's too: `gosub` runs user procedure N, block N of the
+/// container's procedure list, to its end and comes back. The procedure has
+/// its own `if` branch stack: its `return`, a failed condition at its top
+/// level or its last `end 0` returns to the instruction after the call.
+pub const COMMAND_OPS: [Op; 85] = [
     op(0x00, "end", "u", false, Some(2)),
     op(0x01, "if", "l", false, Some(2)),
     op(0x02, "else", "l", false, Some(2)),
@@ -150,6 +155,7 @@ pub const COMMAND_OPS: [Op; 84] = [
     op(0x51, "variant_if", "uL", false, Some(4)),
     op(0x52, "variant_jump", "L", false, Some(3)),
     op(0x53, "message_long", "uUU", false, Some(6)),
+    op(0x54, "gosub", "u", false, Some(2)),
 ];
 
 /// Event-VM state-0 opcodes (0x00-0x09), indexed by opcode.
@@ -426,12 +432,12 @@ mod tests {
 
     #[test]
     fn command_table_indexes_every_opcode() {
-        assert_eq!(COMMAND_OPS.len(), 84);
+        assert_eq!(COMMAND_OPS.len(), 85);
         for (index, entry) in COMMAND_OPS.iter().enumerate() {
             assert_eq!(usize::from(entry.op), index);
             assert_eq!(command_op(entry.op), Some(entry));
         }
-        assert_eq!(command_op(0x54), None);
+        assert_eq!(command_op(0x55), None);
     }
 
     #[test]

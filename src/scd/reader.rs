@@ -31,6 +31,10 @@ const INIT_SLOT: usize = 6;
 const MAIN_SLOT: usize = 7;
 /// Pointer slot of the event SCD table.
 const EVENTS_SLOT: usize = 8;
+/// Pointer slot of the user procedure container (`gosub`), the port's own:
+/// only a standalone container ([`is_standalone`]) carries it. In an RDT the
+/// slot points at other room data.
+pub const PROCS_SLOT: usize = 18;
 /// Smallest RDT prefix needed to read the three SCD pointers.
 const HEADER_MIN: usize = POINTERS_OFFSET + (EVENTS_SLOT + 1) * 4;
 
@@ -53,11 +57,30 @@ pub fn parse_sections(data: &[u8]) -> Result<Scripts> {
     let main = read_pointer(data, MAIN_SLOT)?;
     let events = read_pointer(data, EVENTS_SLOT)?;
 
+    let procs = if is_standalone(data) {
+        parse_container(data, read_pointer(data, PROCS_SLOT)?, "procedure")?
+    } else {
+        Vec::new()
+    };
     Ok(Scripts {
         init: parse_container(data, init, "init")?,
         main: parse_container(data, main, "main")?,
         events: parse_events(data, events)?,
+        procs,
     })
+}
+
+/// Whether `data` is a standalone SCD container rather than an RDT: its
+/// header before the pointer table is zero and so is every pointer but the
+/// script sections'. An RDT's header counts its cameras, so it is never all
+/// zero.
+fn is_standalone(data: &[u8]) -> bool {
+    let header = POINTERS_OFFSET + POINTER_COUNT * 4;
+    data.len() >= header
+        && data[..POINTERS_OFFSET].iter().all(|&byte| byte == 0)
+        && (0..POINTER_COUNT)
+            .filter(|slot| ![INIT_SLOT, MAIN_SLOT, EVENTS_SLOT, PROCS_SLOT].contains(slot))
+            .all(|slot| read_pointer(data, slot).is_ok_and(|pointer| pointer == 0))
 }
 
 /// Copy an RDT's three SCD sections, byte for byte, into a standalone SCD
