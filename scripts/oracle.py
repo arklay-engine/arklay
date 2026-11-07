@@ -73,6 +73,8 @@ class Tick:
     neck_position: str | None = None
     # RE2's `xavol` field: `xa_vol`'s level for the voice channel.
     xa_volume: str | None = None
+    # RE2's `movie` field: `fg_system & 0x8200`, `Movie_idx` and `Movie_r0`.
+    movie: str | None = None
     # The `snd` field: each sound effect started this tick.
     sound: str | None = None
     # RE2's `inv` field: the inventory's slots and how many the player has.
@@ -89,7 +91,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
+OPT_IN_FIELDS = {"pneck", "xavol", "movie", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box")
 
@@ -171,6 +173,7 @@ def parse_trace(path: str) -> list[Tick]:
                     zombies=fields.get("zm"),
                     neck_position=fields.get("pneck"),
                     xa_volume=fields.get("xavol"),
+                    movie=fields.get("movie"),
                     sound=fields.get("snd"),
                     inventory=fields.get("inv"),
                     item_page=item_page(fields),
@@ -204,6 +207,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("pneck", tick.neck_position))
     if tick.xa_volume is not None:
         items.append(("xavol", tick.xa_volume))
+    if tick.movie is not None:
+        items.append(("movie", tick.movie))
     if tick.sound is not None:
         items.append(("snd", tick.sound))
     if tick.inventory is not None:

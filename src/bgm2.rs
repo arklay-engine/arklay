@@ -312,6 +312,14 @@ impl Music {
         format!("{word:04x},{sequences},{}", tracks.join(","))
     }
 
+    /// Sequence `sequence`'s fade (`ss_timer`) is running: `SsInit2` doesn't
+    /// start it again (`0x689DD8`, `0x689DDC`, `0x689DE0`).
+    pub fn fading(&self, sequence: usize) -> bool {
+        self.sequences
+            .get(sequence)
+            .is_some_and(|sequence| sequence.fade > 0)
+    }
+
     fn set_volume(&mut self, sequence: usize, volume: u8) {
         for index in sequence_channels(sequence) {
             self.channels[index].volume = volume;
