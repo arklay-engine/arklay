@@ -308,6 +308,9 @@ pub struct Work {
     pub posed: bool,
     /// [`pl_init`] ran and the engine hasn't posed its frame yet ([`pose_init`]).
     pub init_pose: bool,
+    /// The routines hold the first tick of `pl_mv_00` that a room started on
+    /// its own assumes ([`Work::default`]), and no tick has run them yet.
+    pub first_tick_assumed: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -796,6 +799,7 @@ impl Default for Work {
             floor: 0,
             posed: false,
             init_pose: false,
+            first_tick_assumed: true,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -886,6 +890,7 @@ impl Work {
     pub fn after_pl_init(mut self) -> Self {
         self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         self.hokan = 0;
+        self.first_tick_assumed = false;
         self
     }
 
@@ -1220,6 +1225,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         work.latch_kage_probe(player.angle);
         return None;
     }
+    work.first_tick_assumed = false;
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
@@ -5183,6 +5189,17 @@ pub fn plc_ret(work: &mut Work) {
     work.neck.flags = 0;
 }
 
+/// `Plc_stop` on the player. A scene that stops the player on a room's
+/// first tick, before `pl_mv_00` has run (room 200's entry), leaves
+/// `Pl_init`'s blend, 0, which nothing writes until the scene hands the
+/// player back.
+pub fn plc_stop_player(work: &mut Work) {
+    if std::mem::take(&mut work.first_tick_assumed) {
+        work.hokan = 0;
+    }
+    plc_stop(work);
+}
+
 /// `Plc_stop`: hold the routine, or give it back.
 pub fn plc_stop(work: &mut Work) {
     if work.routine == STOPPED_ROUTINE {
@@ -6821,6 +6838,24 @@ mod tests {
         assert_eq!(work.routine, STOPPED_ROUTINE);
         plc_stop(&mut work);
         assert_eq!(work.routine, running);
+    }
+
+    #[test]
+    fn a_scene_that_stops_the_player_before_the_first_tick_keeps_pl_init_s_blend() {
+        // Room 200's entry: the scene stops the player on the room's first
+        // tick, before `pl_mv_00` has stepped the blend.
+        let mut work = Work::default();
+        assert_eq!(work.hokan, FULL_BLEND - 1);
+        plc_stop_player(&mut work);
+        assert_eq!(work.routine, STOPPED_ROUTINE);
+        assert_eq!(work.hokan, 0);
+
+        // Once a tick has run the routines, the blend is that tick's.
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 200);
+        let hokan = setup.work.hokan;
+        plc_stop_player(&mut setup.work);
+        assert_eq!(setup.work.hokan, hokan);
     }
 
     #[test]

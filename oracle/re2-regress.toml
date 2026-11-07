@@ -654,6 +654,31 @@ expect = "match"
 record = "--warp 11B:8000:0:-19500:0 --life 200"
 
 [[run]]
+name = "scene_200"
+room = "200"
+sound = false
+ticks = 700
+# room 200's entry scene from a warp: it takes the player on the room's first tick, before pl_mv_00 has run
+# (oracle/re2.md, "Ticks and input"); no frames: after the warp the original's cut is scrolled
+setup = { pos = [-21700, 0, -3700], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[1, 1]] }
+input = "none.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv"
+expect = "match"
+record = "--warp 200:-21700:0:-3700:1024 --flag 1:1 --life 200"
+
+[[run]]
+name = "marvin_202"
+room = "202"
+sound = false
+ticks = 1400
+# Marvin turns with 4:7 and 4:9 set, then grabs and bites the player (oracle/re2.md, "Ticks and input")
+setup = { pos = [-20163, 0, -21204], angle = 1024, health = 200, rnd = 6114, flags = [[4, 7], [4, 9]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1"
+expect = "match"
+record = "--warp 202:-21000:0:-21000:1024 --flag 4:7 --flag 4:9 --life 200"
+
+[[run]]
 name = "item_crouch_103"
 room = "103"
 ticks = 1500

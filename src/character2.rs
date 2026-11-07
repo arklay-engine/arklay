@@ -87,16 +87,7 @@ pub fn tick(
                     pos: step.pos,
                 });
             }
-            // `_Spl`'s `Sca_ck_em`.
-            if let Some(sca) = &room.sca {
-                let body = &mut character.body;
-                let [old_x, old_z] = body.collision_mirror;
-                let prev = [old_x, body.pos[1], old_z];
-                let mask = sca_mask(character.id);
-                let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
-                body.pos = resolved.pos;
-                body.collision_mirror = [body.pos[0], body.pos[2]];
-            }
+            spl_sca_ck_em(room, &mut character);
         }
         game.re2.characters.0[slot] = Some(character);
     }
@@ -978,7 +969,7 @@ pub fn init(
                 continue;
             }
             let tick = tick_of(room, game, &character, slot, &model, None);
-            let arrived = em_init_move(&mut character, &tick);
+            let arrived = em_init_move(room, &mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
@@ -1187,16 +1178,35 @@ fn spl(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     arrived
 }
 
-/// `Em_init_move`'s `_Spl` calls for a character the room places.
-fn em_init_move(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
+/// `_Spl`'s `Sca_ck_em`, after its routine.
+fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
+    let Some(sca) = &room.sca else {
+        return;
+    };
+    let body = &mut character.body;
+    let [old_x, old_z] = body.collision_mirror;
+    let prev = [old_x, body.pos[1], old_z];
+    let mask = sca_mask(character.id);
+    let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
+    body.pos = resolved.pos;
+    body.collision_mirror = [body.pos[0], body.pos[2]];
+}
+
+/// `Em_init_move`'s `_Spl` calls for a character the room places, each with
+/// its `Sca_ck_em`: room 202's Marvin, placed in the wall at the desks'
+/// corner, is pushed out while the room loads.
+fn em_init_move(room: &RoomState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     character.with_room = false;
     let arrived = spl(character, tick);
+    spl_sca_ck_em(room, character);
     let (start, flags) = character.start;
     if start == 0 {
         return arrived;
     }
     player2::spl_start(&mut character.work, start, flags);
-    spl(character, tick).or(arrived)
+    let arrived = spl(character, tick).or(arrived);
+    spl_sca_ck_em(room, character);
+    arrived
 }
 
 /// The tick a character's `_Spl` sees: its own model's banks, and the room's
