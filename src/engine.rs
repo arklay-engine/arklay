@@ -3646,6 +3646,9 @@ impl GameSession {
             if let Some(cue) = self.game.tick_re2_item_get() {
                 self.play_re2_status_sounds(pack, &[cue]);
             }
+            if std::mem::take(&mut self.game.re2.player.init_pose) {
+                self.place_re2_neck(true);
+            }
             self.animate_re2_item_screen(pack);
             self.game.update_message(
                 MessageInput {
@@ -6275,6 +6278,8 @@ impl GameSession {
         }
         self.game.message_menu = false;
         crate::player2::pl_init(&mut self.game.re2.player);
+        self.game.re2.player.init_pose = false;
+        self.place_re2_neck(true);
     }
 
     /// Apply one completed menu event.
@@ -6585,6 +6590,13 @@ impl GameSession {
     /// it, after that tick's push out of the walls and before the routines
     /// run again.
     fn place_re2_door_neck(&mut self) {
+        self.place_re2_neck(false);
+    }
+
+    /// Place the player's head on the pose the joints hold, still: the door's
+    /// rest, or with `init` the frame `Pl_init` poses first
+    /// ([`crate::player2::pose_init`]).
+    fn place_re2_neck(&mut self, init: bool) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
@@ -6614,7 +6626,11 @@ impl GameSession {
             neck_targets: &[],
             enemies: 0,
         };
-        crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
+        if init {
+            crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
+        } else {
+            crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
+        }
     }
 
     /// The tail of `room_transition_load` and `game_loop`'s return into

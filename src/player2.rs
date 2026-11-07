@@ -306,6 +306,8 @@ pub struct Work {
     pub floor: u8,
     /// The joints hold a pose of play ([`seed_pose`]); a door keeps it.
     pub posed: bool,
+    /// [`pl_init`] ran and the engine hasn't posed its frame yet ([`pose_init`]).
+    pub init_pose: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -778,6 +780,7 @@ impl Default for Work {
             tilt: [0, 0],
             floor: 0,
             posed: false,
+            init_pose: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -1241,14 +1244,34 @@ pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
 
 /// `Pl_init` (`0x4D9940`), as game mode 3 runs it when the status screen
 /// closes (`0x4C000D` zeroes the routines first): the move starts again from
-/// routine 1, 0, 0, 0 and clip 2, whose first frame `Joint_move` plays, so
-/// `Move_cnt` is 1. The pose isn't redrawn here; the next tick's move poses
-/// the player.
+/// routine 1, 0, 0, 0 and clip 2 of the player's own bank, whose first frame
+/// `Joint_move` plays at once, unblended, so `Move_cnt` is 1. The head looks
+/// ahead again. The engine poses that frame on the same tick ([`pose_init`]).
 pub fn pl_init(work: &mut Work) {
     work.routine = [MODE_MOVE, 0, 0, 0];
+    work.bank = Bank::Pld;
     work.move_no = 2;
     work.move_cnt = 1;
     work.hokan = 0;
+    work.neck.flags = 0;
+    work.neck.joint = None;
+    work.neck.turn = [0; 2];
+    work.neck.target = None;
+    work.init_pose = true;
+}
+
+/// `Pl_init`'s `Joint_move`: the joints take clip 2's first frame, which the
+/// next clip's blend then starts from, and the head is placed on it.
+pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    let (clips, keyframes) = tick.banks.get(Bank::Pld);
+    let pose = clips
+        .get(2)
+        .and_then(|clip| clip.frames.first())
+        .and_then(|frame| keyframes.get(usize::from(frame.keyframe)));
+    if let Some(pose) = pose {
+        player.anim.set_applied_pose(Some(pose.clone()));
+    }
+    place_neck(work, player, tick);
 }
 
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
@@ -1650,6 +1673,8 @@ impl Mover<'_, '_> {
                 self.player.pos[1] = self.ground();
                 self.work.damage_cnt &= !DAMAGE_LOCK;
                 self.player.emit_footstep(self.work.move_cnt, 1);
+                // The landing is heard as loud as a running step.
+                self.work.noise |= 4;
                 self.land();
             }
             5 => self.land(),
@@ -2630,11 +2655,13 @@ impl Mover<'_, '_> {
                 return;
             }
             if self.tick.input.fire_pressed {
+                // The reload starts next tick: this one still turns and
+                // steps the hold (`pl_mv05_w1` falls through to `Joint_move`).
                 if self.tick.weapon.spare {
                     self.aim_stage(4);
-                    return;
+                } else {
+                    self.player.queue_sound(SOUND_EMPTY);
                 }
-                self.player.queue_sound(SOUND_EMPTY);
             }
         }
         self.aim_turn(key, AIM_HOLD_TURN);
