@@ -730,6 +730,10 @@ fn copy_text(
             "enemy/26/enemy.lua",
             include_str!("../games/re2/enemy/26/enemy.lua"),
         ),
+        (
+            "enemy/29/enemy.lua",
+            include_str!("../games/re2/enemy/29/enemy.lua"),
+        ),
         ("lib/ivy.lua", include_str!("../games/re2/lib/ivy.lua")),
         (
             "enemy/2e/enemy.lua",

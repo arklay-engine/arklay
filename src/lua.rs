@@ -673,6 +673,15 @@ mod imp {
                 Ok(())
             });
 
+            // `set_re2_neck_wait(count)`: `BYTE_0053a7d8`, the ticks until
+            // `Pl_neck` next looks for a head to turn to. It's a static that
+            // only counts, so a warp's start leaves it wherever the original's
+            // boot and load left it.
+            methods.add_method_mut("set_re2_neck_wait", |_lua, game, count: u8| {
+                game.re2.player.neck.wait = count;
+                Ok(())
+            });
+
             // `set_re2_no_enemies({"101:0", ...})`: the oracle's `--no-enemies`,
             // switching off every enemy slot at the top of each tick (bit 0 of
             // `be_flg`) but the kept `"ROOM:SLOT"` pairs (room in three hex

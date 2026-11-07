@@ -119,6 +119,11 @@ pub struct Re2State {
     pub rnd: crate::zombie2::Rnd,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: u8,
+    /// The cockroaches' swarm (`Em_29`): `DWORD_00689590`, the ticks with
+    /// more than two on the player, `0x689594`, how many are on the player,
+    /// `0x689598`, the attach points taken, and `0x68959C`, the player was
+    /// killed. Every roach's init zeroes them; a room's load doesn't.
+    pub swarm: [u32; 4],
     /// `DWORD_009888d8`'s low byte: the draw buffer, which `Swap_Cbuff` flips
     /// once a frame.
     pub draw_buffer: u8,
@@ -589,6 +594,7 @@ impl Default for Re2State {
             scroll: 0,
             rnd: Default::default(),
             tongue_owner: 0,
+            swarm: [0; 4],
             draw_buffer: 0,
             enemies: 0,
             sound_types: [0; 2],
@@ -1495,6 +1501,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::G3_ID
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
+            || id == crate::zombie2::ROACH_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -2471,6 +2478,33 @@ mod tests {
         assert_eq!(game.re2_enemy_dest, [(0x118, 2, [5, 6])], "used once");
         exec(&mut game, "sce_em_set", &zombie);
         assert_eq!(dest(&game), [0, 0], "the room's next load starts it at 0");
+    }
+
+    /// Room 40B's `init_00` sets 24 cockroaches (id 0x29) at the top of its
+    /// pipe: each keeps its slot as an enemy with a script, and each is a
+    /// head the player can turn to.
+    #[test]
+    fn room_40bs_cockroaches_keep_their_slots() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("40B0").unwrap();
+        for slot in 0..24 {
+            exec(
+                &mut game,
+                "sce_em_set",
+                &[0, slot, 0x29, 0, 0, 0, 15, 0, 255, -15372, -3600, -25133, 1024, 0, 0],
+            );
+        }
+        for slot in 0..24 {
+            let roach = game.re2.characters.0[slot].as_ref().unwrap();
+            assert_eq!(roach.id, crate::zombie2::ROACH_ID);
+            assert!(roach.zombie.is_some(), "slot {slot}");
+        }
+        assert!(game.re2.characters.0[24].is_none());
+        assert_eq!(game.re2.enemies, 24);
+        let targets = game.re2.neck_targets();
+        assert_eq!(targets.len(), 24);
+        assert_eq!(targets.iter().map(|t| t.index).max(), Some(25));
+        assert!(25 < crate::player2::NECK_WORKS);
     }
 
     #[test]

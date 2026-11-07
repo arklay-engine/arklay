@@ -402,6 +402,8 @@ const YOUNG_MASK: u16 = 0x400;
 pub(crate) const YOUNG_WATER: usize = 5;
 /// `Ground`, which `Game_loop`'s pass after the moves finds under it.
 pub(crate) const YOUNG_GROUND: usize = 30;
+/// The cockroaches, `Em_29`, whose script is `enemy/29/enemy.lua`.
+pub const ROACH_ID: u8 = 0x29;
 /// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
 pub const IVY_ID: u8 = 0x2E;
 /// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
@@ -484,6 +486,9 @@ pub struct Zombie {
     /// `Sce_parts_down`s since it last ran.
     pub script_drops: Vec<ScriptDrop>,
     pulled: Option<PulledArm>,
+    /// A cockroach's part 0 as its last move left it, which the player's
+    /// head turns to from the move after (`run_roach`).
+    roach_head: Option<[i32; 3]>,
     pub life: i16,
     /// The last shot was aimed up, which `Em10Dm02` and `FUN_00458d40` read
     /// off the player.
@@ -784,6 +789,8 @@ pub struct World<'a> {
     pub kin: Vec<KinCall>,
     /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
     pub tongue_owner: &'a mut u8,
+    /// The cockroaches' globals (`Re2State::swarm`).
+    pub swarm: &'a mut [u32; 4],
     /// `fg_common`'s `0xa4`, which takes some life off a licker.
     pub common_a4: bool,
     /// `DWORD_009888d8`'s low byte: which draw buffer this frame fills.
@@ -1074,6 +1081,27 @@ impl Em<'_, '_, '_> {
         }
     }
 
+    /// `Em_29`, which leaves the rest to its script, then places `Atd[0]` on
+    /// the body (`Oba_set_ofs`). It runs neither `Oba_ck_em` nor `Sca_ck_em`,
+    /// and its `Be_flg`'s `0x2` keeps the others' checks off it.
+    fn run_roach(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.script();
+        self.oba_set_ofs();
+        // `Neck_no` 0: part 0's `+0x5C`, where `Rot_neck` turns the player's
+        // head. The original's player moves after the enemies, so its head
+        // follows the place a roach had a move before the one arklay last ran.
+        let head = self.mover.part_point(0, [0, 0, 0]);
+        let last = std::mem::replace(&mut self.z.roach_head, head);
+        self.work().neck.position = last.or(head);
+    }
+
     /// `Em_23`, which leaves the rest to its script. It doesn't run
     /// `Sca_ck_em` or `Oba_ck_em`: its boxes push the others instead
     /// (`Oba_ck_hit` of each work against it), which isn't ported yet.
@@ -1307,6 +1335,10 @@ impl Em<'_, '_, '_> {
             self.run_young();
             return;
         }
+        if self.mover.tick.id == ROACH_ID {
+            self.run_roach();
+            return;
+        }
         if self.mover.tick.id == ALLIGATOR_ID {
             self.run_alligator();
             return;
@@ -1525,13 +1557,7 @@ impl Em<'_, '_, '_> {
     /// `Oba_ck_em`, or with `player` false the ivy's `FUN_00488980`, which
     /// checks only the enemy slots.
     fn oba_ck(&mut self, player: bool) {
-        let pos = self.mover.player.pos;
-        let [ahead_x, ahead_z] = self.atd_ahead();
-        self.z.atd.at = [
-            pos[0] + ahead_x,
-            pos[1] + i32::from(self.z.atd.ofs_y),
-            pos[2] + ahead_z,
-        ];
+        self.oba_set_ofs();
         self.z.at_em_no = NO_BODY;
         let old = Some(self.old_pos);
         for other in self.world.bodies {
@@ -1547,6 +1573,17 @@ impl Em<'_, '_, '_> {
                 self.z.at_em_no = other.slot;
             }
         }
+    }
+
+    /// `Oba_set_ofs`: `Atd[0]` placed on the body.
+    fn oba_set_ofs(&mut self) {
+        let pos = self.mover.player.pos;
+        let [ahead_x, ahead_z] = self.atd_ahead();
+        self.z.atd.at = [
+            pos[0] + ahead_x,
+            pos[1] + i32::from(self.z.atd.ofs_y),
+            pos[2] + ahead_z,
+        ];
     }
 
     /// `Oba_set_ofs`: `Ofs_x` turned with the body. Only the dog has one.
