@@ -646,12 +646,12 @@ lists every approximation M16 leaves.
   ignored performance test.
 - The local check has tiers (`AGENTS.md` has the full policy):
   `./scripts/check.sh` is the session tier, which runs fmt, clippy
-  `--all-targets --all-features -D warnings` and the unit and fast integration
-  tests in the `test-release` profile (release code without LTO). It is
-  budgeted at five minutes cold and is what to run before pushing.
-  `./scripts/check.sh --ci` runs everything the Linux CI job does: also the
-  debug tests, the `--no-default-features` check, the fuzz compile check and
-  the doc build. `./scripts/check.sh --full` adds every ignored test (the
+  `--all-targets --all-features -D warnings`, the unit and fast integration
+  tests and the doc build, in the `test-release` profile (release code
+  without LTO). It is budgeted at five minutes cold and is what to run before
+  pushing. `./scripts/check.sh --ci` runs everything the Linux CI job does:
+  also the debug tests, the `--no-default-features` check and the fuzz
+  compile check. `./scripts/check.sh --full` adds every ignored test (the
   real-asset suite and the asset-gated unit tests) when `ARKLAY_RE1_ROOT` and
   `ARKLAY_RE1_PACK` are set, and is a release-cycle check.
 - Use `--profile test-release` for every local test, build and run

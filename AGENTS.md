@@ -73,7 +73,8 @@ not run it after every edit.
 | CI | `./scripts/check.sh --ci` | runs on every PR in GitHub Actions; run locally only when debugging a CI-only failure | |
 | Release | `./scripts/check.sh --full` / `--soak`, `--test perf_real` | release cycle only, or when the task explicitly asks | 30+ min |
 
-- The session tier is fmt, clippy, and the unit and fast integration tests in
+- The session tier is fmt, clippy, the unit and fast integration tests, and
+  the docs build (`cargo doc`, whose lints CI enforces), all in
   `test-release`. It prints each step's time and what it skipped.
 - **Run it unfiltered:** `./scripts/check.sh`, with no `grep` or `tail`. It
   prints one line per step and the end of a failing step's log. Its last line
@@ -85,6 +86,6 @@ not run it after every edit.
   which checks arklay against the stored recordings of the original. See
   "The regression runner" in `oracle/re2.md`.
 - Leave the debug test build, `--no-default-features`, the fuzz compile check,
-  docs, Windows, MSRV and the artifact smoke to CI.
+  Windows, MSRV and the artifact smoke to CI.
 - **Never run `--full`, `--soak` or the perf tests unless the task asks for
   them.** They need the real game assets and take half an hour or more.

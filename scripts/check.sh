@@ -5,8 +5,8 @@
 # PR, so a session does not need to.
 #
 #   ./scripts/check.sh          session: fmt, clippy, the docs checks,
-#                               the unit and fast integration tests in one
-#                               profile
+#                               the unit and fast integration tests and the
+#                               rustdoc build, in one profile
 #   ./scripts/check.sh --ci     everything the Linux CI job runs: the session
 #                               tier plus the second test profile, the real
 #                               test binaries' non-ignored tests,
@@ -188,6 +188,9 @@ clippy_pid=$!
 
 if [[ "$tier" == "session" ]]; then
     step cargo test --profile test-release "${session_tests[@]}" -- "${session_skips[@]}"
+    # CI's `cargo doc` fails on rustdoc's lints, such as a public item's docs
+    # linking a private one. With test-release warm this takes seconds.
+    step cargo doc --profile test-release --no-deps
 else
     step cargo check --no-default-features
     step cargo check --manifest-path fuzz/Cargo.toml
@@ -219,7 +222,7 @@ case "$tier" in
         echo "  skipped here, covered by CI on the PR: the debug test build, the"
         echo "  real/perf_real/soak_real binaries' non-ignored tests,"
         echo "  the slow unit tests (${slow_unit_tests[*]}),"
-        echo "  --no-default-features, the fuzz compile check, docs, Windows,"
+        echo "  --no-default-features, the fuzz compile check, Windows,"
         echo "  the MSRV check and the artifact smoke (./scripts/check.sh --ci"
         echo "  runs the Linux part locally)."
         echo "  release cycle only: --full (real assets), --soak, perf_real."

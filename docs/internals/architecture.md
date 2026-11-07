@@ -606,8 +606,8 @@ These hold across every milestone and are the regression gate:
   `cd fuzz && cargo +nightly fuzz run <target> -- -max_total_time=300`.
   The stable compile gate is `cargo check --manifest-path fuzz/Cargo.toml`.
 - The check tiers (`AGENTS.md`): `./scripts/check.sh` is the session tier
-  (fmt, clippy, the unit and fast integration tests in `test-release`, five
-  minutes cold) run once before pushing; `--ci` mirrors the Linux CI job;
+  (fmt, clippy, the unit and fast integration tests and the docs build in
+  `test-release`, five minutes cold) run once before pushing; `--ci` mirrors the Linux CI job;
   `--full` adds every ignored test, the real-asset suite and the asset-gated
   unit tests, when the asset variables are set; `--soak` adds the release
   soak. `--full` and `--soak` are release-cycle checks.
