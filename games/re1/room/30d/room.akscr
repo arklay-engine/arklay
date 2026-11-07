@@ -8,16 +8,16 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_NONE 0x04
-#define AOT_05_NONE 0x05
-#define AOT_06_NONE 0x06
+#define AOT_00_DOOR_30C 0x00
+#define AOT_01_DOOR_30E 0x01
+#define AOT_02_DOOR_30F 0x02
+#define AOT_03_ITEM_WEAPON_FLAMETHROWER_0 0x03              // The flamethrower hanging on the hook (Chris).
+#define AOT_04_EVENT_HANG_FLAMETHROWER 0x04
+#define AOT_05_EVENT_TAKE_FLAMETHROWER 0x05
+#define AOT_06_EVENT_HOOK 0x06                              // Examine the empty hook.
 #define CAM_00 0x00
 #define CAM_01 0x01
-#define CAM_04 0x04
+#define CAM_04_HOOK 0x04
 #define ENEMY_00_ADDER 0x00
 #define ENEMY_01_ADDER 0x01
 #define ENEMY_02_ADDER 0x02
@@ -26,146 +26,149 @@
 #define ENEMY_05_ADDER 0x05
 #define ENEMY_06_ADDER 0x06
 #define ENEMY_07_ADDER 0x07
-#define F_ROOM_18 0x18
-#define IMDL_00 0x00
+#define F_ROOM_HOOK_CLOSEUP 0x18                            // The hook close-up was shown: restore the camera unless the flamethrower was taken or hung.
+#define IMDL_00_WEAPON_FLAMETHROWER 0x00
 #define MSG_IT_LOOKS_LIKE_A_HOOK 0x00
-#define OBJ_00 0x00
+#define OBJ_00_HOOK 0x00
 #define SE_17_HOOKMIX 0x17
 #define SE_18_LOCKOUTA 0x18
 #define SE_19_LOCKOUTB 0x19
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 11700, 7100, 5100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30C_BLACK_TIGER_ROOM, 11000, 0, 3500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 27400, 6800, 2800, 2200, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30E_SAVE_ROOM, 4600, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    door_aot_set(AOT_00_DOOR_30C, 11700, 7100, 5100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30C_BLACK_TIGER_ROOM, 11000, 0, 3500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_30E, 27400, 6800, 2800, 2200, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30E_SAVE_ROOM, 4600, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        door_aot_set(AOT_02_DOOR, 0, 3600, 2400, 1900, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_2F, ROOM_30F_CRANK_PASSAGE, 28000, 0, 15400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-        item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_06_WEAPON_FLAMETHROWER, 240, IMDL_00, SCA_NONE, 3760, -2300, 7060, 1024, F_ITEM_AC, SAT_MANUAL | SAT_PLAYER, 0);
-        swap_var(XFER_RESTORE, AOT_03_ITEM, B_0D);
-        aot_set(AOT_04_NONE, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 3, 0, 0, 0);
-        aot_set(AOT_05_NONE, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
-        aot_set(AOT_06_NONE, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 7, 0, 0, 0);
-        obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3300, -2090, 7450, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+        door_aot_set(AOT_02_DOOR_30F, 0, 3600, 2400, 1900, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_30D_30F, ROOM_30F_CRANK_PASSAGE, 28000, 0, 15400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        item_aot_set(AOT_03_ITEM_WEAPON_FLAMETHROWER_0, 0, 0, 1, 1, IT_06_WEAPON_FLAMETHROWER, 240, IMDL_00_WEAPON_FLAMETHROWER, SCA_NONE, 3760, -2300, 7060, 1024, F_ITEM_30D_WEAPON_FLAMETHROWER_0, SAT_MANUAL | SAT_PLAYER, 0);
+        swap_var(XFER_RESTORE, AOT_03_ITEM_WEAPON_FLAMETHROWER_0, B_0D);
+        aot_set(AOT_04_EVENT_HANG_FLAMETHROWER, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 3, 0, 0, 0);
+        aot_set(AOT_05_EVENT_TAKE_FLAMETHROWER, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
+        aot_set(AOT_06_EVENT_HOOK, 3000, 6600, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 7, 0, 0, 0);
+        obj(OBJ_00_HOOK, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3300, -2090, 7450, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     else
     {
-        door_aot_set(AOT_02_DOOR, 0, 3600, 2400, 1900, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30F_CRANK_PASSAGE, 28000, 0, 15400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR_30F, 0, 3600, 2400, 1900, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30F_CRANK_PASSAGE, 28000, 0, 15400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_42, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_ADDERS_IN_30D, TRUE))
     {
-        enemy(EM_0A_ADDER, EB_00, F_ENEMY_92, SPAWN_FORCE, 2, 0, 0, 0, 6500, 0, 4500, ENEMY_00_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_01, F_ENEMY_93, SPAWN_FORCE, 2, 0, 0, 0, 10000, 0, 5000, ENEMY_01_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_01, F_ENEMY_94, SPAWN_FORCE, 2, 0, 0, 0, 12000, 0, 5000, ENEMY_02_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_01, F_ENEMY_95, SPAWN_FORCE, 2, 0, 0, 0, 14000, 0, 5000, ENEMY_03_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_02, F_ENEMY_96, SPAWN_FORCE, 2, 0, 0, 0, 11000, 0, 4000, ENEMY_04_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_02, F_ENEMY_97, SPAWN_FORCE, 2, 0, 0, 0, 13000, 0, 4000, ENEMY_05_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_03, F_ENEMY_98, SPAWN_FORCE, 2, 0, 2048, 0, 30000, 0, 4000, ENEMY_06_ADDER, ANIM_00, 0, EVAR_00);
-        enemy(EM_0A_ADDER, EB_03, F_ENEMY_99, SPAWN_FORCE, 2, 0, 2048, 0, 30000, 0, 5000, ENEMY_07_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_00, F_ENEMY_30D_ADDER_0, SPAWN_FORCE, 2, 0, 0, 0, 6500, 0, 4500, ENEMY_00_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_01, F_ENEMY_30D_ADDER_1, SPAWN_FORCE, 2, 0, 0, 0, 10000, 0, 5000, ENEMY_01_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_01, F_ENEMY_30D_ADDER_2, SPAWN_FORCE, 2, 0, 0, 0, 12000, 0, 5000, ENEMY_02_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_01, F_ENEMY_30D_ADDER_3, SPAWN_FORCE, 2, 0, 0, 0, 14000, 0, 5000, ENEMY_03_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_02, F_ENEMY_30D_ADDER_4, SPAWN_FORCE, 2, 0, 0, 0, 11000, 0, 4000, ENEMY_04_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_02, F_ENEMY_30D_ADDER_5, SPAWN_FORCE, 2, 0, 0, 0, 13000, 0, 4000, ENEMY_05_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_03, F_ENEMY_30D_ADDER_6, SPAWN_FORCE, 2, 0, 2048, 0, 30000, 0, 4000, ENEMY_06_ADDER, ANIM_00, 0, EVAR_00);
+        enemy(EM_0A_ADDER, EB_03, F_ENEMY_30D_ADDER_7, SPAWN_FORCE, 2, 0, 2048, 0, 30000, 0, 5000, ENEMY_07_ADDER, ANIM_00, 0, EVAR_00);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (ck(FG_ITEM, F_ITEM_AC, FALSE))
+        if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
         {
             if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_30F_CRANK_PASSAGE))
             {
-                eml_pos(OBJ_00, 0, 1024, 0, 4260, -2210, 6910);
+                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4260, -2210, 6910);
             }
             else
             {
-                eml_pos(OBJ_00, 0, 1024, 0, 4370, -2340, 7020);
+                eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
             }
             if (item_ck(IT_06_WEAPON_FLAMETHROWER))
             {
-                aot_delete(AOT_04_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_04_EVENT_HANG_FLAMETHROWER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+                aot_delete(AOT_06_EVENT_HOOK, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
-            set(FG_LOCK, F_LOCK_2F, FALSE);
+            set(FG_LOCK, F_LOCK_30D_30F, FALSE);
         }
         else
         {
-            aot_delete(AOT_05_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-            set(FG_LOCK, F_LOCK_2F, TRUE);
+            aot_delete(AOT_05_EVENT_TAKE_FLAMETHROWER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+            set(FG_LOCK, F_LOCK_30D_30F, TRUE);
         }
-        set(FG_STATUS, F_STATUS_1D, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
     }
 }
 
-proc main when (CHRIS)
+proc main
 {
-    if (ck(FG_ROOM, F_ROOM_18, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        set(FG_ROOM, F_ROOM_18, FALSE);
+        if (ck(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+            {
+                set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            }
+            else if (testitem(IT_06_WEAPON_FLAMETHROWER))
+            {
+                set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, FALSE);
+            }
+            else
+            {
+                cutcurr(0);
+                set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
+            }
+        }
         if (testpickup(IT_06_WEAPON_FLAMETHROWER))
         {
-            set(FG_ROOM, F_ROOM_18, FALSE);
+            set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
+            evt_exec(0, TASK_09, hook_rises_door_locks);
         }
-        else if (testitem(IT_06_WEAPON_FLAMETHROWER))
+        if (testitem(IT_06_WEAPON_FLAMETHROWER))
         {
-            set(FG_ROOM, F_ROOM_18, FALSE);
+            set(FG_ITEM, F_ITEM_30B_WEAPON_FLAMETHROWER_1, FALSE);
+            set(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, TRUE);
+            setbyte(0, 1, 0);
+            evt_exec(0, TASK_09, hook_lowers_door_unlocks);
+            evt_exec(0, TASK_09, flamethrower_lowers_with_hook);
         }
-        else
+        if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
         {
-            cutcurr(0);
-            set(FG_STATUS, F_STATUS_1A, TRUE);
-        }
-    }
-    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
-    {
-        set(FG_ITEM, F_ITEM_99, FALSE);
-        evt_exec(0, TASK_09, from_main);
-    }
-    if (testitem(IT_06_WEAPON_FLAMETHROWER))
-    {
-        set(FG_ITEM, F_ITEM_99, FALSE);
-        set(FG_ITEM, F_ITEM_AC, TRUE);
-        setbyte(0, 1, 0);
-        evt_exec(0, TASK_09, from_main_2);
-        evt_exec(0, TASK_09, from_main_3);
-    }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
-    {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
-        {
-            evt_exec(0, TASK_09, from_main_4);
-            if (ck(FG_ITEM, F_ITEM_AC, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
             {
-                eml_pos(OBJ_00, 0, 1024, 0, 4370, -2180, 7020);
+                evt_exec(0, TASK_09, flamethrower_pos_cam_00);
+                if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2180, 7020);
+                }
+                else
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+                }
             }
             else
             {
-                eml_pos(OBJ_00, 0, 1024, 0, 4370, -2340, 7020);
-            }
-        }
-        else
-        {
-            require(cmpb(B_CAMERA, CMP_EQ, CAM_01));
-            evt_exec(0, TASK_09, from_main_5);
-            if (ck(FG_ITEM, F_ITEM_AC, FALSE))
-            {
-                eml_pos(OBJ_00, 0, 1024, 0, 4370, -2340, 7020);
-            }
-            else
-            {
-                eml_pos(OBJ_00, 0, 1024, 0, 4260, -2210, 6910);
+                require(cmpb(B_CAMERA, CMP_EQ, CAM_01));
+                evt_exec(0, TASK_09, flamethrower_pos_cam_01);
+                if (ck(FG_ITEM, F_ITEM_30D_WEAPON_FLAMETHROWER_0, FALSE))
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+                }
+                else
+                {
+                    eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4260, -2210, 6910);
+                }
             }
         }
     }
 }
 
-event from_main when (CHRIS)
+event hook_rises_door_locks
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HOOK);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3960, -2560, 7270);
     tw_end();
     evt_nop();
     run
     {
-        aot_delete(AOT_05_NONE, SCE_NONE, 0);
+        aot_delete(AOT_05_EVENT_TAKE_FLAMETHROWER, SCE_NONE, 0);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
@@ -173,7 +176,7 @@ event from_main when (CHRIS)
     evt_nop();
     se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 3810, 7180);
     sleep(5);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HOOK);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     tw_pos_add();
@@ -254,28 +257,28 @@ event from_main when (CHRIS)
     evt_nop();
     run
     {
-        eml_pos(OBJ_00, 0, 1024, 0, 4370, -2340, 7020);
-        aot_delete(AOT_04_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+        aot_delete(AOT_04_EVENT_HANG_FLAMETHROWER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         se_play_3d(SND_BANK_ROOM, SE_18_LOCKOUTA, 0, SND_AT_POINT, 0, 1200, 2750);
-        set(FG_LOCK, F_LOCK_2F, FALSE);
+        set(FG_LOCK, F_LOCK_30D_30F, FALSE);
         cutcurr(0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
     }
     evt_finish();
 }
 
-event from_main_2 when (CHRIS)
+event hook_lowers_door_unlocks
 {
     run
     {
-        aot_delete(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_EVENT_HANG_FLAMETHROWER, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 3810, 7180);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HOOK);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -366,25 +369,25 @@ event from_main_2 when (CHRIS)
     evt_nop();
     run
     {
-        eml_pos(OBJ_00, 0, 1024, 0, 4370, -2340, 7020);
-        aot_delete(AOT_05_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 4370, -2340, 7020);
+        aot_delete(AOT_05_EVENT_TAKE_FLAMETHROWER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         se_play_3d(SND_BANK_ROOM, SE_19_LOCKOUTB, 0, SND_AT_POINT, 0, 1200, 2750);
-        set(FG_LOCK, F_LOCK_2F, TRUE);
+        set(FG_LOCK, F_LOCK_30D_30F, TRUE);
         cutcurr(0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
     }
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3760, -2300, 7060);
     tw_finish();
 }
 
-event from_main_3 when (CHRIS)
+event flamethrower_lowers_with_hook
 {
-    aot_delete(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    evt_work_set(WK_AOT, IMDL_00);
+    aot_delete(AOT_04_EVENT_HANG_FLAMETHROWER, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -482,16 +485,16 @@ event from_main_3 when (CHRIS)
     evt_finish();
 }
 
-event event_03 when (CHRIS)
+event hang_flamethrower
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
-        eml_pos(OBJ_00, 0, 1024, 0, 3960, -2670, 7270);
-        cutnext(CAM_04);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 3960, -2670, 7270);
+        cutnext(CAM_04_HOOK);
     }
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3810, -2640, 7270);
     tw_end();
@@ -502,23 +505,23 @@ event event_03 when (CHRIS)
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         setb(B_SELECTED_ITEM, IT_06_WEAPON_FLAMETHROWER, 0);
-        swap_var(XFER_HELD, AOT_03_ITEM, B_0D);
-        set(FG_STATUS, F_STATUS_12, TRUE);
-        set(FG_ROOM, F_ROOM_18, TRUE);
+        swap_var(XFER_HELD, AOT_03_ITEM_WEAPON_FLAMETHROWER_0, B_0D);
+        set(FG_STATUS, F_STATUS_MENU_KEY_DEPLETED, TRUE);
+        set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE);
     }
     evt_finish();
 }
 
-event event_04 when (CHRIS)
+event reach_for_flamethrower
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
-        eml_pos(OBJ_00, 0, 1024, 0, 3960, -2560, 7270);
-        cutnext(CAM_04);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 3960, -2560, 7270);
+        cutnext(CAM_04_HOOK);
     }
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3810, -2525, 7270);
     tw_end();
@@ -528,40 +531,40 @@ event event_04 when (CHRIS)
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
-        aot_on(AOT_03_ITEM, SCE_ITEM, 0);
-        set(FG_ROOM, F_ROOM_18, TRUE);
+        aot_on(AOT_03_ITEM_WEAPON_FLAMETHROWER_0, SCE_ITEM, 0);
+        set(FG_ROOM, F_ROOM_HOOK_CLOSEUP, TRUE);
     }
     evt_next();
     evt_nop();
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3760, -2300, 7060);
     tw_finish();
 }
 
-event from_main_4 when (CHRIS)
+event flamethrower_pos_cam_00
 {
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3580, -2430, 7140);
     tw_finish();
 }
 
-event from_main_5 when (CHRIS)
+event flamethrower_pos_cam_01
 {
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_FLAMETHROWER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3760, -2300, 7060);
     tw_finish();
 }
 
-event event_07 when (CHRIS)
+event examine_hook
 {
     run
     {
         message(MSG_IT_LOOKS_LIKE_A_HOOK | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It looks like a hook."
-        eml_pos(OBJ_00, 0, 1024, 0, 3960, -2670, 7270);
-        cutnext(CAM_04);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 3960, -2670, 7270);
+        cutnext(CAM_04_HOOK);
     }
     do
     {
@@ -570,7 +573,7 @@ event event_07 when (CHRIS)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        eml_pos(OBJ_00, 0, 1024, 0, 3300, -2090, 7450);
+        eml_pos(OBJ_00_HOOK, 0, 1024, 0, 3300, -2090, 7450);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         cutcurr(0);

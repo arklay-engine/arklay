@@ -564,11 +564,12 @@ mod tests {
             ["manifest.toml", "room/103/room.scd"]
         );
 
-        // Every variant runs the one runtime build, which tests the variant.
+        // Every variant runs the one runtime build, which tests the variant's
+        // flags.
         let pack = Pack::open(&out).unwrap();
         let scripts = crate::scd::reader::parse(&pack.read("room/103/room.scd").unwrap()).unwrap();
         let ops: Vec<u8> = scripts.main[0].insns.iter().map(|insn| insn.op).collect();
-        assert_eq!(ops, [0x51, 0x0E, 0x51, 0x0E]);
+        assert_eq!(ops, [0x01, 0x04, 0x0E, 0x03, 0x01, 0x04, 0x0E, 0x03]);
         assert_eq!(summary.warnings, Vec::<String>::new());
     }
 

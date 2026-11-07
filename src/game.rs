@@ -288,8 +288,9 @@ fn message_bank_selector(sel: u8) -> Option<(bool, u16)> {
 }
 /// Scenario flag marking the second mansion visit: a door into stage 1 or 2
 /// while it is set leads to the room's second visit
-/// ([`GameState::door_destination`]).
-pub const SCENARIO_FLAG_MANSION2: u8 = 0x00;
+/// ([`GameState::door_destination`]), and a mansion room's scripts test it
+/// for the visit ([`GameState::sync_variant_flags`]).
+pub const SCENARIO_FLAG_MANSION2: u8 = crate::scd::opcode::variant::FLAG_MANSION2;
 /// Scenario/state flag bank index.
 pub const BANK_SCENARIO: u8 = 0;
 /// Second scenario flag bank index (`g_ScenarioFlags2`).
@@ -357,7 +358,14 @@ pub const MSF_CAMERA_DEFER: u8 = 29;
 /// character's spawns. Set by the character-select hand-off (and the test
 /// hook) when Jill is chosen. Mask bit 23 of the first dword, i.e. selector
 /// 8 in the MSB-first flag bank.
-pub const MSF_CHAR_VARIANT: u8 = 8;
+pub const MSF_CHAR_VARIANT: u8 = crate::scd::opcode::variant::FLAG_JILL;
+/// `main_state_flags` bit 0x08000000, which the original never uses: the
+/// port raises it when the base pack is the Japanese release, for the room
+/// scripts' release tests ([`GameState::sync_variant_flags`]).
+pub const MSF_REGION_JPN: u8 = crate::scd::opcode::variant::FLAG_REGION_JPN;
+/// `main_state_flags` bit 0x00200000, which the original never uses: the
+/// port raises it when the base pack is a French or German release.
+pub const MSF_REGION_EUR: u8 = crate::scd::opcode::variant::FLAG_REGION_EUR;
 /// `main_state_flags` bit 0x20 (`MSF_CAMERA_REDRAW`): a deferred camera
 /// redisplay is pending and `game_loop` consumes it once, drawing the cut
 /// chosen by the previous frame's zone walk. Mask bit 5 of the first dword,
@@ -369,6 +377,12 @@ const MSF_PICKUP_SCREEN: u8 = 23;
 const MSF_MENU_GOT_ITEM: u8 = 21;
 /// `main_state_flags` bit 0x800, toggled by `give_item` (item viewer).
 const MSF_MENU_ITEM_VIEW: u8 = 20;
+/// `main_state_flags` bit 0x200 (`F_STATUS_16`), in the menu byte; by its
+/// place there main-menu mode 5 (inferred, the screen is not identified).
+/// The scripts of rooms 204, 20D and 408 raise it and then wait for it to
+/// clear. The port opens no screen for it and consumes it (see
+/// [`GameState::take_unhandled_menu_mode`]).
+const MSF_MENU_MODE_5: u8 = 22;
 /// `main_state_flags` bit 0x1000: the item-box menu may open (the lid settled).
 const MSF_MENU_MODE_ITEMBOX: u8 = 19;
 /// `main_state_flags` bit 0x80: the climb/vault transition is latched.
@@ -911,6 +925,8 @@ const ITEM_GET_ASK_TICK: u8 = 7;
 const ITEM_GET_TAKE_TICK: u8 = 19;
 const ITEM_GET_REFUSE_TICKS: u8 = 15;
 const ITEM_GET_CLOSE_TICKS: u8 = 10;
+/// The open's first ticks, before its fade hands the frame to the window.
+const ITEM_GET_FADE_TICKS: u8 = 3;
 /// The window's screen saves `Cut_no` and sets it to 0 on this tick of the
 /// open (`0x501CD9`), and puts it back on this tick of the close
 /// (`0x502027`).
@@ -1412,6 +1428,7 @@ pub struct ScaVolume {
 
 mod entity;
 pub mod item_get2;
+pub mod itembox2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
@@ -2488,6 +2505,17 @@ impl Entity {
         self.state_field = (self.state_field & 0xFF00) | u16::from(state);
     }
 
+    /// Overwrite the byte at offset 0x8A: the player's `isBeingAttackedFlag`
+    /// (slot 0, `player`) and every other entity's hit state. The port keeps
+    /// the two in separate fields, so an SCD write to the byte picks by slot.
+    pub fn set_byte_8a(&mut self, player: bool, value: u8) {
+        if player {
+            self.is_being_attacked = value;
+        } else {
+            self.hit_state = value;
+        }
+    }
+
     /// The player-ignore flag (offset 0x85).
     pub fn ignore(&self) -> u8 {
         (self.state_field >> 8) as u8
@@ -3173,6 +3201,9 @@ pub struct GameState {
     /// Static music groups and room rows loaded from `game/music.lua`.
     /// Runtime-only; the save block carries just [`GameState::room_bgm`].
     pub music: crate::music::MusicTables,
+    /// The game banks' bit names a `game/flags.lua` chunk gives
+    /// (`api:set_flag_name`), for the debug menu. Runtime-only.
+    pub flag_names: crate::flag_names::FlagNames,
     /// Voice-line state behind the `voice_play` wait handshake.
     pub voice: VoiceState,
     /// Film state behind the `movie_on` request handshake.
@@ -3202,6 +3233,9 @@ pub struct GameState {
     /// the areas after `Player_move`, so the routine changes after this
     /// tick's move.
     pub re2_crouch_start: bool,
+    /// What `fg_stop` was before a message's stop word went up, until the
+    /// message is dismissed ([`GameState::hold_re2_message_stop`]).
+    pub re2_message_stop: Option<u32>,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -3210,12 +3244,28 @@ pub struct GameState {
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
+    /// RE2's item box lid (`Item_box_entrance`).
+    pub re2_box_entrance: itembox2::Entrance,
+    /// RE2's item box page while its screen is up.
+    pub re2_box: Option<itembox2::BoxPage>,
+    /// The box page's bytes as the trace shows them; they stay after the
+    /// screen closes, as the original's do.
+    pub re2_box_bytes: itembox2::BoxPage,
+    /// The lid's swing ended this tick: the box's screen opens on the next
+    /// (game mode 1).
+    pub re2_box_open: bool,
     /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
     /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
     /// cleared, so nothing runs, draws or touches it, but for the
     /// `(room, slot)` pairs kept (room as `0xSRR`, stage digit and room).
     /// `None` leaves the enemies alone.
     pub re2_no_enemies: Option<Vec<(u16, usize)>>,
+    /// A setup script's `Dest` for the next zombie a room's `sce_em_set` puts
+    /// in a slot (`set_re2_enemy_dest`), as `(room, slot, [x, z])` with the
+    /// room as in `re2_no_enemies`. Neither `Sce_em_set` nor `Em10_Init` sets
+    /// `Dest`, so the original's new work starts with whatever its memory
+    /// held, which arklay doesn't model; each entry is used once.
+    pub re2_enemy_dest: Vec<(u16, usize, [i16; 2])>,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3669,6 +3719,7 @@ impl Default for GameState {
             bgm: BgmState::default(),
             room_bgm: [0xFF; ROOM_BGM_LEN],
             music: crate::music::MusicTables::default(),
+            flag_names: crate::flag_names::FlagNames::default(),
             voice: VoiceState::default(),
             fmv: FmvState::default(),
             inventory: Vec::new(),
@@ -3680,10 +3731,16 @@ impl Default for GameState {
             re2_item_get: None,
             re2_crouch_item: None,
             re2_crouch_start: false,
+            re2_message_stop: None,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
+            re2_box_entrance: itembox2::Entrance::default(),
+            re2_box: None,
+            re2_box_bytes: itembox2::BoxPage::default(),
+            re2_box_open: false,
             re2_no_enemies: None,
+            re2_enemy_dest: Vec::new(),
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,
@@ -3840,6 +3897,7 @@ impl GameState {
         state.state_bytes[1] = id.room;
         state.set_camera_cut(0);
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
+        state.sync_variant_flags();
         // `GameInit` parks the special-room-light state at -1 so no overlay
         // draws until a script arms one.
         state.state_words[1] = 0xFFFF;
@@ -3852,27 +3910,34 @@ impl GameState {
         state
     }
 
-    /// The room variant the scripts' variant jumps test
-    /// ([`crate::scd::opcode::variant`]): the room's player, its mansion
-    /// visit and the release.
-    pub fn room_variant(&self) -> u8 {
-        use crate::scd::opcode::variant;
-        let player = if self.id.player_flag & 1 == 0 {
-            variant::CHRIS
-        } else {
-            variant::JILL
-        };
-        let mansion = match (self.id.is_mansion(), self.id.mansion2) {
-            (true, false) => variant::MANSION1,
-            (true, true) => variant::MANSION2,
-            (false, _) => variant::OUTSIDE,
-        };
-        let region = match self.region {
-            crate::scd::akscr::Region::Usa => variant::USA,
-            crate::scd::akscr::Region::Jpn => variant::JPN,
-            crate::scd::akscr::Region::Eur => variant::EUR,
-        };
-        player | mansion | region
+    /// Set the release the base pack was converted from, which the room
+    /// scripts test through [`MSF_REGION_JPN`] and [`MSF_REGION_EUR`].
+    pub fn set_region(&mut self, region: crate::scd::akscr::Region) {
+        self.region = region;
+        self.sync_variant_flags();
+    }
+
+    /// Raise the flags the room scripts test the room's variant with, from
+    /// the room being run: [`MSF_CHAR_VARIANT`] for Jill (the original's own
+    /// selector of her room files), in a mansion room
+    /// [`SCENARIO_FLAG_MANSION2`] for the second visit (the original's
+    /// selector of the stage 6 and 7 files, which the doors already follow),
+    /// and the port's [`MSF_REGION_JPN`] / [`MSF_REGION_EUR`] for the release.
+    /// In normal play the first two already hold; this keeps them true for a
+    /// room booted, loaded or jumped to directly.
+    pub fn sync_variant_flags(&mut self) {
+        use crate::scd::akscr::Region;
+        let mode = |on: bool| if on { 0 } else { 1 };
+        self.apply_flag(5, MSF_CHAR_VARIANT, mode(self.id.player_flag & 1 == 1));
+        if self.id.is_mansion() {
+            self.apply_flag(
+                BANK_SCENARIO,
+                SCENARIO_FLAG_MANSION2,
+                mode(self.id.mansion2),
+            );
+        }
+        self.apply_flag(5, MSF_REGION_JPN, mode(self.region == Region::Jpn));
+        self.apply_flag(5, MSF_REGION_EUR, mode(self.region == Region::Eur));
     }
 
     /// Re-resolve the room's effect sprite metadata, re-running the two-pass
@@ -4681,11 +4746,16 @@ impl GameState {
                 StepResult::Continue
             }
             "act_idle" => {
+                // The idle zeroes the whole state word through +0x8A, so on
+                // the player it also drops a leftover being-attacked flag (a
+                // throw an event cut short, 40C's Barry rescue), which would
+                // otherwise hold the player in the damage state.
+                let player = self.selected_entity == 0;
                 if let Some(entity) = self.selected_entity_mut() {
                     entity.state_field = 1;
                     entity.action_behavior = 0;
                     entity.action_state = 0;
-                    entity.hit_state = 0;
+                    entity.set_byte_8a(player, 0);
                 }
                 StepResult::Continue
             }
@@ -5079,6 +5149,12 @@ impl GameState {
         // A room load runs the same per-frame reset before reseeding the rest
         // of the room state.
         self.room_state_reset();
+        // The first system word is the room's own scratch (`FG_ROOM` bits
+        // 0-31): it survives a frame but not a door. Every room script sets
+        // and tests these bits for itself; one left set by another room
+        // (room 210's bit 15) would start room 106's Barry scenes with no
+        // Barry in the room and hold the player in state 8 for good.
+        self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[0..4].fill(0);
         // `room_set` parks the special-room-light state at -1 (no overlay) and
         // clears the delta and the scripted channel masks.
         self.state_words[1] = 0xFFFF;
@@ -5092,8 +5168,11 @@ impl GameState {
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when
         // a transition runs, so an abandoned reach cannot freeze the
-        // destination's scripted walks.
-        self.health_status &= 0x7F;
+        // destination's scripted walks. The fast `0x40` drain (a room's gas)
+        // ends with the room too: no script clears it, and 409 raises it
+        // right after "Perhaps I should leave for a moment", 205 every frame
+        // its trigger holds. Only the herb poisons (`0x02`, `0x20`) carry on.
+        self.health_status &= 0x3F;
         self.event_item_used = false;
         // The effect pool and the resolved sprite metadata reset with the room
         // (the original's effect init), so no billboard leaks across a door.
@@ -5122,6 +5201,7 @@ impl GameState {
         self.id = id;
         self.mark_room_visited(id);
         self.apply_pending_player(id);
+        self.sync_variant_flags();
         // `RoomInit`'s model switch (0x00477904): the wardrobe stores model id
         // `8`, which raises the alternate-outfit bit and folds back to the
         // character id; the player's model then loads from the costume byte.
@@ -6121,14 +6201,26 @@ impl GameState {
         record: items::CombineRecord,
         herb: bool,
     ) -> CombineResult {
+        // The original's equipped marker is the slot's 1-based index, so a
+        // recipe that rewrites the equipped slot's id (other rounds loaded
+        // into the equipped grenade launcher turn it into that loading's
+        // item) leaves the new item equipped.
+        let equipped_slot = self
+            .equipped
+            .and_then(|equipped| self.inventory.iter().position(|stack| stack.id == equipped));
         self.inventory[cursor_slot].id = record.new_cursor;
         self.inventory[target_slot].id = record.new_target;
         if record.new_target == 0 {
             self.inventory[target_slot].quantity = 0;
         }
+        let rewritten = equipped_slot
+            .map(|slot| self.inventory[slot].id)
+            .filter(|&id| id != 0 && Some(id) != self.equipped);
         self.apply_combine_effect(cursor_slot, target_slot, record.effect);
         self.rebuild_slots();
-        if self.equipped.is_some_and(|item| !self.has_item(item)) {
+        if let Some(id) = rewritten {
+            self.set_equipped(Some(id));
+        } else if self.equipped.is_some_and(|item| !self.has_item(item)) {
             self.set_equipped(None);
         }
         CombineResult::Applied {
@@ -7090,11 +7182,36 @@ impl GameState {
             MSF_MENU_GOT_ITEM,
             MSF_MENU_ITEM_VIEW,
             MSF_MENU_KEY_DEPLETED,
+            MSF_SCRIPT_ONLY_14,
         ] {
             self.apply_flag(5, sel, 1);
         }
         self.message_item_slot = None;
         self.got_item_slot = None;
+    }
+
+    /// The pause menu closed: the original's `menu_restore_game_state`
+    /// clears the whole pending-menu field ([`Self::menu_pending`]). That
+    /// includes `MSF_SCRIPT_ONLY_14`, which room scripts raise (301's crank,
+    /// 300, 304, 306, 307 and 30F) and nothing else clears: left raised, it
+    /// holds every desk shut for the rest of the session.
+    pub fn clear_menu_field(&mut self) {
+        for sel in MSF_SCRIPT_ONLY_14..=MSF_PICKUP_SCREEN {
+            self.apply_flag(5, sel, 1);
+        }
+    }
+
+    /// Consume a raised main-menu mode 5 (`MSF_MENU_MODE_5`), which the port
+    /// has no screen for. The original's menu runs the mode and its
+    /// `menu_restore_game_state` clears the whole menu byte; left raised, the
+    /// bit holds [`Self::menu_pending`] true and every desk refuses its press
+    /// for the rest of the session.
+    pub fn take_unhandled_menu_mode(&mut self) -> bool {
+        if !self.flags[5].bit(MSF_MENU_MODE_5) {
+            return false;
+        }
+        self.apply_flag(5, MSF_MENU_MODE_5, 1);
+        true
     }
 
     /// Whether the ground pick-up armed for `slot` fits the inventory, which
@@ -7644,8 +7761,13 @@ impl GameState {
         }
         // A finished ladder climb (state 8) returns the zone flag, the ladder
         // mode bit and the message flag the climb locked out.
+        // The climb's start raised the sequence byte (0x80); control returns
+        // with it clear, or START (gated on it) stays refused after a ladder.
         if player.ladder_release {
             player.ladder_release = false;
+            if self.entities[0].is_being_attacked == 0x80 {
+                self.entities[0].is_being_attacked = 0;
+            }
             self.entities[0].zone_flags &= !0x10;
             self.flags[5].apply(MSF_LADDER_DOWN, 1);
             self.message_flags |= 0x0040;
@@ -7787,7 +7909,7 @@ impl GameState {
                             old[2] as i16,
                         ],
                         ofs_y,
-                        at_w: crate::character2::PLAYER_WIDTH,
+                        at_w: crate::character2::player_width(self.id.player_flag),
                         at_h: crate::character2::PLAYER_HEIGHT,
                     };
                     objects::oma_ck_oba(&mut player.pos, &mut atd, &record);
@@ -7991,7 +8113,15 @@ impl GameState {
             self.tear_down_item(slot, action, true);
             return true;
         }
-        self.add_item(item, action.item_quantity().max(1));
+        // A pickup authored with quantity 0 (the cranks, the lighter, the
+        // lockpick) is kept at 0, like the starting knife: the menu USE never
+        // uses it up. Only a stacking item takes at least one.
+        let quantity = if self.item_defs.get(item).merge {
+            action.item_quantity().max(1)
+        } else {
+            action.item_quantity()
+        };
+        self.add_item(item, quantity);
         self.last_picked_item = Some(item);
         // BioCard 0x213 (`pickedItemId`) is what the scripts test with cmpb 19.
         self.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)] = item;
@@ -8236,36 +8366,32 @@ impl GameState {
     /// Decode a door record's destination byte relative to the room the record
     /// was read in.
     ///
-    /// Values below `0x20` name a room in `from`'s stage, on `from`'s visit;
-    /// higher values also change stage as `(dest >> 5) - 1`. A door into a
-    /// mansion stage leads to its second visit once
-    /// [`SCENARIO_FLAG_MANSION2`] is set. The original's own door data also
-    /// names the second visit directly, as its stages 6 and 7 (`0xC0`,
-    /// `0xE0`). `0xFF` names no room.
+    /// Values below `0x20` name a room in `from`'s stage; higher values also
+    /// change stage as `(dest >> 5) - 1`. A door into a mansion room leads to
+    /// its second visit exactly while [`SCENARIO_FLAG_MANSION2`] is set: the
+    /// flag is the visit. The original's door data can also name the second
+    /// visit's stages 6 and 7 (`0xC0`, `0xE0`); they read as stages 1 and 2.
+    /// `0xFF` names no room.
     pub fn door_destination(&self, from: RoomId, dest: u8) -> Option<RoomId> {
         if dest == 0xFF {
             return None;
         }
-        if dest < 0x20 {
-            Some(RoomId {
+        let mansion2 = self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
+        let target = if dest < 0x20 {
+            RoomId {
                 stage: from.stage,
                 room: dest,
                 player_flag: from.player_flag,
-                mansion2: from.mansion2,
-            })
+                mansion2: false,
+            }
         } else {
             let row = usize::from((dest >> 5) - 1);
-            let target = RoomId::from_table_row(row, dest & 0x1F);
-            let mansion2 =
-                target.mansion2 || self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
-            Some(
-                RoomId {
-                    player_flag: from.player_flag,
-                    ..target
-                }
-                .with_visit(mansion2),
-            )
-        }
+            RoomId {
+                player_flag: from.player_flag,
+                ..RoomId::from_table_row(row, dest & 0x1F)
+            }
+        };
+        Some(target.with_visit(mansion2))
     }
 
     /// Arm the transition described by `door`, decoding the destination's
@@ -8412,7 +8538,9 @@ impl GameState {
                 self.re2.pending_events.push(event);
             }
             RoomActionKind::ItemBox => {
-                self.open_itembox(slot);
+                // `Sce_Itembox`: the area's first parameter is the box's
+                // object.
+                self.open_re2_box_entrance(action.params[0]);
                 self.record_interaction(slot, action.kind, None);
             }
             RoomActionKind::Typewriter => self.record_interaction(slot, action.kind, None),
@@ -8480,6 +8608,21 @@ impl GameState {
         });
     }
 
+    /// Whether the get-item window's next tick is still a `Game_loop` frame,
+    /// with `fg_stop` up so only the enemies' `Root_ck` runs: the three while
+    /// game mode 1 starts the fade and mode 2 waits for it (`0x4BFB36`), and
+    /// the last, where mode 3 hands the player back and mode 5 starts.
+    pub fn re2_item_get_stopped_frame(&self) -> bool {
+        self.re2_item_get.is_some_and(|get| {
+            let tick = get.ticks.saturating_add(1);
+            match get.phase {
+                Re2ItemGetPhase::Open => tick <= ITEM_GET_FADE_TICKS,
+                Re2ItemGetPhase::Close => tick == ITEM_GET_CLOSE_TICKS,
+                _ => false,
+            }
+        })
+    }
+
     /// One tick of the get-item window, before its message's. Returns the
     /// cue it plays: the cancel cue when the "taken" or "full" message has
     /// closed or a no has counted out (sub 0, `0x4FD701`).
@@ -8535,6 +8678,11 @@ impl GameState {
                 // whose `Pl_init` hands the player back standing, from a
                 // crouch too (`0x4C000D`).
                 crate::player2::pl_init(&mut self.re2.player);
+                // Mode 5 leaves `fg_stop` at `0xEF000000`, input bit
+                // included, for the next tick's `Pad_set`, as a door does: a
+                // direction held through the close moves the player a tick
+                // later.
+                self.re2.door_key_stop = true;
                 return None;
             }
             phase => (phase, get.ticks),
@@ -8646,6 +8794,25 @@ impl GameState {
         let id = u16::from(id);
         self.message.set_re2_timing(false, false);
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
+    }
+
+    /// `message_on`'s stop word: while the message shows, `fg_stop` has it
+    /// in its top half, so the player, the enemies and the scripts wait, and
+    /// its dismissal puts back what `fg_stop` was.
+    pub fn hold_re2_message_stop(&mut self, stop: u16) {
+        if stop == 0 || !self.message.active || self.re2_message_stop.is_some() {
+            return;
+        }
+        let fg_stop = self.re2.fg_stop_mut();
+        self.re2_message_stop = Some(*fg_stop);
+        *fg_stop |= u32::from(stop) << 16;
+    }
+
+    /// The end of a message's [`Self::hold_re2_message_stop`].
+    fn release_re2_message_stop(&mut self) {
+        if let Some(saved) = self.re2_message_stop.take() {
+            *self.re2.fg_stop_mut() = saved;
+        }
     }
 
     /// The player's weapon for [`crate::player2::player_move`].
@@ -8846,6 +9013,7 @@ impl GameState {
     pub fn cancel_message(&mut self) {
         if self.message.active {
             self.message_flags = self.message_flags_backup;
+            self.release_re2_message_stop();
         }
         self.message = MessageWindow::default();
         self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = 0;
@@ -8922,6 +9090,7 @@ impl GameState {
                 self.dpad_blanked |= self.dpad_held & DPAD_DIRECTIONS;
             }
             self.message_flags = self.message_flags_backup;
+            self.release_re2_message_stop();
         }
         let pause = self.message.pause;
         for action in self.message.take_actions() {
@@ -9276,10 +9445,6 @@ fn action_params(handler: u8, flags: u8, operands: &[Operand], word_start: usize
 }
 
 impl ScdHost for ScdGameHost<'_> {
-    fn room_variant(&mut self) -> u8 {
-        self.state.room_variant()
-    }
-
     fn on_flow(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
         match op.op {
             0x0E | 0x32 => StepResult::Continue,
@@ -9852,7 +10017,14 @@ impl ScdHost for ScdGameHost<'_> {
                     entity.angle = operand_i16(operands, 2) as u16 & 0x0FFF;
                     entity.roll = operand_i16(operands, 3) as u16;
                     entity.flags &= 0xFFF3;
-                    entity.set_active(true);
+                    // Only the position: the slot stays as the room's
+                    // `enemy` records left it. Every shipped `pos_set` names
+                    // a slot its room spawns, so a slot left inactive is one
+                    // whose record the enemy bank skipped (that monster is
+                    // dead). Marking it active would raise the stale monster
+                    // the slot held in the previous room, outside
+                    // `enemy_count` and so out of every weapon's reach (204's
+                    // second researcher once one is killed).
                 }
                 StepResult::Continue
             }
@@ -13340,6 +13512,32 @@ mod tests {
         );
     }
 
+    /// `act_idle` zeroes the state word through +0x8A: the player's
+    /// being-attacked flag and another entity's hit state. 40C's Barry
+    /// rescue throws Jill (flag 1) and idles her from its actor script; a
+    /// flag left set holds her in the damage state for good.
+    #[test]
+    fn act_idle_clears_the_byte_at_8a_by_slot() {
+        let mut state = game();
+        state.selected_entity = 0;
+        state.entities[0].is_being_attacked = 1;
+        state.entities[0].hit_state = 0x11;
+        let mut host = ScdGameHost::new(&mut state);
+        let idle = actor_op(0x86).unwrap();
+        assert_eq!(host.on_misc(idle, &[]), StepResult::Continue);
+        assert_eq!(host.state().entities[0].is_being_attacked, 0);
+        assert_eq!(host.state().entities[0].state(), 1);
+
+        let mut state = game();
+        state.selected_entity = 1;
+        state.entities[1].hit_state = 0x11;
+        state.entities[1].is_being_attacked = 1;
+        let mut host = ScdGameHost::new(&mut state);
+        assert_eq!(host.on_misc(idle, &[]), StepResult::Continue);
+        assert_eq!(host.state().entities[1].hit_state, 0);
+        assert_eq!(host.state().entities[1].is_being_attacked, 1);
+    }
+
     #[test]
     fn actor_run_completes_in_one_tick() {
         // A whole actor run: motion, animation and end. The VM must execute
@@ -13989,6 +14187,7 @@ mod tests {
         let mut state = game();
         state.entities[0].zone_flags = 0x30;
         state.flags[5].apply(MSF_LADDER_DOWN, 0);
+        state.entities[0].is_being_attacked = 0x80;
         let mut player =
             crate::player::spawn(RoomId::parse("1000").unwrap(), &RoomState::default());
         player.stairs.ladder = true;
@@ -13997,6 +14196,10 @@ mod tests {
         state.tick_objects(&RoomState::default(), &mut player);
 
         assert!(!player.ladder_release);
+        assert_eq!(
+            state.entities[0].is_being_attacked, 0,
+            "START is open again"
+        );
         assert_eq!(state.entities[0].zone_flags & 0x10, 0);
         assert!(!state.ladder_down());
         assert_ne!(state.message_flags & 0x40, 0, "message flag returned");
@@ -14401,6 +14604,14 @@ mod tests {
         state.enter_room(RoomId::parse("101").unwrap(), &RoomState::default());
         assert!(state.pending_reach.is_none());
         assert_eq!(state.health_status & 0x80, 0, "the reach lock clears");
+    }
+
+    #[test]
+    fn room_entry_ends_the_gas_drain_but_not_the_poisons() {
+        let mut state = item_game("1000", 1);
+        state.health_status = 0x40 | 0x20 | 0x02;
+        state.enter_room(RoomId::parse("101").unwrap(), &RoomState::default());
+        assert_eq!(state.health_status, 0x22);
     }
 
     #[test]
@@ -14825,6 +15036,37 @@ mod tests {
         assert!(state.check_desk(0));
         assert_eq!(state.desk.state, 1);
         assert_eq!(state.desk.action, Some(0));
+    }
+
+    #[test]
+    fn a_closing_menu_clears_the_script_raised_bit_and_frees_the_desk() {
+        // Room 301's crank: set(FG_STATUS, F_STATUS_11), which nothing clears
+        // but the original's `menu_restore_game_state`.
+        for close in [
+            GameState::clear_item_view_flags,
+            GameState::clear_menu_field,
+        ] {
+            let mut state = desk_game();
+            state.add_item(ITEM_DESK_KEY, 1);
+            state.apply_flag(5, MSF_SCRIPT_ONLY_14, 0);
+            assert!(!state.check_desk(0), "the raised bit blocks the desk");
+            close(&mut state);
+            assert!(!state.menu_pending());
+            assert!(state.check_desk(0), "the desk opens once a menu closed");
+        }
+    }
+
+    #[test]
+    fn a_script_raised_menu_mode_5_is_consumed_and_frees_the_desk() {
+        let mut state = desk_game();
+        state.add_item(ITEM_DESK_KEY, 1);
+        assert!(!state.take_unhandled_menu_mode(), "nothing raised");
+        // Room 204's script after the Richard scene: set(FG_STATUS, F_STATUS_16).
+        state.apply_flag(5, MSF_MENU_MODE_5, 0);
+        assert!(!state.check_desk(0), "the raised mode blocks the desk");
+        assert!(state.take_unhandled_menu_mode());
+        assert!(!state.flags[5].bit(MSF_MENU_MODE_5));
+        assert!(state.check_desk(0), "the desk opens once it is consumed");
     }
 
     #[test]
@@ -16160,13 +16402,14 @@ mod tests {
         // ... but not a door out of it.
         let to = state.door_destination(target, 0x60).unwrap();
         assert_eq!((to.stage, to.mansion2), (3, false));
-        // A door inside the second visit stays on it, flag or not, and the
-        // original's own data names the second visit as stages 6 and 7.
+        // The flag alone picks the visit: without it a door inside the
+        // second visit leads to the first, and the original's stage 6 and 7
+        // rows are stages 1 and 2.
         let state = game();
         let inside = state.door_destination(target, 0x05).unwrap();
-        assert_eq!((inside.stage, inside.room, inside.mansion2), (1, 5, true));
+        assert_eq!((inside.stage, inside.room, inside.mansion2), (1, 5, false));
         let named = state.door_destination(target, 0xE7).unwrap();
-        assert_eq!((named.stage, named.room, named.mansion2), (2, 7, true));
+        assert_eq!((named.stage, named.room, named.mansion2), (2, 7, false));
         let first = state.door_destination(state.id, 0x41).unwrap();
         assert_eq!((first.stage, first.mansion2), (2, false));
     }
@@ -17235,6 +17478,24 @@ mod tests {
     }
 
     #[test]
+    fn loading_other_rounds_keeps_the_equipped_launcher_equipped() {
+        // The empty flame-loaded launcher takes explosive rounds and turns
+        // into the explosive-loaded item in the same slot: the equipped
+        // marker (a slot index in the original) follows it.
+        let mut state = game();
+        state.add_item(0x09, 0);
+        state.add_item(0x10, 6);
+        state.set_equipped(Some(0x09));
+        assert!(matches!(
+            state.combine_slots(0, 1),
+            CombineResult::Applied { .. }
+        ));
+        assert_eq!(state.inventory[0].id, 0x07);
+        assert_eq!(state.equipped, Some(0x07));
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_EQUIPPED)], 0x07);
+    }
+
+    #[test]
     fn combine_effects_transfer_ammo_and_merge_quantities() {
         // Effect 1: the gun takes the clip's rounds up to its maximum.
         let mut state = game();
@@ -18266,11 +18527,6 @@ mod tests {
             0,
             "g_SysFlags[1] is cleared by the room reset"
         );
-        assert_eq!(
-            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
-            0x55,
-            "the first system word survives (room_state_reset only clears [1])"
-        );
     }
 
     #[test]
@@ -18280,6 +18536,11 @@ mod tests {
         let mut state = seeded_room_state();
         state.room_state_reset();
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0],
+            0x55,
+            "the first system word survives a frame (room_state_reset only clears [1])"
+        );
 
         let mut state = seeded_room_state();
         state.state_words[1] = 5;
@@ -18291,6 +18552,11 @@ mod tests {
         state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
 
         assert_room_state_cleared(&state);
+        assert_eq!(
+            state.flags[usize::from(BANK_SYSTEM)].bytes()[0..4],
+            [0; 4],
+            "the first system word (FG_ROOM 0-31) does not survive a door"
+        );
         assert_eq!(state.state_words[1], 0xFFFF, "the light parks at -1");
         assert_eq!(state.state_words[2], 0);
         assert_eq!(state.special_light_masks, [0; 3]);

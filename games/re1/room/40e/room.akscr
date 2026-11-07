@@ -8,153 +8,157 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_EVENT 0x02
-#define AOT_03_DOOR 0x03
-#define AOT_04_MESSAGE 0x04
-#define AOT_04_USEITEM 0x04
-#define AOT_05_MESSAGE 0x05
-#define AOT_05_USEITEM 0x05
-#define AOT_06_MESSAGE 0x06
-#define AOT_07_B 0x07
-#define AOT_07_MESSAGE 0x07
-#define AOT_08_MESSAGE 0x08
-#define AOT_09_B 0x09
+#define AOT_00_DOOR_40D 0x00
+#define AOT_01_DOOR_40F 0x01
+#define AOT_02_DOOR_410 0x02                                // A locked-door event until F_LOCK_40E_410, then the door.
+#define AOT_03_DOOR_411 0x03
+#define AOT_04_MESSAGE_TANK_CRACKED 0x04
+#define AOT_04_USEITEM_SOUTH_END 0x04                       // Raises F_ROOM_J_PLAYER_AT_SOUTH_END while Jill is inside.
+#define AOT_05_MESSAGE_TANK 0x05
+#define AOT_05_USEITEM_WEST_DOORS 0x05                      // Raises F_ROOM_J_PLAYER_AT_WEST_DOORS while Jill is inside.
+#define AOT_06_MESSAGE_TANK 0x06
+#define AOT_06_MESSAGE_TANK_CRACKED 0x06
+#define AOT_07_B_WATER 0x07                                 // Likely: the flooded floor, while the water is not drained.
+#define AOT_07_MESSAGE_TANK 0x07
+#define AOT_08_MESSAGE_TANK 0x08
+#define AOT_09_B_WATER 0x09                                 // Likely: the flooded floor, while the water is not drained.
 #define ENEMY_00_NEPTUNE 0x00
 #define ENEMY_01_NEPTUNE 0x01
 #define ENEMY_02_NEPTUNE 0x02
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
+#define F_ROOM_J_PLAYER_AT_SOUTH_END 0x20                   // Jill stands at the south end of the tank (raised while inside AOT_04): the Neptunes show up.
+#define F_ROOM_J_PLAYER_AT_WEST_DOORS 0x21                  // Jill stands by the 410/411 doors (raised while inside AOT_05): the Neptune film plays.
 #define MSG_IT_IS_LOCKED_THERE_IS_NO_KEY_HOLE 0x00
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
+#define OBJ_00_WATER_0 0x00
+#define OBJ_01_WATER_1 0x01
+#define OBJ_02_WATER_2 0x02
+#define OBJ_03_WATER_3 0x03
 #define SE_14_DM_GACHA 0x14
 
 proc init
 {
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
-        set(FG_STATUS, F_STATUS_1C, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     }
-    door_aot_set(AOT_00_DOOR, 29700, 15100, 3700, 4800, 12, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 29700, 27200, 3700, 3200, 1, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_LOCK, F_LOCK_24, FALSE))
+    door_aot_set(AOT_00_DOOR_40D, 29700, 15100, 3700, 4800, 12, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_40F, 29700, 27200, 3700, 3200, 1, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_LOCK, F_LOCK_40E_410, FALSE))
     {
-        aot_set(AOT_02_EVENT, 0, 25400, 2500, 3000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 5, 0, on_aot_02, 0, 0, 0);
+        aot_set(AOT_02_DOOR_410, 0, 25400, 2500, 3000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 5, 0, storehouse_door_locked, 0, 0, 0);
     }
     else
     {
-        door_aot_set(AOT_02_EVENT, 0, 25400, 2500, 3000, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_410_ARMS_STOREHOUSE, 9100, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR_410, 0, 25400, 2500, 3000, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_410_ARMS_STOREHOUSE, 9100, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
-    door_aot_set(AOT_03_DOOR, 0, 22400, 2500, 2500, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, DOOR_LOCKED | F_LOCK_2B, ROOM_411_CONTROL_ROOM, 8200, 0, 10800, 2048, IT_3B_KEY_CONTROL_ROOM, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    door_aot_set(AOT_03_DOOR_411, 0, 22400, 2500, 2500, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, DOOR_LOCKED | F_LOCK_40E_411, ROOM_411_CONTROL_ROOM, 8200, 0, 10800, 2048, IT_3B_KEY_CONTROL_ROOM, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        aot_set(AOT_04_MESSAGE, 14500, 8000, 6500, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-        aot_set(AOT_05_MESSAGE, 7500, 8000, 7000, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-        aot_set(AOT_06_MESSAGE, 7500, 24000, 13500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-        if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
+        aot_set(AOT_04_MESSAGE_TANK_CRACKED, 14500, 8000, 6500, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        aot_set(AOT_05_MESSAGE_TANK, 7500, 8000, 7000, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_06_MESSAGE_TANK, 7500, 24000, 13500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, FALSE))
         {
-            aot_set(AOT_07_B, 0, 0, 32000, 32000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_01, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_02, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_03, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            enemy(EM_0B_NEPTUNE, EB_00, F_ENEMY_39, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_0C, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_0D, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
-            evt_exec(0, TASK_04, on_enter);
+            aot_set(AOT_07_B_WATER, 0, 0, 32000, 32000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_00_WATER_0, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01_WATER_1, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_02_WATER_2, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_03_WATER_3, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            enemy(EM_0B_NEPTUNE, EB_00, F_ENEMY_40E_NEPTUNE_0, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_40E_NEPTUNE_1, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_40E_NEPTUNE_2, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
+            evt_exec(0, TASK_04, water_bob);
         }
         else
         {
-            enemy(EM_0B_NEPTUNE, EB_01, F_ENEMY_39, SPAWN_FORCE, 2, 0, 3257, 0, 26833, 0, 17000, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_0C, SPAWN_FORCE, 2, 0, 0, 0, 24833, 0, 14000, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_0D, SPAWN_FORCE, 2, 0, 512, 0, 25833, 0, 11000, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_01, F_ENEMY_40E_NEPTUNE_0, SPAWN_FORCE, 2, 0, 3257, 0, 26833, 0, 17000, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_40E_NEPTUNE_1, SPAWN_FORCE, 2, 0, 0, 0, 24833, 0, 14000, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_40E_NEPTUNE_2, SPAWN_FORCE, 2, 0, 512, 0, 25833, 0, 11000, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
         }
     }
     else
     {
-        aot_set(AOT_04_USEITEM, 7000, 1000, 6000, 8000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
-        aot_set(AOT_05_USEITEM, 1400, 23600, 6000, 8000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-        if (ck(FG_COMMON, F_COMMON_09, TRUE))
+        aot_set(AOT_04_USEITEM_SOUTH_END, 7000, 1000, 6000, 8000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
+        aot_set(AOT_05_USEITEM_WEST_DOORS, 1400, 23600, 6000, 8000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+        if (ck(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE))
         {
-            aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
         }
-        aot_set(AOT_06_MESSAGE, 14500, 8000, 6500, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-        aot_set(AOT_07_MESSAGE, 7500, 8000, 7000, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-        aot_set(AOT_08_MESSAGE, 7500, 24000, 13500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-        if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
+        aot_set(AOT_06_MESSAGE_TANK_CRACKED, 14500, 8000, 6500, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+        aot_set(AOT_07_MESSAGE_TANK, 7500, 8000, 7000, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_08_MESSAGE_TANK, 7500, 24000, 13500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, FALSE))
         {
-            aot_set(AOT_09_B, 0, 0, 32000, 32000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_01, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_02, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(OBJ_03, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            evt_exec(0, TASK_04, on_enter);
+            aot_set(AOT_09_B_WATER, 0, 0, 32000, 32000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_00_WATER_0, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01_WATER_1, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_02_WATER_2, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_03_WATER_3, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            evt_exec(0, TASK_04, water_bob);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_09, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, FALSE))
             {
-                enemy(EM_0B_NEPTUNE, EB_80, F_ENEMY_39, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
-                enemy(EM_0B_NEPTUNE, EB_82, F_ENEMY_0C, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
-                enemy(EM_0B_NEPTUNE, EB_82, F_ENEMY_0D, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_80, F_ENEMY_40E_NEPTUNE_0, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_82, F_ENEMY_40E_NEPTUNE_1, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_82, F_ENEMY_40E_NEPTUNE_2, SPAWN_FORCE, 2, 0, 848, 0, 4060, -32000, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
             }
             else
             {
-                enemy(EM_0B_NEPTUNE, EB_00, F_ENEMY_39, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
-                enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_0C, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
-                enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_0D, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_00, F_ENEMY_40E_NEPTUNE_0, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 15600, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_40E_NEPTUNE_1, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 14600, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
+                enemy(EM_0B_NEPTUNE, EB_02, F_ENEMY_40E_NEPTUNE_2, SPAWN_FORCE, 2, 0, 848, 0, 4060, 0, 13600, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
             }
         }
         else
         {
-            enemy(EM_0B_NEPTUNE, EB_01, F_ENEMY_39, SPAWN_FORCE, 2, 0, 3257, 0, 26833, 0, 17000, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_0C, SPAWN_FORCE, 2, 0, 0, 0, 26833, 0, 14000, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
-            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_0D, SPAWN_FORCE, 2, 0, 512, 0, 26833, 0, 11000, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_01, F_ENEMY_40E_NEPTUNE_0, SPAWN_FORCE, 2, 0, 3257, 0, 26833, 0, 17000, ENEMY_00_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_40E_NEPTUNE_1, SPAWN_FORCE, 2, 0, 0, 0, 26833, 0, 14000, ENEMY_01_NEPTUNE, ANIM_00, 0, EVAR_00);
+            enemy(EM_0B_NEPTUNE, EB_03, F_ENEMY_40E_NEPTUNE_2, SPAWN_FORCE, 2, 0, 512, 0, 26833, 0, 11000, ENEMY_02_NEPTUNE, ANIM_00, 0, EVAR_00);
         }
     }
 }
 
-proc main when (JILL)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_09, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_20, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, FALSE))
         {
-            pos_set(ENEMY_00_NEPTUNE, 0, 848, 0, 4060, 0, 15600);
-            pos_set(ENEMY_01_NEPTUNE, 0, 848, 0, 4060, 0, 16600);
-            pos_set(ENEMY_02_NEPTUNE, 0, 848, 0, 4060, 0, 17600);
-            eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
-            eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, F_COMMON_09, TRUE);
-        }
-        if (ck(FG_ROOM, F_ROOM_21, TRUE))
-        {
-            dir_set(0, 0, 2048, 0, 2800, 0, 26960);
-            pos_set(ENEMY_00_NEPTUNE, 0, 2056, 0, 14136, 0, 27209);
-            pos_set(ENEMY_01_NEPTUNE, 0, 2056, 0, 15136, 0, 27209);
-            pos_set(ENEMY_02_NEPTUNE, 0, 2056, 0, 16136, 0, 27209);
-            eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
-            eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
-            aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, F_COMMON_09, TRUE);
-            evt_exec(0, TASK_07, event_06);
+            if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_SOUTH_END, TRUE))
+            {
+                pos_set(ENEMY_00_NEPTUNE, 0, 848, 0, 4060, 0, 15600);
+                pos_set(ENEMY_01_NEPTUNE, 0, 848, 0, 4060, 0, 16600);
+                pos_set(ENEMY_02_NEPTUNE, 0, 848, 0, 4060, 0, 17600);
+                eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
+                eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
+                aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
+                set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
+            }
+            if (ck(FG_ROOM, F_ROOM_J_PLAYER_AT_WEST_DOORS, TRUE))
+            {
+                dir_set(0, 0, 2048, 0, 2800, 0, 26960);
+                pos_set(ENEMY_00_NEPTUNE, 0, 2056, 0, 14136, 0, 27209);
+                pos_set(ENEMY_01_NEPTUNE, 0, 2056, 0, 15136, 0, 27209);
+                pos_set(ENEMY_02_NEPTUNE, 0, 2056, 0, 16136, 0, 27209);
+                eml_state(0, ENEMY_00_NEPTUNE, EML_BEHAVIOUR, EB_00);
+                eml_state(0, ENEMY_01_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                eml_state(0, ENEMY_02_NEPTUNE, EML_BEHAVIOUR, EB_02);
+                aot_reset(AOT_04_USEITEM_SOUTH_END, SCE_NONE, 0, 0, 0, 0);
+                aot_reset(AOT_05_USEITEM_WEST_DOORS, SCE_NONE, 0, 0, 0, 0);
+                set(FG_COMMON, F_COMMON_J_TANK_NEPTUNES_SHOWN, TRUE);
+                evt_exec(0, TASK_07, water_tank_film);
+            }
         }
     }
 }
 
-event on_enter_sub1
+event water_bob_0
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -164,7 +168,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 13, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -174,7 +178,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 12, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -184,7 +188,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -194,7 +198,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -204,7 +208,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -214,7 +218,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -224,7 +228,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -234,7 +238,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -244,7 +248,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -254,7 +258,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -264,7 +268,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -274,7 +278,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -284,7 +288,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -294,7 +298,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 0, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -304,7 +308,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -314,7 +318,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -324,7 +328,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -334,7 +338,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -344,7 +348,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -354,7 +358,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -3, 0);
     for (6)
@@ -364,7 +368,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -374,7 +378,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -384,7 +388,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -394,7 +398,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -404,7 +408,7 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER_0);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -414,13 +418,13 @@ event on_enter_sub1
     }
     tw_end();
     nop_wide(0, 12, 0);
-    evt_chain(on_enter_sub1);
+    evt_chain(water_bob_0);
     evt_finish();
 }
 
-event on_enter_sub2
+event water_bob_1
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -430,7 +434,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 13, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -440,7 +444,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 12, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -450,7 +454,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -460,7 +464,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -470,7 +474,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -480,7 +484,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -490,7 +494,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -500,7 +504,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -510,7 +514,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -520,7 +524,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -530,7 +534,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -540,7 +544,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -550,7 +554,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -560,7 +564,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 0, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -570,7 +574,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -580,7 +584,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -590,7 +594,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -600,7 +604,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -610,7 +614,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -620,7 +624,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -3, 0);
     for (6)
@@ -630,7 +634,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -640,7 +644,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -650,7 +654,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -660,7 +664,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -670,7 +674,7 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_WATER_1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -680,13 +684,13 @@ event on_enter_sub2
     }
     tw_end();
     nop_wide(1, 12, 0);
-    evt_chain(on_enter_sub2);
+    evt_chain(water_bob_1);
     evt_finish();
 }
 
-event on_enter_sub3
+event water_bob_2
 {
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -696,7 +700,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 13, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -706,7 +710,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 12, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -716,7 +720,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -726,7 +730,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -736,7 +740,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -746,7 +750,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -756,7 +760,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -766,7 +770,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -776,7 +780,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -786,7 +790,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -796,7 +800,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -806,7 +810,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -816,7 +820,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -826,7 +830,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 0, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -836,7 +840,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -846,7 +850,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -856,7 +860,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -866,7 +870,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -876,7 +880,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -886,7 +890,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -3, 0);
     for (6)
@@ -896,7 +900,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -906,7 +910,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -916,7 +920,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -926,7 +930,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -936,7 +940,7 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_WATER_2);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -946,13 +950,13 @@ event on_enter_sub3
     }
     tw_end();
     nop_wide(2, 12, 0);
-    evt_chain(on_enter_sub3);
+    evt_chain(water_bob_2);
     evt_finish();
 }
 
-event on_enter_sub4
+event water_bob_3
 {
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -962,7 +966,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 13, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -972,7 +976,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 12, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -982,7 +986,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -992,7 +996,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1002,7 +1006,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1012,7 +1016,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1022,7 +1026,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -1032,7 +1036,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1042,7 +1046,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1052,7 +1056,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1062,7 +1066,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1072,7 +1076,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1082,7 +1086,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1092,7 +1096,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 0, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1102,7 +1106,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 1, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -1112,7 +1116,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 2, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -1122,7 +1126,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 3, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -1132,7 +1136,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 4, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -1142,7 +1146,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 5, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -1152,7 +1156,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 6, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -3, 0);
     for (6)
@@ -1162,7 +1166,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 7, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -1172,7 +1176,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 8, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     for (6)
@@ -1182,7 +1186,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 9, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -1192,7 +1196,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 10, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, -1, 0);
     for (6)
@@ -1202,7 +1206,7 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 11, 0);
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_WATER_3);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1212,32 +1216,32 @@ event on_enter_sub4
     }
     tw_end();
     nop_wide(3, 12, 0);
-    evt_chain(on_enter_sub4);
+    evt_chain(water_bob_3);
     evt_finish();
 }
 
-event on_enter
+event water_bob
 {
-    evt_fork(TASK_00, on_enter_sub1, 0);
-    evt_fork(TASK_01, on_enter_sub2, 0);
-    evt_fork(TASK_02, on_enter_sub3, 0);
-    evt_fork(TASK_03, on_enter_sub4, 0);
+    evt_fork(TASK_00, water_bob_0, 0);
+    evt_fork(TASK_01, water_bob_1, 0);
+    evt_fork(TASK_02, water_bob_2, 0);
+    evt_fork(TASK_03, water_bob_3, 0);
     evt_finish();
 }
 
-event on_aot_02
+event storehouse_door_locked
 {
     se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 1250, 26900);
     message(MSG_IT_IS_LOCKED_THERE_IS_NO_KEY_HOLE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's locked. There's no key hole."
     evt_finish();
 }
 
-event event_06
+event water_tank_film
 {
     run
     {
         bgm_stop_all(0);
-        movie_on(MOVIE_07_DM7);
+        movie_on(MOVIE_07_NEPTUNE_POV);
     }
     evt_next();
     evt_nop();

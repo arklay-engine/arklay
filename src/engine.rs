@@ -162,6 +162,10 @@ const WINDOW_WIDTH: i32 = WIDTH * SCALE;
 const FOLLOW_BODY_HEIGHT: i32 = 900;
 /// Fixed simulation step in milliseconds (30 Hz, the original frame rate).
 const TICK_MS: f64 = 1000.0 / 30.0;
+/// The core bank RE 2's title loads (`Title`'s `Snd_load_core(0x10)`).
+const TITLE_CORE_BANK: u8 = 0x10;
+/// The volume `Snd_se_on` gives a core sound on the title (`0x4EDA1E`).
+const TITLE_CORE_VOLUME: u8 = 0x6E;
 /// The original's non-gameplay frame-limiter period in milliseconds.
 ///
 /// The original paces at 33 ms while the game is active and at 16 ms while
@@ -628,6 +632,7 @@ pub fn run_with_options(
                         re2_xa_volume: None,
                         re2_inventory: None,
                         re2_item_page: None,
+                        re2_item_box: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -1897,6 +1902,15 @@ const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 /// next, and the room's return and the main task's states take three more;
 /// every recording closes in the same ten.
 const RE2_STATUS_CLOSE_TICKS: u8 = 10;
+/// The status screen's open tick from which `Cut_no` reads 0.
+const RE2_STATUS_CUT_TICK: u8 = 6;
+/// The close's tick on which `Cut_no` is the room's again.
+const RE2_STATUS_UNCUT_TICK: u8 = 8;
+/// The open's tick on which the item box's page starts (`St_init01`'s step
+/// 0, after its loads).
+const RE2_BOX_START: u8 = 6;
+/// The close's ticks on which the item box's screen still runs.
+const RE2_BOX_CLOSE_DRAWN: u8 = 7;
 
 /// What RE2's status screen's open and close draw on a frame
 /// ([`GameSession::re2_status_view`]), over the same ticks as RE 1's fades.
@@ -3005,12 +3019,22 @@ impl GameSession {
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
         if let Some(ticks) = self.re2_status_open.as_mut() {
             *ticks = ticks.saturating_add(1);
+            // The lid's last state counts on through the screen's first
+            // three ticks, as the original's does, then holds until the
+            // close.
+            if (2..=3).contains(ticks) && self.game.re2_box.is_some() {
+                self.game.tick_re2_box_entrance();
+            }
         }
+        let start_box = self.re2_status_open == Some(RE2_BOX_START);
         self.re2_status_return = self
             .re2_status_return
             .map(|ticks| ticks + 1)
             .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
         let result = self.tick_session(pack, ui, input, action);
+        if start_box {
+            self.game.start_re2_box();
+        }
         self.animate_re2_status(pack);
         result
     }
@@ -3026,6 +3050,9 @@ impl GameSession {
         self.game.countdown_hud = None;
         self.game.apply_re2_no_enemies();
         self.finish_menu_request(pack);
+        if std::mem::take(&mut self.game.re2_box_open) {
+            self.begin_re2_box_open(pack);
+        }
         let cut = Some((self.loaded.id, self.loaded.room.current_cut));
         let previous = self.tick_cut.filter(|(room, _)| *room == self.loaded.id);
         self.cut_held = previous.is_some_and(|previous| Some(previous) != cut)
@@ -3672,8 +3699,20 @@ impl GameSession {
             }
             let was_active = self.game.message.active;
             self.open_re2_item_screen(pack);
+            if self.game.re2_item_get_stopped_frame() {
+                crate::character2::tick_stopped(
+                    &mut self.game,
+                    &self.loaded.room,
+                    pack,
+                    &mut self.npc_models,
+                    Some(&mut self.enemy_lua),
+                );
+            }
             if let Some(cue) = self.game.tick_re2_item_get() {
                 self.play_re2_status_sounds(pack, &[cue]);
+            }
+            if std::mem::take(&mut self.game.re2.player.init_pose) {
+                self.place_re2_neck(true);
             }
             self.animate_re2_item_screen(pack);
             self.game.update_message(
@@ -4025,6 +4064,8 @@ impl GameSession {
             if !self.game.message.active {
                 self.open_pickup_view(pack, request);
             }
+        } else if !self.game.message.active {
+            self.game.take_unhandled_menu_mode();
         }
         // The death machine runs at the end of the gameplay frame, after the
         // room tick noticed the health drop, exactly like the original.
@@ -4242,6 +4283,8 @@ impl GameSession {
             }
         }
         if out.finished {
+            // `Die_move_end`'s `Snd_sys_init2`.
+            self.game.re2.music.sys_init2();
             self.finish_death();
         }
     }
@@ -4567,6 +4610,7 @@ impl GameSession {
             self.map = None;
         }
         self.game.message_menu = false;
+        self.game.clear_menu_field();
         if let Some(assets) = self.loaded.player_assets.as_ref() {
             self.player
                 .menu_exit_restore(&mut self.game, &assets.emd.clips);
@@ -4589,6 +4633,38 @@ impl GameSession {
         if self.game.is_re2_room {
             self.re2_status_open = Some(1);
         }
+    }
+
+    /// Open RE2's item box screen, the tick after the lid stopped: the
+    /// status screen's task in its item box mode (`St_init01`), over the
+    /// same fades as START's.
+    fn begin_re2_box_open(&mut self, pack: &Pack) {
+        if self.menu.is_some() {
+            return;
+        }
+        let opened = self.with_menu(pack, |menu, cx, game| {
+            let args = [("mode", ScreenArg::Str("box".to_owned()))];
+            let screen = LuaScreen::open_screen_with_game(
+                "main_menu",
+                &args,
+                ScreenAction::Resume,
+                cx,
+                game,
+            )?;
+            *menu = Some(Box::new(screen));
+            anyhow::Ok(())
+        });
+        if let Err(err) = opened {
+            eprintln!("warning: item box unavailable: {err:#}");
+            return;
+        }
+        self.game.message_menu = true;
+        self.freeze_room_frame = true;
+        self.game.open_re2_box();
+        self.game.tick_re2_box_entrance();
+        // The screen's own fades are `re2_status_open`'s; its page waits
+        // for `St_init01` rather than for RE 1's menu fade.
+        self.re2_status_open = Some(1);
     }
 
     /// One tick of RE2's status screen's own drawing state, its open and
@@ -4712,6 +4788,22 @@ impl GameSession {
         let get = self.game.re2_item_get?;
         let closing = (get.phase == game::Re2ItemGetPhase::Close).then_some(get.ticks);
         Some(re2_item_get_view(self.re2_item_ticks, closing))
+    }
+
+    /// `Cut_no` for the trace: the get-item window's, and the status
+    /// screen's, which clears it from the open's sixth tick to the close's
+    /// eighth, as the window does, while the room isn't drawn.
+    fn re2_trace_cut(&self) -> usize {
+        let cut = self.game.re2_item_get_cut(self.loaded.room.current_cut);
+        if self.menu.is_none() || !self.game.is_re2_room {
+            return cut;
+        }
+        let cleared = match (self.re2_status_open, self.re2_status_close) {
+            (_, Some(close)) => close < RE2_STATUS_UNCUT_TICK,
+            (Some(open), None) => open >= RE2_STATUS_CUT_TICK,
+            (None, None) => false,
+        };
+        if cleared { 0 } else { cut }
     }
 
     /// What RE2's status screen draws this frame, while it is up: the room
@@ -5525,7 +5617,16 @@ impl GameSession {
         // The menu task runs before the main loop's message update: a prompt
         // the viewer raises types its first glyph this frame, and one that
         // resolves this frame is only seen by the viewer on the next.
+        let had_view = self.pickup_view.is_some();
         self.step_pickup_view(pack, ui);
+        // The action press that dismissed the viewer belongs to the menu, not
+        // to the room-action probe: a reach-gated ground item would otherwise
+        // be re-armed from the player's standing position and reopen a fresh
+        // got-item viewer after every close. Swallow it until the key comes up,
+        // like the message window does.
+        if had_view && self.pickup_view.is_none() && action {
+            self.swallow_action = true;
+        }
         // The original's state 4 runs `menu_draw_health_bar` after the viewer
         // on every frame the viewer stays up, so the face and the EKG keep
         // sweeping (and drawing from the shared `rand()`) under the model.
@@ -5817,6 +5918,9 @@ impl GameSession {
                 // `Obj_model_set` on a slot in use would take it away.
                 let objects = self.game.objects.records.len();
                 self.game.objects.reset(objects);
+                // Nor does a scene the first pass started run on: what it put
+                // up in `fg_stop` (room 200's entry holding the input) goes.
+                *self.game.re2.fg_stop_mut() = 0;
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -5842,18 +5946,22 @@ impl GameSession {
 
     /// A room started on its own has no last room to keep the player's head
     /// from, where a door keeps it until the new room's first frame. The
-    /// original reached the same room by `--warp` has it where the rest pose
-    /// puts it at the new place, so the zombies' first `Root_ck` can see it.
+    /// original reached the same room by `--warp` has it where `Pl_init`'s
+    /// pose, the idle's first frame, puts it at the new place, as a door does
+    /// ([`GameSession::rest_re2_player`]), so the zombies' first `Root_ck` can
+    /// see it.
     fn place_re2_start_neck(&mut self) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
         let relative = &assets.emd.skeleton.relative;
-        let rest = crate::model::Keyframe {
-            offset: relative.first().copied().unwrap_or_default(),
-            vertex: [0; 3],
-            rotations: vec![[0; 3]; relative.len()],
-        };
+        let rest = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+            .cloned()
+            .unwrap_or_else(|| crate::model::Keyframe {
+                offset: relative.first().copied().unwrap_or_default(),
+                vertex: [0; 3],
+                rotations: vec![[0; 3]; relative.len()],
+            });
         let shown = self.player.anim.applied_pose();
         self.player.anim.set_applied_pose(Some(rest));
         self.place_re2_door_neck();
@@ -5988,6 +6096,10 @@ impl GameSession {
             right: input.right,
             cancel: input.run || ui.cancel,
         };
+        if self.game.re2_box.is_some() {
+            self.tick_re2_box(pack, ui, message_input);
+            return;
+        }
         if self.game.re2_items.is_some() {
             self.tick_re2_items(pack, ui, message_input);
             return;
@@ -6217,6 +6329,66 @@ impl GameSession {
         }
     }
 
+    /// One tick of RE2's item box page (`St_main01`), its message and its
+    /// cues: the core bank's, and the room bank's for a row's scroll.
+    fn tick_re2_box(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
+        use game::status2::Input;
+        let input = Input {
+            up: ui.up,
+            down: ui.down,
+            left: ui.left,
+            right: ui.right,
+            confirm: ui.confirm,
+            cancel: ui.cancel,
+            start: ui.start && !ui.cancel,
+        };
+        let input = if self.game.message.active {
+            Input::default()
+        } else {
+            input
+        };
+        let Some(outcome) = self.game.tick_re2_box(input) else {
+            return;
+        };
+        if let Some(page) = self.game.re2_box.as_mut() {
+            let up = ui.up || ui.held_up;
+            let down = ui.down || ui.held_down;
+            page.arrows = if page.sub == game::itembox2::SUB_INVENTORY {
+                0
+            } else {
+                u8::from(up) | u8::from(down) << 1
+            };
+        }
+        for id in &outcome.room_sounds {
+            if let Some(id) = crate::se2::SoundId::decode(*id) {
+                self.game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+            }
+        }
+        self.play_re2_status_sounds(pack, &outcome.sounds);
+        if outcome.sounds.is_empty() && !outcome.room_sounds.is_empty() {
+            let cut = self.sound_cut();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+                cut,
+            );
+        }
+        self.game
+            .update_message(message_input, &self.loaded.room, &self.text);
+        self.tick_menu_screen(pack);
+        if outcome.close {
+            self.re2_status_close = Some(0);
+        }
+    }
+
     /// A yes/no's cue ("Will you mix the herb?", "Will you take the ...?"),
     /// which the message code plays itself (`0x4C9600`).
     fn play_re2_choice_cue(&mut self, pack: &Pack) {
@@ -6276,13 +6448,25 @@ impl GameSession {
             return;
         };
         *ticks += 1;
-        if *ticks < RE2_STATUS_CLOSE_TICKS {
+        let ticks = *ticks;
+        // The box's routines and its draw run until the screen's task ends
+        // (`St_exit`), on the close's seventh tick.
+        if ticks <= RE2_BOX_CLOSE_DRAWN {
+            self.game.tick_re2_box_close();
+        }
+        if ticks < RE2_STATUS_CLOSE_TICKS {
             return;
         }
         self.re2_status_close = None;
         self.re2_status_return = Some(1);
         self.menu = None;
         self.game.close_re2_items();
+        if self.game.re2_box.is_some() {
+            self.game.close_re2_box();
+            // Game mode 5: the lid's routine runs its last count and shuts
+            // the lid.
+            self.game.tick_re2_box_entrance();
+        }
         self.examine = None;
         self.item_box = None;
         if std::mem::take(&mut self.map_direct) {
@@ -6290,6 +6474,8 @@ impl GameSession {
         }
         self.game.message_menu = false;
         crate::player2::pl_init(&mut self.game.re2.player);
+        self.game.re2.player.init_pose = false;
+        self.place_re2_neck(true);
     }
 
     /// Apply one completed menu event.
@@ -6577,21 +6763,23 @@ impl GameSession {
         self.tween.reset();
     }
 
-    /// An RE2 door's load leaves the player's joints at the skeleton's rest,
-    /// every turn zeroed: the pose the next frame draws, and the one the first
-    /// blend starts from.
+    /// An RE2 door's load stands the player on `Pl_init`'s pose, the idle's
+    /// first frame ([`crate::player2::idle_pose`]): the pose the next frame
+    /// draws, and the one the first blend starts from. Without one, the
+    /// skeleton's rest, every turn zeroed.
     fn rest_re2_player(&mut self) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
         let relative = &assets.emd.skeleton.relative;
-        self.player
-            .anim
-            .set_applied_pose(Some(crate::model::Keyframe {
+        let pose = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+            .cloned()
+            .unwrap_or_else(|| crate::model::Keyframe {
                 offset: relative.first().copied().unwrap_or_default(),
                 vertex: [0; 3],
                 rotations: vec![[0; 3]; relative.len()],
-            }));
+            });
+        self.player.anim.set_applied_pose(Some(pose));
         self.re2_door_neck = true;
     }
 
@@ -6600,6 +6788,13 @@ impl GameSession {
     /// it, after that tick's push out of the walls and before the routines
     /// run again.
     fn place_re2_door_neck(&mut self) {
+        self.place_re2_neck(false);
+    }
+
+    /// Place the player's head on the pose the joints hold, still: the door's
+    /// rest, or with `init` the frame `Pl_init` poses first
+    /// ([`crate::player2::pose_init`]).
+    fn place_re2_neck(&mut self, init: bool) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
@@ -6609,6 +6804,7 @@ impl GameSession {
         let tick = crate::player2::Tick {
             room: &self.loaded.room,
             skeleton: &assets.emd.skeleton,
+            morphs: &assets.emd.morphs,
             banks: crate::player2::Banks {
                 pld: (&assets.emd.clips, &assets.emd.keyframes),
                 weapon: (&assets.emw.clips, &assets.emw.keyframes),
@@ -6629,7 +6825,11 @@ impl GameSession {
             neck_targets: &[],
             enemies: 0,
         };
-        crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
+        if init {
+            crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
+        } else {
+            crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
+        }
     }
 
     /// The tail of `room_transition_load` and `game_loop`'s return into
@@ -7166,7 +7366,7 @@ impl GameSession {
         );
         if !self.game.message.active {
             self.boot_message = None;
-            self.arm_room_fade();
+            self.arm_room_entry_fade();
         }
     }
 
@@ -7322,7 +7522,7 @@ impl GameSession {
             rseed,
             fade_counter: fade_counter as i16,
             fade_state,
-            cam: self.game.re2_item_get_cut(self.loaded.room.current_cut) as u8,
+            cam: self.re2_trace_cut() as u8,
             player_flags: self.game.player_flags,
             re2_player: self
                 .game
@@ -7370,6 +7570,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
+            re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -8402,7 +8603,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let loaded = crate::room::load(pack, id)?;
     let (scripts, _) = room_scripts(pack, id, &loaded)?;
     let mut game = game::GameState::new(id, &loaded.state);
-    game.region = pack_region(pack);
+    game.set_region(pack_region(pack));
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
@@ -8440,9 +8641,7 @@ fn scripts_raise_screen_border(scripts: &scd::ir::Scripts) -> bool {
                 .eq([5, i64::from(game::MSF2_SCREEN_BORDER), 0])
     };
     scripts
-        .init
-        .iter()
-        .chain(&scripts.main)
+        .command_blocks()
         .any(|block| block.insns.iter().any(raises))
         || scripts
             .events
@@ -8848,6 +9047,12 @@ struct App {
     prologue_pending: bool,
     /// One-shot cache for the UI cue sounds (`se/cursor.wav`, ...).
     ui_sfx_cache: SfxCache,
+    /// RE 2's sound banks for the screens outside play: the title's core
+    /// bank (`Snd_load_core(0x10)`), loaded on its first cue.
+    ui_banks: Option<crate::se2::Banks>,
+    /// The screens' core-bank cues since the trace last took them, as
+    /// `(kind, slot, volume, pan)`, the trace's `snd` field.
+    ui_sounds: Vec<(u8, u8, u8, i32)>,
     /// Whether the port-only debug room overlay is enabled for the gameplay
     /// sessions this app starts. Enabled by default; `--debug-menu` is
     /// retained for CLI compatibility.
@@ -8881,6 +9086,7 @@ enum RestartPoint {
     File(Box<save::SaveFile>),
     NewGame {
         character: u8,
+        choice: crate::ui::NewGameChoice,
     },
 }
 
@@ -8934,6 +9140,8 @@ impl App {
             pending_return_title: false,
             prologue_pending: false,
             ui_sfx_cache: SfxCache::default(),
+            ui_banks: None,
+            ui_sounds: Vec::new(),
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
@@ -9119,6 +9327,7 @@ impl App {
     /// (`audio`); capture runs leave `ui_music` closed and the queue is
     /// dropped, so their frames never depend on the sound device.
     fn play_ui_cues(&mut self, cues: Vec<ui::UiCue>) {
+        let cues = self.play_core_cues(cues);
         if cues.is_empty() || !self.audio {
             return;
         }
@@ -9142,6 +9351,55 @@ impl App {
                 mixer.play_menu_sfx(wav);
             }
         }
+    }
+
+    /// Play the RE 2 core-bank cues among `cues` (`Snd_se_on(0x4nn0000)`, at
+    /// the slot's volume, unpanned) and note them for the trace; the other
+    /// cues are returned for [`App::play_ui_cues`].
+    fn play_core_cues(&mut self, cues: Vec<ui::UiCue>) -> Vec<ui::UiCue> {
+        let (core, rest): (Vec<_>, Vec<_>) = cues
+            .into_iter()
+            .partition(|cue| matches!(cue, ui::UiCue::Core(_)));
+        if core.is_empty() {
+            return rest;
+        }
+        let App {
+            pack,
+            ui_banks,
+            ui_sounds,
+            ui_music,
+            ui_sfx_cache,
+            audio,
+            ..
+        } = self;
+        let banks = ui_banks.get_or_insert_with(|| {
+            let mut banks = crate::se2::Banks::new();
+            banks.load_core(pack, TITLE_CORE_BANK);
+            banks
+        });
+        if *audio && ui_music.is_none() {
+            *ui_music = Mixer::open();
+        }
+        for cue in core {
+            let ui::UiCue::Core(slot) = cue else {
+                continue;
+            };
+            let kind = crate::se2::Kind::Core;
+            if banks.stem(kind, slot).is_none() {
+                continue;
+            }
+            // `Snd_se_on` plays a core sound at 0x6E while `0x99CF6C` is
+            // clear, as `Title_init` leaves it until a game starts.
+            let volume = TITLE_CORE_VOLUME;
+            ui_sounds.push((kind.index() as u8, slot, volume, 0));
+            let (Some(mixer), Some(stem)) = (ui_music.as_mut(), banks.stem(kind, slot)) else {
+                continue;
+            };
+            if let Some(wav) = ui_sfx_cache.load_stem(pack, stem.to_string()) {
+                mixer.play_sfx(wav, crate::se2::volume_gain(volume), 0.0);
+            }
+        }
+        rest
     }
 
     /// Open the boot screen.
@@ -9400,11 +9658,19 @@ impl App {
     /// `apply`'s arms used to add up to most of a megabyte of them, over the
     /// Windows main thread's 1 MiB stack. Keeping the moves in this small
     /// helper bounds the frame.
-    fn start_new_game(&mut self, character: u8) -> Result<()> {
-        let session =
+    fn start_new_game(&mut self, character: u8, choice: crate::ui::NewGameChoice) -> Result<()> {
+        let mut session =
             GameSession::new_with(&self.pack, character, &self.save_dir, self.player_options)?;
+        // RE 2's title passes its difficulty and ARRANGE MODE on; no choice
+        // leaves the game as it starts.
+        if choice != crate::ui::NewGameChoice::default() {
+            session
+                .game
+                .re2
+                .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
+        }
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
-        self.restart_point = Some(RestartPoint::NewGame { character });
+        self.restart_point = Some(RestartPoint::NewGame { character, choice });
         Ok(())
     }
 
@@ -9435,8 +9701,10 @@ impl App {
         let result = match self.restart_point.clone() {
             Some(RestartPoint::Slot(slot)) => self.continue_from_slot(slot),
             Some(RestartPoint::File(file)) => self.continue_from_file(*file),
-            Some(RestartPoint::NewGame { character }) => self.start_new_game(character),
-            None => self.start_new_game(character),
+            Some(RestartPoint::NewGame { character, choice }) => {
+                self.start_new_game(character, choice)
+            }
+            None => self.start_new_game(character, Default::default()),
         };
         // A failed load leaves the frozen session and its menu up, so the
         // player can pick something else; anything else replaced the session.
@@ -9751,7 +10019,7 @@ impl App {
         match action {
             ScreenAction::CharSelect => self.open_select()?,
             ScreenAction::SaveLoad => self.open_load()?,
-            ScreenAction::NewGame { character } => {
+            ScreenAction::NewGame { character, choice } => {
                 // The interactive root boot plays the prologue film (id 1)
                 // with the chosen character before the session is built. The
                 // film's follow-up action comes back here and builds the
@@ -9763,18 +10031,19 @@ impl App {
                     // starts; the UI mixer is that cue's home.
                     self.ui_music = None;
                     match self.open_movie(PROLOGUE_ID, character) {
-                        Ok(session) => {
-                            self.queue_movie(session, Some(ScreenAction::NewGame { character }))
-                        }
+                        Ok(session) => self.queue_movie(
+                            session,
+                            Some(ScreenAction::NewGame { character, choice }),
+                        ),
                         Err(err) => {
                             eprintln!("warning: intro film unavailable: {err:#}");
                             self.prologue_pending = false;
-                            self.start_new_game(character)?;
+                            self.start_new_game(character, choice)?;
                         }
                     }
                 } else {
                     self.prologue_pending = false;
-                    self.start_new_game(character)?;
+                    self.start_new_game(character, choice)?;
                 }
             }
             ScreenAction::LoadGame { slot } => {
@@ -10500,6 +10769,9 @@ fn run_ui_impl(
             AppBoot::Boot | AppBoot::Title => {
                 // Reach the option menu, then let the fade settle.
                 app.open_title()?;
+                if trace.path.is_some() {
+                    return run_screen_trace(&mut app, &trace);
+                }
                 if play_app_script(&mut app, &trace)? {
                     return Ok(());
                 }
@@ -10725,6 +10997,101 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
     Ok(true)
 }
 
+/// The `--ui title --trace` run: `options.ticks` app updates from the
+/// title's first tick with the scripted `--input`, each followed by a draw,
+/// one trace line and, on the `capture_every` cadence, a `f%05d.bmp` frame.
+/// The line carries the fields the RE 2 oracle's `--boot` record writes for
+/// the title (`ti`, `tlogo`, `tfade`, `tsel`, `snd`), from the values the title's
+/// script publishes; a tick off the title writes `ti=-`.
+fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()> {
+    use std::io::Write as _;
+    let Some(path) = options.path else {
+        return Ok(());
+    };
+    if options.capture_every > 0
+        && let Some(dir) = options.capture_dir
+    {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let file = std::fs::File::create(path)
+        .with_context(|| format!("failed to create {}", path.display()))?;
+    let mut out = std::io::BufWriter::new(file);
+    writeln!(out, "oracle-trace v1 engine=arklay")?;
+    let mut script_input = InputState::default();
+    app.ui_sounds.clear();
+    for index in 0..options.ticks {
+        let word = options.input.map_or(0, |script| script.word_at(index));
+        let tick = script_input.tick_scripted(word);
+        if let AppFlow::Quit = app.update(tick.ui, tick.player, tick.action)? {
+            break;
+        }
+        if let Mode::Play(session) = &mut app.mode {
+            session.movie = None;
+        }
+        app.pending_movie = None;
+        app.draw();
+        let sounds = std::mem::take(&mut app.ui_sounds);
+        writeln!(out, "{}", screen_trace_line(app, index, word, &sounds))?;
+        if options.capture_every > 0 && index % options.capture_every == 0 {
+            write_trace_capture(app, options, index)?;
+        }
+        app.post_present();
+    }
+    out.flush()?;
+    Ok(())
+}
+
+/// One [`run_screen_trace`] line.
+fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)]) -> String {
+    let mut line = format!("t={tick} room=1:0 pad={pad}");
+    if let Mode::Title(screen) = &app.mode {
+        let v = |key: &str| screen.value(key);
+        line.push_str(&format!(
+            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
+             tsel={:x},{},{}",
+            v("ti_fgsys") as u32,
+            v("ti_mv"),
+            v("ti_disp"),
+            v("ti_init"),
+            v("ti_sub"),
+            v("ti_menu"),
+            v("ti_step"),
+            v("ti_sel"),
+            v("ti_cur"),
+            v("ti_pulse"),
+            v("ti_slide"),
+            v("ti_demo"),
+            v("ti_flash"),
+            v("ti_logo"),
+            v("ti_logo_count"),
+            v("ti_fade_level"),
+            v("ti_fade_add"),
+            v("ti_fade_mode"),
+            v("ti_kido"),
+            v("ti_add"),
+            v("ti_fgsys") as u32 & 0x0002_0060,
+            v("ti_hard_mode"),
+            v("ti_censorship_off"),
+        ));
+    } else {
+        line.push_str(" ti=-");
+    }
+    let snd: Vec<String> = sounds
+        .iter()
+        .map(|(kind, slot, volume, pan)| format!("{kind}:{slot:x}:{volume}:{pan}"))
+        .collect();
+    line.push_str(&format!(
+        " snd={}",
+        if snd.is_empty() {
+            "-".to_string()
+        } else {
+            snd.join("/")
+        }
+    ));
+    line
+}
+
 /// Apply the CLI authoring seams to the session an app boot just opened:
 /// `--setup-script` runs once over it and `--save-out` serialises it and asks
 /// the caller to exit before the first tick.
@@ -10761,6 +11128,9 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     if let Mode::Play(session) = &mut app.mode {
         session.arm_new_game_boot();
         session.sound_device |= options.sound;
+        if let Some(path) = options.voice_ticks {
+            session.game.re2.voice_ticks = read_voice_ticks(path)?;
+        }
         if options.sound_wav.is_some() {
             session.music = Some(Mixer::capture());
             session.start_audio(&app.pack);
@@ -13791,9 +14161,12 @@ fn play_re2_sounds(
     for request in requests {
         play(request.id, request.pos);
     }
+    // `Snd_se_walk` reads the player's `Floor`, which the stairs step at their
+    // start rather than with the height.
+    let floor = game.re2.player.floor;
     for footstep in footsteps {
         play(
-            se2::footstep_sound(&room.footstep_zones, &footstep),
+            se2::footstep_sound(&room.footstep_zones, &footstep, floor),
             footstep.pos,
         );
     }
@@ -14524,6 +14897,24 @@ impl VoiceCache {
     }
 }
 
+/// `--voice-ticks`: one number a line, blank lines and `#` comments skipped.
+fn read_voice_ticks(path: &Path) -> Result<std::collections::VecDeque<u32>> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading --voice-ticks {}", path.display()))?;
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| {
+            line.parse::<u32>().with_context(|| {
+                format!(
+                    "--voice-ticks {}: {line:?} is not a tick count",
+                    path.display()
+                )
+            })
+        })
+        .collect()
+}
+
 /// `Cd_system_control`, once a line's `xa_on` has run. `Xa_control` holds
 /// `fg_status`'s voice bit for the line's length, plus a step to start and one
 /// to end. Without sound the executable measures that as half what the line
@@ -14538,9 +14929,16 @@ fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameStat
             let ticks = frames * TICKS_A_SECOND / wav.sample_rate.max(1) as usize;
             if sound { ticks } else { ticks / 2 }
         });
+        // The recording's own length, where the oracle gave it: the voice
+        // bit is up from `xa_on`'s tick to the tick it comes down.
+        let ticks = game
+            .re2
+            .voice_ticks
+            .pop_front()
+            .map_or(line as u32 + 3, |held| held + 1);
         game.re2.voice = VoiceLine {
             request: None,
-            ticks: line as u32 + 3,
+            ticks,
         };
         game.voice.request = Some(game::VoiceRequest {
             path,
@@ -15276,7 +15674,7 @@ fn new_game_state(
     options: player::Options,
 ) -> game::GameState {
     let mut game = game::GameState::new(id, room);
-    game.region = pack_region(pack);
+    game.set_region(pack_region(pack));
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
@@ -15450,6 +15848,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         vm.tick(&mut host);
     }
     context.game.re2.clear_tick_flags();
+    context.game.re2.clear_enemy_areas();
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
@@ -15641,6 +16040,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let tick = crate::player2::Tick {
         room: context.room,
         skeleton: &assets.emd.skeleton,
+        morphs: &assets.emd.morphs,
         banks: crate::player2::Banks {
             pld: (&assets.emd.clips, &assets.emd.keyframes),
             weapon: (&assets.emw.clips, &assets.emw.keyframes),
@@ -15654,7 +16054,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         id: context.game.id.player_flag,
         life: i32::from(context.game.entities[0].health),
         poisoned: context.game.re2.player.poisoned,
-        stopped: context.game.re2.player_stopped(),
+        stopped: context.game.re2.player_stopped() || context.game.re2.script_door,
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),
         targets: &targets,
@@ -15662,6 +16062,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         enemies: context.game.re2.enemies,
     };
     let old = context.player.pos;
+    crate::player2::seed_pose(&mut context.game.re2.player, context.player, &tick);
     let arrived = if crate::player2::is_held(&context.game.re2.player) {
         crate::character2::player_held(context.game, context.player, &tick);
         None
@@ -15842,7 +16243,10 @@ fn tick_room_timed(
     if !context.game.is_re2_room && context.game.tick_countdown() {
         return None;
     }
+    let door_pending = context.game.transition_door.is_some();
     tick_re2_scripts(&mut context);
+    context.game.re2.script_door =
+        context.game.is_re2_room && !door_pending && context.game.transition_door.is_some();
     {
         let mut host = game::ScdGameHost::new(context.game);
         command_vm.run_main(&mut host);
@@ -15873,7 +16277,9 @@ fn tick_room_timed(
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
     let previous_cut = context.room.current_cut;
-    apply_camera(context.room, context.game, Some(context.player.pos));
+    if !context.game.re2.script_door {
+        apply_camera(context.room, context.game, Some(context.player.pos));
+    }
     if context.room.current_cut != previous_cut {
         // The effects projected above under the pre-switch camera; recompute
         // their stored screen/depth so the frame renders billboards against
@@ -16063,6 +16469,9 @@ fn tick_room_timed(
     context.game.sync_entity_from_player(context.player);
     // The stairway (`action_behavior` 0x11) skips both passes as well: its
     // clip carries the player through the stairs' own collision volume.
+    // `Sca_ck_em` clears `Sca_info` before it looks, and doesn't look at all
+    // on these paths.
+    context.game.re2.player.sca_hit = false;
     if context.game.re2.player.climbing() {
         context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
         context.game.entities[0].pos = context.player.pos;
@@ -16115,6 +16524,7 @@ fn tick_room_timed(
                 if let Some(floor) = resolved.floor {
                     work.floor = floor;
                 }
+                work.sca_hit = resolved.hit;
                 player::CollisionResolution::from_sca(resolved)
             }
             _ => player::resolve_room_collision(
@@ -16226,6 +16636,11 @@ fn tick_room_timed(
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, false);
     }
+    // `Item_box_entrance`, the routine `Sce_Itembox` set: the lid swings,
+    // and when it stops the box's screen opens on the next tick.
+    if context.game.is_re2_room && context.game.tick_re2_box_entrance() {
+        context.game.re2_box_open = true;
+    }
     for (zone, kind, damage) in std::mem::take(&mut context.game.re2.pending_damage) {
         crate::player2::sce_damage(
             &mut context.game.re2.player,
@@ -16246,8 +16661,12 @@ fn tick_room_timed(
     // writes `g_roomCameraId` directly and the render reads it. The zone scan
     // itself already ran before the player's movement; this only propagates a
     // mid-tick script write.
+    if context.game.is_re2_room {
+        context.game.re2.view_held = context.game.re2.player.holds_view();
+    }
     if context.game.camera.current_cut < context.room.cuts.len()
         && context.room.current_cut != context.game.camera.current_cut
+        && !(context.game.is_re2_room && context.game.re2.view_held && !context.game.camera.locked)
     {
         context.room.current_cut = context.game.camera.current_cut;
         context.game.reproject_effects(context.room);
@@ -16353,6 +16772,11 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
         return;
     }
     game.set_camera_cut(selected);
+    // RE2's `Cut_check` only moves the live cut; the frame's `Swap_Cbuff`
+    // brings it on screen unless the player is aiming.
+    if game.is_re2_room && game.re2.view_held && pos.is_some() && !game.camera.locked {
+        return;
+    }
     room.current_cut = selected;
 }
 
@@ -19573,6 +19997,41 @@ mod tests {
         assert!(game.quick_turn);
     }
 
+    #[test]
+    fn a_voice_line_holds_its_bit_for_the_recordings_length() {
+        use crate::scd2::host::STATUS_VOICE;
+        let dir = TempDir::new();
+        let path = dir.0.join("game.akpak");
+        PackWriter::new().write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let list = dir.0.join("voice.txt");
+        std::fs::write(&list, "# held ticks\n5\n\n7\n").unwrap();
+        let mut cache = VoiceCache::default();
+        let id = RoomId::parse("1000").unwrap();
+        let mut game = game::GameState::new(id, &RoomState::default());
+        game.re2.voice_ticks = read_voice_ticks(&list).unwrap();
+        assert_eq!(game.re2.voice_ticks, [5, 7]);
+
+        // `xa_on` raises the bit on its tick; the recording had it come down
+        // 5 ticks later, whatever the line's own length.
+        game.re2.voice.request = Some("voice/missing.wav".to_string());
+        game.re2.set_flag(1, STATUS_VOICE, 1);
+        let mut held = 0;
+        loop {
+            tick_re2_voice(true, &mut cache, &mut game, &pack);
+            if !game.re2.flag(1, STATUS_VOICE) {
+                break;
+            }
+            held += 1;
+        }
+        assert_eq!(held, 5);
+        assert_eq!(game.re2.voice_ticks, [7]);
+
+        assert!(read_voice_ticks(&dir.0.join("absent.txt")).is_err());
+        std::fs::write(&list, "5\nsoon\n").unwrap();
+        assert!(read_voice_ticks(&list).is_err());
+    }
+
     struct TempDir(std::path::PathBuf);
 
     impl TempDir {
@@ -21987,6 +22446,56 @@ mod tests {
         game.set_camera_cut(0);
         apply_camera(&mut room, &mut game, Some([50, 0, 50]));
         assert_eq!(game.camera.current_cut, 1, "the zone switch still works");
+    }
+
+    #[test]
+    fn an_re2_zone_switch_waits_on_screen_while_the_player_aims() {
+        use crate::state::{Cut, Zone, ZoneGate};
+
+        let mut room = RoomState {
+            cuts: vec![Cut::default(); 2],
+            sca: Some(Default::default()),
+            ..RoomState::default()
+        };
+        room.zones = vec![
+            Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[0; 2]; 4],
+            },
+            Zone {
+                cam_to: 1,
+                cam_from: 0,
+                corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+        ];
+        room.zone_gates = vec![
+            ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let mut game = game::GameState::new(id, &room);
+        game.is_re2_room = true;
+
+        // `Cut_check` moves the live cut; `Swap_Cbuff` loads no background
+        // while `fg_status`'s 0x80 is up, so the screen keeps cut 0.
+        game.re2.view_held = true;
+        apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(game.camera.current_cut, 1);
+        assert_eq!(room.current_cut, 0);
+
+        // Once the aim ends, the next pass brings the live cut on screen.
+        game.re2.view_held = false;
+        apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(room.current_cut, 1);
     }
 
     #[test]
@@ -25323,6 +25832,7 @@ mod tests {
                 input: None,
                 sound: false,
                 sound_wav: None,
+                voice_ticks: None,
             },
             Authoring {
                 load: Some(&saved),
@@ -27398,6 +27908,64 @@ mod tests {
             session.room_fade_draw_alpha(),
             Some(255),
             "the room fades up from black as after a watched narration"
+        );
+    }
+
+    /// A continue's narration ends in the room-entry fade with the room-events
+    /// gate armed, and the gate's release restores the menu bit START needs.
+    /// The save restores `MESSAGE_FLAGS_INITIAL`, which has that bit clear, so
+    /// START was ignored until a door or pickup set it.
+    #[test]
+    fn start_opens_the_menu_after_the_continue_narration() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        session.set_skips_enabled(true);
+        session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), action_press(), true)
+            .unwrap();
+        assert!(
+            session.boot_message.is_none(),
+            "the press ended the narration"
+        );
+        assert!(session.room_boot_gate, "the room is held during the fade");
+        for _ in 0..120 {
+            if !session.room_boot_gate {
+                break;
+            }
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(!session.room_boot_gate, "the fade released the room");
+        assert_eq!(
+            session.game.message_flags & START_MESSAGE_BITS,
+            START_MESSAGE_BITS,
+            "the release restores the START bits"
+        );
+        for start in [true, false] {
+            session
+                .tick(
+                    &pack,
+                    UiInput {
+                        start,
+                        ..UiInput::default()
+                    },
+                    player::Input::default(),
+                    false,
+                )
+                .unwrap();
+        }
+        assert!(
+            session.menu.is_some(),
+            "START opens the menu after a continue"
         );
     }
 
@@ -30519,11 +31087,21 @@ off_0010:
         let pack = film_pack(&dir, &[(1, "pj")]);
         let mut app = App::new(pack, dir.0.clone(), false);
         app.films = true;
-        app.apply(ScreenAction::NewGame { character: 1 }).unwrap();
+        app.apply(ScreenAction::NewGame {
+            character: 1,
+            choice: Default::default(),
+        })
+        .unwrap();
         let pending = app.pending_movie.as_ref().expect("the intro film");
         assert_eq!(pending.session.id(), 1);
         assert_eq!(pending.session.character(), 1, "the chosen character");
-        assert_eq!(pending.action, Some(ScreenAction::NewGame { character: 1 }));
+        assert_eq!(
+            pending.action,
+            Some(ScreenAction::NewGame {
+                character: 1,
+                choice: Default::default(),
+            })
+        );
         assert!(matches!(app.mode, Mode::Boot), "the session waits");
 
         // The intro finishes and the NewGame action builds the session.
@@ -30546,7 +31124,11 @@ off_0010:
 
         // A later confirm queues the prologue again, like the original.
         app.films = true;
-        app.apply(ScreenAction::NewGame { character: 0 }).unwrap();
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
         let pending = app.pending_movie.as_ref().expect("a second intro film");
         assert_eq!(pending.session.id(), 1);
         assert_eq!(pending.session.character(), 0);

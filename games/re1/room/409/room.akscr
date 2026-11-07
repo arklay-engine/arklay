@@ -8,40 +8,40 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_ITEM 0x04
-#define AOT_05_ITEM 0x05
-#define AOT_06_ITEM 0x06
-#define AOT_07_ITEM 0x07
-#define AOT_08_MESSAGE 0x08
-#define AOT_09_MESSAGE 0x09
-#define AOT_0A_MESSAGE 0x0A
-#define AOT_0B_MESSAGE 0x0B
-#define AOT_0C_MESSAGE 0x0C
-#define AOT_0D_EVENT 0x0D
-#define AOT_0E_MESSAGE 0x0E
-#define AOT_0F_MESSAGE 0x0F
-#define AOT_10_MESSAGE 0x10
-#define AOT_11_MESSAGE 0x11
-#define CAM_00 0x00
-#define ENEMY_00_NPC_REBECCA 0x00
+#define AOT_00_DOOR_408 0x00
+#define AOT_01_ITEM_CHEMICAL_EMPTY_BOTTLE_0 0x01
+#define AOT_02_ITEM_CHEMICAL_EMPTY_BOTTLE_1 0x02
+#define AOT_03_ITEM_CHEMICAL_EMPTY_BOTTLE_2 0x03
+#define AOT_04_ITEM_CHEMICAL_EMPTY_BOTTLE_3 0x04
+#define AOT_05_ITEM_CHEMICAL_WATER_4 0x05
+#define AOT_06_ITEM_CHEMICAL_UMB_2_5 0x06
+#define AOT_07_ITEM_CHEMICAL_UMB_4_6 0x07
+#define AOT_08_MESSAGE_FAUCET 0x08                          // "A faucet."; an event that fills an empty bottle while one is carried.
+#define AOT_09_MESSAGE_WALL_COLOURS 0x09                    // "Water=1, Red=2, Purple=3, Green=4"
+#define AOT_0A_MESSAGE_WALL_SUMS 0x0A                       // "1+2=3, 3+4=7, 2+4=6, 6+7=13, 13+3=16"
+#define AOT_0B_MESSAGE_UMB_NO2 0x0B
+#define AOT_0C_MESSAGE_UMB_NO4 0x0C
+#define AOT_0D_EVENT_REBECCA 0x0D
+#define AOT_0E_MESSAGE_USELESS_BOTTLE_0 0x0E                // "It's useless. Chris can't handle chemicals."
+#define AOT_0F_MESSAGE_USELESS_BOTTLE_1 0x0F
+#define AOT_10_MESSAGE_USELESS_BOTTLE_2 0x10
+#define AOT_11_MESSAGE_USELESS_BOTTLE_3 0x11
+#define CAM_00_REBECCA 0x00
+#define ENEMY_00_REBECCA 0x00
 #define FX_09 0x09
-#define F_ROOM_00 0x00
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_3F 0x3F
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
-#define IMDL_03 0x03
-#define IMDL_04 0x04
-#define IMDL_05 0x05
-#define IMDL_06 0x06
+#define F_ROOM_ANIM_DONE_IGNORED 0x3F                       // Raised when a scene animation ends; nothing waits on it.
+#define F_ROOM_FUMES_PLAYED 0x18                            // The fumes scene after a chemical mix played this visit.
+#define F_ROOM_PLAYER_ANIM_DONE 0x19                        // The player's animation finished in the fumes scene.
+#define F_ROOM_UNUSED_00 0x00                               // Never set; would replay the fumes scene after a mix.
+#define F_ROOM_UNUSED_01 0x01                               // Never set; would flicker the light.
+#define F_ROOM_UNUSED_02 0x02                               // Never set; would make the fumes fade stronger.
+#define IMDL_00_CHEMICAL_EMPTY_BOTTLE 0x00
+#define IMDL_01_CHEMICAL_EMPTY_BOTTLE 0x01
+#define IMDL_02_CHEMICAL_EMPTY_BOTTLE 0x02
+#define IMDL_03_CHEMICAL_EMPTY_BOTTLE 0x03
+#define IMDL_04_CHEMICAL_WATER 0x04
+#define IMDL_05_CHEMICAL_UMB_2 0x05
+#define IMDL_06_CHEMICAL_UMB_4 0x06
 #define MSG_DO_YOU_WANT_ME_TO_HEAL 0x0D
 #define MSG_PERHAPS_I_SHOULD_LEAVE_FOR_A 0x0B
 #define MSG_REBECCA_TREATS_CHRIS 0x16
@@ -72,179 +72,179 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 9600, 2300, 1800, 1700, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (CHRIS)
+    door_aot_set(AOT_00_DOOR_408, 9600, 2300, 1800, 1700, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_NE, 3))
         {
-            item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_3C, SAT_MANUAL | SAT_PLAYER, 0);
-            item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_3D, SAT_MANUAL | SAT_PLAYER, 0);
-            item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_3E, SAT_MANUAL | SAT_PLAYER, 0);
-            item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_3F, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_01_ITEM_CHEMICAL_EMPTY_BOTTLE_0, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_0, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_02_ITEM_CHEMICAL_EMPTY_BOTTLE_1, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_1, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_03_ITEM_CHEMICAL_EMPTY_BOTTLE_2, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_2, SAT_MANUAL | SAT_PLAYER, 0);
+            item_aot_set(AOT_04_ITEM_CHEMICAL_EMPTY_BOTTLE_3, 0, 0, 1, 1, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_3, SAT_MANUAL | SAT_PLAYER, 0);
         }
         else
         {
-            item_aot_set(AOT_01_ITEM, 4300, 1500, 1100, 1500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_3C, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
-            item_aot_set(AOT_02_ITEM, 1900, 5400, 1200, 1000, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_3D, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
-            item_aot_set(AOT_03_ITEM, 5100, 6000, 2200, 1100, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_3E, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
-            item_aot_set(AOT_04_ITEM, 2200, 2800, 850, 500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_3F, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+            item_aot_set(AOT_01_ITEM_CHEMICAL_EMPTY_BOTTLE_0, 4300, 1500, 1100, 1500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+            item_aot_set(AOT_02_ITEM_CHEMICAL_EMPTY_BOTTLE_1, 1900, 5400, 1200, 1000, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_1, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+            item_aot_set(AOT_03_ITEM_CHEMICAL_EMPTY_BOTTLE_2, 5100, 6000, 2200, 1100, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_2, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+            item_aot_set(AOT_04_ITEM_CHEMICAL_EMPTY_BOTTLE_3, 2200, 2800, 850, 500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_3, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
         }
     }
     else
     {
-        item_aot_set(AOT_01_ITEM, 4300, 1500, 1100, 1500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_3C, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
-        item_aot_set(AOT_02_ITEM, 1900, 5400, 1200, 1000, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_3D, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
-        item_aot_set(AOT_03_ITEM, 5100, 6000, 2200, 1100, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_3E, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
-        item_aot_set(AOT_04_ITEM, 2200, 2800, 850, 500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_3F, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
+        item_aot_set(AOT_01_ITEM_CHEMICAL_EMPTY_BOTTLE_0, 4300, 1500, 1100, 1500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_00_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 4740, -1620, 2500, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_0, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
+        item_aot_set(AOT_02_ITEM_CHEMICAL_EMPTY_BOTTLE_1, 1900, 5400, 1200, 1000, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_01_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 3270, -2916, 5800, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_1, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
+        item_aot_set(AOT_03_ITEM_CHEMICAL_EMPTY_BOTTLE_2, 5100, 6000, 2200, 1100, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_02_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 6640, -3010, 6220, 900, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_2, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
+        item_aot_set(AOT_04_ITEM_CHEMICAL_EMPTY_BOTTLE_3, 2200, 2800, 850, 500, IT_13_CHEMICAL_EMPTY_BOTTLE, 1, IMDL_03_CHEMICAL_EMPTY_BOTTLE, SCA_NONE, 2540, -1566, 3130, 0, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_3, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4 | 16);
     }
-    item_aot_set(AOT_05_ITEM, 0, 0, 1, 1, IT_14_CHEMICAL_WATER, 1, IMDL_04, SCA_NONE, 0, 0, 0, 0, F_ITEM_40, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_15_CHEMICAL_UMB_2, 1, IMDL_05, SCA_NONE, 0, 0, 0, 0, F_ITEM_41, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_07_ITEM, 0, 0, 1, 1, IT_16_CHEMICAL_UMB_4, 1, IMDL_06, SCA_NONE, 0, 0, 0, 0, F_ITEM_42, SAT_MANUAL | SAT_PLAYER, 0);
-    if (CHRIS)
+    item_aot_set(AOT_05_ITEM_CHEMICAL_WATER_4, 0, 0, 1, 1, IT_14_CHEMICAL_WATER, 1, IMDL_04_CHEMICAL_WATER, SCA_NONE, 0, 0, 0, 0, F_ITEM_409_CHEMICAL_WATER_4, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_06_ITEM_CHEMICAL_UMB_2_5, 0, 0, 1, 1, IT_15_CHEMICAL_UMB_2, 1, IMDL_05_CHEMICAL_UMB_2, SCA_NONE, 0, 0, 0, 0, F_ITEM_409_CHEMICAL_UMB_2_5, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_07_ITEM_CHEMICAL_UMB_4_6, 0, 0, 1, 1, IT_16_CHEMICAL_UMB_4, 1, IMDL_06_CHEMICAL_UMB_4, SCA_NONE, 0, 0, 0, 0, F_ITEM_409_CHEMICAL_UMB_4_6, SAT_MANUAL | SAT_PLAYER, 0);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        aot_set(AOT_08_MESSAGE, 5900, 1400, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 77, 0, 0, 0);
-        aot_set(AOT_09_MESSAGE, 3000, 1500, 1200, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 77, 0, 0, 0);
-        aot_set(AOT_0A_MESSAGE, 9800, 4400, 700, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 77, 0, 0, 0);
-        aot_set(AOT_0B_MESSAGE, 7300, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 77, 0, 0, 0);
-        aot_set(AOT_0C_MESSAGE, 1900, 3500, 1200, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 0, 77, 0, 0, 0);
-        if (ck(FG_COMMON, F_COMMON_3D, TRUE) && ck(FG_SCENARIO, F_SCENARIO_00, TRUE) && ck(FG_COMMON, F_COMMON_3A, FALSE))
+        aot_set(AOT_08_MESSAGE_FAUCET, 5900, 1400, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 77, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE_WALL_COLOURS, 3000, 1500, 1200, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 77, 0, 0, 0);
+        aot_set(AOT_0A_MESSAGE_WALL_SUMS, 9800, 4400, 700, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 77, 0, 0, 0);
+        aot_set(AOT_0B_MESSAGE_UMB_NO2, 7300, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 77, 0, 0, 0);
+        aot_set(AOT_0C_MESSAGE_UMB_NO4, 1900, 3500, 1200, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 0, 77, 0, 0, 0);
+        if (ck(FG_COMMON, F_COMMON_C_PLANT42_INTRO_SEEN, TRUE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE) && ck(FG_COMMON, F_COMMON_C_BACK_AT_GUARDHOUSE_GATE, FALSE))
         {
-            enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1300, 0, 7446, 0, 5874, ENEMY_00_NPC_REBECCA, ANIM_2A, 0, EVAR_00);
-            evt_exec(0, TASK_09, on_enter);
-            if (ck(FG_COMMON, F_COMMON_3B, FALSE))
+            enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 1300, 0, 7446, 0, 5874, ENEMY_00_REBECCA, ANIM_2A, 0, EVAR_00);
+            evt_exec(0, TASK_09, rebecca_idle);
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_STOREROOM_TALK, FALSE))
             {
-                aot_set(AOT_0D_EVENT, 6548, 4974, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0d, 0, 0, 0);
+                aot_set(AOT_0D_EVENT_REBECCA, 6548, 4974, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, rebecca_first_talk, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_0D_EVENT, 6548, 4974, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0d_2, 0, 0, 0);
+                aot_set(AOT_0D_EVENT_REBECCA, 6548, 4974, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, rebecca_heal_offer, 0, 0, 0);
             }
         }
         if (cmpb(B_CHARACTER_MODEL, CMP_NE, 3))
         {
-            if (ck(FG_ITEM, F_ITEM_3C, TRUE))
+            if (ck(FG_ITEM, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_0, TRUE))
             {
-                aot_set(AOT_0E_MESSAGE, 4300, 1500, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
+                aot_set(AOT_0E_MESSAGE_USELESS_BOTTLE_0, 4300, 1500, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
             }
-            if (ck(FG_ITEM, F_ITEM_3D, TRUE))
+            if (ck(FG_ITEM, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_1, TRUE))
             {
-                aot_set(AOT_0F_MESSAGE, 1900, 5400, 1200, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
+                aot_set(AOT_0F_MESSAGE_USELESS_BOTTLE_1, 1900, 5400, 1200, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
             }
-            if (ck(FG_ITEM, F_ITEM_3E, TRUE))
+            if (ck(FG_ITEM, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_2, TRUE))
             {
-                aot_set(AOT_10_MESSAGE, 5100, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
+                aot_set(AOT_10_MESSAGE_USELESS_BOTTLE_2, 5100, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
             }
-            if (ck(FG_ITEM, F_ITEM_3F, TRUE))
+            if (ck(FG_ITEM, F_ITEM_409_CHEMICAL_EMPTY_BOTTLE_3, TRUE))
             {
-                aot_set(AOT_11_MESSAGE, 2200, 2800, 850, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
+                aot_set(AOT_11_MESSAGE_USELESS_BOTTLE_3, 2200, 2800, 850, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 154, 0, 77, 0, 0, 0);
             }
         }
     }
     else
     {
-        aot_set(AOT_0B_MESSAGE, 7300, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
-        aot_set(AOT_0C_MESSAGE, 1900, 3500, 1200, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 0, 255, 0, 0, 0);
-        aot_set(AOT_08_MESSAGE, 5900, 1400, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-        aot_set(AOT_09_MESSAGE, 3000, 1500, 1200, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-        aot_set(AOT_0A_MESSAGE, 9800, 4400, 700, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_0B_MESSAGE_UMB_NO2, 7300, 6000, 2200, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
+        aot_set(AOT_0C_MESSAGE_UMB_NO4, 1900, 3500, 1200, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 0, 255, 0, 0, 0);
+        aot_set(AOT_08_MESSAGE_FAUCET, 5900, 1400, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE_WALL_COLOURS, 3000, 1500, 1200, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_0A_MESSAGE_WALL_SUMS, 9800, 4400, 700, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
 }
 
 proc main
 {
-    set(FG_ITEM, F_ITEM_40, TRUE);
-    set(FG_ITEM, F_ITEM_41, TRUE);
-    set(FG_ITEM, F_ITEM_42, TRUE);
-    if (CHRIS)
+    set(FG_ITEM, F_ITEM_409_CHEMICAL_WATER_4, TRUE);
+    set(FG_ITEM, F_ITEM_409_CHEMICAL_UMB_2_5, TRUE);
+    set(FG_ITEM, F_ITEM_409_CHEMICAL_UMB_4_6, TRUE);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
             if (item_ck(IT_13_CHEMICAL_EMPTY_BOTTLE))
             {
-                aot_reset(AOT_08_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_08_message, 0);
-                aot_reset(AOT_0B_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0b_message, 0);
-                aot_reset(AOT_0C_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0c_message, 0);
+                aot_reset(AOT_08_MESSAGE_FAUCET, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_water, 0);
+                aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_umb_no2, 0);
+                aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_umb_no4, 0);
             }
             else
             {
-                aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
-                aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 77, 0);
-                aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 77, 0);
+                aot_reset(AOT_08_MESSAGE_FAUCET, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
+                aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 77, 0);
+                aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 77, 0);
             }
         }
-        else if (ck(FG_ITEM, F_ITEM_4E, FALSE))
+        else if (ck(FG_ITEM, F_ITEM_40A_FILE_V_JOLT_REPORT_0, FALSE))
         {
-            aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 152, 77, 0);
-            aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 153, 77, 0);
+            aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 152, 77, 0);
+            aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 153, 77, 0);
         }
         else
         {
-            aot_reset(AOT_0B_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 152, 77, 0);
-            aot_reset(AOT_0C_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 153, 77, 0);
+            aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 152, 77, 0);
+            aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 153, 77, 0);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_16, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_18, FALSE))
+            if (ck(FG_ROOM, F_ROOM_FUMES_PLAYED, FALSE))
             {
-                evt_exec(0, TASK_09, from_main);
+                evt_exec(0, TASK_09, mixing_fumes);
             }
-            else if (ck(FG_ROOM, F_ROOM_00, TRUE))
+            else if (ck(FG_ROOM, F_ROOM_UNUSED_00, TRUE))
             {
-                evt_exec(0, TASK_09, from_main);
+                evt_exec(0, TASK_09, mixing_fumes);
             }
-            set(FG_SCENARIO, F_SCENARIO_16, FALSE);
-            set(FG_ROOM, F_ROOM_18, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, FALSE);
+            set(FG_ROOM, F_ROOM_FUMES_PLAYED, TRUE);
         }
-        if (ck(FG_ROOM, F_ROOM_01, TRUE))
+        if (ck(FG_ROOM, F_ROOM_UNUSED_01, TRUE))
         {
-            set(FG_ROOM, F_ROOM_01, FALSE);
-            evt_exec(0, TASK_09, from_main_2);
+            set(FG_ROOM, F_ROOM_UNUSED_01, FALSE);
+            evt_exec(0, TASK_09, fumes_light_flicker);
         }
     }
     else
     {
-        if (ck(FG_ITEM, F_ITEM_4E, TRUE))
+        if (ck(FG_ITEM, F_ITEM_40A_FILE_V_JOLT_REPORT_0, TRUE))
         {
             if (item_ck(IT_13_CHEMICAL_EMPTY_BOTTLE))
             {
-                aot_reset(AOT_08_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_08_message, 0);
+                aot_reset(AOT_08_MESSAGE_FAUCET, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_water, 0);
             }
             else
             {
-                aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
+                aot_reset(AOT_08_MESSAGE_FAUCET, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
             }
-            aot_delete(AOT_0B_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-            aot_delete(AOT_0C_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_0B_MESSAGE_UMB_NO2, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_0C_MESSAGE_UMB_NO4, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
         else if (item_ck(IT_13_CHEMICAL_EMPTY_BOTTLE))
         {
-            aot_reset(AOT_08_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_08_message, 0);
-            aot_reset(AOT_0B_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0b_message, 0);
-            aot_reset(AOT_0C_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0c_message, 0);
+            aot_reset(AOT_08_MESSAGE_FAUCET, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_water, 0);
+            aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_umb_no2, 0);
+            aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, fill_bottle_with_umb_no4, 0);
         }
         else
         {
-            aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
-            aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 77, 0);
-            aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 77, 0);
+            aot_reset(AOT_08_MESSAGE_FAUCET, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 77, 0);
+            aot_reset(AOT_0B_MESSAGE_UMB_NO2, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 77, 0);
+            aot_reset(AOT_0C_MESSAGE_UMB_NO4, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 137, 77, 0);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_16, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_18, FALSE))
+            if (ck(FG_ROOM, F_ROOM_FUMES_PLAYED, FALSE))
             {
-                evt_exec(0, TASK_09, from_main);
+                evt_exec(0, TASK_09, mixing_fumes);
             }
-            else if (ck(FG_ROOM, F_ROOM_00, TRUE))
+            else if (ck(FG_ROOM, F_ROOM_UNUSED_00, TRUE))
             {
-                evt_exec(0, TASK_09, from_main);
+                evt_exec(0, TASK_09, mixing_fumes);
             }
-            set(FG_SCENARIO, F_SCENARIO_16, FALSE);
-            set(FG_ROOM, F_ROOM_18, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_CHEMICAL_MIXED, FALSE);
+            set(FG_ROOM, F_ROOM_FUMES_PLAYED, TRUE);
         }
     }
 }
 
-event on_aot_08_message
+event fill_bottle_with_water
 {
     run
     {
@@ -264,7 +264,7 @@ event on_aot_08_message
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
-            give_item(AOT_05_ITEM, 4, 0);
+            give_item(AOT_05_ITEM_CHEMICAL_WATER_4, 4, 0);
         }
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
@@ -274,7 +274,7 @@ event on_aot_08_message
     evt_finish();
 }
 
-event on_aot_0b_message
+event fill_bottle_with_umb_no2
 {
     run
     {
@@ -294,7 +294,7 @@ event on_aot_0b_message
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
-            give_item(AOT_06_ITEM, 4, 0);
+            give_item(AOT_06_ITEM_CHEMICAL_UMB_2_5, 4, 0);
         }
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
@@ -304,7 +304,7 @@ event on_aot_0b_message
     evt_finish();
 }
 
-event on_aot_0c_message
+event fill_bottle_with_umb_no4
 {
     run
     {
@@ -324,7 +324,7 @@ event on_aot_0c_message
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
-            give_item(AOT_07_ITEM, 4, 0);
+            give_item(AOT_07_ITEM_CHEMICAL_UMB_4_6, 4, 0);
         }
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
@@ -334,18 +334,18 @@ event on_aot_0c_message
     evt_finish();
 }
 
-event from_main
+event mixing_fumes
 {
     run
     {
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_01, F_ROOM_19, 0);
+    act_anim_flags(ANIM_01, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     se_play_3d(SND_BANK_PLAYER, SE_PL_00, 0, SND_AT_PLAYER, 0, 0, 0);
@@ -361,7 +361,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -370,7 +370,7 @@ event from_main
     evt_nop();
     run
     {
-        if (ck(FG_ROOM, F_ROOM_02, TRUE))
+        if (ck(FG_ROOM, F_ROOM_UNUSED_02, TRUE))
         {
             timer_setup(LIGHT_FADE_HALF, 1600, FADE_R | FADE_G);
         }
@@ -378,7 +378,7 @@ event from_main
         {
             timer_setup(LIGHT_FADE_HALF, 1200, FADE_R | FADE_G);
         }
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_PLAYER, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
@@ -401,7 +401,7 @@ event from_main
     evt_finish();
 }
 
-event from_main_2
+event fumes_light_flicker
 {
     timer_setup(LIGHT_FADE_VEIL, 0, 0);
     sleep(1);
@@ -419,27 +419,27 @@ event from_main_2
     evt_finish();
 }
 
-event on_enter when (CHRIS)
+event rebecca_idle
 {
     sleep(1);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
     act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 150, 75);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d when (CHRIS)
+event rebecca_first_talk
 {
     run
     {
-        cutnext(CAM_00);
+        cutnext(CAM_00_REBECCA);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_COMMON, F_COMMON_3B, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_STOREROOM_TALK, TRUE);
     }
-    evt_fork(TASK_09, on_aot_0d_sub1, 0);
+    evt_fork(TASK_09, rebecca_first_talk_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_00);
     message(MSG_VO_A08_00, 0);
     wait_message();
@@ -453,66 +453,66 @@ event on_aot_0d when (CHRIS)
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_0d_sub2);
+            evt_exec(0, TASK_09, rebecca_first_heal);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_0d_sub3);
+            evt_exec(0, TASK_09, rebecca_first_heal_declined);
         }
     }
     evt_finish();
 }
 
-event on_aot_0d_sub1 when (CHRIS)
+event rebecca_first_talk_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_REBECCA, 0, 150, 75);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_REBECCA, 0, 150, 75);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(30);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(15);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(32);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(7);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(13);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(15);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(35);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d_sub2 when (CHRIS)
+event rebecca_first_heal
 {
-    evt_fork(TASK_09, on_aot_0d_sub2_sub1, 0);
+    evt_fork(TASK_09, chris_first_heal_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_01);
     message(MSG_VO_A08_01, 0);
     wait_message();
@@ -529,14 +529,14 @@ event on_aot_0d_sub2 when (CHRIS)
     timer_setup(LIGHT_FADE_VEIL, -256, FADE_R | FADE_G | FADE_B);
     sleep(150);
     timer_setup(LIGHT_FADE_VEIL, 0, FADE_R | FADE_G | FADE_B);
-    evt_chain(event_0A);
+    evt_chain(rebecca_first_talk_end);
     evt_nop();
     evt_nop();
 }
 
-event on_aot_0d_sub3 when (CHRIS)
+event rebecca_first_heal_declined
 {
-    evt_fork(TASK_09, on_aot_0d_sub3_sub1, 0);
+    evt_fork(TASK_09, chris_first_heal_declined_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_09);
     message(MSG_VO_A08_09, 0);
     wait_message();
@@ -544,21 +544,21 @@ event on_aot_0d_sub3 when (CHRIS)
     evt_nop();
 }
 
-event event_0A when (CHRIS)
+event rebecca_first_talk_end
 {
-    evt_fork(TASK_09, event_0B, 0);
+    evt_fork(TASK_09, rebecca_first_talk_end_anim_1, 0);
     voice_play(VOICE_PLAY, VO_A08_02);
     message(MSG_VO_A08_02, 0);
     wait_message();
-    evt_fork(TASK_09, event_0C, 0);
+    evt_fork(TASK_09, chris_first_talk_end_anim_1, 0);
     voice_play(VOICE_PLAY, VO_A08_03);
     message(MSG_VO_A08_03, 0);
     wait_message();
-    evt_fork(TASK_09, event_0D, 0);
+    evt_fork(TASK_09, rebecca_first_talk_end_anim_2, 0);
     voice_play(VOICE_PLAY, VO_A08_04);
     message(MSG_VO_A08_04, 0);
     wait_message();
-    evt_fork(TASK_09, event_0E, 0);
+    evt_fork(TASK_09, chris_first_talk_end_anim_2, 0);
     voice_play(VOICE_PLAY, VO_A08_05);
     message(MSG_VO_A08_05, 0);
     wait_message();
@@ -568,139 +568,139 @@ event event_0A when (CHRIS)
     act_reset();
     run
     {
-        aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        aot_reset(AOT_0D_EVENT_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_idle_line, 0);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event event_0B when (CHRIS)
+event rebecca_first_talk_end_anim_1
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_25, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(30);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(30);
-    act_anim_flags(ANIM_06, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_06, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event event_0C when (CHRIS)
+event chris_first_talk_end_anim_1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(10);
-    act_anim_flags(ANIM_25, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_25, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(30);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event event_0D when (CHRIS)
+event rebecca_first_talk_end_anim_2
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(20);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(40);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(30);
-    act_anim_flags(ANIM_06, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_06, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event event_0E when (CHRIS)
+event chris_first_talk_end_anim_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_72, 0, 300, 1, 0, 100);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(40);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d_sub2_sub1 when (CHRIS)
+event chris_first_heal_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_72, 0, 300, 1, 200, 100);
-    act_anim_flags(ANIM_23, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(17);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(25);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(25);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(5);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(40);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d_sub3_sub1 when (CHRIS)
+event chris_first_heal_declined_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_71, 700, 0, 1, 150, 100);
-    act_anim_flags(ANIM_21, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(17);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     sleep(25);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(30);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d_2 when (CHRIS)
+event rebecca_heal_offer
 {
     run
     {
-        cutnext(CAM_00);
+        cutnext(CAM_00_REBECCA);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
-    evt_fork(TASK_09, on_aot_0d_2_sub3, 0);
+    evt_fork(TASK_09, rebecca_heal_offer_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_07);
     message(MSG_VO_A08_07, 0);
     wait_message();
@@ -714,17 +714,17 @@ event on_aot_0d_2 when (CHRIS)
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_0d_2_sub1);
+            evt_exec(0, TASK_09, rebecca_heal);
         }
         else
         {
-            evt_exec(0, TASK_09, on_aot_0d_2_sub2);
+            evt_exec(0, TASK_09, rebecca_heal_declined);
         }
     }
     evt_finish();
 }
 
-event on_aot_0d_2_sub1 when (CHRIS)
+event rebecca_heal
 {
     timer_setup(LIGHT_FADE_VEIL, 256, FADE_R | FADE_G | FADE_B);
     sleep(120);
@@ -747,15 +747,15 @@ event on_aot_0d_2_sub1 when (CHRIS)
     act_reset();
     run
     {
-        aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_3, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        aot_reset(AOT_0D_EVENT_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_after_heal_line, 0);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_0d_2_sub2 when (CHRIS)
+event rebecca_heal_declined
 {
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -765,51 +765,51 @@ event on_aot_0d_2_sub2 when (CHRIS)
     act_reset();
     run
     {
-        aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        aot_reset(AOT_0D_EVENT_REBECCA, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, rebecca_idle_line, 0);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_0d_2_sub3 when (CHRIS)
+event rebecca_heal_offer_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_REBECCA, 0, 150, 75);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_REBECCA, 0, 150, 75);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(30);
-    act_anim_flags(ANIM_23, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_23, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(25);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0001);
     sleep(15);
-    act_anim_flags(ANIM_06, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_06, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_0d_3 when (CHRIS)
+event rebecca_after_heal_line
 {
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        cutnext(CAM_00);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        cutnext(CAM_00_REBECCA);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
-    evt_fork(TASK_09, on_aot_0d_3_sub1, 0);
+    evt_fork(TASK_09, rebecca_line_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_08);
     message(MSG_VO_A08_08, 0);
     wait_message();
@@ -817,20 +817,20 @@ event on_aot_0d_3 when (CHRIS)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
 
-event on_aot_0d_4 when (CHRIS)
+event rebecca_idle_line
 {
     run
     {
-        cutnext(CAM_00);
+        cutnext(CAM_00_REBECCA);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
-    evt_fork(TASK_09, on_aot_0d_3_sub1, 0);
+    evt_fork(TASK_09, rebecca_line_anim, 0);
     voice_play(VOICE_PLAY, VO_A08_0A);
     message(MSG_VO_A08_0A, 0);
     wait_message();
@@ -838,32 +838,32 @@ event on_aot_0d_4 when (CHRIS)
     {
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
 
-event on_aot_0d_3_sub1 when (CHRIS)
+event rebecca_line_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_flag_op(EF_OR, EF_0004);
     act_reset();
     evt_nop();
-    eml_state(0, ENEMY_00_NPC_REBECCA, EML_STATUS, EML_STATUS_OR | 2);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+    eml_state(0, ENEMY_00_REBECCA, EML_STATUS, EML_STATUS_OR | 2);
+    evt_work_set(WK_ENEMY, ENEMY_00_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(10);
-    act_anim_flags(ANIM_22, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_22, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_21, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     sleep(50);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, AFL_02 | AFL_01);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE_IGNORED, AFL_02 | AFL_01);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_nop();
     sleep(10);
-    eml_state(0, ENEMY_00_NPC_REBECCA, EML_STATUS, EML_STATUS_XOR | 2);
+    eml_state(0, ENEMY_00_REBECCA, EML_STATUS, EML_STATUS_XOR | 2);
     evt_finish();
 }

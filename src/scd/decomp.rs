@@ -535,6 +535,7 @@ mod tests {
             init: vec![block(0x100, insns)],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         };
 
         // The original tool's `endif` closes one extra level when an `else`
@@ -586,6 +587,7 @@ proc main
                 insns,
                 trailing: vec![0xAA, 0xBB],
             }],
+            procs: Vec::new(),
         };
 
         let expected = "\
@@ -632,6 +634,7 @@ event event_00
                 insns,
                 trailing: Vec::new(),
             }],
+            procs: Vec::new(),
         };
 
         let expected = "\

@@ -199,6 +199,64 @@ boxes = [[0, 165, 232, 240]]
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 2:7:5 --give 3:0x15:10"
 
+# Room 101's pick-ups from a new game: the shotgun from Kendo's body after the zombies' attack, and the
+# handgun rounds on both shelves; then the shotgun fired out (oracle/re2.md, "Weapons"). No sound: the
+# attack's voice lines end by DirectSound's clock in a --sound record ("On Windows").
+[[run]]
+name = "weapon_pickup_101"
+room = "new"
+offset = 0
+sound = false
+ticks = 7100
+setup_script = "route_100_200.lua"
+input = "weapon_pickup_101.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,em"
+# room 100's door, and the head after each get-item window and the status screen's close, 1 to 3 units
+# high on the first ticks (oracle/re2.md, docs/re2-deviations.md, "The head after the get-item window")
+ignore = [
+    [790, "rng"],
+    [790, "rseed"],
+    [4611, "pneck"],
+    [4612, "pneck"],
+    [4613, "pneck"],
+    [4614, "pneck"],
+    [4615, "pneck"],
+    [5471, "pneck"],
+    [5472, "pneck"],
+    [5473, "pneck"],
+    [5474, "pneck"],
+    [5475, "pneck"],
+    [5476, "pneck"],
+    [5477, "pneck"],
+    [5478, "pneck"],
+    [6141, "pneck"],
+    [6142, "pneck"],
+    [6143, "pneck"],
+    [6144, "pneck"],
+    [6145, "pneck"],
+    [6377, "pneck"],
+    [6378, "pneck"],
+    [6379, "pneck"],
+    [6380, "pneck"],
+    [6381, "pneck"],
+]
+expect = "match"
+record = "--no-enemies --keep-enemy-in 101:0 --flag 4:135"
+
+# Room 200's handgun rounds on the counter, then a reload from them (oracle/re2.md, "Weapons").
+[[run]]
+name = "weapon_pickup_200"
+room = "200"
+setup_script = "weapon_pickup_200.lua"
+input = "weapon_pickup_200.txt"
+input_shift = 344
+ticks = 1300
+fields = "item"
+# no frames: from the warp the original's cut 0 is scrolled about 22 lines up, where arklay's --room start
+# has it at 0 (oracle/re2.md, "Weapons"); the reference keeps them
+expect = "match"
+record = "--no-enemies --warp 200:-8950:-1800:-700:3072 --flag 4:6 --life 200 --give 0:2:1"
+
 [[run]]
 name = "run_118"
 room = "102"
@@ -539,7 +597,7 @@ input = "run_102_arklay.txt"
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5"
 # the door starts on tick 790 and the original's Rnd and Sce_rnd differ for that tick only (oracle/re2.md)
 ignore = [[790, "rng"], [790, "rseed"], [3052, "rng"], [3052, "rseed"]]
-expect = { tick = 4700, fields = ["rng", "rseed", "zm1"], note = "room 102 zombie slot 1 takes routine 10 where the original stays in 1, with the player about 4800 units away (docs/re2-deviations.md, Player)" }
+expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
 [[run]]
@@ -594,6 +652,31 @@ input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
 expect = "match"
 record = "--warp 11B:8000:0:-19500:0 --life 200"
+
+[[run]]
+name = "scene_200"
+room = "200"
+sound = false
+ticks = 700
+# room 200's entry scene from a warp: it takes the player on the room's first tick, before pl_mv_00 has run
+# (oracle/re2.md, "Ticks and input"); no frames: after the warp the original's cut is scrolled
+setup = { pos = [-21700, 0, -3700], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[1, 1]] }
+input = "none.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv"
+expect = "match"
+record = "--warp 200:-21700:0:-3700:1024 --flag 1:1 --life 200"
+
+[[run]]
+name = "marvin_202"
+room = "202"
+sound = false
+ticks = 1400
+# Marvin turns with 4:7 and 4:9 set, then grabs and bites the player (oracle/re2.md, "Ticks and input")
+setup = { pos = [-20163, 0, -21204], angle = 1024, health = 200, rnd = 6114, flags = [[4, 7], [4, 9]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1"
+expect = "match"
+record = "--warp 202:-21000:0:-21000:1024 --flag 4:7 --flag 4:9 --life 200"
 
 [[run]]
 name = "item_crouch_103"
@@ -707,10 +790,10 @@ offset = 0
 ticks = 7400
 setup_script = "route_100_200.lua"
 input = "route_100_200.txt"
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 7399]
 frame_max_mean = 0.8
-# the doors' own ticks, the door's second sound a tick early on five doors and room 118's stair steps (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
 ignore = [
     [790, "rng"],
     [790, "rseed"],
@@ -718,38 +801,515 @@ ignore = [
     [3052, "rseed"],
     [3843, "rng"],
     [3843, "rseed"],
-    [3959, "snd"],
-    [3960, "snd"],
-    [4089, "snd"],
-    [4102, "snd"],
-    [4111, "snd"],
-    [4124, "snd"],
-    [4133, "snd"],
-    [4146, "snd"],
-    [4375, "snd"],
-    [4388, "snd"],
-    [4397, "snd"],
-    [4410, "snd"],
-    [4419, "snd"],
-    [4432, "snd"],
     [4976, "rng"],
     [4976, "rseed"],
-    [5094, "snd"],
-    [5095, "snd"],
     [5326, "rng"],
     [5326, "rseed"],
-    [5445, "snd"],
-    [5446, "snd"],
     [5643, "rng"],
     [5643, "rseed"],
-    [5767, "snd"],
-    [5768, "snd"],
     [6068, "rng"],
     [6068, "rseed"],
-    [6190, "snd"],
-    [6191, "snd"],
     [6585, "rng"],
     [6585, "rseed"],
 ]
 expect = "match"
 record = "--no-enemies --keep-enemy-in 101:0 --flag 4:135"
+
+[[run]]
+name = "route_100_200_enemies"
+room = "new"
+offset = 0
+# The route's input with the enemies on: room 100's zombies kill the player and the game over returns to the title after tick 1459, in both games (docs/re2-deviations.md, "The route with the enemies on"). Recorded over 7400 ticks.
+ticks = 1460
+setup_script = "route_100_200_enemies.lua"
+input = "route_100_200.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,bgm,xavol,em"
+expect = "match"
+record = "--flag 4:135"
+
+[[run]]
+name = "alligator_wait_40a"
+room = "40A"
+sound = false
+ticks = 1400
+# entered from room 408's door: the alligator waits for the room's scene
+setup = { pos = [-9093, -1800, -857], angle = 2064, health = 200, rnd = 6114, camera = 8 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:-9093:-1800:-857:2064:8 --life 200"
+
+[[run]]
+name = "alligator_scene_40a"
+room = "40A"
+sound = false
+# the player dies, and both games go to the game over (room 1:0) at tick 1594
+ticks = 1594
+# in the scene's area: the scene, the alligator's entry, its rests and swims up the corridor,
+# its boxes' push, four snaps that throw the player on from behind, the player's death.
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 1219, fields = ["p.z"], note = "the dead player's body is pushed a unit off: the alligator's neck aims at the dying player's head, which arklay places differently (docs/re2-deviations.md)" }
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_face_40a"
+room = "40A"
+sound = false
+# the game over (room 1:0) comes at tick 1605
+ticks = 1605
+# as alligator_scene_40a, but the player turns round after the scene: thrown back from the front
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_face.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_tank_40a"
+room = "40A"
+sound = false
+ticks = 2400
+# as alligator_scene_40a, then the player runs to the button in the second leg, drops the gas tank
+# (obj_model_set 1) into the alligator's way, turns to it and fires the handgun every 30 ticks:
+# it takes the tank in its jaws (tick 1334), shrugs off the first shot (1361), and the second sets the tank off (1392):
+# it is thrown back dead and burns
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_tank.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_end_40a"
+room = "40A"
+sound = false
+# as alligator_scene_40a, then the player runs up the corridor's second leg to its far end and waits: knocked back three times, then the alligator's wait at the end and its kill. Both games end the room at the game over on tick 2146
+ticks = 2146
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_end.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_dive_40a"
+room = "40A"
+sound = false
+ticks = 2400
+# as alligator_end_40a with the magnum: the player turns to the alligator and fires every 20 ticks, through its knocks; hurt below 25000 while it rests at the corridor's end in cut 8, it dives (FUN_0046a2a0)
+setup_script = "alligator_dive_40a.lua"
+input = "alligator_dive.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200 --equip 5 --give 0:5:200"
+
+[[run]]
+name = "alligator_drag_40a"
+room = "40A"
+sound = false
+# as alligator_scene_40a, then the player runs up the corridor and stops just inside its second leg: the alligator's reach catches them as it turns (FUN_00469750) and drags them under (player routine 5,1). Both games end the room at the game over on tick 1380
+ticks = 1380
+setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
+input = "alligator_drag.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
+
+[[run]]
+name = "alligator_zap_40a"
+room = "40A"
+character = 2
+sound = false
+ticks = 2400
+# as alligator_dive_40a in scenario B with fg_zapping's 0x10 (script flag bank 29), where the dive is FUN_0046a430
+setup_script = "alligator_zap_40a.lua"
+input = "alligator_dive.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 40A:2000:-1800:-23000:1128:10 --flag 1:1 --flag 29:16 --life 200 --equip 5 --give 0:5:200"
+
+[[run]]
+name = "route_100_200_fight"
+room = "new"
+offset = 0
+# The route with the enemies on, fought as a player would, to room 200 (oracle/re2.md, "The route"). No flags: the new game as it starts.
+ticks = 9600
+setup_script = "route_100_200_fight.lua"
+input = "route_100_200_fight.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
+frames = [0, 9599]
+frame_max_mean = 0.8
+# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+]
+
+# The title from boot (oracle/re2.md, "The title"): the original reaches `Title_init` on tick 189, which is arklay's
+# tick 0 of `--ui title`.
+[[run]]
+name = "title_menu"
+ui = "title"
+offset = 189
+ticks = 700
+input = "title_menu.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 699]
+expect = "match"
+record = ""
+
+# LOAD GAME: the confirm's flash and fade to black; the title hands over to the load screen on tick 530.
+[[run]]
+name = "title_load"
+ui = "title"
+offset = 189
+ticks = 531
+input = "title_load.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 529]
+expect = "match"
+record = ""
+
+# OPTION: the decide cue and a fade to black; the title hands over to the option task on tick 409, which arklay
+# doesn't have (docs/re2-deviations.md, "The title").
+[[run]]
+name = "title_option"
+ui = "title"
+offset = 189
+ticks = 409
+input = "title_option.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 408]
+expect = "match"
+record = ""
+
+# SPECIAL: its row slides up and the five extras show under it; the cancel slides back to the rows.
+[[run]]
+name = "title_special"
+ui = "title"
+offset = 189
+ticks = 700
+input = "title_special.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 699]
+expect = "match"
+record = ""
+
+# No input: the idle count reaches 0x708 at tick 1990, the screen fades to black over 128 ticks, and on tick 2118 the
+# title hands over to the attract demo (arklay's own reel; docs/re2-deviations.md, "The title").
+[[run]]
+name = "title_demo"
+ui = "title"
+offset = 189
+ticks = 2119
+input = "title_demo.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 2118]
+expect = "match"
+record = ""
+
+# Room 201's item box (oracle/re2.md, "The item box"): the lid, the screen's open, the box's rows, stacking, a two-slot weapon in and out, EXIT and the close.
+[[run]]
+name = "box_201"
+room = "201"
+setup_script = "box_201.lua"
+input = "box_201_arklay.txt"
+ticks = 1100
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,box,snd"
+frames = [360, 1099]
+frame_max_mean = 1.4
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 0:0x14:15 --box 1:0x0E:7:3 --box 2:0x26:1"
+
+# The new-game choice: ORIGINAL MODE, LEON and NORMAL; the title hands over to the new game on tick 690
+# (oracle/re2.md, "The new-game choice").
+[[run]]
+name = "newgame_leon"
+ui = "title"
+offset = 189
+ticks = 691
+input = "newgame_leon.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 690]
+expect = "match"
+record = ""
+
+# ORIGINAL MODE, CLAIRE and EASY, by way of EXIT; the title hands over on tick 780.
+[[run]]
+name = "newgame_claire"
+ui = "title"
+offset = 189
+ticks = 781
+input = "newgame_claire.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 780]
+expect = "match"
+record = ""
+
+# Into the choice and back out: ORIGINAL MODE's EXIT, then ARRANGE MODE's difficulty rows and the cancel key.
+[[run]]
+name = "newgame_back"
+ui = "title"
+offset = 189
+ticks = 900
+input = "newgame_back.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd"
+frames = [189, 899]
+expect = "match"
+record = ""
+
+# ARRANGE MODE, CLAIRE and EASY: `tsel` follows `censorship_off` and the bits the choice sets; the title hands over on
+# tick 740 (oracle/re2.md, "The new-game choice").
+[[run]]
+name = "newgame_arrange_easy"
+ui = "title"
+offset = 189
+ticks = 741
+input = "newgame_arrange_easy.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tsel,snd"
+frames = [189, 740]
+expect = "match"
+record = ""
+
+# ARRANGE MODE, LEON and HARD: `hard_mode` and `censorship_off` both set; the title hands over on tick 720.
+[[run]]
+name = "newgame_arrange_hard"
+ui = "title"
+offset = 189
+ticks = 721
+input = "newgame_arrange_hard.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tsel,snd"
+frames = [189, 720]
+expect = "match"
+record = ""
+
+[[run]]
+name = "g1_wait_303"
+room = "303"
+character = 2
+sound = false
+ticks = 1400
+# scenario B, entered from room 30B's door: G1 waits for the room's scene
+setup = { pos = [-24972, -5400, -13739], angle = 552, health = 200, rnd = 6114, camera = 5, flags = [[1, 1], [4, 55]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_scene_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2311
+# scenario B: the player walks into cut 2, the room's scene runs, and G1 waits, changes, goes for the player and kills them with its charge, to the game over
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_scene_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_flee_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2400
+# as g1_scene_303, but after the scene the player runs east, and G1 walks after them across the room, rears up and kills them with its charge
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_flee_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_hit_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2087
+# as g1_scene_303, but after the scene the player walks into G1's lunge, falls back onto a wall, gets up, is hit again and is killed by the charge, to the game over
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_hit_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_hit_side_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2085
+# as g1_scene_303, but after the scene the player turns and walks into G1's lunge from the side and falls forwards, is thrown again by its step in and is killed by the charge, to the game over
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_hit_side_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_shotgun_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2315
+# as g1_scene_303, but after the scene the player turns to G1 and shoots it with the shotgun every 30 ticks, with Leon's other weapons in scenario B: G1's charge kills the player and plays on through its wait, second swing and walk back, to the game over
+setup_script = "g1_shotgun_303.lua"
+input = "g1_shotgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 7 --give 0:7:200 --give 1:2:15 --give 2:5:6 --give 3:0x15:30"
+
+[[run]]
+name = "g1_magnum_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2800
+# as g1_shotgun_303 with the magnum every 20 ticks: G1 flinches, dies, gets up and hits the player, limps away and falls
+setup_script = "g1_magnum_303.lua"
+input = "g1_magnum_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 5 --give 0:5:200 --give 1:2:15 --give 2:7:5 --give 3:0x16:30"
+
+[[run]]
+name = "g1_handgun_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2230
+# as g1_shotgun_303 with the handgun every 15 ticks, to the game over
+setup_script = "g1_handgun_303.lua"
+input = "g1_handgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 2 --give 0:2:200 --give 1:5:6 --give 2:7:5 --give 3:0x14:30"
+
+# G2 (Em_31) in room 509, scenario A: off the lift from room 505, the player stands; G2 waits off stage
+# for the room's scene (oracle/re2.md, "G2")
+[[run]]
+name = "g2_wait_509"
+room = "509"
+character = 0
+sound = false
+ticks = 1400
+setup = { pos = [13248, -1800, -16378], angle = 3480, health = 200, rnd = 6114, camera = 5, flags = [[4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:13248:-1800:-16378:3480:5 --flag 4:99 --life 200"
+
+[[run]]
+name = "g2_scene_509"
+room = "509"
+character = 0
+sound = false
+ticks = 981
+# room 509's scene: the player stands on the ground floor in the area that starts it (a warp, since the lift arrives on floor 1), and G2 changes and climbs down; it ends as G2 leaves routine 7 for the fight
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 200, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_scene_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 200"
+
+[[run]]
+name = "g2_fight_509"
+room = "509"
+character = 0
+sound = false
+ticks = 3000
+# as g2_scene_509, then G2 fights the player, who stands still with life to spare
+setup = { pos = [8430, 0, -10000], angle = 2048, health = 2000, rnd = 6114, camera = 2, flags = [[4, 99]] }
+input = "g2_fight_509.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:8430:0:-10000:2048:2 --flag 4:99 --life 2000"
+
+[[run]]
+name = "route_claire_a_fight"
+room = "new"
+character = 1
+offset = 0
+# Claire A's route with the enemies on, fought as a player would, to room 200 (oracle/re2.md, "The route"). No flags: the new game as it starts.
+ticks = 9720
+setup_script = "route_claire_a_fight.lua"
+input = "route_claire_a_fight.txt"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,zm0,zm1,zm2,zm3,zm4,zm5"
+frames = [0, 9719]
+frame_max_mean = 0.8
+ignore = [
+    # zombie 1's angle on the first tick (docs/re2-deviations.md, "Zombies")
+    [0, "zm1"],
+    # the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5527, "rng"],
+    [5527, "rseed"],
+    [6656, "rng"],
+    [6656, "rseed"],
+    [7008, "rng"],
+    [7008, "rseed"],
+    [8062, "rng"],
+    [8062, "rseed"],
+    [8379, "rng"],
+    [8379, "rseed"],
+    [8892, "rng"],
+    [8892, "rseed"],
+]
+expect = "match"
+record = "--start claire"

@@ -1319,6 +1319,7 @@ fn no_event_holds_the_player_for_good() {
                     let tick = arklay::player2::Tick {
                         room: &loaded.state,
                         skeleton: &emd.skeleton,
+                        morphs: &emd.morphs,
                         banks: arklay::player2::Banks {
                             pld: (&emd.clips, &emd.keyframes),
                             weapon: (&emw.clips, &emw.keyframes),

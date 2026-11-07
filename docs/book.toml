@@ -1,0 +1,39 @@
+# The Arklay documentation book: https://arklay-engine.github.io/arklay/
+#
+# Build locally with `mdbook serve docs` (or `mdbook build docs`) from the
+# repository root. Every push to main publishes it through
+# .github/workflows/docs.yml.
+
+[book]
+title = "Arklay"
+description = "Documentation for the Arklay engine: game packs, mods, the Lua API and .akscr scripts."
+authors = ["The Arklay contributors"]
+language = "en"
+# The pages live directly in docs/, next to the files the README already links.
+src = "."
+
+[build]
+# Keep the output out of the source tree.
+build-dir = "../target/book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/arklay-engine/arklay"
+edit-url-template = "https://github.com/arklay-engine/arklay/edit/main/docs/{path}"
+site-url = "/arklay/"
+
+# Expands `{{#lua-api FILE}}` in a chapter into the API reference generated
+# from the LuaLS definition file lua-types/FILE.
+[preprocessor.lua-api]
+command = "python3 ../scripts/lua-api-doc.py"
+
+# Expands `{{#opcode-index ...}}` into the opcode tables of an
+# akscr/*/opcodes/ directory, and fails the build when a page is missing
+# from SUMMARY.md.
+[preprocessor.opcode-index]
+command = "python3 ../scripts/opcode-index.py"
+
+# The opcode lists are long: fold the sidebar below the dialect pages.
+[output.html.fold]
+enable = true
+level = 2

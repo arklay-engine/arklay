@@ -8,16 +8,16 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
+#define AOT_00_DOOR_508 0x00
+#define AOT_01_DOOR_512 0x01                                // The cell door; an event or message until the cell is open.
 #define CAM_02 0x02
-#define CAM_03 0x03
+#define CAM_03_CELL_DOOR 0x03
 #define ENEMY_00_NPC_CHRIS 0x00
 #define ENEMY_00_NPC_JILL 0x00
 #define ENEMY_01_NPC_CHRIS 0x01
 #define ENEMY_01_NPC_JILL 0x01
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
+#define F_ROOM_CAPTIVE_ANIM_DONE 0x21                       // The captive Jill's or Chris's animation finished (one frame).
+#define F_ROOM_PLAYER_ANIM_DONE 0x20                        // The player's animation finished (one frame).
 #define MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03 0x07
 #define SE_14_DM_GACHA 0x14
 #define VO_00F_10 0x11
@@ -32,39 +32,39 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 5500, 2700, 2600, 2400, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_508_DOUBLE_LOCK, 2500, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+    door_aot_set(AOT_00_DOOR_508, 5500, 2700, 2600, 2400, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_508_DOUBLE_LOCK, 2500, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, TRUE))
     {
-        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, 0, ROOM_512_CELL, 5600, 0, 10000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR_512, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, 0, ROOM_512_CELL, 5600, 0, 10000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     }
-    else if (ck(FG_ENEMY, F_ENEMY_70, FALSE))
+    else if (ck(FG_ENEMY, F_ENEMY_513_TYRANT_1_1, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CELL_DOOR_TALK, FALSE))
         {
-            aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_01_door, 0, 0, 0);
+            aot_set(AOT_01_DOOR_512, 9100, 15000, 1500, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, cell_door_talk, 0, 0, 0);
         }
         else
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
-                aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+                aot_set(AOT_01_DOOR_512, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+                aot_set(AOT_01_DOOR_512, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
             }
         }
     }
     else
     {
-        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, DOOR_LOCKED | F_LOCK_2C, ROOM_512_CELL, 5600, 0, 10000, 1024, IT_37_KEY_LAB_MASTER, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR_512, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, DOOR_LOCKED | F_LOCK_50B_512, ROOM_512_CELL, 5600, 0, 10000, 1024, IT_37_KEY_LAB_MASTER, SAT_MANUAL | SAT_PLAYER);
     }
-    evt_exec(0, TASK_09, on_enter);
-    if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+    evt_exec(0, TASK_09, survivor_waits);
+    if (ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, FALSE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CELL_DOOR_TALK, FALSE))
         {
-            if (CHRIS)
+            if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
             {
                 enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 10750, 0, 11000, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -74,11 +74,11 @@ proc init
             }
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_JILL, ANIM_00, 0, EVAR_00);
             }
@@ -86,9 +86,9 @@ proc init
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_CHRIS_WENT_AHEAD, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
             {
                 enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_CHRIS, ANIM_00, 0, EVAR_00);
             }
@@ -96,16 +96,16 @@ proc init
     }
 }
 
-event on_enter
+event survivor_waits
 {
     sleep(1);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
                 {
                     eml_state(0, ENEMY_01_NPC_JILL, EML_08);
                 }
@@ -113,9 +113,9 @@ event on_enter
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+            if (ck(FG_COMMON, F_COMMON_J_CHRIS_WENT_AHEAD, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                if (ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
                 {
                     eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
                 }
@@ -125,24 +125,24 @@ event on_enter
     evt_finish();
 }
 
-event on_aot_01_door
+event cell_door_talk
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_SCENARIO, F_SCENARIO_65, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_CELL_DOOR_TALK, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 9750, 14000, F_ROOM_20);
+    act_anim_seq(AB_06, 9750, 14000, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    if (CHRIS)
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_JILL, 10000, 15800);
     }
@@ -151,7 +151,7 @@ event on_aot_01_door
     act_motion_path(MOTION_32, 0, 310, 0, 30, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(30);
     }
@@ -164,7 +164,7 @@ event on_aot_01_door
     run
     {
         message(0, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_00F_10);
         }
@@ -182,12 +182,12 @@ event on_aot_01_door
     run
     {
         dir_set(0, 0, 980, 0, 10300, 0, 15780);
-        cutnext(CAM_03);
+        cutnext(CAM_03_CELL_DOOR);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
     }
@@ -200,7 +200,7 @@ event on_aot_01_door
     run
     {
         message(1, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_00F_11);
         }
@@ -210,7 +210,7 @@ event on_aot_01_door
         }
     }
     wait_message();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -219,17 +219,17 @@ event on_aot_01_door
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_seq(AB_02, 10750, 13900, F_ROOM_21);
+    act_anim_seq(AB_02, 10750, 13900, F_ROOM_CAPTIVE_ANIM_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_CAPTIVE_ANIM_DONE, FALSE));
     run
     {
         message(2, 0);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_00F_12);
         }
@@ -238,7 +238,7 @@ event on_aot_01_door
             voice_play(VOICE_PLAY, VO_112_13);
         }
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -247,7 +247,7 @@ event on_aot_01_door
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_CAPTIVE_ANIM_DONE, 0);
     act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 100, 0);
     act_reset();
     evt_nop();
@@ -255,8 +255,8 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    if (CHRIS)
+    while (ck(FG_ROOM, F_ROOM_CAPTIVE_ANIM_DONE, FALSE));
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     }
@@ -265,10 +265,10 @@ event on_aot_01_door
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_27, F_ROOM_21, 0);
+    act_anim_flags(ANIM_27, F_ROOM_CAPTIVE_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(50);
     }
@@ -287,13 +287,13 @@ event on_aot_01_door
     act_motion_path(MOTION_33, 400, 310, 0, 80, 60);
     act_reset();
     evt_nop();
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(20);
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_CHRIS, 10000, 15800);
     }
     sleep(10);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_JILL, 10000, 15800);
         sleep(5);
@@ -312,7 +312,7 @@ event on_aot_01_door
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_motion_path(MOTION_71, 350, 0, 2, 100, 0);
     act_reset();
     evt_nop();
@@ -320,13 +320,13 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        act_anim_flags(ANIM_22, F_ROOM_20, 0);
+        act_anim_flags(ANIM_22, F_ROOM_PLAYER_ANIM_DONE, 0);
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
         act_reset();
         evt_nop();
@@ -334,12 +334,12 @@ event on_aot_01_door
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_20, FALSE));
+        while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
     }
-    act_anim_flags(ANIM_25, F_ROOM_20, 0);
-    if (JILL)
+    act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_CHRIS, 0, 100, 0);
     }
@@ -349,14 +349,14 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_27, F_ROOM_20, 0);
+    act_anim_flags(ANIM_27, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -372,14 +372,14 @@ event on_aot_01_door
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
     }
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_CAPTIVE_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_CAPTIVE_ANIM_DONE, FALSE));
     wait_message();
     cutnext(CAM_02);
     evt_work_set(WK_PLAYER, 0);
@@ -390,16 +390,16 @@ event on_aot_01_door
     sleep(20);
     run
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
+            aot_reset(AOT_01_DOOR_512, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
         }
         else
         {
-            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 255, 0);
+            aot_reset(AOT_01_DOOR_512, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 255, 0);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);

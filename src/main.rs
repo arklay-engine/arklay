@@ -264,6 +264,14 @@ struct Cli {
     #[arg(long, value_name = "FILE", requires = "sound")]
     sound_wav: Option<PathBuf>,
 
+    /// With `--sound`, hold each RE2 voice line for the ticks FILE lists, one
+    /// number a line in the order the lines play, instead of the line's own
+    /// length: with sound the original ends a line by DirectSound's clock, so
+    /// its length in ticks depends on the recording's pace. The regression
+    /// runner writes it from the recording's `fg_status` voice bit
+    #[arg(long, value_name = "FILE", requires = "sound")]
+    voice_ticks: Option<PathBuf>,
+
     /// Write a frame BMP every N traced ticks; requires `--capture-dir` and
     /// `--trace`
     #[arg(
@@ -564,7 +572,25 @@ enum ModAction {
         #[arg(long, value_name = "PATH")]
         base: Option<PathBuf>,
     },
+
+    /// Write the LuaLS definition files of the engine's Lua APIs, for
+    /// linting and completion in an editor
+    LuaTypes {
+        /// Output directory; add it to the editor's `workspace.library`
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+    },
 }
+
+/// The LuaLS definition files in `lua-types/`, which document every Lua API
+/// the engine gives scripts (and generate the book's Lua API pages).
+const LUA_TYPES: &[(&str, &str)] = &[
+    ("hooks.lua", include_str!("../lua-types/hooks.lua")),
+    ("screen.lua", include_str!("../lua-types/screen.lua")),
+    ("gui.lua", include_str!("../lua-types/gui.lua")),
+    ("enemy.lua", include_str!("../lua-types/enemy.lua")),
+    ("re2-enemy.lua", include_str!("../lua-types/re2-enemy.lua")),
+];
 
 #[derive(Subcommand, Debug)]
 enum PackAction {
@@ -853,6 +879,21 @@ fn decompile_rooms(
         .iter()
         .map(|(&id, scripts)| (id, arklay::scd::akscr::decompile_with(scripts, names, id)))
         .collect())
+}
+
+/// Write the embedded Lua definition files into `out`.
+fn write_lua_types(out: &Path) -> Result<()> {
+    fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
+    for (name, text) in LUA_TYPES {
+        let path = out.join(name);
+        fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
+    }
+    println!(
+        "wrote {} Lua definition files to {}; add it to workspace.library in .luarc.json",
+        LUA_TYPES.len(),
+        out.display()
+    );
+    Ok(())
 }
 
 /// Build a mod source directory and print its summary and aggregated warnings.
@@ -1266,6 +1307,7 @@ fn main() -> Result<()> {
         },
         Some(Command::Mod { action }) => match action {
             ModAction::Build { dir, out, base } => build_mod_pack(&dir, &out, base.as_deref()),
+            ModAction::LuaTypes { out } => write_lua_types(&out),
         },
         Some(Command::Pack { action }) => match action {
             PackAction::Info { pack, mods } => pack_info(&pack, &mods),
@@ -1342,10 +1384,14 @@ fn main() -> Result<()> {
                     .ui
                     .as_deref()
                     .is_some_and(|screen| !matches!(screen, "game" | "demo" | "font"));
+            // `--ui title --trace` traces the title's ticks (the RE 2 oracle's
+            // `--boot` record).
+            let title_trace = tracing && cli.ui.as_deref() == Some("title");
             if let Some(screen) = &cli.ui
                 && cli.ticks > 0
                 && ((screen != "game" && screen != "demo") || !tracing)
                 && !app_script
+                && !title_trace
             {
                 bail!(
                     "--ticks with --ui is only supported for `--ui game` with --trace, or an \
@@ -1377,10 +1423,10 @@ fn main() -> Result<()> {
             // valid trace target like `--ui game`/`--ui demo`.
             if tracing
                 && cli.room.is_none()
-                && !matches!(cli.ui.as_deref(), Some("game" | "demo"))
+                && !matches!(cli.ui.as_deref(), Some("game" | "demo" | "title"))
                 && (cli.load.is_none() || cli.ui.is_some())
             {
-                bail!("--trace is only supported for --room or --ui game/demo");
+                bail!("--trace is only supported for --room or --ui game/demo/title");
             }
             if cli.input.is_some() && !tracing && !app_script {
                 bail!("--input requires --trace (or an app --ui screen with --capture-dir)");
@@ -1415,6 +1461,7 @@ fn main() -> Result<()> {
                 input: input_script.as_ref(),
                 sound: cli.sound,
                 sound_wav: cli.sound_wav.as_deref(),
+                voice_ticks: cli.voice_ticks.as_deref(),
             };
             let authoring = arklay::engine::Authoring {
                 load: cli.load.as_deref(),

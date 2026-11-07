@@ -1,0 +1,35 @@
+# box_201.txt 344 ticks earlier, for arklay's --room 201 (oracle/re2.md, "The item box")
+76 action
+79
+136 down
+139
+166 confirm
+169
+196 up
+199
+226 up
+229
+256 confirm
+259
+286 confirm
+289
+316 down
+319
+346 confirm
+349
+406 up
+409
+436 confirm
+439
+466 down
+469
+496 confirm
+499
+526 confirm
+529
+556 cancel
+559
+586 up
+589
+616 confirm
+619

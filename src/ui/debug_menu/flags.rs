@@ -7,11 +7,13 @@
 //! `ck`/`set` (MSB-first, [`GameState::flag_test`]/[`GameState::apply_flag`]),
 //! with its selector, value and a name when one is known.
 //!
-//! The bit names are a port-only identifier table taken from the reference's
-//! `s_dbgMsfNames`/`s_dbgMsf2Names`/`s_dbgMapNames`/visited groups and the
-//! audited bits of `ref/docs/SCENARIO_FLAGS.md`; they are debug identifiers,
-//! not translated text.
+//! The game banks (scenario, common, lock, enemy and item bits) are named by
+//! the pack's `game/flags.lua` ([`crate::flag_names`]). The engine's banks
+//! are named here, from the reference's `s_dbgMsfNames`/`s_dbgMsf2Names`/
+//! `s_dbgMapNames`/visited groups; they are debug identifiers, not
+//! translated text.
 
+use crate::flag_names::FlagNames;
 use crate::game::{ROOM_FLAG_FILE_BASE, ROOM_FLAG_MAP_BASE, STAGE_ROOM_FLAG_OFFSETS};
 
 /// The documents' first item id: file bit `i` is item `0x5F + i`.
@@ -26,8 +28,8 @@ const MAP_COUNT: u16 = 6;
 enum Names {
     /// No known names: raw indices only.
     None,
-    /// A sparse `(selector, name)` table.
-    Table(&'static [(u8, &'static str)]),
+    /// A game bank: named by the pack's `game/flags.lua`.
+    Game,
     /// A 32-entry table indexed by `selector - first`.
     Dword(&'static [&'static str; 32]),
     /// Room-visited bits: named by their stage room.
@@ -62,22 +64,10 @@ impl FlagGroup {
 /// The thirteen groups, in the reference editor's order (minus its unused
 /// room-flag tail).
 pub const GROUPS: [FlagGroup; 13] = [
-    group(
-        "UI_DEBUG_FLAGS_SCENARIO",
-        0,
-        0,
-        128,
-        Names::Table(SCENARIO_NAMES),
-    ),
-    group(
-        "UI_DEBUG_FLAGS_SCENARIO2",
-        1,
-        0,
-        256,
-        Names::Table(SCENARIO2_NAMES),
-    ),
-    group("UI_DEBUG_FLAGS_LOCKS", 2, 0, 64, Names::None),
-    group("UI_DEBUG_FLAGS_ENEMIES", 3, 0, 256, Names::None),
+    group("UI_DEBUG_FLAGS_SCENARIO", 0, 0, 128, Names::Game),
+    group("UI_DEBUG_FLAGS_SCENARIO2", 1, 0, 256, Names::Game),
+    group("UI_DEBUG_FLAGS_LOCKS", 2, 0, 64, Names::Game),
+    group("UI_DEBUG_FLAGS_ENEMIES", 3, 0, 256, Names::Game),
     group("UI_DEBUG_FLAGS_SYSTEM", 4, 0, 64, Names::None),
     group("UI_DEBUG_FLAGS_STATE", 5, 0, 32, Names::Dword(&MSF_NAMES)),
     group(
@@ -88,7 +78,7 @@ pub const GROUPS: [FlagGroup; 13] = [
         Names::Dword(&MSF2_NAMES),
     ),
     group("UI_DEBUG_FLAGS_MESSAGE", 6, 0, 32, Names::None),
-    group("UI_DEBUG_FLAGS_ROOM_ITEMS", 7, 0, 256, Names::None),
+    group("UI_DEBUG_FLAGS_ROOM_ITEMS", 7, 0, 256, Names::Game),
     group(
         "UI_DEBUG_FLAGS_ROOM_VISITED",
         8,
@@ -129,13 +119,13 @@ const MSF_NAMES: [&str; 32] = [
     "SCREEN_STANDALONE",
     "FADE_ACTIVE",
     "CONTINUE_GAME",
-    "UNUSED_27",
+    "REGION_JPN",
     "ROOM_TRANSITION",
     "GAMEPLAY_ACTIVE",
     "PLAYER_DEAD",
     "CHAR_VARIANT",
     "OPTIONS_REQUEST",
-    "UNUSED_21",
+    "REGION_EUR",
     "CAMERA_LOCK",
     "PANNING_RESET",
     "FMV_REQUEST",
@@ -195,49 +185,6 @@ const MSF2_NAMES: [&str; 32] = [
     "EFFECT_ZONE",
 ];
 
-/// The audited `g_ScenarioFlags` bits (`ref/docs/SCENARIO_FLAGS.md`).
-const SCENARIO_NAMES: &[(u8, &str)] = &[
-    (0x00, "STAGE_VARIANT"),
-    (0x10, "YAWN_BITE"),
-    (0x13, "ITEM_13_GATE"),
-    (0x16, "CHEMICAL_MIXED"),
-    (0x1E, "PANEL_VARIANT_A"),
-    (0x1F, "PANEL_VARIANT_B"),
-    (0x20, "INTERACTIVE_SCREEN"),
-    (0x21, "PANEL_SOLVED"),
-    (0x29, "PLANT42_DEAD"),
-    (0x2A, "ALT_OUTFIT"),
-    (0x37, "WESKER_LATE_ANIM"),
-    (0x47, "YAWN_SERUM"),
-    (0x48, "PLANT42_OBJ_ACK"),
-    (0x49, "SERUM1_OBJ_ACK"),
-    (0x4A, "SERUM2_OBJ_ACK"),
-    (0x5B, "MONSTER_PLANT_HITS"),
-    (0x7A, "DC_BEST_ENDING"),
-    (0x7B, "SECOND_PLAYTHROUGH"),
-    (0x7C, "HAS_LOCKPICK"),
-    (0x7D, "FADE_MENU_LATCH"),
-    (0x7E, "ROCKET_UNLOCK"),
-    (0x7F, "HAS_RADIO"),
-];
-
-/// The audited `g_ScenarioFlags2` bits (`ref/docs/SCENARIO_FLAGS.md`).
-const SCENARIO2_NAMES: &[(u8, &str)] = &[
-    (0x0B, "JILL_FIRST_RUN"),
-    (0x22, "RADIO_TAB_GATE"),
-    (0x23, "JILL_SERUM_OBJ1"),
-    (0x24, "JILL_SERUM_OBJ2"),
-    (0x2D, "CHRIS_SERUM_OBJ1"),
-    (0x2E, "CHRIS_SERUM_OBJ2"),
-    (0x38, "PLANT42_OBJ"),
-    (0x43, "YAWN_POISONED"),
-    (0x48, "BGM_207_A"),
-    (0x4B, "SECOND_SURVIVOR"),
-    (0x55, "BGM_207_B"),
-    (0x5C, "BGM_207_C"),
-    (0xC0, "PARTNER_ALIVE"),
-];
-
 /// The visited groups' labels by `(stage - 1) % 5` and the map names by map
 /// index (`s_dbgVisitedGroups`, `s_dbgMapNames`).
 const VISITED_GROUPS: [&str; 5] = [
@@ -263,6 +210,8 @@ pub enum FlagName {
     None,
     /// A fixed identifier.
     Static(&'static str),
+    /// The pack's names for a game bank's bit.
+    Game(String),
     /// A room-visited bit: its visited-group label and the `room3` id of the
     /// group's first stage.
     Room(&'static str, String),
@@ -270,14 +219,13 @@ pub enum FlagName {
     Item(u8),
 }
 
-/// The name of `group`'s selector `sel`.
-pub fn flag_name(group: &FlagGroup, sel: u8) -> FlagName {
+/// The name of `group`'s selector `sel`; `game` names the game banks.
+pub fn flag_name(group: &FlagGroup, sel: u8, game: &FlagNames) -> FlagName {
     match group.names {
         Names::None => FlagName::None,
-        Names::Table(table) => table
-            .iter()
-            .find(|(bit, _)| *bit == sel)
-            .map_or(FlagName::None, |(_, name)| FlagName::Static(name)),
+        Names::Game => game
+            .label(group.bank, sel)
+            .map_or(FlagName::None, FlagName::Game),
         Names::Dword(table) => match table[usize::from(sel.wrapping_sub(group.first) & 31)] {
             "" => FlagName::None,
             name => FlagName::Static(name),
@@ -422,10 +370,11 @@ mod tests {
 
     #[test]
     fn the_state_groups_split_bank_five() {
+        let none = FlagNames::default();
         let mut game = GameState::default();
         let row = usize::from(MSF_CHAR_VARIANT);
         assert_eq!(
-            flag_name(&GROUPS[5], GROUPS[5].selector(row)),
+            flag_name(&GROUPS[5], GROUPS[5].selector(row), &none),
             FlagName::Static("CHAR_VARIANT")
         );
         edit(&mut game, 5, row, true);
@@ -434,8 +383,11 @@ mod tests {
         let group = GROUPS[6];
         let sel = group.selector(5);
         assert_eq!(sel, MSF2_COSTUME_VARIANT);
-        assert_eq!(flag_name(&group, sel), FlagName::Static("COSTUME_VARIANT"));
-        assert_eq!(flag_name(&group, 0x21), FlagName::None);
+        assert_eq!(
+            flag_name(&group, sel, &none),
+            FlagName::Static("COSTUME_VARIANT")
+        );
+        assert_eq!(flag_name(&group, 0x21, &none), FlagName::None);
     }
 
     #[test]
@@ -455,17 +407,18 @@ mod tests {
 
     #[test]
     fn room_groups_are_named_by_room_map_and_document() {
+        let none = FlagNames::default();
         let visited = GROUPS[9];
         assert_eq!(
-            flag_name(&visited, 0x06),
+            flag_name(&visited, 0x06, &none),
             FlagName::Room("MANSION 1F", "106".into())
         );
         assert_eq!(
-            flag_name(&visited, 32),
+            flag_name(&visited, 32, &none),
             FlagName::Room("MANSION 2F", "200".into())
         );
         assert_eq!(
-            flag_name(&visited, 100 + 3),
+            flag_name(&visited, 100 + 3, &none),
             FlagName::Room("LABORATORY", "503".into())
         );
         // Marking a room visited raises exactly the row the editor names.
@@ -473,14 +426,35 @@ mod tests {
         game.mark_room_visited(crate::state::RoomId::parse("2030").unwrap());
         assert!(game.flag_test(8, 32 + 3, false));
         assert_eq!(
-            flag_name(&GROUPS[10], 0x7C + 3),
+            flag_name(&GROUPS[10], 0x7C + 3, &none),
             FlagName::Static("UNDERGROUND")
         );
-        assert_eq!(flag_name(&GROUPS[11], 0x82 + 2), FlagName::Item(0x61));
         assert_eq!(
-            flag_name(&GROUPS[0], 0x7B),
-            FlagName::Static("SECOND_PLAYTHROUGH")
+            flag_name(&GROUPS[11], 0x82 + 2, &none),
+            FlagName::Item(0x61)
         );
-        assert_eq!(flag_name(&GROUPS[3], 0x7B), FlagName::None);
+    }
+
+    #[test]
+    fn game_groups_are_named_by_the_packs_flag_names() {
+        let names = crate::flag_names::load_builtin();
+        assert_eq!(
+            flag_name(&GROUPS[0], 0x7B, &names),
+            FlagName::Game("SECOND_PLAYTHROUGH".into())
+        );
+        assert_eq!(
+            flag_name(&GROUPS[1], 0xA0, &names),
+            FlagName::Game("J_BARRY_DINING_ENTRY / C_MUSIC_SCORE_GIVEN".into())
+        );
+        assert_eq!(
+            flag_name(&GROUPS[8], 0x34, &names),
+            FlagName::Game("106_INK_3".into())
+        );
+        assert_eq!(flag_name(&GROUPS[3], 0x10, &names), FlagName::None);
+        // Without a pack's names the game groups show raw indices.
+        assert_eq!(
+            flag_name(&GROUPS[0], 0x7B, &FlagNames::default()),
+            FlagName::None
+        );
     }
 }

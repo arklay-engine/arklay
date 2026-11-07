@@ -21,7 +21,7 @@
 //! item box, player health/position/character, room identity/camera, FILE and
 //! item-use flags, raw flag banks, state bytes and the static room-music
 //! tables). Methods use Lua's colon
-//! syntax (`api:flag_set(0, 1, true)`); `docs/modding.md` is the full table.
+//! syntax (`api:flag_set(0, 1, true)`); `lua-types/hooks.lua` is the full table.
 //!
 //! The sandbox loads only the base, `string` and `table` libraries, so `os`,
 //! `io`, `package`, `debug`, `coroutine` and `math` do not exist; the base
@@ -529,6 +529,23 @@ mod imp {
                 },
             );
 
+            // `set_re2_box_slot(slot, id, count[, mark])`: one of RE2's
+            // `Item_boxwork` slots, the oracle's `--box`; mark 3 for a
+            // two-slot weapon.
+            methods.add_method_mut(
+                "set_re2_box_slot",
+                |_lua, game, (slot, id, count, mark): (usize, u8, u8, Option<u8>)| {
+                    let Some(entry) = game.re2.item_box.get_mut(slot) else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "item box slot {slot} is out of range (0..{})",
+                            crate::game::itembox2::BOX_SLOTS
+                        )));
+                    };
+                    *entry = [id, count, mark.unwrap_or(0)];
+                    Ok(())
+                },
+            );
+
             methods.add_method_mut("item_box_clear", |_lua, game, ()| {
                 game.item_box =
                     [crate::game::InventoryItem::default(); crate::game::ITEM_BOX_SLOTS];
@@ -583,6 +600,7 @@ mod imp {
                 game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER)] = id;
                 game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER_MODEL)] = id;
                 game.entities[0].id = id;
+                game.sync_variant_flags();
                 Ok(())
             });
 
@@ -598,6 +616,8 @@ mod imp {
                     game.id = game.id.with_visit(mansion2.unwrap_or(false));
                     game.state_bytes[0] = stage;
                     game.state_bytes[1] = room;
+                    // The scenario flag carries the visit into the save.
+                    game.sync_variant_flags();
                     Ok(())
                 },
             );
@@ -680,6 +700,28 @@ mod imp {
                 },
             );
 
+            // `set_re2_enemy_dest("ROOM:SLOT", x, z)`: the `Dest` the next
+            // zombie placed in that slot of that room starts with, which the
+            // original takes from whatever its new work's memory held.
+            methods.add_method_mut(
+                "set_re2_enemy_dest",
+                |_lua, game, (pair, x, z): (String, i16, i16)| {
+                    let parsed = pair.split_once(':').and_then(|(room, slot)| {
+                        Some((
+                            u16::from_str_radix(room, 16).ok()?,
+                            slot.parse::<usize>().ok()?,
+                        ))
+                    });
+                    let Some((room, slot)) = parsed else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "set_re2_enemy_dest: {pair:?} is not ROOM:SLOT"
+                        )));
+                    };
+                    game.re2_enemy_dest.push((room, slot, [x, z]));
+                    Ok(())
+                },
+            );
+
             // `set_re2_sce_rnd(value)`: the same for `Sce_rnd_set`'s state.
             methods.add_method_mut("set_re2_sce_rnd", |_lua, game, value: u32| {
                 game.re2.random = value;
@@ -735,6 +777,22 @@ mod imp {
                     game.music
                         .set_group(group, value)
                         .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
+                },
+            );
+
+            // `set_flag_name(bank, bit, name[, description])` names a bit of a
+            // game bank for the debug menu (`game/flags.lua`).
+            methods.add_method_mut(
+                "set_flag_name",
+                |_lua, game, (bank, bit, name, description): (u8, u8, String, Option<String>)| {
+                    if usize::from(bank) >= crate::game::FLAG_BANK_COUNT {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "set_flag_name: no flag bank {bank}"
+                        )));
+                    }
+                    game.flag_names
+                        .add(bank, bit, &name, description.as_deref().unwrap_or(""));
+                    Ok(())
                 },
             );
 

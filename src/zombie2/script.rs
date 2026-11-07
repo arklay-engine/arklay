@@ -1,5 +1,5 @@
 //! The `e` of an RE2 enemy script: the fields of the original's work, and the
-//! low-level calls behaviour is written with. See `docs/modding.md`.
+//! low-level calls behaviour is written with. See `lua-types/re2-enemy.lua`.
 
 use mlua::{UserData, UserDataMethods};
 
@@ -224,6 +224,9 @@ impl UserData for Api {
             e.em().work().neck.flags = 0;
             Ok(())
         });
+        // A point given on `part`'s matrix as this tick's frame poses it, or
+        // nils without a pose of it (`drawn_part_point` reads the last
+        // draw's).
         methods.add_method_mut(
             "part_point",
             |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
@@ -520,6 +523,19 @@ impl UserData for Api {
                 (over, ground.below.max(ground.above))
             }))
         });
+        // `Sca_ck_hit` of a point grown by `radius` without the room's
+        // objects: whether `DWORD_00695e84` is raised, by a record that
+        // holds the point or one that starts above it.
+        methods.add_method_mut(
+            "sca_struck",
+            |_, e, (x, y, z, radius, mask): (i32, i32, i32, i32, i64)| {
+                let room = e.em().mover.tick.room;
+                Ok(room.sca.as_ref().is_some_and(|sca| {
+                    let ground = crate::sca::ground_at(sca, [x, y, z], radius, mask as u16);
+                    ground.blocked || ground.under_record
+                }))
+            },
+        );
         methods.add_method_mut("init_parts", |_, e, ()| {
             let pos = e.em().mover.player.pos;
             let l = e.l()?;
@@ -588,6 +604,34 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_damage_cnt", |_, e, ()| Ok(e.em().world.pl.damage_cnt));
+        // The player's `Spd_x`, `Spd_y` and `Spd_z`.
+        methods.add_method_mut("pl_speed", |_, e, ()| {
+            let [x, y, z] = e.em().world.pl.spd;
+            Ok((x, y, z))
+        });
+        // The player's `pSub1_kan_t_ptr` and `pSub1_seq_t_ptr` become this
+        // body's (its model's second bank), for `Pl_damage`'s falls.
+        // The player's `Move_no`, `Move_cnt` and `Hokan_flg` on `pSub1`'s
+        // clips, and their speed.
+        methods.add_method_mut(
+            "pl_set_motion",
+            |_,
+             e,
+             (clip, count, hokan, x, y, z, neck): (i64, i64, i64, i64, i64, i64, Option<i64>)| {
+                let pl = &mut *e.em().world.pl;
+                pl.neck.flags |= neck.unwrap_or(0) as u8;
+                pl.bank = player2::Bank::Held;
+                pl.move_no = clip as u8;
+                pl.move_cnt = count as u8;
+                pl.hokan = hokan as u8;
+                pl.spd = [x as i16, y as i16, z as i16];
+                Ok(())
+            },
+        );
+        methods.add_method_mut("pl_set_sub1", |_, e, ()| {
+            e.em().world.sub1 = true;
+            Ok(())
+        });
         methods.add_method_mut("pl_hold", |_, e, ()| {
             let world = &mut *e.em().world;
             world.pl.held_by = Some(world.slot);
@@ -768,6 +812,23 @@ impl UserData for Api {
             player2::set_part_flags(e.em().work(), part as u8, 0);
             Ok(())
         });
+        // `Sa_parts_allmv`: the part's children placed by its morph's weights,
+        // as the model's morph data has them.
+        methods.add_method_mut(
+            "morph",
+            |_, e, (part, weights): (u8, mlua::Variadic<i16>)| {
+                let em = e.em();
+                let Some(morph) = em.mover.tick.morphs.iter().find(|morph| morph.part == part)
+                else {
+                    return Ok(());
+                };
+                let joints = morph.joint_offsets(&weights);
+                let offsets = &mut em.work().joint_offsets;
+                offsets.retain(|(index, _)| joints.iter().all(|(child, _)| child != index));
+                offsets.extend(joints);
+                Ok(())
+            },
+        );
         // Where `pSin_parts_ptr[part]` hangs from its parent.
         methods.add_method_mut("part_offset", |_, e, part: usize| {
             let [x, y, z] = e
@@ -942,8 +1003,16 @@ impl UserData for Api {
             e.em().world.pl.routine[routine_index(index)?] = value as u8;
             Ok(())
         });
+        methods.add_method_mut("pl_or_neck_flags", |_, e, bits: i64| {
+            e.em().world.pl.neck.flags |= bits as u8;
+            Ok(())
+        });
         methods.add_method_mut("pl_or_be_flg", |_, e, bits: i64| {
             e.em().world.pl.be_flg |= bits as u32;
+            Ok(())
+        });
+        methods.add_method_mut("pl_clear_be_flg", |_, e, bits: i64| {
+            e.em().world.pl.be_flg &= !(bits as u32);
             Ok(())
         });
         methods.add_method_mut("pl_set_timer", |_, e, (index, value): (usize, i64)| {
@@ -987,6 +1056,13 @@ impl UserData for Api {
         });
         methods.add_method_mut("area_count", |_, e, ()| Ok(e.em().world.guides.len()));
         // `Goto00_ck`: 0 once within `rate`, or the way to turn.
+        // `Hit_ck_point4` of the body's place on the current cut's view
+        // (`DWORD_00988630`); true when the cut has none.
+        methods.add_method_mut("in_cut_view", |_, e, ()| {
+            let em = e.em();
+            let [x, _, z] = em.mover.player.pos;
+            Ok(em.mover.tick.room.in_cut_view(x, z).unwrap_or(true))
+        });
         methods.add_method_mut("goto_ck", |_, e, (x, z, rate): (i32, i32, i32)| {
             let body = &*e.em().mover.player;
             let target = direction_ck(body.pos[0], body.pos[2], x, z);
@@ -1023,6 +1099,13 @@ impl UserData for Api {
         );
         methods.add_method_mut("player_floor", |_, e, ()| Ok(e.em().world.player_floor));
         // `Approach` on the player's position.
+        methods.add_method_mut("set_player_xz", |_, e, (x, z): (i32, i32)| {
+            let world = &mut *e.em().world;
+            world.player_moved = true;
+            world.player[0] = x;
+            world.player[2] = z;
+            Ok(())
+        });
         methods.add_method_mut("player_approach", |_, e, (x, z, rate): (i32, i32, i32)| {
             let world = &mut *e.em().world;
             let [old_x, _, old_z] = world.player;
@@ -1064,8 +1147,147 @@ impl UserData for Api {
         methods.add_method_mut("draw_buffer", |_, e, ()| Ok(e.em().world.draw_buffer));
         methods.add_method_mut("room_code", |_, e, ()| Ok(e.em().world.room_code));
         methods.add_method_mut("set_status", |_, e, bits: i64| {
-            e.em().world.status_or |= bits as u32;
+            let world = &mut e.em().world;
+            world.status_or |= bits as u32;
+            world.status_and_not &= !(bits as u32);
             Ok(())
+        });
+        methods.add_method_mut("clear_status", |_, e, bits: i64| {
+            let world = &mut e.em().world;
+            world.status_and_not |= bits as u32;
+            world.status_or &= !(bits as u32);
+            Ok(())
+        });
+        // Whether any of `bits` is set in `fg_status`'s first word.
+        methods.add_method_mut("status", |_, e, bits: i64| {
+            let world = &e.em().world;
+            let word = world
+                .banks
+                .get(usize::from(crate::scd2::host::STATUS_BANK))
+                .map_or(0, |words| words[0]);
+            // The aim's `0x80` (`pl_mv_05`) is kept on the player.
+            let aim = if world.pl.holds_view() { 0x80 } else { 0 };
+            Ok((word | world.status_or | aim) & !world.status_and_not & bits as u32 != 0)
+        });
+        // `Flg_ck` of a flag bank, with what the script changed this tick.
+        methods.add_method_mut("flag", |_, e, (bank, index): (u8, u8)| {
+            let world = &e.em().world;
+            if let Some(&(_, _, op)) = world
+                .flag_ops
+                .iter()
+                .rev()
+                .find(|&&(b, i, _)| b == bank && i == index)
+            {
+                return Ok(op == 1);
+            }
+            Ok(world.banks.get(usize::from(bank)).is_some_and(|words| {
+                words[usize::from(index >> 5) & 7] & (0x8000_0000 >> (index & 31)) != 0
+            }))
+        });
+        methods.add_method_mut("set_flag", |_, e, (bank, index, on): (u8, u8, bool)| {
+            e.em().world.flag_ops.push((bank, index, u8::from(on)));
+            Ok(())
+        });
+        // `Cut_change`.
+        methods.add_method_mut("cut_change", |_, e, cut: u8| {
+            e.em().world.cut = Some(cut);
+            Ok(())
+        });
+        // Where object `index` of the room (`obj_model_set`) stands.
+        methods.add_method_mut("object_pos", |_, e, index: usize| {
+            let [x, y, z] = e.em().world.objects.get(index).copied().unwrap_or_default();
+            Ok((x, y, z))
+        });
+        methods.add_method_mut("cut", |_, e, ()| Ok(e.em().world.camera_cut));
+        // A room object's `Be_flg` cleared: it's gone (`Om_explosion_set`'s end).
+        methods.add_method_mut("hide_object", |_, e, index: usize| {
+            e.em().world.hidden_objects.push(index);
+            Ok(())
+        });
+        methods.add_method_mut(
+            "set_object_pos",
+            |_, e, (index, x, y, z): (usize, i32, i32, i32)| {
+                if let Some(pos) = e.em().world.objects.get_mut(index) {
+                    *pos = [x, y, z];
+                }
+                Ok(())
+            },
+        );
+        // A point given on `part`'s matrix as the last draw left it (`Workm`),
+        // in the world (`Rot_add_matrix`'s translation), or nils before the
+        // first draw; `part_point` poses the part on this tick's frame instead.
+        // And back (`MulLMatrix`'s).
+        methods.add_method_mut(
+            "drawn_part_point",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let matrix = e.em().z.parts.get(part).copied().flatten();
+                let Some(matrix) = matrix else {
+                    return Ok((None, None, None));
+                };
+                let at = [x, y, z];
+                let [wx, wy, wz] = std::array::from_fn(|row| {
+                    let turned: i64 = (0..3)
+                        .map(|k| i64::from(matrix.m[row][k]) * i64::from(at[k]))
+                        .sum();
+                    matrix.t[row].wrapping_add((turned >> 12) as i32)
+                });
+                Ok((Some(wx), Some(wy), Some(wz)))
+            },
+        );
+        methods.add_method_mut(
+            "part_local",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let matrix = e.em().z.parts.get(part).copied().flatten();
+                let Some(matrix) = matrix else {
+                    return Ok((x, y, z));
+                };
+                let point = player2::Matrix {
+                    m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+                    t: [x, y, z],
+                };
+                let [lx, ly, lz] = point.relative_to(&matrix).t;
+                Ok((lx, ly, lz))
+            },
+        );
+        // `Rot_neck` with `Neck_flg`'s 4: `Neck_no` `joint` turns toward
+        // `Neck_point` (`+0x170`) rather than the player's head. Only the
+        // yaw is turned; the pitch (`+0x9A`) isn't ported.
+        methods.add_method_mut(
+            "rot_neck_point",
+            |_, e, (joint, rate, limit, x, y, z): (usize, i32, i32, i32, i32, i32)| {
+                let em = e.em();
+                let from = em.z.parts.get(joint).copied().flatten().map(|m| m.t);
+                let angle = em.mover.player.angle as i16;
+                em.work().neck.joint = Some(joint as u8);
+                em.mover
+                    .rot_neck_joint(joint, from, Some([x, y, z]), angle, rate, limit);
+                Ok(())
+            },
+        );
+        // `Rot_neck_em` on `Neck_no` `joint`, with the joint's rate and limit
+        // (its `+0x9C` and `+0xA0`), from where the last draw left it toward
+        // the player's head.
+        methods.add_method_mut(
+            "rot_neck_part",
+            |_, e, (joint, rate, limit): (usize, i32, i32)| {
+                let em = e.em();
+                let from = em.z.parts.get(joint).copied().flatten().map(|m| m.t);
+                let target = em.world.player_neck;
+                let angle = em.mover.player.angle as i16;
+                em.work().neck.joint = Some(joint as u8);
+                em.mover
+                    .rot_neck_joint(joint, from, target, angle, rate, limit);
+                Ok(())
+            },
+        );
+        // The alligator's jaws: the roll of parts 6 and 7 on top of their pose.
+        methods.add_method_mut("set_jaw", |_, e, (six, seven): (i16, i16)| {
+            e.em().work().neck.jaw = [six, seven];
+            Ok(())
+        });
+        // The player's `At_em_flg`: a body touched them this tick.
+        methods.add_method_mut("player_touched", |_, e, ()| {
+            Ok(e.em().world.pl.at_em_flg != 0)
         });
         methods.add_method_mut("set_player_angle", |_, e, angle: i64| {
             e.em().world.turn_player = Some(angle as u16 & 0xFFF);
@@ -1472,9 +1694,83 @@ impl UserData for Api {
 mod tests {
     use super::*;
 
-    const SCRIPTS: [&str; 9] = [
+    /// The names a source registers through `add_method`, `add_function` or
+    /// their `_mut` forms, in order.
+    fn registered_names(source: &str) -> Vec<&str> {
+        let mut names = Vec::new();
+        for (at, _) in source.match_indices(".add_") {
+            let rest = &source[at + ".add_".len()..];
+            let kind_len = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            if !matches!(
+                &rest[..kind_len],
+                "method" | "method_mut" | "function" | "function_mut"
+            ) {
+                continue;
+            }
+            let Some(args) = rest[kind_len..].strip_prefix('(') else {
+                continue;
+            };
+            let Some(quoted) = args.trim_start().strip_prefix('"') else {
+                continue;
+            };
+            if let Some(end) = quoted.find('"') {
+                names.push(&quoted[..end]);
+            }
+        }
+        names
+    }
+
+    fn repeated_names<'a>(names: &[&'a str]) -> Vec<&'a str> {
+        let mut seen = std::collections::HashSet::new();
+        names
+            .iter()
+            .copied()
+            .filter(|name| !seen.insert(*name))
+            .collect()
+    }
+
+    /// mlua keeps the last of two methods registered under one name, so a
+    /// second registration silently replaces the first for every script.
+    #[test]
+    fn no_enemy_script_method_is_registered_twice() {
+        for (file, source) in [
+            ("src/zombie2/script.rs", include_str!("script.rs")),
+            ("src/enemy/lua.rs", include_str!("../enemy/lua.rs")),
+        ] {
+            // The tests' own samples below aren't registrations.
+            let code = source.split("#[cfg(test)]").next().unwrap_or(source);
+            let names = registered_names(code);
+            assert!(
+                names.len() > 100,
+                "{file}: only {} names found",
+                names.len()
+            );
+            assert_eq!(repeated_names(&names), Vec::<&str>::new(), "{file}");
+        }
+    }
+
+    #[test]
+    fn the_registration_scan_finds_a_repeated_name() {
+        let source = r#"
+            methods.add_method_mut("pos", |_, e, ()| Ok(()));
+            methods.add_method(
+                "part_point",
+                |_, e, ()| Ok(()),
+            );
+            methods.add_function("pos", |_, ()| Ok(()));
+            methods.add_meta_method(MetaMethod::ToString, |_, e, ()| Ok(()));
+        "#;
+        let names = registered_names(source);
+        assert_eq!(names, ["pos", "part_point", "pos"]);
+        assert_eq!(repeated_names(&names), ["pos"]);
+    }
+
+    const SCRIPTS: [&str; 10] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
+        include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
@@ -2372,5 +2668,285 @@ mod tests {
         assert_eq!(young.get("died"), 0);
         let young = run_young(0x2002, &[], 2, setup);
         assert_eq!((young.get("died"), young.get("be")), (1, 0));
+    }
+
+    /// A stand-in for the work, enough for `enemy/23/enemy.lua`'s init, wait,
+    /// entry and swim. Each clip ends after `CLIP_LEN` steps.
+    const ALLIGATOR_STUB: &str = "
+        w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, be = 1, angle = 1024,
+            pos = { 5706, 3000, -5316 }, move_no = 0, move_cnt = 0, status = 0,
+            cleared = 0, cuts = {}, steps = 0, sce = SCE, moved = 0 }
+        e = {}
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:set_life(v) w.life = v end
+        function e:move_no() return w.move_no end
+        function e:move_cnt() return w.move_cnt end
+        function e:set_move_no(v) w.move_no = v end
+        function e:clip(n, c) w.move_no = n; w.move_cnt = c; w.steps = 0 end
+        function e:joint()
+            w.steps = w.steps + 1
+            w.move_cnt = w.move_cnt + 1
+            return w.steps >= CLIP_LEN
+        end
+        function e:add_speed_xz() w.moved = w.moved + 1 end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:set_pos(x, y, z) w.pos = { x, y, z } end
+        function e:sce_free(i) return w.sce end
+        function e:set_status(bits) w.status = w.status | bits end
+        function e:clear_status(bits) w.cleared = w.cleared | bits; w.status = w.status & ~bits end
+        function e:status(bits) return w.status & bits ~= 0 end
+        function e:cut_change(cut) w.cuts[#w.cuts + 1] = cut end
+        function e:distance() return DIST end
+        function e:now_seq() return 0 end
+        function e:neck_flags() return 0 end
+        function e:object_pos() return 1836, -1800, -21254 end
+        function e:flag() return false end
+        w.jaws = {}
+        w.pl = { 1, 0, 0, 0 }
+        w.downs = {}
+        w.draws = 0
+        w.effects = 0
+        function e:set_jaw(six, seven) w.jaws[#w.jaws + 1] = { six, seven } end
+        function e:player_touched() return TOUCH end
+        w.dc = 0
+        function e:pl_damage_cnt() return w.dc end
+        -- The player's own tick sets its `Damage_cnt` as the throw starts.
+        function e:pl_hold() w.dc = 0x80 end
+        function e:cdir_player() return true end
+        function e:pl_set_routine(a, b, c, d) w.pl = { a, b, c, d } end
+        function e:pl_set_routine_at(i, v) w.pl[i + 1] = v end
+        function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+        function e:rnd() w.draws = w.draws + 1 return 0 end
+        function e:call_effect() w.effects = w.effects + 1 end
+        function e:player_pos() return 0, -1800, 20000 end
+        function e:direction_from_player() return 0 end
+        function e:own_part() return 0, 0, 0 end
+        function e:hypot() return 20000 end
+        for _, name in ipairs({ 'set_damage_flg', 'set_sce_flg', 'set_neck_flags',
+            'set_body_box', 'set_body_ofs_x', 'spd', 'seq_sound', 'sound',
+            'player_goto_angle', 'rot_neck_part' }) do
+            e[name] = function() end
+        end
+    ";
+
+    struct Alligator(std::collections::HashMap<String, i64>, Vec<u8>);
+
+    impl Alligator {
+        fn get(&self, name: &str) -> i64 {
+            self.0[name]
+        }
+    }
+
+    fn run_alligator(ticks: usize, setup: &str) -> Alligator {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        let script = include_str!("../../games/re2/enemy/23/enemy.lua");
+        budget.begin();
+        lua.load(format!(
+            "SCE = 0 DIST = 20000 CLIP_LEN = 4 TOUCH = false {setup}
+             {ALLIGATOR_STUB}
+             {script}"
+        ))
+        .exec()
+        .unwrap();
+        // A tick at a time, each with its own budget, as the engine runs them.
+        for _ in 0..ticks {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        budget.begin();
+        lua.load(
+            "return { r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], life = w.life, be = w.be,
+                 cuts = w.cuts, angle = w.angle, z = w.pos[3], move_no = w.move_no,
+                 status = w.status, cleared = w.cleared, rest = w.vars[15] or 0,
+                 moved = w.moved, draws = w.draws, effects = w.effects,
+                 pl1 = w.pl[2], down = w.downs[1] or 0, downs = #w.downs,
+                 jaw = #w.jaws > 0 and (w.jaws[#w.jaws][1] * 0x10000 + (w.jaws[#w.jaws][2] & 0xFFFF)) or 0 }",
+        )
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let cuts = table
+                .get::<mlua::Table>("cuts")
+                .unwrap()
+                .sequence_values()
+                .map(Result::unwrap)
+                .collect();
+            let fields = [
+                "r0", "r1", "r2", "life", "be", "angle", "z", "move_no", "status", "cleared",
+                "rest", "moved", "draws", "effects", "pl1", "down", "downs", "jaw",
+            ]
+            .into_iter()
+            .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+            .collect();
+            Alligator(fields, cuts)
+        })
+        .unwrap()
+    }
+
+    /// `FUN_00468a10`: a life of 25300 and `Be_flg`'s `0x1c00004c`; then the
+    /// entry waits for the room's scene, with `Mot_play_init`'s `Move_no`
+    /// 0xFF from the init's change of routines.
+    #[test]
+    fn an_alligator_waits_for_the_scene() {
+        let alligator = run_alligator(1, "");
+        assert_eq!(alligator.get("life"), 25300);
+        assert_eq!(alligator.get("be"), 0x1C00_004D);
+        assert_eq!(alligator.get("move_no"), 0xFF);
+        let alligator = run_alligator(50, "");
+        assert_eq!(
+            (
+                alligator.get("r0"),
+                alligator.get("r1"),
+                alligator.get("r2")
+            ),
+            (1, 0, 0)
+        );
+        assert_eq!(alligator.get("moved"), 0);
+    }
+
+    /// `FUN_00468d30`: `Sce_free0` starts clip 6 under `fg_status`'s `0x110`;
+    /// its end cuts to camera 1 and puts it at `z` -21212, and clip 3's end
+    /// turns it a quarter, clears `0x110` and rests for 110 ticks.
+    #[test]
+    fn an_alligator_enters_when_the_scene_says() {
+        let alligator = run_alligator(3, "SCE = 1");
+        assert_eq!(alligator.get("r2"), 1);
+        assert_eq!(alligator.get("status"), 0x110);
+        assert_eq!(alligator.get("move_no"), 6);
+        // Tick 2 starts the entry, and clip 6's fourth step, on tick 6, ends it.
+        let alligator = run_alligator(6, "SCE = 1");
+        assert_eq!(alligator.get("r2"), 2);
+        assert_eq!(alligator.1, [1]);
+        assert_eq!(alligator.get("z"), -0x52DC);
+        let alligator = run_alligator(10, "SCE = 1");
+        assert_eq!(
+            (
+                alligator.get("r0"),
+                alligator.get("r1"),
+                alligator.get("r2")
+            ),
+            (1, 1, 0)
+        );
+        assert_eq!(alligator.get("angle"), 1024 + 0x400);
+        assert_eq!(alligator.get("cleared"), 0x110);
+        assert_eq!(alligator.get("rest"), 0x6E - 1);
+    }
+
+    /// `FUN_00468e20`: the rest runs out, then it swims (`Routine_1` 2) while
+    /// the player is more than 90 away.
+    #[test]
+    fn an_alligator_swims_once_its_rest_runs_out() {
+        let alligator = run_alligator(10 + 0x6D, "SCE = 1");
+        assert_eq!(alligator.get("r1"), 1);
+        let alligator = run_alligator(10 + 0x6E, "SCE = 1");
+        assert_eq!(alligator.get("r1"), 2);
+        assert_eq!(alligator.get("move_no"), 1);
+        let alligator = run_alligator(10 + 0x6E, "SCE = 1 DIST = 50");
+        assert_eq!(alligator.get("r1"), 1);
+    }
+
+    /// `FUN_00469480`: once the player has touched it, the jaws open and
+    /// close over eight ticks (as the original's `+0x22a` and `+0x228` went
+    /// in room 40A), then snap: `FUN_00469630` throws the player on from
+    /// behind (`Routine` 5,3) for `Pl_life_down(40)`, and `FUN_0046b1c0`
+    /// bleeds on three ticks, four draws of `Rnd` each.
+    #[test]
+    fn an_alligators_jaws_snap_at_the_player() {
+        let jaws = [
+            (1, -6),
+            (5, -25),
+            (11, -56),
+            (20, -100),
+            (29, -144),
+            (35, -175),
+            (39, -194),
+            (40, -200),
+            (38, -189),
+        ];
+        // The entry ends on tick 10; the rest's first tick, 11, sees the touch.
+        for (tick, (six, seven)) in jaws.into_iter().enumerate() {
+            let alligator = run_alligator(11 + tick, "SCE = 1 TOUCH = true");
+            let jaw = alligator.get("jaw");
+            assert_eq!(
+                ((jaw >> 16) as i16, jaw as i16),
+                (six, seven),
+                "tick {tick}"
+            );
+        }
+        let alligator = run_alligator(19, "SCE = 1 TOUCH = true");
+        assert_eq!(alligator.get("downs"), 1, "the snap's first tick");
+        assert_eq!(alligator.get("down"), 0x28);
+        assert_eq!(alligator.get("pl1"), 3);
+        assert_eq!((alligator.get("draws"), alligator.get("effects")), (4, 1));
+        let alligator = run_alligator(21, "SCE = 1 TOUCH = true");
+        assert_eq!((alligator.get("draws"), alligator.get("effects")), (12, 3));
+        let alligator = run_alligator(30, "SCE = 1 TOUCH = true");
+        assert_eq!(alligator.get("draws"), 12);
+    }
+
+    /// `FUN_004697f0`: once its swim reaches the gas tank, it raises
+    /// `fg_room`'s 0x1d, opens its jaws over 13 ticks pushing the tank ahead,
+    /// takes it in them and settles it 1750 ahead and 210 up on part 6 over
+    /// 26 more.
+    #[test]
+    fn an_alligator_takes_the_gas_tank_in_its_jaws() {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        let script = include_str!("../../games/re2/enemy/23/enemy.lua");
+        budget.begin();
+        lua.load(format!(
+            "SCE = 0 DIST = 20000 CLIP_LEN = 4 TOUCH = false
+             {ALLIGATOR_STUB}
+             {script}
+             w.flags = {{}}
+             w.tank = {{ -22816, -1984, -14000 }}
+             function e:flag() return false end
+             function e:set_flag(bank, index, on) w.flags[#w.flags + 1] = bank * 0x100 + index end
+             function e:object_pos() return w.tank[1], w.tank[2], w.tank[3] end
+             function e:set_object_pos(_, x, y, z) w.tank = {{ x, y, z }} end
+             function e:part_local(_, x, y, z) return x - 1000, y, z end
+             function e:drawn_part_point(_, x, y, z) return x, y, z end
+             update(e)
+             w.pos = {{ -24299, -1800, -18000 }}
+             w.r = {{ [0] = 1, 1, 0, 0 }}
+             w.vars[7] = 1"
+        ))
+        .exec()
+        .unwrap();
+        let state = |lua: &mlua::Lua| -> (i64, i64, i64, i64) {
+            lua.load("return w.vars[7], w.tank[3], w.vars[24] or 0, w.vars[25] or 0")
+                .eval()
+                .unwrap()
+        };
+        budget.begin();
+        lua.load("update(e)").exec().unwrap();
+        // Pushed to 0x1FA4 ahead of it, and `fg_room`'s 0x1d raised.
+        assert_eq!(state(&lua), (2, -18000 + 0x1FA4, 0, 0));
+        assert_eq!(lua.load("return w.flags[1]").eval::<i64>().unwrap(), 0x51D);
+        for _ in 0..12 {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        // Taken on part 6 on the 13th tick.
+        assert_eq!(state(&lua), (3, -18000 + 0x1FA4, -22816 - 1000, -1984));
+        for _ in 0..26 {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        assert_eq!(state(&lua).0, 7);
+        budget.begin();
+        lua.load("update(e)").exec().unwrap();
+        let (_, _, x, y) = state(&lua);
+        // Settling on 1750 and -210, by 100 and 0x1E a tick.
+        assert!(x > -23816 && y > -1984, "{x} {y}");
+        // Where the original's jaws (`+0x22a`, `+0x228`) rest with the tank.
+        let jaws: (i64, i64) = lua.load("return w.vars[10], w.vars[9]").eval().unwrap();
+        assert_eq!(jaws, (34, -161));
     }
 }

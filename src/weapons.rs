@@ -2562,7 +2562,9 @@ fn knife_swing(
     let character = usize::from(game.id.player_flag & 1);
     let motion = player.anim.clip;
     let e = (character * 3 + motion) * 2;
-    if (12..=13).contains(&e) {
+    // The swing clips are 6..=8 for both characters, so `e` runs 12..=22:
+    // one (window, width) pair of KNIFE_FIRE_WINDOW per character and clip.
+    if (12..=22).contains(&e) {
         let window = KNIFE_FIRE_WINDOW[e - 12];
         let width = KNIFE_FIRE_WINDOW[e - 11];
         if frame.wrapping_sub(window) < width && player.weapon.aim_flags & 2 == 0 {
@@ -4703,6 +4705,17 @@ mod tests {
             game.inventory[0].quantity, 14,
             "the round still left the clip"
         );
+    }
+
+    #[test]
+    fn jills_knife_swing_damages_in_her_fire_window() {
+        // Jill's torso swing is clip 6, e = (3 + 6) * 2 = 18: her window
+        // pair is KNIFE_FIRE_WINDOW[6..8], not Chris's first pair.
+        let (mut game, mut player) = armed(1, 0);
+        game.id.player_flag = 1;
+        place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
+        drive(&mut game, &mut player, aiming(true), 40);
+        assert_eq!(game.entities[1].health, 45, "the web knife record");
     }
 
     #[test]

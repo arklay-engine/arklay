@@ -8,36 +8,37 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_MESSAGE 0x01
-#define AOT_02_MESSAGE 0x02
-#define AOT_03_MESSAGE 0x03
-#define AOT_04_MESSAGE 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_USEITEM 0x06
-#define AOT_07_ITEM 0x07
-#define AOT_08_ITEM 0x08
-#define AOT_09_ITEM 0x09
+#define AOT_00_DOOR_208 0x00
+#define AOT_01_MESSAGE_ARRANGED 0x01                        // "It's well arranged."; init turns it into the event that shows the researcher's will.
+#define AOT_02_MESSAGE_SWITCH 0x02                          // Init turns it into the shelf switch event.
+#define AOT_03_MESSAGE_NOTHING 0x03                         // "Nothing special."
+#define AOT_04_MESSAGE_BACK_OF_SHELF 0x04                   // "There's something at the back of the shelf."
+#define AOT_05_USEITEM_SHELF_SPOT 0x05                      // Under-object spot; raises F_ROOM_SHELF_PUSHED_ASIDE.
+#define AOT_06_USEITEM_AQUARIUM 0x06                        // Under-player spot by the aquarium; raises F_ROOM_PLAYER_AT_AQUARIUM.
+#define AOT_07_ITEM_AMMO_GRENADE_EXPLOSIVE 0x07
+#define AOT_07_ITEM_AMMO_SHOTGUN 0x07
+#define AOT_08_ITEM_FILE_RESEARCHERS_WILL 0x08
+#define AOT_09_ITEM_INK 0x09
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_03 0x03
-#define CAM_04 0x04
-#define CAM_05 0x05
-#define ENEMY_00_NPC_BARRY 0x00
+#define CAM_04_AQUARIUM 0x04
+#define CAM_05_SWITCH 0x05
+#define ENEMY_00_BARRY 0x00
 #define FX_25 0x25
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_03 0x03
-#define F_ROOM_0A 0x0A
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_24 0x24
-#define F_ROOM_25 0x25
-#define F_ROOM_26 0x26
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
+#define F_ROOM_BUBBLE_SPAWNED 0x26                          // A bubble was spawned this frame.
+#define F_ROOM_J_BARRY_ANIM_DONE 0x25                       // Barry's animation finished (one frame).
+#define F_ROOM_J_BARRY_SCENE 0x22                           // Barry is here to show Jill the researcher's will.
+#define F_ROOM_J_BARRY_WALK_DONE 0x03                       // Barry's walk finished.
+#define F_ROOM_PLAYER_ANIM_DONE 0x24                        // The player's animation finished (one frame).
+#define F_ROOM_PLAYER_AT_AQUARIUM 0x21                      // The player stands by the aquarium (raised each frame).
+#define F_ROOM_SHELF_PUSHED_ASIDE 0x20                      // Likely: the shelf was pushed onto AOT_05 and no longer hides the ammo (raised each frame).
+#define F_ROOM_SWITCH_PUSHED 0x0A                           // The switch was pushed; the bubbles stop.
+#define F_ROOM_TOO_HEAVY_RUNNING 0x01                       // The "too heavy to move" event is running.
+#define F_ROOM_WATER_DRAINED 0x02                           // The water finished sinking.
+#define IMDL_00_AMMO 0x00
+#define IMDL_01_FILE_RESEARCHERS_WILL 0x01
+#define IMDL_02_INK 0x02
 #define MSG_IT_IS_TOO_HEAVY_TO_MOVE 0x01
 #define MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE 0x03
 #define MSG_VO_108_00 0x09
@@ -48,9 +49,9 @@
 #define MSG_VO_108_05 0x0E
 #define MSG_VO_108_06 0x0F
 #define MSG_VO_108_07 0x10
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
+#define OBJ_00_AQUARIUM 0x00
+#define OBJ_01_AQUARIUM_WATER 0x01                          // Likely: the water; it bubbles, then sinks away when drained.
+#define OBJ_02_SHELF 0x02                                   // Likely: the shelf hiding the ammo.
 #define SE_18_SW_PUSH 0x18
 #define SE_19_AQUARIUM 0x19
 #define SE_DOOR_00 0x00
@@ -67,101 +68,101 @@
 proc init
 {
     room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_MAIN_ON | 1);
-    door_aot_set(AOT_00_DOOR, 1000, 5000, 1300, 1600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_01_MESSAGE, 5800, 2400, 1900, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_02_MESSAGE, 1800, 1700, 2000, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_03_MESSAGE, 5000, 2400, 800, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 3930, 7500, 1800, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_USEITEM, 6200, 7000, 1530, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 32, 0, 1, 0);
-    aot_set(AOT_06_USEITEM, 6800, 4000, 800, 4000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-    if (CHRIS)
+    door_aot_set(AOT_00_DOOR_208, 1000, 5000, 1300, 1600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_MESSAGE_ARRANGED, 5800, 2400, 1900, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE_SWITCH, 1800, 1700, 2000, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE_NOTHING, 5000, 2400, 800, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE_BACK_OF_SHELF, 3930, 7500, 1800, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_USEITEM_SHELF_SPOT, 6200, 7000, 1530, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 32, 0, 1, 0);
+    aot_set(AOT_06_USEITEM_AQUARIUM, 6800, 4000, 800, 4000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_0F, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_07_ITEM_AMMO_SHOTGUN, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_0F, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_07_ITEM_AMMO_GRENADE_EXPLOSIVE, 4110, 7500, 900, 1000, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, IMDL_00_AMMO, SCA_NONE, 5330, -18000, 9160, 0, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    if (ck(FG_ITEM, F_ITEM_0F, FALSE))
+    if (ck(FG_ITEM, F_ITEM_20A_AMMO_SHOTGUN_OR_GRENADE_EXPLOSIVE_0, FALSE))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_04_MESSAGE_BACK_OF_SHELF, SCE_NONE, 0, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (ck(FG_COMMON, F_COMMON_07, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_62, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
-                eml_rot(IMDL_01, 2048, 0);
-                aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
+                item_aot_set(AOT_08_ITEM_FILE_RESEARCHERS_WILL, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01_FILE_RESEARCHERS_WILL, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
+                eml_rot(IMDL_01_FILE_RESEARCHERS_WILL, 2048, 0);
+                aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, find_researchers_will, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
-                eml_rot(IMDL_01, 2048, 0);
-                aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
+                item_aot_set(AOT_08_ITEM_FILE_RESEARCHERS_WILL, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01_FILE_RESEARCHERS_WILL, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
+                eml_rot(IMDL_01_FILE_RESEARCHERS_WILL, 2048, 0);
+                aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, find_researchers_will, 0);
             }
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_08, FALSE))
+        if (ck(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_62, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
-                eml_rot(IMDL_01, 2048, 0);
-                aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
+                item_aot_set(AOT_08_ITEM_FILE_RESEARCHERS_WILL, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01_FILE_RESEARCHERS_WILL, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
+                eml_rot(IMDL_01_FILE_RESEARCHERS_WILL, 2048, 0);
+                aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, find_researchers_will, 0);
             }
-            else if (ck(FG_COMMON, F_COMMON_07, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_J_BARRY_ACID_ROUNDS, TRUE))
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
-                eml_rot(IMDL_01, 2048, 0);
-                aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
+                item_aot_set(AOT_08_ITEM_FILE_RESEARCHERS_WILL, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, IMDL_01_FILE_RESEARCHERS_WILL, SCA_NONE, 7490, -1440, 2640, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
+                eml_rot(IMDL_01_FILE_RESEARCHERS_WILL, 2048, 0);
+                aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, find_researchers_will, 0);
             }
             else
             {
-                item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01, SCA_NONE, 0, 10000, 0, 0, F_ITEM_10, SAT_MANUAL | SAT_PLAYER, 0);
-                set(FG_ROOM, F_ROOM_22, TRUE);
+                item_aot_set(AOT_08_ITEM_FILE_RESEARCHERS_WILL, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, IMDL_01_FILE_RESEARCHERS_WILL, SCA_NONE, 0, 10000, 0, 0, F_ITEM_20A_FILE_RESEARCHERS_WILL_1_OR_FILE_RESEARCHERS_WILL_2_1, SAT_MANUAL | SAT_PLAYER, 0);
+                set(FG_ROOM, F_ROOM_J_BARRY_SCENE, TRUE);
             }
         }
     }
-    if (USA)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, FALSE) && ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
     {
-        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_09_ITEM_INK, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02_INK, SCA_NONE, 0, 0, 0, 0, F_ITEM_20A_INK_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_09_ITEM_INK, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02_INK, SCA_NONE, 0, 0, 0, 0, F_ITEM_20A_INK_2, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 7470, 0, 5850, 2048, 0, 930, 0, -930, 240, 10000, 640, 1170);
-    if (ck(FG_SCENARIO, F_SCENARIO_12, TRUE))
+    obj(OBJ_00_AQUARIUM, OF_ACTIVE, SCA_NONE, 7470, 0, 5850, 2048, 0, 930, 0, -930, 240, 10000, 640, 1170);
+    if (ck(FG_SCENARIO, F_SCENARIO_AQUARIUM_DRAINED, TRUE))
     {
-        aot_reset(AOT_02_MESSAGE, SCE_NONE, 0, 0, 0, 0);
-        aot_reset(AOT_06_USEITEM, SCE_NONE, 0, 0, 0, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, -20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        aot_reset(AOT_02_MESSAGE_SWITCH, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_06_USEITEM_AQUARIUM, SCE_NONE, 0, 0, 0, 0);
+        obj(OBJ_01_AQUARIUM_WATER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00_AQUARIUM, 0, -20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         cut_auto(CUT_LOCKED);
         setb(B_CAMERA, CAM_03, 0);
-        set(FG_ROOM, F_ROOM_0A, TRUE);
+        set(FG_ROOM, F_ROOM_SWITCH_PUSHED, TRUE);
     }
     else
     {
-        aot_reset(AOT_02_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_02_message, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7620, -1200, 5920, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
+        aot_reset(AOT_02_MESSAGE_SWITCH, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, examine_switch, 0);
+        obj(OBJ_01_AQUARIUM_WATER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7620, -1200, 5920, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        obj(OBJ_02, OF_ACTIVE, SCA_NONE, 4995, 0, 7552, 1024, 0, 830, 0, -830, 340, 10000, 1070, 940);
+        obj(OBJ_02_SHELF, OF_ACTIVE, SCA_NONE, 4995, 0, 7552, 1024, 0, 830, 0, -830, 340, 10000, 1070, 940);
     }
     else
     {
-        obj(OBJ_02, OF_ACTIVE, SCA_NONE, 4995, 0, 7552, 1024, 0, 850, 0, -850, 320, 10000, 1070, 940);
-        if (ck(FG_ROOM, F_ROOM_22, TRUE))
+        obj(OBJ_02_SHELF, OF_ACTIVE, SCA_NONE, 4995, 0, 7552, 1024, 0, 850, 0, -850, 320, 10000, 1070, 940);
+        if (ck(FG_ROOM, F_ROOM_J_BARRY_SCENE, TRUE))
         {
-            enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 320, 0, 5496, 0, 3240, ENEMY_00_NPC_BARRY, ANIM_23, 8, EVAR_00);
-            evt_exec(0, TASK_00, on_enter);
-            set(FG_STATUS, F_STATUS_1D, TRUE);
+            enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 320, 0, 5496, 0, 3240, ENEMY_00_BARRY, ANIM_23, 8, EVAR_00);
+            evt_exec(0, TASK_00, barry_shows_researchers_will);
+            set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
             room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_RELOAD);
         }
     }
@@ -169,221 +170,221 @@ proc init
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_12, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_AQUARIUM_DRAINED, FALSE))
     {
-        if (ck(FG_ROOM, F_ROOM_21, TRUE) && ck(FG_ROOM, F_ROOM_01, FALSE) && ck_anim(OBJ_00, CMP_GE, 7))
+        if (ck(FG_ROOM, F_ROOM_PLAYER_AT_AQUARIUM, TRUE) && ck(FG_ROOM, F_ROOM_TOO_HEAVY_RUNNING, FALSE) && ck_anim(OBJ_00_AQUARIUM, CMP_GE, 7))
         {
-            set(FG_ROOM, F_ROOM_01, TRUE);
-            evt_exec(0, TASK_00, from_main);
+            set(FG_ROOM, F_ROOM_TOO_HEAVY_RUNNING, TRUE);
+            evt_exec(0, TASK_00, aquarium_too_heavy);
         }
     }
-    else if (ck(FG_ROOM, F_ROOM_01, FALSE))
+    else if (ck(FG_ROOM, F_ROOM_TOO_HEAVY_RUNNING, FALSE))
     {
         cut_auto(CUT_FREE);
-        set(FG_ROOM, F_ROOM_01, TRUE);
+        set(FG_ROOM, F_ROOM_TOO_HEAVY_RUNNING, TRUE);
     }
-    if (ck(FG_ROOM, F_ROOM_20, TRUE))
+    if (ck(FG_ROOM, F_ROOM_SHELF_PUSHED_ASIDE, TRUE))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_NONE, 0, 0, 0, 0);
-        aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_04_MESSAGE_BACK_OF_SHELF, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_05_USEITEM_SHELF_SPOT, SCE_NONE, 0, 0, 0, 0);
     }
-    if (ck(FG_ROOM, F_ROOM_0A, TRUE))
+    if (ck(FG_ROOM, F_ROOM_SWITCH_PUSHED, TRUE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 10) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 10) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -850, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -850, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 20) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 20) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -800, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -800, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 30) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 30) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -750, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -750, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 40) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 40) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -700, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -700, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 50) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 50) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -650, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -650, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 60) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 60) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -600, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -600, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 70) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 70) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -550, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -550, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 80) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 80) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -500, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -500, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 90) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 90) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -450, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -450, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 100) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 100) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -400, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -400, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 110) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 110) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -350, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -350, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 120) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 120) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -300, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -300, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 130) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 130) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -250, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -250, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 140) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 140) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -200, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -200, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 150) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 150) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -150, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -150, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 160) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 160) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -100, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -100, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 170) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 170) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, -50, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, -50, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 180) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 180) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 0, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 0, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 190) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 190) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 50, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 50, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 200) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 200) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 100, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 100, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 210) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 210) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 150, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 150, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 220) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 220) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 200, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 200, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 230) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 230) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 250, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 250, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 240) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 240) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 300, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 300, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 250) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 250) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 350, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 350, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 260) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 260) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 400, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 400, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 270) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 270) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 450, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 450, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 280) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 280) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 500, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 500, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 290) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 290) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 550, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 550, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 300) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 300) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 600, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 600, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 310) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 310) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 650, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 650, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 320) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 320) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 700, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 700, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 330) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 330) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 750, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 750, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 340) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 340) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 800, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 800, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 350) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 350) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 850, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 850, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 360) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 360) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 900, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 900, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 370) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 370) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 950, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 950, 0);
     }
-    if (cmpw(0, W_RANDOM, CMP_LT, 380) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 380) && ck(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_26, TRUE);
-        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01, 650, 0, 1000, 0);
+        set(FG_ROOM, F_ROOM_BUBBLE_SPAWNED, TRUE);
+        effect(FX_25, FX_ROW_02, FX_AT_OBJ | OBJ_01_AQUARIUM_WATER, 650, 0, 1000, 0);
     }
 }
 
-event on_aot_02_message
+event examine_switch
 {
     message(MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It seems someone has searched here already... It appears to be a switch. Will you push it? There's something at the back of the shelf."
     do
@@ -395,31 +396,31 @@ event on_aot_02_message
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_01, on_aot_02_message_sub1);
+            evt_exec(0, TASK_01, push_switch);
         }
     }
     evt_finish();
 }
 
-event on_aot_02_message_sub1
+event push_switch
 {
     run
     {
-        if (!EUR)
+        if (ck(FG_STATUS, F_STATUS_REGION_EUR, FALSE))
         {
             se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
         }
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        cutnext(CAM_05);
-        set(FG_ROOM, F_ROOM_0A, TRUE);
-        if (EUR)
+        cutnext(CAM_05_SWITCH);
+        set(FG_ROOM, F_ROOM_SWITCH_PUSHED, TRUE);
+        if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
         {
             se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
         }
     }
     sleep(10);
-    evt_fork(TASK_02, on_aot_02_message_sub1_sub1, 0);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    evt_fork(TASK_02, drain_aquarium, 0);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -428,26 +429,26 @@ event on_aot_02_message_sub1
     act_motion_path(MOTION_11, 6565, -2600, 5035, 180, 64);
     sleep(8);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_2D, F_ROOM_24, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     act_param_set(0, 64512);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_motion_path(MOTION_11, 6565, -2600, 5035, 240, 64);
     act_reset();
     evt_nop();
     sleep(10);
-    cutnext(CAM_04);
+    cutnext(CAM_04_AQUARIUM);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_02, FALSE));
-    cutnext(CAM_05);
-    evt_work_set(WK_OBJ, OBJ_01);
+    while (ck(FG_ROOM, F_ROOM_WATER_DRAINED, FALSE));
+    cutnext(CAM_05_SWITCH);
+    evt_work_set(WK_OBJ, OBJ_01_AQUARIUM_WATER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 0, 20000, 0);
     tw_end();
@@ -460,10 +461,10 @@ event on_aot_02_message_sub1
     evt_nop();
     run
     {
-        aot_reset(AOT_02_MESSAGE, SCE_NONE, 0, 0, 0, 0);
-        aot_reset(AOT_06_USEITEM, SCE_NONE, 0, 0, 0, 0);
-        set(FG_SCENARIO, F_SCENARIO_12, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        aot_reset(AOT_02_MESSAGE_SWITCH, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_06_USEITEM_AQUARIUM, SCE_NONE, 0, 0, 0, 0);
+        set(FG_SCENARIO, F_SCENARIO_AQUARIUM_DRAINED, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
         sys_multi(SYS_IDLE);
@@ -471,33 +472,33 @@ event on_aot_02_message_sub1
     evt_finish();
 }
 
-event on_aot_01_message
+event find_researchers_will
 {
     run
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
-        aot_reset(AOT_08_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
-        aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
-        if (CHRIS)
+        aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
+        aot_reset(AOT_08_ITEM_FILE_RESEARCHERS_WILL, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        aot_on(AOT_08_ITEM_FILE_RESEARCHERS_WILL, SCE_DOCUMENT, 0);
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_07, TRUE);
+            set(FG_COMMON, F_COMMON_C_RESEARCHER_WILL_TAKEN, TRUE);
         }
         else
         {
-            set(FG_COMMON, F_COMMON_08, TRUE);
+            set(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE);
         }
     }
     evt_finish();
 }
 
-event from_main
+event aquarium_too_heavy
 {
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_10 | OF_ACTIVE);
+    objtbl_b_set(TBL_OBJ, OBJ_00_AQUARIUM, OF_10 | OF_ACTIVE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_24, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_31, F_ROOM_24, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_nop();
@@ -509,14 +510,14 @@ event from_main
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_24, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(10);
     act_idle();
     act_reset();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
-        set(FG_ROOM, F_ROOM_01, FALSE);
+        objtbl_b_set(TBL_OBJ, OBJ_00_AQUARIUM, OF_ACTIVE);
+        set(FG_ROOM, F_ROOM_TOO_HEAVY_RUNNING, FALSE);
         message(MSG_IT_IS_TOO_HEAVY_TO_MOVE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too heavy to move."
     }
     do
@@ -529,17 +530,17 @@ event from_main
     evt_finish();
 }
 
-event on_enter when (JILL)
+event barry_shows_researchers_will
 {
-    evt_fork(TASK_01, on_enter_sub1, 0);
+    evt_fork(TASK_01, barry_shows_researchers_will_barry_reads, 0);
     evt_next();
     evt_nop();
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(CUT_LOCKED);
     sleep(10);
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(20);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_33, -712, 0, 0, 192, 64);
     sleep(10);
@@ -547,48 +548,48 @@ event on_enter when (JILL)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 192, 64);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 192, 64);
     act_reset();
     evt_nop();
     cutnext(CAM_01);
     evt_disable(TASK_01);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2F, F_ROOM_25, 0);
+    act_anim_flags(ANIM_2F, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     act_param_set(0, 2048);
     sleep(4);
     act_motion(MOTION_10);
     sleep(16);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(6);
-    act_anim_flags(ANIM_02, F_ROOM_25, 0);
+    act_anim_flags(ANIM_02, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(4);
     act_reset();
     evt_nop();
     voice_play(VOICE_PLAY, VO_108_00);
     message(MSG_VO_108_00, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_71, 200, 0, 2, 50, 64);
-    act_anim_flags(ANIM_25, F_ROOM_25, 0);
+    act_anim_flags(ANIM_25, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(15);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
     cutnext(CAM_00);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_25, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(35);
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 192, 64);
-    act_anim_seq(AB_02, 3667, 4868, F_ROOM_24);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 192, 64);
+    act_anim_seq(AB_02, 3667, 4868, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     sleep(12);
     cutnext(CAM_01);
@@ -598,30 +599,30 @@ event on_enter when (JILL)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(10);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(10);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(24);
-    act_anim_flags(ANIM_23, F_ROOM_25, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(11);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_motion_path(MOTION_32, 0, 200, 0, 192, 64);
     sleep(50);
     act_motion(MOTION_10);
@@ -630,11 +631,11 @@ event on_enter when (JILL)
     evt_nop();
     voice_play(VOICE_PLAY, VO_108_02);
     message(MSG_VO_108_02, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(20);
     act_reset();
@@ -645,28 +646,28 @@ event on_enter when (JILL)
     act_motion_path(MOTION_33, 200, 100, 0, 192, 64);
     sleep(40);
     act_motion(MOTION_10);
-    act_anim_seq(AB_02, 4379, 3992, F_ROOM_24);
+    act_anim_seq(AB_02, 4379, 3992, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
-    act_anim_seq(AB_06, 5496, 3240, F_ROOM_24);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_seq(AB_06, 5496, 3240, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     sleep(10);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(5);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(12);
     act_idle();
@@ -675,7 +676,7 @@ event on_enter when (JILL)
     evt_actor_begin();
     sleep(10);
     act_motion_path(MOTION_32, 0, 200, 0, 192, 44);
-    act_anim_flags(ANIM_27, F_ROOM_25, 0);
+    act_anim_flags(ANIM_27, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(16);
     act_reset();
     evt_nop();
@@ -683,33 +684,33 @@ event on_enter when (JILL)
     {
         bgm_play(BGM_MAIN);
         sys_multi(SYS_FORCE_ACTION);
-        aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
+        aot_on(AOT_08_ITEM_FILE_RESEARCHERS_WILL, SCE_DOCUMENT, 0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_next();
     evt_nop();
     run
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
+        aot_reset(AOT_01_MESSAGE_ARRANGED, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(10);
     voice_play(VOICE_PLAY, VO_108_03);
     message(MSG_VO_108_03, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(10);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(13);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -717,7 +718,7 @@ event on_enter when (JILL)
     evt_disable(TASK_01);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 192, 64);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 192, 64);
     act_reset();
     evt_nop();
     sleep(10);
@@ -725,17 +726,17 @@ event on_enter when (JILL)
     message(MSG_VO_108_04, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_25, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(11);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(13);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
-    act_anim_flags(ANIM_28, F_ROOM_25, 0);
+    act_anim_flags(ANIM_28, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
@@ -743,19 +744,19 @@ event on_enter when (JILL)
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_32, 0, 200, 0, 192, 44);
-    act_anim_flags(ANIM_27, F_ROOM_25, 0);
+    act_anim_flags(ANIM_27, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(16);
     act_reset();
     evt_nop();
     sys_multi(SYS_FORCE_ACTION);
-    evt_fork(TASK_01, on_enter_sub2, 0);
+    evt_fork(TASK_01, barry_shows_researchers_will_jill_reads, 0);
     voice_play(VOICE_PLAY, VO_108_05);
     message(MSG_VO_108_05, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002 | EF_0001);
     act_reset();
     evt_nop();
@@ -764,124 +765,124 @@ event on_enter when (JILL)
     evt_disable(TASK_01);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 192, 64);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_BARRY, 0, 192, 64);
     act_reset();
     evt_nop();
     voice_play(VOICE_PLAY, VO_108_06);
     message(MSG_VO_108_06, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(13);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(30);
-    act_anim_flags(ANIM_27, F_ROOM_25, 0);
+    act_anim_flags(ANIM_27, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_25, 0);
+    act_anim_flags(ANIM_28, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(20);
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
     voice_play(VOICE_PLAY, VO_108_07);
     message(MSG_VO_108_07, 0);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_23, F_ROOM_25, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(11);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002 | EF_0001);
     sleep(13);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(20);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(10);
-    act_anim_flags(ANIM_23, F_ROOM_25, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(11);
-    act_anim_flags(ANIM_23, F_ROOM_25, 0);
+    act_anim_flags(ANIM_23, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(11);
-    act_anim_flags(ANIM_21, F_ROOM_25, 0);
+    act_anim_flags(ANIM_21, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(50);
-    act_anim_flags(ANIM_2E, F_ROOM_25, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_param_set(0, 1024);
     sleep(30);
     act_reset();
     evt_nop();
     wait_message();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_ADDITIVE | AB_02, 5006, 5544, F_ROOM_03);
+    act_anim_seq(AB_ADDITIVE | AB_02, 5006, 5544, F_ROOM_J_BARRY_WALK_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_03, FALSE));
-    set(FG_ROOM, F_ROOM_03, FALSE);
+    while (ck(FG_ROOM, F_ROOM_J_BARRY_WALK_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_J_BARRY_WALK_DONE, FALSE);
     cutnext(CAM_00);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_seq(AB_02, 2937, 5403, F_ROOM_25);
+    act_anim_seq(AB_02, 2937, 5403, F_ROOM_J_BARRY_ANIM_DONE);
     act_reset();
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 2446, -2600, 5440, 192, 64);
     sleep(6);
-    act_anim_flags(ANIM_2D, F_ROOM_24, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_param_set(0, 64512);
     act_flag_op(EF_OR, EF_0002);
     sleep(30);
-    act_anim_seq(AB_06, 2937, 5403, F_ROOM_24);
+    act_anim_seq(AB_06, 2937, 5403, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     sleep(10);
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_25, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_param_set(0, 64512);
     sleep(30);
     act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 192, 64);
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_26, F_ROOM_25, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(30);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_25, 0);
+    act_anim_flags(ANIM_26, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(5);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
-    act_anim_flags(ANIM_2E, F_ROOM_25, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_param_set(0, 1024);
     sleep(30);
-    act_anim_flags(ANIM_24, F_ROOM_25, 0);
+    act_anim_flags(ANIM_24, F_ROOM_J_BARRY_ANIM_DONE, 0);
     sleep(20);
     act_reset();
     evt_nop();
     cutnext(CAM_01);
-    pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 30000, 0);
+    pos_set(ENEMY_00_BARRY, 0, 0, 0, 0, 30000, 0);
     sleep(10);
     se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 2434, 4925);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_22, F_ROOM_25, 0);
+    act_anim_flags(ANIM_22, F_ROOM_J_BARRY_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(50);
@@ -893,18 +894,18 @@ event on_enter when (JILL)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_COMMON, F_COMMON_08, TRUE);
+        set(FG_COMMON, F_COMMON_J_RESEARCHER_WILL_TAKEN, TRUE);
         cut_auto(CUT_FREE);
         sys_multi(SYS_IDLE);
     }
     evt_finish();
 }
 
-event on_enter_sub1 when (JILL)
+event barry_shows_researchers_will_barry_reads
 {
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
+    evt_work_set(WK_ENEMY, ENEMY_00_BARRY);
     evt_actor_begin();
     act_motion_path(MOTION_33, -200, 300, 0, 50, 44);
     sleep(10);
@@ -915,11 +916,11 @@ event on_enter_sub1 when (JILL)
     act_motion_path(MOTION_33, -200, 300, 0, 20, 44);
     sleep(10);
     act_reset();
-    evt_chain(on_enter_sub1);
+    evt_chain(barry_shows_researchers_will_barry_reads);
     evt_finish();
 }
 
-event on_enter_sub2 when (JILL)
+event barry_shows_researchers_will_jill_reads
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -932,16 +933,16 @@ event on_enter_sub2 when (JILL)
     act_motion_path(MOTION_33, -200, 300, 0, 20, 44);
     sleep(10);
     act_reset();
-    evt_chain(on_enter_sub2);
+    evt_chain(barry_shows_researchers_will_jill_reads);
     evt_finish();
 }
 
-event on_aot_02_message_sub1_sub1
+event drain_aquarium
 {
     se_play_3d(SND_BANK_ROOM, SE_19_AQUARIUM, 0, SND_AT_POINT, 0, 7470, 5980);
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_AQUARIUM_WATER);
     evt_tween_begin_alt();
-    if (EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         tw_set_pos(0, 5, 0);
         for (240)
@@ -960,10 +961,10 @@ event on_aot_02_message_sub1_sub1
         }
     }
     tw_end();
-    set(FG_ROOM, F_ROOM_02, TRUE);
-    evt_work_set(WK_OBJ, OBJ_01);
+    set(FG_ROOM, F_ROOM_WATER_DRAINED, TRUE);
+    evt_work_set(WK_OBJ, OBJ_01_AQUARIUM_WATER);
     evt_tween_begin_alt();
-    if (EUR)
+    if (ck(FG_STATUS, F_STATUS_REGION_EUR, TRUE))
     {
         tw_set_pos(0, 5, 0);
         for (10)

@@ -1,13 +1,13 @@
 //! RE1 SCD opcode tables.
 //!
-//! Three separate opcode spaces exist: the command VM (0x00-0x50), the event
+//! Three separate opcode spaces exist: the command VM (0x00-0x54), the event
 //! VM state-0 table (0x00-0x09) with the shared control ops (0xF4-0xFF), and
 //! the two event sub-ISAs entered from state 0: actor (state 1) and tween
 //! (state 2). Operand signatures use one character per operand:
 //!
 //! - `u` u8, `U` u16, `I` i16, `b` i8
 //! - `l` command jump label (`if`/`else`), `j` event jump label (`evt_do`)
-//! - `L` u16 forward jump label (the port's variant jumps)
+//! - `L` u16 forward jump label (the port's long `if`/`else` and event jumps)
 //! - `p` payload length (`evt_block`/`evt_single`)
 //! - `r` raw remainder, not decoded as operands
 
@@ -44,22 +44,29 @@ const fn op(
     }
 }
 
-/// The command-VM opcode table, indexed by opcode (0x00-0x53).
+/// The command-VM opcode table, indexed by opcode (0x00-0x54).
 ///
 /// 0x26 and 0x2E are dead slots: the original handler returns without
 /// consuming anything, so the interpreter spins. They are kept as zero-width
 /// "hang" rows so the table stays a direct index.
 ///
-/// 0x51 and 0x52 are the port's own: `variant_if` skips forward when the room
-/// variant does not match its mask ([`variant_matches`]) and `variant_jump`
-/// skips forward always. Neither touches the `if` branch stack, so `return`
-/// and a failed condition inside one behave exactly as they would without it.
+/// 0x51 and 0x52 are the port's own: `if_long` and `else_long` are `if` and
+/// `else` with a `u16` jump, for a body past the 255 bytes the original's
+/// one-byte jump reaches. Each behaves exactly as its short form; their jump
+/// is a forward delta from the start of the instruction, to where the flow
+/// resumes (the `else` body or past the `endif` for `if_long`, past the
+/// `else` body for `else_long`).
 ///
 /// 0x53 is the port's too: `message_long` requests a message by an id word
 /// (a zero byte, the word, the pause word), whose high byte reaches the room
 /// messages past the 64 that `message`'s id byte does
 /// ([`crate::text::message_index`]).
-pub const COMMAND_OPS: [Op; 84] = [
+///
+/// 0x54 is the port's too: `gosub` runs user procedure N, block N of the
+/// container's procedure list, to its end and comes back. The procedure has
+/// its own `if` branch stack: its `return`, a failed condition at its top
+/// level or its last `end 0` returns to the instruction after the call.
+pub const COMMAND_OPS: [Op; 85] = [
     op(0x00, "end", "u", false, Some(2)),
     op(0x01, "if", "l", false, Some(2)),
     op(0x02, "else", "l", false, Some(2)),
@@ -147,9 +154,10 @@ pub const COMMAND_OPS: [Op; 84] = [
     op(0x4E, "mass_mask", "uU", false, Some(4)),
     op(0x4F, "costume_set", "u", false, Some(2)),
     op(0x50, "costume_ck", "u", true, Some(2)),
-    op(0x51, "variant_if", "uL", false, Some(4)),
-    op(0x52, "variant_jump", "L", false, Some(3)),
+    op(0x51, "if_long", "L", false, Some(3)),
+    op(0x52, "else_long", "L", false, Some(3)),
     op(0x53, "message_long", "uUU", false, Some(6)),
+    op(0x54, "gosub", "u", false, Some(2)),
 ];
 
 /// Event-VM state-0 opcodes (0x00-0x09), indexed by opcode.
@@ -171,12 +179,15 @@ pub const EVENT_CONTROL_BASE: u8 = 0xF4;
 
 /// Event-VM control opcodes (0xF4-0xFF), indexed from [`EVENT_CONTROL_BASE`].
 ///
-/// 0xF4 and 0xF5 are the port's own event-level variant jumps, the
-/// counterparts of command 0x51/0x52: `evt_variant_if` skips forward when the
-/// room variant does not match its mask and `evt_jump` skips forward always.
+/// 0xF4 and 0xF5 are the port's own: the original's event VM has no `if`.
+/// `evt_if` is followed by condition commands, as `evt_do` is, up to its
+/// first operand (the delta from the instruction to the first body byte);
+/// when one fails, the event continues at its second operand (a `u16`
+/// forward delta from the instruction). `evt_jump` skips forward always,
+/// over an `else` body.
 /// Neither yields or touches the slot's stacks.
 pub const EVENT_CONTROL_OPS: &[Op] = &[
-    op(0xF4, "evt_variant_if", "uL", false, Some(4)),
+    op(0xF4, "evt_if", "jL", false, Some(4)),
     op(0xF5, "evt_jump", "L", false, Some(3)),
     op(0xF6, "evt_push_cond", "", false, Some(1)),
     op(0xF7, "evt_skip_if", "", false, Some(1)),
@@ -281,9 +292,10 @@ pub fn command_width(bytes: &[u8]) -> Option<usize> {
     }
 }
 
-/// The room-variant bits a `variant_if` mask tests: one dimension each for
-/// the player, the mansion visit and the release region. The room being run
-/// has exactly one bit of each dimension set (the host's `room_variant`).
+/// The room-variant bits a variant test (`if (JILL)`) masks: one dimension
+/// each for the player, the mansion visit and the release region. A build
+/// for one RDT variant has exactly one bit of each dimension set and folds
+/// the tests away; the runtime build tests the flags that stand for them.
 pub mod variant {
     /// The player is Chris (RDT player digit 0).
     pub const CHRIS: u8 = 0x01;
@@ -310,6 +322,23 @@ pub mod variant {
     pub const REGION: u8 = USA | JPN | EUR;
     /// Every dimension.
     pub const DIMENSIONS: [u8; 3] = [PLAYER, MANSION, REGION];
+
+    /// The status flag bank, which holds the player and release bits.
+    pub const FLAG_BANK_STATUS: u8 = 5;
+    /// The status bit set while the player is Jill
+    /// ([`crate::game::MSF_CHAR_VARIANT`]).
+    pub const FLAG_JILL: u8 = 8;
+    /// The port's status bit for the Japanese release
+    /// ([`crate::game::MSF_REGION_JPN`]).
+    pub const FLAG_REGION_JPN: u8 = 4;
+    /// The port's status bit for the French and German releases
+    /// ([`crate::game::MSF_REGION_EUR`]).
+    pub const FLAG_REGION_EUR: u8 = 10;
+    /// The scenario flag bank.
+    pub const FLAG_BANK_SCENARIO: u8 = 0;
+    /// The scenario flag set for the second mansion visit
+    /// ([`crate::game::SCENARIO_FLAG_MANSION2`]).
+    pub const FLAG_MANSION2: u8 = 0;
 }
 
 /// Whether the room variant `current` (one bit of each dimension) matches
@@ -321,7 +350,8 @@ pub fn variant_matches(mask: u8, current: u8) -> bool {
         .all(|&dimension| mask & dimension == 0 || mask & current & dimension != 0)
 }
 
-/// Every room variant's bits: one per player, mansion visit and region.
+/// One room variant: a bit of each dimension of [`variant`] (an outside
+/// room has no visit to test).
 const VARIANT_COMBOS: [u8; 18] = {
     use variant::*;
     let players = [CHRIS, JILL];
@@ -336,73 +366,134 @@ const VARIANT_COMBOS: [u8; 18] = {
     combos
 };
 
+/// Whether condition command `bytes` may pass and may fail in room variant
+/// `combo`. A `ck` of a flag that tells the variant
+/// ([`variant::FLAG_JILL`] and the rest) is fixed by it; any other
+/// condition may go either way.
+fn condition_outcomes(bytes: &[u8], combo: u8) -> (bool, bool) {
+    use variant::*;
+    let &[0x04, bank, flag, mode] = bytes else {
+        return (true, true);
+    };
+    // `ck` passes on a set flag for mode 0.
+    let set = mode == 0;
+    let bit = match (bank, flag) {
+        (FLAG_BANK_STATUS, FLAG_JILL) => combo & JILL != 0,
+        (FLAG_BANK_STATUS, FLAG_REGION_JPN) => combo & JPN != 0,
+        (FLAG_BANK_STATUS, FLAG_REGION_EUR) => combo & EUR != 0,
+        // Outside the mansion the visit flag tells nothing.
+        (FLAG_BANK_SCENARIO, FLAG_MANSION2) if combo & OUTSIDE == 0 => combo & MANSION2 != 0,
+        _ => return (true, true),
+    };
+    (bit == set, bit != set)
+}
+
 /// The event-VM state (0 top level, 1 actor, 2 tween) each room variant
-/// reaches an instruction in, across the variant jumps.
+/// reaches an instruction in, across the port's event `if`s and jumps.
 ///
-/// An event stream decodes each byte in one state, and an instruction is
-/// valid only where every variant reaching it agrees on the state. Without
-/// variant jumps every variant runs the same instructions, so the flow is
-/// the plain linear state. A variant jump splits the variants between its
-/// branches, and its target gathers them again: a branch may leave its
-/// variants in another state than the other branch, which only matters if
-/// an instruction both reach depends on the state (anything but a control
-/// opcode).
+/// An event stream decodes each byte in one state. Without jumps the state
+/// is linear. An `evt_if` or `evt_jump` sends the flow to its target too,
+/// where it meets the flow that ran into it. A variant can reach a point in
+/// two states (one branch began or ended an actor or tween sequence the
+/// other did not), and then only a control opcode, which is valid in every
+/// state, may follow. An `evt_if` that tests only the flags that tell the
+/// variant sends each variant down the one branch it takes, so the branches
+/// of a test of the player, say, may each leave the event in its own state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventFlow {
-    states: [Option<u8>; 18],
+    states: [FlowState; 18],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FlowState {
+    /// The variant does not reach here.
+    Unreachable,
+    State(u8),
+    /// The variant reaches here in different states.
+    Mixed,
 }
 
 impl EventFlow {
     /// Every variant, in `state`.
     pub fn new(state: u8) -> Self {
         Self {
-            states: [Some(state); 18],
+            states: [FlowState::State(state); 18],
         }
     }
 
     /// No variant: the code after an unconditional jump.
     pub fn unreachable() -> Self {
-        Self { states: [None; 18] }
+        Self {
+            states: [FlowState::Unreachable; 18],
+        }
     }
 
-    /// Gather the variants of `other` (a jump's) in.
+    /// Gather the flow of `other` (a jump's) in.
     pub fn merge(&mut self, other: &EventFlow) {
         for (mine, theirs) in self.states.iter_mut().zip(other.states) {
-            if mine.is_none() {
-                *mine = theirs;
-            }
+            *mine = match (*mine, theirs) {
+                (FlowState::Unreachable, theirs) => theirs,
+                (mine, FlowState::Unreachable) => mine,
+                (mine, theirs) if mine == theirs => mine,
+                _ => FlowState::Mixed,
+            };
         }
     }
 
     /// The one state every variant here is in; `None` when they differ or
     /// none reaches here.
     pub fn state(&self) -> Option<u8> {
-        let mut states = self.states.iter().flatten();
-        let first = *states.next()?;
-        states.all(|&state| state == first).then_some(first)
+        let mut reached = self
+            .states
+            .iter()
+            .filter(|state| **state != FlowState::Unreachable);
+        let FlowState::State(first) = *reached.next()? else {
+            return None;
+        };
+        reached
+            .all(|state| *state == FlowState::State(first))
+            .then_some(first)
     }
 
     /// Whether any variant reaches here.
     pub fn is_reachable(&self) -> bool {
-        self.states.iter().any(Option::is_some)
+        self.states
+            .iter()
+            .any(|state| *state != FlowState::Unreachable)
     }
 
     /// Move every variant here to `state`.
     pub fn set(&mut self, state: u8) {
-        for slot in self.states.iter_mut().flatten() {
-            *slot = state;
+        for slot in &mut self.states {
+            if *slot != FlowState::Unreachable {
+                *slot = FlowState::State(state);
+            }
         }
     }
 
-    /// The variants a variant jump with `mask` lets through, and those it
-    /// sends to its target.
-    pub fn split(&self, mask: u8) -> (EventFlow, EventFlow) {
+    /// The flow into the body of an `evt_if` of the condition commands
+    /// `conditions` (their bytes), and the flow it sends to its target.
+    pub fn branch<'a>(
+        &self,
+        conditions: impl IntoIterator<Item = &'a [u8]> + Clone,
+    ) -> (Self, Self) {
         let mut taken = Self::unreachable();
         let mut skipped = Self::unreachable();
         for (index, state) in self.states.iter().enumerate() {
-            if variant_matches(mask, VARIANT_COMBOS[index]) {
+            let combo = VARIANT_COMBOS[index];
+            let outcomes = conditions
+                .clone()
+                .into_iter()
+                .map(|bytes| condition_outcomes(bytes, combo));
+            let (mut all_may_pass, mut any_may_fail) = (true, false);
+            for (may_pass, may_fail) in outcomes {
+                all_may_pass &= may_pass;
+                any_may_fail |= may_fail;
+            }
+            if all_may_pass {
                 taken.states[index] = *state;
-            } else {
+            }
+            if any_may_fail {
                 skipped.states[index] = *state;
             }
         }
@@ -426,12 +517,12 @@ mod tests {
 
     #[test]
     fn command_table_indexes_every_opcode() {
-        assert_eq!(COMMAND_OPS.len(), 84);
+        assert_eq!(COMMAND_OPS.len(), 85);
         for (index, entry) in COMMAND_OPS.iter().enumerate() {
             assert_eq!(usize::from(entry.op), index);
             assert_eq!(command_op(entry.op), Some(entry));
         }
-        assert_eq!(command_op(0x54), None);
+        assert_eq!(command_op(0x55), None);
     }
 
     #[test]
@@ -500,7 +591,7 @@ mod tests {
 
         assert_eq!(event_control_op(0xF6).unwrap().mnemonic, "evt_push_cond");
         assert_eq!(event_control_op(0xFF).unwrap().mnemonic, "evt_finish");
-        assert_eq!(event_control_op(0xF4).unwrap().mnemonic, "evt_variant_if");
+        assert_eq!(event_control_op(0xF4).unwrap().mnemonic, "evt_if");
         assert_eq!(event_control_op(0xF3), None);
 
         assert_eq!(actor_op(0x00).unwrap().mnemonic, "act_nop");

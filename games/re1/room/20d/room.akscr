@@ -8,31 +8,32 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_03_ITEM 0x03
-#define AOT_04_EVENT 0x04
-#define AOT_04_ITEM 0x04
-#define AOT_05_ITEM 0x05
-#define CAM_01 0x01
-#define CAM_03 0x03
-#define CAM_04 0x04
-#define CAM_05 0x05
+#define AOT_00_DOOR_204 0x00
+#define AOT_01_DOOR_20E 0x01
+#define AOT_02_ITEM_AMMO_HANDGUN_0 0x02
+#define AOT_03_ITEM_HEAL_HERB_GREEN_1 0x03
+#define AOT_04_EVENT_RICHARD 0x04
+#define AOT_04_ITEM_HEAL_HERB_GREEN_2 0x04
+#define AOT_05_ITEM_HEAL_HERB_GREEN_2 0x05
+#define CAM_01_FROM_204_DOOR 0x01                           // Likely.
+#define CAM_03_TOWARD_RICHARD 0x03                          // Likely: reaching it starts the Richard scenes.
+#define CAM_04_RICHARD 0x04
+#define CAM_05_RICHARD_CLOSEUP 0x05
 #define ENEMY_00_NPC_RICHARD 0x00
 #define ENEMY_01_NPC_REBECCA 0x01
 #define FX_00 0x00
-#define F_ROOM_00 0x00
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_03 0x03
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_23 0x23
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
+#define F_ROOM_CAM_03_REACHED 0x01                          // Camera 3 was reached this visit: the Richard scene checks ran.
+#define F_ROOM_C_REBECCA_ANIM_DONE 0x22                     // Chris: Rebecca's animation finished (one frame).
+#define F_ROOM_C_RICHARD_ANIM_DONE 0x23                     // Chris: Richard's animation finished (one frame).
+#define F_ROOM_J_RICHARD_ANIM_DONE 0x22                     // Jill: Richard's animation finished (one frame).
+#define F_ROOM_MAP_MENU_CLOSED 0x03                         // That map screen was closed: give back control.
+#define F_ROOM_MAP_MENU_OPENED 0x02                         // The map screen opened at the start of Rebecca's serum run.
+#define F_ROOM_PLAYER_ANIM_DONE 0x21                        // The player's animation finished (one frame).
+#define F_ROOM_RICHARD_IDLE_DONE 0x20                       // Richard's idle animation finished (one frame).
+#define F_ROOM_RICHARD_IDLE_STARTED 0x00                    // Richard's idle animation was started this visit.
+#define IMDL_00_AMMO_HANDGUN 0x00
+#define IMDL_01_HEAL_HERB_GREEN 0x01
+#define IMDL_02_HEAL_HERB_GREEN 0x02
 #define MSG_RICHARD_FROM_BRAVO_TEAM_0C 0x24
 #define MSG_RICHARD_FROM_BRAVO_TEAM_13 0x13
 #define MSG_RICHARD_IS_DEAD_0E 0x26
@@ -109,93 +110,93 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 1300, 12900, 3400, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_204_C_PASSAGE, 12500, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 12000, 1100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 2700, 0, 2900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_ITEM, F_ITEM_28, TRUE))
+    door_aot_set(AOT_00_DOOR_204, 1300, 12900, 3400, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_204_C_PASSAGE, 12500, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_20E, 12000, 1100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 2700, 0, 2900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
-            item_aot_set(AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 10, 0, 10, 0, F_ITEM_28, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-            aot_reset(AOT_02_ITEM, SCE_NONE, 0, 0, 0, 0);
+            item_aot_set(AOT_02_ITEM_AMMO_HANDGUN_0, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 10, 0, 10, 0, F_ITEM_20D_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            aot_reset(AOT_02_ITEM_AMMO_HANDGUN_0, SCE_NONE, 0, 0, 0, 0);
         }
         else
         {
-            item_aot_set(ITEM_ALT_ROT | AOT_02_ITEM, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 8300, 0, 3600, 0, F_ITEM_28, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(ITEM_ALT_ROT | AOT_02_ITEM_AMMO_HANDGUN_0, 7500, 2500, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00_AMMO_HANDGUN, SCA_NONE, 8300, 0, 3600, 0, F_ITEM_20D_AMMO_HANDGUN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
     }
-    if (ck(FG_ITEM, F_ITEM_C5, TRUE))
+    if (ck(FG_ITEM, F_ITEM_20D_HEAL_HERB_GREEN_1, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 5800, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 6700, 0, 6900, 0, F_ITEM_C5, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+        item_aot_set(AOT_03_ITEM_HEAL_HERB_GREEN_1, 5800, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_01_HEAL_HERB_GREEN, SCA_NONE, 6700, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     }
-    if (MANSION1)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_24, TRUE) && ck(FG_COMMON, F_COMMON_62, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_MET, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE))
             {
-                set(FG_COMMON, F_COMMON_61, TRUE);
+                set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
             }
         }
-        if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
         {
             if (item_ck(IT_42_KEY_SERUM))
             {
                 if (cmpw(0, W_04, CMP_LE, 420))
                 {
-                    set(FG_COMMON, F_COMMON_63, TRUE);
-                    set(FG_COMMON, F_COMMON_64, FALSE);
+                    set(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE);
+                    set(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE);
                     room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_RELOAD | 1);
-                    if (CHRIS)
+                    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                     {
-                        aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_3, 0, 0, 0);
+                        aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, talk_to_rebecca, 0, 0, 0);
                     }
                     else
                     {
-                        aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_2_jill_mansion1, 0, 0, 0);
+                        aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, examine_richard_jill, 0, 0, 0);
                     }
                 }
                 else
                 {
-                    set(FG_COMMON, F_COMMON_63, FALSE);
-                    set(FG_COMMON, F_COMMON_64, TRUE);
-                    set(FG_SCENARIO, F_SCENARIO_49, TRUE);
+                    set(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE);
+                    set(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE);
+                    set(FG_SCENARIO, F_SCENARIO_SERUM1_OBJ_ACK, TRUE);
                 }
             }
             else if (cmpw(0, W_04, CMP_LE, 420))
             {
-                set(FG_COMMON, F_COMMON_63, FALSE);
-                set(FG_COMMON, F_COMMON_64, FALSE);
-                if (CHRIS)
+                set(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE);
+                set(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE);
+                if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
                 {
-                    aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_04_2, 0, 0, 0);
+                    aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, rebecca_waits_for_serum, 0, 0, 0);
                 }
                 else
                 {
-                    aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_04_3_jill_mansion1, 0, 0, 0);
+                    aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, richard_waits_for_serum_jill, 0, 0, 0);
                 }
             }
             else
             {
-                set(FG_COMMON, F_COMMON_63, FALSE);
-                set(FG_COMMON, F_COMMON_64, TRUE);
-                set(FG_SCENARIO, F_SCENARIO_49, TRUE);
+                set(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE);
+                set(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_SERUM1_OBJ_ACK, TRUE);
             }
         }
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            if (ck(FG_COMMON, F_COMMON_61, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE))
             {
                 enemy(EM_27_NPC_RICHARD, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 8300, 0, 3600, ENEMY_00_NPC_RICHARD, ANIM_02, 39, EVAR_00);
-                if (ck(FG_COMMON, F_COMMON_63, TRUE) && ck(FG_COMMON, F_COMMON_66, FALSE))
+                if (ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_LEFT, FALSE))
                 {
                     enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2560, 0, 9850, 0, 3000, ENEMY_01_NPC_REBECCA, ANIM_3D, 0, EVAR_01);
-                    aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_3, 0, 0, 0);
+                    aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, talk_to_rebecca, 0, 0, 0);
                 }
-                else if (ck(FG_ITEM, F_ITEM_28, TRUE))
+                else if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
                 {
-                    aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
+                    aot_set(AOT_04_EVENT_RICHARD, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, examine_richard, 0, 0, 0);
                 }
-                if (ck(FG_COMMON, F_COMMON_65, FALSE))
+                if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
                 {
                     room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_RELOAD | 2);
                 }
@@ -204,10 +205,10 @@ proc init
                     room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_MAIN_ON | 3);
                 }
             }
-            else if (ck(FG_COMMON, F_COMMON_64, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
             {
                 room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_RELOAD | 2);
-                aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_4, 0, 0, 0);
+                aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, examine_richard_body, 0, 0, 0);
                 enemy(EM_27_NPC_RICHARD, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 8300, 0, 3600, ENEMY_00_NPC_RICHARD, ANIM_02, 39, EVAR_00);
             }
             else
@@ -215,29 +216,29 @@ proc init
                 enemy(EM_27_NPC_RICHARD, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 8300, 0, 3600, ENEMY_00_NPC_RICHARD, ANIM_01, 0, EVAR_00);
                 enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2560, 0, 9850, 0, 3000, ENEMY_01_NPC_REBECCA, ANIM_3D, 0, EVAR_01);
             }
-            if (ck(FG_COMMON, F_COMMON_5F, TRUE) && ck(FG_COMMON, F_COMMON_5E, FALSE))
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_SERUM_RUN, TRUE) && ck(FG_COMMON, F_COMMON_C_POISON_SCENE_DONE, FALSE))
             {
                 if (item_ck(IT_42_KEY_SERUM))
                 {
-                    aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_door, 0);
+                    aot_reset(AOT_01_DOOR_20E, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, rebecca_brings_serum, 0);
                 }
                 else
                 {
-                    set(FG_COMMON, F_COMMON_5F, TRUE);
-                    aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_SERUM_RUN, TRUE);
+                    aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
                 }
             }
         }
         else
         {
-            if (ck(FG_COMMON, F_COMMON_61, TRUE))
+            if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE))
             {
-                if (ck(FG_ITEM, F_ITEM_28, TRUE))
+                if (ck(FG_ITEM, F_ITEM_20D_AMMO_HANDGUN_0, TRUE))
                 {
-                    aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04_4, 0, 0, 0);
+                    aot_set(AOT_04_EVENT_RICHARD, 7400, 2700, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, examine_richard_body, 0, 0, 0);
                 }
                 enemy(EM_27_NPC_RICHARD, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 8300, 0, 3600, ENEMY_00_NPC_RICHARD, ANIM_02, 39, EVAR_00);
-                if (ck(FG_COMMON, F_COMMON_65, FALSE))
+                if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
                 {
                     room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_RELOAD | 2);
                 }
@@ -246,9 +247,9 @@ proc init
                     room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_MAIN_ON | 3);
                 }
             }
-            else if (ck(FG_COMMON, F_COMMON_64, TRUE))
+            else if (ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
             {
-                aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, on_aot_04_4_jill_mansion1, 0, 0, 0);
+                aot_set(AOT_04_EVENT_RICHARD, 7500, 2500, 1800, 1800, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 7, 0, examine_dead_richard_jill, 0, 0, 0);
                 enemy(EM_27_NPC_RICHARD, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2048, 0, 8300, 0, 3600, ENEMY_00_NPC_RICHARD, ANIM_02, 39, EVAR_00);
                 room_bgm_state_set(1, ROOM_20D_PILLAR_PASSAGE, BGM_RELOAD | 2);
             }
@@ -258,135 +259,138 @@ proc init
             }
         }
     }
-    if (ck(FG_ITEM, F_ITEM_C6, TRUE))
+    if (ck(FG_ITEM, F_ITEM_20D_HEAL_HERB_GREEN_2, TRUE))
     {
-        if (MANSION1)
+        if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
         {
-            item_aot_set(AOT_05_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_C6, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(AOT_05_ITEM_HEAL_HERB_GREEN_2, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02_HEAL_HERB_GREEN, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
         else
         {
-            item_aot_set(AOT_04_ITEM, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_C6, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+            item_aot_set(AOT_04_ITEM_HEAL_HERB_GREEN_2, 4100, 6000, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_02_HEAL_HERB_GREEN, SCA_NONE, 5000, 0, 6900, 0, F_ITEM_20D_HEAL_HERB_GREEN_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
         }
     }
 }
 
-proc main when (CHRIS && MANSION1)
+proc main
 {
-    if (ck(FG_COMMON, F_COMMON_5F, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4E, FALSE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        set(FG_SCENARIO, F_SCENARIO_4E, TRUE);
-        set(FG_STATUS, F_STATUS_16, TRUE);
-    }
-    if (ck(FG_COMMON, F_COMMON_61, FALSE))
-    {
-        if (ck(FG_ROOM, F_ROOM_00, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
+        if (ck(FG_COMMON, F_COMMON_C_REBECCA_SERUM_RUN, TRUE) && ck(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, FALSE))
         {
-            set(FG_ROOM, F_ROOM_00, TRUE);
-            evt_exec(0, TASK_01, from_main_3);
+            set(FG_SCENARIO, F_SCENARIO_C_REBECCA_MAP_SHOWN, TRUE);
+            set(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_01, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
         {
-            set(FG_ROOM, F_ROOM_01, TRUE);
-            if (ck(FG_COMMON, F_COMMON_62, FALSE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
+            if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
             {
-                set(FG_COMMON, F_COMMON_62, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_0F, TRUE);
-                set(FG_COMMON, F_COMMON_2D, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_04);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, from_main);
+                set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
+                evt_exec(0, TASK_01, richard_idle);
             }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE) && ck(FG_COMMON, F_COMMON_64, FALSE))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
             {
-                set(FG_COMMON, F_COMMON_61, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_0F, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_05);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, from_main_2);
-                remove_item(IT_42_KEY_SERUM);
-            }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, TRUE))
-            {
-                set(FG_COMMON, F_COMMON_61, TRUE);
-            }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, FALSE))
-            {
-                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
+                set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    set(FG_COMMON, F_COMMON_C_RICHARD_NEEDS_SERUM, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_04_RICHARD);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, richard_poisoned_scene);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_05_RICHARD_CLOSEUP);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, give_richard_serum);
+                    remove_item(IT_42_KEY_SERUM);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+                {
+                    aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 148, 127, 0);
+                }
             }
         }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE))
+        {
+            set(FG_RUN, F_RUN_0080, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
+        }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, FALSE) && ck(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_MAP_MENU_CLOSED, TRUE);
+        }
+        if (ck(FG_STATUS, F_STATUS_MENU_MAP_ITEM, TRUE))
+        {
+            set(FG_ROOM, F_ROOM_MAP_MENU_OPENED, TRUE);
+        }
     }
-    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_03, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        set(FG_RUN, F_RUN_18, TRUE);
-        set(FG_RUN, F_RUN_READY, TRUE);
-    }
-    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_03, TRUE);
-    }
-    if (ck(FG_STATUS, F_STATUS_16, TRUE))
-    {
-        set(FG_ROOM, F_ROOM_02, TRUE);
+        if (ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+        {
+            if (ck(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+            {
+                set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, TRUE);
+                evt_exec(0, TASK_01, richard_idle_jill);
+            }
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_03_TOWARD_RICHARD) && ck(FG_ROOM, F_ROOM_CAM_03_REACHED, FALSE))
+            {
+                set(FG_ROOM, F_ROOM_CAM_03_REACHED, TRUE);
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    set(FG_COMMON, F_COMMON_J_RICHARD_NEEDS_SERUM, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_04_RICHARD);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, richard_poisoned_scene_jill);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+                    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
+                    cut_auto(CUT_LOCKED);
+                    cutnext(CAM_05_RICHARD_CLOSEUP);
+                    dir_set(0, 0, 472, 0, 5596, 0, 3804);
+                    evt_exec(0, TASK_00, give_richard_serum_jill);
+                    remove_item(IT_42_KEY_SERUM);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SERUM_IN_TIME, FALSE) && ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
+                {
+                    set(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, TRUE);
+                }
+                if (ck(FG_COMMON, F_COMMON_RICHARD_FOUND, TRUE) && ck(FG_COMMON, F_COMMON_RICHARD_SCENE_OVER, FALSE))
+                {
+                    aot_reset(AOT_01_DOOR_20E, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 167, 127, 0);
+                }
+            }
+        }
     }
 }
 
-proc main when (JILL && MANSION1)
-{
-    if (ck(FG_COMMON, F_COMMON_61, FALSE))
-    {
-        if (ck(FG_ROOM, F_ROOM_00, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
-        {
-            set(FG_ROOM, F_ROOM_00, TRUE);
-            evt_exec(0, TASK_01, from_main_jill_mansion1);
-        }
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_01, FALSE))
-        {
-            set(FG_ROOM, F_ROOM_01, TRUE);
-            if (ck(FG_COMMON, F_COMMON_62, FALSE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
-            {
-                set(FG_COMMON, F_COMMON_62, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_0F, TRUE);
-                set(FG_COMMON, F_COMMON_23, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_04);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, from_main_2_jill_mansion1);
-            }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE) && ck(FG_COMMON, F_COMMON_64, FALSE))
-            {
-                set(FG_COMMON, F_COMMON_61, TRUE);
-                set(FG_RUN, F_RUN_CONTROLS, FALSE);
-                set(FG_STATUS, F_STATUS_0F, TRUE);
-                cut_auto(CUT_LOCKED);
-                cutnext(CAM_05);
-                dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, TASK_00, from_main_3_jill_mansion1);
-                remove_item(IT_42_KEY_SERUM);
-            }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, TRUE))
-            {
-                set(FG_COMMON, F_COMMON_61, TRUE);
-            }
-            if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, FALSE))
-            {
-                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 167, 127, 0);
-            }
-        }
-    }
-}
 
-event from_main when (CHRIS && MANSION1)
+event richard_poisoned_scene
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 9900, -800, 3050, 0, 0);
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -402,33 +406,33 @@ event from_main when (CHRIS && MANSION1)
     wait_message();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         voice_play(VOICE_PLAY, VO_005_01);
         message(MSG_VO_005_01, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(32);
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(11);
-    act_anim_flags(ANIM_24, F_ROOM_21, 0);
+    act_anim_flags(ANIM_24, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(8);
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(4);
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(5);
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(4);
-    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_anim_flags(ANIM_23, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(4);
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(7);
-    act_anim_flags(ANIM_24, F_ROOM_21, 0);
+    act_anim_flags(ANIM_24, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(23);
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(14);
     act_motion_path(MOTION_13, 10000, -800, 4100, 28, 28);
     act_reset();
@@ -437,7 +441,7 @@ event from_main when (CHRIS && MANSION1)
     bgm_play(BGM_MAIN);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_anim_flags(ANIM_21, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
     act_reset();
     evt_nop();
@@ -448,22 +452,22 @@ event from_main when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 7380, 2440, F_ROOM_21);
+    act_anim_seq(AB_03, 7380, 2440, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_seq(AB_06, 8300, 3600, F_ROOM_21);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_seq(AB_06, 8300, 3600, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 64);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -473,17 +477,17 @@ event from_main when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    cutnext(CAM_05);
+    cutnext(CAM_05_RICHARD_CLOSEUP);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 11000, -800, 5000, 20, 20);
     act_reset();
     evt_nop();
     wait_message();
-    evt_fork(TASK_02, from_main_sub1, 0);
+    evt_fork(TASK_02, richard_struggles, 0);
     voice_play(VOICE_PLAY, VO_005_02);
     message(MSG_VO_005_02, 0);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -502,12 +506,12 @@ event from_main when (CHRIS && MANSION1)
     sleep(40);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_3D, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(4);
@@ -515,7 +519,7 @@ event from_main when (CHRIS && MANSION1)
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
     act_flag_op(EF_OR, EF_0002 | EF_0001);
-    act_anim_flags(ANIM_3D, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     sleep(12);
     act_idle();
     act_nop();
@@ -582,34 +586,34 @@ event from_main when (CHRIS && MANSION1)
     message(MSG_VO_005_07, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(15);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     wait_message();
     act_flag_op(EF_XOR, EF_0001);
-    act_anim_flags(ANIM_2D, F_ROOM_21, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     wait_message();
     act_reset();
     evt_nop();
     sys_multi(SYS_ANGLE, 2048);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 3064, 3455, F_ROOM_21);
+    act_anim_seq(AB_03, 3064, 3455, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     wait_message();
     run
     {
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         voice_play(VOICE_PLAY, VO_005_08);
         message(MSG_VO_005_08, 0);
     }
@@ -622,29 +626,29 @@ event from_main when (CHRIS && MANSION1)
     run
     {
         sys_multi(SYS_ANGLE, 3072);
-        cutnext(CAM_01);
+        cutnext(CAM_01_FROM_204_DOOR);
         voice_play(VOICE_PLAY, VO_005_09);
         message(MSG_VO_005_09, 0);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(35);
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(10);
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(5);
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(5);
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_00, F_ROOM_21, 0);
+    act_anim_flags(ANIM_00, F_ROOM_PLAYER_ANIM_DONE, 0);
     wait_message();
     act_motion(MOTION_10);
-    act_anim_seq(AB_03, 3000, 12500, F_ROOM_21);
+    act_anim_seq(AB_03, 3000, 12500, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     act_reset();
@@ -653,38 +657,38 @@ event from_main when (CHRIS && MANSION1)
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR_204, SCE_DOOR, 0);
         setw(W_04, 0);
     }
     evt_finish();
 }
 
-event from_main_2 when (CHRIS && MANSION1)
+event give_richard_serum
 {
-    set(FG_COMMON, F_COMMON_65, TRUE);
+    set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 7580, 2436, F_ROOM_21);
+    act_anim_seq(AB_03, 7580, 2436, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_seq(AB_06, 9280, 3584, F_ROOM_21);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_seq(AB_06, 9280, 3584, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 64);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -699,7 +703,7 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(12);
     act_reset();
     evt_nop();
@@ -708,14 +712,14 @@ event from_main_2 when (CHRIS && MANSION1)
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(5);
     act_reset();
     evt_nop();
     wait_message();
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
-    act_anim_flags(ANIM_3D, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     voice_play(VOICE_PLAY, VO_005_0B);
@@ -734,11 +738,11 @@ event from_main_2 when (CHRIS && MANSION1)
     act_motion_path(MOTION_13, 4012, -800, 2200, 17, 17);
     act_reset();
     evt_nop();
-    evt_fork(TASK_02, from_main_2_sub2, 0);
+    evt_fork(TASK_02, chris_serum_anim, 0);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
     act_motion_path(MOTION_13, 8200, 0, 5000, 20, 20);
-    act_anim_flags(ANIM_3D, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -754,7 +758,7 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_nop();
     wait_message();
     sleep(20);
-    evt_fork(TASK_03, from_main_2_sub3, 0);
+    evt_fork(TASK_03, richard_serum_reaction, 0);
     sleep(10);
     voice_play(VOICE_PLAY, VO_005_0C);
     message(MSG_VO_005_0C, 0);
@@ -767,19 +771,19 @@ event from_main_2 when (CHRIS && MANSION1)
     sleep(90);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     wait_message();
-    set(FG_SCENARIO, F_SCENARIO_7F, TRUE);
-    set(FG_ITEM, F_ITEM_57, FALSE);
+    set(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE);
+    set(FG_ITEM, F_ITEM_20D_KEY_RADIO_0, FALSE);
     sleep(40);
     voice_play(VOICE_PLAY, VO_005_0D);
     bgm_play(BGM_MAIN);
-    evt_fork(TASK_04, from_main_2_sub1, 0);
+    evt_fork(TASK_04, rebecca_tends_richard, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002 | EF_0001);
     act_reset();
     evt_nop();
@@ -800,7 +804,7 @@ event from_main_2 when (CHRIS && MANSION1)
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(40);
     act_motion_path(MOTION_71, 300, 300, 1, 20, 20);
     sleep(40);
@@ -814,31 +818,31 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 9850, -2000, 3000, 25, 25);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_motion(MOTION_10);
     sleep(33);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(23);
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(10);
     sleep(7);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(10);
     sleep(10);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(3);
     sleep(15);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0002);
     sleep(22);
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(10);
     sleep(8);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(3);
     sleep(20);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_b(7);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
@@ -852,33 +856,33 @@ event from_main_2 when (CHRIS && MANSION1)
     message(MSG_VO_005_11, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_motion(MOTION_10);
     sleep(33);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(25);
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(0);
     sleep(9);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(3);
     sleep(15);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(3);
     sleep(9);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     sleep(10);
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(0);
     sleep(8);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(0);
     sleep(4);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(3);
     sleep(12);
     act_reset();
@@ -893,10 +897,10 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
-    act_anim_flags(ANIM_2D, F_ROOM_21, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(30);
     act_param_set(0, 1024);
     act_reset();
@@ -905,20 +909,20 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 9900, -1000, 3050, 100, 100);
-    act_anim_seq(AB_02, 3064, 3455, F_ROOM_21);
+    act_anim_seq(AB_02, 3064, 3455, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     wait_message();
     run
     {
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         voice_play(VOICE_PLAY, VO_005_12);
         message(MSG_VO_005_12, 0);
     }
@@ -928,7 +932,7 @@ event from_main_2 when (CHRIS && MANSION1)
     act_reset();
     evt_nop();
     wait_message();
-    cutnext(CAM_01);
+    cutnext(CAM_01_FROM_204_DOOR);
     sys_multi(SYS_ANGLE, 3072);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
@@ -937,9 +941,9 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(35);
-    act_anim_flags(ANIM_00, F_ROOM_21, 0);
+    act_anim_flags(ANIM_00, F_ROOM_PLAYER_ANIM_DONE, 0);
     wait_message();
     act_motion(MOTION_10);
     act_idle();
@@ -948,35 +952,35 @@ event from_main_2 when (CHRIS && MANSION1)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(CUT_FREE);
     }
     evt_finish();
 }
 
-event on_aot_04 when (CHRIS && MANSION1)
+event examine_richard
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
     run
     {
-        if (ck(FG_COMMON, F_COMMON_65, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
         {
             bgm_play(BGM_MAIN);
-            set(FG_COMMON, F_COMMON_65, TRUE);
+            set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
         }
         message(MSG_RICHARD_FROM_BRAVO_TEAM_13 | MSG_FAST, 0); // "Richard from Bravo team."
     }
@@ -994,7 +998,7 @@ event on_aot_04 when (CHRIS && MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -1003,24 +1007,24 @@ event on_aot_04 when (CHRIS && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
-        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM_AMMO_HANDGUN_0, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
+        aot_reset(AOT_04_EVENT_RICHARD, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }
 
-event on_aot_04_2 when (CHRIS && MANSION1)
+event rebecca_waits_for_serum
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -1028,7 +1032,7 @@ event on_aot_04_2 when (CHRIS && MANSION1)
     act_motion_path(MOTION_13, 8000, -4000, 2440, 32, 32);
     act_reset();
     evt_nop();
-    cutnext(CAM_05);
+    cutnext(CAM_05_RICHARD_CLOSEUP);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
     act_motion_path(MOTION_13, 8000, -400, 2440, 32, 32);
@@ -1036,7 +1040,7 @@ event on_aot_04_2 when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
@@ -1084,7 +1088,7 @@ event on_aot_04_2 when (CHRIS && MANSION1)
     act_motion_path(MOTION_13, 9900, -800, 3050, 20, 20);
     sleep(25);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -1112,22 +1116,22 @@ event on_aot_04_2 when (CHRIS && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_04_3 when (CHRIS && MANSION1)
+event talk_to_rebecca
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
@@ -1135,7 +1139,7 @@ event on_aot_04_3 when (CHRIS && MANSION1)
     act_motion_path(MOTION_13, 8000, -4000, 2440, 32, 32);
     act_reset();
     evt_nop();
-    cutnext(CAM_05);
+    cutnext(CAM_05_RICHARD_CLOSEUP);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
     act_motion_path(MOTION_13, 8000, -400, 2440, 32, 32);
@@ -1143,7 +1147,7 @@ event on_aot_04_3 when (CHRIS && MANSION1)
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
@@ -1179,7 +1183,7 @@ event on_aot_04_3 when (CHRIS && MANSION1)
     act_motion_path(MOTION_13, 9900, -800, 3050, 20, 20);
     sleep(25);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     act_reset();
     evt_nop();
@@ -1202,26 +1206,26 @@ event on_aot_04_3 when (CHRIS && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_COMMON, F_COMMON_65, TRUE);
+        set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
     }
     evt_finish();
 }
 
-event from_main_3 when (CHRIS && MANSION1)
+event richard_idle
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
-    act_anim_flags(ANIM_00, F_ROOM_20, 0);
+    act_anim_flags(ANIM_00, F_ROOM_RICHARD_IDLE_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_finish();
 }
 
-event from_main_2_sub3_sub1 when (CHRIS && MANSION1)
+event richard_blood_fx
 {
     single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3700, 0);
     sleep(20);
@@ -1242,18 +1246,18 @@ event from_main_2_sub3_sub1 when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event from_main_2_sub1 when (CHRIS && MANSION1)
+event rebecca_tends_richard
 {
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_REBECCA);
     evt_actor_begin();
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_3D, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3D, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     sleep(20);
     act_idle();
     act_nop();
     sleep(50);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_action_b(30);
     act_flag_op(EF_OR, EF_0001);
     sleep(150);
@@ -1269,48 +1273,48 @@ event from_main_2_sub1 when (CHRIS && MANSION1)
     sleep(30);
     act_motion_path(MOTION_13, 8200, -2500, 5000, 10, 4);
     sleep(40);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     sleep(27);
     act_idle();
     act_nop();
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_action_b(17);
     sleep(40);
     act_motion_path(MOTION_71, 300, 128, 1, 40, 40);
     sleep(20);
     act_motion_path(MOTION_71, 150, 128, 1, 80, 80);
     sleep(60);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(2);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
     act_idle();
     act_nop();
     sleep(60);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
     act_idle();
     act_nop();
     sleep(40);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(3);
-    act_anim_flags(ANIM_3E, F_ROOM_22, 0);
+    act_anim_flags(ANIM_3E, F_ROOM_C_REBECCA_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(2);
     act_idle();
@@ -1328,51 +1332,51 @@ event from_main_2_sub1 when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event on_aot_01_door when (CHRIS && MANSION1)
+event rebecca_brings_serum
 {
     run
     {
         setb(B_CHARACTER_MODEL, 0, 0);
-        aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 1, 0, 0);
-        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+        aot_reset(AOT_01_DOOR_20E, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 1, 0, 0);
+        aot_on(AOT_01_DOOR_20E, SCE_DOOR, 0);
         remove_item(IT_42_KEY_SERUM);
     }
     evt_finish();
 }
 
-event from_main_jill_mansion1 when (JILL && MANSION1)
+event richard_idle_jill
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
-    act_anim_flags(ANIM_00, F_ROOM_20, 0);
+    act_anim_flags(ANIM_00, F_ROOM_RICHARD_IDLE_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_reset();
     evt_finish();
 }
 
-event from_main_2_jill_mansion1 when (JILL && MANSION1)
+event richard_poisoned_scene_jill
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 9900, -800, 3050, 0, 0);
-    act_anim_flags(ANIM_20, F_ROOM_21, 0);
+    act_anim_flags(ANIM_20, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(25);
-    cutnext(CAM_03);
+    cutnext(CAM_03_TOWARD_RICHARD);
     voice_play(VOICE_PLAY, VO_A01_00);
     message(MSG_VO_A01_00, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(17);
-    act_anim_flags(ANIM_26, F_ROOM_21, 0);
+    act_anim_flags(ANIM_26, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(7);
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
-    act_anim_flags(ANIM_29, F_ROOM_21, 0);
+    act_anim_flags(ANIM_29, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(2);
-    act_anim_flags(ANIM_25, F_ROOM_21, 0);
+    act_anim_flags(ANIM_25, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(15);
     act_reset();
     evt_nop();
@@ -1380,33 +1384,33 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     bgm_play(BGM_MAIN);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 7480, 2440, F_ROOM_21);
+    act_anim_seq(AB_03, 7480, 2440, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_seq(AB_06, 8300, 3600, F_ROOM_21);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_seq(AB_06, 8300, 3600, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 128);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
-    cutnext(CAM_05);
+    cutnext(CAM_05_RICHARD_CLOSEUP);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 12000, -800, 4500, 20, 20);
     act_reset();
     evt_nop();
     sleep(30);
-    evt_fork(TASK_02, from_main_sub1, 0);
+    evt_fork(TASK_02, richard_struggles, 0);
     voice_play(VOICE_PLAY, VO_A01_01);
     message(MSG_VO_A01_01, 0);
     sleep(90);
@@ -1420,7 +1424,7 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     sleep(13);
     act_motion_path(MOTION_13, 12000, -800, 4500, 15, 15);
     sleep(30);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(10);
     act_reset();
     evt_nop();
@@ -1430,40 +1434,40 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     message(MSG_VO_A01_02, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(11);
     act_flag_op(EF_OR, EF_0080);
     sleep(3);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0080);
     sleep(4);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(36);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(24);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(7);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0080);
     sleep(6);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(7);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0080);
     sleep(6);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(14);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(15);
@@ -1486,7 +1490,7 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     message(MSG_VO_A01_04, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(15);
     act_reset();
@@ -1495,22 +1499,22 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(11);
     act_flag_op(EF_OR, EF_0080);
     sleep(3);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0080);
     sleep(4);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(14);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(30);
@@ -1535,22 +1539,22 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     sleep(20);
     act_motion_path(MOTION_13, 12000, -800, 4500, 20, 20);
     sleep(20);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(11);
     act_flag_op(EF_OR, EF_0080);
     sleep(3);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0080);
     sleep(4);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(25);
     sleep(15);
     act_motion_path(MOTION_13, 12000, 800, 4500, 20, 20);
@@ -1566,71 +1570,71 @@ event from_main_2_jill_mansion1 when (JILL && MANSION1)
     evt_actor_begin();
     act_motion_path(MOTION_71, 200, 200, 1, 50, 50);
     sleep(30);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
-    act_anim_flags(ANIM_2D, F_ROOM_21, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(30);
     act_reset();
     evt_nop();
     run
     {
         sys_multi(SYS_ANGLE, 2048);
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 5335, 2956, F_ROOM_21);
+    act_anim_seq(AB_03, 5335, 2956, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 64);
     sleep(10);
-    act_anim_seq(AB_03, 3282, 4620, F_ROOM_21);
+    act_anim_seq(AB_03, 3282, 4620, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 64);
     sleep(15);
-    act_anim_seq(AB_03, 3000, 12500, F_ROOM_21);
+    act_anim_seq(AB_03, 3000, 12500, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 64);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR_204, SCE_DOOR, 0);
         setw(W_04, 0);
     }
     evt_finish();
 }
 
-event from_main_3_jill_mansion1 when (JILL && MANSION1)
+event give_richard_serum_jill
 {
-    set(FG_COMMON, F_COMMON_65, TRUE);
+    set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_03, 7680, 2460, F_ROOM_21);
+    act_anim_seq(AB_03, 7680, 2460, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 32);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_seq(AB_06, 8780, 3584, F_ROOM_21);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_seq(AB_06, 8780, 3584, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_param_set(0, 128);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
@@ -1643,14 +1647,14 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080);
     sleep(10);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     act_flag_op(EF_OR, EF_0080);
     sleep(10);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(5);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(25);
@@ -1668,11 +1672,11 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(3);
     act_flag_op(EF_OR, EF_0080);
     sleep(10);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(5);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
@@ -1680,14 +1684,14 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     evt_nop();
     wait_message();
     sleep(20);
-    evt_fork(TASK_02, from_main_2_sub3, 0);
+    evt_fork(TASK_02, richard_serum_reaction, 0);
     voice_play(VOICE_PLAY, VO_A01_0A);
     message(MSG_VO_A01_0A, 0);
-    set(FG_SCENARIO, F_SCENARIO_7F, TRUE);
+    set(FG_SCENARIO, F_SCENARIO_HAS_RADIO, TRUE);
     sleep(120);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(7);
     act_flag_op(EF_OR, EF_0080);
     sleep(5);
@@ -1701,18 +1705,18 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     evt_actor_begin();
     act_motion_path(MOTION_71, 200, 200, 1, 50, 50);
     sleep(20);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0080 | EF_0001);
     sleep(10);
-    act_anim_flags(ANIM_32, F_ROOM_21, 0);
+    act_anim_flags(ANIM_32, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(20);
     act_flag_op(EF_OR, EF_0080);
     sleep(14);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(23);
     act_flag_op(EF_OR, EF_0080);
     sleep(14);
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_action_a(10);
     act_flag_op(EF_OR, EF_0001);
     sleep(30);
@@ -1725,7 +1729,7 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     sleep(35);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_30, F_ROOM_21, 0);
+    act_anim_flags(ANIM_30, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(30);
     act_motion_path(MOTION_71, 200, 200, 1, 20, 20);
     sleep(30);
@@ -1733,12 +1737,12 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     act_reset();
     evt_nop();
     sleep(34);
-    cutnext(CAM_04);
+    cutnext(CAM_04_RICHARD);
     sleep(45);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -1747,26 +1751,26 @@ event from_main_3_jill_mansion1 when (JILL && MANSION1)
     evt_nop();
     run
     {
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
     }
     evt_finish();
 }
 
-event from_main_sub1 when (MANSION1)
+event richard_struggles
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
     act_motion_path(MOTION_13, 4012, 8000, 2200, 25, 25);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        act_anim_flags(ANIM_01, F_ROOM_23, 0);
+        act_anim_flags(ANIM_01, F_ROOM_C_RICHARD_ANIM_DONE, 0);
     }
     else
     {
-        act_anim_flags(ANIM_01, F_ROOM_22, 0);
+        act_anim_flags(ANIM_01, F_ROOM_J_RICHARD_ANIM_DONE, 0);
     }
     act_flag_op(EF_SET, EF_0002);
     sleep(26);
@@ -1806,7 +1810,7 @@ event from_main_sub1 when (MANSION1)
     act_action_b(15);
     act_flag_op(EF_SET, 0);
     sleep(26);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_action_b(13);
         act_flag_op(EF_SET, EF_0001);
@@ -1820,21 +1824,21 @@ event from_main_sub1 when (MANSION1)
     single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -200, 3800, 0);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        act_anim_flags(ANIM_01, F_ROOM_23, 0);
+        act_anim_flags(ANIM_01, F_ROOM_C_RICHARD_ANIM_DONE, 0);
     }
     else
     {
-        act_anim_flags(ANIM_01, F_ROOM_22, 0);
+        act_anim_flags(ANIM_01, F_ROOM_J_RICHARD_ANIM_DONE, 0);
     }
     act_action_b(19);
     act_flag_op(EF_SET, EF_0002 | EF_0001);
     act_motion_path(MOTION_31, 712, 200, 0, 120, 120);
     act_reset();
     evt_nop();
-    set(FG_ROOM, F_ROOM_00, FALSE);
-    if (JILL)
+    set(FG_ROOM, F_ROOM_RICHARD_IDLE_STARTED, FALSE);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(130);
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
@@ -1870,12 +1874,12 @@ event from_main_sub1 when (MANSION1)
     evt_finish();
 }
 
-event from_main_2_sub2 when (CHRIS && MANSION1)
+event chris_serum_anim
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(MOTION_13, 10000, -800, 4100, 25, 25);
-    act_anim_flags(ANIM_31, F_ROOM_21, 0);
+    act_anim_flags(ANIM_31, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
@@ -1883,29 +1887,29 @@ event from_main_2_sub2 when (CHRIS && MANSION1)
     evt_finish();
 }
 
-event from_main_2_sub3 when (MANSION1)
+event richard_serum_reaction
 {
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_motion_path(MOTION_13, 4012, 2500, 3200, 25, 25);
         sleep(30);
         act_motion_path(MOTION_13, 4012, 2000, 3200, 25, 25);
         sleep(30);
         act_motion_path(MOTION_13, 4012, 200, 3200, 25, 25);
-        act_anim_flags(ANIM_01, F_ROOM_23, 0);
+        act_anim_flags(ANIM_01, F_ROOM_C_RICHARD_ANIM_DONE, 0);
     }
     else
     {
         act_motion_path(MOTION_13, 4012, 8000, 2200, 25, 25);
         sleep(26);
-        act_anim_flags(ANIM_01, F_ROOM_22, 0);
+        act_anim_flags(ANIM_01, F_ROOM_J_RICHARD_ANIM_DONE, 0);
     }
     act_flag_op(EF_SET, EF_0002);
     sleep(26);
     act_action_b(15);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_flag_op(EF_SET, EF_0001);
     }
@@ -1915,7 +1919,7 @@ event from_main_2_sub3 when (MANSION1)
     }
     sleep(18);
     act_action_b(17);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_flag_op(EF_SET, 0);
     }
@@ -1925,7 +1929,7 @@ event from_main_2_sub3 when (MANSION1)
     }
     sleep(8);
     act_action_b(20);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_flag_op(EF_SET, EF_0001);
     }
@@ -1934,7 +1938,7 @@ event from_main_2_sub3 when (MANSION1)
         act_flag_op(EF_SET, EF_0080 | EF_0001);
     }
     sleep(8);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         act_action_b(17);
         act_flag_op(EF_SET, 0);
@@ -1950,7 +1954,7 @@ event from_main_2_sub3 when (MANSION1)
         sleep(16);
     }
     act_action_b(17);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         act_flag_op(EF_SET, EF_0080 | EF_0001);
         sleep(18);
@@ -1960,13 +1964,13 @@ event from_main_2_sub3 when (MANSION1)
         act_action_b(22);
     }
     act_flag_op(EF_SET, 0);
-    if (JILL)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, TRUE))
     {
         sleep(16);
     }
     act_reset();
     evt_nop();
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         wait_message();
         single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3800, 0);
@@ -1976,22 +1980,22 @@ event from_main_2_sub3 when (MANSION1)
         single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3800, 0);
         sleep(1);
         single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 9000, -400, 3600, 0);
-        evt_fork(TASK_05, from_main_2_sub3_sub1, 0);
+        evt_fork(TASK_05, richard_blood_fx, 0);
     }
     else
     {
-        evt_fork(TASK_03, from_main_3_sub1_sub1, 0);
+        evt_fork(TASK_03, richard_blood_fx_jill, 0);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_RICHARD);
     evt_actor_begin();
     act_motion_path(MOTION_31, 300, 100, 0, 50, 50);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        act_anim_flags(ANIM_01, F_ROOM_23, 0);
+        act_anim_flags(ANIM_01, F_ROOM_C_RICHARD_ANIM_DONE, 0);
     }
     else
     {
-        act_anim_flags(ANIM_01, F_ROOM_22, 0);
+        act_anim_flags(ANIM_01, F_ROOM_J_RICHARD_ANIM_DONE, 0);
     }
     act_flag_op(EF_SET, EF_0002 | EF_0001);
     sleep(16);
@@ -2014,7 +2018,7 @@ event from_main_2_sub3 when (MANSION1)
     act_motion_path(MOTION_33, 340, 140, 0, 30, 30);
     sleep(4);
     act_motion_path(MOTION_33, 540, -180, 0, 30, 30);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         sleep(60);
         act_motion_path(MOTION_33, 540, -60, 0, 20, 20);
@@ -2033,13 +2037,13 @@ event from_main_2_sub3 when (MANSION1)
     act_motion_path(MOTION_33, 0, 0, 0, 50, 50);
     act_motion(MOTION_10);
     act_flag_op(EF_SET, 0);
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        act_anim_flags(ANIM_02, F_ROOM_23, 0);
+        act_anim_flags(ANIM_02, F_ROOM_C_RICHARD_ANIM_DONE, 0);
     }
     else
     {
-        act_anim_flags(ANIM_02, F_ROOM_22, 0);
+        act_anim_flags(ANIM_02, F_ROOM_J_RICHARD_ANIM_DONE, 0);
     }
     act_reset();
     evt_nop();
@@ -2047,30 +2051,30 @@ event from_main_2_sub3 when (MANSION1)
     evt_finish();
 }
 
-event on_aot_04_4 when (MANSION1)
+event examine_richard_body
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
     run
     {
-        if (ck(FG_COMMON, F_COMMON_65, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
         {
             bgm_play(BGM_MAIN);
-            set(FG_COMMON, F_COMMON_65, TRUE);
+            set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
         }
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             message(MSG_RICHARD_IS_DEAD_17 | MSG_FAST, 0); // "Richard is dead."
         }
@@ -2093,7 +2097,7 @@ event on_aot_04_4 when (MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -2102,17 +2106,17 @@ event on_aot_04_4 when (MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
-        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM_AMMO_HANDGUN_0, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
+        aot_reset(AOT_04_EVENT_RICHARD, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }
 
-event from_main_3_sub1_sub1 when (JILL && MANSION1)
+event richard_blood_fx_jill
 {
     sleep(20);
     single(12) effect(FX_00, FX_ROW_05, FX_AT_WORLD, 8900, -300, 3800, 0);
@@ -2139,28 +2143,28 @@ event from_main_3_sub1_sub1 when (JILL && MANSION1)
     evt_finish();
 }
 
-event on_aot_04_2_jill_mansion1 when (JILL && MANSION1)
+event examine_richard_jill
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
     run
     {
-        if (ck(FG_COMMON, F_COMMON_65, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
         {
             bgm_play(BGM_MAIN);
-            set(FG_COMMON, F_COMMON_65, TRUE);
+            set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
         }
         message(MSG_RICHARD_IS_DEAD_0E | MSG_FAST, 0); // "Richard is dead."
     }
@@ -2178,7 +2182,7 @@ event on_aot_04_2_jill_mansion1 when (JILL && MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -2187,29 +2191,29 @@ event on_aot_04_2_jill_mansion1 when (JILL && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
-        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM_AMMO_HANDGUN_0, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
+        aot_reset(AOT_04_EVENT_RICHARD, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }
 
-event on_aot_04_3_jill_mansion1 when (JILL && MANSION1)
+event richard_waits_for_serum_jill
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_05);
+        cutnext(CAM_05_RICHARD_CLOSEUP);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
@@ -2226,7 +2230,7 @@ event on_aot_04_3_jill_mansion1 when (JILL && MANSION1)
     act_motion_path(MOTION_72, 300, 128, 2, 10, 10);
     sleep(60);
     act_motion(MOTION_10);
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -2240,36 +2244,36 @@ event on_aot_04_3_jill_mansion1 when (JILL && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_aot_04_4_jill_mansion1 when (JILL && MANSION1)
+event examine_dead_richard_jill
 {
     run
     {
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_RICHARD);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(26);
     act_reset();
     evt_nop();
     run
     {
-        if (ck(FG_COMMON, F_COMMON_65, FALSE))
+        if (ck(FG_COMMON, F_COMMON_RICHARD_THEME_ON, FALSE))
         {
             bgm_play(BGM_MAIN);
-            set(FG_COMMON, F_COMMON_65, TRUE);
+            set(FG_COMMON, F_COMMON_RICHARD_THEME_ON, TRUE);
         }
         message(MSG_RICHARD_IS_DEAD_10 | MSG_FAST, 0); // "Richard is dead."
     }
@@ -2287,7 +2291,7 @@ event on_aot_04_4_jill_mansion1 when (JILL && MANSION1)
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
@@ -2296,12 +2300,12 @@ event on_aot_04_4_jill_mansion1 when (JILL && MANSION1)
     evt_nop();
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_TOWARD_RICHARD);
         cut_auto(CUT_FREE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
-        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM_AMMO_HANDGUN_0, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
+        aot_reset(AOT_04_EVENT_RICHARD, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }

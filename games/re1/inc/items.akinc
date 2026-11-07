@@ -79,12 +79,12 @@
 #define IT_4B_HEAL_HERB_MIX_GGB 0x4B
 #define IT_4C_KEY_PICKAXE 0x4C
 #define IT_4D_KEY_RADIO 0x4D
-#define IT_4E_UNKNOWN_4E 0x4E
-#define IT_4F_UNKNOWN_4F 0x4F
-#define IT_50_UNKNOWN_50 0x50
-#define IT_51_UNKNOWN_51 0x51
-#define IT_52_UNKNOWN_52 0x52
-#define IT_53_UNKNOWN_53 0x53
+#define IT_4E_MAP_1F 0x4E                                   // Map of the mansion's 1st floor (107)
+#define IT_4F_MAP_2F 0x4F                                   // Map of the mansion's 2nd floor (20B)
+#define IT_50_MAP_GARDEN 0x50                               // Map of the garden and courtyard (300)
+#define IT_51_MAP_UNDERGROUND 0x51                          // Map of the underground (30F)
+#define IT_52_MAP_DORMITORY 0x52                            // Map of the dormitory, the guardhouse (406)
+#define IT_53_MAP_LAB 0x53                                  // Map of the laboratory (506)
 #define IT_54_UNKNOWN_54 0x54
 #define IT_5F_FILE_RESEARCHERS_WILL_1 0x5F
 #define IT_60_FILE_RESEARCHERS_WILL_2 0x60

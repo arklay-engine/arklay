@@ -1740,7 +1740,7 @@ local function scd_state(e)
             local body = e:plant42_body()
             e:random()
             local y = (e:random() & 0xFFF) + 0x200
-            if body ~= nil and (e:plant42_body_y() or 0) > -2000 then
+            if body ~= nil and (e.plant42_body_y or 0) > -2000 then
                 y = 0
             end
             local x = 0x200 - (e:random() & 0x3FF)

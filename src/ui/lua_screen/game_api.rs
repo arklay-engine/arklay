@@ -119,6 +119,40 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_box()`: RE2's item box page while its screen is up: its
+    // `routine`, `sub`, `count`, `cursor`, `top`, `scroll`, `pulse` and
+    // whether `St_init01` has `started` it; nil otherwise.
+    methods.add_method("re2_box", |lua, api, ()| {
+        let Some(page) = api.game().and_then(|game| game.re2_box) else {
+            return Ok(mlua::Value::Nil);
+        };
+        let table = lua.create_table()?;
+        table.set("routine", page.routine)?;
+        table.set("sub", page.sub)?;
+        table.set("count", page.count)?;
+        table.set("cursor", page.cursor)?;
+        table.set("top", page.top)?;
+        table.set("scroll", page.scroll)?;
+        table.set("pulse", page.pulse)?;
+        table.set("started", page.started)?;
+        table.set("arrows", page.arrows)?;
+        Ok(mlua::Value::Table(table))
+    });
+
+    // `re2_box_slot(slot)`: one of RE2's item box slots, `id, count, mark`.
+    methods.add_method("re2_box_slot", |_lua, api, slot: usize| {
+        let [id, count, mark] = api
+            .game()
+            .and_then(|game| {
+                game.re2
+                    .item_box
+                    .get(slot % crate::game::itembox2::BOX_SLOTS)
+                    .copied()
+            })
+            .unwrap_or_default();
+        Ok((id, count, mark))
+    });
+
     // `re2_map()`: what RE2's MAP page draws on the player's floor: its
     // `map` picture's number, its `rooms` in the draw order (each `x`, `y`,
     // `w`, `h`, an `outline` and maybe a translucent `fill`, both a
@@ -289,10 +323,14 @@ fn closes_inventory(kind: ItemKind) -> bool {
 
 /// Remove one item from `slot`, compacting the inventory.
 fn consume_slot(game: &mut GameState, slot: usize) {
-    if let Some(stack) = game.inventory.get_mut(slot) {
-        if stack.quantity > 0 {
-            stack.quantity -= 1;
-        }
+    // A stack picked up with quantity 0 (the square and hex cranks, the
+    // lighter, the lockpick) is never used up: like `remove_item`, only a
+    // counted stack is decremented and emptied. The square crank turns
+    // 301's pool twice, and there is one crank.
+    if let Some(stack) = game.inventory.get_mut(slot)
+        && stack.quantity > 0
+    {
+        stack.quantity -= 1;
         if stack.quantity == 0 {
             stack.id = 0;
         }
@@ -320,5 +358,18 @@ mod tests {
         assert!(!closes(0x44)); // green herb
         assert!(!closes(0x02)); // beretta
         assert!(!closes(0x0B)); // handgun ammo
+    }
+
+    #[test]
+    fn consume_slot_keeps_an_uncounted_stack() {
+        // The square crank (picked up with quantity 0) survives its use;
+        // a counted stack is decremented and emptied at zero.
+        let mut game = GameState::default();
+        game.add_item(0x1D, 0);
+        game.add_item(0x3D, 1);
+        consume_slot(&mut game, 0);
+        assert!(game.has_item(0x1D));
+        consume_slot(&mut game, 1);
+        assert!(!game.has_item(0x3D));
     }
 }

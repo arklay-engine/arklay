@@ -27,10 +27,19 @@ pub struct Re2State {
     pub random: u32,
     /// `Xa_control`'s voice line.
     pub voice: VoiceLine,
+    /// `--voice-ticks`: how long the oracle's recording held each voice line,
+    /// in its order. With sound the original ends a line by DirectSound's
+    /// clock, so its length in ticks follows the recording's pace.
+    pub voice_ticks: std::collections::VecDeque<u32>,
     /// `xa_vol`'s level for the voice channel (`0x693E88`), 0 to 127.
     pub xa_volume: u8,
     /// The camera `cut_old` returns to.
     pub cut_old: u8,
+    /// `fg_status`'s `0x80`, which the aim routine (`pl_mv_05`) raises each
+    /// frame and `Player_move` clears: while it is set at the frame's end,
+    /// `Swap_Cbuff` loads no background, so a cut `Cut_check` switched to
+    /// waits there and `scd_var_cut`, the cut on screen, stays.
+    pub view_held: bool,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
@@ -47,6 +56,11 @@ pub struct Re2State {
     /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
     /// `Pad_set` has masked the pad with it.
     pub door_key_stop: bool,
+    /// The scripts opened a door this tick (`aot_on` on a door's area). The
+    /// original's scripts run after `Player_move` and its cut check, and
+    /// `Sce_Door` stops both from the next tick; the port runs the scripts
+    /// first, so the player, the cut and the characters sit this tick out.
+    pub script_door: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// Each task's `Speed_set`s: speeds of position and rotation, then what
@@ -75,6 +89,14 @@ pub struct Re2State {
     /// `Item_work`'s eleventh slot (`0x98ED5C`): the lighter or the lockpick,
     /// `[id, count]`, which the eight slots and their count don't see.
     pub personal_item: [u8; 2],
+    /// `Item_boxwork` (`0x98ED60`): the item box's 64 slots, `[id, count,
+    /// mark]`, the mark 3 for a two-slot weapon.
+    pub item_box: [[u8; 3]; crate::game::itembox2::BOX_SLOTS],
+    /// The title's `hard_mode` and `censorship_off` as the new game's setup
+    /// keeps them in the saved work (`0x98EF2C`, `0x98EF2D`, `FUN_004b73c0`);
+    /// a load puts them back (`Title_game_init`).
+    pub hard_mode: bool,
+    pub censorship_off: bool,
     /// The room music table (`bgm_tbl`).
     pub bgm: crate::bgm2::BgmTable,
     /// The main music playing.
@@ -226,8 +248,8 @@ pub struct Character {
     pub with_room: bool,
     /// `+0x1F0`: how far it was from the player when it last ran.
     pub distance: u32,
-    /// `+0xB` (member 9): the last area `Sce_at_check`'s enemy pass found it
-    /// in, [`NO_AREA`] until it's been in one.
+    /// `+0xB` (member 9): the area `Sce_at_check`'s enemy pass last found it
+    /// in, [`NO_AREA`] once the scripts' pass after it has ended.
     pub area: u8,
     /// `pSub1_kan_t_ptr` once a zombie has hold of it: that zombie's own.
     pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
@@ -289,9 +311,22 @@ impl PartialEq for Characters {
 impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
+const SAVE_LEN: usize = SAVE_LEN_NO_CHOICE + 2;
+/// A save from before the new-game choice's two bytes.
+const SAVE_LEN_NO_CHOICE: usize = SAVE_LEN_NO_BOX + crate::game::itembox2::BOX_SLOTS * 3;
+/// A save from before the item box's slots.
+const SAVE_LEN_NO_BOX: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 7;
 /// A save from before the personal item's two bytes.
-const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN - 2;
+const SAVE_LEN_NO_PERSONAL: usize = SAVE_LEN_NO_BOX - 2;
+
+/// `fg_system`'s `0x20`: EASY.
+const FG_SYSTEM_EASY: u8 = 26;
+/// `fg_system`'s `0x40`: `censorship_off`'s bit.
+const FG_SYSTEM_CENSORSHIP_OFF: u8 = 25;
+/// `fg_system`'s `0x80000`: EASY with `censorship_off`.
+const FG_SYSTEM_EASY_CENSORSHIP_OFF: u8 = 12;
+/// `fg_status`'s `0x4000000`: EASY's.
+const FG_STATUS_EASY: u8 = 5;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -469,7 +504,9 @@ impl Default for Re2State {
             door_locks: [0; 2],
             random: 0x1382_01C3,
             cut_old: 0,
+            view_held: false,
             voice: VoiceLine::default(),
+            voice_ticks: Default::default(),
             xa_volume: XA_VOLUME,
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
@@ -478,6 +515,7 @@ impl Default for Re2State {
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
+            script_door: false,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
@@ -491,6 +529,9 @@ impl Default for Re2State {
             vm: None,
             scenario_b: false,
             personal_item: [0; 2],
+            item_box: [[0; 3]; crate::game::itembox2::BOX_SLOTS],
+            hard_mode: false,
+            censorship_off: false,
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
@@ -531,6 +572,9 @@ impl Re2State {
         out.extend_from_slice(&self.random.to_le_bytes());
         out.push(u8::from(self.scenario_b));
         out.extend_from_slice(&self.personal_item);
+        out.extend(self.item_box.iter().flatten());
+        out.push(u8::from(self.hard_mode));
+        out.push(u8::from(self.censorship_off));
         out
     }
 
@@ -545,7 +589,11 @@ impl Re2State {
 
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
-        if bytes.len() != SAVE_LEN && bytes.len() != SAVE_LEN_NO_PERSONAL {
+        if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_CHOICE
+            && bytes.len() != SAVE_LEN_NO_BOX
+            && bytes.len() != SAVE_LEN_NO_PERSONAL
+        {
             return None;
         }
         let mut words = bytes
@@ -576,7 +624,37 @@ impl Re2State {
             rest.get(5).copied().unwrap_or(0),
             rest.get(6).copied().unwrap_or(0),
         ];
+        let boxed = rest.get(7..).unwrap_or(&[]);
+        for (index, slot) in self.item_box.iter_mut().enumerate() {
+            for (byte, value) in slot.iter_mut().enumerate() {
+                *value = boxed.get(index * 3 + byte).copied().unwrap_or(0);
+            }
+        }
+        let choice = rest
+            .get(7 + crate::game::itembox2::BOX_SLOTS * 3..)
+            .unwrap_or(&[]);
+        self.hard_mode = choice.first().is_some_and(|&byte| byte != 0);
+        self.censorship_off = choice.get(1).is_some_and(|&byte| byte != 0);
         Some(())
+    }
+
+    /// The title's new-game choice, as the original's game starts with it:
+    /// the difficulty confirm's EASY (`fg_system`'s `0x20`) and `hard_mode`,
+    /// ARRANGE MODE's `censorship_off` and the title's `fg_system` `0x40` for
+    /// it (`Title_sel_menu`), and `Title_game_init`'s new-game step, which
+    /// raises `fg_status`'s `0x4000000` under EASY and `fg_system`'s
+    /// `0x80000` under EASY with `censorship_off`.
+    pub fn start_new_game(&mut self, easy: bool, hard_mode: bool, censorship_off: bool) {
+        self.set_flag(0, FG_SYSTEM_EASY, u8::from(easy));
+        self.set_flag(0, FG_SYSTEM_CENSORSHIP_OFF, u8::from(censorship_off));
+        self.set_flag(
+            0,
+            FG_SYSTEM_EASY_CENSORSHIP_OFF,
+            u8::from(easy && censorship_off),
+        );
+        self.set_flag(STATUS_BANK, FG_STATUS_EASY, u8::from(easy));
+        self.hard_mode = hard_mode;
+        self.censorship_off = censorship_off;
     }
 
     /// Whether a script holds the player's input, or a door has just handed
@@ -659,9 +737,10 @@ impl Re2State {
     }
 
     /// `fg_stop`'s second bit keeps `splayer_work` from running, and its third
-    /// the enemy slots.
+    /// the enemy slots. A door the scripts opened this tick has raised them all
+    /// before the enemies' pass ([`Self::script_door`]).
     pub fn character_stopped(&self, slot: usize) -> bool {
-        self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
+        self.script_door || self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
     }
 
     pub fn enemies_stopped(&self) -> bool {
@@ -726,6 +805,17 @@ impl Re2State {
         }
         for flag in std::mem::take(&mut self.unmodelled_arrivals) {
             self.raise_room_flag(flag);
+        }
+    }
+
+    /// `Sce_work_clr_at`, at the end of `Sce_scheduler_main`'s pass: every
+    /// enemy in play forgets its area, so a script sees only the one the last
+    /// `Sce_at` found it in.
+    pub fn clear_enemy_areas(&mut self) {
+        for character in self.characters.0.iter_mut().flatten() {
+            if character.be_flg & 1 != 0 {
+                character.area = NO_AREA;
+            }
         }
     }
 
@@ -1244,6 +1334,16 @@ impl GameHost<'_> {
             params[..5].copy_from_slice(&[data[0], data[2], data[4], model, action]);
         } else {
             params[..6].copy_from_slice(&data);
+            // `Aot_reset` writes only the area's first three data words: an
+            // item's object and action bytes stay for a later reset to an
+            // item (room 101's shotgun, off at the load and back on Kendo's
+            // second check, is still picked up crouching).
+            let kept = if old.kind == RoomActionKind::Item {
+                [old.params[3], old.params[4]]
+            } else {
+                [old.params[6], old.params[7]]
+            };
+            params[6..].copy_from_slice(&kept);
         }
         self.game.room_actions[slot] = Some(area_action(
             slot as u8,
@@ -1319,6 +1419,9 @@ impl GameHost<'_> {
         let zombie = (0x10..=0x21).contains(&id)
             || licker
             || id == crate::zombie2::MRX_ID
+            || id == crate::zombie2::ALLIGATOR_ID
+            || id == crate::zombie2::G1_ID
+            || id == crate::zombie2::G2_ID
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
             || crate::zombie2::is_plant(id);
@@ -1343,6 +1446,11 @@ impl GameHost<'_> {
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
             work.kind = kind;
+            let room = u16::from(self.game.id.stage) << 8 | u16::from(self.game.id.room);
+            let given = &mut self.game.re2_enemy_dest;
+            if let Some(index) = given.iter().position(|&(r, s, _)| (r, s) == (room, slot)) {
+                work.dest = given.remove(index).2;
+            }
         }
         let characters = &mut self.game.re2.characters.0;
         characters.resize_with(CHARACTER_SLOTS, || None);
@@ -1374,7 +1482,6 @@ impl GameHost<'_> {
     }
 
     /// Set the player's position or facing for `pos_set` and `dir_set`.
-    /// `Sce_se_on`: its position is its offset from the body it names.
     /// A script's write to a fade: fade 0 is the session's, for the door's own
     /// to share.
     fn fade_write(&mut self, fade: u8, write: FadeWrite) {
@@ -1388,6 +1495,7 @@ impl GameHost<'_> {
         }
     }
 
+    /// `Sce_se_on`: its position is its offset from the body it names.
     fn se_on(&mut self, at: impl Fn(usize) -> i64) {
         let (slot, positional) = (at(1) as u16 & 0xff, at(1) as u16 >> 8);
         let work = at(2) as u16;
@@ -1410,7 +1518,12 @@ impl GameHost<'_> {
             1 => player,
             2 => character(SPLAYER_SLOT).unwrap_or(player),
             3 => character(usize::from(work >> 8)).unwrap_or(player),
-            // Objects have no position here yet.
+            // `pOm[n]`'s position, as `Sce_se_on` reads it.
+            4 => self
+                .game
+                .objects
+                .record(usize::from(work >> 8))
+                .map_or(player, |object| object.pos),
             _ => player,
         };
         let offset = [at(3) as i32, at(4) as i32, at(5) as i32];
@@ -1710,10 +1823,20 @@ impl Host for GameHost<'_> {
             "aot_on" => {
                 if let Some(Some(action)) = self.game.room_actions.get(at(0) as usize).copied() {
                     self.game.fire_re2_area(action);
+                    // The scripts run after `Player_move`, and a crouching
+                    // pick-up's `Sce_Item` sets the routine there and then.
+                    if self.game.re2_crouch_start {
+                        self.game.tick_re2_crouch();
+                    }
                 }
             }
             "message_on" => {
                 self.game.show_re2_message(at(1) as u8);
+                // Its last two bytes, a word, are the `fg_stop` bits the
+                // message holds up while it shows: `0xFFFF` on a check in
+                // play, none in a scene.
+                let stop = u16::from_le_bytes([at(3) as u8, at(4) as u8]);
+                self.game.hold_re2_message_stop(stop);
             }
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
@@ -2016,7 +2139,7 @@ impl Host for GameHost<'_> {
                 crate::player2::plc_ret(&mut self.game.re2.player);
             }
             "plc_stop" if self.work_is_player(task) => {
-                crate::player2::plc_stop(&mut self.game.re2.player);
+                crate::player2::plc_stop_player(&mut self.game.re2.player);
             }
             "plc_rot" if self.task_character(task).is_some() => {
                 let by = at(1) as i16;
@@ -2099,8 +2222,9 @@ impl Host for GameHost<'_> {
                 }
             }
             "member_set" => self.set_member(task, at(0) as u8, at(1) as i32),
+            // `Member_set2` reads the variable as a signed word (`MOVSX`).
             "member_set2" => {
-                let value = i32::from(self.var(at(1) as u8));
+                let value = i32::from(self.var(at(1) as u8) as i16);
                 self.set_member(task, at(0) as u8, value);
             }
             "sce_key_ck" | "sce_trg_ck" => {
@@ -2259,6 +2383,22 @@ mod tests {
     }
 
     #[test]
+    fn a_setup_scripts_dest_starts_the_next_zombie_in_its_slot_and_room() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("1020").unwrap();
+        game.re2_enemy_dest = vec![(0x102, 2, [224, 28708]), (0x118, 2, [5, 6])];
+        let zombie = [
+            0, 2, 0x1F, 70, 128, 0, 7, 0, 54, 20000, 20000, 20000, 4056, 0, 0,
+        ];
+        let dest = |game: &GameState| game.re2.characters.0[2].as_ref().unwrap().work.dest;
+        exec(&mut game, "sce_em_set", &zombie);
+        assert_eq!(dest(&game), [224, 28708]);
+        assert_eq!(game.re2_enemy_dest, [(0x118, 2, [5, 6])], "used once");
+        exec(&mut game, "sce_em_set", &zombie);
+        assert_eq!(dest(&game), [0, 0], "the room's next load starts it at 0");
+    }
+
+    #[test]
     fn neck_targets_give_a_script_character_no_life_and_each_its_facing() {
         let mut game = GameState::default();
         spawn_character(&mut game, 0x48, 255);
@@ -2304,6 +2444,21 @@ mod tests {
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0);
         assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn se_on_of_an_object_sounds_at_the_object() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [
+            2, 2, 0, 0, 0, 0x4000, 0, 0x10, 0, 100, -200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        exec(&mut game, "obj_model_set", &call);
+        // Room 102's gate: room slot 0x0a in 3D, at object 2 and 10 units up.
+        exec(&mut game, "se_on", &[2, 0x10A, 0x204, 0, -10, 0]);
+        let sound = game.re2.sounds.last().unwrap();
+        assert_eq!(sound.id, crate::se2::SoundId::decode(0x020A_0001).unwrap());
+        assert_eq!(sound.pos, [100, -210, 300]);
     }
 
     #[test]
@@ -2568,8 +2723,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A spider, which isn't modelled.
-        spawn_character(&mut game, 0x23, 255);
+        // A cockroach, which isn't modelled.
+        spawn_character(&mut game, 0x29, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.
@@ -2631,6 +2786,19 @@ mod tests {
         state.set_key(CONFIRM | FORWARD);
         assert_eq!(state.key, CONFIRM | FORWARD);
         assert_eq!(state.key_trg, 0);
+    }
+
+    #[test]
+    fn a_door_the_scripts_open_stops_every_character_for_the_tick() {
+        let mut state = Re2State::default();
+        assert!(!state.character_stopped(0));
+        assert!(!state.character_stopped(SPLAYER_SLOT));
+        // `Sce_Door` has raised `fg_stop` before the original's characters
+        // run on that tick: the enemies and `splayer_work` both sit it out.
+        state.script_door = true;
+        assert!(state.character_stopped(0));
+        assert!(state.character_stopped(5));
+        assert!(state.character_stopped(SPLAYER_SLOT));
     }
 
     #[test]
@@ -2731,9 +2899,10 @@ mod tests {
     /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
     /// body probe): `Sce_at_check`'s enemy pass puts the area in the zombie's
     /// `+0xB`, which the room's script reads as member 9, and in the script's
-    /// body-area variable. It keeps the area once the zombie has left.
+    /// body-area variable. The scripts' pass ends with `Sce_work_clr_at`, which
+    /// clears it, so once the zombie has left the next probe leaves none.
     #[test]
-    fn an_enemy_area_is_kept_as_the_enemys_member_nine() {
+    fn an_enemy_area_is_the_enemys_member_nine_until_the_scripts_pass() {
         let mut game = GameState::default();
         game.is_re2_room = true;
         exec(
@@ -2754,9 +2923,14 @@ mod tests {
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
         assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
-        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
+        game.re2.clear_enemy_areas();
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
+        game.re2.clear_enemy_areas();
+        game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
     }
 
     /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives
@@ -2978,6 +3152,56 @@ mod tests {
     }
 
     #[test]
+    fn room_101s_shotgun_is_picked_up_crouching_from_the_scripts() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.player.routine = [1, 0, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        // Room 101's `main_00`: the shotgun's area, put out at once.
+        let set = [
+            11, 2, 49, 0, 0, -17422, -15899, 2000, 2000, 7, 5, 15, 255, 1,
+        ];
+        host.exec(0, lookup(0x4E).unwrap(), &set);
+        host.exec(0, lookup(0x46).unwrap(), &[11, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // `main_1D`, Kendo's second check: its first three words back, with
+        // four shells, and the area run.
+        host.exec(0, lookup(0x46).unwrap(), &[11, 2, 49, 7, 0, 4, 0, 15, 0]);
+        host.exec(0, lookup(0x47).unwrap(), &[11]);
+        // The action byte stayed: a crouch, set in the scripts' pass.
+        assert!(game.re2_item_get.is_none());
+        assert_eq!(game.re2.player.routine, [1, 6, 0, 0]);
+        game.re2.player.item_window = true;
+        game.tick_re2_crouch();
+        let (taken, _, _) = take_through_the_window(&mut game, false);
+        assert!(taken.is_some());
+        assert_eq!(game.item_count(7), 4);
+        // The close holds the next tick's keys, as a door's does.
+        assert!(game.re2.door_key_stop);
+    }
+
+    #[test]
+    fn a_checks_message_holds_fg_stop_until_it_is_dismissed() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        *game.re2.fg_stop_mut() = 0x0100_0000;
+        let mut host = GameHost { game: &mut game };
+        // A scene's line holds nothing.
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+        game.cancel_message();
+        // Kendo's body: `message_on(0, 18, 0, 255, 255)`.
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 18, 0, 255, 255]);
+        assert!(game.message.active);
+        assert_eq!(*game.re2.fg_stop_mut(), 0xFFFF_0000);
+        assert!(game.re2.player_stopped());
+        game.cancel_message();
+        assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+    }
+
+    #[test]
     fn a_crouch_that_is_cut_short_drops_its_item() {
         let mut game = GameState::default();
         game.is_re2_room = true;
@@ -3090,8 +3314,47 @@ mod tests {
         assert_eq!(loaded.personal_item, [0x2F, 1]);
         // A save from before the slot loads with it empty.
         let mut old = Re2State::default();
-        old.load_save_bytes(&bytes[..bytes.len() - 2]).unwrap();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_PERSONAL]).unwrap();
         assert_eq!(old.personal_item, [0, 0]);
+    }
+
+    #[test]
+    fn the_item_box_survives_a_save() {
+        let mut state = Re2State::default();
+        state.item_box[0] = [0x14, 15, 0];
+        state.item_box[63] = [0x0E, 7, 3];
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.item_box, state.item_box);
+        // A save from before the box loads with it empty.
+        let mut old = Re2State::default();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_BOX]).unwrap();
+        assert_eq!(old.item_box[0], [0; 3]);
+    }
+
+    #[test]
+    fn the_new_game_choice_sets_the_flags_and_survives_a_save() {
+        let mut state = Re2State::default();
+        state.start_new_game(true, false, true);
+        assert_eq!(state.banks[0][0], 0x0008_0060);
+        assert_eq!(state.banks[usize::from(STATUS_BANK)][0], 0x0400_0000);
+        assert!(state.censorship_off && !state.hard_mode);
+        let mut hard = Re2State::default();
+        hard.start_new_game(false, true, false);
+        assert_eq!(hard.banks[0][0], 0);
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert!(loaded.censorship_off && !loaded.hard_mode);
+        assert_eq!(loaded.banks[0][0], 0x0008_0060);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&hard.to_save_bytes()).unwrap();
+        assert!(loaded.hard_mode && !loaded.censorship_off);
+        // A save from before the two bytes loads with both clear.
+        let mut old = Re2State::default();
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_CHOICE]).unwrap();
+        assert!(!old.censorship_off && !old.hard_mode);
     }
 
     #[test]

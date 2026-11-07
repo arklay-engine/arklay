@@ -8,25 +8,25 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_NONE 0x03
-#define AOT_04_NONE 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_USEITEM 0x06
-#define AOT_07_MESSAGE 0x07
-#define AOT_08_MESSAGE 0x08
-#define AOT_09_NONE 0x09
-#define AOT_0A_NONE 0x0A
-#define AOT_0B_NONE 0x0B
-#define AOT_0C_6 0x0C
-#define AOT_0D_NONE 0x0D
-#define AOT_0E_EVENT 0x0E
-#define AOT_0F_ITEM 0x0F
-#define AOT_10_ITEM 0x10
-#define AOT_11_ITEM 0x11
-#define AOT_12_ITEM 0x12
+#define AOT_00_MESSAGE_WELDED_DOOR_303 0x00                 // A door to 303, always reset to "It's welded and does not open."
+#define AOT_01_DOOR_310 0x01
+#define AOT_02_DOOR_30F 0x02                                // The elevator down; switched on by the ride.
+#define AOT_03_NONE_UNUSED 0x03
+#define AOT_04_NONE_UNUSED 0x04
+#define AOT_05_USEITEM_EAGLE_MEDAL 0x05                     // "The medal is in place." once placed.
+#define AOT_06_USEITEM_WOLF_MEDAL 0x06                      // "The medal is in place." once placed.
+#define AOT_07_MESSAGE_EAGLE_HOLLOW 0x07
+#define AOT_08_MESSAGE_WOLF_HOLLOW 0x08
+#define AOT_09_EVENT_STAIRS_DOWN 0x09                       // Starts as SCE_NONE; main turns it into the walk down the fountain stairs.
+#define AOT_0A_EVENT_STAIRS_UP 0x0A                         // Starts as SCE_NONE; main turns it into the walk up the fountain stairs.
+#define AOT_0B_NONE_STAIRS_TOP 0x0B                         // Guess: a spot at the top of the stairs, removed after the walk down.
+#define AOT_0C_6_STAIRS_BOTTOM 0x0C                         // Guess: the bottom of the fountain stairs.
+#define AOT_0D_EVENT_STAIRS_FADE 0x0D                       // Turned into the fade before the walk up.
+#define AOT_0E_EVENT_ELEVATOR 0x0E
+#define AOT_0F_ITEM_HEAL_HERB_GREEN_0 0x0F
+#define AOT_10_ITEM_HEAL_HERB_GREEN_1 0x10
+#define AOT_11_ITEM_HEAL_HERB_BLUE_2 0x11
+#define AOT_12_ITEM_HEAL_HERB_BLUE_3 0x12
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define CAM_03 0x03
@@ -39,21 +39,21 @@
 #define COL_04 0x04
 #define COL_05 0x05
 #define COL_06 0x06
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_1A 0x1A
-#define F_ROOM_1B 0x1B
-#define F_ROOM_1C 0x1C
-#define F_ROOM_1D 0x1D
-#define F_ROOM_1E 0x1E
-#define IMDL_00 0x00
-#define IMDL_01 0x01
-#define IMDL_02 0x02
-#define IMDL_03 0x03
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
+#define F_ROOM_EAGLE_PLACED_LAST 0x1E                       // The eagle medal went in last: picks the film's closing camera.
+#define F_ROOM_IN_STAIRWELL 0x1C                            // The player is down the fountain stairs: the stairwell collision is on.
+#define F_ROOM_ON_TOP 0x18                                  // The player is up at the fountain: its top collision is on.
+#define F_ROOM_PLACE_DOORS 0x1B                             // Place the fountain halves next frame.
+#define F_ROOM_PLAYER_ANIM_DONE 0x19                        // The player's animation finished (one frame).
+#define F_ROOM_STAIRS_DOWN_ON 0x1A                          // The walk-down spot is live.
+#define F_ROOM_STAIRS_UP_ON 0x1D                            // The walk-up spot is live.
+#define IMDL_00_HEAL_HERB_GREEN 0x00
+#define IMDL_01_HEAL_HERB_GREEN 0x01
+#define IMDL_02_HEAL_HERB_BLUE 0x02
+#define IMDL_03_HEAL_HERB_BLUE 0x03
+#define OBJ_00_FOUNTAIN_DOOR_0 0x00                         // Guess: one half of the fountain's opening, apart once it is open.
+#define OBJ_01_FOUNTAIN_DOOR_1 0x01                         // Guess: one half of the fountain's opening, apart once it is open.
+#define OBJ_02_ELEVATOR 0x02
+#define OBJ_03_ELEVATOR_PART 0x03                           // Attached to OBJ_02.
 #define SE_17_SW_MEDAL2 0x17
 #define SE_21_ELV1 0x21
 #define SE_22_ELV2 0x22
@@ -66,81 +66,81 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1C, TRUE);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
-    set(FG_STATUS, F_STATUS_3C, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 15200, 2900, 3800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 0, 0, ROOM_303_HELIPORT, 8700, 0, 5300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 20500, 11100, 3300, 3500, 1, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, ROOM_310_COURT_TO_LABO, 24600, 6400, 1300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_30F_CRANK_PASSAGE, 24200, 0, 5700, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
-    aot_set(AOT_03_NONE, 0, 0, 1, 1, SCE_NONE, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_04_NONE, 0, 0, 1, 1, SCE_NONE, 0, 0, 0, 0, 0, 0, 0);
-    item_aot_set(AOT_0F_ITEM, 14700, 22500, 600, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 15000, 0, 22800, 0, F_ITEM_CB, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    item_aot_set(AOT_10_ITEM, 13700, 22500, 600, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 14000, 0, 22800, 0, F_ITEM_CC, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    item_aot_set(AOT_11_ITEM, 16700, 22500, 600, 600, IT_45_HEAL_HERB_BLUE, 1, IMDL_02, SCA_NONE, 17000, 0, 22800, 0, F_ITEM_CD, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
-    item_aot_set(AOT_12_ITEM, 15900, 22500, 600, 600, IT_45_HEAL_HERB_BLUE, 1, IMDL_03, SCA_NONE, 16200, 0, 22800, 0, F_ITEM_CE, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
+    door_aot_set(AOT_00_MESSAGE_WELDED_DOOR_303, 0, 15200, 2900, 3800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 0, 0, ROOM_303_HELIPORT, 8700, 0, 5300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_310, 20500, 11100, 3300, 3500, 1, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, ROOM_310_COURT_TO_LABO, 24600, 6400, 1300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_30F, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_30F_CRANK_PASSAGE, 24200, 0, 5700, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
+    aot_set(AOT_03_NONE_UNUSED, 0, 0, 1, 1, SCE_NONE, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_04_NONE_UNUSED, 0, 0, 1, 1, SCE_NONE, 0, 0, 0, 0, 0, 0, 0);
+    item_aot_set(AOT_0F_ITEM_HEAL_HERB_GREEN_0, 14700, 22500, 600, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_00_HEAL_HERB_GREEN, SCA_NONE, 15000, 0, 22800, 0, F_ITEM_305_HEAL_HERB_GREEN_0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_10_ITEM_HEAL_HERB_GREEN_1, 13700, 22500, 600, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_01_HEAL_HERB_GREEN, SCA_NONE, 14000, 0, 22800, 0, F_ITEM_305_HEAL_HERB_GREEN_1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_11_ITEM_HEAL_HERB_BLUE_2, 16700, 22500, 600, 600, IT_45_HEAL_HERB_BLUE, 1, IMDL_02_HEAL_HERB_BLUE, SCA_NONE, 17000, 0, 22800, 0, F_ITEM_305_HEAL_HERB_BLUE_2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_12_ITEM_HEAL_HERB_BLUE_3, 15900, 22500, 600, 600, IT_45_HEAL_HERB_BLUE, 1, IMDL_03_HEAL_HERB_BLUE, SCA_NONE, 16200, 0, 22800, 0, F_ITEM_305_HEAL_HERB_BLUE_3, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_310_COURT_TO_LABO))
     {
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 22341, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 20770, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
+        obj(OBJ_00_FOUNTAIN_DOOR_0, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 22341, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
+        obj(OBJ_01_FOUNTAIN_DOOR_1, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 20770, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
     }
     else
     {
-        obj(OBJ_00, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 21560, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
-        obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 21560, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
+        obj(OBJ_00_FOUNTAIN_DOOR_0, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 21560, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
+        obj(OBJ_01_FOUNTAIN_DOOR_1, OF_NOT_PUSHABLE | OF_10 | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 21560, 0, 6000, 3072, 0, 576, 0, -576, 540, 0, 0, 0);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_30F_CRANK_PASSAGE))
     {
-        obj(OBJ_02, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 6180, 3072, 13450, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_02_ELEVATOR, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 6180, 3072, 13450, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     else
     {
-        obj(OBJ_02, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 6180, 0, 13450, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_02_ELEVATOR, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 6180, 0, 13450, 3072, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    obj(OBJ_03, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_02, 0, 0, 0, -1024, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_USEITEM, 24000, 10000, 3400, 2200, SCE_USEITEM, SAT_PLAYER, 9, 0, 10, 0, 1, 0);
-    aot_set(AOT_06_USEITEM, 15900, 10000, 3400, 2200, SCE_USEITEM, SAT_PLAYER, 9, 0, 9, 0, 1, 0);
-    aot_set(AOT_07_MESSAGE, 24000, 10000, 3400, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 69, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 15900, 10000, 3400, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 69, 0, 0, 0);
-    aot_set(AOT_09_NONE, 21200, 5355, 700, 4500, SCE_NONE, SAT_PLAYER, 9, 0, 0, 0, 0, 0);
-    aot_set(AOT_0A_NONE, 23700, 9383, 3400, 1000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 9, 0, 1, 0, 0, 0);
-    aot_set(AOT_0B_NONE, 21579, 7200, 2113, 1000, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
-    aot_set(AOT_0C_6, 23800, 10996, 3400, 400, SCE_6, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
-    aot_set(AOT_0D_NONE, 23800, 9883, 3400, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
-    aot_set(AOT_0E_EVENT, 5000, 12500, 6000, 1500, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_0e, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_1D, TRUE))
+    obj(OBJ_03_ELEVATOR_PART, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_02_ELEVATOR, 0, 0, 0, -1024, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_USEITEM_EAGLE_MEDAL, 24000, 10000, 3400, 2200, SCE_USEITEM, SAT_PLAYER, 9, 0, 10, 0, 1, 0);
+    aot_set(AOT_06_USEITEM_WOLF_MEDAL, 15900, 10000, 3400, 2200, SCE_USEITEM, SAT_PLAYER, 9, 0, 9, 0, 1, 0);
+    aot_set(AOT_07_MESSAGE_EAGLE_HOLLOW, 24000, 10000, 3400, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 69, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE_WOLF_HOLLOW, 15900, 10000, 3400, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 69, 0, 0, 0);
+    aot_set(AOT_09_EVENT_STAIRS_DOWN, 21200, 5355, 700, 4500, SCE_NONE, SAT_PLAYER, 9, 0, 0, 0, 0, 0);
+    aot_set(AOT_0A_EVENT_STAIRS_UP, 23700, 9383, 3400, 1000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 9, 0, 1, 0, 0, 0);
+    aot_set(AOT_0B_NONE_STAIRS_TOP, 21579, 7200, 2113, 1000, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
+    aot_set(AOT_0C_6_STAIRS_BOTTOM, 23800, 10996, 3400, 400, SCE_6, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
+    aot_set(AOT_0D_EVENT_STAIRS_FADE, 23800, 9883, 3400, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
+    aot_set(AOT_0E_EVENT_ELEVATOR, 5000, 12500, 6000, 1500, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 9, 0, ride_elevator_down, 0, 0, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_FOUNTAIN_OPEN, TRUE))
     {
         if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_310_COURT_TO_LABO))
         {
-            set(FG_ROOM, F_ROOM_1A, FALSE);
-            set(FG_ROOM, F_ROOM_1D, TRUE);
+            set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, FALSE);
+            set(FG_ROOM, F_ROOM_STAIRS_UP_ON, TRUE);
         }
         else
         {
-            set(FG_ROOM, F_ROOM_1A, TRUE);
-            set(FG_ROOM, F_ROOM_1D, FALSE);
+            set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, TRUE);
+            set(FG_ROOM, F_ROOM_STAIRS_UP_ON, FALSE);
         }
     }
     else
     {
-        set(FG_ROOM, F_ROOM_1A, FALSE);
-        set(FG_ROOM, F_ROOM_1D, TRUE);
+        set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, FALSE);
+        set(FG_ROOM, F_ROOM_STAIRS_UP_ON, TRUE);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_310_COURT_TO_LABO))
     {
-        set(FG_ROOM, F_ROOM_18, FALSE);
-        set(FG_ROOM, F_ROOM_1C, TRUE);
-        aot_delete(AOT_0D_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_0C_6, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_ON_TOP, FALSE);
+        set(FG_ROOM, F_ROOM_IN_STAIRWELL, TRUE);
+        aot_delete(AOT_0D_EVENT_STAIRS_FADE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0C_6_STAIRS_BOTTOM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        set(FG_ROOM, F_ROOM_18, TRUE);
-        set(FG_ROOM, F_ROOM_1C, FALSE);
+        set(FG_ROOM, F_ROOM_ON_TOP, TRUE);
+        set(FG_ROOM, F_ROOM_IN_STAIRWELL, FALSE);
     }
-    set(FG_ROOM, F_ROOM_1B, TRUE);
+    set(FG_ROOM, F_ROOM_PLACE_DOORS, TRUE);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_30F_CRANK_PASSAGE))
     {
-        evt_exec(0, TASK_09, on_enter);
+        evt_exec(0, TASK_09, arrive_from_30f);
         dir_set(0, 0, 3072, 0, 6000, 2000, 13800);
         spd_set(ENT_PLAYER, 2000);
         timer_setup(LIGHT_FADE_VEIL, 0, FADE_R | FADE_G | FADE_B);
@@ -151,7 +151,7 @@ proc init
         dir_set(0, 0, 0, 0, 24100, 4320, 13100);
         spd_set(ENT_PLAYER, 4320);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_1D, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_FOUNTAIN_OPEN, TRUE))
     {
         msgnode_set(ZONE_04, CAM_01, CAM_02);
         msgnode_set(ZONE_09, CAM_02, CAM_04);
@@ -171,72 +171,72 @@ proc init
 
 proc main
 {
-    set(FG_STATUS, F_STATUS_1C, TRUE);
-    aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 69, 0);
+    set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
+    aot_reset(AOT_00_MESSAGE_WELDED_DOOR_303, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 69, 0);
     if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
-        aot_delete(AOT_05_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_USEITEM_EAGLE_MEDAL, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_MESSAGE_EAGLE_HOLLOW, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
-    else if (ck(FG_SCENARIO, F_SCENARIO_1B, TRUE))
+    else if (ck(FG_SCENARIO, F_SCENARIO_EAGLE_MEDAL_PLACED, TRUE))
     {
-        aot_reset(AOT_05_USEITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
-        aot_delete(AOT_07_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_reset(AOT_05_USEITEM_EAGLE_MEDAL, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+        aot_delete(AOT_07_MESSAGE_EAGLE_HOLLOW, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_reset(AOT_05_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 10, 1);
-        aot_delete(AOT_07_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_reset(AOT_05_USEITEM_EAGLE_MEDAL, SCE_USEITEM, SAT_PLAYER, 9, 10, 1);
+        aot_delete(AOT_07_MESSAGE_EAGLE_HOLLOW, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
-        aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_08_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_06_USEITEM_WOLF_MEDAL, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_08_MESSAGE_WOLF_HOLLOW, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
-    else if (ck(FG_SCENARIO, F_SCENARIO_1C, TRUE))
+    else if (ck(FG_SCENARIO, F_SCENARIO_WOLF_MEDAL_PLACED, TRUE))
     {
-        aot_reset(AOT_06_USEITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
-        aot_delete(AOT_08_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_reset(AOT_06_USEITEM_WOLF_MEDAL, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+        aot_delete(AOT_08_MESSAGE_WOLF_HOLLOW, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_reset(AOT_06_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 9, 1);
-        aot_delete(AOT_08_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_reset(AOT_06_USEITEM_WOLF_MEDAL, SCE_USEITEM, SAT_PLAYER, 9, 9, 1);
+        aot_delete(AOT_08_MESSAGE_WOLF_HOLLOW, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     if (testitem(IT_25_KEY_MEDAL_EAGLE))
     {
-        set(FG_SCENARIO, F_SCENARIO_1B, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_EAGLE_MEDAL_PLACED, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17_SW_MEDAL2, 0, SND_AT_PLAYER, 0, 0, 0);
-        set(FG_ROOM, F_ROOM_1E, TRUE);
+        set(FG_ROOM, F_ROOM_EAGLE_PLACED_LAST, TRUE);
     }
     if (testitem(IT_24_KEY_MEDAL_WOLF))
     {
-        set(FG_SCENARIO, F_SCENARIO_1C, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_WOLF_MEDAL_PLACED, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17_SW_MEDAL2, 0, SND_AT_PLAYER, 0, 0, 0);
-        set(FG_ROOM, F_ROOM_1E, FALSE);
+        set(FG_ROOM, F_ROOM_EAGLE_PLACED_LAST, FALSE);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_1B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_1C, TRUE) && ck(FG_SCENARIO, F_SCENARIO_1D, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_EAGLE_MEDAL_PLACED, TRUE) && ck(FG_SCENARIO, F_SCENARIO_WOLF_MEDAL_PLACED, TRUE) && ck(FG_SCENARIO, F_SCENARIO_FOUNTAIN_OPEN, FALSE))
     {
-        set(FG_SCENARIO, F_SCENARIO_1D, TRUE);
-        evt_exec(0, TASK_09, from_main_3);
+        set(FG_SCENARIO, F_SCENARIO_FOUNTAIN_OPEN, TRUE);
+        evt_exec(0, TASK_09, fountain_opens_film);
     }
-    if (ck(FG_ROOM, F_ROOM_1A, TRUE))
+    if (ck(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, TRUE))
     {
-        aot_delete(AOT_09_NONE, SCE_EVENT, SAT_PLAYER);
+        aot_delete(AOT_09_EVENT_STAIRS_DOWN, SCE_EVENT, SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_09_NONE, SCE_NONE, SAT_PLAYER);
+        aot_delete(AOT_09_EVENT_STAIRS_DOWN, SCE_NONE, SAT_PLAYER);
     }
-    if (ck(FG_ROOM, F_ROOM_1D, TRUE))
+    if (ck(FG_ROOM, F_ROOM_STAIRS_UP_ON, TRUE))
     {
-        aot_delete(AOT_0A_NONE, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0A_EVENT_STAIRS_UP, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_0A_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0A_EVENT_STAIRS_UP, SCE_NONE, SAT_UNDER | SAT_PLAYER);
     }
-    if (ck(FG_ROOM, F_ROOM_18, TRUE))
+    if (ck(FG_ROOM, F_ROOM_ON_TOP, TRUE))
     {
         inst_cfg(COL_LIST_00, COL_00, 0, 15894, 5364, 27324, 16794);
         inst_cfg(COL_LIST_01, COL_00, 0, 15894, 5364, 27324, 16794);
@@ -250,7 +250,7 @@ proc main
         inst_cfg(COL_LIST_02, COL_00, 0, 0, 0, 2, 2);
         inst_cfg(COL_LIST_03, COL_00, 0, 0, 0, 2, 2);
     }
-    if (ck(FG_ROOM, F_ROOM_1C, TRUE))
+    if (ck(FG_ROOM, F_ROOM_IN_STAIRWELL, TRUE))
     {
         inst_cfg(COL_LIST_02, COL_03, 0, 18396, 10458, 26802, 11556);
         inst_cfg(COL_LIST_00, COL_04, 0, 18342, 10296, 23634, 15858);
@@ -268,67 +268,67 @@ proc main
         inst_cfg(COL_LIST_00, COL_06, 0, 0, 0, 2, 2);
         inst_cfg(COL_LIST_02, COL_05, 0, 0, 0, 2, 2);
     }
-    if (ck(FG_ROOM, F_ROOM_1B, TRUE))
+    if (ck(FG_ROOM, F_ROOM_PLACE_DOORS, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1B, FALSE);
-        if (ck(FG_SCENARIO, F_SCENARIO_1D, TRUE))
+        set(FG_ROOM, F_ROOM_PLACE_DOORS, FALSE);
+        if (ck(FG_SCENARIO, F_SCENARIO_FOUNTAIN_OPEN, TRUE))
         {
-            evt_exec(0, TASK_09, from_main);
+            evt_exec(0, TASK_09, place_fountain_doors_open);
         }
         else
         {
-            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, place_fountain_doors_shut);
         }
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ELEVATOR, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
     }
     else
     {
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ELEVATOR, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
 }
 
-event event_00
+event walk_down_fountain_stairs
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
-        set(FG_ROOM, F_ROOM_19, FALSE);
-        set(FG_ROOM, F_ROOM_1A, FALSE);
-        aot_delete(AOT_09_NONE, SCE_NONE, SAT_PLAYER);
-        set(FG_ROOM, F_ROOM_1D, FALSE);
-        set(FG_ROOM, F_ROOM_1A, FALSE);
-        aot_delete(AOT_0A_NONE, SCE_NONE, SAT_PLAYER);
-        aot_delete(AOT_0D_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
+        set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, FALSE);
+        aot_delete(AOT_09_EVENT_STAIRS_DOWN, SCE_NONE, SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_STAIRS_UP_ON, FALSE);
+        set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, FALSE);
+        aot_delete(AOT_0A_EVENT_STAIRS_UP, SCE_NONE, SAT_PLAYER);
+        aot_delete(AOT_0D_EVENT_STAIRS_FADE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
-    set(FG_ROOM, F_ROOM_18, FALSE);
+    set(FG_ROOM, F_ROOM_ON_TOP, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 21579, 8000, F_ROOM_19);
+    act_anim_seq(AB_02, 21579, 8000, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 22579, 8000, F_ROOM_19);
+    act_anim_seq(AB_06, 22579, 8000, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_35, F_ROOM_19, 0);
+    act_anim_flags(ANIM_35, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(10);
@@ -343,19 +343,19 @@ event event_00
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_36, F_ROOM_19, 0);
+    act_anim_flags(ANIM_36, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -366,10 +366,10 @@ event event_00
     {
         dir_set(0, 0, 3072, 0, 24500, 2918, 11000);
         spd_set(ENT_PLAYER, 2918);
-        set(FG_ROOM, F_ROOM_18, FALSE);
-        set(FG_ROOM, F_ROOM_1C, TRUE);
-        aot_delete(AOT_0C_6, SCE_6, SAT_UNDER | SAT_PLAYER);
-        aot_on(AOT_0C_6, SCE_6, 129);
+        set(FG_ROOM, F_ROOM_ON_TOP, FALSE);
+        set(FG_ROOM, F_ROOM_IN_STAIRWELL, TRUE);
+        aot_delete(AOT_0C_6_STAIRS_BOTTOM, SCE_6, SAT_UNDER | SAT_PLAYER);
+        aot_on(AOT_0C_6_STAIRS_BOTTOM, SCE_6, 129);
         setw(W_DPAD_HELD, 1);
     }
     sleep(1);
@@ -385,34 +385,34 @@ event event_00
     sleep(25);
     run
     {
-        aot_delete(AOT_0B_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0B_NONE_STAIRS_TOP, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
-        set(FG_ROOM, F_ROOM_19, FALSE);
-        aot_delete(AOT_0D_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        set(FG_ROOM, F_ROOM_1D, TRUE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
+        aot_delete(AOT_0D_EVENT_STAIRS_FADE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_STAIRS_UP_ON, TRUE);
     }
     evt_finish();
 }
 
-event event_01
+event walk_up_fountain_stairs
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
-        set(FG_ROOM, F_ROOM_1D, FALSE);
-        aot_delete(AOT_0A_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_STAIRS_UP_ON, FALSE);
+        aot_delete(AOT_0A_EVENT_STAIRS_UP, SCE_NONE, SAT_UNDER | SAT_PLAYER);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     run
     {
         dir_set(0, 0, 1024, 0, 21577, 0, 8000);
@@ -427,7 +427,7 @@ event event_01
     timer_setup(LIGHT_FADE_VEIL, -2176, FADE_R | FADE_G | FADE_B);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_02, 21577, 4320, F_ROOM_19);
+    act_anim_seq(AB_02, 21577, 4320, F_ROOM_PLAYER_ANIM_DONE);
     act_reset();
     sleep(15);
     setw(W_LIGHT_DELTA, 0);
@@ -435,32 +435,32 @@ event event_01
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
-    set(FG_ROOM, F_ROOM_19, FALSE);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     run
     {
-        aot_delete(AOT_0C_6, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0C_6_STAIRS_BOTTOM, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
-        set(FG_ROOM, F_ROOM_19, FALSE);
-        set(FG_ROOM, F_ROOM_1A, TRUE);
-        aot_delete(AOT_0D_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        set(FG_ROOM, F_ROOM_18, TRUE);
-        set(FG_ROOM, F_ROOM_1C, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
+        set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, TRUE);
+        aot_delete(AOT_0D_EVENT_STAIRS_FADE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_ON_TOP, TRUE);
+        set(FG_ROOM, F_ROOM_IN_STAIRWELL, FALSE);
     }
     evt_finish();
 }
 
-event from_main
+event place_fountain_doors_open
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_FOUNTAIN_DOOR_0);
     evt_tween_begin_alt();
     tw_abs_pos(0, 22341, 0, 6000);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_FOUNTAIN_DOOR_1);
     evt_tween_begin_alt();
     tw_abs_pos(0, 20770, 0, 6000);
     tw_end();
@@ -468,14 +468,14 @@ event from_main
     evt_finish();
 }
 
-event from_main_2
+event place_fountain_doors_shut
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_FOUNTAIN_DOOR_0);
     evt_tween_begin_alt();
     tw_abs_pos(0, 21560, 0, 6000);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_FOUNTAIN_DOOR_1);
     evt_tween_begin_alt();
     tw_abs_pos(0, 21560, 0, 6000);
     tw_end();
@@ -483,24 +483,24 @@ event from_main_2
     evt_finish();
 }
 
-event event_04
+event fountain_stairs_up_fade
 {
     run
     {
-        aot_delete(AOT_0D_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_on(AOT_0C_6, SCE_6, 129);
+        aot_delete(AOT_0D_EVENT_STAIRS_FADE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_on(AOT_0C_6_STAIRS_BOTTOM, SCE_6, 129);
         setw(W_DPAD_HELD, 1);
     }
     sleep(20);
     timer_setup(LIGHT_FADE_VEIL, 2176, FADE_R | FADE_G | FADE_B);
     sleep(15);
     setw(W_LIGHT_DELTA, 0);
-    set(FG_ROOM, F_ROOM_19, TRUE);
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, TRUE);
     sleep(1);
     evt_finish();
 }
 
-event on_aot_0e
+event ride_elevator_down
 {
     run
     {
@@ -519,8 +519,8 @@ event on_aot_0e
     run
     {
         set(FG_RUN, F_RUN_PLAYER, FALSE);
-        evt_exec(0, TASK_09, on_aot_0e_sub1);
-        evt_exec(0, TASK_09, on_aot_0e_sub2);
+        evt_exec(0, TASK_09, ride_elevator_down_player);
+        evt_exec(0, TASK_09, ride_elevator_down_platform);
     }
     for (39)
     {
@@ -549,12 +549,12 @@ event on_aot_0e
         {
             setb(B_CHARACTER_MODEL, 5, 0);
         }
-        aot_on(AOT_02_DOOR, SCE_DOOR, 129);
+        aot_on(AOT_02_DOOR_30F, SCE_DOOR, 129);
     }
     evt_finish();
 }
 
-event on_aot_0e_sub1
+event ride_elevator_down_player
 {
     evt_work_set(WK_PLAYER, 0);
     evt_tween_begin_alt();
@@ -570,9 +570,9 @@ event on_aot_0e_sub1
     evt_finish();
 }
 
-event on_aot_0e_sub2
+event ride_elevator_down_platform
 {
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ELEVATOR);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (54)
@@ -586,7 +586,7 @@ event on_aot_0e_sub2
     evt_finish();
 }
 
-event on_enter
+event arrive_from_30f
 {
     sleep(1);
     run
@@ -598,8 +598,8 @@ event on_enter
     se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_PLAYER, 0, 0, 0);
     run
     {
-        evt_exec(0, TASK_09, on_enter_sub1);
-        evt_exec(0, TASK_09, on_enter_sub2);
+        evt_exec(0, TASK_09, arrive_from_30f_player);
+        evt_exec(0, TASK_09, arrive_from_30f_platform);
     }
     setw(W_LIGHT_DELTA, -2176);
     sleep(110);
@@ -614,7 +614,7 @@ event on_enter
     evt_finish();
 }
 
-event on_enter_sub1
+event arrive_from_30f_player
 {
     for (80)
     {
@@ -636,9 +636,9 @@ event on_enter_sub1
     evt_finish();
 }
 
-event on_enter_sub2
+event arrive_from_30f_platform
 {
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ELEVATOR);
     evt_tween_begin_alt();
     tw_abs_pos(0, 6180, 2000, 13450);
     tw_set_pos(0, -25, 0);
@@ -654,7 +654,7 @@ event on_enter_sub2
     evt_finish();
 }
 
-event from_main_3
+event fountain_opens_film
 {
     run
     {
@@ -665,9 +665,9 @@ event from_main_3
     run
     {
         bgm_stop_all(0);
-        movie_on(MOVIE_08_DM8);
+        movie_on(MOVIE_08_FOUNTAIN_OPENS);
         cut_auto(CUT_LOCKED);
-        if (ck(FG_ROOM, F_ROOM_1E, FALSE))
+        if (ck(FG_ROOM, F_ROOM_EAGLE_PLACED_LAST, FALSE))
         {
             cutnext(CAM_02);
         }
@@ -683,8 +683,8 @@ event from_main_3
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         bgm_restore(0);
-        set(FG_ROOM, F_ROOM_1B, TRUE);
-        set(FG_ROOM, F_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_PLACE_DOORS, TRUE);
+        set(FG_ROOM, F_ROOM_STAIRS_DOWN_ON, TRUE);
         msgnode_set(ZONE_04, CAM_01, CAM_02);
         msgnode_set(ZONE_09, CAM_02, CAM_04);
         msgnode_set(ZONE_0C, CAM_03, CAM_02);
@@ -694,7 +694,7 @@ event from_main_3
     evt_finish();
 }
 
-event event_0C
+event restore_bgm
 {
     sleep(1);
     bgm_restore(0);

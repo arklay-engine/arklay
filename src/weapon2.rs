@@ -266,8 +266,10 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         DOG_ID => &DOG_DAMAGE,
         CROW_ID => &CROW_DAMAGE,
         MRX_ID => &MRX_DAMAGE,
+        G1_ID => &G1_DAMAGE,
         // `Em_26` points at `Em_25`'s rows.
         SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
+        ALLIGATOR_ID => &ALLIGATOR_DAMAGE,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT_DAMAGE,
         _ => &DAMAGE,
     };
@@ -408,6 +410,46 @@ const MRX_DAMAGE: [Damage; 7] = [
     },
 ];
 
+const G1_ID: u8 = crate::zombie2::G1_ID;
+/// The same rows for `Em_30` (`0x5369d0`).
+const G1_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00E0_3C10,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0551_605A,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0330_DC3C,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0501_545A,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+];
+
 const IVY_ID: u8 = crate::zombie2::IVY_ID;
 const VINE_ID: u8 = crate::zombie2::VINE_ID;
 const POISON_IVY_ID: u8 = crate::zombie2::POISON_IVY_ID;
@@ -453,6 +495,46 @@ const PLANT_DAMAGE: [Damage; 7] = [
 ];
 
 const SPIDER_ID: u8 = crate::zombie2::SPIDER_ID;
+const ALLIGATOR_ID: u8 = crate::zombie2::ALLIGATOR_ID;
+/// The same rows for `Em_23`, `Em_23_wp_tbl` (`0x535C50`): a few units of
+/// its 25300 a shot.
+const ALLIGATOR_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_4011,
+        stun: 0x0102_0414,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x01F0_7C1F,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0320_C832,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0180_641B,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0280_B432,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+];
 const YOUNG_ID: u8 = crate::zombie2::YOUNG_ID;
 const SPIDER_HEIGHTS: [i32; 6] = [-7000, -2000, -4200, 500, -500, 2000];
 /// The same rows for `Em_25` and `Em_26` (`0x535dd0`).
@@ -880,6 +962,17 @@ mod tests {
     }
 
     #[test]
+    fn g1_has_rows_of_its_own() {
+        let damage = |weapon| damage_table(G1_ID, weapon).unwrap().damage & 0x3FF;
+        assert_eq!(
+            [2, 3, 4, 5, 6, 7, 8].map(damage),
+            [16, 16, 16, 90, 100, 60, 90]
+        );
+        assert_eq!(damage_table(G1_ID, 7).unwrap().heights[1], 500);
+        assert_eq!(damage_table(G1_ID, 5).unwrap().heights[1], -2000);
+    }
+
+    #[test]
     fn the_plants_share_one_row_for_each_weapon() {
         for id in [IVY_ID, VINE_ID, POISON_IVY_ID] {
             let damage = |weapon| damage_table(id, weapon).unwrap().damage & 0x3FF;
@@ -889,6 +982,21 @@ mod tests {
             );
             assert_eq!(damage_table(id, 7).unwrap().heights[1], 500);
         }
+    }
+
+    /// `Em_23_wp_tbl`: the handgun's 17, 16 and 15 a band, the magnums' 31
+    /// and 50, the shotguns' 27 and 50 at their nearest.
+    #[test]
+    fn the_alligator_takes_a_few_units_a_shot() {
+        let damage = |weapon| damage_table(ALLIGATOR_ID, weapon).unwrap().damage;
+        assert_eq!(damage(2) & 0x3FF, 17);
+        assert_eq!(damage(2) >> 10 & 0x3FF, 16);
+        assert_eq!(damage(2) >> 20 & 0x3FF, 15);
+        assert_eq!(
+            [5, 6, 7, 8].map(|weapon| damage(weapon) & 0x3FF),
+            [31, 50, 27, 50]
+        );
+        assert_eq!(damage_table(ALLIGATOR_ID, 7).unwrap().heights[1], 500);
     }
 
     #[test]

@@ -6,6 +6,10 @@
 //! section is then compiled on its own and compared with the original bytes;
 //! a section that does not reproduce exactly is re-rendered as one `asm`
 //! block, so the output always compiles back to identical bytecode.
+//!
+//! A container the port built decompiles too: its user procedures become
+//! `proc proc_NN` sections and their `gosub`s calls, and its `if_long` and
+//! event `evt_if` are `if` statements, as the compiler emits them.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -18,7 +22,7 @@ use crate::scd::akscr::compile;
 use crate::scd::decomp::constants;
 use crate::scd::disasm::{COMMAND_SIG, EventState, format_insn, next_event_state, render_run};
 use crate::scd::ir::{Block, Decoded, Insn, Scripts, Stream, StreamKind};
-use crate::scd::opcode::command_width;
+use crate::scd::opcode::{EventFlow, command_width};
 use crate::sfx;
 
 /// Render the `.akscr` source of every stream, with numbers for game data.
@@ -73,6 +77,7 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         voice_messages,
         stage: (merged_id(room) >> 8) as u8,
         defines,
+        procs: (0..scripts.procs.len()).map(proc_name).collect(),
         room_flags: RefCell::default(),
         room_messages: RefCell::default(),
         used_voices: RefCell::default(),
@@ -85,6 +90,9 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     }
     for block in &scripts.main {
         sections.push(block_section(&ctx, "main", block));
+    }
+    for (block, name) in scripts.procs.iter().zip(&ctx.procs) {
+        sections.push(block_section(&ctx, name, block));
     }
     let first_event = sections.len();
     for stream in &scripts.events {
@@ -135,6 +143,11 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         out.push_str(&section);
     }
     out
+}
+
+/// The name of user procedure `index` (the `gosub` operand).
+fn proc_name(index: usize) -> String {
+    format!("proc_{index:02X}")
 }
 
 /// The prefixes of a room's object, camera, effect, item model, collision,
@@ -271,7 +284,7 @@ fn enemy_names(scripts: &Scripts, names: &Names) -> BTreeMap<u8, String> {
             let kind = match kinds.iter().copied().collect::<Vec<_>>().as_slice() {
                 &[kind] => Some(names.enemy(kind).map_or_else(
                     || format!("{kind:02X}"),
-                    // `EM_11_ZOMBIE_LAB` is `ZOMBIE_LAB`.
+                    // `EM_11_ZOMBIE_GREEN` is `ZOMBIE_GREEN`.
                     |name| name.splitn(3, '_').nth(2).unwrap_or(name).to_string(),
                 )),
                 _ => None,
@@ -382,9 +395,20 @@ fn name_events(sections: &mut [String], first_event: usize) {
     // (priority, name) per event; the lowest priority wins.
     let mut found: Vec<Option<(u8, String)>> = vec![None; count];
     let mut parents: Vec<Vec<usize>> = vec![Vec::new(); count];
+    // A procedure `proc main` calls stands for it.
+    let main_calls: Vec<String> = sections
+        .iter()
+        .filter(|section| section.starts_with("proc main"))
+        .flat_map(|section| section.lines())
+        .filter_map(|line| line.trim().strip_suffix("();"))
+        .map(|name| format!("proc {name}\n"))
+        .collect();
     for (position, section) in sections.iter().enumerate() {
         let owner = position.checked_sub(first_event);
-        let from_main = section.starts_with("proc main");
+        let from_main = section.starts_with("proc main")
+            || main_calls
+                .iter()
+                .any(|header| section.starts_with(header.as_str()));
         for line in section.lines() {
             let trimmed = line.trim_start();
             let mnemonic: String = trimmed
@@ -544,6 +568,8 @@ struct Ctx<'n> {
     stage: u8,
     /// Every name a section may use, for verifying it.
     defines: HashMap<String, i64>,
+    /// The user procedures' names, by number.
+    procs: Vec<String>,
     /// The room flag bits named so far, defined at the top of the script.
     room_flags: RefCell<BTreeSet<u8>>,
     /// The room's own message names used so far, by id.
@@ -577,24 +603,38 @@ const FG_ENEMY: u8 = 3;
 /// The flag group of the room item flags.
 const FG_ITEM: u8 = 7;
 
-/// One `proc init`/`proc main` section, verified against the block's bytes.
+/// One `proc init`/`proc main` or procedure section, verified against the
+/// block's bytes.
 fn block_section(ctx: &Ctx, name: &str, block: &Block) -> String {
     let original = stream_bytes(&block.insns, &block.trailing);
-    let mut writer = Writer::new(ctx);
     let header = format!("proc {name}");
+    let mut writer = Writer::new(ctx);
     if block.trailing.is_empty()
         && let Some(body) = structure_block(&block.insns)
     {
         writer.command_block(&header, &body);
+        let text = writer.finish();
+        if verified(ctx, &text, &original) {
+            return text;
+        }
+        writer = Writer::new(ctx);
+    }
+    // A procedure takes no `noreturn`: its final `end 0` is the implicit one.
+    let procedure = name != "init" && name != "main";
+    let ends = block.trailing.is_empty()
+        && block
+            .insns
+            .last()
+            .is_some_and(|insn| is_command(insn, 0x00) && insn.bytes[1] == 0);
+    if procedure && ends {
+        let insns = &block.insns[..block.insns.len() - 1];
+        writer.line(&header);
+        writer.open();
+        writer.asm(insns, &[], block.offset + 2);
+        writer.close();
     } else {
         writer.asm_block(&header, &block.insns, &block.trailing, block.offset + 2);
     }
-    let text = writer.finish();
-    if verified(ctx, &text, &original) {
-        return text;
-    }
-    let mut writer = Writer::new(ctx);
-    writer.asm_block(&header, &block.insns, &block.trailing, block.offset + 2);
     writer.finish()
 }
 
@@ -631,7 +671,10 @@ fn event_section(ctx: &Ctx, stream: &Stream) -> String {
 
 /// Whether section `text` compiles back to `original`.
 fn verified(ctx: &Ctx, text: &str, original: &[u8]) -> bool {
-    compile::section_bytes(text, &ctx.defines).ok().as_deref() == Some(original)
+    compile::section_bytes(text, &ctx.defines, &ctx.procs)
+        .ok()
+        .as_deref()
+        == Some(original)
 }
 
 /// The exact bytes of one stream: every instruction plus the trailing data.
@@ -704,21 +747,29 @@ struct CommandBody<'a> {
 }
 
 /// Structure one command block. The final top-level `end 0` is implicit; a
-/// block without one is marked `noreturn`.
+/// block without one, or whose last `end 0` belongs to an `else` body that
+/// runs to the end of the block, is marked `noreturn`.
 fn structure_block(insns: &[Insn]) -> Option<CommandBody<'_>> {
     let last = insns.last();
     let implicit_end = last.is_some_and(|insn| is_command(insn, 0x00) && insn.bytes[1] == 0);
-    let (end, count) = match last {
-        Some(insn) if implicit_end => (insn.offset, insns.len() - 1),
-        Some(insn) => (insn.offset + insn.bytes.len(), insns.len()),
-        None => (0, 0),
+    let structure = |implicit: bool| {
+        let (end, count) = match last {
+            Some(insn) if implicit => (insn.offset, insns.len() - 1),
+            Some(insn) => (insn.offset + insn.bytes.len(), insns.len()),
+            None => (0, 0),
+        };
+        let mut index = 0usize;
+        let body = structure_commands(insns, &mut index, end)?;
+        (index == count).then_some(CommandBody {
+            noreturn: !implicit,
+            body,
+        })
     };
-    let mut index = 0usize;
-    let body = structure_commands(insns, &mut index, end)?;
-    (index == count).then_some(CommandBody {
-        noreturn: !implicit_end,
-        body,
-    })
+    if implicit_end {
+        structure(true).or_else(|| structure(false))
+    } else {
+        structure(false)
+    }
 }
 
 /// Structure the commands from `*index` up to the instruction at offset `end`.
@@ -742,14 +793,16 @@ fn structure_commands<'a>(
                 body.push(Cmd::Return);
                 *index += 1;
             }
-            0x01 => body.push(structure_if(insns, index, end)?),
+            // The port's `if_long` is an `if` too: the compiler picks the
+            // form.
+            0x01 | 0x51 => body.push(structure_if(insns, index, end)?),
             // The original data pops the branch stack with an unpaired
             // `endif`; it carries no jump, so it can sit in place.
             0x03 => {
                 body.push(Cmd::StrayEndif(insn));
                 *index += 1;
             }
-            0x02 => return None,
+            0x02 | 0x52 => return None,
             _ if op.condition => {
                 body.push(Cmd::Require(insn));
                 *index += 1;
@@ -763,11 +816,18 @@ fn structure_commands<'a>(
     Some(body)
 }
 
-/// Structure the `if` at `*index`: its conditions, its body up to the
-/// `endif`/`else` its skip lands on, and the `else` body up to its target.
+/// Structure the `if` (or `if_long`) at `*index`: its conditions, its body
+/// up to the `endif`/`else` it resumes after, and the `else` body up to its
+/// target.
 fn structure_if<'a>(insns: &'a [Insn], index: &mut usize, end: usize) -> Option<Cmd<'a>> {
     let head = &insns[*index];
-    let label = head.operands.first()?.target?.checked_sub(2)?;
+    let long = is_command(head, 0x51);
+    // The flow resumes right after the `endif` or `else`.
+    let resume = head.operands.first()?.target?;
+    let label = insns
+        .iter()
+        .find(|insn| insn.offset + insn.bytes.len() == resume)?
+        .offset;
     if label <= head.offset || label >= end {
         return None;
     }
@@ -796,7 +856,7 @@ fn structure_if<'a>(insns: &'a [Insn], index: &mut usize, end: usize) -> Option<
             otherwise: None,
         });
     }
-    if !is_command(tail, 0x02) {
+    if !is_command(tail, if long { 0x52 } else { 0x02 }) {
         return None;
     }
     let target = tail.operands.first()?.target?;
@@ -805,8 +865,10 @@ fn structure_if<'a>(insns: &'a [Insn], index: &mut usize, end: usize) -> Option<
     }
     let otherwise = structure_commands(insns, index, target)?;
     // The compiler labels the instruction after the `else` body, so one must
-    // start exactly at the target.
-    insns.get(*index).filter(|insn| insn.offset == target)?;
+    // start exactly at the target, or the body runs to the end.
+    if target != end {
+        insns.get(*index).filter(|insn| insn.offset == target)?;
+    }
     Some(Cmd::If {
         conditions,
         then,
@@ -839,6 +901,82 @@ enum Evt<'a> {
         condition: &'a Insn,
         body: Vec<Evt<'a>>,
     },
+    /// The port's `evt_if` + inline conditions, its body and, after an
+    /// `evt_jump`, its `else` body.
+    If {
+        conditions: Vec<&'a Insn>,
+        then: Vec<Evt<'a>>,
+        otherwise: Option<Vec<Evt<'a>>>,
+    },
+}
+
+/// The state each instruction of an event stream runs in, following each
+/// room variant across the port's `evt_if`s and `evt_jump`s as the reader
+/// does ([`EventFlow`]): after an `if` of the player, say, the code may run
+/// in a different state for each.
+fn event_states(insns: &[Insn]) -> Vec<EventState> {
+    let code = |state: EventState| match state {
+        EventState::Top => 0,
+        EventState::Actor => 1,
+        EventState::Tween => 2,
+    };
+    let mut flow = EventFlow::new(0);
+    let mut targets: HashMap<usize, EventFlow> = HashMap::new();
+    let mut states = Vec::with_capacity(insns.len());
+    for (index, insn) in insns.iter().enumerate() {
+        if let Some(incoming) = targets.remove(&insn.offset) {
+            flow.merge(&incoming);
+        }
+        // Where the variants differ, the instruction's own table tells.
+        let state = match (flow.state(), insn.decoded) {
+            (Some(1), _) | (None, Decoded::Actor(_)) => EventState::Actor,
+            (Some(2), _) | (None, Decoded::Tween(_)) => EventState::Tween,
+            _ => EventState::Top,
+        };
+        states.push(state);
+        match insn.decoded {
+            Decoded::Control(op) if op.op == 0xF4 => {
+                let (Some(body), Some(skip)) = (
+                    insn.operands.first().and_then(|operand| operand.target),
+                    insn.operands.get(1).and_then(|operand| operand.target),
+                ) else {
+                    continue;
+                };
+                let conditions = insns[index + 1..]
+                    .iter()
+                    .take_while(|condition| condition.offset < body)
+                    .map(|condition| condition.bytes.as_slice());
+                let (taken, skipped) = flow.branch(conditions);
+                flow = taken;
+                targets
+                    .entry(skip)
+                    .or_insert_with(EventFlow::unreachable)
+                    .merge(&skipped);
+            }
+            Decoded::Control(op) if op.op == 0xF5 => {
+                if let Some(target) = insn.operands.first().and_then(|operand| operand.target) {
+                    let jumped = std::mem::replace(&mut flow, EventFlow::unreachable());
+                    targets
+                        .entry(target)
+                        .or_insert_with(EventFlow::unreachable)
+                        .merge(&jumped);
+                }
+            }
+            // A command inside an `evt_if`, `evt_single`, `evt_do` or `run`
+            // leaves the event state alone.
+            Decoded::Command(_) | Decoded::SubBlockHeader { .. } => {}
+            Decoded::Control(_) => {
+                // A control op moves every variant only when it changes the
+                // state (`evt_finish`); otherwise each keeps its own.
+                let next = next_event_state(state, insn);
+                if next != state {
+                    flow.set(code(next));
+                }
+            }
+            _ => flow.set(code(next_event_state(state, insn))),
+        }
+    }
+    states
 }
 
 /// Recursive-descent structurer over one event stream.
@@ -852,30 +990,28 @@ struct EventParser<'a> {
 
 impl<'a> EventParser<'a> {
     fn new(ctx: &'a Ctx<'a>, insns: &'a [Insn]) -> Self {
-        let mut states = Vec::with_capacity(insns.len());
-        let mut state = EventState::Top;
-        for insn in insns {
-            states.push(state);
-            state = next_event_state(state, insn);
-        }
         Self {
             ctx,
             insns,
-            states,
+            states: event_states(insns),
             index: 0,
         }
     }
 
     fn parse_all(mut self) -> Option<Vec<Evt<'a>>> {
-        let body = self.parse(None)?;
+        let body = self.parse(None, usize::MAX)?;
         (self.index == self.insns.len()).then_some(body)
     }
 
     /// Parse statements until the control opcode `close` (left unconsumed) or
-    /// the end of the stream when `close` is `None`.
-    fn parse(&mut self, close: Option<u8>) -> Option<Vec<Evt<'a>>> {
+    /// the end of the stream when `close` is `None`, and in any case up to
+    /// the instruction at offset `until`.
+    fn parse(&mut self, close: Option<u8>, until: usize) -> Option<Vec<Evt<'a>>> {
         let mut body = Vec::new();
         while let Some(insn) = self.insns.get(self.index) {
+            if insn.offset >= until {
+                return (close.is_none() && insn.offset == until).then_some(body);
+            }
             let state = self.states[self.index];
             match insn.decoded {
                 Decoded::Control(op) => match op.op {
@@ -888,11 +1024,12 @@ impl<'a> EventParser<'a> {
                         }
                         let count = u16::from_le_bytes([insn.bytes[2], insn.bytes[3]]);
                         self.index += 1;
-                        let inner = self.parse(Some(0xFB))?;
+                        let inner = self.parse(Some(0xFB), until)?;
                         self.index += 1;
                         body.push(Evt::For { count, body: inner });
                     }
-                    0xFC => body.push(self.parse_do(insn)?),
+                    0xFC => body.push(self.parse_do(insn, until)?),
+                    0xF4 => body.push(self.parse_if(insn, until)?),
                     0xF8 if insn.bytes.len() == 4 && insn.bytes[1] == 0xF9 => {
                         let count = u16::from_le_bytes([insn.bytes[2], insn.bytes[3]]);
                         body.push(Evt::Line(format!("sleep({count});")));
@@ -922,8 +1059,75 @@ impl<'a> EventParser<'a> {
         close.is_none().then_some(body)
     }
 
+    /// Whether the statement at `self.index` starts at `offset`, or the
+    /// stream ends there.
+    fn at(&self, offset: usize) -> bool {
+        match self.insns.get(self.index) {
+            Some(insn) => insn.offset == offset,
+            None => self
+                .insns
+                .last()
+                .is_some_and(|last| last.offset + last.bytes.len() == offset),
+        }
+    }
+
+    /// `evt_if`: its inline conditions up to its body, the body up to the
+    /// target it skips to, and an `else` body when the body ends in an
+    /// `evt_jump` to just past it.
+    fn parse_if(&mut self, head: &'a Insn, until: usize) -> Option<Evt<'a>> {
+        let start = head.operands.first()?.target?;
+        let skip = head.operands.get(1)?.target?;
+        if skip > until {
+            return None;
+        }
+        self.index += 1;
+        let mut conditions = Vec::new();
+        while let Some(insn) = self.insns.get(self.index)
+            && insn.offset < start
+        {
+            let Decoded::Command(op) = insn.decoded else {
+                return None;
+            };
+            if !op.condition || command_width(&insn.bytes) != Some(insn.bytes.len()) {
+                return None;
+            }
+            conditions.push(insn);
+            self.index += 1;
+        }
+        if conditions.is_empty() || !self.at(start) {
+            return None;
+        }
+        let jump = self.insns[self.index..].iter().position(|insn| {
+            insn.offset + insn.bytes.len() == skip
+                && matches!(insn.decoded, Decoded::Control(op) if op.op == 0xF5)
+        });
+        let Some(jump) = jump.map(|jump| self.index + jump) else {
+            let then = self.parse(None, skip)?;
+            return self.at(skip).then_some(Evt::If {
+                conditions,
+                then,
+                otherwise: None,
+            });
+        };
+        let end = self.insns[jump].operands.first()?.target?;
+        if end > until {
+            return None;
+        }
+        let then = self.parse(None, self.insns[jump].offset)?;
+        if self.index != jump {
+            return None;
+        }
+        self.index += 1;
+        let otherwise = self.parse(None, end)?;
+        self.at(end).then_some(Evt::If {
+            conditions,
+            then,
+            otherwise: Some(otherwise),
+        })
+    }
+
     /// `evt_do` whose jump skips exactly one whole condition command.
-    fn parse_do(&mut self, head: &'a Insn) -> Option<Evt<'a>> {
+    fn parse_do(&mut self, head: &'a Insn, until: usize) -> Option<Evt<'a>> {
         let target = head.operands.first()?.target?;
         let condition = self.insns.get(self.index + 1)?;
         let Decoded::Command(op) = condition.decoded else {
@@ -936,7 +1140,7 @@ impl<'a> EventParser<'a> {
             return None;
         }
         self.index += 2;
-        let body = self.parse(Some(0xFD))?;
+        let body = self.parse(Some(0xFD), until)?;
         self.index += 1;
         Some(Evt::DoWhile { condition, body })
     }
@@ -997,6 +1201,15 @@ impl<'a> EventParser<'a> {
 
 /// `name(args)` for one instruction, naming game data through `ctx`.
 fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
+    // `gosub N` is a call of procedure N by its name.
+    if is_command(insn, 0x54)
+        && let Some(name) = insn
+            .bytes
+            .get(1)
+            .and_then(|&index| ctx.procs.get(usize::from(index)))
+    {
+        return format!("{name}()");
+    }
     let (name, mut args) = format_insn(insn, state, None);
     if let Some(fields) = layout::layout(&name) {
         let values = layout::unpack(fields, insn.bytes.get(1..).unwrap_or(&[]));
@@ -1629,6 +1842,38 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// An event `if` statement; an `else` body that is exactly one `if`
+    /// renders as `else if`.
+    fn event_if(&mut self, evt: &Evt, keyword: &str) {
+        let Evt::If {
+            conditions,
+            then,
+            otherwise,
+        } = evt
+        else {
+            return;
+        };
+        let expression = conditions
+            .iter()
+            .map(|insn| call_text(self.ctx, insn, EventState::Top))
+            .collect::<Vec<_>>()
+            .join(" && ");
+        self.line(&format!("{keyword} ({expression})"));
+        self.open();
+        self.events(then);
+        self.close();
+        match otherwise.as_deref() {
+            None => {}
+            Some([nested @ Evt::If { .. }]) => self.event_if(nested, "else if"),
+            Some(body) => {
+                self.line("else");
+                self.open();
+                self.events(body);
+                self.close();
+            }
+        }
+    }
+
     fn events(&mut self, body: &[Evt]) {
         for evt in body {
             match evt {
@@ -1643,6 +1888,7 @@ impl<'a> Writer<'a> {
                     self.events(body);
                     self.close();
                 }
+                Evt::If { .. } => self.event_if(evt, "if"),
                 Evt::DoWhile { condition, body } => {
                     self.line("do");
                     self.open();

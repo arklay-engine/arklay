@@ -262,6 +262,11 @@ impl SaveFile {
         state.flags = [FlagBank::new(); FLAG_BANK_COUNT];
         state.flags[0].bytes_mut()[..16].copy_from_slice(&self.scenario);
         state.flags[1].bytes_mut().copy_from_slice(&self.scenario2);
+        // The saved scenario flag picks the mansion visit, as a door would.
+        state.id =
+            state
+                .id
+                .with_visit(state.flag_test(0, crate::game::SCENARIO_FLAG_MANSION2, false));
         state.flags[2].bytes_mut()[..8].copy_from_slice(&self.locks);
         state.flags[3].bytes_mut().copy_from_slice(&self.enemies);
         state.flags[7].bytes_mut().copy_from_slice(&self.room_items);
@@ -353,6 +358,8 @@ impl SaveFile {
         put_i16(&mut state.state_bytes, 0x2E, self.pos_z);
         put_i16(&mut state.state_bytes, 0x30, self.angle);
         state.state_bytes[usize::from(STATE_BYTE_HEALTH_STATUS)] = self.health_status;
+        // The release bits live in the cleared status bank.
+        state.sync_variant_flags();
     }
 
     /// The bytes a save file holds: the block, then the height trailer when
@@ -1254,8 +1261,9 @@ mod tests {
             id: 0x41,
             quantity: 1,
         };
+        // Flag 0 of bank 0 would make the save a second visit.
         for bank in [0u8, 1, 2, 3, 7, 8] {
-            state.apply_flag(bank, 0, 0);
+            state.apply_flag(bank, 1, 0);
         }
 
         let file = SaveFile::from_state(&state);

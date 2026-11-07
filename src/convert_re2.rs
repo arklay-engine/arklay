@@ -11,11 +11,13 @@
 //! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
 //! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp`, `room/<id>/mask/<nn>.bmp` |
 //! | `Common/bin/rc2000_.adt`, `rc2168_.adt` | `room/<id>/scroll/<nn>.bmp` |
-//! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
+//! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin`, `itembox.tim` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
 //! | ADT streams in `Common/bin/itemdata.bin` | `ui/status/check_<id:02x>.tim` |
 //! | `Common/file/map<nn>.adt` (TIM `k`) | `ui/status/map<nn>_<k>.tim` |
 //! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
 //! | `Common/Data/type00.adt` | `ui/type00.bmp` |
+//! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
+//! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
@@ -551,6 +553,13 @@ pub(crate) fn convert(
         &mut tally,
         &mut warnings,
     )?;
+    copy_title_art(
+        &layout,
+        ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
+        &mut writer,
+        &mut tally,
+        &mut warnings,
+    )?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_die_text(&layout, &mut writer, &mut tally)?;
     copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
@@ -696,6 +705,18 @@ fn copy_text(
         (
             "enemy/24/enemy.lua",
             include_str!("../games/re2/enemy/24/enemy.lua"),
+        ),
+        (
+            "enemy/23/enemy.lua",
+            include_str!("../games/re2/enemy/23/enemy.lua"),
+        ),
+        (
+            "enemy/30/enemy.lua",
+            include_str!("../games/re2/enemy/30/enemy.lua"),
+        ),
+        (
+            "enemy/31/enemy.lua",
+            include_str!("../games/re2/enemy/31/enemy.lua"),
         ),
         (
             "enemy/25/enemy.lua",
@@ -1381,8 +1402,9 @@ fn copy_scroll_pictures(
 }
 
 /// The status screen's sheets, each a run of TIMs: `Common/Data/st<n>_jp.tim`
-/// (one per character), and `Common/Data/itemall.bin`, the item icons.
-const STATUS_SHEETS: [&str; 4] = ["ST0_JP", "ST1_JP", "ST2_JP", "ITEMALL"];
+/// (one per character), `Common/Data/itemall.bin`, the item icons, and
+/// `Common/Data/itembox.tim`, the item box's panel.
+const STATUS_SHEETS: [&str; 5] = ["ST0_JP", "ST1_JP", "ST2_JP", "ITEMALL", "ITEMBOX"];
 
 /// The status screen's art, as `ui/status/<stem>_<k>.tim` per TIM `k` of each
 /// [`STATUS_SHEETS`] file, and CHECK's pictures from `Common/bin/itemdata.bin`
@@ -1517,6 +1539,78 @@ fn copy_maps(
     }
     if !found && layout.common.is_some() {
         warnings.push("no Common/file/map<nn>.adt; the MAP page has no map".into());
+    }
+    Ok(())
+}
+
+/// The title's menu sheets in the 7z archive of `ddraw.dll`.
+const TITLE_MOJI_7Z: &str = "common/data/tmoji.bin";
+
+/// The title's art (`Title_bg_load`, `0x503810`): its background,
+/// `Common/Data/Title_bg.adt`, as `ui/title/title_bg.bmp`, and the three TIMs
+/// of `Common/Data/tmoji.bin` (the copy in `ddraw.dll`'s archive when there
+/// is one), which the executable uploads as textures 0x12 to 0x14: the menu's
+/// words and the logo, as `ui/title/tmoji_<k>.tim`.
+fn copy_title_art(
+    layout: &Layout,
+    ddraw: Option<&[u8]>,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let data_files = files_in(layout.common(&["Data"]))?;
+    let find = |stem: &str| {
+        data_files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(name, _)| name == stem))
+    };
+    match find("TITLE_BG") {
+        Some(path) => {
+            let decoded =
+                adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+            let image =
+                adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+            tally.add(
+                writer,
+                "ui",
+                "ui/title/title_bg.bmp",
+                bmp::encode_to_vec(&image)?,
+            )?;
+        }
+        None if layout.common.is_some() => {
+            warnings.push("no Common/Data/Title_bg.adt; the title has no background".into());
+        }
+        None => {}
+    }
+    let english = ddraw
+        .and_then(sevenz::find)
+        .map(|archive| sevenz::extract(archive, |name| name.eq_ignore_ascii_case(TITLE_MOJI_7Z)))
+        .transpose()
+        .unwrap_or_else(|error| {
+            warnings.push(format!("ddraw.dll: no title sheets: {error:#}"));
+            None
+        })
+        .and_then(|mut files| (!files.is_empty()).then(|| files.remove(0).1));
+    let bytes = match english {
+        Some(bytes) => bytes,
+        None => match find("TMOJI") {
+            Some(path) => read(path)?,
+            None => {
+                if layout.common.is_some() {
+                    warnings.push("no Common/Data/tmoji.bin; the title has no menu".into());
+                }
+                return Ok(());
+            }
+        },
+    };
+    let tims = split_tims(&bytes).context("Common/Data/tmoji.bin")?;
+    for (index, tim) in tims.into_iter().enumerate() {
+        tally.add(
+            writer,
+            "ui",
+            &format!("ui/title/tmoji_{index}.tim"),
+            tim.to_vec(),
+        )?;
     }
     Ok(())
 }

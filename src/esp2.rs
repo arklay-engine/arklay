@@ -50,7 +50,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x4E)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x4E | 0x52)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -959,6 +959,79 @@ impl Effects {
             }
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
+            0x52 => self.ripple_ring(index),
+            // `Esp_45`: a fire burning for 90 ticks, three flames (kind 0x26,
+            // a random one of the three rows from `row & 0xF8`) a tick, each
+            // turned a random step of 400; it dies down over its last 65.
+            0x45 => {
+                if slot.start == 0 {
+                    let this = &mut self.slots[index];
+                    this.flags = 0x8002;
+                    this.start = 1;
+                    this.count = 0x5A;
+                } else if slot.start != 1 {
+                    return;
+                }
+                if self.slots[index].count == 0 {
+                    self.slots[index].kill();
+                    return;
+                }
+                for _ in 0..3 {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    let row = (self.rnd() % 3).wrapping_add(slot.row & 0xF8);
+                    let this = self.slots[index];
+                    self.call(
+                        0x26,
+                        row,
+                        this.size,
+                        turn.wrapping_add(this.dir),
+                        this.base,
+                        true,
+                    );
+                }
+                let this = &mut self.slots[index];
+                if this.count < 0x41 {
+                    this.size = (u32::from(this.size) * 0x3BB / 1000) as u16;
+                }
+                this.count -= 1;
+            }
+            // `Esp_4A`: ten ripples of row `row & 0xF8` at its size, each
+            // turned a random step of 400, and it goes.
+            0x4A => {
+                for _ in 0..10 {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    let call = u32::from(slot.size) | ((u32::from(slot.row & 0xF8) | 0x1A00) << 16);
+                    let at = self.slots[index].base;
+                    self.call(
+                        (call >> 24) as u8,
+                        (call >> 16) as u8,
+                        call as u16,
+                        turn.wrapping_add(slot.dir),
+                        at,
+                        true,
+                    );
+                }
+                self.slots[index].kill();
+            }
+            // `Esp_15`: on every other of its `+2` ticks, a drop (kind 3,
+            // row 9, `0xB00` larger) where it's drawn, unless that's the origin.
+            0x15 => {
+                if slot.start != 0 {
+                    let [x, y, z] = slot.pos.map(i32::from);
+                    if slot.start & 1 == 0 && x + y + z != 0 {
+                        let call = (u32::from(slot.size) + 0xB00) | 0x309_0000;
+                        self.call(
+                            (call >> 24) as u8,
+                            (call >> 16) as u8,
+                            call as u16,
+                            0,
+                            slot.pos,
+                            true,
+                        );
+                    }
+                    self.slots[index].start -= 1;
+                }
+            }
             // `Esp_41`: back at its first frame, it rests a while from the
             // frame `step` names, then comes back at a slightly smaller size.
             0x41 => {
@@ -1010,6 +1083,90 @@ impl Effects {
                 }
             }
         }
+    }
+
+    /// `Esp_tbl`'s `0x52`: a splash's rings, over five ticks. Each tick it
+    /// moves its base up or down by a share of its size and starts ripples
+    /// (`Esp_call3`, kind 0x1A, row `(row & 0xF8) + 1`) there, each at a
+    /// share of its size and turned a random step of 400 from its own turn;
+    /// on the fifth it starts one more of row `+ 4` at its size, and goes.
+    fn ripple_ring(&mut self, index: usize) {
+        /// The base's moves (in 1/4096ths of the size) and the ripples'
+        /// sizes (in hundredths), in the order each tick makes them.
+        enum Step {
+            Move(i32),
+            Ripple(u32),
+        }
+        use Step::{Move, Ripple};
+        const TICKS: [&[Step]; 5] = [
+            &[
+                Ripple(180),
+                Move(-300),
+                Ripple(150),
+                Move(-290),
+                Ripple(120),
+            ],
+            &[Move(-260), Ripple(115), Move(-230), Ripple(100)],
+            &[Move(-190), Ripple(90)],
+            &[Move(190), Ripple(90), Move(230), Ripple(105)],
+            &[
+                Move(260),
+                Ripple(110),
+                Move(290),
+                Ripple(140),
+                Move(300),
+                Ripple(170),
+            ],
+        ];
+        let slot = self.slots[index];
+        let Some(steps) = TICKS.get(usize::from(slot.start)) else {
+            return;
+        };
+        if slot.start == 0 {
+            let this = &mut self.slots[index];
+            this.flags = 0x8002;
+            this.next_flags = this.base[1] as u16;
+        }
+        let size = u32::from(slot.size);
+        let row = u32::from((slot.row & 0xF8).wrapping_add(1)) << 16;
+        for step in *steps {
+            match *step {
+                Move(by) => {
+                    // The original divides toward zero.
+                    let by = (size as i32 * by) / 4096;
+                    let base = &mut self.slots[index].base[1];
+                    *base = base.wrapping_add(by as i16);
+                }
+                Ripple(share) => {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    let call = (size * share / 100) | 0x1A00_0000 | row;
+                    let at = self.slots[index].base;
+                    self.call(
+                        (call >> 24) as u8,
+                        (call >> 16) as u8,
+                        call as u16,
+                        turn.wrapping_add(slot.dir),
+                        at,
+                        true,
+                    );
+                }
+            }
+        }
+        if slot.start < 4 {
+            self.slots[index].start = slot.start + 1;
+            return;
+        }
+        let call = (u32::from((slot.row & 0xF8).wrapping_add(4)) << 16) | size | 0x1A00_0000;
+        let at = self.slots[index].base;
+        self.call(
+            (call >> 24) as u8,
+            (call >> 16) as u8,
+            call as u16,
+            slot.dir,
+            at,
+            true,
+        );
+        self.slots[index].kill();
     }
 
     /// What `Esp_22` and `Esp_24` share: a new way to drift, the other way.
@@ -1672,6 +1829,61 @@ mod tests {
         let slot = effects.slots[slot];
         assert_eq!(slot.accel[0], 15);
         assert_eq!(slot.velocity[0], 150);
+    }
+
+    /// `Esp_tbl`'s `0x52` draws a turn for each ripple it starts, three, two,
+    /// one, two and three over five ticks, moves its base down and back up
+    /// by shares of its size, and goes.
+    #[test]
+    fn a_splashs_rings_draw_for_each_ripple_and_go_after_five_ticks() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x52;
+        let mut effects = Effects::default();
+        // Its ripples' row 1 isn't in this bank, so they draw and start nothing.
+        effects.enter_room(bank_of(0x18, &[block]));
+        let slot = effects
+            .call(0x18, 0, 4096, 0, [0, -1000, 0], false)
+            .unwrap();
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut lowest = 0;
+        for draws in [3, 2, 1, 2, 3] {
+            let mut expected = rnd;
+            for _ in 0..draws {
+                expected.draw();
+            }
+            effects.tick(&mut rnd, None);
+            assert_eq!(rnd, expected);
+            lowest = lowest.min(effects.slots[slot].base[1]);
+        }
+        assert_eq!(lowest, -1000 - 300 - 290 - 260 - 230 - 190);
+        assert_eq!(effects.slots[slot].base[1], -1000);
+        assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_tbl`'s `0x45` draws two for each of its three flames a tick for
+    /// 90 ticks, shrinking over the last 65, and goes.
+    #[test]
+    fn a_fire_throws_three_flames_a_tick_for_ninety_ticks() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x45;
+        let mut effects = Effects::default();
+        // Its flames' kind 0x26 isn't in this bank, so they draw and start nothing.
+        effects.enter_room(bank_of(0x18, &[block]));
+        let slot = effects.call(0x18, 0, 4000, 0, [0; 3], false).unwrap();
+        let mut rnd = crate::zombie2::Rnd::default();
+        for tick in 0..0x5A {
+            let mut expected = rnd;
+            for _ in 0..6 {
+                expected.draw();
+            }
+            effects.tick(&mut rnd, None);
+            assert_eq!(rnd, expected, "tick {tick}");
+        }
+        assert!(effects.slots[slot].size < 4000);
+        let before = rnd;
+        effects.tick(&mut rnd, None);
+        assert_eq!(rnd, before);
+        assert!(!effects.slots[slot].live());
     }
 
     #[test]

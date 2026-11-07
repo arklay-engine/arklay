@@ -37,7 +37,7 @@ pub struct Insn {
 /// The opcode table an instruction was decoded with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decoded {
-    /// Command VM opcode 0x00-0x50.
+    /// Command VM opcode 0x00-0x54.
     Command(&'static Op),
     /// Event VM state-0 opcode (0x00-0x09).
     Event(&'static Op),
@@ -97,9 +97,17 @@ pub struct Scripts {
     pub main: Vec<Block>,
     /// Event scripts in table order.
     pub events: Vec<Stream>,
+    /// The user procedures `gosub N` runs, block N each: the port's own
+    /// container, which only the standalone `.scd` containers carry.
+    pub procs: Vec<Block>,
 }
 
 impl Scripts {
+    /// Every command-VM block: init, main and the user procedures.
+    pub fn command_blocks(&self) -> impl Iterator<Item = &Block> {
+        self.init.iter().chain(&self.main).chain(&self.procs)
+    }
+
     /// A 64-bit FNV-1a hash of every stream's bytes, in order: two script
     /// sets with the same digest hold the same bytecode wherever it sits.
     pub fn digest(&self) -> u64 {
@@ -126,6 +134,14 @@ impl Scripts {
         feed(&mut hash, &(self.events.len() as u32).to_le_bytes());
         for event in &self.events {
             stream(&mut hash, &event.insns, &event.trailing);
+        }
+        // Fed only when present, so a script set without procedures keeps
+        // the digest it always had.
+        if !self.procs.is_empty() {
+            feed(&mut hash, &(self.procs.len() as u32).to_le_bytes());
+            for block in &self.procs {
+                stream(&mut hash, &block.insns, &block.trailing);
+            }
         }
         hash
     }

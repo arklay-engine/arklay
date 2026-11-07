@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "oracle" / "re2-regress.toml"
 INPUTS = ROOT / "oracle" / "inputs-re2"
 DEFAULT_REFS = "~/.local/share/arklay/re2-refs"
-DEFAULT_ARKLAY = ROOT / "target" / "test-release" / "arklay"
+DEFAULT_ARKLAY = ROOT / "target" / "test-release" / ("arklay.exe" if sys.platform == "win32" else "arklay")
 
 
 def load_oracle():
@@ -133,6 +133,28 @@ def drop_sound_3(source: Path, dest: Path) -> None:
             out.write(re.sub(r" snd=(\S+)", clean, line))
 
 
+def voice_ticks(trace: Path) -> list[int]:
+    """How long each voice line held `fg_status`'s voice bit (flag 1:26, `0x20`) in the recording, in order.
+
+    With `--sound` the original ends a line by DirectSound's clock, so a line's length in ticks follows the
+    recording's pace (`docs/re2-deviations.md`, "Voice lines"); a run with `voice_from_ref` hands arklay these."""
+    held = []
+    start = None
+    with open(trace) as lines:
+        for line in lines:
+            tick = re.match(r"t=(\d+) ", line)
+            status = re.search(r" fgstat=([0-9a-f]+)", line)
+            if not tick or not status:
+                continue
+            on = int(status.group(1), 16) & 0x20 != 0
+            if on and start is None:
+                start = int(tick.group(1))
+            elif not on and start is not None:
+                held.append(int(tick.group(1)) - start)
+                start = None
+    return held
+
+
 def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=()) -> dict:
     """Compare from `offset`, leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
     ref = oracle.parse_trace(str(ref_path))
@@ -228,7 +250,10 @@ def run_one(run: dict, ctx: dict) -> dict:
 
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
-    if run.get("setup_script"):
+    screen = run.get("ui", "game")
+    if screen != "game":
+        setup = None
+    elif run.get("setup_script"):
         setup = INPUTS / run["setup_script"]
     else:
         setup = out / f"{name}.setup.lua"
@@ -239,7 +264,7 @@ def run_one(run: dict, ctx: dict) -> dict:
     else:
         input_path = INPUTS / run["input"]
     for needed in (setup, input_path):
-        if not needed.exists():
+        if needed is not None and not needed.exists():
             result["problems"].append(f"{needed.name} is missing")
             result["text"] = "setup or input missing"
             return result
@@ -249,14 +274,25 @@ def run_one(run: dict, ctx: dict) -> dict:
     frames_dir = out / f"{name}.frames"
     # `room = "new"` starts arklay's new game, as the original's record does, with no `--room`.
     start = [] if run["room"] == "new" else ["--room", str(run["room"]), "--player", str(run.get("player", 0))]
-    command = [
-        str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
-        "--character", str(run.get("character", 0)),
-        "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
-        "--setup-script", str(setup), "--input", str(input_path),
-    ]
-    if run.get("sound", True):
-        command.append("--sound")
+    if screen != "game":
+        # A screen before play (`ui = "title"`): arklay boots it, and the reference is a `--boot` record.
+        command = [
+            str(ctx["arklay"]), str(ctx["pack"]), "--ui", screen,
+            "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace), "--input", str(input_path),
+        ]
+    else:
+        command = [
+            str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
+            "--character", str(run.get("character", 0)),
+            "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
+            "--setup-script", str(setup), "--input", str(input_path),
+        ]
+        if run.get("sound", True):
+            command.append("--sound")
+            if run.get("voice_from_ref"):
+                voice = out / f"{name}.voice.txt"
+                voice.write_text("".join(f"{held}\n" for held in voice_ticks(ref_trace)))
+                command += ["--voice-ticks", str(voice)]
     if want_frames:
         frames_dir.mkdir(parents=True, exist_ok=True)
         command += ["--capture-every", "1", "--capture-dir", str(frames_dir)]
@@ -321,17 +357,39 @@ def ensure_pack(args, out: Path) -> Path:
             raise SystemExit(f"re2-regress: pack {pack} does not exist")
         return pack
     pack = out / "re2.akpak"
-    if pack.exists():
+    stamp = out / "re2.akpak.stamp"
+    want = pack_stamp(args.arklay)
+    if pack.exists() and stamp.exists() and stamp.read_text() == want:
         return pack
     game = args.game or os.environ.get("ARKLAY_RE2_ROOT")
     if not game:
+        if pack.exists():
+            print(f"re2-regress: {pack} may be stale (built by another arklay or from other game scripts); "
+                  "pass --game to convert it again", flush=True)
+            return pack
         raise SystemExit("re2-regress: no --pack, and no --game or ARKLAY_RE2_ROOT to convert one from")
-    print(f"converting {game} to {pack} (once)", flush=True)
+    why = "once" if not pack.exists() else "again: the arklay binary or games/re2 changed"
+    print(f"converting {game} to {pack} ({why})", flush=True)
+    stamp.unlink(missing_ok=True)
     subprocess.run(
         [str(args.arklay), "convert-game", game, "--game", "re2", "--out", str(pack)],
         cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
     )
+    stamp.write_text(want)
     return pack
+
+
+def pack_stamp(arklay: Path) -> str:
+    """What a converted pack depends on in this checkout: the arklay binary that
+    converted it (the converter) and every file under games/re2 (the scripts it
+    packs). A pack whose stamp differs is converted again."""
+    digest = hashlib.sha256()
+    digest.update(Path(arklay).read_bytes())
+    scripts = ROOT / "games" / "re2"
+    for path in sorted(p for p in scripts.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(scripts)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest() + "\n"
 
 
 def check_out(path: str) -> Path:
@@ -371,6 +429,8 @@ def record_run(run: dict, args, refs: Path) -> int:
     ]
     if run.get("sound", True):
         command.append("--sound")
+    if run.get("ui", "game") != "game":
+        command.append("--boot")
     if run.get("frames"):
         command += ["--shot-dir", str(dest / "frames"), "--shot-every", "1"]
     command += shlex.split(run["record"])

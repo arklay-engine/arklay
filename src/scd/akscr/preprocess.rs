@@ -6,7 +6,7 @@
 //! (`MANSION1`, `MANSION2`) and the release (`USA`, `JPN`, `EUR`) are tested
 //! at run time by `if (JILL) { ... }` statements (see [`super::compile`]).
 //! A [`Build`] for one RDT variant folds those tests away, giving that RDT's
-//! own bytecode; the runtime build keeps them as variant jumps.
+//! own bytecode; the runtime build tests the flags that tell the variant.
 //!
 //! The older merged form, which picked the variants with `#if CHRIS`-style
 //! lines (`#if !JPN` takes the block when the symbol is not defined; blocks
@@ -132,7 +132,7 @@ impl Variant {
         Self { region, ..self }
     }
 
-    /// The variant's bits for a variant jump's mask
+    /// The variant's bits for a variant test's mask
     /// ([`crate::scd::opcode::variant_matches`]): one per dimension.
     pub fn bits(self) -> u8 {
         use crate::scd::opcode::variant;
@@ -154,7 +154,7 @@ impl Variant {
         player | mansion | region
     }
 
-    /// Whether a variant jump's `mask` takes this variant.
+    /// Whether a variant test's `mask` takes this variant.
     pub fn matches(self, mask: u8) -> bool {
         crate::scd::opcode::variant_matches(mask, self.bits())
     }
@@ -383,6 +383,8 @@ impl State<'_> {
             return Ok(true);
         }
         if let Some(rest) = word(trimmed, "#define") {
+            // A define may end in a `//` comment.
+            let rest = rest.split_once("//").map_or(rest, |(define, _)| define);
             let mut parts = rest.split_whitespace();
             let (Some(name), Some(value), None) = (parts.next(), parts.next(), parts.next()) else {
                 bail!("expected `#define NAME value`");

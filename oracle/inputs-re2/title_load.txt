@@ -1,0 +1,4 @@
+# The title from boot: LOAD GAME, the confirm's flash and fade, and the load screen (oracle/re2.md, "The title").
+0
+260 confirm
+263

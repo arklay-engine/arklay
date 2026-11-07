@@ -8,83 +8,83 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_EVENT 0x01
-#define AOT_02_NONE 0x02
-#define AOT_03_B 0x03
-#define AOT_04_MESSAGE 0x04
+#define AOT_00_DOOR_40E 0x00
+#define AOT_01_EVENT_LEVER 0x01
+#define AOT_02_EVENT_BUTTON 0x02                            // Main arms it once the water is drained, until the 410 door is unlocked.
+#define AOT_03_B_WATER 0x03                                 // Likely: the flooded floor, while the water is not drained.
+#define AOT_04_MESSAGE_NOTHING 0x04
 #define CAM_01 0x01
-#define CAM_02 0x02
-#define CAM_03 0x03
-#define CAM_04 0x04
+#define CAM_02_WATER_DRAINS 0x02
+#define CAM_03_LEVER_CLOSEUP 0x03
+#define CAM_04_LEVER 0x04
 #define FX_0A 0x0A
-#define F_ROOM_17 0x17
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_1A 0x1A
+#define F_ROOM_BUTTON_GLOW_ON 0x17                          // The glow on the button is shown (water drained, 410 still locked).
+#define F_ROOM_LEVER_GLOW_BUSY 0x18                         // The lever's glow pulse is running.
+#define F_ROOM_PLAYER_ANIM_DONE 0x1A                        // The player's animation finished (one frame).
+#define F_ROOM_WATER_FULL 0x19                              // The water is not drained yet: the lever glows.
 #define MSG_THERE_IS_A_BUTTON 0x01
 #define MSG_THERE_IS_A_LEVER 0x00
 #define MSG_THERE_WAS_A_SOUND_FROM_THE 0x02
-#define OBJ_00 0x00
+#define OBJ_00_WATER 0x00
 #define SE_17_SW_LEVER 0x17
 #define SE_18_SW_411 0x18
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 8500, 8900, 2300, 3300, 0, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    obj(OBJ_00, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 5410, -1700, 7280, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_01_EVENT, 8200, 4000, 1700, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_02_NONE, 6300, 11800, 1100, 1500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 10, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
+    door_aot_set(AOT_00_DOOR_40E, 8500, 8900, 2300, 3300, 0, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    obj(OBJ_00_WATER, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 5410, -1700, 7280, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_01_EVENT_LEVER, 8200, 4000, 1700, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_EVENT_BUTTON, 6300, 11800, 1100, 1500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 10, 0, 0, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, FALSE))
     {
-        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        set(FG_ROOM, F_ROOM_19, TRUE);
-        evt_exec(0, TASK_09, on_enter);
+        aot_set(AOT_03_B_WATER, 0, 0, 20000, 20000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        set(FG_ROOM, F_ROOM_WATER_FULL, TRUE);
+        evt_exec(0, TASK_09, water_bob);
     }
     else
     {
-        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        set(FG_ROOM, F_ROOM_19, FALSE);
-        objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
+        aot_set(AOT_03_B_WATER, 0, 0, 20000, 20000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        set(FG_ROOM, F_ROOM_WATER_FULL, FALSE);
+        objtbl_b_set(TBL_OBJ, OBJ_00_WATER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
     }
-    aot_set(AOT_04_MESSAGE, 1500, 10000, 1300, 2900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 68, 1, 0, 0);
-    eml_rot(ROT_OBJ | OBJ_00, -10, 0);
+    aot_set(AOT_04_MESSAGE_NOTHING, 1500, 10000, 1300, 2900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 68, 1, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_00_WATER, -10, 0);
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, FALSE))
     {
-        aot_reset(AOT_01_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01, 0);
+        aot_reset(AOT_01_EVENT_LEVER, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, examine_lever, 0);
     }
     else
     {
-        aot_delete(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_01_EVENT_LEVER, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
-    if (ck(FG_ROOM, F_ROOM_18, FALSE) && ck(FG_ROOM, F_ROOM_19, TRUE))
+    if (ck(FG_ROOM, F_ROOM_LEVER_GLOW_BUSY, FALSE) && ck(FG_ROOM, F_ROOM_WATER_FULL, TRUE))
     {
-        set(FG_ROOM, F_ROOM_18, TRUE);
-        evt_exec(0, TASK_09, from_main);
+        set(FG_ROOM, F_ROOM_LEVER_GLOW_BUSY, TRUE);
+        evt_exec(0, TASK_09, lever_glow);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_23, TRUE) && ck(FG_LOCK, F_LOCK_24, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, TRUE) && ck(FG_LOCK, F_LOCK_40E_410, FALSE))
     {
-        aot_delete(AOT_02_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        if (ck(FG_ROOM, F_ROOM_17, FALSE) && ck(FG_ROOM, F_ROOM_18, FALSE))
+        aot_delete(AOT_02_EVENT_BUTTON, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        if (ck(FG_ROOM, F_ROOM_BUTTON_GLOW_ON, FALSE) && ck(FG_ROOM, F_ROOM_LEVER_GLOW_BUSY, FALSE))
         {
-            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, button_glow_on);
         }
     }
     else
     {
-        aot_delete(AOT_02_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        if (ck(FG_ROOM, F_ROOM_17, TRUE))
+        aot_delete(AOT_02_EVENT_BUTTON, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        if (ck(FG_ROOM, F_ROOM_BUTTON_GLOW_ON, TRUE))
         {
-            evt_exec(0, TASK_09, from_main_3);
+            evt_exec(0, TASK_09, button_glow_off);
         }
     }
 }
 
-event from_main
+event lever_glow
 {
     run
     {
@@ -114,18 +114,18 @@ event from_main
         setw(W_LIGHT_STATE, 0);
     }
     sleep(5);
-    set(FG_ROOM, F_ROOM_18, FALSE);
+    set(FG_ROOM, F_ROOM_LEVER_GLOW_BUSY, FALSE);
     evt_finish();
 }
 
-event on_aot_01
+event examine_lever
 {
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
-        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -136,10 +136,10 @@ event on_aot_01
     sleep(15);
     run
     {
-        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
         message(MSG_THERE_IS_A_LEVER | MSG_FAST, RUN_PLAYER); // "There's a lever. Will you move it? There's a button. Will you push it? There was a sound from the room next door."
         cut_auto(CUT_LOCKED);
-        cutnext(CAM_04);
+        cutnext(CAM_04_LEVER);
         dir_set(0, 0, 0, 0, 7800, 0, 5000);
     }
     do
@@ -151,7 +151,7 @@ event on_aot_01
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, TASK_09, on_aot_01_sub1);
+            evt_exec(0, TASK_09, pull_lever);
         }
         else
         {
@@ -165,28 +165,28 @@ event on_aot_01
     evt_finish();
 }
 
-event on_aot_01_sub1
+event pull_lever
 {
     run
     {
-        cutnext(CAM_03);
+        cutnext(CAM_03_LEVER_CLOSEUP);
         se_play_3d(SND_BANK_ROOM, SE_17_SW_LEVER, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(60);
     run
     {
-        cutnext(CAM_02);
+        cutnext(CAM_02_WATER_DRAINS);
         dir_set(0, 0, 0, 0, 7500, 0, 5000);
-        evt_exec(0, TASK_09, on_aot_01_sub1_sub1);
-        evt_exec(0, TASK_09, on_aot_01_sub1_sub2);
+        evt_exec(0, TASK_09, water_drains);
+        evt_exec(0, TASK_09, pull_lever_player);
     }
     sleep(195);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
-    aot_delete(AOT_03_B, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
+    aot_delete(AOT_03_B_WATER, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     sleep(60);
     run
     {
@@ -195,16 +195,16 @@ event on_aot_01_sub1
         set(FG_RUN, F_RUN_READY, TRUE);
         cutnext(CAM_01);
         cut_auto(CUT_FREE);
-        set(FG_SCENARIO, F_SCENARIO_23, TRUE);
-        set(FG_ROOM, F_ROOM_19, FALSE);
+        set(FG_SCENARIO, F_SCENARIO_WATER_DRAINED, TRUE);
+        set(FG_ROOM, F_ROOM_WATER_FULL, FALSE);
     }
     evt_finish();
 }
 
-event on_aot_01_sub1_sub1
+event water_drains
 {
     bgm_play(BGM_SUB_1);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (170)
     {
@@ -215,14 +215,14 @@ event on_aot_01_sub1_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
+    objtbl_b_set(TBL_OBJ, OBJ_00_WATER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
     evt_disable(TASK_05);
     evt_disable(TASK_06);
     evt_disable(TASK_07);
     evt_finish();
 }
 
-event on_aot_01_sub1_sub2
+event pull_lever_player
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -250,17 +250,17 @@ event on_aot_01_sub1_sub2
     act_motion(MOTION_10);
     act_reset();
     evt_nop();
-    evt_fork(TASK_09, on_aot_01_sub1_sub2_sub1, 0);
+    evt_fork(TASK_09, pull_lever_player_turns, 0);
     sleep(60);
     evt_finish();
 }
 
-event on_aot_01_sub1_sub2_sub1
+event pull_lever_player_turns
 {
-    set(FG_ROOM, F_ROOM_1A, FALSE);
+    set(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_1A, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(30);
@@ -269,7 +269,7 @@ event on_aot_01_sub1_sub2_sub1
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -277,17 +277,17 @@ event on_aot_01_sub1_sub2_sub1
     act_finish();
 }
 
-event on_enter
+event water_bob
 {
-    evt_fork(TASK_05, on_enter_sub1, 0);
-    evt_fork(TASK_06, on_enter_sub2, 0);
-    evt_fork(TASK_07, on_enter_sub3, 0);
+    evt_fork(TASK_05, water_bob_0, 0);
+    evt_fork(TASK_06, water_bob_1, 0);
+    evt_fork(TASK_07, water_light_cycle, 0);
     evt_finish();
 }
 
-event on_enter_sub1
+event water_bob_0
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -296,7 +296,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -305,7 +305,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -314,7 +314,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -323,7 +323,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -332,7 +332,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -341,7 +341,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -350,7 +350,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -359,7 +359,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -369,7 +369,7 @@ event on_enter_sub1
     }
     tw_end();
     sleep(5);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -378,7 +378,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -387,7 +387,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -396,7 +396,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -405,7 +405,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -414,7 +414,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -423,7 +423,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -432,7 +432,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -441,7 +441,7 @@ event on_enter_sub1
         evt_next();
     }
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -451,13 +451,13 @@ event on_enter_sub1
     }
     tw_end();
     sleep(5);
-    evt_chain(on_enter_sub1);
+    evt_chain(water_bob_0);
     evt_finish();
 }
 
-event on_enter_sub2
+event water_bob_1
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (5)
     {
@@ -517,13 +517,13 @@ event on_enter_sub2
     tw_end();
     evt_nop();
     sleep(60);
-    evt_chain(on_enter_sub2);
+    evt_chain(water_bob_1);
     evt_finish();
 }
 
-event event_09
+event water_bob_unused
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_WATER);
     evt_tween_begin_alt();
     for (20)
     {
@@ -543,11 +543,11 @@ event event_09
     tw_end();
     evt_nop();
     sleep(30);
-    evt_chain(event_09);
+    evt_chain(water_bob_unused);
     evt_finish();
 }
 
-event event_0A
+event push_button
 {
     run
     {
@@ -566,9 +566,9 @@ event event_0A
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            set(FG_LOCK, F_LOCK_24, TRUE);
+            set(FG_LOCK, F_LOCK_40E_410, TRUE);
             se_play_3d(SND_BANK_ROOM, SE_18_SW_411, 0, SND_AT_PLAYER, 0, 0, 0);
-            evt_exec(0, TASK_09, event_0D);
+            evt_exec(0, TASK_09, button_sound_next_door);
         }
         else
         {
@@ -580,27 +580,27 @@ event event_0A
     evt_finish();
 }
 
-event from_main_2
+event button_glow_on
 {
     run
     {
         effect_tracked(FX_0A, FX_ROW_00, FX_AT_WORLD, 6900, 64136, 11900, 0);
-        set(FG_ROOM, F_ROOM_17, TRUE);
+        set(FG_ROOM, F_ROOM_BUTTON_GLOW_ON, TRUE);
     }
     evt_finish();
 }
 
-event from_main_3
+event button_glow_off
 {
     run
     {
         effect_kill_a(0);
-        set(FG_ROOM, F_ROOM_17, FALSE);
+        set(FG_ROOM, F_ROOM_BUTTON_GLOW_ON, FALSE);
     }
     evt_finish();
 }
 
-event event_0D
+event button_sound_next_door
 {
     sleep(20);
     message(MSG_THERE_WAS_A_SOUND_FROM_THE | MSG_FAST, RUN_PLAYER); // "There was a sound from the room next door."
@@ -618,7 +618,7 @@ event event_0D
     evt_finish();
 }
 
-event on_enter_sub3
+event water_light_cycle
 {
     nop_wide(0, 13, 0);
     sleep(5);
@@ -674,6 +674,6 @@ event on_enter_sub3
     sleep(5);
     nop_wide(0, 13, 0);
     sleep(5);
-    evt_chain(on_enter_sub3);
+    evt_chain(water_light_cycle);
     evt_finish();
 }

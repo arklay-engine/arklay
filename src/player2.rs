@@ -304,6 +304,13 @@ pub struct Work {
     /// stairs, slopes, climbs and drops change it, so a script that moves the
     /// player to another height leaves it behind.
     pub floor: u8,
+    /// The joints hold a pose of play ([`seed_pose`]); a door keeps it.
+    pub posed: bool,
+    /// [`pl_init`] ran and the engine hasn't posed its frame yet ([`pose_init`]).
+    pub init_pose: bool,
+    /// The routines hold the first tick of `pl_mv_00` that a room started on
+    /// its own assumes ([`Work::default`]), and no tick has run them yet.
+    pub first_tick_assumed: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -322,6 +329,9 @@ pub struct Work {
     pub spd: [i16; 3],
     pub(crate) spd_base: [i16; 3],
     timer0: u16,
+    /// `Sca_info`'s 1: whether `Sca_ck_em` pushed the player out of a wall
+    /// on the last tick, which `pl_dm02`'s slide reads.
+    pub sca_hit: bool,
     /// `Timer1` and `Timer2`: the climb's steps left and whether it goes down.
     timer1: i16,
     timer2: u8,
@@ -371,6 +381,9 @@ pub struct Work {
     pub neck: Neck,
     /// The parts whose `Be_flg` `parts_set` cleared, by bit: they aren't drawn.
     pub hidden_parts: u32,
+    /// Parts placed under their parent other than the skeleton says: the
+    /// `Pos` that `Sa_parts_allmv` blends for a morphing part's children.
+    pub joint_offsets: Vec<(u8, [i16; 3])>,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
     /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
@@ -500,6 +513,8 @@ pub const NECK_JOINT: usize = 8;
 const DOG_NECK: [usize; 2] = [2, 3];
 /// `Pl_init`'s turn rates and limits of [`NECK_JOINT`], yaw then pitch.
 const NECK_RATES: [i32; 2] = [0x60, 0x60];
+/// The alligator's jaws, which [`Neck::jaw`] rolls.
+const ALLIGATOR_JAWS: [usize; 2] = [6, 7];
 const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
 /// What `Pl_neck` counts down from.
 const NECK_WAIT: u8 = 0x2D;
@@ -533,6 +548,9 @@ pub struct Neck {
     pub target: Option<usize>,
     /// The second joint's yaw, when the neck has two (`DOG_NECK`).
     pub turn_two: Option<i16>,
+    /// The alligator's jaws (`Em_23`'s `+0x22a` and `+0x228`): the roll of
+    /// parts 6 and 7 on top of their pose.
+    pub jaw: [i16; 2],
     /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
     /// so a new room doesn't restart it.
     pub wait: u8,
@@ -566,6 +584,13 @@ impl Work {
 impl Neck {
     /// Add the turn to `pose`, as `Rot_neck` does around its `RotMatrix`.
     pub fn apply(&self, pose: &mut Keyframe) {
+        if self.jaw != [0, 0] {
+            for (joint, roll) in ALLIGATOR_JAWS.into_iter().zip(self.jaw) {
+                if let Some(rotation) = pose.rotations.get_mut(joint) {
+                    rotation[2] = rotation[2].wrapping_add(roll);
+                }
+            }
+        }
         if let Some(turn_two) = self.turn_two {
             for (joint, turn) in DOG_NECK.into_iter().zip([self.turn[0], turn_two]) {
                 if let Some(rotation) = pose.rotations.get_mut(joint) {
@@ -775,12 +800,16 @@ impl Default for Work {
             super_matrix: None,
             tilt: [0, 0],
             floor: 0,
+            posed: false,
+            init_pose: false,
+            first_tick_assumed: true,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            joint_offsets: Vec::new(),
             parts0_y: 0x1000,
             lean: 0,
             aim_target: None,
@@ -811,6 +840,7 @@ impl Default for Work {
             spd: [0; 3],
             spd_base: [0; 3],
             timer0: 0,
+            sca_hit: false,
             timer1: 0,
             timer2: 0,
             back_look: false,
@@ -847,6 +877,7 @@ impl Work {
         Self {
             d_life_u: self.d_life_u,
             kind: self.kind,
+            posed: self.posed,
             // The head's world position is the joints' last matrix, which a
             // room load leaves alone until the new room is drawn.
             neck: Neck {
@@ -863,7 +894,14 @@ impl Work {
     pub fn after_pl_init(mut self) -> Self {
         self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         self.hokan = 0;
+        self.first_tick_assumed = false;
         self
+    }
+
+    /// Whether the player is aiming (`pl_mv_05`), which raises `fg_status`'s
+    /// `0x80` and so holds the cut on screen (`Re2State::view_held`).
+    pub fn holds_view(&self) -> bool {
+        self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
@@ -923,6 +961,8 @@ pub struct Tick<'a> {
     pub room: &'a RoomState,
     pub banks: Banks<'a>,
     pub skeleton: &'a Skeleton,
+    /// The model's `pSa_dat` morphs, which move a part's children.
+    pub morphs: &'a [crate::model::PartMorph],
     pub input: Input,
     pub options: Options,
     /// The character id, `Id`.
@@ -1159,6 +1199,26 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
     work.neck.body = Some(pos);
 }
 
+/// The pose on screen before the player's first tick of play: the frame its
+/// clip last showed (`Move_cnt - 1`), as the original's joints hold it. A
+/// new game's first tick is set up as already run (`Work::default`) with the
+/// joints never posed, and the clip blend that starts on the next tick eases
+/// out of this pose: the new game's idle frame. Once per player; a door keeps
+/// the last room's pose ([`Work::entering_room`]).
+pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    if std::mem::replace(&mut work.posed, true) || work.move_cnt == 0 {
+        return;
+    }
+    let (clips, keyframes) = tick.banks.get(work.bank);
+    let pose = clips
+        .get(usize::from(work.move_no))
+        .and_then(|clip| clip.frames.get(usize::from(work.move_cnt) - 1))
+        .and_then(|frame| keyframes.get(usize::from(frame.keyframe)));
+    if let Some(pose) = pose {
+        player.anim.set_applied_pose(Some(pose.clone()));
+    }
+}
+
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
 pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
     let key = key_word(&tick.input);
@@ -1171,6 +1231,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         work.latch_kage_probe(player.angle);
         return None;
     }
+    work.first_tick_assumed = false;
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
@@ -1190,9 +1251,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
-    if mover.work.routine[0] == MODE_MOVE
-        && matches!(mover.work.routine[1], MOVE_STAIRS | MOVE_JUMP_DOWN)
-    {
+    if mover.work.routine[0] == MODE_MOVE && mover.work.routine[1] == MOVE_JUMP_DOWN {
         mover.work.floor = crate::sca::floor_of(mover.player.pos[1]);
     }
     mover.pl_neck();
@@ -1219,14 +1278,40 @@ pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
 
 /// `Pl_init` (`0x4D9940`), as game mode 3 runs it when the status screen
 /// closes (`0x4C000D` zeroes the routines first): the move starts again from
-/// routine 1, 0, 0, 0 and clip 2, whose first frame `Joint_move` plays, so
-/// `Move_cnt` is 1. The pose isn't redrawn here; the next tick's move poses
-/// the player.
+/// routine 1, 0, 0, 0 and clip 2 of the player's own bank, whose first frame
+/// `Joint_move` plays at once, unblended, so `Move_cnt` is 1. The head looks
+/// ahead again. The engine poses that frame on the same tick ([`pose_init`]).
 pub fn pl_init(work: &mut Work) {
     work.routine = [MODE_MOVE, 0, 0, 0];
+    work.bank = Bank::Pld;
     work.move_no = 2;
     work.move_cnt = 1;
     work.hokan = 0;
+    work.neck.flags = 0;
+    work.neck.joint = None;
+    work.neck.turn = [0; 2];
+    work.neck.target = None;
+    work.init_pose = true;
+}
+
+/// `Pl_init`'s `Joint_move`: the joints take clip 2's first frame, which the
+/// next clip's blend then starts from, and the head is placed on it.
+pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    let (clips, keyframes) = tick.banks.get(Bank::Weapon);
+    if let Some(pose) = idle_pose(clips, keyframes) {
+        player.anim.set_applied_pose(Some(pose.clone()));
+    }
+    place_neck(work, player, tick);
+}
+
+/// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
+/// where `Pl_init` stands the player: at a new game, through a door and when
+/// the get-item window closes. Leon's handgun has his skeleton's own root
+/// and no turn on the parts down to the head; Claire's (`PL01W03`'s keyframe
+/// 50) stands her 14 units higher than her skeleton's root and rolls her hips.
+pub fn idle_pose<'k>(clips: &[Clip], keyframes: &'k [Keyframe]) -> Option<&'k Keyframe> {
+    let frame = clips.get(2)?.frames.first()?;
+    keyframes.get(usize::from(frame.keyframe))
 }
 
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
@@ -1628,6 +1713,8 @@ impl Mover<'_, '_> {
                 self.player.pos[1] = self.ground();
                 self.work.damage_cnt &= !DAMAGE_LOCK;
                 self.player.emit_footstep(self.work.move_cnt, 1);
+                // The landing is heard as loud as a running step.
+                self.work.noise |= 4;
                 self.land();
             }
             5 => self.land(),
@@ -1738,6 +1825,14 @@ impl Mover<'_, '_> {
             2 | 3 => {
                 if self.work.routine[2] == 2 {
                     self.work.routine[2] = 3;
+                    // `Floor` steps the whole flight here, `Timer1` floors up or
+                    // down, before the first step (`0x4DB1B7`).
+                    let flight = self.work.timer1 as u8;
+                    self.work.floor = if self.work.timer2 == 0 {
+                        self.work.floor.wrapping_add(flight)
+                    } else {
+                        self.work.floor.wrapping_sub(flight)
+                    };
                     self.work.bank = Bank::Room;
                     self.work.move_no = climb;
                     self.work.move_cnt = 0;
@@ -2384,8 +2479,8 @@ impl Mover<'_, '_> {
                 let [x, y, z] = pose.offset;
                 [x, self.work.scaled_height(y), z]
             } else {
-                match skeleton.relative.get(part) {
-                    Some(t) => *t,
+                match self.relative(part) {
+                    Some(t) => t,
                     None => continue,
                 }
             };
@@ -2419,8 +2514,21 @@ impl Mover<'_, '_> {
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         Some(Matrix {
             m: rot_matrix(*pose.rotations.get(part)?),
-            t: self.tick.skeleton.relative.get(part)?.map(i32::from),
+            t: self.relative(part)?.map(i32::from),
         })
+    }
+
+    /// Where a part sits under its parent: the skeleton's, or what the work
+    /// put in its place.
+    fn relative(&self, part: usize) -> Option<[i16; 3]> {
+        let skeleton = self.tick.skeleton.relative.get(part).copied()?;
+        Some(
+            self.work
+                .joint_offsets
+                .iter()
+                .find(|(index, _)| usize::from(*index) == part)
+                .map_or(skeleton, |(_, at)| *at),
+        )
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
@@ -2435,7 +2543,7 @@ impl Mover<'_, '_> {
                 let [x, y, z] = pose.offset;
                 [x, self.work.scaled_height(y), z]
             } else {
-                *self.tick.skeleton.relative.get(part)?
+                self.relative(part)?
             };
             world = world.comp(&Matrix {
                 m: rot_matrix(*pose.rotations.get(part)?),
@@ -2600,11 +2708,13 @@ impl Mover<'_, '_> {
                 return;
             }
             if self.tick.input.fire_pressed {
+                // The reload starts next tick: this one still turns and
+                // steps the hold (`pl_mv05_w1` falls through to `Joint_move`).
                 if self.tick.weapon.spare {
                     self.aim_stage(4);
-                    return;
+                } else {
+                    self.player.queue_sound(SOUND_EMPTY);
                 }
-                self.player.queue_sound(SOUND_EMPTY);
             }
         }
         self.aim_turn(key, AIM_HOLD_TURN);
@@ -3144,10 +3254,14 @@ impl Mover<'_, '_> {
     }
 
     /// `Pl_damage`: the hit reactions a `Sce_Damage` or an enemy starts.
-    /// `Routine_1` 4 and 5, the falls that read `pSub1`, play as the plain hit
+    /// `Routine_1` 4 and 5, the falls on `pSub1`'s clips, play as the plain
+    /// hit when no enemy has handed the player its clips
     /// (`docs/re2-deviations.md`).
     fn pl_damage(&mut self) {
+        let has_sub1 = !self.tick.banks.held.0.is_empty();
         match self.work.routine[1] {
+            4 if has_sub1 => self.pl_dm02(),
+            5 if has_sub1 => self.pl_dm03(),
             2 | 3 => {
                 let back = self.work.routine[1] & 1;
                 let speed = [
@@ -3180,6 +3294,213 @@ impl Mover<'_, '_> {
                     self.damage_joint(DAMAGE_BLEND_STEP);
                 }
             }
+        }
+    }
+
+    /// `Gacha_ch`: a button pressed this tick, which shortens a fall's wait.
+    fn gacha(&self) -> u16 {
+        u16::from(self.work.key_trg & 0x34F != 0)
+    }
+
+    /// The wait on the floor before a fall's getting up: longer the less life
+    /// is left.
+    fn floor_wait(&self) -> u16 {
+        let life = self.tick.life;
+        let mut wait: u16 = 0x1E;
+        if life < 0x96 {
+            wait = 0x3C;
+        }
+        if life < 0x46 {
+            wait += 0x32;
+        }
+        if life < 0x1E {
+            wait += 0x32;
+        }
+        if life == 0 {
+            wait += 100;
+        }
+        wait
+    }
+
+    /// Start a fall's clip on `pSub1`'s bank.
+    fn sub1_clip(&mut self, clip: u8) {
+        self.work.bank = Bank::Held;
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = DAMAGE_BLEND;
+    }
+
+    /// `pl_dm02`, `Pl_damage`'s `Routine_1` 4: knocked down backwards on the
+    /// enemy's clips (`pSub1`), sliding, onto a wall if one stops the slide
+    /// (`Sca_info`'s 1), the wait on the floor (shorter for each button
+    /// pressed) and the getting up, ending in the player's own clip 6 played
+    /// backwards.
+    fn pl_dm02(&mut self) {
+        const LATE: u16 = 0x400;
+        let mut sub = self.work.routine[2];
+        if sub == 0 {
+            self.work.spd = [-800, 0, 0];
+            self.sub1_clip(2);
+            self.work.neck.flags |= 0x12;
+            self.work.routine[2] = 1;
+            self.work.damage_cnt |= DAMAGE_LOCK;
+            self.work.sounds.push(0x401_0001);
+            self.work.be_flg &= !4;
+            sub = 1;
+        }
+        match sub {
+            1 => {
+                if self.work.hokan == 0 {
+                    self.work.routine[2] = 2;
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0x96);
+                if self.work.sca_hit {
+                    self.work.routine[2] = 5;
+                }
+            }
+            2 | 3 => {
+                if sub == 2 {
+                    self.sub1_clip(3);
+                    self.work.routine[2] = 3;
+                    self.work.sounds.push(0x22A_0001);
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0xF);
+                self.work.routine[2] += u8::from(ended);
+                if self.work.spd[0] > 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+            }
+            5 | 6 => {
+                if sub == 5 {
+                    self.sub1_clip(0);
+                    self.work.routine[2] = 6;
+                    self.work.sounds.push(0x229_0001);
+                    self.work.sounds.push(0x402_0001);
+                }
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+            }
+            7 | 8 => {
+                if sub == 7 {
+                    self.sub1_clip(4);
+                    self.work.routine[2] = 8;
+                    self.work.timer0 = self.floor_wait();
+                }
+                self.work.bank = Bank::Held;
+                self.joint_move_late_reversed(LATE, true);
+                let gacha = self.gacha();
+                self.work.timer0 = self.work.timer0.wrapping_sub(gacha * 5 + 1);
+                if (self.work.timer0 as i16) < 0 {
+                    self.work.routine[2] = 9;
+                }
+            }
+            9 | 10 => {
+                if sub == 9 {
+                    self.sub1_clip(1);
+                    self.work.routine[2] = 10;
+                    self.work.damage_cnt = 0;
+                }
+                self.work.bank = Bank::Held;
+                if self.joint_move_late(LATE) {
+                    self.work.routine[2] = 0xB;
+                    self.work.bank = Bank::Pld;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = DAMAGE_BLEND;
+                }
+            }
+            0xB => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(LATE, true) {
+                    self.work.routine[2] = 4;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `pl_dm03`, `Pl_damage`'s `Routine_1` 5: knocked down forwards on the
+    /// enemy's clips (`pSub1`), the wait on the floor (shorter for each
+    /// button pressed) and the getting up, ending in the player's own clip 6
+    /// played backwards.
+    fn pl_dm03(&mut self) {
+        const LATE: u16 = 0x400;
+        let mut sub = self.work.routine[2];
+        if sub == 0 {
+            self.work.damage_cnt |= DAMAGE_LOCK;
+            self.sub1_clip(5);
+            self.work.routine[2] = 1;
+            self.work.spd = [400, 0, 0];
+            self.work.neck.flags |= 0x12;
+            self.work.sounds.push(0x402_0001);
+            self.work.be_flg &= !4;
+            sub = 1;
+        }
+        match sub {
+            1 => {
+                if self.work.move_cnt == 5 && self.work.hokan == 3 {
+                    self.work.sounds.push(0x402_0001);
+                }
+                self.add_speed_xz();
+                self.work.bank = Bank::Held;
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+                let slow = if self.work.hokan == 0 { 0x32 } else { 0x14 };
+                self.work.spd[0] = self.work.spd[0].wrapping_sub(slow);
+                if self.work.spd[0] < 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            2 | 3 => {
+                if sub == 2 {
+                    self.sub1_clip(4);
+                    self.work.routine[2] = 3;
+                    self.work.timer0 = self.floor_wait();
+                }
+                self.work.bank = Bank::Held;
+                self.joint_move_late_reversed(LATE, true);
+                let gacha = self.gacha();
+                self.work.timer0 = self.work.timer0.wrapping_sub(gacha * 3 + 1);
+                if (self.work.timer0 as i16) < 0 {
+                    self.work.routine[2] = 4;
+                }
+            }
+            4 | 5 => {
+                if sub == 4 {
+                    self.sub1_clip(1);
+                    self.work.routine[2] = 5;
+                    self.work.damage_cnt = 0;
+                }
+                self.work.bank = Bank::Held;
+                if self.joint_move_late(LATE) {
+                    self.work.routine[2] = 6;
+                    self.work.bank = Bank::Pld;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = DAMAGE_BLEND;
+                }
+            }
+            6 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(LATE, true) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt = 0;
+                    self.work.neck.flags &= 0xED;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3362,15 +3683,17 @@ impl Mover<'_, '_> {
     /// `get_null_pos`, turned by `RotMatrixY`.
     fn null_pos(&self, turn: u16) -> [i32; 3] {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
-        let frames = clips
-            .get(usize::from(self.work.move_no))
-            .map_or(&[][..], |clip| clip.frames.as_slice());
-        let frame = frames
-            .iter()
-            .skip(usize::from(self.work.move_cnt))
-            .find(|frame| frame.flags & FRAME_SKIPPED == 0);
-        let Some(keyframe) = frame.and_then(|frame| keyframes.get(usize::from(frame.keyframe)))
-        else {
+        let (move_no, move_cnt) = (self.work.move_no, self.work.move_cnt);
+        let index = match clips.get(usize::from(move_no)) {
+            Some(clip) => clip
+                .frames
+                .iter()
+                .skip(usize::from(move_cnt))
+                .find(|frame| frame.flags & FRAME_SKIPPED == 0)
+                .map(|frame| frame.keyframe),
+            None => stray_keyframe(clips, move_no, move_cnt),
+        };
+        let Some(keyframe) = index.and_then(|index| keyframes.get(usize::from(index))) else {
             return [0; 3];
         };
         let [x, y, z] = keyframe.vertex.map(i32::from);
@@ -3391,6 +3714,18 @@ impl Mover<'_, '_> {
         }
         if held.holder_id == crate::zombie2::MRX_ID {
             self.em2a_held(held);
+            return;
+        }
+        if held.holder_id == crate::zombie2::ALLIGATOR_ID {
+            self.em23_held(held);
+            return;
+        }
+        if held.holder_id == crate::zombie2::G1_ID {
+            self.em30_killed(held);
+            return;
+        }
+        if held.holder_id == crate::zombie2::G2_ID {
+            self.em31_held(held);
             return;
         }
         if matches!(
@@ -3608,6 +3943,222 @@ impl Mover<'_, '_> {
             0 => self.em2a_thrown(),
             2 => self.em2a_killed(held),
             _ => self.em2a_turned(),
+        }
+    }
+
+    /// `FUN_0046a710`, `em_damage_table_real[0x13]`: the alligator's jaws.
+    /// `Routine_1` 1 drags the player to it, 2 throws them back from the
+    /// front and 3 from behind, on the room's clips.
+    fn em23_held(&mut self, held: &mut Held<'_>) {
+        match self.work.routine[1] {
+            1 => self.em23_dragged(held),
+            2 => self.em23_thrown(),
+            3 => self.em23_thrown_round(),
+            _ => self.em23_killed(),
+        }
+    }
+
+    /// `FUN_0046a710`'s other `Routine_1`s: caught at the corridor's end. It
+    /// stands on its own clip until the alligator sets its `Timer0`, then
+    /// plays the alligator's clip from the base it set. `fg_stop`'s
+    /// `0x1000000` isn't ported.
+    fn em23_killed(&mut self) {
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.timers[0] = 0;
+                    self.work.routine[2] = 1;
+                }
+                self.work.bank = Bank::Weapon;
+                self.work.move_no = 2;
+                self.work.move_cnt = 0;
+                self.work.hokan = 3;
+                self.joint_move_late(0x400);
+                if self.work.timers[0] != 0 {
+                    self.work.move_no = 1;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 0;
+                    self.work.routine[2] = 2;
+                }
+            }
+            2 => {
+                self.work.bank = Bank::Held;
+                self.null_pos_set(0);
+                if self.work.move_cnt == 3 {
+                    self.work.sounds.push(0x402_0001);
+                }
+                let ended = self.joint_move_late(0x1000);
+                self.work.routine[2] += u8::from(ended);
+            }
+            3 => self.work.damage_cnt = 0x80,
+            _ => {}
+        }
+    }
+
+    /// `FUN_0046acf0(step)`: the drag's blood, its first three ticks. Each step
+    /// takes three of the player's parts from its first and a point on each,
+    /// as `Esp_call`'s matrix and vector: blood rows 1, 2 and 1 toward the
+    /// step's way, then rows 2, 0 and 0 a quarter round from it. The parts
+    /// are posed as the last draw left them, before this tick's move.
+    fn em23_drag_blood(&mut self, step: u8) {
+        /// The way, the first part, and the points on it and the two after.
+        const STEPS: [(i16, usize, [[i32; 3]; 3]); 3] = [
+            (0x850, 4, [[0, 0, 0], [0, 0, 0], [0, 200, 0]]),
+            (0x536, 3, [[0, 200, 0], [0, 300, 0], [0, 200, 0]]),
+            (0x9E6, 1, [[-300, -500, 200], [0, 0, 200], [-200, 600, 400]]),
+        ];
+        /// Row and size of each call, and whether it turns a quarter.
+        const CALLS: [(u8, u16, bool, usize); 6] = [
+            (1, 0x1800, false, 0),
+            (2, 0x1000, false, 1),
+            (1, 0x1800, false, 2),
+            (2, 0x2000, true, 0),
+            (0, 0x1800, true, 1),
+            (0, 0x1000, true, 2),
+        ];
+        let Some(&(dir, first, points)) = STEPS.get(usize::from(step)) else {
+            return;
+        };
+        for (row, size, turned, index) in CALLS {
+            let at = self
+                .part_point(first + index, points[index])
+                .unwrap_or(self.player.pos);
+            self.work.effects.push(EffectCall {
+                kind: 0,
+                row,
+                size,
+                dir: if turned { dir.wrapping_add(0x400) } else { dir },
+                at: at.map(|axis| axis as i16),
+            });
+        }
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 1: caught by its reach, and pulled in,
+    /// bleeding over its first three ticks. `fg_system`'s `0x4000000` isn't
+    /// ported.
+    fn em23_dragged(&mut self, held: &mut Held<'_>) {
+        if self.work.routine[2] == 0 {
+            self.work.sounds.push(0x403_0001);
+            self.work.move_no = 0;
+            self.work.move_cnt = 3;
+            self.work.hokan = 0;
+            self.work.routine[3] = 0;
+            self.work.routine[2] = 1;
+        } else if self.work.routine[2] != 1 {
+            return;
+        }
+        if self.work.routine[3] < 3 {
+            self.em23_drag_blood(self.work.routine[3]);
+            self.work.routine[3] += 1;
+        }
+        let [x, _, z] = held.holder;
+        let to = direction_ck(x, z, self.player.pos[0], self.player.pos[2]);
+        self.player.angle = goto(self.player.angle, to, 0x80);
+        self.work.bank = Bank::Weapon;
+        let ended = self.joint_move_late(0x400);
+        self.work.routine[2] += u8::from(ended);
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 2: thrown back, sliding to a stop.
+    fn em23_thrown(&mut self) {
+        const LATE: u16 = 0x400;
+        self.work.bank = Bank::Room;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x401_0001);
+                    self.work.spd = [-800, 0, 0];
+                    self.work.move_no = 0x12;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                if self.work.hokan == 0 {
+                    self.work.routine[2] = 2;
+                }
+                self.add_speed_xz();
+                self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0x96);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.move_no = 0x13;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 3;
+                }
+                self.add_speed_xz();
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_add(0xF);
+                self.work.routine[2] += u8::from(first) + u8::from(second);
+                if self.work.spd[0] > 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+            }
+            _ => {}
+        }
+    }
+
+    /// `FUN_0046a710`'s `Routine_1` 3: thrown forward from behind, then
+    /// back to the player's own clip.
+    fn em23_thrown_round(&mut self) {
+        const LATE: u16 = 0x400;
+        match self.work.routine[2] {
+            0 | 1 => {
+                self.work.bank = Bank::Room;
+                if self.work.routine[2] == 0 {
+                    self.work.sounds.push(0x402_0001);
+                    self.work.move_no = 0x14;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 1;
+                    self.work.spd = [800, 0, 0];
+                    self.work.damage_cnt |= 0x80;
+                    self.work.neck.flags |= 0x12;
+                }
+                self.add_speed_xz();
+                let ended = self.joint_move_late(LATE);
+                self.work.spd[0] = self.work.spd[0].wrapping_sub(0x78);
+                self.work.routine[2] += u8::from(ended);
+                if self.work.spd[0] < 0 {
+                    self.work.spd[0] = 0;
+                }
+            }
+            2 | 4 | 5 => {
+                self.work.bank = Bank::Room;
+                if self.work.routine[2] != 5 {
+                    self.work.move_no = 0x11;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                    self.work.routine[2] = 5;
+                    self.work.damage_cnt = 0;
+                }
+                let first = self.joint_move_late(LATE);
+                let second = self.joint_move_late(LATE);
+                if first || second {
+                    self.work.routine[2] = 6;
+                    self.work.move_no = 6;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 3;
+                }
+            }
+            6 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late_reversed(0x400, true) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.damage_cnt = 0;
+                    self.work.neck.flags &= 0xED;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3864,6 +4415,72 @@ impl Mover<'_, '_> {
         self.work.be_flg &= !0x1004;
         self.work.bank = Bank::Weapon;
         held.released = true;
+    }
+
+    /// `em_die_table[0x30]`'s `Routine_1` 0 (`0x48f7d0`): killed by G1's
+    /// charge, on its clip 7. Its blood at the player's parts (two effects a
+    /// frame below frame 10, each with a `Rnd`) and the parts its frame 5
+    /// hides aren't drawn, but their `Rnd`s are. Its `Routine_1` 2 and 3,
+    /// which the charge doesn't start, aren't ported.
+    fn em30_killed(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x400;
+        if self.work.routine[1] != 0 {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.bank = Bank::Held;
+                self.work.move_no = 7;
+                self.work.move_cnt = 0;
+                self.work.hokan = DAMAGE_BLEND;
+                self.work.routine[2] = 1;
+                self.work.neck.flags = 1;
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                *held.life = -1;
+                self.work.sounds.push(0x402_0001);
+            }
+            1 => {}
+            _ => return,
+        }
+        if self.work.move_cnt == 0x17 {
+            self.work.sounds.push(0x403_0001);
+        }
+        if self.work.move_cnt < 10 {
+            held.rnd.draw();
+            held.rnd.draw();
+        }
+        self.work.bank = Bank::Held;
+        if self.joint_move_late(LATE) {
+            self.work.be_flg |= 2;
+            self.work.routine[2] = 2;
+        }
+    }
+
+    /// `FUN_004960d0`, `em_damage_table[0x31]`'s `Routine_1` 0: in G2's hand
+    /// on its clip 0, turning to it, while G2's grab carries the player.
+    /// `fg_status`'s `0x40` isn't ported, nor are its `Routine_1` 2 to 4, the
+    /// kill.
+    fn em31_held(&mut self, held: &mut Held<'_>) {
+        if matches!(self.work.routine[1], 2..=4) {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.bank = Bank::Held;
+                self.held_clip(0, 3);
+                self.work.routine[2] = 1;
+                self.work.neck.flags = 1;
+                self.work.sounds.push(0x400_0001);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.work.bank = Bank::Held;
+        self.work.move_cnt = 0;
+        self.joint_move_late(0x400);
+        let [x, _, z] = held.holder;
+        let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
+        self.player.angle = goto(self.player.angle, target, 0x100);
     }
 
     /// `FUN_0045a880`: held from the front or the back, standing.
@@ -4579,6 +5196,31 @@ fn frame_past_end(clips: &[Clip], clip: usize, count: u8) -> Option<(usize, usiz
     None
 }
 
+/// `get_null_pos` on a clip past the table (`Mot_play_init`'s `0xFF`): the
+/// original reads the EDD's bytes as they lie, so a frame's word is taken as
+/// the clip's count and offset. The parsed clips stand in for those bytes,
+/// laid end to end after their table as the shipped models have them.
+fn stray_keyframe(clips: &[Clip], move_no: u8, move_cnt: u8) -> Option<u16> {
+    let table = clips.len();
+    let word = |index: usize| -> Option<u32> {
+        if index < table {
+            let before: usize = clips[..index].iter().map(|clip| clip.frames.len()).sum();
+            let offset = (table + before) * 4;
+            return Some(clips[index].frames.len() as u32 | (offset as u32) << 16);
+        }
+        let frame = clips
+            .iter()
+            .flat_map(|clip| &clip.frames)
+            .nth(index - table)?;
+        Some((u32::from(frame.keyframe) | frame.flags) | u32::from(frame.timing) << 16)
+    };
+    let mut at = (word(usize::from(move_no))? >> 16) as usize / 4 + usize::from(move_cnt);
+    while word(at)? & FRAME_SKIPPED != 0 {
+        at += 1;
+    }
+    Some(word(at)? as u16 & 0xFFF)
+}
+
 pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
     let (cos, sin) = (rcos(i32::from(angle)), rsin(i32::from(angle)));
     (
@@ -4749,6 +5391,17 @@ pub fn plc_ret(work: &mut Work) {
     work.neck.flags = 0;
 }
 
+/// `Plc_stop` on the player. A scene that stops the player on a room's
+/// first tick, before `pl_mv_00` has run (room 200's entry), leaves
+/// `Pl_init`'s blend, 0, which nothing writes until the scene hands the
+/// player back.
+pub fn plc_stop_player(work: &mut Work) {
+    if std::mem::take(&mut work.first_tick_assumed) {
+        work.hokan = 0;
+    }
+    plc_stop(work);
+}
+
 /// `Plc_stop`: hold the routine, or give it back.
 pub fn plc_stop(work: &mut Work) {
     if work.routine == STOPPED_ROUTINE {
@@ -4762,6 +5415,9 @@ pub fn plc_stop(work: &mut Work) {
 /// `Load_member_branch` for the fields that live in [`Work`].
 pub fn member(work: &Work, member: u8) -> Option<i32> {
     Some(match member {
+        // `Be_flg`'s low and high words.
+        0 => i32::from(work.be_flg as u16),
+        1 => i32::from((work.be_flg >> 16) as u16),
         2..=5 => i32::from(work.routine[usize::from(member) - 2]),
         7 => i32::from(work.kind),
         0x14 | 0x19 => i32::from(work.dest[0]),
@@ -4781,6 +5437,8 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
 /// `Member_set_branch` for the fields that live in [`Work`]. False for another.
 pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
     match member {
+        0 => work.be_flg = (work.be_flg & 0xFFFF_0000) | u32::from(value as u16),
+        1 => work.be_flg = (work.be_flg & 0xFFFF) | u32::from(value as u16) << 16,
         2..=5 => work.routine[usize::from(member) - 2] = value as u8,
         7 => work.kind = value as u16,
         0x14 | 0x19 => work.dest[0] = value as i16,
@@ -5040,6 +5698,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5071,6 +5730,128 @@ mod tests {
         );
     }
 
+    /// `Pl_init` stands the player on the weapon bank's idle, not the body's:
+    /// Claire's handgun's (keyframe 50) has her hips 15 units higher than
+    /// her PLD's clip 2 and rolled, which puts her head where the original's
+    /// is at a new game, through a door and after the get-item window.
+    #[test]
+    fn pl_init_poses_the_idle_of_the_weapons_bank() {
+        let mut setup = Setup::new(0);
+        setup.skeleton.relative = vec![[0; 3]; NECK_JOINT + 1];
+        setup.skeleton.relative[0] = [0, -1709, 0];
+        setup.skeleton.relative[NECK_JOINT] = [-21, -623, 0];
+        setup.skeleton.children = vec![vec![NECK_JOINT as u8]];
+        setup.player.pos = [18802, 0, -2932];
+        setup.player.angle = 2048;
+        let idle = |offset: i16, roll: i16, keyframe: u16| {
+            let mut rotations = vec![[0; 3]; NECK_JOINT + 1];
+            rotations[0] = [0, 0, roll];
+            let clip = Clip {
+                frames: vec![ClipFrame {
+                    keyframe,
+                    ..ClipFrame::default()
+                }],
+            };
+            let pose = Keyframe {
+                offset: [0, offset, 0],
+                vertex: [0; 3],
+                rotations,
+            };
+            (vec![Clip::default(), Clip::default(), clip], pose)
+        };
+        let (pld_clips, pld_pose) = idle(-1708, 4077, 0);
+        let (weapon_clips, weapon_pose) = idle(-1723, 4077, 1);
+        let keyframes = vec![pld_pose, weapon_pose.clone()];
+        assert_eq!(idle_pose(&weapon_clips, &keyframes), Some(&weapon_pose));
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: (&pld_clips, &keyframes),
+                weapon: (&weapon_clips, &keyframes),
+                room: (&pld_clips, &keyframes),
+                held: (&pld_clips, &keyframes),
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 1,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+        };
+        pose_init(&mut setup.work, &mut setup.player, &tick);
+        let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
+        // The original's at Claire's new game: 18841, -2346, -2932.
+        assert_eq!((x - 18802, y, z), (39, -2346, -2932));
+    }
+
+    /// `FUN_0046acf0`'s second step: six bloods on parts 3 to 5, rows 1, 2
+    /// and 1 toward 0x536 and rows 2, 0 and 0 a quarter round, each at its
+    /// part's point; there is no fourth step.
+    #[test]
+    fn the_alligators_drag_bleeds_on_three_parts_a_step() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 7];
+        }
+        setup.skeleton.relative = std::iter::once([0; 3])
+            .chain(std::iter::repeat_n([0, -100, 0], 6))
+            .collect();
+        setup.skeleton.children = (1..7u8).map(|child| vec![child]).collect();
+        setup.skeleton.children.push(Vec::new());
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.em23_drag_blood(1);
+        let calls: Vec<_> = std::mem::take(&mut mover.work.effects)
+            .iter()
+            .map(|call| (call.kind, call.row, call.size, call.dir, call.at))
+            .collect();
+        let (near, far) = ([1000, -100, 2000], [1000, -300, 2000]);
+        assert_eq!(
+            calls,
+            [
+                (0, 1, 0x1800, 0x536, near),
+                (0, 2, 0x1000, 0x536, near),
+                (0, 1, 0x1800, 0x536, far),
+                (0, 2, 0x2000, 0x936, near),
+                (0, 0, 0x1800, 0x936, near),
+                (0, 0, 0x1000, 0x936, far),
+            ]
+        );
+        mover.em23_drag_blood(3);
+        assert!(mover.work.effects.is_empty());
+    }
+
     /// `Snd_se_walk` in water: the footfall plays the water's sound, and three
     /// ripples (`Esp_call` kind 0x1a) start on part 1 at the water's level.
     #[test]
@@ -5090,6 +5871,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5146,6 +5928,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5275,6 +6058,7 @@ mod tests {
             let tick = Tick {
                 room: &self.room,
                 skeleton: &self.skeleton,
+                morphs: &[],
                 banks: Banks {
                     pld: bank,
                     weapon: bank,
@@ -5295,6 +6079,61 @@ mod tests {
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
+
+        /// [`seed_pose`] in this setup's banks.
+        fn seed(&mut self) {
+            let bank = (self.clips.as_slice(), self.keyframes.as_slice());
+            let tick = Tick {
+                room: &self.room,
+                skeleton: &self.skeleton,
+                morphs: &[],
+                banks: Banks {
+                    pld: bank,
+                    weapon: bank,
+                    room: bank,
+                    held: bank,
+                },
+                input: Input::default(),
+                options: Options::default(),
+                id: 0,
+                life: 200,
+                poisoned: false,
+                stopped: false,
+                weapon: self.weapon,
+                necks: Default::default(),
+                targets: &[],
+                neck_targets: &self.neck_targets,
+                enemies: 0,
+            };
+            seed_pose(&mut self.work, &mut self.player, &tick);
+        }
+    }
+
+    #[test]
+    fn a_new_games_joints_start_on_the_idle_frame_it_shows() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(IDLE_CLIPS[0] as usize + 1, 4, 0);
+        for (index, keyframe) in setup.keyframes.iter_mut().enumerate() {
+            keyframe.rotations = vec![[index as i16 * 10, 0, 0]; 2];
+        }
+        assert!(setup.player.anim.applied_pose().is_none());
+        setup.seed();
+        // `Work::default` has shown the idle clip's first frame (`Move_cnt` 1).
+        assert_eq!(
+            setup.player.anim.applied_pose(),
+            Some(setup.keyframes[0].clone())
+        );
+        // A door keeps the pose the last room left.
+        setup.work = setup.work.entering_room();
+        setup
+            .player
+            .anim
+            .set_applied_pose(Some(setup.keyframes[3].clone()));
+        setup.seed();
+        assert_eq!(
+            setup.player.anim.applied_pose(),
+            Some(setup.keyframes[3].clone())
+        );
     }
 
     /// Runs a dead player's hold until `done`, or panics.
@@ -5303,6 +6142,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -5374,6 +6214,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: (&held_clips, &weapon_keyframes),
                 weapon: (&held_clips, &weapon_keyframes),
@@ -5630,6 +6471,31 @@ mod tests {
         assert_eq!(setup.work.routine[1], MOVE_STAIRS);
         assert_eq!(setup.work.timer0, 0x400);
         assert_eq!(setup.work.timer2, 1);
+    }
+
+    #[test]
+    fn a_climb_steps_floor_the_whole_flight_before_its_first_step() {
+        for (pos, angle, start) in [([1500, 0, 700], 0xC00, 0), ([1500, 0, 2300], 0x400, 5)] {
+            let mut setup = at_stairs(pos, angle);
+            setup.work.floor = start;
+            setup.tick(action(), 200);
+            let flight = setup.work.timer1 as u8;
+            let up = setup.work.timer2 == 0;
+            assert!(flight > 0);
+            while setup.work.routine[2] < 3 {
+                assert_eq!(setup.work.floor, start, "the turn keeps it");
+                setup.tick(Input::default(), 200);
+            }
+            let want = if up { start + flight } else { start - flight };
+            assert_eq!(setup.work.floor, want);
+            for _ in 0..200 {
+                if setup.work.routine[1] != MOVE_STAIRS {
+                    break;
+                }
+                setup.tick(Input::default(), 200);
+                assert_eq!(setup.work.floor, want, "not with the height");
+            }
+        }
     }
 
     #[test]
@@ -6085,6 +6951,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6143,6 +7010,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6230,6 +7098,35 @@ mod tests {
         assert_eq!(frame_past_end(&clips, 2, 4), None);
     }
 
+    /// The alligator's kill does a `Null_pos_set` while `Mot_play_init` has
+    /// its clip at `0xFF`: the original reads a frame's word as the clip's
+    /// count and offset, and the frame it lands on skips a held frame.
+    #[test]
+    fn a_clip_past_the_table_reads_the_frames_as_its_header() {
+        let frame = |keyframe, timing, flags| ClipFrame {
+            keyframe,
+            timing,
+            flags,
+        };
+        let clips = vec![
+            Clip {
+                frames: vec![frame(10, 0, 0), frame(11, 0x10, 0), frame(12, 0, 0)],
+            },
+            Clip {
+                frames: vec![
+                    frame(20, 0, FRAME_SKIPPED),
+                    frame(42, 0, 0),
+                    frame(22, 0, 0),
+                ],
+            },
+        ];
+        // Word 3 is clip 0's frame 1: offset 0x10 is word 4, and one frame on
+        // is clip 1's held frame 0, so its frame 1.
+        assert_eq!(stray_keyframe(&clips, 3, 1), Some(42));
+        assert_eq!(stray_keyframe(&clips, 3, 0), Some(12));
+        assert_eq!(stray_keyframe(&clips, 0xFF, 0), None, "past the bytes");
+    }
+
     /// `Em_25`'s death on a wall starts its 8-frame clip 1 at `Move_cnt` 9:
     /// `Joint_move` reads clip 2's frame 1, and `J_seq` ends the clip.
     #[test]
@@ -6240,6 +7137,7 @@ mod tests {
         let tick = Tick {
             room: &setup.room,
             skeleton: &setup.skeleton,
+            morphs: &[],
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -6303,6 +7201,24 @@ mod tests {
         assert_eq!(work.routine, STOPPED_ROUTINE);
         plc_stop(&mut work);
         assert_eq!(work.routine, running);
+    }
+
+    #[test]
+    fn a_scene_that_stops_the_player_before_the_first_tick_keeps_pl_init_s_blend() {
+        // Room 200's entry: the scene stops the player on the room's first
+        // tick, before `pl_mv_00` has stepped the blend.
+        let mut work = Work::default();
+        assert_eq!(work.hokan, FULL_BLEND - 1);
+        plc_stop_player(&mut work);
+        assert_eq!(work.routine, STOPPED_ROUTINE);
+        assert_eq!(work.hokan, 0);
+
+        // Once a tick has run the routines, the blend is that tick's.
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 200);
+        let hokan = setup.work.hokan;
+        plc_stop_player(&mut setup.work);
+        assert_eq!(setup.work.hokan, hokan);
     }
 
     #[test]

@@ -213,6 +213,8 @@ pub struct DebugMenu {
     /// The pack's strings, kept from the first draw for the labels the
     /// screens show.
     text: Option<Text>,
+    /// The game banks' bit names, from the pack's `game/flags.lua`.
+    flag_names: crate::flag_names::FlagNames,
     /// Every flag's state when `debug.flags` was last published; the
     /// groups are rebuilt only when one changes (or the strings do).
     flag_values: Option<Vec<bool>>,
@@ -239,6 +241,7 @@ impl DebugMenu {
             device: Device::Keyboard,
             ui,
             text: None,
+            flag_names: crate::flag_names::load(pack),
             flag_values: None,
             cursors: Default::default(),
             view: View {
@@ -623,9 +626,10 @@ impl DebugMenu {
 
     /// A flag's name: its identifier, room or document.
     fn flag_label(&self, group: &FlagGroup, sel: u8) -> String {
-        match flag_name(group, sel) {
+        match flag_name(group, sel, &self.flag_names) {
             FlagName::None => String::new(),
             FlagName::Static(name) => name.to_string(),
+            FlagName::Game(name) => name,
             FlagName::Room(label, room3) => {
                 let name = self
                     .text

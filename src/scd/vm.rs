@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::scd::host::{EventRequest, ScdHost, StepResult};
 use crate::scd::ir::{Block, Decoded, Insn, Operand, Scripts};
-use crate::scd::opcode::{Op, variant_matches};
+use crate::scd::opcode::Op;
 
 /// Resume-address stack depth of the command VM.
 const BRANCH_STACK_SIZE: usize = 16;
@@ -15,6 +15,9 @@ const EVENT_STACK_SIZE: usize = 4;
 const SLOT_COUNT: usize = 8;
 /// Per-run instruction cap so malformed streams cannot spin forever.
 const MAX_STEPS: usize = 100_000;
+/// How deep `gosub` calls may nest; a deeper call is skipped. The compiler
+/// rejects recursion, so only a hand-written container reaches it.
+const MAX_CALL_DEPTH: usize = 16;
 
 /// Command-VM state: runs init once and main every tick.
 ///
@@ -37,7 +40,7 @@ impl CommandVm {
     /// Build a VM sharing an already-parsed script set.
     pub fn from_scripts(scripts: Rc<Scripts>) -> Self {
         let mut insns = HashMap::new();
-        for block in scripts.init.iter().chain(scripts.main.iter()) {
+        for block in scripts.command_blocks() {
             for insn in &block.insns {
                 insns.insert(insn.offset, Rc::new(insn.clone()));
             }
@@ -66,73 +69,102 @@ impl CommandVm {
     fn run_blocks(&mut self, blocks: &[Block], host: &mut impl ScdHost) {
         self.depth = 0;
         for block in blocks {
-            let Some(first) = block.insns.first() else {
-                continue;
+            if self.run_block(block, host, 0, 0) == BlockExit::Stop {
+                return;
+            }
+        }
+    }
+
+    /// Run `block` until its `end 0`. `base` is the branch-stack depth the
+    /// block starts at: 0 for an init or main block, the caller's depth for
+    /// a `gosub` procedure, whose flow never unwinds below it. `calls` is how
+    /// many procedure calls are running, 0 outside a procedure.
+    fn run_block(
+        &mut self,
+        block: &Block,
+        host: &mut impl ScdHost,
+        base: usize,
+        calls: usize,
+    ) -> BlockExit {
+        let Some(first) = block.insns.first() else {
+            return BlockExit::Done;
+        };
+        self.pc = first.offset;
+        let block_end = block_end(block);
+        let mut steps = 0;
+        loop {
+            if steps >= MAX_STEPS || self.pc >= block_end {
+                return BlockExit::Stop;
+            }
+            steps += 1;
+            let Some(insn) = self.insns.get(&self.pc).cloned() else {
+                return BlockExit::Stop;
             };
-            self.pc = first.offset;
-            let block_end = block_end(block);
-            let mut steps = 0;
-            loop {
-                if steps >= MAX_STEPS || self.pc >= block_end {
-                    return;
-                }
-                steps += 1;
-                let Some(insn) = self.insns.get(&self.pc).cloned() else {
-                    return;
-                };
-                let insn = insn.as_ref();
-                let next = insn.offset + insn.bytes.len();
-                let mut block_done = false;
-                match &insn.decoded {
-                    Decoded::Command(op) => match op.op {
-                        0x00 => {
-                            if self.depth == 0 {
-                                block_done = true;
-                            } else {
-                                self.depth -= 1;
-                                self.pc = self.branch_stack[self.depth];
+            let insn = insn.as_ref();
+            let next = insn.offset + insn.bytes.len();
+            match &insn.decoded {
+                Decoded::Command(op) => match op.op {
+                    // `end 0` ends the block at any depth: the original's
+                    // `cmd_block_end` zeroes the `if` nesting count, so
+                    // `run_command_functions` skips the branch-stack unwind
+                    // and moves on to the next block. A procedure's returns
+                    // to its caller.
+                    0x00 => {
+                        self.depth = base;
+                        return BlockExit::Done;
+                    }
+                    // `if_long` and `else_long` are `if` and `else` with a
+                    // `u16` jump.
+                    0x01 => {
+                        self.push_branch(if_target(insn));
+                        self.pc = next;
+                    }
+                    0x51 => {
+                        self.push_branch(jump_target(insn, 0));
+                        self.pc = next;
+                    }
+                    0x02 => {
+                        self.pop_branch();
+                        self.pc = else_target(insn);
+                    }
+                    0x52 => {
+                        self.pop_branch();
+                        self.pc = jump_target(insn, 0);
+                    }
+                    0x03 => {
+                        self.pop_branch();
+                        self.pc = next;
+                    }
+                    0x54 => {
+                        let scripts = Rc::clone(&self.scripts);
+                        if let Some(procedure) = scripts.procs.get(usize::from(operand_u8(insn, 0)))
+                            && calls < MAX_CALL_DEPTH
+                        {
+                            let depth = self.depth;
+                            let exit = self.run_block(procedure, host, depth, calls + 1);
+                            self.depth = depth;
+                            if exit == BlockExit::Stop {
+                                return BlockExit::Stop;
                             }
                         }
-                        0x01 => {
-                            self.push_branch(if_target(insn));
+                        self.pc = next;
+                    }
+                    _ if op.condition => {
+                        if eval_condition(host, insn, op) {
                             self.pc = next;
+                        } else if self.depth > base {
+                            self.depth -= 1;
+                            self.pc = self.branch_stack[self.depth];
+                        } else {
+                            return BlockExit::Done;
                         }
-                        0x02 => {
-                            self.pop_branch();
-                            self.pc = else_target(insn);
-                        }
-                        0x03 => {
-                            self.pop_branch();
-                            self.pc = next;
-                        }
-                        0x51 => {
-                            self.pc = if variant_matches(operand_u8(insn, 0), host.room_variant()) {
-                                next
-                            } else {
-                                jump_target(insn, 1)
-                            };
-                        }
-                        0x52 => self.pc = jump_target(insn, 0),
-                        _ if op.condition => {
-                            if eval_condition(host, insn, op) {
-                                self.pc = next;
-                            } else if self.depth > 0 {
-                                self.depth -= 1;
-                                self.pc = self.branch_stack[self.depth];
-                            } else {
-                                block_done = true;
-                            }
-                        }
-                        _ => {
-                            dispatch_command(host, op, &insn.operands);
-                            self.pc = next;
-                        }
-                    },
-                    _ => return,
-                }
-                if block_done {
-                    break;
-                }
+                    }
+                    _ => {
+                        dispatch_command(host, op, &insn.operands);
+                        self.pc = next;
+                    }
+                },
+                _ => return BlockExit::Stop,
             }
         }
     }
@@ -147,6 +179,17 @@ impl CommandVm {
     fn pop_branch(&mut self) {
         self.depth = self.depth.saturating_sub(1);
     }
+}
+
+/// How a command block ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockExit {
+    /// Its `end 0` (or a failed condition at its top level): the next block,
+    /// or for a procedure the instruction after its `gosub`, runs.
+    Done,
+    /// It ran off its end, out of steps or into bytes that are not commands:
+    /// the rest of the block list does not run.
+    Stop,
 }
 
 /// One cooperative event-VM slot.
@@ -195,6 +238,8 @@ pub struct EventVm {
     scripts: Rc<Scripts>,
     insns: HashMap<usize, Rc<Insn>>,
     payloads: HashMap<usize, Vec<Rc<Insn>>>,
+    /// The user procedures' instructions, for a `gosub` in a command run.
+    procs: Vec<Vec<Rc<Insn>>>,
     slots: [EventSlot; SLOT_COUNT],
     /// The original's room-events gate (`g_message_flags & 0x80`): while it is
     /// clear `room_events_check` only drains queued starts/kills and does not
@@ -232,10 +277,22 @@ impl EventVm {
                 payloads.insert(insn.offset, payload);
             }
         }
+        let procs = scripts
+            .procs
+            .iter()
+            .map(|block| {
+                block
+                    .insns
+                    .iter()
+                    .map(|insn| Rc::new(insn.clone()))
+                    .collect()
+            })
+            .collect();
         Self {
             scripts,
             insns,
             payloads,
+            procs,
             slots: [EventSlot::default(); SLOT_COUNT],
             enabled: true,
         }
@@ -385,13 +442,25 @@ impl EventVm {
         let next = insn.offset + insn.bytes.len();
         match &insn.decoded {
             Decoded::Control(op) => match op.op {
+                // The port's event `if`: every condition command up to the
+                // body must pass, or the event continues at the target.
                 0xF4 => {
-                    self.slots[index].pc =
-                        if variant_matches(operand_u8(insn, 0), host.room_variant()) {
-                            next
-                        } else {
-                            jump_target(insn, 1)
+                    let body = branch_target(insn);
+                    let mut at = next;
+                    let mut passed = true;
+                    while at < body {
+                        // A condition that does not decode fails.
+                        let Some(condition) = self.insns.get(&at).cloned() else {
+                            passed = false;
+                            break;
                         };
+                        if !self.eval_condition_at(at, host) {
+                            passed = false;
+                            break;
+                        }
+                        at += condition.bytes.len().max(1);
+                    }
+                    self.slots[index].pc = if passed { body } else { jump_target(insn, 1) };
                     true
                 }
                 0xF5 => {
@@ -650,13 +719,16 @@ impl EventVm {
                 .iter()
                 .position(|insn| matches!(insn.decoded, Decoded::SubBlockHeader { .. }))
                 .map_or(payload.len(), |position| start + position);
-            self.run_command_flow(&payload[start..end], host);
+            self.run_command_flow(&payload[start..end], host, 0);
             start = end;
         }
     }
 
     /// Run one straight-line command block with the command VM's flow rules.
-    fn run_command_flow(&self, insns: &[Rc<Insn>], host: &mut impl ScdHost) {
+    /// `calls` is how many `gosub` procedures are running, 0 outside one.
+    /// `end 0` ends the block (or returns from the procedure) at any depth,
+    /// as in [`CommandVm`].
+    fn run_command_flow(&self, insns: &[Rc<Insn>], host: &mut impl ScdHost, calls: usize) {
         let mut pc = 0usize;
         let mut branch_stack: Vec<usize> = Vec::new();
         let mut steps = 0usize;
@@ -672,38 +744,36 @@ impl EventVm {
             };
             let next = pc + 1;
             match op.op {
-                0x00 => {
-                    if let Some(resume) = branch_stack.pop() {
-                        pc = resume;
-                        continue;
-                    }
-                    return;
-                }
-                0x01 => {
-                    let target = if_target(insn);
+                0x00 => return,
+                0x01 | 0x51 => {
+                    let target = if op.op == 0x01 {
+                        if_target(insn)
+                    } else {
+                        jump_target(insn, 0)
+                    };
                     branch_stack.push(self.index_of(insns, target).unwrap_or(insns.len()));
                     pc = next;
                 }
-                0x02 => {
+                0x02 | 0x52 => {
                     branch_stack.pop();
-                    pc = self
-                        .index_of(insns, else_target(insn))
-                        .unwrap_or(insns.len());
+                    let target = if op.op == 0x02 {
+                        else_target(insn)
+                    } else {
+                        jump_target(insn, 0)
+                    };
+                    pc = self.index_of(insns, target).unwrap_or(insns.len());
                 }
                 0x03 => {
                     branch_stack.pop();
                     pc = next;
                 }
-                0x51 if !variant_matches(operand_u8(insn, 0), host.room_variant()) => {
-                    pc = self
-                        .index_of(insns, jump_target(insn, 1))
-                        .unwrap_or(insns.len());
-                }
-                0x51 => pc = next,
-                0x52 => {
-                    pc = self
-                        .index_of(insns, jump_target(insn, 0))
-                        .unwrap_or(insns.len());
+                0x54 => {
+                    if let Some(procedure) = self.procs.get(usize::from(operand_u8(insn, 0)))
+                        && calls < MAX_CALL_DEPTH
+                    {
+                        self.run_command_flow(procedure, host, calls + 1);
+                    }
+                    pc = next;
                 }
                 _ if op.condition => {
                     if eval_condition(host, insn, op) {
@@ -873,8 +943,8 @@ fn else_target(insn: &Insn) -> usize {
     branch_target(insn)
 }
 
-/// The target of a variant jump's `u16` operand `index`, from the start of
-/// the instruction.
+/// The target of a long jump's `u16` operand `index` (`if_long`,
+/// `else_long`, `evt_if`, `evt_jump`), from the start of the instruction.
 fn jump_target(insn: &Insn, index: usize) -> usize {
     let operand = insn.operands.get(index);
     if let Some(target) = operand.and_then(|operand| operand.target) {
@@ -1314,8 +1384,10 @@ mod tests {
         assert_eq!(host.flag_calls.len(), 1);
     }
 
+    /// `end` inside an `if` body ends the whole block, as the original's
+    /// `cmd_block_end` does: it skips the branch-stack unwind.
     #[test]
-    fn end_unwinds_branch_stack() {
+    fn end_inside_an_if_ends_the_block() {
         let insns = vec![
             command(0x1000, &IF, 2, vec![jump(0x08, 0x100A)]),
             command(0x1002, &CK, 4, vec![value(0), value(1), value(0)]),
@@ -1330,7 +1402,7 @@ mod tests {
         host.flag_results.push_back(true);
         vm.run_init(&mut host);
         assert!(host.class_names("flags").is_empty());
-        assert_eq!(host.class_names("flow"), vec!["nop"]);
+        assert!(host.class_names("flow").is_empty());
     }
 
     #[test]

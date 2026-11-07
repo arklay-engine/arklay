@@ -1,0 +1,2 @@
+# The title from boot with no input: the idle count runs out and the attract demo starts (oracle/re2.md, "The title").
+0

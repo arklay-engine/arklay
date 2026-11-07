@@ -1,0 +1,18 @@
+# From boot: ORIGINAL MODE, CLAIRE, EASY, and the new game's start (oracle/re2.md, "The new-game choice").
+0
+260 down
+263
+300 confirm
+303
+340 right
+343
+380 confirm
+383
+420 right
+423
+450 down
+453
+480 up
+483
+510 confirm
+513

@@ -1,0 +1,143 @@
+# room 303 in scenario B: walk into cut 2 for the scene, then turn to G1 and shoot it with the magnum every 20 ticks (oracle/re2.md)
+344 up
+380
+1128 right
+1132
+1134 aim
+1150 aim fire
+1155 aim
+1170 aim fire
+1175 aim
+1190 aim fire
+1195 aim
+1210 aim fire
+1215 aim
+1230 aim fire
+1235 aim
+1250 aim fire
+1255 aim
+1270 aim fire
+1275 aim
+1290 aim fire
+1295 aim
+1310 aim fire
+1315 aim
+1330 aim fire
+1335 aim
+1350 aim fire
+1355 aim
+1370 aim fire
+1375 aim
+1390 aim fire
+1395 aim
+1410 aim fire
+1415 aim
+1430 aim fire
+1435 aim
+1450 aim fire
+1455 aim
+1470 aim fire
+1475 aim
+1490 aim fire
+1495 aim
+1510 aim fire
+1515 aim
+1530 aim fire
+1535 aim
+1550 aim fire
+1555 aim
+1570 aim fire
+1575 aim
+1590 aim fire
+1595 aim
+1610 aim fire
+1615 aim
+1630 aim fire
+1635 aim
+1650 aim fire
+1655 aim
+1670 aim fire
+1675 aim
+1690 aim fire
+1695 aim
+1710 aim fire
+1715 aim
+1730 aim fire
+1735 aim
+1750 aim fire
+1755 aim
+1770 aim fire
+1775 aim
+1790 aim fire
+1795 aim
+1810 aim fire
+1815 aim
+1830 aim fire
+1835 aim
+1850 aim fire
+1855 aim
+1870 aim fire
+1875 aim
+1890 aim fire
+1895 aim
+1910 aim fire
+1915 aim
+1930 aim fire
+1935 aim
+1950 aim fire
+1955 aim
+1970 aim fire
+1975 aim
+1990 aim fire
+1995 aim
+2010 aim fire
+2015 aim
+2030 aim fire
+2035 aim
+2050 aim fire
+2055 aim
+2070 aim fire
+2075 aim
+2090 aim fire
+2095 aim
+2110 aim fire
+2115 aim
+2130 aim fire
+2135 aim
+2150 aim fire
+2155 aim
+2170 aim fire
+2175 aim
+2190 aim fire
+2195 aim
+2210 aim fire
+2215 aim
+2230 aim fire
+2235 aim
+2250 aim fire
+2255 aim
+2270 aim fire
+2275 aim
+2290 aim fire
+2295 aim
+2310 aim fire
+2315 aim
+2330 aim fire
+2335 aim
+2350 aim fire
+2355 aim
+2370 aim fire
+2375 aim
+2390 aim fire
+2395 aim
+2410 aim fire
+2415 aim
+2430 aim fire
+2435 aim
+2450 aim fire
+2455 aim
+2470 aim fire
+2475 aim
+2490 aim fire
+2495 aim
+2530

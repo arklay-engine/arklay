@@ -1,5 +1,5 @@
 -- Demo hooks: log and flag on room entry, then grant one item on the 30th
--- tick. The API uses Lua's method syntax; see docs/modding.md.
+-- tick. The API uses Lua's method syntax; see lua-types/hooks.lua.
 local granted = false
 
 function on_room_load(api)

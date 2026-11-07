@@ -2,7 +2,8 @@
 """Record a trace from RE2's original executable, for the differential oracle.
 
 RE2 has no reference source to build a tracer into, so this runs ``bio2 1.10``
-under Wine and traces it from outside. It stops the game once per tick at the
+and traces it from outside: on Linux under Wine with ``ptrace``, on Windows
+natively with the Win32 debug API. It stops the game once per tick at the
 one place every tick passes through, ``Pad_set``, straight after its pad read:
 that is where a line of state is recorded and the scripted pad value goes in.
 The game's code is otherwise untouched, and ticks are counted rather than
@@ -29,6 +30,7 @@ import argparse
 import ctypes
 import os
 import re
+import shutil
 import signal
 import struct
 import subprocess
@@ -71,6 +73,28 @@ ROOM = 0x0098EB16
 CUT = 0x0098EB18
 RANDOM = 0x00988610  # `Rnd`'s state
 RANDOM_BASE = 0x00695E58  # `Sce_rnd_set`'s state
+# The title (`Title`, `0x5035B0`) and its task, task 0 of `Tasks` (0x24 bytes
+# each: +8 the init step, +9 the sub-step).
+TASKS = 0x0068A220
+TITLE_MV_STATE = 0x00691B80  # `title_mv_state`, the step `Title_mv` runs
+TITLE_DISP = 0x00691B81  # `Ti_Disp_add`, `Title_main`'s step
+TITLE_MENU = 0x00691B82  # the menu's page, then its step
+TITLE_SEL_MODE = 0x00691B86  # `Ti_Sel_mode`
+TITLE_CUR = 0x00691B87  # `Ti_Cur`
+TITLE_PULSE = 0x00691B88  # the cursor's pulse
+TITLE_SLIDE = 0x00691B8A  # the menu's slide count
+TITLE_DEMO = 0x00691B90  # `demo_countdown`
+TITLE_KIDO = 0x00691B92  # `Ti_kido`
+TITLE_ADD = 0x00691B94  # `Ti_Add`
+TITLE_FLASH = 0x00691B96  # the white tiles' level
+TITLE_LOGO = 0x00691B98  # the logo's offset
+TITLE_LOGO_COUNT = 0x00691B9C  # the logo's slide count
+FADE = 0x0098F07C  # `Fade_set`'s slot 0: level, step, mode
+HARD_MODE = 0x006805B1  # `hard_mode`: the difficulty's HARD
+CENSORSHIP_OFF = 0x006805B3  # `censorship_off`: ARRANGE MODE's
+# `fg_system`'s bits the new-game choice sets: EASY (0x20), `censorship_off`'s
+# (0x40) and the difficulty confirm's (0x20000).
+FG_SYSTEM_CHOICE = 0x00020060
 
 ENTITY_ROUTINES = 0x04
 ENTITY_ID = 0x08
@@ -134,9 +158,15 @@ PTRACE_EVENT_STOP = 128
 WALL = 0x40000000
 PR_SET_CHILD_SUBREAPER = 36
 
-libc = ctypes.CDLL(None, use_errno=True)
-libc.ptrace.argtypes = [ctypes.c_long, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p]
-libc.ptrace.restype = ctypes.c_long
+WINDOWS = sys.platform == "win32"
+if WINDOWS:
+    import _winapi
+
+    import oracle_re2_windows as win
+else:
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.ptrace.argtypes = [ctypes.c_long, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p]
+    libc.ptrace.restype = ctypes.c_long
 
 
 class Regs(ctypes.Structure):
@@ -199,6 +229,33 @@ def prepare_game(game: Path, work: Path, sound: bool = False) -> Path:
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(game / name)
+    write_config(game, tree, sound)
+    return tree
+
+
+def prepare_game_windows(game: Path, work: Path, sound: bool = False) -> Path:
+    """The install's code copied and its data joined, with settings of our own, under `work`.
+
+    A symbolic link needs a privilege on Windows, so the executable and Classic Rebirth's
+    DLL are copied (they are small) and `data` is a junction to the install's."""
+    tree = work / "game"
+    (tree / "savedata").mkdir(parents=True, exist_ok=True)
+    for name in ("bio2 1.10.exe", "ddraw.dll"):
+        source, copy = game / name, tree / name
+        if not copy.exists() or copy.read_bytes() != source.read_bytes():
+            shutil.copyfile(source, copy)
+    data = tree / "data"
+    if data.is_junction() and Path(os.readlink(data)).resolve() != (game / "data").resolve():
+        data.rmdir()  # removes the junction only, never what it points at
+    if not data.is_junction():
+        if data.exists():
+            raise SystemExit(f"{data} is in the way of the game data's junction")
+        _winapi.CreateJunction(str((game / "data").resolve()), str(data))
+    write_config(game, tree, sound)
+    return tree
+
+
+def write_config(game: Path, tree: Path, sound: bool) -> None:
     settings = (game / "config.ini").read_text(errors="replace")
     # A fixed config: no dialogs or sound device to wait on, none of Classic
     # Rebirth's optional gameplay changes, no optional art.
@@ -212,7 +269,6 @@ def prepare_game(game: Path, work: Path, sound: bool = False) -> Path:
         key = line.split("=", 1)[0].strip()
         lines.append(f"{key} = {fixed[key]}" if key in fixed else line)
     (tree / "config.ini").write_text("\n".join(lines) + "\n")
-    return tree
 
 
 def music_state(game: Game) -> str:
@@ -295,7 +351,7 @@ def find_game(deadline: float) -> int:
             except OSError:
                 continue
             ppid = stat.rsplit(")", 1)[1].split()[1]
-            if ppid == me and cmdline[:2] in (b"C:", b"Z:") and b"bio2" in cmdline \
+            if ppid == me and (cmdline[:2] in (b"C:", b"Z:") or cmdline[:1] == b"/") and b"bio2" in cmdline \
                     and "bio2 1.10.exe" in maps and "ddraw.dll" in maps:
                 return int(pid)
         time.sleep(0.02)
@@ -303,27 +359,66 @@ def find_game(deadline: float) -> int:
 
 
 class Game:
-    """The game's process, traced: stops at `BREAK_PAD` and otherwise runs freely."""
+    """The game's memory and what the tool notes from it; a backend below runs the process."""
 
-    def __init__(self, pid: int) -> None:
-        self.pid = pid
-        self.mem = os.open(f"/proc/{pid}/mem", os.O_RDWR)
-        self.traced: set[int] = set()
+    def __init__(self) -> None:
         self.sound_byte: int | None = None  # What `watch_sounds` overwrote.
         self.sounds: list[str] = []  # What's played since `trace_line` last took them.
+
+    def read(self, address: int, size: int) -> bytes:
+        raise NotImplementedError
+
+    def write(self, address: int, data: bytes) -> None:
+        raise NotImplementedError
 
     def watch_sounds(self) -> None:
         """Note every sound effect `SsPlay` starts in `self.sounds`."""
         self.sound_byte = self.u8(BREAK_SOUND)
         self.write(BREAK_SOUND, b"\xcc")
 
-    def note_sound(self, tid: int, regs: Regs) -> None:
-        """Record a stop on `SsPlay`, and run the instruction under it."""
-        kind, index = struct.unpack("<2i", self.read((regs.rsp & 0xFFFFFFFF) + 4, 8))
+    def record_sound(self, esp: int) -> None:
+        """Note the sound `SsPlay` is starting, from its arguments on the stack at `esp`."""
+        kind, index = struct.unpack("<2i", self.read((esp & 0xFFFFFFFF) + 4, 8))
         if kind < 5:
             volume = max(self.u16(VOL_3D_L), self.u16(VOL_3D_R))
             pan = struct.unpack("<i", self.read(VOL_3D_PAN, 4))[0]
             self.sounds.append(f"{kind}:{index:x}:{volume}:{pan}")
+
+    def seize_threads(self) -> None:
+        """Take over the game's threads, where the backend needs to."""
+
+    def hold(self, tid: int, seconds: float) -> None:
+        """Keep the thread `tid` at its breakpoint for `seconds` while the others run."""
+        time.sleep(seconds)
+
+    def u8(self, address: int) -> int:
+        return self.read(address, 1)[0]
+
+    def i16(self, address: int) -> int:
+        return struct.unpack("<h", self.read(address, 2))[0]
+
+    def u16(self, address: int) -> int:
+        return struct.unpack("<H", self.read(address, 2))[0]
+
+    def u32(self, address: int) -> int:
+        return struct.unpack("<I", self.read(address, 4))[0]
+
+    def i32s(self, address: int, count: int) -> tuple[int, ...]:
+        return struct.unpack(f"<{count}i", self.read(address, 4 * count))
+
+
+class PtraceGame(Game):
+    """The game's process under Wine, traced: stops at `BREAK_PAD` and otherwise runs freely."""
+
+    def __init__(self, pid: int) -> None:
+        super().__init__()
+        self.pid = pid
+        self.mem = os.open(f"/proc/{pid}/mem", os.O_RDWR)
+        self.traced: set[int] = set()
+
+    def note_sound(self, tid: int, regs: Regs) -> None:
+        """Record a stop on `SsPlay`, and run the instruction under it."""
+        self.record_sound(regs.rsp)
         regs.rip = BREAK_SOUND
         ptrace(PTRACE_SETREGS, tid, 0, ctypes.addressof(regs))
         self.step_over(tid, BREAK_SOUND, self.sound_byte)
@@ -345,21 +440,6 @@ class Game:
 
     def write(self, address: int, data: bytes) -> None:
         os.pwrite(self.mem, data, address)
-
-    def u8(self, address: int) -> int:
-        return self.read(address, 1)[0]
-
-    def i16(self, address: int) -> int:
-        return struct.unpack("<h", self.read(address, 2))[0]
-
-    def u16(self, address: int) -> int:
-        return struct.unpack("<H", self.read(address, 2))[0]
-
-    def u32(self, address: int) -> int:
-        return struct.unpack("<I", self.read(address, 4))[0]
-
-    def i32s(self, address: int, count: int) -> tuple[int, ...]:
-        return struct.unpack(f"<{count}i", self.read(address, 4 * count))
 
     def run_to_break(self) -> tuple[int, Regs]:
         """Run every thread until one stops on the breakpoint; it stays stopped."""
@@ -457,11 +537,11 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 
 
 def zombie_trace(game: Game) -> str:
-    """The zombies, lickers, Mr. X, the plants and the spiders in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    """The zombies, lickers, Mr. X, the plants, the spiders, the alligator, G1 and G2 in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     count = max(16, min(32, (game.u32(ENEMIES_END) - ENEMIES) // 4))
     for slot, pointer in enumerate(struct.unpack(f"<{count}I", game.read(ENEMIES, count * 4))):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x25, 0x26, 0x2A, 0x2E, 0x2F, 0x39)):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x23, 0x25, 0x26, 0x2A, 0x2E, 0x2F, 0x30, 0x31, 0x39)):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)
@@ -482,6 +562,30 @@ def inventory_trace(game: Game) -> str:
     work = game.read(ITEM_WORK, 11 * 4)
     slots = ",".join(f"{work[n * 4]:x}:{work[n * 4 + 1]}" for n in range(11))
     return f"inv={slots}/{game.u8(ITEM_SLOTS)}"
+
+
+ITEM_BOX_WORK = 0x98ED60  # `Item_boxwork`: 64 slots of id, count and the two-slot weapon's half
+ITEM_BOX_ENTRANCE = 0x98E542  # `Item_box_entrance`'s state; its object at 0x98E533
+ITEM_BOX_OBJECT = 0x98E533
+ITEM_BOX_LID = 0x689C90  # the lid's speed and its step (`0x689C98`)
+OBJECTS = 0x98A61C  # `pOm`: 0x1F8 bytes an object, the lid's turn at +0x78
+ITEM_BOX_PAGE = [0x691F61, 0x691F62, 0x691F63, 0x691F6C, 0x691F76, 0x691F84]
+
+
+def item_box_trace(game: Game) -> str:
+    """The item box (`Item_box_entrance` and `St_main01`): the lid's state, speed, step and turn, the screen's routine, sub, count, cursor and repeat gate, the box's top row and its scroll, the cursor lines' pulse; then the inventory's two-slot marks and the box's filled slots."""
+    lid = game.i16(OBJECTS + game.u8(ITEM_BOX_OBJECT) * 0x1F8 + 0x78)
+    page = ",".join(str(game.u8(address)) for address in ITEM_BOX_PAGE)
+    marks = "".join(str(game.u8(ITEM_WORK + n * 4 + 2)) for n in range(10))
+    work = game.read(ITEM_BOX_WORK, 64 * 4)
+    slots = ";".join(
+        f"{n}:{work[n * 4]:x}:{work[n * 4 + 1]}:{work[n * 4 + 2]}" for n in range(64) if work[n * 4]
+    )
+    return (
+        f"ib={game.u8(ITEM_BOX_ENTRANCE)},{game.i16(ITEM_BOX_LID)},{game.i16(ITEM_BOX_LID + 8)},{lid},"
+        f"{page},{struct.unpack('b', bytes((game.u8(0x691F85),)))[0]},{game.i16(0x692FBE)} "
+        f"box={marks}/{slots or '-'}"
+    )
 
 
 def trace_line(game: Game, tick: int, pad: int) -> str:
@@ -552,6 +656,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x},"
         + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
+    fields.append(item_box_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
@@ -609,7 +714,7 @@ def screenshot(display: str, path: Path) -> None:
     )
 
 
-class Session:
+class WineSession:
     """The game running under Wine on its own virtual display, traced."""
 
     def __init__(self, game_dir: Path, work: Path, sound_out: str | None = None) -> None:
@@ -642,7 +747,7 @@ class Session:
             ["wine", str(tree / "bio2 1.10.exe")], cwd=tree, env=self.env,
             stdout=open(work / "game.log", "w"), stderr=subprocess.STDOUT,
         )
-        self.game = Game(find_game(time.monotonic() + 60))
+        self.game = PtraceGame(find_game(time.monotonic() + 60))
         # Classic Rebirth applies its patches as it loads, so the code is only
         # final once the game has started running: wait for the code we break
         # on, then for the window.
@@ -652,8 +757,19 @@ class Session:
                 raise SystemExit("Pad_set is not the expected code: wrong executable?")
             time.sleep(0.01)
 
+    def screenshot(self, path: Path) -> None:
+        screenshot(self.display, path)
+
+    def idle(self, seconds: float) -> None:
+        """Let the game run untraced for a while."""
+        time.sleep(seconds)
+
     def close(self) -> None:
-        subprocess.run(["wineserver", "-k"], env=self.env, check=False)
+        # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
+        try:
+            subprocess.run(["wineserver", "-k"], env=self.env, check=False)
+        except FileNotFoundError:
+            subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False)
         self.launcher.kill()
         self.display_server.kill()
         if self.sound_capture:
@@ -661,6 +777,203 @@ class Session:
             self.sound_capture.wait()
         if self.sink_module:
             subprocess.run(["pactl", "unload-module", self.sink_module], check=False)
+
+
+class DebugGame(Game):
+    """The game's process under the Windows debugger: stops at `BREAK_PAD` and otherwise runs freely.
+
+    As under ptrace, only the thread at `BREAK_PAD` stops there: it is suspended and the debug
+    event continued, so the game's other threads (its sound's among them) run on while a
+    stop's work is done. The original's voice lines end by DirectSound's clock, so freezing
+    the whole game for a stop's picture would hold them for more ticks than Wine does."""
+
+    def __init__(self, process: "win.Debuggee") -> None:
+        super().__init__()
+        self.process = process
+        self.stepping: dict[int, int] = {}  # Thread to the breakpoint it's stepping over.
+        self.held: int | None = None  # The thread suspended at `BREAK_PAD`.
+        self.on_break = lambda: None  # Called at each stop at `BREAK_PAD`.
+
+    def read(self, address: int, size: int) -> bytes:
+        return self.process.read(address, size)
+
+    def write(self, address: int, data: bytes) -> None:
+        self.process.write(address, data)
+
+    def handle(self, event: tuple[int, int, int]) -> bool:
+        """Deal with an exception; True when it is a stop at `BREAK_PAD`, which stays stopped."""
+        tid, code, address = event
+        if code in win.SINGLE_STEPS and tid in self.stepping:
+            # The instruction under a breakpoint has run: put the breakpoint back.
+            self.write(self.stepping.pop(tid), b"\xcc")
+            context = self.process.get_context(tid)
+            if context.EFlags & win.TRAP_FLAG:
+                context.EFlags &= ~win.TRAP_FLAG
+                self.process.set_context(tid, context)
+            return False
+        if code in win.BREAKPOINTS:
+            if address == BREAK_PAD:
+                return True
+            if self.sound_byte is not None and address == BREAK_SOUND:
+                context = self.process.get_context(tid)
+                self.record_sound(context.Esp)
+                self.step_over(tid, context, BREAK_SOUND, self.sound_byte)
+                return False
+            if address not in (BREAK_PAD, BREAK_SOUND):
+                # The loader's breakpoints, once in 64-bit code and once in 32-bit.
+                return False
+        # Not ours: the game's own handlers decide.
+        self.process.pass_exception()
+        return False
+
+    def run_to_break(self) -> tuple[int, "win.WOW64_CONTEXT"]:
+        """Run every thread until one stops on the breakpoint; the game stays stopped."""
+        while True:
+            try:
+                event = self.process.next_exception()
+            except win.GameExited:
+                raise SystemExit("the game exited") from None
+            if self.handle(event):
+                tid = event[0]
+                context = self.process.get_context(tid)
+                self.process.suspend(tid)
+                self.held = tid
+                self.process.release()
+                self.on_break()
+                return tid, context
+
+    def step_over(self, tid: int, context: "win.WOW64_CONTEXT", address: int, original: int) -> None:
+        """Run the instruction under the breakpoint at `address`; `handle` puts it back."""
+        self.write(address, bytes([original]))
+        context.Eip = address
+        context.EFlags |= win.TRAP_FLAG
+        self.process.set_context(tid, context)
+        self.stepping[tid] = address
+
+    def resume_from_break(self, tid: int, regs: "win.WOW64_CONTEXT", original: int) -> None:
+        """Run the instruction under the breakpoint, put the breakpoint back, go on."""
+        self.step_over(tid, regs, BREAK_PAD, original)
+        if self.held == tid:
+            self.held = None
+            self.process.resume(tid)
+
+    def hold(self, tid: int, seconds: float) -> None:
+        """Keep `tid` at `BREAK_PAD` for `seconds`; the game's other threads run, as under ptrace."""
+        deadline = time.monotonic() + seconds
+        while (left := deadline - time.monotonic()) > 0:
+            try:
+                event = self.process.next_exception(left)
+            except win.GameExited:
+                raise SystemExit("the game exited") from None
+            if event is not None and self.handle(event):
+                raise SystemExit("a second thread reached Pad_set")
+
+
+class WindowsSession:
+    """The game running natively on Windows under the debugger, in its own tree under `work`."""
+
+    def __init__(self, game_dir: Path, work: Path, sound_out: str | None = None) -> None:
+        if not (game_dir / "bio2 1.10.exe").is_file():
+            raise SystemExit("--game (or ARKLAY_RE2_ROOT) must be a retail RE2 install")
+        work.mkdir(parents=True, exist_ok=True)
+        tree = prepare_game_windows(game_dir, work, sound_out is not None)
+        self.capture_started = 0.0
+        self.capture: "win.WindowCapture | None" = None
+        self.stops = 0
+        # `record` sets this when it takes pictures, which want the window on top.
+        self.wants_pictures = False
+        self.recorder: "win.SoundRecorder | None" = None
+        self.process = win.Debuggee(tree / "bio2 1.10.exe", tree)
+        win.keep_awake(display=False)
+        try:
+            self.game = DebugGame(self.process)
+            self.game.on_break = self.watch_window
+            if sound_out is not None:
+                try:
+                    self.recorder = win.SoundRecorder(self.process.pid, sound_out)
+                except (OSError, RuntimeError) as error:
+                    raise SystemExit(f"--sound: {error}") from None
+                self.capture_started = self.recorder.started
+            # The image is mapped before the process's first event; run the game until it's
+            # there, and stop it before any of its code runs a tick.
+            deadline = time.monotonic() + 60
+            while True:
+                try:
+                    if self.game.read(BREAK_PAD, len(BREAK_PAD_BYTES)) == BREAK_PAD_BYTES:
+                        break
+                except OSError:
+                    pass
+                if time.monotonic() > deadline:
+                    raise SystemExit("Pad_set is not the expected code: wrong executable?")
+                self.idle(0.01)
+        except BaseException:
+            self.close()
+            raise
+
+    def watch_window(self) -> None:
+        """For pictures: once the game's window is up, capture it, and at every stop keep only
+        the capture's newest frame, since a full frame pool takes no more."""
+        if not self.wants_pictures:
+            return
+        if self.capture is None:
+            self.stops += 1
+            if self.stops % 10:
+                return
+            window = win.game_window(self.process.pid)
+            if window is None or win.client_size(window) != (640, 480):
+                return
+            try:
+                self.capture = win.WindowCapture(window)
+                # DWM composes nothing with the display off, so keep it on.
+                win.keep_awake(display=True)
+            except OSError as error:
+                raise SystemExit(f"can't capture the game's window: {error}") from None
+        self.capture.stopped()
+
+    def screenshot(self, path: Path) -> None:
+        """The game's 640x480 picture placed on a 1024x768 image at `FRAME_ORIGIN`, as Wine's display has it.
+
+        Until the window is up, a boot frame (which nothing compares) is skipped; a frame of
+        play that can't be taken stops the record."""
+        from PIL import Image
+
+        try:
+            if self.capture is None:
+                raise RuntimeError("the game has no window yet")
+            width, height, pixels = self.capture.picture()
+        except (OSError, RuntimeError) as error:
+            if path.stem.startswith("boot"):
+                return
+            raise SystemExit(f"no picture of tick {path.stem}: {error}") from None
+        if (width, height) != (640, 480):
+            raise SystemExit(f"the game's picture is {width}x{height}, not 640x480: check config.ini's resolution")
+        screen = Image.new("RGB", (1024, 768))
+        screen.paste(Image.frombuffer("RGB", (width, height), pixels, "raw", "BGRX", 0, 1), FRAME_ORIGIN)
+        screen.save(path, compress_level=1)
+
+    def idle(self, seconds: float) -> None:
+        """Let the game run untraced for a while."""
+        deadline = time.monotonic() + seconds
+        while (left := deadline - time.monotonic()) > 0:
+            try:
+                event = self.process.next_exception(left)
+            except win.GameExited:
+                raise SystemExit("the game exited") from None
+            if event is not None and self.game.handle(event):
+                raise SystemExit("Pad_set's breakpoint is armed outside a trace")
+
+    def close(self) -> None:
+        if self.capture:
+            self.capture.close()
+        self.process.terminate()
+        win.let_sleep()
+        if self.recorder:
+            self.recorder.close()
+            if self.recorder.error:
+                print(f"--sound: the capture stopped early: {self.recorder.error}", file=sys.stderr)
+
+
+Session = WindowsSession if WINDOWS else WineSession
 
 
 def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: float = 0.0) -> None:
@@ -673,13 +986,15 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     # A prefix keeps the audio driver it was made with.
     session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
-    music_log = open(trace_path.with_suffix(".music"), "w") if args.sound else None
+    session.wants_pictures = bool(args.shot_dir and args.shot_every)
+    # Newlines as on Linux, so that the files are the same byte for byte.
+    music_log = open(trace_path.with_suffix(".music"), "w", newline="\n") if args.sound else None
     # When each tick ended, in seconds from the capture's start, to place the
     # ticks in the wall-clock `.wav`.
-    tick_log = open(trace_path.with_suffix(".ticks"), "w") if args.sound else None
+    tick_log = open(trace_path.with_suffix(".ticks"), "w", newline="\n") if args.sound else None
     last_music = ""
     try:
-        with open(trace_path, "w") as trace:
+        with open(trace_path, "w", newline="\n") as trace:
             trace.write("oracle-trace v1 engine=ref\n")
             game = session.game
             game.seize_threads()
@@ -688,6 +1003,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             game.watch_sounds()
 
             started = time.monotonic()
+            pace = read_pace(Path(args.pace)) if getattr(args, "pace", None) else {}
+            pace_origin: float | None = None
             boot_tick = 0
             cursor = 0
             pad = 0
@@ -717,6 +1034,9 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         for item in args.give:
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
+                        for item in args.box:
+                            slot, item_id, count, *mark = (int(part, 0) for part in item.split(":"))
+                            game.write(ITEM_BOX_WORK + slot * 4, bytes((item_id, count, mark[0] if mark else 0)))
                         if args.life is not None:
                             game.write(PL + ENTITY_LIFE, struct.pack("<h", args.life))
                 if settled and args.equip is not None:
@@ -736,7 +1056,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     if boot_tick > BOOT_TICKS:
                         raise SystemExit("the title route did not reach play")
                     if args.shot_dir and args.shot_every and boot_tick % args.shot_every == 0:
-                        screenshot(session.display, Path(args.shot_dir) / f"boot{boot_tick:06d}.png")
+                        session.screenshot(Path(args.shot_dir) / f"boot{boot_tick:06d}.png")
                     if not settled:
                         while cursor < len(route) and route[cursor][0] <= boot_tick:
                             pad = route[cursor][1]
@@ -746,22 +1066,112 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     boot_tick += 1
                 else:
                     # This stop is the end of the tick before it.
+                    if tick > 0 and tick - 1 in pace:
+                        # Reach this tick when the recording being followed did, counted
+                        # from tick 0, with the game's other threads running meanwhile.
+                        if pace_origin is None:
+                            pace_origin = time.monotonic() - pace[tick - 1]
+                        wait = pace_origin + pace[tick - 1] - time.monotonic()
+                        if wait > 0:
+                            game.hold(tid, wait)
                     if tick > 0:
                         trace.write(trace_line(game, tick - 1, pad) + "\n")
                         if tick_log:
                             tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                         if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
-                            screenshot(session.display, Path(args.shot_dir) / f"t{tick - 1:06d}.png")
+                            session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png")
                     while cursor < len(entries) and entries[cursor][0] <= tick:
                         pad = entries[cursor][1]
                         cursor += 1
                     tick += 1
                 regs.rax = pad
                 if tick_delay:
-                    time.sleep(tick_delay)
+                    game.hold(tid, tick_delay)
                 game.resume_from_break(tid, regs, original)
             elapsed = time.monotonic() - started
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
+    finally:
+        session.close()
+
+
+def read_pace(path: Path) -> dict[int, float]:
+    """A `--sound` recording's `.ticks` log: each traced tick and when it was reached, in seconds."""
+    pace = {}
+    for line in path.read_text().splitlines():
+        tick, seconds = line.split()
+        pace[int(tick)] = float(seconds)
+    return pace
+
+
+def title_trace(game: Game) -> str:
+    """The title's state (`Title`, `0x5035B0`): its task's steps, the menu's and the fade's, and what the new-game
+    choice has set."""
+    task = game.read(TASKS, 0x14)
+    fade = game.read(FADE, 0x10)
+    kido, add = struct.unpack_from("<hh", fade, 0)
+    return (
+        f"ti={game.u8(TITLE_MV_STATE)},{game.u8(TITLE_DISP)},{task[8]},{task[9]},"
+        f"{game.u8(TITLE_MENU)},{game.u8(TITLE_MENU + 1)},{game.u8(TITLE_SEL_MODE)},{game.u8(TITLE_CUR)},"
+        f"{game.u8(TITLE_PULSE)},{game.u8(TITLE_SLIDE)},{game.u16(TITLE_DEMO)} "
+        f"tlogo={game.i16(TITLE_FLASH)},{game.i16(TITLE_LOGO)},{game.i32s(TITLE_LOGO_COUNT, 1)[0]} "
+        f"tfade={kido},{add},{fade[4]},{game.u16(TITLE_KIDO)},{game.u16(TITLE_ADD)} "
+        f"tsel={game.u32(FG_SYSTEM) & FG_SYSTEM_CHOICE:x},{game.u8(HARD_MODE)},{game.u8(CENSORSHIP_OFF)}"
+    )
+
+
+def boot_trace_line(game: Game, tick: int, pad: int) -> str:
+    """One tick from boot, before play: the title's state, the sound and the music."""
+    fields = [
+        f"t={tick}",
+        f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",
+        f"pad={pad}",
+        f"fgsys={game.u32(FG_SYSTEM):08x}",
+        title_trace(game),
+        music_trace(game),
+        "snd=" + ("/".join(game.sounds) or "-"),
+    ]
+    game.sounds.clear()
+    return " ".join(fields)
+
+
+def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
+    """Record `args.ticks` ticks from boot, the title's included: `--input`'s ticks count from boot."""
+    entries = parse_input(Path(args.input) if args.input else None)
+    if args.shot_dir:
+        Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
+    sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
+    session.wants_pictures = bool(args.shot_dir and args.shot_every)
+    tick_log = open(trace_path.with_suffix(".ticks"), "w", newline="\n") if args.sound else None
+    try:
+        with open(trace_path, "w", newline="\n") as trace:
+            trace.write("oracle-trace v1 engine=ref\n")
+            game = session.game
+            game.seize_threads()
+            original = game.u8(BREAK_PAD)
+            game.write(BREAK_PAD, b"\xcc")
+            game.watch_sounds()
+            started = time.monotonic()
+            cursor = 0
+            pad = 0
+            tick = 0
+            while tick <= args.ticks:
+                tid, regs = game.run_to_break()
+                # This stop is the end of the tick before it.
+                if tick > 0:
+                    trace.write(boot_trace_line(game, tick - 1, pad) + "\n")
+                    if tick_log:
+                        tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
+                    if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
+                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png")
+                while cursor < len(entries) and entries[cursor][0] <= tick:
+                    pad = entries[cursor][1]
+                    cursor += 1
+                tick += 1
+                regs.rax = pad
+                game.resume_from_break(tid, regs, original)
+            print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
     finally:
         session.close()
 
@@ -771,6 +1181,9 @@ def game_root(args: argparse.Namespace) -> Path:
 
 
 def record_command(args: argparse.Namespace) -> int:
+    if args.boot:
+        record_boot(args, Path(args.trace), Path(args.work).resolve())
+        return 0
     record(args, Path(args.trace), Path(args.work).resolve(), args.tick_delay)
     return 0
 
@@ -901,7 +1314,7 @@ def patches_command(args: argparse.Namespace) -> int:
     size = min(virtual_size, raw_size)
     session = Session(game_dir, Path(args.work).resolve())
     try:
-        time.sleep(args.wait)
+        session.idle(args.wait)
         live = session.game.read(base + virtual, size)
     finally:
         session.close()
@@ -955,6 +1368,10 @@ def main() -> int:
             help="put an item in the inventory when play begins",
         )
         command.add_argument(
+            "--box", action="append", default=[], metavar="SLOT:ID:COUNT[:MARK]",
+            help="put an item in the item box when play begins; MARK 3 for a two-slot weapon",
+        )
+        command.add_argument(
             "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",
             help="hold this weapon from the moment play is settled; give its slot with --give",
         )
@@ -962,12 +1379,20 @@ def main() -> int:
             "--life", type=int, default=None, metavar="N",
             help="set the player's life when play begins",
         )
+        command.add_argument(
+            "--pace", default=None, metavar="TICKS_LOG",
+            help="with --sound, reach each tick no sooner than the recording whose .ticks log this is did",
+        )
 
     command = commands.add_parser("record", help="record a trace from the original")
     common(command)
     command.add_argument("--ticks", type=int, required=True)
     command.add_argument("--trace", required=True)
     command.add_argument("--tick-delay", type=float, default=0.0)
+    command.add_argument(
+        "--boot", action="store_true",
+        help="trace from boot, the title included: --input's ticks count from boot, and no title route is played",
+    )
     command.set_defaults(func=record_command)
 
     command = commands.add_parser("scenario", help="record the original, run arklay, compare")

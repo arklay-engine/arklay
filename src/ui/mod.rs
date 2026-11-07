@@ -110,11 +110,28 @@ pub enum ScreenResult {
     Done(ScreenAction),
 }
 
+/// What a title chose for a new game besides the character: RE 2's
+/// difficulty and ARRANGE MODE (`ui/title.lua`). The default is the game as
+/// it starts with no choice: NORMAL, ORIGINAL MODE.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NewGameChoice {
+    /// EASY: `fg_system`'s `0x20`.
+    pub easy: bool,
+    /// HARD: `hard_mode`.
+    pub hard_mode: bool,
+    /// ARRANGE MODE's `censorship_off`.
+    pub censorship_off: bool,
+}
+
 /// A completed screen interaction, interpreted by the app's mode machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScreenAction {
-    /// Start a new game as the character (`0` Chris, `1` Jill).
-    NewGame { character: u8 },
+    /// Start a new game as the character (`0` Chris, `1` Jill), with what
+    /// the title chose besides.
+    NewGame {
+        character: u8,
+        choice: NewGameChoice,
+    },
     /// Continue from save slot `index` (zero-based, `savedat{index+1}.dat`).
     LoadGame { slot: usize },
     /// Continue from an explicit save file, the file a Lua screen chose.
@@ -175,6 +192,9 @@ pub enum UiCue {
     /// A current-room bank sound (`play_sfx(2, slot)`): the slot of the
     /// loaded room's sound-table row, which only the session can resolve.
     RoomSound(u8),
+    /// An RE 2 core-bank slot (`Snd_se_on(0x4nn0000)`), from the bank the
+    /// screen's game loaded (the title's `Snd_load_core(0x10)`).
+    Core(u8),
 }
 
 impl UiCue {
@@ -193,7 +213,7 @@ impl UiCue {
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
             UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
             UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
-            UiCue::RoomSound(_) => None,
+            UiCue::RoomSound(_) | UiCue::Core(_) => None,
         }
     }
 }

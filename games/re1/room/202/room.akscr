@@ -8,96 +8,98 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_SAVE 0x02
-#define AOT_03_EVENT 0x03
+#define AOT_00_DOOR_201 0x00
+#define AOT_01_DOOR_203 0x01
+#define AOT_02_SAVE_STATUE 0x02                             // Guess: an SCE_SAVE spot under the balcony statue, likely its push area.
+#define AOT_03_EVENT_STATUE_FALLS 0x03                      // Under the statue at the balcony edge: it falls once pushed there.
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define CAM_03 0x03
-#define CAM_04 0x04
-#define ENEMY_00 0x00
-#define ENEMY_01 0x01
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
+#define CAM_04_STATUE 0x04
+#define ENEMY_00_HUNTER 0x00
+#define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
+#define ENEMY_01_HUNTER 0x01
+#define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
+#define OBJ_00_STATUE 0x00
+#define OBJ_01_EMBLEM_WOOD 0x01                             // The wooden emblem in 105's fireplace, seen from the balcony.
+#define OBJ_02_EMBLEM_GOLD 0x02                             // The gold emblem in 105's fireplace, seen from the balcony.
+#define OBJ_03_CLOCK 0x03                                   // 105's clock; it stands moved once the gold emblem is in place.
 #define SE_17_BRK_STN 0x17
 #define SE_18 0x18
 #define SE_19 0x19
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 5000, 14100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 31000, 6900, 2800, 3300, 9, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
+    door_aot_set(AOT_00_DOOR_201, 5000, 14100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_203, 31000, 6900, 2800, 3300, 9, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_BALCONY_STATUE_PUSHED, FALSE))
     {
-        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 23263, 0, 3510, 3072, 0, 0, 0, 0, 512, 0, 512, 408);
-        aot_set(AOT_03_EVENT, 16863, 4440, 1250, 501, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 0, 0, on_aot_03, 0, 0, 0);
-        aot_set(AOT_02_SAVE, 16863, 3000, 1250, 4900, SCE_SAVE, SAT_UNDER | SAT_OBJECT, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00_STATUE, OF_ACTIVE, SCA_NONE, 23263, 0, 3510, 3072, 0, 0, 0, 0, 512, 0, 512, 408);
+        aot_set(AOT_03_EVENT_STATUE_FALLS, 16863, 4440, 1250, 501, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 0, 0, statue_falls, 0, 0, 0);
+        aot_set(AOT_02_SAVE_STATUE, 16863, 3000, 1250, 4900, SCE_SAVE, SAT_UNDER | SAT_OBJECT, 0, 0, 0, 0, 0, 0);
     }
-    if (CHRIS)
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (ck(FG_COMMON, F_COMMON_A7, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_FIREPLACE_WOOD_EMBLEM, TRUE))
         {
-            obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+            obj(OBJ_01_EMBLEM_WOOD, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
         }
-        if (ck(FG_COMMON, F_COMMON_A8, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_FIREPLACE_GOLD_EMBLEM, TRUE))
         {
-            obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+            obj(OBJ_02_EMBLEM_GOLD, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
         }
-        if (ck(FG_COMMON, F_COMMON_A8, TRUE))
+        if (ck(FG_COMMON, F_COMMON_C_FIREPLACE_GOLD_EMBLEM, TRUE))
         {
-            obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+            obj(OBJ_03_CLOCK, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
         }
         else
         {
-            obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+            obj(OBJ_03_CLOCK, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
         }
     }
     else
     {
-        if (ck(FG_COMMON, F_COMMON_AA, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_FIREPLACE_WOOD_EMBLEM, TRUE))
         {
-            obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+            obj(OBJ_01_EMBLEM_WOOD, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
         }
-        if (ck(FG_COMMON, F_COMMON_AB, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_FIREPLACE_GOLD_EMBLEM, TRUE))
         {
-            obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+            obj(OBJ_02_EMBLEM_GOLD, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
         }
-        if (ck(FG_COMMON, F_COMMON_AB, TRUE))
+        if (ck(FG_COMMON, F_COMMON_J_FIREPLACE_GOLD_EMBLEM, TRUE))
         {
-            obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+            obj(OBJ_03_CLOCK, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
         }
         else
         {
-            obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+            obj(OBJ_03_CLOCK, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_20, SPAWN_FORCE, 2, 0, 2932, 0, 16416, 0, 2384, ENEMY_00, ANIM_00, 0, EVAR_00);
-        if (CHRIS)
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_202_ZOMBIE_GROUNDSKEEPER_0, SPAWN_FORCE, 2, 0, 2932, 0, 16416, 0, 2384, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 23542, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_202_ZOMBIE_GROUNDSKEEPER_1, SPAWN_FORCE, 2, 0, 432, 0, 23542, 0, 13672, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
         else
         {
-            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 24594, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_202_ZOMBIE_GROUNDSKEEPER_1, SPAWN_FORCE, 2, 0, 432, 0, 24594, 0, 13672, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2276, 0, 2172, 0, 6217, ENEMY_00, ANIM_00, 0, EVAR_00);
-            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 3872, 0, 23354, 0, 14662, ENEMY_01, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_202_HUNTER_0, SPAWN_FORCE, 2, 0, 2276, 0, 2172, 0, 6217, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_202_HUNTER_1, SPAWN_FORCE, 2, 0, 3872, 0, 23354, 0, 14662, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
         }
         else
         {
-            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2932, 0, 10768, 0, 2932, ENEMY_00, ANIM_00, 0, EVAR_00);
-            enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 1680, 0, 20081, 0, 14326, ENEMY_01, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_202_HUNTER_0, SPAWN_FORCE, 2, 0, 2932, 0, 10768, 0, 2932, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            enemy(EM_06_HUNTER, EB_07, F_ENEMY_202_HUNTER_1, SPAWN_FORCE, 2, 0, 1680, 0, 20081, 0, 14326, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
         }
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
@@ -112,15 +114,15 @@ proc init
 
 proc main noreturn
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_BALCONY_STATUE_PUSHED, FALSE))
     {
         if (cmpb(B_ENT_AOT, CMP_EQ, 3))
         {
-            objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_00_STATUE, OF_NO_FLOOR_PROBE | OF_ACTIVE);
         }
         else
         {
-            objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_00_STATUE, OF_ACTIVE);
         }
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
@@ -139,19 +141,19 @@ proc main noreturn
     {
         snd_pan_vol_set(BGM_SUB_1, 30, 90);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_04_STATUE))
     {
         snd_pan_vol_set(BGM_SUB_1, 15, 65);
     }
 }
 
-event on_aot_03
+event statue_falls
 {
-    aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-    set(FG_SCENARIO, F_SCENARIO_0B, TRUE);
-    cutnext(CAM_04);
-    evt_work_set(WK_OBJ, OBJ_00);
+    aot_reset(AOT_03_EVENT_STATUE_FALLS, SCE_NONE, 0, 0, 0, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_00_STATUE, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    set(FG_SCENARIO, F_SCENARIO_BALCONY_STATUE_PUSHED, TRUE);
+    cutnext(CAM_04_STATUE);
+    evt_work_set(WK_OBJ, OBJ_00_STATUE);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 5);
     tw_set_rot(0, 0, 0);

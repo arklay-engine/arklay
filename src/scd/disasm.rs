@@ -32,13 +32,14 @@ const LST_ARGS_COLUMN: usize = 120;
 const DB_CHUNK: usize = 16;
 
 /// Original-tool display signatures for the command VM (0x00-0x50), then the
-/// port's own variant jumps (0x51-0x52) and long message (0x53).
+/// port's own long `if`/`else` (0x51-0x52), long message (0x53) and `gosub`
+/// (0x54).
 ///
 /// A signature without a `:` means the operand bytes are printed raw; an empty
 /// entry is an undecodable dead slot. This table matches the operand split of
 /// the original tool, which differs from the decoder's own signature for some
 /// opcodes (e.g. `aot_set` splits its trailing words into bytes).
-pub(super) const COMMAND_SIG: [&str; 84] = [
+pub(super) const COMMAND_SIG: [&str; 85] = [
     "end:u",
     "if:l",
     "else:l",
@@ -120,9 +121,10 @@ pub(super) const COMMAND_SIG: [&str; 84] = [
     "mass_mask",
     "costume_set:u",
     "costume_ck",
-    "variant_if:uL",
-    "variant_jump:L",
+    "if_long:L",
+    "else_long:L",
     "message_long:uUU",
+    "gosub:u",
 ];
 
 /// Original-tool display signatures for event state 0 (0x00-0x09).
@@ -139,10 +141,10 @@ pub(super) const EVENT_TOP_SIG: [&str; 10] = [
     "evt_disable:u",
 ];
 
-/// Display signatures for control opcodes (0xF4-0xFF): the port's variant
-/// jumps, then the original tool's.
+/// Display signatures for control opcodes (0xF4-0xFF): the port's event `if`
+/// and jump, then the original tool's.
 pub(super) const CONTROL_SIG: [&str; 12] = [
-    "evt_variant_if:uL",
+    "evt_if:jL",
     "evt_jump:L",
     "evt_push_cond",
     "evt_skip_if",
@@ -279,6 +281,23 @@ fn render_with(scripts: &Scripts, style: Style) -> String {
         );
     }
 
+    // The port's user procedures, which only its own containers carry.
+    if !scripts.procs.is_empty() {
+        emitter.blank();
+        emitter.raw(".procs");
+        for block in &scripts.procs {
+            if style == Style::Assembly {
+                emitter.raw(".block");
+            }
+            emit_insns(
+                &mut emitter,
+                &block.insns,
+                &block.trailing,
+                block.offset + 2,
+            );
+        }
+    }
+
     for stream in &scripts.events {
         let StreamKind::Event(index) = stream.kind else {
             continue;
@@ -355,6 +374,13 @@ fn referenced_targets(insns: &[Insn]) -> Vec<usize> {
             }
             Decoded::Control(op) if op.op == 0xFC => {
                 targets.extend(insn.operands.first().and_then(|operand| operand.target));
+            }
+            // The port's long `if`/`else`, `evt_if` and `evt_jump`.
+            Decoded::Command(op) if matches!(op.op, 0x51 | 0x52) => {
+                targets.extend(insn.operands.iter().filter_map(|operand| operand.target));
+            }
+            Decoded::Control(op) if matches!(op.op, 0xF4 | 0xF5) => {
+                targets.extend(insn.operands.iter().filter_map(|operand| operand.target));
             }
             _ => {}
         }
@@ -543,7 +569,20 @@ fn parse_params(
             args.push(match param {
                 b'l' => label_or_value(insn.op, insn, position, labels),
                 b'u' => value.to_string(),
-                b'U' | b'L' => u16_at(insn, position).to_string(),
+                b'j' | b'L' => insn
+                    .operands
+                    .get(index)
+                    .and_then(|operand| operand.target)
+                    .and_then(|target| labels?.get(target))
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        if param == b'L' {
+                            u16_at(insn, position).to_string()
+                        } else {
+                            value.to_string()
+                        }
+                    }),
+                b'U' => u16_at(insn, position).to_string(),
                 b'I' => i16_at(insn, position).to_string(),
                 b'b' => format!("{} | {}", (value >> 5) << 5, value & 0x1F),
                 b'f' => named_or_decimal(constants::flag_group(value), value),
@@ -818,6 +857,7 @@ mod tests {
             init: vec![block(0x0FE, vec![insn])],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         }
     }
 
@@ -922,6 +962,7 @@ mod tests {
             init: vec![block(0x100, insns)],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -967,6 +1008,7 @@ off_0210:
                 insns,
                 trailing: vec![0xAA, 0xBB],
             }],
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1008,6 +1050,7 @@ off_0210:
                 insns,
                 trailing: Vec::new(),
             }],
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1044,6 +1087,7 @@ off_0210:
             init: vec![block(0x100, insns)],
             main: Vec::new(),
             events: Vec::new(),
+            procs: Vec::new(),
         };
         let expected = "\
 .version 1
@@ -1082,6 +1126,7 @@ off_0302:
                 insns,
                 trailing: Vec::new(),
             }],
+            procs: Vec::new(),
         };
         scripts.events[0].insns[0].operands = vec![operand(0x06, Some(0x606))];
         let expected = "\

@@ -540,6 +540,35 @@ fn verify_validates_the_checked_in_hd_mods_png_and_ogg_replacements() {
 }
 
 #[test]
+fn mod_lua_types_writes_every_definition_file() {
+    // The binary ships every file in lua-types/, byte for byte, so a new
+    // definition file cannot be left out of `LUA_TYPES`.
+    let tmp = TempDir::new("lua-types");
+    let out = tmp.join("types");
+    let output = run(&["mod", "lua-types", "--out", out.to_str().unwrap()]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("lua-types");
+    let mut names: Vec<_> = fs::read_dir(&source)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    names.sort();
+    let mut written: Vec<_> = fs::read_dir(&out)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    written.sort();
+    assert_eq!(written, names);
+    for name in names {
+        assert_eq!(
+            fs::read(out.join(&name)).unwrap(),
+            fs::read(source.join(&name)).unwrap(),
+            "{name:?}"
+        );
+    }
+}
+
+#[test]
 fn mod_build_does_not_warn_about_a_format_override() {
     // A replacement whose stem matches a base entry is an override, not a new
     // file, whatever its extension.

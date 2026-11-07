@@ -8,63 +8,63 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_ITEM 0x01
-#define AOT_02_ITEM 0x02
-#define AOT_04_USEITEM 0x04
-#define AOT_05_USEITEM 0x05
-#define AOT_06_USEITEM 0x06
-#define AOT_07_USEITEM 0x07
-#define AOT_08_MESSAGE 0x08
+#define AOT_00_MESSAGE_LAB_ELEVATOR 0x00                    // A door to the lab, always reset to "There's no need to go downstairs now."
+#define AOT_01_ITEM_WEAPON_ROCKET_LAUNCHER_0 0x01           // Off until Brad drops it.
+#define AOT_02_ITEM_KEY_FLARE_1 0x02
+#define AOT_04_USEITEM_ZONE_TYRANT_A 0x04                   // Guess: raises F_ROOM_PLAYER_AT_TYRANT_SPAWN while the player stands where the Tyrant comes in.
+#define AOT_05_USEITEM_ZONE_TYRANT_B 0x05                   // Guess: raises F_ROOM_PLAYER_NEAR_TYRANT_SPAWN while the player stands near where the Tyrant comes in.
+#define AOT_06_USEITEM_ZONE_DROP_PLAYER 0x06                // Guess: raises F_ROOM_PLAYER_IN_DROP_AREA while the player is in the drop area.
+#define AOT_07_USEITEM_ZONE_DROP_ENEMY 0x07                 // Guess: raises F_ROOM_ENEMY_IN_DROP_AREA while the Tyrant is in the drop area.
+#define AOT_08_MESSAGE_WELDED_DOOR 0x08
 #define CAM_00 0x00
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define CAM_03 0x03
-#define CAM_04 0x04
-#define CAM_05 0x05
-#define CAM_06 0x06
+#define CAM_04_HELICOPTER_ARRIVES 0x04
+#define CAM_05_ROCKET_LAUNCHER_DROP 0x05
+#define CAM_06_TYRANT_ENTRANCE 0x06
 #define CAM_07 0x07
 #define COL_04 0x04
 #define ENEMY_00_TYRANT_2 0x00
 #define FX_0B 0x0B
-#define F_ROOM_00 0x00
-#define F_ROOM_01 0x01
-#define F_ROOM_02 0x02
-#define F_ROOM_03 0x03
-#define F_ROOM_04 0x04
-#define F_ROOM_05 0x05
-#define F_ROOM_07 0x07
-#define F_ROOM_08 0x08
-#define F_ROOM_09 0x09
-#define F_ROOM_0A 0x0A
-#define F_ROOM_0B 0x0B
-#define F_ROOM_0C 0x0C
-#define F_ROOM_0D 0x0D
-#define F_ROOM_0E 0x0E
-#define F_ROOM_0F 0x0F
-#define F_ROOM_10 0x10
-#define F_ROOM_11 0x11
-#define F_ROOM_1C 0x1C
-#define F_ROOM_1D 0x1D
-#define F_ROOM_1E 0x1E
-#define F_ROOM_1F 0x1F
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_23 0x23
-#define F_ROOM_24 0x24
-#define IMDL_00 0x00
-#define IMDL_01 0x01
+#define F_ROOM_ARRIVAL_ON_CAM_02 0x0F                       // The helicopter arrived while camera 2 was on.
+#define F_ROOM_ARRIVAL_ON_CAM_03 0x10                       // The helicopter arrived while camera 3 was on.
+#define F_ROOM_CAMERA_FREED 0x0D                            // The first frame freed the camera.
+#define F_ROOM_DROP_NOW 0x1F                                // The skip path asks for the rocket launcher drop at once.
+#define F_ROOM_DROP_PENDING 0x0B                            // Brad drops the rocket launcher once nobody is in the drop area.
+#define F_ROOM_DROP_TIMER_DONE 0x08                         // The 30-second wait for the rocket launcher is over.
+#define F_ROOM_DROP_TIMER_STARTED 0x11                      // The 30-second wait for the rocket launcher has started.
+#define F_ROOM_ENEMY_IN_DROP_AREA 0x24                      // Guess: the Tyrant is where the rocket launcher falls (one frame).
+#define F_ROOM_FLARE_FIRED 0x00                             // A flare was fired: calls the helicopter.
+#define F_ROOM_FLARE_FIRED_2 0x01                           // A second flare was fired.
+#define F_ROOM_FLARE_FIRED_3 0x02                           // A third flare was fired.
+#define F_ROOM_FLARE_FIRING 0x05                            // The flare is being fired.
+#define F_ROOM_HAS_ROCKET_LAUNCHER 0x0C                     // The player already carries the rocket launcher: no drop.
+#define F_ROOM_HELICOPTER_CALLED 0x03                       // The helicopter's approach has started.
+#define F_ROOM_HELICOPTER_HOVERING 0x04                     // The helicopter is over the heliport: the Tyrant can come in.
+#define F_ROOM_ONLY_ROCKET_LAUNCHER 0x1E                    // Guess: the rocket launcher is the only item carried; never read.
+#define F_ROOM_PLAYER_ANIM_DONE 0x20                        // The player's animation finished (one frame).
+#define F_ROOM_PLAYER_AT_TYRANT_SPAWN 0x21                  // Guess: the player stands where the Tyrant comes in (one frame).
+#define F_ROOM_PLAYER_IN_DROP_AREA 0x23                     // Guess: the player is where the rocket launcher falls (one frame).
+#define F_ROOM_PLAYER_NEAR_TYRANT_SPAWN 0x22                // Guess: the player stands near where the Tyrant comes in (one frame).
+#define F_ROOM_SKIP_STARTED 0x1C                            // The skip to the Tyrant fight has started.
+#define F_ROOM_SKIP_TO_FIGHT 0x1D                           // Guess: skips the flare and helicopter and starts the Tyrant fight; this script never sets it.
+#define F_ROOM_TYRANT_DEAD_SEEN 0x0A                        // The Tyrant's death was handled.
+#define F_ROOM_TYRANT_ENTRANCE_STARTED 0x07                 // The Tyrant's entrance has started.
+#define F_ROOM_TYRANT_FIGHT 0x09                            // The Tyrant fight is on.
+#define F_ROOM_UNUSED_0E 0x0E                               // Only ever cleared, after the helicopter arrives.
+#define IMDL_00_WEAPON_ROCKET_LAUNCHER 0x00
+#define IMDL_01_KEY_FLARE 0x01
 #define MSG_VO_016_05 0x00
 #define MSG_VO_11B_03 0x01
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
-#define OBJ_04 0x04
-#define OBJ_05 0x05
-#define OBJ_06 0x06
-#define OBJ_07 0x07
+#define OBJ_00_HELICOPTER 0x00
+#define OBJ_01_ROTOR_0 0x01
+#define OBJ_02_ROTOR_1 0x02
+#define OBJ_03_ROTOR_2 0x03
+#define OBJ_04_ROTOR_3 0x04
+#define OBJ_05_HELICOPTER_2 0x05                            // Guess: a second helicopter part moved with OBJ_00; the player looks at it.
+#define OBJ_06_BLOCK 0x06                                   // Guess: a collision box near where the Tyrant comes in.
+#define OBJ_07_FLARE_BOX 0x07                               // Guess: the box the flare lies on.
 #define SE_18_RANCHER 0x18
 #define SE_WEAPON_07 0x07
 #define SE_WEAPON_08 0x08
@@ -79,45 +79,45 @@
 
 proc init
 {
-    set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
-    item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_47, SAT_MANUAL | SAT_PLAYER, 0);
-    aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);
-    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+    door_aot_set(AOT_00_MESSAGE_LAB_ELEVATOR, 5800, 3900, 2500, 2700, 0, DOOR_SND_0D_EV_LAB, DOOR_11_ELE01, 64, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_201_214, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_reset(AOT_00_MESSAGE_LAB_ELEVATOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+    item_aot_set(AOT_01_ITEM_WEAPON_ROCKET_LAUNCHER_0, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, IMDL_00_WEAPON_ROCKET_LAUNCHER, SCA_NONE, 21000, -18000, 17000, 0, F_ITEM_303_WEAPON_ROCKET_LAUNCHER_0, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_reset(AOT_01_ITEM_WEAPON_ROCKET_LAUNCHER_0, SCE_NONE, 0, 0, 0, 0);
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 200, 0, F_ITEM_49, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_02_ITEM_KEY_FLARE_1, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01_KEY_FLARE, SCA_PLAYER, 800, 0, 200, 0, F_ITEM_303_KEY_FLARE_1, SAT_MANUAL | SAT_PLAYER, 0);
     }
     else
     {
-        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01, SCA_PLAYER, 800, 0, 0, 0, F_ITEM_49, SAT_MANUAL | SAT_PLAYER, 0);
+        item_aot_set(AOT_02_ITEM_KEY_FLARE_1, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, IMDL_01_KEY_FLARE, SCA_PLAYER, 800, 0, 0, 0, F_ITEM_303_KEY_FLARE_1, SAT_MANUAL | SAT_PLAYER, 0);
     }
-    objtbl_b_set(TBL_ITEM, IMDL_01, 0);
-    aot_set(AOT_04_USEITEM, 8500, 24000, 7500, 8500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-    aot_set(AOT_05_USEITEM, 8500, 22500, 9000, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
-    aot_set(AOT_06_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 35, 0, 1, 0);
-    aot_set(AOT_07_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_02, 4, 0, 36, 0, 1, 0);
-    aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 22260, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_01, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_02, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 32, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_03, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_04, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 1056, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_05, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 22260, -18000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_00, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_04, 0);
-    objtbl_b_set(TBL_OBJ, OBJ_05, 0);
-    obj(OBJ_06, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 13250, 0, 28250, 0, 0, 0, 0, 0, 0, 1000, 2750, 4250);
-    obj(OBJ_07, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 9000, 0, 2310, 0, 0, 0, 0, 0, 0, 300, 200, 250);
-    enemy(EM_10_TYRANT_2, EB_80, F_ENEMY_59, SPAWN_FORCE, 2, 0, 800, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, ANIM_00, 0, EVAR_00);
+    objtbl_b_set(TBL_ITEM, IMDL_01_KEY_FLARE, 0);
+    aot_set(AOT_04_USEITEM_ZONE_TYRANT_A, 8500, 24000, 7500, 8500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_05_USEITEM_ZONE_TYRANT_B, 8500, 22500, 9000, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_06_USEITEM_ZONE_DROP_PLAYER, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 35, 0, 1, 0);
+    aot_set(AOT_07_USEITEM_ZONE_DROP_ENEMY, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_02, 4, 0, 36, 0, 1, 0);
+    aot_set(AOT_08_MESSAGE_WELDED_DOOR, 29000, 3600, 1000, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    obj(OBJ_00_HELICOPTER, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 22260, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01_ROTOR_0, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00_HELICOPTER, 0, 24, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02_ROTOR_1, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00_HELICOPTER, 0, 24, 2000, 32, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_03_ROTOR_2, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00_HELICOPTER, 0, 24, 2000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_04_ROTOR_3, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00_HELICOPTER, 0, 24, 2000, 1056, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_05_HELICOPTER_2, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 22260, -18000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_00_HELICOPTER, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_05_HELICOPTER_2, 0);
+    obj(OBJ_06_BLOCK, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 13250, 0, 28250, 0, 0, 0, 0, 0, 0, 1000, 2750, 4250);
+    obj(OBJ_07_FLARE_BOX, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 9000, 0, 2310, 0, 0, 0, 0, 0, 0, 300, 200, 250);
+    enemy(EM_10_TYRANT_2, EB_80, F_ENEMY_303_TYRANT_2_0, SPAWN_FORCE, 2, 0, 800, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, ANIM_00, 0, EVAR_00);
     cut_auto(CUT_LOCKED);
     setb(B_CAMERA, CAM_07, 0);
     if (item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER))
     {
-        set(FG_ROOM, F_ROOM_0C, TRUE);
+        set(FG_ROOM, F_ROOM_HAS_ROCKET_LAUNCHER, TRUE);
     }
     inst_cfg(COL_LIST_01, COL_04, CF_2, 1, 1, 1, 1);
 }
@@ -125,69 +125,69 @@ proc init
 proc main
 {
     set(FG_9, F_9_0F, TRUE);
-    if (ck(FG_ROOM, F_ROOM_0D, FALSE))
+    if (ck(FG_ROOM, F_ROOM_CAMERA_FREED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_0D, TRUE);
+        set(FG_ROOM, F_ROOM_CAMERA_FREED, TRUE);
         cut_auto(CUT_FREE);
     }
     if (testitem(IT_2A_KEY_FLARE))
     {
-        set(FG_ROOM, F_ROOM_05, TRUE);
-        evt_exec(0, TASK_00, from_main_2);
+        set(FG_ROOM, F_ROOM_FLARE_FIRING, TRUE);
+        evt_exec(0, TASK_00, fire_flare);
     }
-    if (ck(FG_ROOM, F_ROOM_03, FALSE) && ck(FG_ROOM, F_ROOM_05, FALSE) && ck(FG_ROOM, F_ROOM_00, TRUE))
+    if (ck(FG_ROOM, F_ROOM_HELICOPTER_CALLED, FALSE) && ck(FG_ROOM, F_ROOM_FLARE_FIRING, FALSE) && ck(FG_ROOM, F_ROOM_FLARE_FIRED, TRUE))
     {
-        set(FG_ROOM, F_ROOM_03, TRUE);
-        evt_exec(0, TASK_01, from_main_3);
+        set(FG_ROOM, F_ROOM_HELICOPTER_CALLED, TRUE);
+        evt_exec(0, TASK_01, helicopter_arrives);
     }
-    if (ck(FG_ROOM, F_ROOM_04, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
+    if (ck(FG_ROOM, F_ROOM_HELICOPTER_HOVERING, TRUE) && ck(FG_ROOM, F_ROOM_TYRANT_ENTRANCE_STARTED, FALSE))
     {
-        if (ck(FG_ROOM, F_ROOM_21, FALSE) && ck(FG_ROOM, F_ROOM_22, FALSE))
+        if (ck(FG_ROOM, F_ROOM_PLAYER_AT_TYRANT_SPAWN, FALSE) && ck(FG_ROOM, F_ROOM_PLAYER_NEAR_TYRANT_SPAWN, FALSE))
         {
-            set(FG_ROOM, F_ROOM_07, TRUE);
-            evt_exec(0, TASK_07, from_main_4);
+            set(FG_ROOM, F_ROOM_TYRANT_ENTRANCE_STARTED, TRUE);
+            evt_exec(0, TASK_07, tyrant_entrance);
         }
         else
         {
-            set(FG_STATUS, F_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
             set(FG_RUN, F_RUN_CONTROLS, TRUE);
             cut_auto(CUT_FREE);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_09, TRUE) && ck(FG_ROOM, F_ROOM_0C, FALSE) && ck(FG_ROOM, F_ROOM_11, FALSE))
+    if (ck(FG_ROOM, F_ROOM_TYRANT_FIGHT, TRUE) && ck(FG_ROOM, F_ROOM_HAS_ROCKET_LAUNCHER, FALSE) && ck(FG_ROOM, F_ROOM_DROP_TIMER_STARTED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_11, TRUE);
-        evt_exec(0, TASK_07, from_main_5);
+        set(FG_ROOM, F_ROOM_DROP_TIMER_STARTED, TRUE);
+        evt_exec(0, TASK_07, rocket_launcher_timer);
     }
-    if (ck(FG_ROOM, F_ROOM_0C, FALSE))
+    if (ck(FG_ROOM, F_ROOM_HAS_ROCKET_LAUNCHER, FALSE))
     {
-        if (ck(FG_ROOM, F_ROOM_0B, TRUE) && ck(FG_ROOM, F_ROOM_23, FALSE) && ck(FG_ROOM, F_ROOM_24, FALSE))
+        if (ck(FG_ROOM, F_ROOM_DROP_PENDING, TRUE) && ck(FG_ROOM, F_ROOM_PLAYER_IN_DROP_AREA, FALSE) && ck(FG_ROOM, F_ROOM_ENEMY_IN_DROP_AREA, FALSE))
         {
-            set(FG_ROOM, F_ROOM_0B, FALSE);
-            evt_exec(0, TASK_00, from_main);
+            set(FG_ROOM, F_ROOM_DROP_PENDING, FALSE);
+            evt_exec(0, TASK_00, rocket_launcher_drop);
         }
-        if (ck(FG_ROOM, F_ROOM_09, TRUE))
+        if (ck(FG_ROOM, F_ROOM_TYRANT_FIGHT, TRUE))
         {
-            if (ck(FG_ROOM, F_ROOM_1F, TRUE))
+            if (ck(FG_ROOM, F_ROOM_DROP_NOW, TRUE))
             {
-                set(FG_ROOM, F_ROOM_09, FALSE);
+                set(FG_ROOM, F_ROOM_TYRANT_FIGHT, FALSE);
                 task_kill(TASK_07);
-                set(FG_ROOM, F_ROOM_0B, TRUE);
+                set(FG_ROOM, F_ROOM_DROP_PENDING, TRUE);
             }
-            if (ck(FG_ROOM, F_ROOM_08, TRUE))
+            if (ck(FG_ROOM, F_ROOM_DROP_TIMER_DONE, TRUE))
             {
-                set(FG_ROOM, F_ROOM_09, FALSE);
+                set(FG_ROOM, F_ROOM_TYRANT_FIGHT, FALSE);
                 task_kill(TASK_07);
-                set(FG_ROOM, F_ROOM_0B, TRUE);
+                set(FG_ROOM, F_ROOM_DROP_PENDING, TRUE);
             }
         }
     }
-    if (ck(FG_ENEMY, F_ENEMY_59, TRUE) && ck(FG_ROOM, F_ROOM_0A, FALSE))
+    if (ck(FG_ENEMY, F_ENEMY_303_TYRANT_2_0, TRUE) && ck(FG_ROOM, F_ROOM_TYRANT_DEAD_SEEN, FALSE))
     {
-        set(FG_ROOM, F_ROOM_0A, TRUE);
+        set(FG_ROOM, F_ROOM_TYRANT_DEAD_SEEN, TRUE);
         bgm_stop(BGM_SUB_2);
-        set(FG_STATUS, F_STATUS_24, FALSE);
-        set(FG_STATUS, F_STATUS_26, TRUE);
+        set(FG_STATUS, F_STATUS_COUNTDOWN_ACTIVE, FALSE);
+        set(FG_STATUS, F_STATUS_ROOM_SPRITES_OFF, TRUE);
         effect_clear(0);
         task_kill(TASK_01);
         task_kill(TASK_02);
@@ -195,24 +195,24 @@ proc main
         task_kill(TASK_04);
         task_kill(TASK_05);
         task_kill(TASK_06);
-        objtbl_b_set(TBL_OBJ, OBJ_00, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_05, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_00_HELICOPTER, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_05_HELICOPTER_2, 0);
         dir_set(0, 0, 0, 0, 10000, -20000, 10000);
         spd_set(ENT_PLAYER, -20000);
         setb(B_ROOM, ROOM_311, 0);
-        evt_exec(0, TASK_07, from_main_6);
+        evt_exec(0, TASK_07, tyrant_dies_ending);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_RUN, F_RUN_PLAYER, FALSE);
     }
-    if (ck(FG_ROOM, F_ROOM_1E, FALSE) && item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER) && ck_item_count(IGRP_ANY, CMP_EQ, 0))
+    if (ck(FG_ROOM, F_ROOM_ONLY_ROCKET_LAUNCHER, FALSE) && item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER) && ck_item_count(IGRP_ANY, CMP_EQ, 0))
     {
-        set(FG_ROOM, F_ROOM_1E, TRUE);
+        set(FG_ROOM, F_ROOM_ONLY_ROCKET_LAUNCHER, TRUE);
     }
-    if (ck(FG_ROOM, F_ROOM_07, FALSE))
+    if (ck(FG_ROOM, F_ROOM_TYRANT_ENTRANCE_STARTED, FALSE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
@@ -229,88 +229,88 @@ proc main
             aot_switch(0, SPR_01, SPR_ON);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_1D, TRUE) && ck(FG_ROOM, F_ROOM_1C, FALSE))
+    if (ck(FG_ROOM, F_ROOM_SKIP_TO_FIGHT, TRUE) && ck(FG_ROOM, F_ROOM_SKIP_STARTED, FALSE))
     {
-        set(FG_ROOM, F_ROOM_1C, TRUE);
+        set(FG_ROOM, F_ROOM_SKIP_STARTED, TRUE);
         task_kill(TASK_06);
-        evt_exec(0, TASK_06, from_main_7);
+        evt_exec(0, TASK_06, skip_to_tyrant_fight);
     }
     return;
-    if (ck(FG_COMMON, F_COMMON_20, TRUE))
+    if (ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE))
     {
-        set(FG_COMMON, F_COMMON_20, FALSE);
+        set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE);
         bgm_stop(BGM_MAIN);
     }
-    if (ck(FG_COMMON, F_COMMON_21, TRUE))
+    if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
     {
-        set(FG_COMMON, F_COMMON_21, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
         bgm_stop(BGM_SUB_1);
     }
-    if (ck(FG_COMMON, F_COMMON_22, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, TRUE))
     {
-        set(FG_COMMON, F_COMMON_22, FALSE);
+        set(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, FALSE);
         bgm_stop(BGM_SUB_2);
     }
-    if (ck(FG_COMMON, F_COMMON_23, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_RICHARD_NEEDS_SERUM, TRUE))
     {
-        set(FG_COMMON, F_COMMON_23, FALSE);
+        set(FG_COMMON, F_COMMON_J_RICHARD_NEEDS_SERUM, FALSE);
         bgm_play(BGM_MAIN);
     }
-    if (ck(FG_COMMON, F_COMMON_24, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_JILL_NEEDS_SERUM, TRUE))
     {
-        set(FG_COMMON, F_COMMON_24, FALSE);
+        set(FG_COMMON, F_COMMON_J_JILL_NEEDS_SERUM, FALSE);
         bgm_play(BGM_SUB_1);
     }
-    if (ck(FG_COMMON, F_COMMON_25, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
     {
-        set(FG_COMMON, F_COMMON_25, FALSE);
+        set(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, FALSE);
         bgm_play(BGM_SUB_2);
     }
-    if (ck(FG_COMMON, F_COMMON_26, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, TRUE))
     {
-        set(FG_COMMON, F_COMMON_26, FALSE);
+        set(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, FALSE);
         snd_fade_set(251);
     }
-    if (ck(FG_COMMON, F_COMMON_27, TRUE))
+    if (ck(FG_COMMON, F_COMMON_C_YAWN_WAKE_UP_DUE, TRUE))
     {
-        set(FG_COMMON, F_COMMON_27, FALSE);
+        set(FG_COMMON, F_COMMON_C_YAWN_WAKE_UP_DUE, FALSE);
         snd_fade_set(5);
     }
-    if (ck(FG_COMMON, F_COMMON_28, TRUE))
+    if (ck(FG_COMMON, F_COMMON_C_REBECCA_HEAL_COUNT_0, TRUE))
     {
-        set(FG_COMMON, F_COMMON_28, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_HEAL_COUNT_0, FALSE);
         bgm_volume_ramp(BGM_MAIN, -95, 95);
         bgm_volume_ramp(BGM_SUB_1, -95, 95);
         bgm_volume_ramp(BGM_SUB_2, -95, 95);
     }
-    if (ck(FG_COMMON, F_COMMON_29, TRUE))
+    if (ck(FG_COMMON, F_COMMON_C_REBECCA_HEAL_COUNT_1, TRUE))
     {
-        set(FG_COMMON, F_COMMON_29, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_HEAL_COUNT_1, FALSE);
         bgm_volume_ramp(BGM_MAIN, 90, 90);
         bgm_volume_ramp(BGM_SUB_1, 90, 90);
         bgm_volume_ramp(BGM_SUB_2, 90, 90);
     }
-    if (ck(FG_COMMON, F_COMMON_20, TRUE))
+    if (ck(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, TRUE))
     {
-        set(FG_COMMON, F_COMMON_20, FALSE);
+        set(FG_COMMON, F_COMMON_CEILING_TRAP_SPRUNG, FALSE);
         setb(B_ROOM, 19, 0);
         cam_set(CAM_00, 10818, -1116, 23508, 15570, -2304, 21852, 289);
         cutnext(CAM_00);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 20152, -2600, 16284, 2624);
         dir_set(0, 0, 576, 0, 14933, 0, 22784);
     }
-    if (ck(FG_COMMON, F_COMMON_21, TRUE))
+    if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
     {
-        set(FG_COMMON, F_COMMON_21, FALSE);
+        set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
         setb(B_ROOM, 19, 0);
         cam_set(CAM_01, 22968, -4806, 15912, 28602, -1062, 18180, 289);
         cutnext(CAM_01);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 28661, -2600, 11650, 2912);
         dir_set(0, 0, 864, 0, 26692, 0, 19840);
     }
-    if (ck(FG_COMMON, F_COMMON_22, TRUE))
+    if (ck(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, TRUE))
     {
-        set(FG_COMMON, F_COMMON_22, FALSE);
+        set(FG_COMMON, F_COMMON_J_CARRIED_TO_SAVE_ROOM, FALSE);
         setb(B_ROOM, 19, 0);
         cam_set(CAM_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
         cutnext(CAM_02);
@@ -319,7 +319,7 @@ proc main
     }
 }
 
-event from_main
+event rocket_launcher_drop
 {
     sleep(10);
     run
@@ -329,18 +329,18 @@ event from_main
         set(FG_RUN, F_RUN_ENTITIES, FALSE);
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_EFFECTS, FALSE);
-        set(FG_RUN, F_RUN_1B, FALSE);
-        set(FG_RUN, F_RUN_1A, FALSE);
+        set(FG_RUN, F_RUN_0010, FALSE);
+        set(FG_RUN, F_RUN_0020, FALSE);
         set(FG_RUN, F_RUN_READY, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        cutnext(CAM_05);
+        cutnext(CAM_05_ROCKET_LAUNCHER_DROP);
     }
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_ROCKET_LAUNCHER);
     evt_tween_begin_alt();
     tw_set_rot(8, 0, 0);
     tw_set_sel(TW_POS_Y, -18000);
@@ -475,7 +475,7 @@ event from_main
     tw_end();
     evt_nop();
     se_play_3d(SND_BANK_ROOM, SE_18_RANCHER, 0, SND_AT_POINT, 0, 21000, 17000);
-    evt_work_set(WK_AOT, IMDL_00);
+    evt_work_set(WK_AOT, IMDL_00_WEAPON_ROCKET_LAUNCHER);
     evt_tween_begin_alt();
     tw_set_sel(TW_POS_Y, -21);
     tw_abs_rot(0, 4048, 0, 0);
@@ -508,10 +508,10 @@ event from_main
     sleep(10);
     tw_end();
     evt_nop();
-    aot_reset(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+    aot_reset(AOT_01_ITEM_WEAPON_ROCKET_LAUNCHER_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             voice_play(VOICE_PLAY, VO_016_05);
             message(MSG_VO_016_05, 0);
@@ -529,48 +529,48 @@ event from_main
         set(FG_RUN, F_RUN_ENTITIES, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_EFFECTS, TRUE);
-        set(FG_RUN, F_RUN_1B, TRUE);
-        set(FG_RUN, F_RUN_1A, TRUE);
+        set(FG_RUN, F_RUN_0010, TRUE);
+        set(FG_RUN, F_RUN_0020, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         mass_mask(MASK_CLEAR, FXF_8000);
         cutcurr(0);
     }
     evt_finish();
 }
 
-event from_main_3_sub2_sub1
+event rotor_frame_1
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -581,48 +581,48 @@ event from_main_3_sub2_sub1
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub2_sub1);
+    evt_chain(rotor_frame_1);
     evt_finish();
 }
 
-event from_main_3_sub2_sub2
+event rotor_frame_2
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -633,27 +633,27 @@ event from_main_3_sub2_sub2
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub2_sub2);
+    evt_chain(rotor_frame_2);
     evt_finish();
 }
 
-event from_main_3_sub2_sub3
+event rotor_frame_3
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -661,7 +661,7 @@ event from_main_3_sub2_sub3
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -669,7 +669,7 @@ event from_main_3_sub2_sub3
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -677,7 +677,7 @@ event from_main_3_sub2_sub3
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -689,42 +689,42 @@ event from_main_3_sub2_sub3
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub2_sub3);
+    evt_chain(rotor_frame_3);
     evt_finish();
 }
 
-event from_main_3_sub2_sub4
+event rotor_frame_4
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 127, 0);
     tw_rot_add();
@@ -733,42 +733,42 @@ event from_main_3_sub2_sub4
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub2_sub4);
+    evt_chain(rotor_frame_4);
     evt_finish();
 }
 
-event from_main_3_sub3_sub1
+event rotor_frame_5
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 64, 0);
     tw_rot_add();
@@ -777,42 +777,42 @@ event from_main_3_sub3_sub1
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub1);
+    evt_chain(rotor_frame_5);
     evt_finish();
 }
 
-event from_main_3_sub3_sub2
+event rotor_frame_6
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 32, 0);
     tw_rot_add();
@@ -821,42 +821,42 @@ event from_main_3_sub3_sub2
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub2);
+    evt_chain(rotor_frame_6);
     evt_finish();
 }
 
-event from_main_3_sub3_sub3
+event rotor_frame_7
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, 16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, 16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, 16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, 16, 0);
     tw_rot_add();
@@ -865,66 +865,66 @@ event from_main_3_sub3_sub3
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub3);
+    evt_chain(rotor_frame_7);
     evt_finish();
 }
 
-event from_main_3_sub3_sub4
+event rotor_frame_8
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
     evt_next();
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub4);
+    evt_chain(rotor_frame_8);
     evt_finish();
 }
 
-event from_main_3_sub3_sub5
+event rotor_frame_9
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -16, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -16, 0);
     tw_rot_add();
@@ -933,42 +933,42 @@ event from_main_3_sub3_sub5
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub5);
+    evt_chain(rotor_frame_9);
     evt_finish();
 }
 
-event from_main_3_sub3_sub6
+event rotor_frame_10
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -32, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -32, 0);
     tw_rot_add();
@@ -977,42 +977,42 @@ event from_main_3_sub3_sub6
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub6);
+    evt_chain(rotor_frame_10);
     evt_finish();
 }
 
-event from_main_3_sub3_sub7
+event rotor_frame_11
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -64, 0);
     tw_rot_add();
@@ -1021,42 +1021,42 @@ event from_main_3_sub3_sub7
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub7);
+    evt_chain(rotor_frame_11);
     evt_finish();
 }
 
-event from_main_3_sub3_sub8
+event rotor_frame_12
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1065,27 +1065,27 @@ event from_main_3_sub3_sub8
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub8);
+    evt_chain(rotor_frame_12);
     evt_finish();
 }
 
-event from_main_3_sub3_sub9
+event rotor_frame_13
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1093,7 +1093,7 @@ event from_main_3_sub3_sub9
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1101,7 +1101,7 @@ event from_main_3_sub3_sub9
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1109,7 +1109,7 @@ event from_main_3_sub3_sub9
     tw_set_rot(0, -64, 0);
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1121,48 +1121,48 @@ event from_main_3_sub3_sub9
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub9);
+    evt_chain(rotor_frame_13);
     evt_finish();
 }
 
-event from_main_3_sub3_sub10
+event rotor_frame_14
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1173,48 +1173,48 @@ event from_main_3_sub3_sub10
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub10);
+    evt_chain(rotor_frame_14);
     evt_finish();
 }
 
-event from_main_3_sub3_sub11
+event rotor_frame_15
 {
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTOR_0);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ROTOR_1);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_ROTOR_2);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
     tw_rot_add();
     tw_rot_add();
     tw_end();
-    evt_work_set(WK_OBJ, OBJ_04);
+    evt_work_set(WK_OBJ, OBJ_04_ROTOR_3);
     evt_tween_begin_alt();
     tw_set_rot(0, -127, 0);
     tw_rot_add();
@@ -1225,33 +1225,33 @@ event from_main_3_sub3_sub11
     evt_nop();
     run
     {
-        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
-        objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, 0);
     }
     evt_next();
     evt_nop();
-    evt_chain(from_main_3_sub3_sub11);
+    evt_chain(rotor_frame_15);
     evt_finish();
 }
 
-event from_main_2
+event fire_flare
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     sleep(10);
     act_reset();
     evt_nop();
-    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     sleep(15);
-    objtbl_b_set(TBL_ITEM, IMDL_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    objtbl_b_set(TBL_ITEM, IMDL_01_KEY_FLARE, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_09, F_ROOM_20, 0);
+    act_anim_flags(ANIM_09, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_motion_path(MOTION_32, 0, 150, 0, 192, 40);
@@ -1262,7 +1262,7 @@ event from_main_2
     {
         voice_play(VOICE_PLAY, VO_B00_30);
         effect(FX_0B, FX_ROW_00, FX_AT_PLAYER, 800, 0, 200, 0);
-        objtbl_b_set(TBL_ITEM, IMDL_01, 0);
+        objtbl_b_set(TBL_ITEM, IMDL_01_KEY_FLARE, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1275,28 +1275,28 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     run
     {
         sys_multi(SYS_IDLE);
-        if (ck(FG_ROOM, F_ROOM_00, FALSE))
+        if (ck(FG_ROOM, F_ROOM_FLARE_FIRED, FALSE))
         {
-            set(FG_ROOM, F_ROOM_00, TRUE);
+            set(FG_ROOM, F_ROOM_FLARE_FIRED, TRUE);
         }
-        else if (ck(FG_ROOM, F_ROOM_01, FALSE))
+        else if (ck(FG_ROOM, F_ROOM_FLARE_FIRED_2, FALSE))
         {
-            set(FG_ROOM, F_ROOM_01, TRUE);
+            set(FG_ROOM, F_ROOM_FLARE_FIRED_2, TRUE);
         }
-        else if (ck(FG_ROOM, F_ROOM_02, FALSE))
+        else if (ck(FG_ROOM, F_ROOM_FLARE_FIRED_3, FALSE))
         {
-            set(FG_ROOM, F_ROOM_02, TRUE);
+            set(FG_ROOM, F_ROOM_FLARE_FIRED_3, TRUE);
         }
-        set(FG_ROOM, F_ROOM_05, FALSE);
+        set(FG_ROOM, F_ROOM_FLARE_FIRING, FALSE);
     }
     evt_finish();
 }
 
-event from_main_3
+event helicopter_arrives
 {
     run
     {
@@ -1332,56 +1332,56 @@ event from_main_3
     cut_auto(CUT_LOCKED);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(MOTION_TARGET, LOOK_AT_OBJ, OBJ_05, 0, 192, 64);
+    act_motion_path(MOTION_TARGET, LOOK_AT_OBJ, OBJ_05_HELICOPTER_2, 0, 192, 64);
     sleep(4);
-    act_anim_seq(AB_06, 21000, 10000, F_ROOM_20);
+    act_anim_seq(AB_06, 21000, 10000, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     act_reset();
     evt_nop();
     sleep(10);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(180);
-    evt_fork(TASK_03, from_main_3_sub2, 0);
-    evt_fork(TASK_04, from_main_3_sub1, 0);
-    evt_fork(TASK_05, from_main_3_sub4, 0);
-    evt_fork(TASK_06, from_main_3_sub5, 0);
+    evt_fork(TASK_03, rotor_spin_slow, 0);
+    evt_fork(TASK_04, helicopter_sway, 0);
+    evt_fork(TASK_05, helicopter_drift, 0);
+    evt_fork(TASK_06, helicopter_turn, 0);
     run
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
-            set(FG_ROOM, F_ROOM_0F, TRUE);
+            set(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_02, TRUE);
         }
         if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
         {
-            set(FG_ROOM, F_ROOM_10, TRUE);
+            set(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_03, TRUE);
         }
         bank_bit(255);
-        cutnext(CAM_04);
-        objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        objtbl_b_set(TBL_OBJ, OBJ_05, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        cutnext(CAM_04_HELICOPTER_ARRIVES);
+        objtbl_b_set(TBL_OBJ, OBJ_00_HELICOPTER, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01_ROTOR_0, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_02_ROTOR_1, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_03_ROTOR_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_04_ROTOR_3, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_05_HELICOPTER_2, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     }
     for (70)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
         tw_pos_add();
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
@@ -1394,13 +1394,13 @@ event from_main_3
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(AB_06, 21000, 17000, F_ROOM_20);
+    act_anim_seq(AB_06, 21000, 17000, F_ROOM_PLAYER_ANIM_DONE);
     act_nop();
     act_reset();
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
@@ -1408,7 +1408,7 @@ event from_main_3
         tw_set_pos(0, 0, 50);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
@@ -1422,14 +1422,14 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
         tw_pos_add();
         tw_end();
         evt_nop();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
@@ -1440,17 +1440,17 @@ event from_main_3
     evt_nop();
     evt_disable(TASK_02);
     evt_disable(TASK_03);
-    evt_fork(TASK_03, from_main_3_sub3, 0);
+    evt_fork(TASK_03, rotor_spin_fast, 0);
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 75);
         tw_pos_add();
         tw_pos_add();
         tw_end();
         evt_nop();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 75);
         tw_pos_add();
@@ -1461,12 +1461,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 100);
         tw_pos_add();
@@ -1477,12 +1477,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 75);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 75);
         tw_pos_add();
@@ -1493,12 +1493,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 50);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 50);
         tw_pos_add();
@@ -1509,13 +1509,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 25);
         tw_set_rot(0, -10, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 25);
         tw_pos_add();
@@ -1526,13 +1526,13 @@ event from_main_3
     evt_nop();
     for (20)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_set_rot(0, -20, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_pos_add();
@@ -1543,13 +1543,13 @@ event from_main_3
     evt_nop();
     for (40)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_set_rot(0, -30, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_pos_add();
@@ -1560,13 +1560,13 @@ event from_main_3
     evt_nop();
     for (20)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_set_rot(0, -20, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 10);
         tw_pos_add();
@@ -1577,13 +1577,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 0);
         tw_set_rot(0, -10, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 0);
         tw_set_rot(0, -10, 0);
@@ -1595,13 +1595,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -10);
         tw_set_rot(0, 0, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -10);
         tw_pos_add();
@@ -1612,13 +1612,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -20);
         tw_set_rot(0, 5, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -20);
         tw_pos_add();
@@ -1629,13 +1629,13 @@ event from_main_3
     evt_nop();
     for (12)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -25);
         tw_set_rot(0, 10, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -25);
         tw_pos_add();
@@ -1646,13 +1646,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -50);
         tw_set_rot(0, 5, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -50);
         tw_pos_add();
@@ -1663,13 +1663,13 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_set_rot(0, -5, 0);
         tw_pos_rot_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_pos_add();
@@ -1680,7 +1680,7 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -75);
         tw_set_rot(0, -1, 0);
@@ -1688,7 +1688,7 @@ event from_main_3
         tw_pos_rot_add();
         tw_end();
         evt_nop();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -75);
         tw_pos_add();
@@ -1699,12 +1699,12 @@ event from_main_3
     evt_nop();
     run
     {
-        if (ck(FG_ROOM, F_ROOM_0F, TRUE))
+        if (ck(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_02, TRUE))
         {
             bank_bit(255);
             bank_bit(1);
         }
-        else if (ck(FG_ROOM, F_ROOM_10, TRUE))
+        else if (ck(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_03, TRUE))
         {
             bank_bit(255);
             bank_bit(1);
@@ -1717,14 +1717,14 @@ event from_main_3
     }
     for (40)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_pos_add();
         tw_pos_add();
         tw_end();
         evt_nop();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_pos_add();
@@ -1733,21 +1733,21 @@ event from_main_3
         tw_end();
     }
     evt_nop();
-    cutnext(CAM_05);
+    cutnext(CAM_05_ROCKET_LAUNCHER_DROP);
     run
     {
         snd_pan_vol_set(BGM_SUB_1, 120, 120);
     }
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -75);
         tw_pos_add();
         tw_pos_add();
         tw_end();
         evt_nop();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -75);
         tw_pos_add();
@@ -1758,12 +1758,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -100);
         tw_pos_add();
@@ -1774,12 +1774,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -50);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -50);
         tw_pos_add();
@@ -1790,12 +1790,12 @@ event from_main_3
     evt_nop();
     for (10)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -25);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, -25);
         tw_pos_add();
@@ -1807,12 +1807,12 @@ event from_main_3
     sleep(10);
     for (75)
     {
-        evt_work_set(WK_OBJ, OBJ_00);
+        evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 20);
         tw_pos_add();
         tw_end();
-        evt_work_set(WK_OBJ, OBJ_05);
+        evt_work_set(WK_OBJ, OBJ_05_HELICOPTER_2);
         evt_tween_begin_alt();
         tw_set_pos(0, 0, 20);
         tw_pos_add();
@@ -1823,12 +1823,12 @@ event from_main_3
     evt_nop();
     run
     {
-        if (ck(FG_ROOM, F_ROOM_0F, TRUE))
+        if (ck(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_02, TRUE))
         {
             bank_bit(255);
             bank_bit(1);
         }
-        else if (ck(FG_ROOM, F_ROOM_10, TRUE))
+        else if (ck(FG_ROOM, F_ROOM_ARRIVAL_ON_CAM_03, TRUE))
         {
             bank_bit(255);
             bank_bit(1);
@@ -1847,23 +1847,23 @@ event from_main_3
     evt_nop();
     run
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, TRUE))
         {
-            set(FG_ROOM, F_ROOM_04, TRUE);
-            set(FG_ROOM, F_ROOM_0E, FALSE);
+            set(FG_ROOM, F_ROOM_HELICOPTER_HOVERING, TRUE);
+            set(FG_ROOM, F_ROOM_UNUSED_0E, FALSE);
             sys_multi(SYS_IDLE);
         }
         else
         {
-            evt_exec(0, TASK_07, from_main_3_sub6);
+            evt_exec(0, TASK_07, helicopter_escape_end);
         }
     }
     evt_finish();
 }
 
-event from_main_3_sub1
+event helicopter_sway
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
     evt_tween_begin_alt();
     for (10)
     {
@@ -2147,118 +2147,118 @@ event from_main_3_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    evt_chain(from_main_3_sub1);
+    evt_chain(helicopter_sway);
     evt_finish();
 }
 
-event from_main_3_sub2
+event rotor_spin_slow
 {
-    evt_fork(TASK_02, from_main_3_sub2_sub1, 0);
+    evt_fork(TASK_02, rotor_frame_1, 0);
     sleep(40);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub2, 0);
+    evt_fork(TASK_02, rotor_frame_2, 0);
     sleep(20);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_3, 0);
     sleep(20);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub4, 0);
+    evt_fork(TASK_02, rotor_frame_4, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_3, 0);
     sleep(20);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub2, 0);
+    evt_fork(TASK_02, rotor_frame_2, 0);
     sleep(20);
     evt_disable(TASK_02);
-    evt_chain(from_main_3_sub2);
+    evt_chain(rotor_spin_slow);
     evt_finish();
 }
 
-event from_main_3_sub3
+event rotor_spin_fast
 {
-    evt_fork(TASK_02, from_main_3_sub2_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_3, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub4, 0);
+    evt_fork(TASK_02, rotor_frame_4, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub1, 0);
+    evt_fork(TASK_02, rotor_frame_5, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub2, 0);
+    evt_fork(TASK_02, rotor_frame_6, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_7, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub4, 0);
+    evt_fork(TASK_02, rotor_frame_8, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub5, 0);
+    evt_fork(TASK_02, rotor_frame_9, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub6, 0);
+    evt_fork(TASK_02, rotor_frame_10, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub7, 0);
+    evt_fork(TASK_02, rotor_frame_11, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub8, 0);
+    evt_fork(TASK_02, rotor_frame_12, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub10, 0);
+    evt_fork(TASK_02, rotor_frame_14, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub11, 0);
+    evt_fork(TASK_02, rotor_frame_15, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub10, 0);
+    evt_fork(TASK_02, rotor_frame_14, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub9, 0);
+    evt_fork(TASK_02, rotor_frame_13, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub8, 0);
+    evt_fork(TASK_02, rotor_frame_12, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub7, 0);
+    evt_fork(TASK_02, rotor_frame_11, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub6, 0);
+    evt_fork(TASK_02, rotor_frame_10, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub5, 0);
+    evt_fork(TASK_02, rotor_frame_9, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub4, 0);
+    evt_fork(TASK_02, rotor_frame_8, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_7, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub2, 0);
+    evt_fork(TASK_02, rotor_frame_6, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub3_sub1, 0);
+    evt_fork(TASK_02, rotor_frame_5, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub4, 0);
+    evt_fork(TASK_02, rotor_frame_4, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub3, 0);
+    evt_fork(TASK_02, rotor_frame_3, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_fork(TASK_02, from_main_3_sub2_sub2, 0);
+    evt_fork(TASK_02, rotor_frame_2, 0);
     sleep(10);
     evt_disable(TASK_02);
-    evt_chain(from_main_3_sub2);
+    evt_chain(rotor_spin_slow);
     evt_finish();
 }
 
-event from_main_3_sub4
+event helicopter_drift
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
     evt_tween_begin_alt();
     for (20)
     {
@@ -2402,13 +2402,13 @@ event from_main_3_sub4
     }
     tw_end();
     evt_nop();
-    evt_chain(from_main_3_sub4);
+    evt_chain(helicopter_drift);
     evt_finish();
 }
 
-event from_main_3_sub5
+event helicopter_turn
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_HELICOPTER);
     evt_tween_begin_alt();
     for (16)
     {
@@ -2524,26 +2524,26 @@ event from_main_3_sub5
     }
     tw_end();
     evt_nop();
-    evt_chain(from_main_3_sub5);
+    evt_chain(helicopter_turn);
     evt_finish();
 }
 
-event event_17
+event unused_empty
 {
     evt_finish();
 }
 
-event from_main_4
+event tyrant_entrance
 {
     run
     {
         aot_switch(0, SPR_01, SPR_ON);
         aot_switch(0, SPR_02, SPR_ON);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         pos_set(ENEMY_00_TYRANT_2, 0, 800, 0, 13873, 0, 24724);
         bank_bit(255);
-        cutnext(CAM_06);
+        cutnext(CAM_06_TYRANT_ENTRANCE);
     }
     sleep(20);
     run
@@ -2576,21 +2576,21 @@ event from_main_4
     run
     {
         inst_cfg(COL_LIST_01, COL_04, CF_2, 5526, 25100, 17154, 32000);
-        set(FG_ROOM, F_ROOM_09, TRUE);
+        set(FG_ROOM, F_ROOM_TYRANT_FIGHT, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
 
-event from_main_5
+event rocket_launcher_timer
 {
     sleep(1800);
-    set(FG_ROOM, F_ROOM_08, TRUE);
+    set(FG_ROOM, F_ROOM_DROP_TIMER_DONE, TRUE);
     evt_finish();
 }
 
-event from_main_6
+event tyrant_dies_ending
 {
     run
     {
@@ -2656,7 +2656,7 @@ event from_main_6
     {
         eml_state(0, ENEMY_00_TYRANT_2, EML_ACTION, AB_0E);
     }
-    evt_fork(TASK_06, from_main_6_sub2, 0);
+    evt_fork(TASK_06, tyrant_dies_flash, 0);
     sleep(2);
     run
     {
@@ -2667,7 +2667,7 @@ event from_main_6
     {
         eml_state(0, ENEMY_00_TYRANT_2, EML_ACTION, AB_0D);
     }
-    evt_fork(TASK_06, from_main_6_sub1, 0);
+    evt_fork(TASK_06, tyrant_dies_flicker, 0);
     sleep(20);
     run
     {
@@ -2714,33 +2714,33 @@ event from_main_6
     sleep(70);
     run
     {
-        set(FG_STATUS, F_STATUS_07, TRUE);
-        set(FG_STATUS, F_STATUS_20, TRUE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
+        set(FG_STATUS, F_STATUS_DEATH_VARIANT, TRUE);
     }
     evt_finish();
 }
 
-event from_main_7
+event skip_to_tyrant_fight
 {
     run
     {
-        set(FG_ROOM, F_ROOM_03, TRUE);
-        set(FG_ROOM, F_ROOM_05, TRUE);
-        set(FG_ROOM, F_ROOM_04, TRUE);
+        set(FG_ROOM, F_ROOM_HELICOPTER_CALLED, TRUE);
+        set(FG_ROOM, F_ROOM_FLARE_FIRING, TRUE);
+        set(FG_ROOM, F_ROOM_HELICOPTER_HOVERING, TRUE);
     }
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_09, FALSE));
+    while (ck(FG_ROOM, F_ROOM_TYRANT_FIGHT, FALSE));
     run
     {
-        set(FG_ROOM, F_ROOM_1F, TRUE);
+        set(FG_ROOM, F_ROOM_DROP_NOW, TRUE);
     }
     evt_finish();
 }
 
-event from_main_6_sub1
+event tyrant_dies_flicker
 {
     run
     {
@@ -2901,7 +2901,7 @@ event from_main_6_sub1
     evt_finish();
 }
 
-event from_main_6_sub2
+event tyrant_dies_flash
 {
     run
     {
@@ -2916,7 +2916,7 @@ event from_main_6_sub2
     evt_finish();
 }
 
-event from_main_3_sub6
+event helicopter_escape_end
 {
     run
     {
@@ -2925,8 +2925,8 @@ event from_main_3_sub6
     sleep(100);
     run
     {
-        set(FG_STATUS, F_STATUS_07, TRUE);
-        set(FG_STATUS, F_STATUS_20, TRUE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
+        set(FG_STATUS, F_STATUS_DEATH_VARIANT, TRUE);
     }
     evt_finish();
 }

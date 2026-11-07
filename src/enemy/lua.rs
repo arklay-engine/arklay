@@ -16470,6 +16470,33 @@ mod computer_arms_tests {
             );
         }
 
+        /// 40C's Barry rescue (event_01) burns the boss: the SCD table's
+        /// flinch (13) arms the flame timer, then 14 runs the scripted death.
+        /// The timer's spray reads the body height, a field; calling it as a
+        /// method stopped the script and the plant never died.
+        #[test]
+        fn plant42_scd_burn_runs_the_scripted_death() {
+            let pack = pack();
+            let mut game = plant(0x40);
+            let mut host = LuaEnemyHost::new();
+            head_low(&mut game);
+            assert!(step(&mut host, &mut game, &pack)); // init, into state 8
+            assert_eq!(game.entities[1].state(), 8);
+            game.entities[1].action_behavior = 13;
+            game.entities[1].action_state = 0;
+            for tick in 0..12 {
+                head_low(&mut game);
+                assert!(step(&mut host, &mut game, &pack), "flinch tick {tick}");
+            }
+            game.entities[1].action_behavior = 14;
+            game.entities[1].action_state = 0;
+            for tick in 0..40 {
+                head_low(&mut game);
+                assert!(step(&mut host, &mut game, &pack), "burn tick {tick}");
+            }
+            assert_ne!(game.entities[1].action_state, 0, "the death is under way");
+        }
+
         #[test]
         fn plant42_wither_rewinds_the_scale_and_the_companions() {
             let pack = pack();

@@ -1,0 +1,6 @@
+# room 303 in scenario B: walk into cut 2 for the scene, then turn and walk on, into G1's lunge from the side (oracle/re2.md)
+344 up
+380
+1128 right
+1136 up
+1184

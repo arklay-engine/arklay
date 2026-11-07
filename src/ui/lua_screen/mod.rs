@@ -17,7 +17,7 @@
 //! the presented band (320x180 at 16:9) at a wider aspect, or the full-height
 //! canvas (427x240 at 16:9) a screen drawn on black asks for with
 //! `api:set("canvas", 1)`. The full
-//! method table is in `docs/modding.md`.
+//! method table is in `lua-types/screen.lua`.
 //!
 //! There is no Rust fallback: a script that fails to load is an error the
 //! opener handles (a registered mod save screen falls back to the shipped
@@ -1075,8 +1075,10 @@ fn slot_table(lua: &Lua, info: &save::SaveSlotInfo) -> mlua::Result<Table> {
     Ok(row)
 }
 
-/// The action an `api:exit(name, arg)` names.
-fn action_of(name: &str, arg: Option<i64>) -> mlua::Result<ScreenAction> {
+/// The action an `api:exit(name, arg, choice)` names. `choice` is a new
+/// game's table of `easy`, `hard_mode` and `censorship_off`, each true or 1
+/// when set ([`super::NewGameChoice`]).
+fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Result<ScreenAction> {
     let arg = |what: &str| {
         arg.ok_or_else(|| mlua::Error::RuntimeError(format!("api:exit(\"{name}\") needs {what}")))
     };
@@ -1092,6 +1094,7 @@ fn action_of(name: &str, arg: Option<i64>) -> mlua::Result<ScreenAction> {
         "ending_save" => ScreenAction::EndingSave,
         "new_game" => ScreenAction::NewGame {
             character: arg("a character")?.clamp(0, 255) as u8,
+            choice: new_game_choice(choice)?,
         },
         "load_game" => ScreenAction::LoadGame {
             slot: arg("a slot")?.clamp(0, 7) as usize,
@@ -1104,11 +1107,39 @@ fn action_of(name: &str, arg: Option<i64>) -> mlua::Result<ScreenAction> {
     })
 }
 
+/// A new game's choice from `api:exit("new_game", character, choice)`.
+fn new_game_choice(choice: Option<&Table>) -> mlua::Result<super::NewGameChoice> {
+    let Some(choice) = choice else {
+        return Ok(super::NewGameChoice::default());
+    };
+    let set = |key: &str| -> mlua::Result<bool> {
+        Ok(match choice.get::<Value>(key)? {
+            Value::Nil => false,
+            Value::Boolean(on) => on,
+            Value::Integer(n) => n != 0,
+            Value::Number(n) => n != 0.0,
+            other => {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "api:exit(\"new_game\"): `{key}` is a {}, not a flag",
+                    other.type_name()
+                )));
+            }
+        })
+    };
+    Ok(super::NewGameChoice {
+        easy: set("easy")?,
+        hard_mode: set("hard_mode")?,
+        censorship_off: set("censorship_off")?,
+    })
+}
+
 /// The error a draw method reports outside `draw`.
 fn no_draw() -> mlua::Error {
     mlua::Error::RuntimeError("draw methods need `draw(api)`".into())
 }
 
+#[cfg(test)]
+mod re2_title_tests;
 #[cfg(test)]
 mod screen_tests;
 #[cfg(test)]

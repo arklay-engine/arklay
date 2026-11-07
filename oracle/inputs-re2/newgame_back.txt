@@ -1,0 +1,34 @@
+# From boot: into the new-game choice and back out by EXIT and the cancel key, through ARRANGE MODE and HARD (oracle/re2.md, "The new-game choice").
+0
+260 down
+263
+300 confirm
+303
+340 right
+343
+370 left
+373
+400 down
+403
+430 up
+433
+460 down
+463
+490 confirm
+493
+540 down
+543
+570 confirm
+573
+620 confirm
+623
+660 down
+663
+690 down
+693
+720 up
+723
+750 cancel
+753
+800 cancel
+803

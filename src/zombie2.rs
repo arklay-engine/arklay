@@ -364,8 +364,26 @@ const DOG_STUCK: usize = 18;
 pub(crate) const DOG_GROUND: usize = 20;
 /// Part 4's place, which `Game_loop`'s `Joint_trans2` left there between ticks.
 pub(crate) const DOG_JAW: usize = 21;
+/// The alligator, `Em_23`, whose script is `enemy/23/enemy.lua`.
+pub const ALLIGATOR_ID: u8 = 0x23;
+/// The part `Em_23`'s boxes follow (`pSuper`, `+0x4fc` of its parts).
+const ALLIGATOR_HEAD: usize = 7;
+/// `FUN_00468a10`'s `Atd[0]` to `Atd[2]`: `Ofs_x` and `At_w` (each `W` and
+/// `At_d` the same, `At_h` 2000).
+const ALLIGATOR_BOXES: [(i16, u16); 3] = [(3000, 600), (0x1C2, 0x5AA), (0x76C, 0x3B6)];
 /// The giant spider, `Em_25`, whose script is `enemy/25/enemy.lua`.
 pub const SPIDER_ID: u8 = 0x25;
+/// G1, William Birkin's first form, `Em_30`, whose script is
+/// `enemy/30/enemy.lua`.
+pub const G1_ID: u8 = 0x30;
+/// G2, William Birkin's second form, `Em_31`, whose script is
+/// `enemy/31/enemy.lua`.
+pub const G2_ID: u8 = 0x31;
+/// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
+/// point of `+0x21b`.
+const G1_FLAGS: usize = 3;
+const G1_ROOT_X: usize = 7;
+const G1_ROOT_Z: usize = 8;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
 /// that `Game_loop`'s `Joint_trans` left there, x and z.
 pub(crate) const SPIDER_FOOT: usize = 32;
@@ -455,6 +473,9 @@ impl std::ops::DerefMut for Vars {
 pub struct Zombie {
     /// `Em_22`'s state: this isn't a zombie but a licker.
     pub licker: Option<Box<licker::Licker>>,
+    /// `Atd[1]` and up, which the others are pushed out of after `Atd[0]`:
+    /// the alligator's.
+    pub more_atd: Vec<Atd>,
     /// Parts it has thrown that are still falling.
     pub thrown: Vec<ThrownPart>,
     /// `Sce_parts_down`s since it last ran.
@@ -757,6 +778,24 @@ pub struct World<'a> {
     pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
     pub water: Vec<WaterArea>,
+    /// The flag banks as the tick began. Only the alligator's world has them.
+    pub banks: Vec<[u32; 8]>,
+    /// Flags a script set or cleared: bank, index and `set`'s operation.
+    pub flag_ops: Vec<(u8, u8, u8)>,
+    /// Bits a script cleared in `fg_status`'s first word.
+    pub status_and_not: u32,
+    /// `Cut_change`: the camera cut a script switched to.
+    pub cut: Option<u8>,
+    /// The room's objects' places (`obj_model_set`). Only the alligator's
+    /// world has them.
+    pub objects: Vec<[i32; 3]>,
+    /// A script pointed the player's `pSub1_kan_t_ptr` at this body's
+    /// model's clips (its second bank), for `Pl_damage`'s falls.
+    pub sub1: bool,
+    /// `scd_var_cut`, the camera's cut as the tick began.
+    pub camera_cut: u8,
+    /// Room objects a script took away.
+    pub hidden_objects: Vec<usize>,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
@@ -1003,6 +1042,88 @@ impl Em<'_, '_, '_> {
         }
     }
 
+    /// `Em_23`, which leaves the rest to its script. It doesn't run
+    /// `Sca_ck_em` or `Oba_ck_em`: its boxes push the others instead
+    /// (`Oba_ck_hit` of each work against it), which isn't ported yet.
+    fn run_alligator(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        // The parts as the last draw left them, which its boxes, its neck and
+        // its reach (`FUN_00469750`) start from: a script's `pos_set` since
+        // then doesn't move them.
+        if self.z.parts.is_empty() {
+            self.z.parts = self.mover.posed_parts();
+        }
+        self.script();
+        // What a hit that it shrugs off (`FUN_00469e20`) goes back to: the
+        // original's `+0x1fc`, the routines as a hit finds them.
+        self.z.last_routine = self.work().routine;
+        self.alligator_atd();
+        self.z.parts = self.mover.posed_parts();
+    }
+
+    /// `Em_23`'s `Oba_set_ofs`: its three boxes, each `Ofs_x` ahead along
+    /// part 7 as the last draw left it (`Be_flg`'s `0x2000000`, with `Cdir`
+    /// cleared). The init gives them their sizes.
+    fn alligator_atd(&mut self) {
+        let Some(Some(part)) = self.z.parts.get(ALLIGATOR_HEAD).copied() else {
+            return;
+        };
+        let boxes = ALLIGATOR_BOXES.map(|(ofs_x, at_w)| {
+            let ofs = [i32::from(ofs_x), 0, 0];
+            let at = std::array::from_fn(|axis| {
+                let turned: i32 = (0..3).map(|i| i32::from(part.m[axis][i]) * ofs[i]).sum();
+                part.t[axis] + (turned >> 12)
+            });
+            Atd {
+                ofs_x,
+                ofs_y: 0,
+                at_w,
+                at_h: 2000,
+                w: at_w,
+                at,
+            }
+        });
+        let [first, rest @ ..] = boxes;
+        self.z.atd = first;
+        self.z.more_atd = rest.to_vec();
+    }
+
+    /// `Em_30` and `Em_31`, which leave the rest to their scripts: `Root_ck`
+    /// to the player on every tick (G1's to its point while it limps away),
+    /// then, unless the room is stopped, `Damage_cnt`, the move, `Oba_ck_em`
+    /// and `Sca_ck_em` (`0x400`).
+    fn run_g1(&mut self) {
+        // `+0x21c`'s 8 sends `Root_ck` to the point its routine 9 chose, which
+        // the script keeps in two of its fields.
+        if self.mover.tick.id == G1_ID && self.z.vars[G1_FLAGS] & 8 != 0 {
+            let [x, z] = [G1_ROOT_X, G1_ROOT_Z].map(|index| self.z.vars[index] as i16);
+            self.root_ck_to([x, z], None);
+        } else {
+            self.root_ck();
+        }
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.script();
+        // `+0x1fc`, the routines a shot finds, which the hit goes back to.
+        self.z.last_routine = self.work().routine;
+        self.oba_ck_em();
+        self.sca_ck_em();
+        // The parts as this tick's draw leaves them, which the step in's hit
+        // (`Workm` of part 6) reads on the next.
+        self.z.parts = self.mover.posed_parts();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1116,6 +1237,10 @@ impl Em<'_, '_, '_> {
             self.run_mrx();
             return;
         }
+        if matches!(self.mover.tick.id, G1_ID | G2_ID) {
+            self.run_g1();
+            return;
+        }
         if is_plant(self.mover.tick.id) {
             self.run_plant();
             return;
@@ -1126,6 +1251,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == YOUNG_ID {
             self.run_young();
+            return;
+        }
+        if self.mover.tick.id == ALLIGATOR_ID {
+            self.run_alligator();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

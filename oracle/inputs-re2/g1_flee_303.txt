@@ -1,0 +1,6 @@
+# room 303 in scenario B: walk into cut 2 for the scene, then turn and run east, away from G1 (oracle/re2.md)
+344 up
+380
+1128 right
+1144 up run
+1744

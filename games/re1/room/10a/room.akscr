@@ -8,18 +8,18 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_DOOR 0x03
-#define AOT_04_DOOR 0x04
-#define AOT_05_EVENT 0x05
+#define AOT_00_DOOR_109 0x00
+#define AOT_01_DOOR_117 0x01
+#define AOT_02_DOOR_119 0x02
+#define AOT_03_DOOR_10B 0x03
+#define AOT_04_DOOR_11A 0x04
+#define AOT_05_EVENT_HUNTER_FILM 0x05
 #define CAM_02 0x02
-#define CAM_03 0x03
+#define CAM_03_ROOFED_PASSAGE_DOOR 0x03
 #define ENEMY_00_HUNTER 0x00
-#define ENEMY_00_ZOMBIE_LAB 0x00
-#define ENEMY_01_ZOMBIE_LAB 0x01
-#define F_ROOM_3F 0x3F
+#define ENEMY_00_ZOMBIE_GREEN 0x00
+#define ENEMY_01_ZOMBIE_GREEN 0x01
+#define F_ROOM_ANIM_DONE 0x3F                               // Raised when an actor's animation ends (one frame); nothing waits for it.
 #define MSG_VO_00C_00 0x00
 #define MSG_VO_00C_01 0x01
 #define MSG_VO_00C_20 0x02
@@ -34,100 +34,103 @@
 
 proc init
 {
-    if (MANSION2)
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
-        set(FG_STATUS, F_STATUS_1C, TRUE);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_1C, TRUE);
     }
-    door_aot_set(AOT_00_DOOR, 15200, 2400, 2000, 2600, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_109_TRAP_PASSAGE, 2700, 0, 8500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 1800, 1000, 2400, 1400, 2, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, DOOR_LOCK_40, ROOM_117_LARGE_GALLERY, 2900, 0, 10000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 7800, 5200, 1500, 1700, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_18, ROOM_119_STUDY, 6300, 0, 2700, 3072, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 10600, 5200, 2000, 1700, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCKED | F_LOCK_14, ROOM_10B_1F_RIGHT_STAIRS, 3300, 0, 6600, 3072, LOCK, SAT_MANUAL | SAT_PLAYER);
-    if (MANSION1)
+    door_aot_set(AOT_00_DOOR_109, 15200, 2400, 2000, 2600, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_109_TRAP_PASSAGE, 2700, 0, 8500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_117, 1800, 1000, 2400, 1400, 2, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, DOOR_LOCK_40, ROOM_117_LARGE_GALLERY, 2900, 0, 10000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_119, 7800, 5200, 1500, 1700, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_10A_119, ROOM_119_STUDY, 6300, 0, 2700, 3072, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR_10B, 10600, 5200, 2000, 1700, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCKED | F_LOCK_10A_10B, ROOM_10B_1F_RIGHT_STAIRS, 3300, 0, 6600, 3072, LOCK, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_MANSION2, FALSE))
     {
-        door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_71, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
-        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_72, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+        door_aot_set(AOT_04_DOOR_11A, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_10A_ZOMBIE_GREEN_0, SPAWN_FORCE, 2, 0, 0, 0, 8272, 0, 2433, ENEMY_00_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_GREEN, EB_00, F_ENEMY_10A_ZOMBIE_GREEN_1, SPAWN_FORCE, 2, 0, 1031, 0, 3023, 0, 6864, ENEMY_01_ZOMBIE_GREEN, ANIM_00, 0, EVAR_00);
     }
     else
     {
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-            if (ck(FG_COMMON, F_COMMON_2B, FALSE))
+            door_aot_set(AOT_04_DOOR_11A, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCK_40, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+            if (ck(FG_COMMON, F_COMMON_C_HUNTER_FILM_SEEN, FALSE))
             {
-                if (ck(FG_COMMON, F_COMMON_64, TRUE))
+                if (ck(FG_COMMON, F_COMMON_RICHARD_DIED, TRUE))
                 {
-                    set(FG_COMMON, F_COMMON_36, TRUE);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE);
                 }
-                if (ck(FG_COMMON, F_COMMON_59, TRUE) && ck(FG_COMMON, F_COMMON_5D, FALSE))
+                if (ck(FG_COMMON, F_COMMON_C_REBECCA_RAN_FOR_SERUM, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_SERUM_QUICK, FALSE))
                 {
-                    set(FG_COMMON, F_COMMON_36, TRUE);
+                    set(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE);
                 }
-                aot_set(AOT_05_EVENT, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_05, 0, 0, 0);
-                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                aot_set(AOT_05_EVENT_HUNTER_FILM, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, hunter_film, 0, 0, 0);
+                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_10A_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
             }
             else
             {
-                enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                enemy(EM_06_HUNTER, EB_27, F_ENEMY_10A_HUNTER_0, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
             }
         }
         else
         {
-            door_aot_set(AOT_04_DOOR, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-            if (ck(FG_COMMON, F_COMMON_28, FALSE))
+            door_aot_set(AOT_04_DOOR_11A, 200, 10700, 2000, 2300, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_11A_ROOFED_PASSAGE, 4500, 0, 4100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+            if (ck(FG_COMMON, F_COMMON_J_HUNTER_FILM_SEEN, FALSE))
             {
-                aot_set(AOT_05_EVENT, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_05, 0, 0, 0);
-                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_02, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                aot_set(AOT_05_EVENT_HUNTER_FILM, 0, 400, 5600, 6100, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 0, 0, hunter_film, 0, 0, 0);
+                enemy(EM_06_HUNTER, EB_A7, F_ENEMY_10A_HUNTER_0, SPAWN_FORCE, 2, 0, 0, 0, 20000, 20000, 20000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
             }
             else
             {
-                enemy(EM_06_HUNTER, EB_27, F_ENEMY_02, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+                enemy(EM_06_HUNTER, EB_27, F_ENEMY_10A_HUNTER_0, SPAWN_FORCE, 2, 0, 896, 0, 4561, 0, 4818, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
             }
         }
         return;
     }
 }
 
-proc main when (CHRIS && MANSION2)
+proc main
 {
-    if (ck(FG_ENEMY, F_ENEMY_02, TRUE) && ck(FG_COMMON, F_COMMON_21, TRUE))
+    if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE) && ck(FG_SCENARIO, F_SCENARIO_MANSION2, TRUE))
     {
-        set(FG_COMMON, F_COMMON_21, FALSE);
-        if (ck(FG_COMMON, F_COMMON_22, TRUE))
+        if (ck(FG_ENEMY, F_ENEMY_10A_HUNTER_0, TRUE) && ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
         {
-            setw(W_04, 0);
-            evt_exec(0, TASK_09, from_main);
+            set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, FALSE);
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_IN_SAVE_ROOM, TRUE))
+            {
+                setw(W_04, 0);
+                evt_exec(0, TASK_09, rebecca_radio_call);
+            }
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_UPSTAIRS_CALL, TRUE))
+            {
+                setw(W_04, 0);
+                evt_exec(0, TASK_09, rebecca_radio_call_upstairs);
+            }
         }
-        if (ck(FG_COMMON, F_COMMON_36, TRUE))
-        {
-            setw(W_04, 0);
-            evt_exec(0, TASK_09, from_main_2);
-        }
+        return;
     }
-    return;
 }
 
-event on_aot_05 when (MANSION2)
+event hunter_film
 {
     run
     {
-        aot_delete(AOT_05_EVENT, SCE_NONE, 0);
-        if (CHRIS)
+        aot_delete(AOT_05_EVENT_HUNTER_FILM, SCE_NONE, 0);
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_2B, TRUE);
+            set(FG_COMMON, F_COMMON_C_HUNTER_FILM_SEEN, TRUE);
         }
         else
         {
-            set(FG_COMMON, F_COMMON_28, TRUE);
+            set(FG_COMMON, F_COMMON_J_HUNTER_FILM_SEEN, TRUE);
         }
         bgm_stop_all(0);
     }
     sleep(1);
-    movie_on(MOVIE_06_DM6);
+    movie_on(MOVIE_06_HUNTER_RUN);
     sleep(1);
     run
     {
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         bgm_restore(0);
         dir_set(0, 0, 304, 0, 2276, 0, 3481);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -135,11 +138,11 @@ event on_aot_05 when (MANSION2)
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_20, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_20, F_ROOM_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(10);
-    evt_fork(TASK_09, on_aot_05_sub2, 0);
+    evt_fork(TASK_09, hunter_film_player, 0);
     se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 2468, 11628);
     sleep(30);
     se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 2468, 11628);
@@ -148,7 +151,7 @@ event on_aot_05 when (MANSION2)
     {
         pos_set(ENEMY_00_HUNTER, 0, 914, 0, 2524, 0, 12163);
         eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_67);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 0, 0, 4880, 0, 3549);
         }
@@ -157,8 +160,8 @@ event on_aot_05 when (MANSION2)
             dir_set(0, 0, 304, 0, 4890, 0, 3549);
         }
     }
-    evt_fork(TASK_09, on_aot_05_sub1, 0);
-    cutnext(CAM_03);
+    evt_fork(TASK_09, hunter_film_hunter, 0);
+    cutnext(CAM_03_ROOFED_PASSAGE_DOOR);
     sleep(100);
     run
     {
@@ -168,29 +171,29 @@ event on_aot_05 when (MANSION2)
         cutnext(CAM_02);
         cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        if (CHRIS)
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
-            set(FG_COMMON, F_COMMON_21, TRUE);
+            set(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE);
         }
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
 
-event on_aot_05_sub1 when (MANSION2)
+event hunter_film_hunter
 {
     evt_work_set(WK_ENEMY, ENEMY_00_HUNTER);
     evt_actor_begin();
-    act_anim_seq(AB_02, 3033, 8206, F_ROOM_3F);
+    act_anim_seq(AB_02, 3033, 8206, F_ROOM_ANIM_DONE);
     act_finish();
 }
 
-event from_main when (CHRIS && MANSION2)
+event rebecca_radio_call
 {
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -201,7 +204,7 @@ event from_main when (CHRIS && MANSION2)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        evt_exec(0, TASK_09, from_main_sub1);
+        evt_exec(0, TASK_09, rebecca_radio_call_chris);
         voice_play(VOICE_PLAY, VO_00C_00);
         message(MSG_VO_00C_00, 0);
     }
@@ -228,28 +231,28 @@ event from_main when (CHRIS && MANSION2)
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
-event from_main_sub1 when (CHRIS && MANSION2)
+event rebecca_radio_call_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(70);
     act_motion_path(MOTION_31, 1250, 0, 0, 50, 0);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
     act_motion(MOTION_10);
     act_reset();
@@ -257,12 +260,12 @@ event from_main_sub1 when (CHRIS && MANSION2)
     evt_finish();
 }
 
-event from_main_2 when (CHRIS && MANSION2)
+event rebecca_radio_call_upstairs
 {
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -273,7 +276,7 @@ event from_main_2 when (CHRIS && MANSION2)
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        evt_exec(0, TASK_09, from_main_2_sub1);
+        evt_exec(0, TASK_09, rebecca_radio_call_upstairs_chris);
         voice_play(VOICE_PLAY, VO_00C_20);
         message(MSG_VO_00C_20, 0);
     }
@@ -281,7 +284,7 @@ event from_main_2 when (CHRIS && MANSION2)
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
-    if (JPN)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         sleep(56);
     }
@@ -291,7 +294,7 @@ event from_main_2 when (CHRIS && MANSION2)
         {
             evt_next();
         }
-        while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+        while (ck(FG_STATUS, F_STATUS_VOICE_PLAYING, TRUE));
     }
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_22);
@@ -307,44 +310,44 @@ event from_main_2 when (CHRIS && MANSION2)
     act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, F_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     evt_finish();
 }
 
-event from_main_2_sub1 when (CHRIS && MANSION2)
+event rebecca_radio_call_upstairs_chris
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(30);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(40);
     act_motion_path(MOTION_33, 1700, -5000, 0, 150, 50);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(20);
     act_motion_path(MOTION_33, -1700, -5000, 0, 150, 50);
     sleep(15);
     act_motion_path(MOTION_33, 1700, -5000, 0, 150, 50);
     sleep(25);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     sleep(40);
-    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2A, F_ROOM_ANIM_DONE, 0);
     sleep(40);
-    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_28, F_ROOM_ANIM_DONE, 0);
     act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 
-event on_aot_05_sub2 when (MANSION2)
+event hunter_film_player
 {
     sleep(37);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_2D, F_ROOM_3F, 0);
+    act_anim_flags(ANIM_2D, F_ROOM_ANIM_DONE, 0);
     sleep(25);
     act_idle();
     act_finish();

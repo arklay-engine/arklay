@@ -35,9 +35,9 @@
 //!   knife reach from the player's knife-hand joint world matrix and anchors
 //!   several hit reactions on specific joints. The port has no game-layer
 //!   joint matrices yet, so the knife origin is the player position plus the
-//!   per-character reach offset rotated by the yaw, and the joint-attached
-//!   gore spurts/tints are skipped. The hit/miss rules, ranges and damage
-//!   stay exact.
+//!   per-character reach offset rotated by the yaw (ahead of the player for
+//!   both characters), and the joint-attached gore spurts/tints are skipped.
+//!   The hit/miss rules, ranges and damage stay exact.
 //! - **Per-joint fudges in the head reaction.** The original clamps the
 //!   lifted head blood against joint 1's world height; the port compares
 //!   against the entity origin instead and documents the difference.
@@ -728,10 +728,15 @@ fn detect_knife(
     player_pos: [i32; 3],
     displacement: &mut u32,
 ) -> bool {
+    // Both reach points lie ahead of the player: the original's -0x17C for
+    // Jill is a hand-joint offset, and taken as a distance along the yaw it
+    // put her knife point behind her, out of reach of anything in front
+    // (30C's web, which her route must cut, stands 671 past the nearest
+    // floor). Part of the documented joint-matrix approximation.
     let offset: i16 = if player_character & 1 == 0 {
         0x99
     } else {
-        -0x17C
+        0x17C
     };
     let (reach_x, reach_z) = crate::player::rotate_speed(player_angle, 0, i32::from(offset));
     let knife = [player_pos[0] + reach_x, player_pos[2] + reach_z];

@@ -7,7 +7,7 @@
 
 use anyhow::{Result, bail};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::layout;
 use super::preprocess::{Build, Loader, Region, Variant, no_includes, preprocess};
@@ -15,8 +15,8 @@ use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
 use crate::scd::disasm::{ACTOR_SIG, CONTROL_SIG, EVENT_TOP_SIG, TWEEN_SIG};
 
-/// Compile `.akscr` source into the SCD IR: the runtime build, which keeps
-/// the variant tests. The script must not use `#include`; see
+/// Compile `.akscr` source into the SCD IR: the runtime build, which tests
+/// the room variant through the engine's status flags. The script must not use `#include`; see
 /// [`compile_with`].
 pub fn compile(text: &str) -> Result<Assembled> {
     compile_with(text, None, &no_includes)
@@ -39,12 +39,62 @@ pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Resul
 /// `load`.
 pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled> {
     let preprocessed = preprocess(text, build, load)?;
-    let sections = parse(&preprocessed.text, &preprocessed.defines, build)?;
+    let Parsed { sections, procs } = parse(&preprocessed.text, &preprocessed.defines, build)?;
+    check_recursion(&sections, &procs)?;
+    relaxed(|relax| {
+        let (source, pad_events) = lower_sections(&sections, build, &procs, relax)?;
+        asm::assemble_source(&source, &pad_events)
+    })
+}
+
+/// Lower and assemble with `attempt` until every jump fits: a command `if`
+/// whose 1-byte jump does not reach takes the long form, and the script is
+/// lowered again.
+fn relaxed<T>(mut attempt: impl FnMut(&mut Relax) -> Result<T>) -> Result<T> {
+    let mut long = HashSet::new();
+    loop {
+        let mut relax = Relax {
+            long: std::mem::take(&mut long),
+            ..Relax::default()
+        };
+        match attempt(&mut relax) {
+            Ok(done) => return Ok(done),
+            Err(error) => {
+                let owner = short_jump_label(&format!("{error:#}"))
+                    .and_then(|label| relax.owner.get(label))
+                    .filter(|owner| !relax.long.contains(*owner))
+                    .cloned();
+                let Some(owner) = owner else {
+                    return Err(error);
+                };
+                long = relax.long;
+                long.insert(owner);
+            }
+        }
+    }
+}
+
+/// The label of a 1-byte jump the assembler reports as too far.
+fn short_jump_label(error: &str) -> Option<&str> {
+    let (_, rest) = error.split_once("jump to `")?;
+    let (label, rest) = rest.split_once('`')?;
+    let (_, rest) = rest.split_once(" bytes and does not fit")?;
+    (!rest.starts_with(" 16 bits")).then_some(label)
+}
+
+/// Lower every section of `build` to the assembler's streams, and say which
+/// events take the padding.
+fn lower_sections(
+    sections: &[Section],
+    build: Build,
+    procs: &HashMap<String, u8>,
+    relax: &mut Relax,
+) -> Result<(Source, Vec<bool>)> {
     let mut source = Source::default();
     let mut pad_events = Vec::new();
     let mut init_done = false;
     let mut main_done = false;
-    for section in &sections {
+    for section in sections {
         // A section another RDT variant carries is not in this one's
         // streams; the runtime build carries every section.
         if let Some(variant) = build.variant()
@@ -52,8 +102,10 @@ pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled
         {
             continue;
         }
-        let items = lower_section(section, build)?;
+        let items = lower_section(section, build, procs, relax)?;
         match section.kind {
+            // Procedures may stand anywhere; they are numbered in order.
+            SectionKind::Proc(_) => source.procs.push(items),
             SectionKind::Init => {
                 if init_done {
                     bail!(
@@ -89,30 +141,60 @@ pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled
             }
         }
     }
-    asm::assemble_source(&source, &pad_events)
+    Ok((source, pad_events))
 }
 
 /// Compile a single section (with or without the `#version` line), naming
-/// with `defines`, and return the bytes of its block or event stream.
-pub(super) fn section_bytes(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<u8>> {
+/// with `defines`, and return the bytes of its block or event stream. The
+/// script's procedures are `procs`, by number: a call to one compiles to its
+/// `gosub`, and a section that is one of them is that procedure.
+pub(super) fn section_bytes(
+    text: &str,
+    defines: &HashMap<String, i64>,
+    procs: &[String],
+) -> Result<Vec<u8>> {
     let build = Build::Variant(Variant {
         jill: false,
         mansion: None,
         // The decompiler checks one RDT's section, which holds no region.
         region: Region::Usa,
     });
-    let text = if text.trim_start().starts_with("#version") {
-        text.to_string()
-    } else {
-        format!("#version 1\n{text}")
-    };
-    let sections = parse(&text, defines, build)?;
-    let [section] = sections.as_slice() else {
+    let text = text.trim_start().strip_prefix("#version 1").unwrap_or(text);
+    // Empty procedures stand for the others, in their places, so that the
+    // procedures keep their numbers.
+    let own = procs.iter().position(|name| {
+        text.trim_start()
+            .strip_prefix("proc ")
+            .and_then(|rest| rest.strip_prefix(name.as_str()))
+            .is_some_and(|rest| {
+                !rest.starts_with(|ch: char| ch.is_ascii_alphanumeric() || ch == '_')
+            })
+    });
+    let mut script = String::from("#version 1\n");
+    for (index, name) in procs.iter().enumerate() {
+        if Some(index) == own {
+            script.push_str(text);
+            script.push('\n');
+        } else {
+            script.push_str(&format!("proc {name}\n{{\n}}\n"));
+        }
+    }
+    if own.is_none() {
+        script.push_str(text);
+    }
+    let Parsed { sections, procs } = parse(&script, defines, build)?;
+    let position = own.unwrap_or(procs.len());
+    let (Some(section), true) = (
+        sections.get(position),
+        sections.len() == procs.len() + usize::from(own.is_none()),
+    ) else {
         bail!("expected exactly one section");
     };
-    let items = lower_section(section, build)?;
     let event = matches!(section.kind, SectionKind::Event(_));
-    asm::assemble_stream(&items, event, !holds(section.nopad, build))
+    relaxed(|relax| {
+        let items = lower_section(section, build, &procs, relax)?;
+        asm::assemble_stream(&items, event, !holds(section.nopad, build))
+    })
 }
 
 /// Whether a section flag held for the variants of `mask` (`None` when the
@@ -146,6 +228,62 @@ fn variant_atom(name: &str) -> Option<u8> {
         .iter()
         .find(|(atom, _)| *atom == name)
         .map(|(_, bit)| *bit)
+}
+
+/// The flag tests that hold for the room variants of `mask` at run time.
+/// The engine keeps a status bit for the player and the release, and the
+/// scenario flag for the mansion visit, in step with the room
+/// ([`crate::game::GameState::sync_variant_flags`]). Outside rooms leave the
+/// visit flag alone, so a visit test means nothing there.
+///
+/// The second list, when there is one, must not all pass as well: no flag
+/// says `!USA` (the Japanese or a European release), but it is where the
+/// USA test, both release bits clear, fails.
+fn variant_tests(mask: u8, line: usize, col: usize) -> (Vec<Call>, Option<Vec<Call>>) {
+    use crate::scd::opcode::variant::*;
+    let ck = |group: u8, flag: u8, set: bool| Call {
+        name: "ck".to_string(),
+        args: vec![
+            Arg::Num(i64::from(group)),
+            Arg::Num(i64::from(flag)),
+            // `ck` passes on a set flag for 0 (`TRUE`).
+            Arg::Num(if set { 0 } else { 1 }),
+        ],
+        line,
+        col,
+    };
+    let mut tests = Vec::new();
+    match mask & PLAYER {
+        CHRIS => tests.push(ck(FLAG_BANK_STATUS, FLAG_JILL, false)),
+        JILL => tests.push(ck(FLAG_BANK_STATUS, FLAG_JILL, true)),
+        _ => {}
+    }
+    match mask & (MANSION1 | MANSION2) {
+        MANSION1 => tests.push(ck(FLAG_BANK_SCENARIO, FLAG_MANSION2, false)),
+        MANSION2 => tests.push(ck(FLAG_BANK_SCENARIO, FLAG_MANSION2, true)),
+        _ => {}
+    }
+    let usa = || {
+        vec![
+            ck(FLAG_BANK_STATUS, FLAG_REGION_JPN, false),
+            ck(FLAG_BANK_STATUS, FLAG_REGION_EUR, false),
+        ]
+    };
+    let region = mask & REGION;
+    if region == JPN {
+        tests.push(ck(FLAG_BANK_STATUS, FLAG_REGION_JPN, true));
+    } else if region == EUR {
+        tests.push(ck(FLAG_BANK_STATUS, FLAG_REGION_EUR, true));
+    } else if region == JPN | EUR {
+        return (tests, Some(usa()));
+    } else if region == USA {
+        tests.extend(usa());
+    } else if region == USA | JPN {
+        tests.push(ck(FLAG_BANK_STATUS, FLAG_REGION_EUR, false));
+    } else if region == USA | EUR {
+        tests.push(ck(FLAG_BANK_STATUS, FLAG_REGION_JPN, false));
+    }
+    (tests, None)
 }
 
 /// Parse a variant condition from `tokens` (`JILL`, `!JPN`, `CHRIS &&
@@ -407,6 +545,8 @@ fn asm_block(
 enum SectionKind {
     Init,
     Main,
+    /// A user procedure (`proc NAME`), which `NAME();` calls: `gosub N`.
+    Proc(u8),
     Event(u8),
 }
 
@@ -450,7 +590,8 @@ enum Stmt {
         col: usize,
     },
     /// `if (JILL) { ... } else { ... }`: a test of the room variant, which
-    /// is a variant jump at run time and folds away in a variant's build.
+    /// tests the engine's flags at run time ([`variant_tests`]) and folds
+    /// away in a variant's build.
     Variant {
         mask: u8,
         then: Vec<Stmt>,
@@ -542,7 +683,13 @@ fn substitute(line: &str, defines: &HashMap<String, i64>) -> String {
 /// so a reference that survives the fold fails to encode.
 const ABSENT_EVENT: i64 = -1;
 
-fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec<Section>> {
+/// A parsed script: its sections and the user procedures' numbers by name.
+struct Parsed {
+    sections: Vec<Section>,
+    procs: HashMap<String, u8>,
+}
+
+fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Parsed> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
     let mut defines = defines.clone();
@@ -552,12 +699,36 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
     // Event names stand for their index, so any event may name any other.
     // A variant's build numbers only the events its RDT carries; the
     // runtime build numbers every event in order.
+    // A user procedure is numbered in the order it stands in.
     let mut depth = 0usize;
     let mut events = 0i64;
+    let mut procs = HashMap::new();
     for (pos, token) in tokens.iter().enumerate() {
         match &token.tok {
             Tok::Punct("{") => depth += 1,
             Tok::Punct("}") => depth = depth.saturating_sub(1),
+            Tok::Ident(word) if depth == 0 && word == "proc" => {
+                let Some(Token {
+                    tok: Tok::Ident(name),
+                    line,
+                    ..
+                }) = tokens.get(pos + 1)
+                else {
+                    continue;
+                };
+                if name == "init" || name == "main" {
+                    continue;
+                }
+                if defines.contains_key(name) || is_engine_name(name) {
+                    bail!("line {line}: procedure name `{name}` is already defined");
+                }
+                let Ok(index) = u8::try_from(procs.len()) else {
+                    bail!("line {line}: a script has at most 256 procedures");
+                };
+                if procs.insert(name.clone(), index).is_some() {
+                    bail!("line {line}: procedure `{name}` is already defined");
+                }
+            }
             Tok::Ident(word) if depth == 0 && word == "event" => {
                 let Some(Token {
                     tok: Tok::Ident(name),
@@ -581,7 +752,7 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
                 } else {
                     ABSENT_EVENT
                 };
-                if defines.insert(name.clone(), index).is_some() {
+                if defines.insert(name.clone(), index).is_some() || procs.contains_key(name) {
                     bail!("line {line}: event name `{name}` is already defined");
                 }
                 if present {
@@ -595,13 +766,98 @@ fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec
         tokens,
         pos: 0,
         defines,
+        procs,
     };
     parser.version()?;
     let mut sections = Vec::new();
     while parser.peek().tok != Tok::Eof {
         sections.push(parser.section()?);
     }
-    Ok(sections)
+    Ok(Parsed {
+        sections,
+        procs: parser.procs,
+    })
+}
+
+/// Reject a procedure that calls itself, directly or through others: the
+/// calls nest without end.
+fn check_recursion(sections: &[Section], procs: &HashMap<String, u8>) -> Result<()> {
+    fn calls(body: &[Stmt], procs: &HashMap<String, u8>, out: &mut Vec<(u8, usize)>) {
+        for stmt in body {
+            match stmt {
+                Stmt::Call(call) | Stmt::Single { call, .. } => {
+                    if let Some(&index) = procs.get(&call.name) {
+                        out.push((index, call.line));
+                    }
+                }
+                Stmt::If {
+                    then, otherwise, ..
+                }
+                | Stmt::Variant {
+                    then, otherwise, ..
+                } => {
+                    calls(then, procs, out);
+                    calls(otherwise.as_deref().unwrap_or_default(), procs, out);
+                }
+                Stmt::Run { body, .. } | Stmt::For { body, .. } | Stmt::DoWhile { body, .. } => {
+                    calls(body, procs, out);
+                }
+                Stmt::Return { .. } | Stmt::Require(_) | Stmt::Asm(_) | Stmt::Raw { .. } => {}
+            }
+        }
+    }
+    let mut graph: HashMap<u8, Vec<(u8, usize)>> = HashMap::new();
+    for section in sections {
+        if let SectionKind::Proc(index) = section.kind {
+            let mut out = Vec::new();
+            calls(&section.body, procs, &mut out);
+            graph.insert(index, out);
+        }
+    }
+    let name = |index: u8| {
+        procs
+            .iter()
+            .find(|(_, value)| **value == index)
+            .map_or("?", |(name, _)| name.as_str())
+    };
+    // Depth-first from every procedure, keeping the path to report.
+    fn visit(
+        index: u8,
+        graph: &HashMap<u8, Vec<(u8, usize)>>,
+        path: &mut Vec<u8>,
+        done: &mut Vec<u8>,
+    ) -> Option<(Vec<u8>, usize)> {
+        if done.contains(&index) {
+            return None;
+        }
+        path.push(index);
+        for &(callee, line) in graph.get(&index).map_or(&[][..], Vec::as_slice) {
+            if path.contains(&callee) {
+                return Some((path.clone(), line));
+            }
+            if let Some(found) = visit(callee, graph, path, done) {
+                return Some(found);
+            }
+        }
+        path.pop();
+        done.push(index);
+        None
+    }
+    let mut done = Vec::new();
+    let mut indices: Vec<u8> = graph.keys().copied().collect();
+    indices.sort_unstable();
+    for index in indices {
+        if let Some((path, line)) = visit(index, &graph, &mut Vec::new(), &mut done) {
+            let chain: Vec<&str> = path.iter().map(|&index| name(index)).collect();
+            bail!(
+                "line {line}: procedure `{}` calls itself ({} -> {})",
+                chain[0],
+                chain.join(" -> "),
+                chain[0]
+            );
+        }
+    }
+    Ok(())
 }
 
 struct Parser {
@@ -609,6 +865,8 @@ struct Parser {
     pos: usize,
     /// `#define`s, the builtins and the event names.
     defines: HashMap<String, i64>,
+    /// The user procedures' numbers, by name.
+    procs: HashMap<String, u8>,
 }
 
 impl Parser {
@@ -712,7 +970,10 @@ impl Parser {
                 match name.as_str() {
                     "init" => SectionKind::Init,
                     "main" => SectionKind::Main,
-                    _ => return self.error(&name_token, "`init` or `main`"),
+                    _ => match self.procs.get(&name) {
+                        Some(&index) => SectionKind::Proc(index),
+                        None => return self.error(&name_token, "a procedure name"),
+                    },
                 }
             }
             "event" => {
@@ -743,6 +1004,13 @@ impl Parser {
             } else {
                 break;
             }
+        }
+        if matches!(kind, SectionKind::Proc(_)) && (noreturn.is_some() || when != 0) {
+            bail!(
+                "line {}: a procedure takes no `noreturn` or `when`; test the variant with `if` \
+                 inside it",
+                token.line
+            );
         }
         let body = self.block()?;
         Ok(Section {
@@ -988,72 +1256,71 @@ impl Parser {
 // Lowering
 // ---------------------------------------------------------------------------
 
+/// What lowering a script carries from section to section, and from one
+/// attempt to the next.
+#[derive(Default)]
+struct Relax {
+    /// The command `if`s, by skip label, that take the long form.
+    long: HashSet<String>,
+    /// The command `if` each jump label belongs to, by its skip label.
+    owner: HashMap<String, String>,
+    /// The last label number used; labels are unique across the sections.
+    next_label: usize,
+}
+
 /// Lower one section to assembler items.
-fn lower_section(section: &Section, build: Build) -> Result<Vec<Item>> {
+fn lower_section(
+    section: &Section,
+    build: Build,
+    procs: &HashMap<String, u8>,
+    relax: &mut Relax,
+) -> Result<Vec<Item>> {
     let mut lowerer = Lowerer {
         build,
+        procs,
         items: Vec::new(),
         pending: Vec::new(),
-        next_label: 0,
+        relax,
     };
     match section.kind {
+        SectionKind::Proc(_) => lowerer.command_block(&section.body, false, section.line)?,
         SectionKind::Init | SectionKind::Main if build.variant().is_some() => {
             let noreturn = holds(section.noreturn, build);
             lowerer.command_block(&section.body, noreturn, section.line)?;
         }
         // The runtime build carries every variant's blocks: the variants
-        // whose RDT lacks this one skip to an `end 0` of their own.
+        // whose RDT lacks this one end it at once.
         SectionKind::Init | SectionKind::Main => {
-            let line = section.line;
-            let skip = (section.when != 0).then(|| {
-                let skip = lowerer.label();
-                lowerer.push(
-                    "variant_if",
-                    vec![Arg::Num(i64::from(section.when)), Arg::Symbol(skip.clone())],
-                    line,
-                    1,
-                );
-                skip
-            });
-            lowerer.commands(&section.body)?;
-            // A `noreturn` block runs off its end, which ends the block list
-            // too; the variants it is not `noreturn` for end it plainly.
-            let fall = match section.noreturn {
-                None => {
-                    lowerer.push("end", vec![Arg::Num(0)], line, 1);
-                    None
-                }
-                Some(0) if skip.is_none() => None,
-                Some(mask) => {
-                    let fall = lowerer.label();
-                    if mask == 0 {
-                        lowerer.push("variant_jump", vec![Arg::Symbol(fall.clone())], line, 1);
-                    } else {
-                        let end = lowerer.label();
-                        lowerer.push(
-                            "variant_if",
-                            vec![Arg::Num(i64::from(mask)), Arg::Symbol(end.clone())],
-                            line,
-                            1,
-                        );
-                        lowerer.push("variant_jump", vec![Arg::Symbol(fall.clone())], line, 1);
-                        lowerer.pending.push(end);
-                        lowerer.push("end", vec![Arg::Num(0)], line, 1);
+            let (line, col) = (section.line, 1);
+            let mut end = |lowerer: &mut Lowerer| {
+                lowerer.push("end", vec![Arg::Num(0)], line, col);
+                Ok(())
+            };
+            let mut body = |lowerer: &mut Lowerer| {
+                lowerer.commands(&section.body)?;
+                // A `noreturn` block runs off its end, which ends the block
+                // list too; the other variants end it plainly.
+                match section.noreturn {
+                    None => {
+                        lowerer.push("end", vec![Arg::Num(0)], line, col);
+                        Ok(())
                     }
-                    Some(fall)
+                    Some(0) => Ok(()),
+                    Some(mask) => {
+                        let mut end = |lowerer: &mut Lowerer| {
+                            lowerer.push("end", vec![Arg::Num(0)], line, col);
+                            Ok(())
+                        };
+                        lowerer.variant_if(mask, &mut |_| Ok(()), Some(&mut end), false, line, col)
+                    }
                 }
             };
-            if let Some(skip) = skip {
-                lowerer.pending.push(skip);
-                lowerer.push("end", vec![Arg::Num(0)], line, 1);
-            }
-            lowerer.pending.extend(fall);
+            lowerer.variant_if(section.when, &mut body, Some(&mut end), false, line, col)?;
         }
         SectionKind::Event(_) => lowerer.events(&section.body)?,
     }
     if !lowerer.pending.is_empty() {
-        // A variant jump past the last statement lands on the end of the
-        // stream.
+        // A jump past the last statement lands on the end of the stream.
         lowerer.items.push(Item {
             labels: std::mem::take(&mut lowerer.pending),
             kind: ItemKind::Db(Vec::new()),
@@ -1064,18 +1331,112 @@ fn lower_section(section: &Section, build: Build) -> Result<Vec<Item>> {
     Ok(lowerer.items)
 }
 
-struct Lowerer {
+struct Lowerer<'a> {
     build: Build,
+    /// The user procedures' numbers, by name.
+    procs: &'a HashMap<String, u8>,
     items: Vec<Item>,
     /// Labels for the next item.
     pending: Vec<String>,
-    next_label: usize,
+    relax: &'a mut Relax,
 }
 
-impl Lowerer {
+/// A part of an `if` statement to lower.
+type Branch<'b> = &'b mut dyn FnMut(&mut Lowerer) -> Result<()>;
+
+impl Lowerer<'_> {
     fn label(&mut self) -> String {
-        self.next_label += 1;
-        format!("__akscr_{}", self.next_label)
+        self.relax.next_label += 1;
+        format!("__akscr_{}", self.relax.next_label)
+    }
+
+    /// A command-VM `if` of `conditions`. The short `if`/`else` jump a byte;
+    /// an `if` [`Relax`] marks takes `if_long`/`else_long`, which jump two.
+    ///
+    /// The short `if` names the `else` or `endif` it resumes after; the long
+    /// one names where it resumes.
+    fn command_if(
+        &mut self,
+        conditions: &[Call],
+        then: Branch,
+        otherwise: Option<Branch>,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let skip = self.label();
+        let long = self.relax.long.contains(&skip);
+        self.relax.owner.insert(skip.clone(), skip.clone());
+        let (test, jump) = if long {
+            ("if_long", "else_long")
+        } else {
+            ("if", "else")
+        };
+        self.push(test, vec![Arg::Symbol(skip.clone())], line, col);
+        for condition in conditions {
+            self.condition(condition)?;
+            self.push_call(condition)?;
+        }
+        then(self)?;
+        if !long {
+            self.pending.push(skip.clone());
+        }
+        match otherwise {
+            None => {
+                self.push("endif", vec![Arg::Num(0)], line, col);
+                if long {
+                    self.pending.push(skip);
+                }
+            }
+            Some(otherwise) => {
+                let end = self.label();
+                self.relax.owner.insert(end.clone(), skip.clone());
+                self.push(jump, vec![Arg::Symbol(end.clone())], line, col);
+                if long {
+                    self.pending.push(skip);
+                }
+                otherwise(self)?;
+                self.pending.push(end);
+            }
+        }
+        Ok(())
+    }
+
+    /// An event-VM `if` of `conditions`: `evt_if` runs the conditions up to
+    /// its body and jumps past it when one fails; `evt_jump` skips the
+    /// `else`.
+    fn event_if(
+        &mut self,
+        conditions: &[Call],
+        then: Branch,
+        otherwise: Option<Branch>,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let body = self.label();
+        let skip = self.label();
+        self.push(
+            "evt_if",
+            vec![Arg::Symbol(body.clone()), Arg::Symbol(skip.clone())],
+            line,
+            col,
+        );
+        for condition in conditions {
+            self.condition(condition)?;
+            self.push_call(condition)?;
+        }
+        self.pending.push(body);
+        then(self)?;
+        match otherwise {
+            None => self.pending.push(skip),
+            Some(otherwise) => {
+                let end = self.label();
+                self.push("evt_jump", vec![Arg::Symbol(end.clone())], line, col);
+                self.pending.push(skip);
+                otherwise(self)?;
+                self.pending.push(end);
+            }
+        }
+        Ok(())
     }
 
     fn push(&mut self, mnemonic: &str, args: Vec<Arg>, line: usize, col: usize) {
@@ -1152,23 +1513,7 @@ impl Lowerer {
                     line,
                     col,
                 } => {
-                    let skip = self.label();
-                    self.push("if", vec![Arg::Symbol(skip.clone())], *line, *col);
-                    for condition in conditions {
-                        self.condition(condition)?;
-                        self.push_call(condition)?;
-                    }
-                    self.commands(then)?;
-                    self.pending.push(skip);
-                    match otherwise {
-                        None => self.push("endif", vec![Arg::Num(0)], *line, *col),
-                        Some(otherwise) => {
-                            let end = self.label();
-                            self.push("else", vec![Arg::Symbol(end.clone())], *line, *col);
-                            self.commands(otherwise)?;
-                            self.pending.push(end);
-                        }
-                    }
+                    self.statement_if(conditions, then, otherwise.as_deref(), false, *line, *col)?
                 }
                 Stmt::Asm(lines) => self.asm(lines)?,
                 Stmt::Variant {
@@ -1190,9 +1535,32 @@ impl Lowerer {
         Ok(())
     }
 
+    /// An `if` statement in the command or, for `event`, the event VM.
+    fn statement_if(
+        &mut self,
+        conditions: &[Call],
+        then: &[Stmt],
+        otherwise: Option<&[Stmt]>,
+        event: bool,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let lower = move |lowerer: &mut Lowerer, body: &[Stmt]| {
+            if event {
+                lowerer.events(body)
+            } else {
+                lowerer.commands(body)
+            }
+        };
+        let mut then = |lowerer: &mut Lowerer| lower(lowerer, then);
+        let mut otherwise = otherwise.map(|body| move |lowerer: &mut Lowerer| lower(lowerer, body));
+        let otherwise = otherwise.as_mut().map(|branch| branch as Branch);
+        self.flag_if(conditions, &mut then, otherwise, event, line, col)
+    }
+
     /// A variant test: in a variant's build the branch that variant takes,
-    /// in the runtime build a variant jump over `then` (and an unconditional
-    /// one over `otherwise`) in the command or, for `event`, the event VM.
+    /// in the runtime build an `if` of the flags that tell the variant
+    /// ([`variant_tests`]).
     fn variant(
         &mut self,
         mask: u8,
@@ -1202,7 +1570,7 @@ impl Lowerer {
         line: usize,
         col: usize,
     ) -> Result<()> {
-        let lower = |lowerer: &mut Self, body: &[Stmt]| {
+        let lower = move |lowerer: &mut Lowerer, body: &[Stmt]| {
             if event {
                 lowerer.events(body)
             } else {
@@ -1216,37 +1584,97 @@ impl Lowerer {
                 (false, None) => Ok(()),
             };
         }
-        let (test, jump) = if event {
-            ("evt_variant_if", "evt_jump")
-        } else {
-            ("variant_if", "variant_jump")
-        };
-        let skip = self.label();
-        self.push(
-            test,
-            vec![Arg::Num(i64::from(mask)), Arg::Symbol(skip.clone())],
-            line,
-            col,
-        );
-        lower(self, then)?;
-        match otherwise {
-            None => self.pending.push(skip),
-            Some(otherwise) => {
-                let end = self.label();
-                self.push(jump, vec![Arg::Symbol(end.clone())], line, col);
-                self.pending.push(skip);
-                lower(self, otherwise)?;
-                self.pending.push(end);
+        let mut then = |lowerer: &mut Lowerer| lower(lowerer, then);
+        let mut otherwise = otherwise.map(|body| move |lowerer: &mut Lowerer| lower(lowerer, body));
+        let otherwise = otherwise.as_mut().map(|branch| branch as Branch);
+        self.variant_if(mask, &mut then, otherwise, event, line, col)
+    }
+
+    /// An `if` of the room variants of `mask` ([`variant_tests`]) in the
+    /// command or, for `event`, the event VM. A test of `!USA` is the `else`
+    /// of the USA test, nested in the variant's other tests.
+    fn variant_if(
+        &mut self,
+        mask: u8,
+        then: Branch,
+        otherwise: Option<Branch>,
+        event: bool,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let (tests, not) = variant_tests(mask, line, col);
+        let Some(usa) = not else {
+            if tests.is_empty() {
+                return then(self);
             }
+            return self.flag_if(&tests, then, otherwise, event, line, col);
+        };
+        // The `else` body runs both where the other tests fail and in the
+        // USA release.
+        let has_otherwise = otherwise.is_some();
+        let otherwise = std::cell::RefCell::new(otherwise);
+        let other = |lowerer: &mut Lowerer| match otherwise.borrow_mut().as_mut() {
+            Some(branch) => branch(lowerer),
+            None => Ok(()),
+        };
+        let (mut first, mut second) = (other, other);
+        if tests.is_empty() {
+            return self.flag_if(&usa, &mut first, Some(then), event, line, col);
         }
-        Ok(())
+        let mut inner = |lowerer: &mut Lowerer| {
+            lowerer.flag_if(&usa, &mut first, Some(&mut *then), event, line, col)
+        };
+        let outer = has_otherwise.then_some(&mut second as Branch);
+        self.flag_if(&tests, &mut inner, outer, event, line, col)
+    }
+
+    /// An `if` of `conditions` in the command or, for `event`, the event VM.
+    fn flag_if(
+        &mut self,
+        conditions: &[Call],
+        then: Branch,
+        otherwise: Option<Branch>,
+        event: bool,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        if event {
+            self.event_if(conditions, then, otherwise, line, col)
+        } else {
+            self.command_if(conditions, then, otherwise, line, col)
+        }
     }
 
     /// A plain command statement; flow opcodes must use the statement forms.
     fn command_call(&mut self, call: &Call) -> Result<()> {
+        if let Some(&index) = self.procs.get(&call.name) {
+            if !call.args.is_empty() {
+                bail!(
+                    "line {}, column {}: procedure `{}` takes no arguments",
+                    call.line,
+                    call.col,
+                    call.name
+                );
+            }
+            self.push(
+                "gosub",
+                vec![Arg::Num(i64::from(index))],
+                call.line,
+                call.col,
+            );
+            return Ok(());
+        }
+        if call.name == "gosub" {
+            bail!(
+                "line {}, column {}: call a procedure by its name: `proc NAME {{ ... }}` and \
+                 `NAME();`",
+                call.line,
+                call.col
+            );
+        }
         if matches!(
             call.name.as_str(),
-            "end" | "if" | "else" | "endif" | "variant_if" | "variant_jump"
+            "end" | "if" | "else" | "endif" | "if_long" | "else_long"
         ) {
             bail!(
                 "line {}, column {}: write `{}` with the `if`/`else`/`return` statements",
@@ -1369,7 +1797,16 @@ impl Lowerer {
                     line,
                     col,
                 } => self.variant(*mask, then, otherwise.as_deref(), true, *line, *col)?,
-                Stmt::Return { .. } | Stmt::Require(_) | Stmt::If { .. } => {
+                Stmt::If {
+                    conditions,
+                    then,
+                    otherwise,
+                    line,
+                    col,
+                } => {
+                    self.statement_if(conditions, then, otherwise.as_deref(), true, *line, *col)?
+                }
+                Stmt::Return { .. } | Stmt::Require(_) => {
                     let (line, col) = stmt.position();
                     bail!(
                         "line {line}, column {col}: command flow is only valid inside a `run` \

@@ -2044,6 +2044,8 @@ local function mv_floor(e)
         lying_be_flg(e)
         e:clip(side == 0 and 1 or 2, side * 5 + 10, 0xF)
         hold_damage(e)
+        -- Down, it is no longer staggered: its next hit staggers it again.
+        e:set_var(AT_OBJ_NO, 0)
         e:set_timer(3, 0)
         if voice_free(e) then
             moan_either(e, 0xD, 0xC)

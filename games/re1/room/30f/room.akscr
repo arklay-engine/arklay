@@ -8,26 +8,26 @@
 #include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
-#define AOT_00_DOOR 0x00
-#define AOT_01_DOOR 0x01
-#define AOT_02_DOOR 0x02
-#define AOT_03_EVENT 0x03
-#define AOT_04_ITEM 0x04
-#define AOT_05_ITEM 0x05
-#define AOT_06_USEITEM 0x06
-#define AOT_07_MESSAGE 0x07
-#define AOT_08_NONE 0x08
-#define AOT_09_NONE 0x09
-#define AOT_0A_USEITEM 0x0A
-#define AOT_0B_USEITEM 0x0B
-#define AOT_0C_EVENT 0x0C
-#define AOT_0D_NONE 0x0D
-#define AOT_0E_NONE 0x0E
+#define AOT_00_DOOR_305 0x00                                // The lift up to the fountain.
+#define AOT_01_DOOR_306 0x01
+#define AOT_02_DOOR_30D 0x02
+#define AOT_03_EVENT_ELEVATOR 0x03
+#define AOT_04_ITEM_MAP_UNDERGROUND_0 0x04
+#define AOT_05_ITEM_KEY_MO_DISK_1 0x05
+#define AOT_06_USEITEM_CRANK_HOLE 0x06
+#define AOT_07_MESSAGE_HEXAGONAL_HOLE 0x07
+#define AOT_08_EVENT_BOULDER_TRIGGER 0x08                   // Starts the boulder once the map corner was reached.
+#define AOT_09_USEITEM_BOULDER_PATH 0x09                    // Walk-on zone raising F_ROOM_IN_BOULDER_PATH.
+#define AOT_0A_USEITEM_BOULDER_PATH_MID 0x0A                // Walk-on zone raising F_ROOM_IN_BOULDER_PATH_MID.
+#define AOT_0B_USEITEM_MAP_CORNER 0x0B                      // Walk-on zone raising F_ROOM_MAP_CORNER_REACHED.
+#define AOT_0C_EVENT_MAP 0x0C
+#define AOT_0D_USEITEM_EAST_END 0x0D                        // Guess: walk-on zone at the boulder's resting end, raising F_ROOM_AT_EAST_END.
+#define AOT_0E_USEITEM_BOULDER_PATH_SIDE 0x0E               // Walk-on zone raising F_ROOM_IN_BOULDER_PATH.
 #define CAM_02 0x02
-#define CAM_03 0x03
+#define CAM_03_CORRIDOR_EAST_END 0x03
 #define CAM_05 0x05
 #define CAM_06 0x06
-#define CAM_07 0x07
+#define CAM_07_MAP_CORNER 0x07
 #define COL_05 0x05
 #define COL_06 0x06
 #define COL_07 0x07
@@ -37,37 +37,37 @@
 #define FX_00 0x00
 #define FX_06 0x06
 #define FX_09 0x09
-#define F_ROOM_0A 0x0A
-#define F_ROOM_0B 0x0B
-#define F_ROOM_0E 0x0E
-#define F_ROOM_0F 0x0F
-#define F_ROOM_10 0x10
-#define F_ROOM_11 0x11
-#define F_ROOM_12 0x12
-#define F_ROOM_13 0x13
-#define F_ROOM_14 0x14
-#define F_ROOM_15 0x15
-#define F_ROOM_17 0x17
-#define F_ROOM_18 0x18
-#define F_ROOM_19 0x19
-#define F_ROOM_1C 0x1C
-#define F_ROOM_1D 0x1D
-#define F_ROOM_1F 0x1F
-#define F_ROOM_20 0x20
-#define F_ROOM_21 0x21
-#define F_ROOM_22 0x22
-#define F_ROOM_24 0x24
-#define IMDL_00 0x00
-#define IMDL_01 0x01
+#define F_ROOM_AT_EAST_END 0x12                             // Guess: the player is at the corridor's east end, where the boulder stops.
+#define F_ROOM_BOULDER_AT_REST 0x17                         // The boulder lies at the corridor's east end.
+#define F_ROOM_BOULDER_RELEASED 0x18                        // The boulder's start sequence finished.
+#define F_ROOM_BOULDER_ROLLING 0x13                         // The boulder sequence is running.
+#define F_ROOM_BOULDER_SOUNDS_ON 0x1C                       // The boulder's sound requests are played.
+#define F_ROOM_BOULDER_STOPPED 0x19                         // The boulder finished rolling.
+#define F_ROOM_CRANK_TURNED 0x15                            // The crank turn finished: restore the player's position and camera.
+#define F_ROOM_ENTRY_WALL_POS_PENDING 0x14                  // Set on entry: place the rotating passage once when coming from 306.
+#define F_ROOM_IN_BOULDER_PATH 0x21                         // The player stands in the boulder's path.
+#define F_ROOM_IN_BOULDER_PATH_MID 0x22                     // Guess: the player stands in the middle stretch of the boulder's path (picks the crush animation).
+#define F_ROOM_MAP_CORNER_REACHED 0x24                      // The player reached the map's west end: arms the boulder trigger.
+#define F_ROOM_MAP_PRESENT 0x1F                             // The map was still here on entry: show the pickup message once it is taken.
+#define F_ROOM_PLAYER_ANIM_DONE 0x20                        // The player's animation finished (one frame).
+#define F_ROOM_PLAYER_CRUSHED 0x11                          // The boulder crushed the player.
+#define F_ROOM_SND_ROCK_HIT_A 0x0A                          // Play the boulder's first hit sound (one shot).
+#define F_ROOM_SND_ROCK_HIT_B 0x0B                          // Play the boulder's second hit sound (one shot).
+#define F_ROOM_SND_ROCK_STOP 0x0E                           // Play the boulder's stop sound (one shot).
+#define F_ROOM_SND_ROCK_STOP_2 0x0F                         // Play sound 0x1F as the boulder stops (one shot).
+#define F_ROOM_SND_ROCK_STOP_3 0x10                         // Play sound 0x20 as the boulder stops (one shot).
+#define F_ROOM_WALL_REFRESH 0x1D                            // Re-apply the rotating passage's collision and angle from the turn count.
+#define IMDL_00_MAP_UNDERGROUND 0x00
+#define IMDL_01_KEY_MO_DISK 0x01
 #define MSG_IT_IS_A_MAP_OF_UNDER 0x01
 #define MSG_YOU_GOT_THE_MAP_OF_UNDER 0x02
-#define OBJ_00 0x00
-#define OBJ_01 0x01
-#define OBJ_02 0x02
-#define OBJ_03 0x03
-#define OBJ_04 0x04
-#define OBJ_05 0x05
-#define OBJ_06 0x06
+#define OBJ_00_BOULDER 0x00
+#define OBJ_01_ROTATING_PASSAGE 0x01
+#define OBJ_02_ELEVATOR 0x02
+#define OBJ_03_CRANK 0x03
+#define OBJ_04_WALL_SOUTH 0x04                              // Guess: a passage wall blocker toggled by the rotation.
+#define OBJ_05_WALL_NORTH 0x05                              // Guess: a passage wall blocker toggled by the rotation.
+#define OBJ_06_WALL_CENTRE 0x06                             // Guess: a passage wall blocker toggled by the rotation.
 #define SE_17_R_PASS 0x17
 #define SE_18_CRANK 0x18
 #define SE_1A_RCK_HITA 0x1A
@@ -80,60 +80,60 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 0, 0, ROOM_305_FOUNTAIN, 5950, 0, 13800, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 10000, 14500, 2400, 2500, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_306_ITEM_PASSAGE, 9400, 0, 6300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 28700, 14000, 4900, 3100, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30D_STRAIGHT_PASSAGE, 4100, 0, 4300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    aot_set(AOT_03_EVENT, 21800, 0, 4200, 4500, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, on_aot_03, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_51_UNKNOWN_51, 1, IMDL_00, SCA_NONE, 1950, -2550, 24070, 0, F_ITEM_76, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_05_ITEM, 2300, 18000, 1000, 3000, IT_28_KEY_MO_DISK, 1, IMDL_01, SCA_NONE, 2600, -1000, 18830, -1400, F_ITEM_FB, SAT_MANUAL | SAT_PLAYER, 0);
-    obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3400, -2160, 24000, 0, 0, 0, 0, 0, 0, 2300, 2900, 2100);
-    obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 17270, -2310, 23970, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_02, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 24300, 0, 2360, -1024, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_03, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 16500, 0, 27180, 0, 0, 0, 0, 0, 0, 0, 16500, 1380);
-    obj(OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14436, 0, 20726, 0, 0, 0, 0, 0, 0, 0, 10782, 1200);
-    obj(OBJ_06, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 13599, 0, 23373, 0, 0, 0, 0, 0, 0, 0, 2637, 4401);
-    aot_set(AOT_06_USEITEM, 17600, 19300, 1700, 2700, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
-    aot_set(AOT_07_MESSAGE, 17600, 19300, 1700, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    if (ck(FG_SCENARIO, F_SCENARIO_4C, FALSE))
+    door_aot_set(AOT_00_DOOR_305, 0, 0, 1, 1, 0, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 0, 0, ROOM_305_FOUNTAIN, 5950, 0, 13800, 3072, UNLOCKED, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR_306, 10000, 14500, 2400, 2500, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_306_ITEM_PASSAGE, 9400, 0, 6300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR_30D, 28700, 14000, 4900, 3100, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30D_STRAIGHT_PASSAGE, 4100, 0, 4300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_03_EVENT_ELEVATOR, 21800, 0, 4200, 4500, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 0, 0, ride_elevator_up, 0, 0, 0);
+    item_aot_set(AOT_04_ITEM_MAP_UNDERGROUND_0, 0, 0, 1, 1, IT_51_MAP_UNDERGROUND, 1, IMDL_00_MAP_UNDERGROUND, SCA_NONE, 1950, -2550, 24070, 0, F_ITEM_30F_MAP_UNDERGROUND_0, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_05_ITEM_KEY_MO_DISK_1, 2300, 18000, 1000, 3000, IT_28_KEY_MO_DISK, 1, IMDL_01_KEY_MO_DISK, SCA_NONE, 2600, -1000, 18830, -1400, F_ITEM_30F_KEY_MO_DISK_1, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3400, -2160, 24000, 0, 0, 0, 0, 0, 0, 2300, 2900, 2100);
+    obj(OBJ_01_ROTATING_PASSAGE, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 17270, -2310, 23970, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02_ELEVATOR, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 24300, 0, 2360, -1024, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_03_CRANK, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_04_WALL_SOUTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 16500, 0, 27180, 0, 0, 0, 0, 0, 0, 0, 16500, 1380);
+    obj(OBJ_05_WALL_NORTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 14436, 0, 20726, 0, 0, 0, 0, 0, 0, 0, 10782, 1200);
+    obj(OBJ_06_WALL_CENTRE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 13599, 0, 23373, 0, 0, 0, 0, 0, 0, 0, 2637, 4401);
+    aot_set(AOT_06_USEITEM_CRANK_HOLE, 17600, 19300, 1700, 2700, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
+    aot_set(AOT_07_MESSAGE_HEXAGONAL_HOLE, 17600, 19300, 1700, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_30F_BOULDER_ROLLED, FALSE))
     {
-        aot_set(AOT_08_NONE, 10600, 21800, 3000, 5500, SCE_NONE, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        aot_set(AOT_09_NONE, 0, 21400, 31000, 5000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-        aot_set(AOT_0A_USEITEM, 1500, 22200, 23700, 4200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
-        aot_set(AOT_0B_USEITEM, 0, 21800, 7000, 5500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 36, 0, 1, 0);
+        aot_set(AOT_08_EVENT_BOULDER_TRIGGER, 10600, 21800, 3000, 5500, SCE_NONE, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_09_USEITEM_BOULDER_PATH, 0, 21400, 31000, 5000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+        aot_set(AOT_0A_USEITEM_BOULDER_PATH_MID, 1500, 22200, 23700, 4200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
+        aot_set(AOT_0B_USEITEM_MAP_CORNER, 0, 21800, 7000, 5500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 36, 0, 1, 0);
     }
     else
     {
-        set(FG_ROOM, F_ROOM_17, TRUE);
+        set(FG_ROOM, F_ROOM_BOULDER_AT_REST, TRUE);
     }
-    if (ck(FG_ITEM, F_ITEM_76, TRUE))
+    if (ck(FG_ITEM, F_ITEM_30F_MAP_UNDERGROUND_0, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1F, TRUE);
-        aot_set(AOT_0C_EVENT, 1350, 23190, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0c, 0, 0, 0);
+        set(FG_ROOM, F_ROOM_MAP_PRESENT, TRUE);
+        aot_set(AOT_0C_EVENT_MAP, 1350, 23190, 2000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_map, 0, 0, 0);
     }
-    set(FG_SCENARIO, F_SCENARIO_42, TRUE);
-    set(FG_STATUS, F_STATUS_3D, TRUE);
-    set(FG_STATUS, F_STATUS_1D, TRUE);
-    set(FG_STATUS, F_STATUS_3C, TRUE);
+    set(FG_SCENARIO, F_SCENARIO_ADDERS_IN_30D, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_BORDER, TRUE);
+    set(FG_STATUS, F_STATUS_CAMERA_DEFER, TRUE);
+    set(FG_STATUS, F_STATUS_FADE_NO_DEPTH_CLAMP, TRUE);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_305_FOUNTAIN))
     {
-        evt_exec(0, TASK_09, on_enter);
+        evt_exec(0, TASK_09, ride_elevator_down);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_4C, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_30F_BOULDER_ROLLED, FALSE))
     {
-        aot_set(AOT_0D_NONE, 27400, 22100, 5000, 6000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 18, 0, 1, 0);
+        aot_set(AOT_0D_USEITEM_EAST_END, 27400, 22100, 5000, 6000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 18, 0, 1, 0);
     }
-    if (JPN)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
-        aot_set(AOT_0E_NONE, 10000, 21000, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+        aot_set(AOT_0E_USEITEM_BOULDER_PATH_SIDE, 10000, 21000, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
     }
     else
     {
-        aot_set(AOT_0E_NONE, 10000, 21200, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+        aot_set(AOT_0E_USEITEM_BOULDER_PATH_SIDE, 10000, 21200, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
     }
-    set(FG_ROOM, F_ROOM_1D, TRUE);
-    set(FG_ROOM, F_ROOM_14, TRUE);
-    if (ck(FG_SCENARIO, F_SCENARIO_4C, FALSE))
+    set(FG_ROOM, F_ROOM_WALL_REFRESH, TRUE);
+    set(FG_ROOM, F_ROOM_ENTRY_WALL_POS_PENDING, TRUE);
+    if (ck(FG_SCENARIO, F_SCENARIO_30F_BOULDER_ROLLED, FALSE))
     {
         inst_cfg(COL_LIST_00, COL_06, 0, 0, 0, 2, 2);
         inst_cfg(COL_LIST_00, COL_07, 0, 0, 0, 2, 2);
@@ -151,7 +151,7 @@ proc init
 
 proc main
 {
-    if (JPN)
+    if (ck(FG_STATUS, F_STATUS_REGION_JPN, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
         {
@@ -165,32 +165,32 @@ proc main
             set(FG_MAP, F_MAP_VISITED_312, TRUE);
         }
     }
-    if (ck(FG_ITEM, F_ITEM_76, FALSE) && ck(FG_ROOM, F_ROOM_1F, TRUE))
+    if (ck(FG_ITEM, F_ITEM_30F_MAP_UNDERGROUND_0, FALSE) && ck(FG_ROOM, F_ROOM_MAP_PRESENT, TRUE))
     {
-        set(FG_ROOM, F_ROOM_1F, FALSE);
+        set(FG_ROOM, F_ROOM_MAP_PRESENT, FALSE);
         message(MSG_YOU_GOT_THE_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of UNDER GROUND."
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
         {
-            aot_delete(AOT_06_USEITEM, SCE_USEITEM, SAT_PLAYER);
+            aot_delete(AOT_06_USEITEM_CRANK_HOLE, SCE_USEITEM, SAT_PLAYER);
         }
         else
         {
-            aot_delete(AOT_06_USEITEM, SCE_NONE, SAT_PLAYER);
+            aot_delete(AOT_06_USEITEM_CRANK_HOLE, SCE_NONE, SAT_PLAYER);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_15, TRUE))
+    if (ck(FG_ROOM, F_ROOM_CRANK_TURNED, TRUE))
     {
-        set(FG_ROOM, F_ROOM_15, FALSE);
+        set(FG_ROOM, F_ROOM_CRANK_TURNED, FALSE);
         dir_set(0, 0, 1024, 0, 18741, 0, 22348);
         cut_auto(CUT_FREE);
     }
     if (testitem(IT_1E_KEY_CRANK_HEXAGONAL))
     {
         cut_auto(CUT_LOCKED);
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             dir_set(0, 0, 1024, 0, 19710, 0, 22052);
         }
@@ -198,130 +198,130 @@ proc main
         {
             dir_set(0, 0, 1024, 0, 19910, -50, 22400);
         }
-        evt_exec(0, TASK_09, from_main_4);
+        evt_exec(0, TASK_09, turn_crank);
     }
-    if (ck(FG_ROOM, F_ROOM_24, TRUE))
+    if (ck(FG_ROOM, F_ROOM_MAP_CORNER_REACHED, TRUE))
     {
-        aot_delete(AOT_08_NONE, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0B_USEITEM, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0D_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_08_EVENT_BOULDER_TRIGGER, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0B_USEITEM_MAP_CORNER, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0D_USEITEM_EAST_END, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
     }
-    if (ck(FG_ROOM, F_ROOM_21, TRUE))
+    if (ck(FG_ROOM, F_ROOM_IN_BOULDER_PATH, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_12, TRUE))
+        if (ck(FG_ROOM, F_ROOM_AT_EAST_END, TRUE))
         {
-            set(FG_ROOM, F_ROOM_12, FALSE);
-            objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            set(FG_ROOM, F_ROOM_AT_EAST_END, FALSE);
+            objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         }
         require(cmpb(B_CAMERA, CMP_NE, CAM_02));
-        require(ck_counter(0, DIST_OBJ, OBJ_00, 3800));
-        aot_delete(AOT_09_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0E_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        require(ck_counter(0, DIST_OBJ, OBJ_00_BOULDER, 3800));
+        aot_delete(AOT_09_USEITEM_BOULDER_PATH, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0E_USEITEM_BOULDER_PATH_SIDE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         if (ck_tween(0, 1024, 3072))
         {
-            evt_exec(0, TASK_04, from_main);
+            evt_exec(0, TASK_04, crushed_by_boulder_facing);
         }
-        else if (ck(FG_ROOM, F_ROOM_22, TRUE))
+        else if (ck(FG_ROOM, F_ROOM_IN_BOULDER_PATH_MID, TRUE))
         {
-            evt_exec(0, TASK_04, from_main_3);
+            evt_exec(0, TASK_04, crushed_by_boulder_mid);
         }
         else
         {
-            evt_exec(0, TASK_04, from_main_2);
+            evt_exec(0, TASK_04, crushed_by_boulder);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_13, TRUE))
+    if (ck(FG_ROOM, F_ROOM_BOULDER_ROLLING, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
         {
-            evt_exec(0, TASK_03, from_main_10);
+            evt_exec(0, TASK_03, boulder_rolling_cam_06);
         }
         else if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
-            evt_exec(0, TASK_03, from_main_12);
+            evt_exec(0, TASK_03, boulder_rolling_cam_02);
         }
         else
         {
-            evt_exec(0, TASK_03, from_main_11);
+            evt_exec(0, TASK_03, boulder_rolling_default);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_1C, TRUE))
+    if (ck(FG_ROOM, F_ROOM_BOULDER_SOUNDS_ON, TRUE))
     {
-        if (ck(FG_ROOM, F_ROOM_0A, TRUE))
+        if (ck(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, TRUE))
         {
-            set(FG_ROOM, F_ROOM_0A, FALSE);
+            set(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, FALSE);
             se_play_3d(SND_BANK_ROOM, SE_1A_RCK_HITA, 0, SND_AT_PLAYER, 0, 31300, 14400);
         }
-        if (ck(FG_ROOM, F_ROOM_0B, TRUE))
+        if (ck(FG_ROOM, F_ROOM_SND_ROCK_HIT_B, TRUE))
         {
-            set(FG_ROOM, F_ROOM_0B, FALSE);
+            set(FG_ROOM, F_ROOM_SND_ROCK_HIT_B, FALSE);
             se_play_3d(SND_BANK_ROOM, SE_1B_RCK_HITB, 0, SND_AT_PLAYER, 0, 31300, 14400);
         }
-        if (ck(FG_ROOM, F_ROOM_0E, TRUE))
+        if (ck(FG_ROOM, F_ROOM_SND_ROCK_STOP, TRUE))
         {
-            set(FG_ROOM, F_ROOM_0E, FALSE);
+            set(FG_ROOM, F_ROOM_SND_ROCK_STOP, FALSE);
             se_play_3d(SND_BANK_ROOM, SE_1E_RCK_STOP, 0, SND_AT_PLAYER, 0, 31300, 14400);
         }
-        if (ck(FG_ROOM, F_ROOM_0F, TRUE))
+        if (ck(FG_ROOM, F_ROOM_SND_ROCK_STOP_2, TRUE))
         {
-            set(FG_ROOM, F_ROOM_0F, FALSE);
+            set(FG_ROOM, F_ROOM_SND_ROCK_STOP_2, FALSE);
             se_play_3d(SND_BANK_ROOM, SE_1F, 0, SND_AT_PLAYER, 0, 31300, 14400);
         }
-        if (ck(FG_ROOM, F_ROOM_10, TRUE))
+        if (ck(FG_ROOM, F_ROOM_SND_ROCK_STOP_3, TRUE))
         {
-            set(FG_ROOM, F_ROOM_10, FALSE);
+            set(FG_ROOM, F_ROOM_SND_ROCK_STOP_3, FALSE);
             se_play_3d(SND_BANK_ROOM, SE_20, 0, SND_AT_PLAYER, 0, 31300, 14400);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_1D, TRUE))
+    if (ck(FG_ROOM, F_ROOM_WALL_REFRESH, TRUE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, FALSE) && ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, FALSE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
-            objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            objtbl_b_set(TBL_OBJ, OBJ_06, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_04_WALL_SOUTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_06_WALL_CENTRE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
             inst_cfg(COL_LIST_01, COL_0C, 0, 10260, 18414, 17730, 21726);
-            objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            eml_pos(OBJ_01, -2048, 0, 0, 16710, -2310, 23970);
+            objtbl_b_set(TBL_OBJ, OBJ_05_WALL_NORTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            eml_pos(OBJ_01_ROTATING_PASSAGE, -2048, 0, 0, 16710, -2310, 23970);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, TRUE) && ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, FALSE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 0, 0, 2, 2);
-            objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-            objtbl_b_set(TBL_OBJ, OBJ_06, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_04_WALL_SOUTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_06_WALL_CENTRE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
             inst_cfg(COL_LIST_01, COL_0C, 0, 10260, 18414, 17730, 21726);
-            objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            eml_pos(OBJ_01, -3072, 0, 0, 16710, -2310, 23970);
+            objtbl_b_set(TBL_OBJ, OBJ_05_WALL_NORTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            eml_pos(OBJ_01_ROTATING_PASSAGE, -3072, 0, 0, 16710, -2310, 23970);
         }
     }
-    if (ck(FG_ROOM, F_ROOM_1D, TRUE))
+    if (ck(FG_ROOM, F_ROOM_WALL_REFRESH, TRUE))
     {
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, FALSE) && ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, TRUE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
-            objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            objtbl_b_set(TBL_OBJ, OBJ_06, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_04_WALL_SOUTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_06_WALL_CENTRE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
             inst_cfg(COL_LIST_01, COL_0C, 0, 10260, 18414, 17730, 21726);
-            objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            eml_pos(OBJ_01, 0, 0, 0, 16710, -2310, 23970);
+            objtbl_b_set(TBL_OBJ, OBJ_05_WALL_NORTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            eml_pos(OBJ_01_ROTATING_PASSAGE, 0, 0, 0, 16710, -2310, 23970);
         }
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4B, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, TRUE) && ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, TRUE))
         {
             inst_cfg(COL_LIST_01, COL_0D, 0, 10260, 26000, 17730, 29502);
-            objtbl_b_set(TBL_OBJ, OBJ_04, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-            objtbl_b_set(TBL_OBJ, OBJ_06, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_04_WALL_SOUTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+            objtbl_b_set(TBL_OBJ, OBJ_06_WALL_CENTRE, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
             inst_cfg(COL_LIST_01, COL_0C, 0, 0, 0, 2, 2);
-            objtbl_b_set(TBL_OBJ, OBJ_05, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-            eml_pos(OBJ_01, -1024, 0, 0, 16710, -2310, 23970);
+            objtbl_b_set(TBL_OBJ, OBJ_05_WALL_NORTH, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+            eml_pos(OBJ_01_ROTATING_PASSAGE, -1024, 0, 0, 16710, -2310, 23970);
         }
     }
-    set(FG_ROOM, F_ROOM_1D, FALSE);
-    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_306_ITEM_PASSAGE) && ck(FG_ROOM, F_ROOM_14, TRUE))
+    set(FG_ROOM, F_ROOM_WALL_REFRESH, FALSE);
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_306_ITEM_PASSAGE) && ck(FG_ROOM, F_ROOM_ENTRY_WALL_POS_PENDING, TRUE))
     {
-        set(FG_ROOM, F_ROOM_14, FALSE);
-        eml_pos(OBJ_01, -1024, 0, 0, 17310, -1700, 23400);
+        set(FG_ROOM, F_ROOM_ENTRY_WALL_POS_PENDING, FALSE);
+        eml_pos(OBJ_01_ROTATING_PASSAGE, -1024, 0, 0, 17310, -1700, 23400);
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
         {
@@ -334,87 +334,87 @@ proc main
             inst_cfg(COL_LIST_01, COL_06, 0, 16002, 0, 23202, 18360);
         }
     }
-    if (ck(FG_STATUS, F_STATUS_1A, TRUE))
+    if (ck(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE))
     {
         if (cmpb(B_CAMERA, CMP_NE, CAM_06))
         {
-            if (cmpb(B_CAMERA, CMP_NE, CAM_07))
+            if (cmpb(B_CAMERA, CMP_NE, CAM_07_MAP_CORNER))
             {
-                evt_exec(0, TASK_09, from_main_5);
+                evt_exec(0, TASK_09, passage_pos_default);
             }
             else
             {
-                evt_exec(0, TASK_09, from_main_6);
+                evt_exec(0, TASK_09, passage_pos_cam_07);
             }
         }
         else
         {
-            evt_exec(0, TASK_09, from_main_7);
+            evt_exec(0, TASK_09, passage_pos_cam_06);
         }
-        require(ck(FG_ROOM, F_ROOM_17, TRUE));
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        require(ck(FG_ROOM, F_ROOM_BOULDER_AT_REST, TRUE));
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03_CORRIDOR_EAST_END))
         {
-            evt_exec(0, TASK_09, from_main_8);
+            evt_exec(0, TASK_09, boulder_pos_cam_03);
         }
         else
         {
-            evt_exec(0, TASK_09, from_main_9);
+            evt_exec(0, TASK_09, boulder_pos_default);
         }
     }
 }
 
-event event_00
+event boulder_trap
 {
     run
     {
-        set(FG_SCENARIO, F_SCENARIO_4C, TRUE);
-        objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
-        set(FG_ROOM, F_ROOM_13, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_30F_BOULDER_ROLLED, TRUE);
+        objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE);
+        set(FG_ROOM, F_ROOM_BOULDER_ROLLING, TRUE);
         set(FG_RUN, F_RUN_READY, FALSE);
-        aot_delete(AOT_03_EVENT, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_04_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_05_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_08_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0B_USEITEM, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0C_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03_EVENT_ELEVATOR, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_04_ITEM_MAP_UNDERGROUND_0, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_ITEM_KEY_MO_DISK_1, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_MESSAGE_HEXAGONAL_HOLE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_08_EVENT_BOULDER_TRIGGER, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0B_USEITEM_MAP_CORNER, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0C_EVENT_MAP, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         inst_cfg(COL_LIST_01, COL_07, 0, 0, 0, 2, 2);
         inst_cfg(COL_LIST_01, COL_08, 0, 0, 0, 2, 2);
     }
-    evt_fork(TASK_01, event_02, 0);
+    evt_fork(TASK_01, boulder_starts, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_18, FALSE));
-    evt_fork(TASK_01, event_01, 0);
+    while (ck(FG_ROOM, F_ROOM_BOULDER_RELEASED, FALSE));
+    evt_fork(TASK_01, boulder_rolls, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, F_ROOM_19, FALSE));
+    while (ck(FG_ROOM, F_ROOM_BOULDER_STOPPED, FALSE));
     run
     {
         set(FG_RUN, F_RUN_READY, TRUE);
-        set(FG_ROOM, F_ROOM_13, FALSE);
-        set(FG_ROOM, F_ROOM_11, FALSE);
-        aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_07_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_0C_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        aot_delete(AOT_0D_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
+        set(FG_ROOM, F_ROOM_BOULDER_ROLLING, FALSE);
+        set(FG_ROOM, F_ROOM_PLAYER_CRUSHED, FALSE);
+        aot_delete(AOT_03_EVENT_ELEVATOR, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_04_ITEM_MAP_UNDERGROUND_0, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_ITEM_KEY_MO_DISK_1, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_MESSAGE_HEXAGONAL_HOLE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0C_EVENT_MAP, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_0D_USEITEM_EAST_END, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     }
     evt_finish();
 }
 
-event event_01
+event boulder_rolls
 {
-    evt_fork(TASK_05, event_08, 0);
-    evt_fork(TASK_06, event_07, 0);
-    evt_fork(TASK_07, event_06, 0);
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_fork(TASK_05, boulder_debris, 0);
+    evt_fork(TASK_06, boulder_dust, 0);
+    evt_fork(TASK_07, boulder_rumble, 0);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_pos(75, 2, 0);
     tw_set_rot(0, 0, 34);
@@ -1092,55 +1092,55 @@ event event_01
     evt_disable(TASK_07);
     run
     {
-        aot_delete(AOT_09_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0E_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+        aot_delete(AOT_09_USEITEM_BOULDER_PATH, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0E_USEITEM_BOULDER_PATH_SIDE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03_CORRIDOR_EAST_END))
         {
-            eml_pos(OBJ_00, 0, 0, 0, 31000, -2000, 24120);
+            eml_pos(OBJ_00_BOULDER, 0, 0, 0, 31000, -2000, 24120);
         }
         else
         {
-            eml_pos(OBJ_00, 0, 0, 0, 29373, -2000, 24120);
+            eml_pos(OBJ_00_BOULDER, 0, 0, 0, 29373, -2000, 24120);
         }
-        if (ck(FG_ROOM, F_ROOM_11, FALSE))
+        if (ck(FG_ROOM, F_ROOM_PLAYER_CRUSHED, FALSE))
         {
             inst_cfg(COL_LIST_00, COL_06, 0, 27198, 21060, 33570, 27432);
             inst_cfg(COL_LIST_00, COL_07, 0, 27396, 24552, 31338, 28188);
         }
-        objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-        set(FG_STATUS, F_STATUS_3E, TRUE);
-        set(FG_ROOM, F_ROOM_0E, TRUE);
-        set(FG_ROOM, F_ROOM_0F, TRUE);
-        set(FG_ROOM, F_ROOM_10, TRUE);
-        set(FG_ROOM, F_ROOM_17, TRUE);
+        objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
+        set(FG_ROOM, F_ROOM_SND_ROCK_STOP, TRUE);
+        set(FG_ROOM, F_ROOM_SND_ROCK_STOP_2, TRUE);
+        set(FG_ROOM, F_ROOM_SND_ROCK_STOP_3, TRUE);
+        set(FG_ROOM, F_ROOM_BOULDER_AT_REST, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     sleep(30);
     run
     {
-        set(FG_ROOM, F_ROOM_19, TRUE);
+        set(FG_ROOM, F_ROOM_BOULDER_STOPPED, TRUE);
     }
     evt_disable(TASK_06);
     evt_finish();
 }
 
-event event_02
+event boulder_starts
 {
     run
     {
-        cutnext(CAM_07);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        cutnext(CAM_07_MAP_CORNER);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
-        set(FG_ROOM, F_ROOM_1C, TRUE);
-        set(FG_ROOM, F_ROOM_0A, TRUE);
+        set(FG_ROOM, F_ROOM_BOULDER_SOUNDS_ON, TRUE);
+        set(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, TRUE);
         bgm_play(BGM_SUB_1);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     tw_abs_pos(0, 19000, -1700, 23400);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_pos(1, 0, 0);
     tw_set_rot(1, 0, 0);
@@ -1152,8 +1152,8 @@ event event_02
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_0A, TRUE);
-    evt_work_set(WK_OBJ, OBJ_00);
+    set(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, TRUE);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_pos(2, 0, 0);
     tw_set_rot(0, 0, 1);
@@ -1205,8 +1205,8 @@ event event_02
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_ROOM, F_ROOM_0A, TRUE);
-    evt_work_set(WK_OBJ, OBJ_00);
+    set(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, TRUE);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_pos(34, -5, 0);
     tw_set_rot(0, 0, 14);
@@ -1243,35 +1243,35 @@ event event_02
     tw_abs_pos(0, 3400, -2160, 24000);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     tw_abs_pos(0, 16710, -2310, 23970);
     tw_end();
     evt_nop();
     run
     {
-        set(FG_ROOM, F_ROOM_18, TRUE);
+        set(FG_ROOM, F_ROOM_BOULDER_RELEASED, TRUE);
         cutcurr(0);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
-        aot_delete(AOT_09_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
-        aot_delete(AOT_0E_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_09_USEITEM_BOULDER_PATH, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
+        aot_delete(AOT_0E_USEITEM_BOULDER_PATH_SIDE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
     }
     evt_finish();
 }
 
-event from_main
+event crushed_by_boulder_facing
 {
-    set(FG_ROOM, F_ROOM_11, TRUE);
+    set(FG_ROOM, F_ROOM_PLAYER_CRUSHED, TRUE);
     evt_disable(TASK_05);
     evt_disable(TASK_06);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_34, F_ROOM_20, 0);
+    act_anim_flags(ANIM_34, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(15);
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     run
     {
         effect(FX_00, FX_ROW_03, FX_AT_PLAYER, 0, -200, 0, 0);
@@ -1283,25 +1283,25 @@ event from_main
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
 }
 
-event from_main_2
+event crushed_by_boulder
 {
-    set(FG_ROOM, F_ROOM_11, TRUE);
+    set(FG_ROOM, F_ROOM_PLAYER_CRUSHED, TRUE);
     evt_disable(TASK_05);
     evt_disable(TASK_06);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_35, F_ROOM_20, 0);
+    act_anim_flags(ANIM_35, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(15);
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     run
     {
         effect(FX_00, FX_ROW_03, FX_AT_PLAYER, 0, -200, 0, 0);
@@ -1313,25 +1313,25 @@ event from_main_2
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
 }
 
-event from_main_3
+event crushed_by_boulder_mid
 {
-    set(FG_ROOM, F_ROOM_11, TRUE);
+    set(FG_ROOM, F_ROOM_PLAYER_CRUSHED, TRUE);
     evt_disable(TASK_05);
     evt_disable(TASK_06);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(ANIM_36, F_ROOM_20, 0);
+    act_anim_flags(ANIM_36, F_ROOM_PLAYER_ANIM_DONE, 0);
     act_reset();
     evt_nop();
     sleep(20);
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     run
     {
         effect(FX_00, FX_ROW_03, FX_AT_PLAYER, 0, -200, 0, 0);
@@ -1343,99 +1343,99 @@ event from_main_3
     run
     {
         objs_hide(0);
-        set(FG_STATUS, F_STATUS_3E, FALSE);
-        set(FG_STATUS, F_STATUS_07, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+        set(FG_STATUS, F_STATUS_PLAYER_DEAD, TRUE);
         bgm_stop(BGM_SUB_1);
     }
     evt_finish();
 }
 
-event event_06
+event boulder_rumble
 {
-    set(FG_STATUS, F_STATUS_3E, TRUE);
-    set(FG_ROOM, F_ROOM_0A, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
+    set(FG_ROOM, F_ROOM_SND_ROCK_HIT_A, TRUE);
     sleep(20);
-    set(FG_STATUS, F_STATUS_3E, FALSE);
-    set(FG_ROOM, F_ROOM_0B, TRUE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
+    set(FG_ROOM, F_ROOM_SND_ROCK_HIT_B, TRUE);
     sleep(4);
-    evt_chain(event_06);
+    evt_chain(boulder_rumble);
     evt_finish();
 }
 
-event event_07
+event boulder_dust
 {
     run
     {
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 2080, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 2080, 2400, 3072);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 1680, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 1680, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 2080, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 2080, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 1680, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 1680, 2400, 3072);
     }
     sleep(7);
     run
     {
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 1040, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 1040, 2400, 3072);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 640, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 640, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 1040, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 1040, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 640, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 640, 2400, 3072);
     }
     sleep(7);
     run
     {
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 0, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, 500, 0, 2400, 3072);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 0, -2400, 1024);
-        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00, -500, 0, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 0, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, 500, 0, 2400, 3072);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 0, -2400, 1024);
+        effect(FX_09, FX_ROW_10, FX_AT_OBJ | OBJ_00_BOULDER, -500, 0, 2400, 3072);
     }
     sleep(6);
-    evt_chain(event_07);
+    evt_chain(boulder_dust);
     evt_finish();
 }
 
-event event_08
+event boulder_debris
 {
-    effect(FX_06, FX_ROW_03, FX_AT_OBJ | OBJ_00, 1800, 2680, -2000, 0);
+    effect(FX_06, FX_ROW_03, FX_AT_OBJ | OBJ_00_BOULDER, 1800, 2680, -2000, 0);
     sleep(12);
-    effect(FX_06, FX_ROW_02, FX_AT_OBJ | OBJ_00, 1500, 2680, 2000, 0);
+    effect(FX_06, FX_ROW_02, FX_AT_OBJ | OBJ_00_BOULDER, 1500, 2680, 2000, 0);
     sleep(4);
-    effect(FX_06, FX_ROW_03, FX_AT_OBJ | OBJ_00, 3500, 2680, 0, 0);
+    effect(FX_06, FX_ROW_03, FX_AT_OBJ | OBJ_00_BOULDER, 3500, 2680, 0, 0);
     sleep(6);
-    evt_chain(event_08);
+    evt_chain(boulder_debris);
     evt_finish();
 }
 
-event event_09
+event boulder_reset
 {
-    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
-    evt_work_set(WK_OBJ, OBJ_00);
+    objtbl_b_set(TBL_OBJ, OBJ_00_BOULDER, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_abs_pos(0, 29373, -2000, 24120);
     tw_abs_rot(0, 0, 0, 0);
     tw_finish();
 }
 
-event from_main_4
+event turn_crank
 {
     run
     {
         set(FG_RUN, F_RUN_READY, FALSE);
-        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_LETTERBOX, TRUE);
     }
     for (4)
     {
         evt_work_set(WK_PLAYER, 0);
         evt_actor_begin();
-        act_anim_flags(ANIM_37, F_ROOM_20, 0);
+        act_anim_flags(ANIM_37, F_ROOM_PLAYER_ANIM_DONE, 0);
         act_flag_op(EF_SET, EF_0080);
         act_reset();
         evt_nop();
-        evt_fork(TASK_09, from_main_4_sub2, 0);
-        evt_fork(TASK_09, from_main_4_sub1, 0);
+        evt_fork(TASK_09, turn_crank_handle, 0);
+        evt_fork(TASK_09, turn_crank_passage, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, F_ROOM_20, FALSE));
+        while (ck(FG_ROOM, F_ROOM_PLAYER_ANIM_DONE, FALSE));
     }
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
@@ -1447,39 +1447,39 @@ event from_main_4
     run
     {
         set(FG_RUN, F_RUN_READY, TRUE);
-        set(FG_ROOM, F_ROOM_1D, TRUE);
-        if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE))
+        set(FG_ROOM, F_ROOM_WALL_REFRESH, TRUE);
+        if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, FALSE))
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, TRUE);
         }
-        else if (ck(FG_SCENARIO, F_SCENARIO_4B, FALSE))
+        else if (ck(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, FALSE))
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, FALSE);
-            set(FG_SCENARIO, F_SCENARIO_4B, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, TRUE);
         }
         else
         {
-            set(FG_SCENARIO, F_SCENARIO_4A, FALSE);
-            set(FG_SCENARIO, F_SCENARIO_4B, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT0, FALSE);
+            set(FG_SCENARIO, F_SCENARIO_CRANK_TURNS_BIT1, FALSE);
         }
-        eml_pos(OBJ_03, 0, 0, 0, 1, 1, 1);
-        set(FG_STATUS, F_STATUS_11, TRUE);
-        set(FG_STATUS, F_STATUS_1A, TRUE);
-        set(FG_ROOM, F_ROOM_15, TRUE);
-        aot_on(AOT_06_USEITEM, SCE_USEITEM, 1);
-        set(FG_STATUS, F_STATUS_0F, FALSE);
+        eml_pos(OBJ_03_CRANK, 0, 0, 0, 1, 1, 1);
+        set(FG_STATUS, F_STATUS_SCRIPT_ONLY_11, TRUE);
+        set(FG_STATUS, F_STATUS_CAMERA_REDRAW, TRUE);
+        set(FG_ROOM, F_ROOM_CRANK_TURNED, TRUE);
+        aot_on(AOT_06_USEITEM_CRANK_HOLE, SCE_USEITEM, 1);
+        set(FG_STATUS, F_STATUS_LETTERBOX, FALSE);
     }
     evt_finish();
 }
 
-event from_main_4_sub1
+event turn_crank_passage
 {
     run
     {
-        set(FG_STATUS, F_STATUS_3E, TRUE);
+        set(FG_STATUS, F_STATUS_SCREEN_SHAKE, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17_R_PASS, 0, SND_AT_POINT, 0, 17000, 24050);
     }
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     for (16)
     {
@@ -1502,18 +1502,18 @@ event from_main_4_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    set(FG_STATUS, F_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_SCREEN_SHAKE, FALSE);
     evt_finish();
 }
 
-event from_main_4_sub2
+event turn_crank_handle
 {
     run
     {
-        eml_pos(OBJ_03, 1024, 1024, 3072, 18951, -2089, 21651);
+        eml_pos(OBJ_03_CRANK, 1024, 1024, 3072, 18951, -2089, 21651);
         se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 20000, 21000);
     }
-    evt_work_set(WK_OBJ, OBJ_03);
+    evt_work_set(WK_OBJ, OBJ_03_CRANK);
     evt_tween_begin_alt();
     tw_abs_rot(0, 1024, 990, 3072);
     evt_next();
@@ -1760,7 +1760,7 @@ event from_main_4_sub2
     evt_finish();
 }
 
-event on_aot_0c
+event examine_map
 {
     message(MSG_IT_IS_A_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of UNDER GROUND. Will you take it? You got the map of UNDER GROUND."
     do
@@ -1771,20 +1771,20 @@ event on_aot_0c
     run
     {
         require(cmpb(B_MENU_CHOICE, CMP_EQ, 0));
-        aot_on(AOT_04_ITEM, SCE_F, 129);
-        aot_delete(AOT_0C_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_on(AOT_04_ITEM_MAP_UNDERGROUND_0, SCE_F, 129);
+        aot_delete(AOT_0C_EVENT_MAP, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     evt_finish();
 }
 
-event on_aot_03_sub1
+event ride_elevator_up_platform
 {
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_POINT, 0, 24300, 2360);
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_POINT, 0, 24300, 2360);
     }
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ELEVATOR);
     evt_tween_begin_alt();
     tw_set_pos(0, -2, 0);
     tw_pos_add();
@@ -1808,10 +1808,10 @@ event on_aot_03_sub1
     tw_finish();
 }
 
-event on_aot_03
+event ride_elevator_up
 {
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
-    evt_fork(TASK_09, on_aot_03_sub1, 0);
+    evt_fork(TASK_09, ride_elevator_up_platform, 0);
     evt_next();
     evt_nop();
     spd_add(-2);
@@ -1860,7 +1860,7 @@ event on_aot_03
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
         }
@@ -1868,15 +1868,15 @@ event on_aot_03
         {
             setb(B_CHARACTER_MODEL, 1, 0);
         }
-        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR_305, SCE_DOOR, 0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
-event on_enter_sub1
+event ride_elevator_down_platform
 {
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ELEVATOR);
     evt_tween_begin_alt();
     tw_abs_pos(0, 24300, -2000, 2360);
     tw_end();
@@ -1887,7 +1887,7 @@ event on_enter_sub1
         se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_POINT, 0, 24300, 2360);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
-    evt_work_set(WK_OBJ, OBJ_02);
+    evt_work_set(WK_OBJ, OBJ_02_ELEVATOR);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (70)
@@ -1918,9 +1918,9 @@ event on_enter_sub1
     tw_finish();
 }
 
-event on_enter
+event ride_elevator_down
 {
-    evt_fork(TASK_09, on_enter_sub1, 0);
+    evt_fork(TASK_09, ride_elevator_down_platform, 0);
     run
     {
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
@@ -1987,63 +1987,63 @@ event on_enter
     evt_finish();
 }
 
-event from_main_5
+event passage_pos_default
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     tw_abs_pos(0, 16710, -2310, 23970);
     tw_finish();
 }
 
-event from_main_6
+event passage_pos_cam_07
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     tw_abs_pos(0, 19000, -1700, 23400);
     tw_finish();
 }
 
-event from_main_7
+event passage_pos_cam_06
 {
-    evt_work_set(WK_OBJ, OBJ_01);
+    evt_work_set(WK_OBJ, OBJ_01_ROTATING_PASSAGE);
     evt_tween_begin_alt();
     tw_abs_pos(0, 17310, -1700, 23400);
     tw_finish();
 }
 
-event from_main_8
+event boulder_pos_cam_03
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_sel(TW_POS_X, 31000);
     tw_finish();
 }
 
-event from_main_9
+event boulder_pos_default
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_sel(TW_POS_X, 29373);
     tw_finish();
 }
 
-event from_main_10
+event boulder_rolling_cam_06
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_sel(TW_POS_Z, 23650);
     tw_finish();
 }
 
-event from_main_11
+event boulder_rolling_default
 {
-    evt_work_set(WK_OBJ, OBJ_00);
+    evt_work_set(WK_OBJ, OBJ_00_BOULDER);
     evt_tween_begin_alt();
     tw_set_sel(TW_POS_Z, 24000);
     tw_finish();
 }
 
-event from_main_12
+event boulder_rolling_cam_02
 {
     evt_disable(TASK_05);
     evt_finish();

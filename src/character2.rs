@@ -77,36 +77,30 @@ pub fn tick(
                 game.re2.raise_room_flag(flag);
             }
             sce_blood(game, &mut character);
-            // `Snd_se_walk` from the character's own walk.
+            // `Snd_se_walk` from the character's own walk. Their `Floor` isn't
+            // modelled, so the zone is the one at the step's height.
             for step in character.body.take_footsteps() {
+                let floor = crate::sca::floor_of(step.pos[1]);
                 game.re2.sounds.push(crate::scd2::host::SoundRequest {
-                    id: crate::se2::footstep_sound(&room.footstep_zones, &step),
+                    id: crate::se2::footstep_sound(&room.footstep_zones, &step, floor),
                     pos: step.pos,
                 });
             }
-            // `_Spl`'s `Sca_ck_em`.
-            if let Some(sca) = &room.sca {
-                let body = &mut character.body;
-                let [old_x, old_z] = body.collision_mirror;
-                let prev = [old_x, body.pos[1], old_z];
-                let mask = sca_mask(character.id);
-                let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
-                body.pos = resolved.pos;
-                body.collision_mirror = [body.pos[0], body.pos[2]];
-            }
+            spl_sca_ck_em(room, &mut character);
         }
         game.re2.characters.0[slot] = Some(character);
     }
 }
 
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
-fn player_atd(pos: [i32; 3]) -> crate::zombie2::Atd {
+fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
+    let width = player_width(game.id.player_flag);
     crate::zombie2::Atd {
         ofs_x: 0,
         ofs_y: -(PLAYER_HEIGHT as i16),
-        at_w: PLAYER_WIDTH,
+        at_w: width,
         at_h: PLAYER_HEIGHT,
-        w: PLAYER_WIDTH,
+        w: width,
         at: [pos[0], pos[1] - i32::from(PLAYER_HEIGHT), pos[2]],
     }
 }
@@ -138,9 +132,15 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
             let licker = other.zombie.as_ref().and_then(|z| z.licker.as_ref());
             let head = licker.map(|licker| licker.head);
             let back = licker.and_then(|licker| licker.back);
+            let more = other
+                .zombie
+                .as_ref()
+                .map(|z| z.more_atd.clone())
+                .unwrap_or_default();
             std::iter::once(atd)
                 .chain(head)
                 .chain(back)
+                .chain(more)
                 .map(move |atd| crate::zombie2::Oba {
                     slot: slot as u8,
                     be_flg: other.be_flg,
@@ -155,7 +155,7 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
 ///
 /// `old` is where the player ended the last tick: `Old_x`, `Old_y` and `Old_z`.
 pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState, old: [i32; 3]) {
-    let mut atd = player_atd(player.pos);
+    let mut atd = player_atd(game, player.pos);
     let be_flg = game.re2.player.be_flg;
     let mut touching = 0;
     for other in slot_bodies(game) {
@@ -505,7 +505,11 @@ fn run_zombie(
     let mut bodies = vec![crate::zombie2::Oba {
         slot: crate::zombie2::PLAYER_BODY,
         be_flg: game.re2.player.be_flg,
-        atd: game.re2.player.atd.unwrap_or_else(|| player_atd(player)),
+        atd: game
+            .re2
+            .player
+            .atd
+            .unwrap_or_else(|| player_atd(game, player)),
         pos: player,
     }];
     bodies.extend(slot_bodies(game));
@@ -543,7 +547,23 @@ fn run_zombie(
     } else {
         Vec::new()
     };
+    let alligator = character.id == crate::zombie2::ALLIGATOR_ID;
+    let camera_cut = game.camera.current_cut as u8;
+    let objects = if alligator {
+        game.objects
+            .records
+            .iter()
+            .map(|object| object.pos)
+            .collect()
+    } else {
+        Vec::new()
+    };
     let re2 = &mut game.re2;
+    let banks = if alligator {
+        re2.banks.to_vec()
+    } else {
+        Vec::new()
+    };
     let gacha = re2.key_trg & 0x34F != 0;
     let same_id = re2
         .characters
@@ -627,12 +647,26 @@ fn run_zombie(
         spawns: Vec::new(),
         killed: false,
         water,
+        banks,
+        flag_ops: Vec::new(),
+        status_and_not: 0,
+        cut: None,
+        objects,
+        sub1: false,
+        camera_cut,
+        hidden_objects: Vec::new(),
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
     let killed = world.killed;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
+    let status_and_not = world.status_and_not;
+    let flag_ops = std::mem::take(&mut world.flag_ops);
+    let cut = world.cut;
+    let sub1 = world.sub1;
+    let objects = std::mem::take(&mut world.objects);
+    let hidden_objects = std::mem::take(&mut world.hidden_objects);
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
@@ -646,6 +680,32 @@ fn run_zombie(
     for bit in (0..32u8).filter(|bit| status_or & (0x8000_0000u32 >> bit) != 0) {
         re2.set_flag(crate::scd2::host::STATUS_BANK, bit, 1);
     }
+    for bit in (0..32u8).filter(|bit| status_and_not & (0x8000_0000u32 >> bit) != 0) {
+        re2.set_flag(crate::scd2::host::STATUS_BANK, bit, 0);
+    }
+    for (bank, index, op) in flag_ops {
+        re2.set_flag(bank, index, op);
+    }
+    // The alligator moves the gas tank it bites (`FUN_004697f0`).
+    for (record, pos) in game.objects.records.iter_mut().zip(objects) {
+        record.pos = pos;
+    }
+    for index in hidden_objects {
+        if let Some(record) = game.objects.record_mut(index) {
+            record.flag &= !crate::objects::OBJECT_FLAG_ACTIVE;
+        }
+    }
+    if let Some(cut) = cut {
+        // `Cut_change`: the cut changes, and the zones carry on from it.
+        game.set_camera_cut(usize::from(cut & 0x7F));
+    }
+    // `fg_status`'s `0x100` is the camera's lock, which `Cut_check` obeys.
+    if status_or & 0x100 != 0 {
+        game.camera.locked = true;
+    } else if status_and_not & 0x100 != 0 {
+        game.camera.locked = false;
+    }
+    let re2 = &mut game.re2;
     for call in &kin {
         for other in re2.characters.0.iter_mut().flatten() {
             if other.id == character.id
@@ -671,6 +731,12 @@ fn run_zombie(
         && re2.player.routine[2] == 0
         && let Some(bank) = model.banks.get(1)
     {
+        game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
+            keyframes: std::sync::Arc::new(bank.keyframes.clone()),
+            clips: std::sync::Arc::new(bank.clips.clone()),
+        }));
+    }
+    if sub1 && let Some(bank) = model.banks.get(1) {
         game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
             keyframes: std::sync::Arc::new(bank.keyframes.clone()),
             clips: std::sync::Arc::new(bank.clips.clone()),
@@ -830,8 +896,12 @@ fn set_enemy_work(
     characters[spawn.slot] = Some(Box::new(character));
 }
 
-/// `Player_set`'s `At_w`.
-pub const PLAYER_WIDTH: u16 = 450;
+/// The player's `Atd[0]` width, `At_w` and `W`: `Player_set`'s 450, which
+/// `Pl_init` makes 350 for Claire's bodies and Sherry, as it does the radius
+/// the room's collision pushes with.
+pub fn player_width(player_flag: u8) -> u16 {
+    crate::sca::player_radius(player_flag) as u16
+}
 /// The player's `At_h`, and how far its box's `Ofs_y` lifts it.
 pub const PLAYER_HEIGHT: u16 = 0x5FA;
 /// `fg_system`'s `0x20`, easy mode's bit.
@@ -912,7 +982,7 @@ pub fn init(
                 continue;
             }
             let tick = tick_of(room, game, &character, slot, &model, None);
-            let arrived = em_init_move(&mut character, &tick);
+            let arrived = em_init_move(room, &mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
@@ -1038,6 +1108,19 @@ pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Opti
     Some(joint_meshes)
 }
 
+/// A `Game_loop` pass under `fg_stop` outside the room's own tick (the
+/// get-item window's first and last frames): each enemy does its `Root_ck`
+/// and nothing else.
+pub fn tick_stopped(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+    lua: Option<&mut crate::enemy::LuaEnemyHost>,
+) {
+    run_load_stop(game, room, pack, npc_models, lua);
+}
+
 /// The tick the load's `fg_stop` ends: the enemies do no more than a `Root_ck`.
 fn run_load_stop(
     game: &mut GameState,
@@ -1108,16 +1191,35 @@ fn spl(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     arrived
 }
 
-/// `Em_init_move`'s `_Spl` calls for a character the room places.
-fn em_init_move(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
+/// `_Spl`'s `Sca_ck_em`, after its routine.
+fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
+    let Some(sca) = &room.sca else {
+        return;
+    };
+    let body = &mut character.body;
+    let [old_x, old_z] = body.collision_mirror;
+    let prev = [old_x, body.pos[1], old_z];
+    let mask = sca_mask(character.id);
+    let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
+    body.pos = resolved.pos;
+    body.collision_mirror = [body.pos[0], body.pos[2]];
+}
+
+/// `Em_init_move`'s `_Spl` calls for a character the room places, each with
+/// its `Sca_ck_em`: room 202's Marvin, placed in the wall at the desks'
+/// corner, is pushed out while the room loads.
+fn em_init_move(room: &RoomState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     character.with_room = false;
     let arrived = spl(character, tick);
+    spl_sca_ck_em(room, character);
     let (start, flags) = character.start;
     if start == 0 {
         return arrived;
     }
     player2::spl_start(&mut character.work, start, flags);
-    spl(character, tick).or(arrived)
+    let arrived = spl(character, tick).or(arrived);
+    spl_sca_ck_em(room, character);
+    arrived
 }
 
 /// The tick a character's `_Spl` sees: its own model's banks, and the room's
@@ -1147,6 +1249,7 @@ pub fn tick_of<'a>(
     Tick {
         room,
         skeleton: &model.skeleton,
+        morphs: &model.morphs,
         banks: Banks {
             pld,
             weapon,
@@ -1259,6 +1362,45 @@ mod tests {
         game.re2.characters.0[2].as_mut().unwrap().be_flg = 1;
         game.apply_re2_no_enemies();
         assert_eq!(flags(&game), [Some(0), None, Some(1)]);
+    }
+
+    #[test]
+    fn claire_is_pushed_out_of_a_body_with_her_own_width() {
+        // Kendo's body in room 101 (`At_w` 450) and the player walking past it,
+        // 850 units off: Leon (450 wide) touches it, Claire (350) doesn't.
+        let room = RoomId::parse("1010").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [0, 0, 0];
+        body.radius = 450;
+        let kendo = Character {
+            id: 0x48,
+            model: 0x48,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 0x2005,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            zombie: None,
+        };
+        for (player_flag, x) in [(0, -901), (1, -850)] {
+            let mut game = GameState::default();
+            game.id = room;
+            game.id.player_flag = player_flag;
+            game.re2.characters.0 = vec![Some(Box::new(kendo.clone()))];
+            let mut player = crate::player::spawn(room, &RoomState::default());
+            player.pos = [-850, 0, 0];
+            oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
+            assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
+            assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
     }
 
     #[test]
