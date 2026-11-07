@@ -39,6 +39,16 @@ local W4 <const> = 15
 -- which of them still grow (their `Be_flg`'s 0x400), as a bit per part.
 local SIZE <const> = { [3] = 16, [6] = 17, [7] = 18, [8] = 19 }
 local GROWING <const> = 20
+-- The eye's swell's step (`+0x222`) and its count of throbs (`+0x21f`).
+local EYE_STEP <const> = 21
+local EYE_COUNT <const> = 22
+-- `+0x229`: a magnum's spurt (`FUN_00495470`), its count of drops (`+0x22a`)
+-- and its turn (`+0x22c`).
+local SPURT <const> = 23
+local SPURT_N <const> = 25
+local SPURT_DIR <const> = 26
+-- `Atd[0]`'s `At_w`, `At_d`, `W` and `D`, which routine 6 grows.
+local BOX <const> = 24
 
 -- The init's life: normal, with `fg_system`'s `0x20`, and for the scene types.
 local LIFE <const> = 700
@@ -91,9 +101,10 @@ local function init(e)
     e:set_life(e:easy() and LIFE_EASY or LIFE)
     e:set_d_life(0)
     e:set_neck_flags(0)
-    for index = CNT_218, GROWING do
+    for index = CNT_218, SPURT_DIR do
         e:set_var(index, 0)
     end
+    e:set_var(BOX, 900)
     for part, index in pairs(SIZE) do
         e:set_var(index, 0x200)
         e:set_var(GROWING, e:var(GROWING) | (1 << part))
@@ -707,7 +718,7 @@ end
 -- `Routine_2` 1 of routine 4: clip 5. On its hit frames its hand catches a
 -- player within 800 and carries them, until the frames end. Then, with the
 -- player above 20 life, it throws (5), or one time in a few swipes; below,
--- the kill (2 to 4), which isn't ported; and having caught nothing, walks.
+-- the kill (2 to 4); and having caught nothing, walks.
 local function grab_reach(e)
     e:spd()
     if e:joint(0x100) then
@@ -803,8 +814,54 @@ local function throw(e)
     end
 end
 
--- Routine 4 (`0x491540`): the grab (`Routine_2` 0 and 1) and the throw (5
--- and 6). `FLAGS`' 0x80 is up throughout.
+-- `Routine_2` 2 to 4 of routine 4: the kill of a player it caught near
+-- death. It turns to them, takes 500 life and their death in its claws
+-- (`em_die_table[0x31]`, player routine 6) on clip 9, with blood at the claws
+-- each fourth frame from frame 8, then holds clip 0x17. `fg_system`'s
+-- `0x100` isn't ported.
+local function kill(e, sub)
+    if sub == 2 then
+        e:clip(9, 0, 7)
+        e:set_routine(2, 3)
+        e:goto_player(0x800)
+        e:pl_hold()
+        e:pl_set_base()
+        e:pl_set_routine(6, 0, 0, 0)
+        e:pl_set_sub1()
+        e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:set_be_flg(e:be_flg() | 0x1000)
+        e:pl_or_be_flg(0x1000)
+        e:set_player_angle((e:angle() + 0x800) & 0xFFFF)
+        e:pl_life_down(500, false)
+        sub = 3
+    end
+    if sub == 3 then
+        e:null_pos_set(0)
+        if e:joint(0x200) then
+            e:clip(0x17, 0, 0xF)
+            e:set_routine(2, 4)
+        end
+        local count = e:move_cnt()
+        if count == 6 then
+            e:sound(5)
+            mark(e)
+        end
+        if count >= 7 and count & 3 == 0 then
+            local ox = 0x100 - e:rnd() * 2
+            local oy = 0x148 - e:rnd()
+            local oz = 0x100 - e:rnd() * 2
+            e:effect(0, 0, 0x1000 + e:rnd() * 4, i16(e:angle()), CLAWS, ox, oy, oz)
+        end
+    elseif sub == 4 then
+        if e:joint(0x100) then
+            e:set_hokan(0xF)
+        end
+    end
+end
+
+-- Routine 4 (`0x491540`): the grab (`Routine_2` 0 and 1), the kill (2 to 4)
+-- and the throw (5 and 6). `FLAGS`' 0x80 is up throughout.
 local function grab(e)
     local sub = e:routine(2)
     e:set_var(FLAGS, e:var(FLAGS) | 0x80)
@@ -819,6 +876,8 @@ local function grab(e)
     end
     if sub == 1 then
         grab_reach(e)
+    elseif sub >= 2 and sub <= 4 then
+        kill(e, sub)
     elseif sub == 5 then
         e:clip(9, 1, 7)
         e:set_routine(2, 6)
@@ -886,6 +945,83 @@ local function back_off(e)
     end
 end
 
+-- Routine 6 (`0x492390`): out of points to regain or below 100 life, it
+-- mutates (clip 0xe), its life held at 9000. Part 2's morph shudders and
+-- swells, part 1's swells to 0x1000 (and starts `FLAGS`' 0x20, the throb),
+-- its box grows to 0x44c, and blood spurts from parts 2 and 3. Then it raises
+-- `FLAGS`' 0x100, which lets the next killing shot kill it, and walks, with
+-- the life it had, at most 100.
+local function mutate(e)
+    local sub = e:routine(2)
+    e:set_var(FLAGS, e:var(FLAGS) | 0x80)
+    e:set_var(CNT_219, 0)
+    local dir = i16(e:angle())
+    if sub == 0 then
+        e:clip(0xE, 0, 0xF)
+        e:set_routine(2, 1)
+        e:effect(0, 0, 0x13D0, dir, 3, 400, 100, 0)
+        e:set_neck_flags(e:neck_flags() | 2)
+        e:set_timer(1, e:life())
+        e:sound(0xC)
+    elseif sub ~= 1 then
+        e:set_life(9000)
+        return
+    end
+    local count = e:move_cnt()
+    if count == 0x1E or count == 0x23 or count == 0x32 then
+        e:effect(0, 0, 0x13D0, dir, 3, 300, 0, 0)
+    end
+    if count > 5 and count < 0x19 then
+        local vy = -0x2C - e:rnd() * 2
+        local vz = 0x80 - e:rnd()
+        e:effect(0, 0, 0x17B8, i16(e:rnd() << 4), 2, 400, vy, vz)
+        vy = -0x2C - e:rnd() * 2
+        vz = 0x80 - e:rnd()
+        e:effect(0, 1, 0x17B8, i16(e:rnd() << 4), 2, 400, vy, vz)
+    end
+    local box = e:var(BOX)
+    if box < 0x44C then
+        box = box + 5
+        e:set_var(BOX, box)
+        e:set_body_box(-1500, box, 1500, box)
+    end
+    local odd = count & 1
+    e:set_var(W2B, i16(e:var(W2B) - odd * 0x80))
+    if count > 0x3C and count < 0x5C then
+        add_w2(e, 0x80, 0x40)
+    end
+    morph_2(e)
+    e:set_var(W2B, i16(e:var(W2B) + odd * 0x80))
+    if count > 0x14 then
+        local w = i16(e:var(W1) + 0x40)
+        if w > 0x1000 then
+            w = 0x1000
+            e:set_var(FLAGS, e:var(FLAGS) | 0x20)
+        end
+        e:set_var(W1, w)
+        morph_1(e)
+    end
+    if count > 0x14 and count < 0x3E and count & 3 == 0 then
+        local vx = 0x16C - (e:rnd() & 0x7F)
+        local vz = 0x16C - (e:rnd() & 0x7F)
+        e:effect(0, 0, 0x13D0, dir, 2, vx, 200, vz)
+        vz = -(e:rnd() & 0x7F) - 0xEC
+        e:effect(0, 0, 0x13D0, dir, 2, vx, 200, vz)
+    end
+    e:spd()
+    if not e:joint(0x100) then
+        e:add_speed_xz()
+        e:set_life(9000)
+        return
+    end
+    e:set_neck_flags(e:neck_flags() & 0xFD)
+    e:routines(1, 1, 0, 0)
+    e:set_var(CNT_21A, 10)
+    e:set_var(FLAGS, (e:var(FLAGS) & 0xFF7F) | 0x100)
+    local life = i16(e:timer(1))
+    e:set_life(life > 100 and 100 or life)
+end
+
 -- `funcs_4908BB` (before the clip) and `funcs_4908D2` (after it), by
 -- `Routine_1`.
 local BEFORE <const> = {
@@ -899,20 +1035,119 @@ local AFTER <const> = {
     [3] = dodge,
     [4] = grab,
     [5] = back_off,
+    [6] = mutate,
     [7] = change,
+}
+
+-- Routine 1 before the clip with `Type` 1 (`0x490b30`): close and facing it
+-- steps back (5); within 3000 and in its arc, once `CNT_21A` has run out, it
+-- strikes (2).
+local function weak_ck(e)
+    local far = e:distance()
+    player_ck(e, 0x5F4)
+    local near = player_ck(e, 0x270)
+    local ahead = player_ck(e, 0x400)
+    if ahead == 0 and far < 0x5DC then
+        e:routines(1, 5, 0, 0)
+    end
+    if e:var(CNT_21A) == 0 and e:pl_damage_cnt() == 0 and near == 0 and far < 3000 then
+        e:routines(1, 2, 0, 0)
+    end
+end
+
+-- Routine 5 before the clip with `Type` 1 (`FUN_00491f90`): it walks again
+-- once the player is more than 0x9c4 away and in its arc.
+local function weak_back_ck(e)
+    local far = e:distance()
+    if player_ck(e, 0x400) == 0 and far > 0x9C4 then
+        e:routines(1, 1, 0, 0)
+    end
+end
+
+-- Routines 2 and 4 with `Type` 1 (`FUN_004920e0`): a strike, clip 0xc or
+-- 0xd, turning slowly to the player. On its hit frames the claws (part 6 as
+-- its last draw left it) hit a player within 800 for twice 5 life (10 in
+-- hard mode), a plain hit, or their death; with blood for two ticks.
+local function weak_strike(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        local clip = 0xC + (e:rnd() & 1)
+        e:set_routine(2, 1)
+        e:set_timer(2, 0)
+        e:clip(clip, 0, 0xF)
+    elseif sub ~= 1 then
+        return
+    end
+    e:goto_player(8)
+    e:spd()
+    if e:joint(0x100) then
+        e:set_var(FLAGS, e:var(FLAGS) & 0xFF7F)
+        e:routines(1, 1, 0, 0)
+        e:set_var(CNT_21A, 0x14)
+    end
+    e:add_speed_xz()
+    if e:now_seq() & 0x30000 ~= 0 then
+        e:set_var(FLAGS, e:var(FLAGS) | 0x80)
+        e:goto_player(0x10)
+        local ax, _, az = e:drawn_part_point(CLAWS, 0, 0, 0)
+        local bx, _, bz = e:drawn_part_point(CLAWS, 0, 500, 0)
+        if (near(e, ax, az, 800) or near(e, bx, bz, 800)) and e:pl_damage_cnt() == 0 then
+            e:pl_life_down(5, false)
+            local killed = e:pl_life_down(5, false) == 2
+            e:pl_set_routine(killed and 3 or 2, 0, 0, 0)
+            e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+            e:pl_set_sub1()
+            e:set_timer(2, 2)
+            e:sound(6)
+            mark(e)
+        end
+    end
+    if e:timer(2) ~= 0 then
+        e:set_timer(2, e:timer(2) - 1)
+        local ox = 0x100 - e:rnd() * 2
+        local oy = 0x274 - e:rnd()
+        local oz = 0x100 - e:rnd() * 2
+        e:effect(0, 0, 0xC18 + e:rnd() * 4, i16(e:angle()), CLAWS, ox, oy, oz)
+        ox = 0x100 - e:rnd() * 2
+        oz = 0x100 - e:rnd() * 2
+        local size = 0x1000 + e:rnd() * 4
+        local x, y, z = e:player_root_point(ox, 0, oz)
+        if x ~= nil then
+            e:call_effect(0, 0, size, 0, x, y, z)
+        end
+    end
+end
+
+-- `funcs_4908EB` and `funcs_490902`: the same with `Type` 1, after routine
+-- 6.
+local WEAK_BEFORE <const> = {
+    [1] = weak_ck,
+    [5] = weak_back_ck,
+}
+local WEAK_AFTER <const> = {
+    [1] = walk,
+    [2] = weak_strike,
+    [4] = weak_strike,
+    [5] = back_off,
+    [6] = mutate,
 }
 
 -- `FUN_00490890`.
 local function move(e)
     local kind = e:kind() & 0x3F
-    if kind ~= 0 and kind ~= 3 then
+    local tables
+    if kind == 0 or kind == 3 then
+        tables = { BEFORE, AFTER }
+    elseif kind == 1 then
+        tables = { WEAK_BEFORE, WEAK_AFTER }
+    else
         return
     end
-    local before = BEFORE[e:routine(1)]
+    local before = tables[1][e:routine(1)]
     if before then
         before(e)
     end
-    local after = AFTER[e:routine(1)]
+    local after = tables[2][e:routine(1)]
     if after then
         after(e)
     end
@@ -933,6 +1168,321 @@ local function throb(e)
     if wave & 0x10 ~= 0 then
         e:rnd()
         e:rnd()
+    end
+end
+
+-- `FUN_00495470`: a magnum's spurt of blood out of the far side, eight drops
+-- a tick in a line away from the player, for three ticks, as G1's.
+local function spurt(e)
+    local state = e:var(SPURT)
+    if state == 1 then
+        e:set_var(SPURT, 2)
+        e:set_var(SPURT_N, 0)
+        e:set_var(SPURT_DIR, e:direction_to_player())
+    elseif state ~= 2 then
+        return
+    end
+    local dir = e:var(SPURT_DIR)
+    local count = e:var(SPURT_N)
+    local ox, oy, oz = e:rot_apply(0, dir, 0, i16(count * -100), 200, 0)
+    local sx, sz
+    if e:damage_no() % 3 == 0 then
+        sx, _, sz = e:rot_apply(0, dir, 0, -100, 500, 0)
+    else
+        sx, _, sz = e:rot_apply(0, dir, 0, -100, -500, 0)
+    end
+    local bx, _, bz = e:pos()
+    local _, part_y = e:drawn_part_point(2, 0, 0, 0)
+    local y = i16((part_y or 0) + oy)
+    local function drop(x, z, step)
+        local size = (0x65C - step * count) - e:rnd()
+        e:call_effect(0, 1, size & 0xFFFF, i16(dir), i16(x), y, i16(z))
+        count = count + 1
+    end
+    local function wide_drop(x_at, z_at, step)
+        local x = bx - e:rnd() + x_at + 0x80 + ox
+        local z = bz - e:rnd() + z_at + 0x80 + oz
+        local size = (0x65C - step * count) - e:rnd()
+        local row = e:rnd() & 1 == 0 and 1 or 0
+        e:call_effect(0, row, size & 0xFFFF, i16(dir), i16(x), y, i16(z))
+        if count == 1 then
+            e:call_effect(0, 2, 0x17D0, i16(dir + 0x800), i16(x), y, i16(z))
+            e:call_effect(0, 2, 0xC18, i16(dir + 0x800), i16(x), y, i16(z))
+        end
+        count = count + 1
+    end
+    drop(bx + ox, bz + oz, 0x24)
+    wide_drop(sx, sz, 0x24)
+    drop(sx * 2 + bx + ox, sz * 2 + bz + oz, 0x24)
+    wide_drop(sx * 3, sz * 3, 0x24)
+    drop(sx * 4 + bx + ox, sz * 4 + bz + oz, 0x24)
+    wide_drop(sx * 5, sz * 5, 0x24)
+    drop(sx * 6 + bx + ox, sz * 6 + bz + oz, 0x24)
+    local last = count
+    wide_drop(sx * 7, sz * 7, 0x1E)
+    e:set_var(SPURT_N, count)
+    if last > 0x10 then
+        e:set_var(SPURT, 0)
+    end
+end
+
+-- `FUN_004966a0`: the eye (part 4's morph) swells after a hit (`HURT` 1)
+-- to 0x1000, with two `Rnd`s as it gets there, then shrinks back and stops;
+-- once G2 is dead (`HURT` 2) it swells to 0xc00 and throbs, 500 a tick for
+-- four ticks each way, with two `Rnd`s each tick. What it does to
+-- `DWORD_0068968c` (the eye's light) isn't modelled.
+local function eye(e)
+    local state = e:var(HURT)
+    if state == 0 then
+        return
+    end
+    local sub = e:var(HURT_221)
+    local weight = e:var(W4)
+    local step = e:var(EYE_STEP)
+    local count = e:var(EYE_COUNT)
+    if state == 1 then
+        if sub == 0 then
+            weight = i16(weight + 0x400)
+            if weight > 0x1000 then
+                weight = 0x1000
+                sub = 1
+                step = 0
+                e:rnd()
+                e:rnd()
+            end
+        elseif sub == 1 then
+            weight = i16(weight - step)
+            step = i16(step + 100)
+            if weight < 0 then
+                weight = 0
+                e:set_var(HURT, 0)
+                sub = 0
+            end
+        end
+    else
+        if sub == 0 then
+            weight = i16(weight + 0x400)
+            if weight >= 0xC01 then
+                weight = 0xC00
+                step = 0
+                sub = 1
+                count = 3
+            end
+        elseif sub == 1 or sub == 2 then
+            local way = sub == 1 and -1 or 1
+            weight = i16(weight + way * 500)
+            step = i16(step - way * 100)
+            local was = count
+            count = (count - 1) & 0xFF
+            if was == 0 then
+                sub = 3 - sub
+                count = 3
+            end
+        end
+        e:rnd()
+        e:rnd()
+    end
+    e:set_var(W4, weight)
+    morph_4(e)
+    e:set_var(HURT_221, sub)
+    e:set_var(EYE_STEP, step)
+    e:set_var(EYE_COUNT, count)
+end
+
+-- The blood of a hit, at part 1 as its last draw left it, turned toward
+-- the player: two drops 200 out and two further by its speed, higher for a
+-- shot at the head (`Damage_no`'s third), and `Snd_se_enem` 2. With `Type`
+-- 2 (room 500, not ported) it bleeds at parts 5 and 6 instead.
+local function hit_blood(e, weapon)
+    if weapon == 0x10 or weapon == 0xC then
+        return
+    end
+    local dir = e:direction_to_player()
+    local px, py, pz = e:drawn_part_point(1, 0, 0, 0)
+    if px == nil then
+        px, py, pz = e:pos()
+    end
+    local reach = i16(e:speed_x() + 0x4B)
+    local ax, ay, bx, by = 200, -200, reach * 4, 0
+    if e:damage_no() % 3 == 0 then
+        ax, ay, bx, by = 0x96, 700, reach * 2, 700
+    end
+    local x, y, z = e:rot_apply(0, dir, 0, ax, ay, 0)
+    x, y, z = i16(x + px), i16(y + py), i16(z + pz)
+    local fx, fy, fz = e:rot_apply(0, dir, 0, i16(bx), by, 0)
+    fx, fy, fz = i16(fx + px), i16(fy + py), i16(fz + pz)
+    dir = i16(dir)
+    e:call_effect(0, 1, e:rnd() * 8 + 0x17D0, dir, x, y, z)
+    y = i16(y + 0x40 - (e:rnd() & 0x3F))
+    e:call_effect(0, 0, e:rnd() * 8 + 0x17D0, dir, x, y, z)
+    e:call_effect(0, 0, e:rnd() * 8 + 0x17D0, dir, fx, fy, fz)
+    -- The original moves the first pair's height here and passes the second.
+    e:rnd()
+    e:call_effect(0, 0, e:rnd() * 8 + 0x17D0, dir, fx, fy, fz)
+    if weapon ~= 1 then
+        e:sound(2)
+    end
+end
+
+-- `FUN_00495ad0`: the flinch, backwards or forwards by whether it faces the
+-- way the player does (clip 3 or 4), to its frame 15; then it walks.
+local function flinch(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(e:cdir_player() and 3 or 4, 0, 3)
+        e:set_routine(2, 1)
+        e:sound(9)
+        e:set_var(FLAGS, e:var(FLAGS) | 0x200)
+        e:set_var(CNT_228, (e:var(CNT_228) + 1) & 0xFF)
+    elseif sub ~= 1 then
+        return
+    end
+    e:spd()
+    if e:joint(0x400) then
+        e:routines(1, 1, 0, 0)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+    end
+    e:add_speed_xz()
+    if e:move_cnt() == 0xF then
+        e:routines(1, 1, 0, 0)
+        e:set_var(FLAGS, e:var(FLAGS) & 0xFDFF)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+    end
+end
+
+-- `0x52a537`: what each weapon adds to `CNT_219`, which flinches it at 12.
+local FLINCH_ADD <const> = {
+    [0] = 3, 1, 4, 4, 3, 10, 20, 6, 10, 8, 20, 8, 3, 2, 20, 1, 0, 20, 2,
+}
+
+-- Routine 0 2 (`FUN_00494440`): a hit. Below 200 life it raises `FLAGS`' 4
+-- and starts `CNT_219` at 0x32. Each hit adds the weapon's share to
+-- `CNT_219`, which `CNT_218` takes down by one every 15 ticks; at 12 or more
+-- it flinches, and otherwise it goes on with what it was doing on this tick,
+-- as it does during an attack (`FLAGS`' 0x80). A hit during a flinch goes on
+-- with it. The other weapons' effects (9, 0xa, 0xb, 0xe, 0x10 and 0x11)
+-- aren't ported.
+local function hurt(e)
+    if e:routine(2) ~= 0 then
+        flinch(e)
+        return
+    end
+    local weapon = e:routine(1)
+    hit_blood(e, weapon)
+    e:set_var(HURT, 1)
+    e:set_var(HURT_221, 0)
+    if weapon == 5 or weapon == 6 then
+        e:set_var(SPURT, 1)
+    end
+    local flags = e:var(FLAGS)
+    if flags & 4 == 0 and e:life() < 200 then
+        e:set_var(CNT_219, 0x32)
+        flags = flags | 4
+        e:set_var(FLAGS, flags)
+    end
+    if flags & 0x200 ~= 0 then
+        e:restore_routine()
+        flinch(e)
+        return
+    end
+    if flags & 1 == 0 then
+        e:set_var(CNT_219, (e:var(CNT_219) + (FLINCH_ADD[weapon] or 0)) & 0xFF)
+        if flags & 2 == 0 then
+            e:set_var(CNT_218, 0xF)
+            e:set_var(FLAGS, flags | 2)
+        end
+    end
+    if e:var(FLAGS) & 0x80 ~= 0 or e:var(CNT_219) < 0xC then
+        e:restore_routine()
+        move(e)
+        return
+    end
+    e:set_var(CNT_219, 0)
+    e:set_var(CNT_218, 0)
+    e:set_var(FLAGS, e:var(FLAGS) & 0xFFFD)
+    flinch(e)
+end
+
+-- Blood from part 3 (and part 2) as the death plays: `vy` up, a random
+-- turn and row, and `size`.
+local function death_blood(e, part, vx, vy, vz, size)
+    local dir = i16(e:rnd() << 4)
+    local row = e:rnd() & 1
+    e:effect(0, row, size, dir, part, vx, vy, vz)
+end
+
+-- Routine 0 3 (`FUN_00495bc0`): a shot that takes its life below zero.
+-- Before routine 6 has raised `FLAGS`' 0x100 it only leaves it 10 life and
+-- goes on. After, it bleeds, raises its dead flag, falls (clip 10) with blood
+-- from part 3 and, from frame 0x51, from part 2 as well, and lies. Its
+-- shadow's fade isn't modelled.
+local function death(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        local weapon = e:routine(1)
+        local dir = e:direction_to_player() & 0xFF
+        local px, py, pz = e:drawn_part_point(1, 0, 0, 0)
+        if px == nil then
+            px, py, pz = e:pos()
+        end
+        local x, y, z = e:rot_apply(0, dir, 0, 100, e:damage_no() % 3 == 0 and 700 or 0, 0)
+        x, y, z = i16(x + px), i16(y + py), i16(z + pz)
+        if weapon ~= 0x10 then
+            e:call_effect(0, 1, e:rnd() * 8 + 0x17D0, dir, x, y, z)
+            y = i16(y + 0x40 - (e:rnd() & 0x3F))
+            e:call_effect(0, 0, e:rnd() * 8 + 0x17D0, dir, x, y, z)
+        end
+        if weapon == 5 or weapon == 6 then
+            e:set_var(SPURT, 1)
+        end
+        if e:var(FLAGS) & 0x100 == 0 then
+            e:set_life(10)
+            e:restore_routine()
+            return
+        end
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:clip(10, 0, 3)
+        e:set_routine(2, 1)
+        e:set_var(FLAGS, e:var(FLAGS) | 0x11)
+        e:set_var(HURT, 2)
+        e:set_var(HURT_221, 0)
+        e:set_died()
+        e:set_neck_flags(e:neck_flags() | 2)
+        sub = 1
+    end
+    if sub == 1 then
+        local count = e:move_cnt()
+        if count < 0xF then
+            local vx = 0x40 - (e:rnd() >> 1)
+            local vz = 0x40 - (e:rnd() >> 1)
+            death_blood(e, 3, vx, 0, vz, 0xC00)
+        end
+        if count > 0x50 and count < 0x6D then
+            if count == 0x51 then
+                e:sound(9)
+            end
+            local vx = 0x40 - (e:rnd() >> 1)
+            local vz = 0x40 - (e:rnd() >> 1)
+            death_blood(e, 3, vx, -200, vz, 0xC00)
+            vx = 0x100 - e:rnd() * 2
+            local vy = i16(0xD4 - e:rnd() * 4)
+            vz = 0x100 - e:rnd() * 2
+            death_blood(e, 2, vx, vy, vz, 0x17B8)
+        end
+        e:spd()
+        if e:joint(0x400) then
+            e:set_var(FLAGS, e:var(FLAGS) & 0xFFDF)
+            e:set_routine(2, 2)
+            e:set_be_flg(e:be_flg() | 2)
+            e:set_var(HURT, 0)
+            e:set_var(HURT_221, 0)
+            e:set_timer(0, 0xD2)
+        end
+        e:add_speed_xz()
+    elseif sub == 2 then
+        if e:timer(0) ~= 0 then
+            e:set_timer(0, e:timer(0) - 1)
+        end
     end
 end
 
@@ -980,6 +1530,12 @@ function update(e)
         init(e)
     elseif zero == 1 then
         move(e)
+    elseif zero == 2 then
+        hurt(e)
+    elseif zero == 3 then
+        death(e)
     end
+    spurt(e)
+    eye(e)
     e:seq_sound()
 end

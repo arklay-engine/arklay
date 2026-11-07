@@ -4196,6 +4196,9 @@ impl GameSession {
             return;
         };
         let out = die.tick(&mut self.game.re2);
+        if out.lock_cut {
+            self.game.camera.locked = true;
+        }
         match out.fade {
             Some(crate::die2::DieFade::White(level)) => self.room_fade.set(1, 0, level),
             Some(crate::die2::DieFade::WhiteClear) => self.room_fade.set(1, -0xBBC, 0x7444),

@@ -1,0 +1,141 @@
+# room 509 in scenario A: after the scene the player turns to G2 and shoots it with the shotgun every 30 ticks, with Leon's other weapons (oracle/re2.md)
+912 right
+938
+940 aim
+970 aim fire
+975 aim
+1000 aim fire
+1005 aim
+1030 aim fire
+1035 aim
+1060 aim fire
+1065 aim
+1090 aim fire
+1095 aim
+1120 aim fire
+1125 aim
+1150 aim fire
+1155 aim
+1180 aim fire
+1185 aim
+1210 aim fire
+1215 aim
+1240 aim fire
+1245 aim
+1270 aim fire
+1275 aim
+1300 aim fire
+1305 aim
+1330 aim fire
+1335 aim
+1360 aim fire
+1365 aim
+1390 aim fire
+1395 aim
+1420 aim fire
+1425 aim
+1450 aim fire
+1455 aim
+1480 aim fire
+1485 aim
+1510 aim fire
+1515 aim
+1540 aim fire
+1545 aim
+1570 aim fire
+1575 aim
+1600 aim fire
+1605 aim
+1630 aim fire
+1635 aim
+1660 aim fire
+1665 aim
+1690 aim fire
+1695 aim
+1720 aim fire
+1725 aim
+1750 aim fire
+1755 aim
+1780 aim fire
+1785 aim
+1810 aim fire
+1815 aim
+1840 aim fire
+1845 aim
+1870 aim fire
+1875 aim
+1900 aim fire
+1905 aim
+1930 aim fire
+1935 aim
+1960 aim fire
+1965 aim
+1990 aim fire
+1995 aim
+2020 aim fire
+2025 aim
+2050 aim fire
+2055 aim
+2080 aim fire
+2085 aim
+2110 aim fire
+2115 aim
+2140 aim fire
+2145 aim
+2170 aim fire
+2175 aim
+2200 aim fire
+2205 aim
+2230 aim fire
+2235 aim
+2260 aim fire
+2265 aim
+2290 aim fire
+2295 aim
+2320 aim fire
+2325 aim
+2350 aim fire
+2355 aim
+2380 aim fire
+2385 aim
+2410 aim fire
+2415 aim
+2440 aim fire
+2445 aim
+2470 aim fire
+2475 aim
+2500 aim fire
+2505 aim
+2530 aim fire
+2535 aim
+2560 aim fire
+2565 aim
+2590 aim fire
+2595 aim
+2620 aim fire
+2625 aim
+2650 aim fire
+2655 aim
+2680 aim fire
+2685 aim
+2710 aim fire
+2715 aim
+2740 aim fire
+2745 aim
+2770 aim fire
+2775 aim
+2800 aim fire
+2805 aim
+2830 aim fire
+2835 aim
+2860 aim fire
+2865 aim
+2890 aim fire
+2895 aim
+2920 aim fire
+2925 aim
+2950 aim fire
+2955 aim
+2980 aim fire
+2985 aim
+3000

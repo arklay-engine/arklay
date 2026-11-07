@@ -2311,7 +2311,9 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
         return Some(character.body.pos[axis]);
     }
     match member {
-        0 => Some(character.be_flg as i32),
+        // `Be_flg`'s low and high words, as `Load_member_branch` reads them.
+        0 => Some(i32::from(character.be_flg as u16)),
+        1 => Some(i32::from((character.be_flg >> 16) as u16)),
         MEMBER_ID => Some(i32::from(character.id)),
         MEMBER_AREA => Some(i32::from(character.area)),
         MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
@@ -2348,7 +2350,9 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
         return;
     }
     match member {
-        0 => character.be_flg = value as u32,
+        // `Member_set_branch` writes a word of `Be_flg`, and leaves the other.
+        0 => character.be_flg = character.be_flg & 0xFFFF_0000 | u32::from(value as u16),
+        1 => character.be_flg = character.be_flg & 0xFFFF | u32::from(value as u16) << 16,
         MEMBER_ID => character.id = value as u8,
         MEMBER_AREA => character.area = value as u8,
         MEMBER_ANGLE => character.body.angle = value as u16,
