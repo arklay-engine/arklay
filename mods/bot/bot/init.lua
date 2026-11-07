@@ -156,9 +156,10 @@ function on_bot_tick(bot)
         return
     end
     if not fought and BotTactics.step(bot, scene, player) then
-        if BotTactics.dodging() then
-            BotPlanner.hold_clock()
-        end
+        -- A tick that combat or a dodge took is not the goal's: 509's
+        -- zombies held the bot for 300 ticks at the MO disk's computer, the
+        -- use timed out, and pass code 01's lamp was never lit.
+        BotPlanner.hold_clock()
         return
     end
     BotPlanner.step(bot)
