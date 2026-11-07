@@ -1010,5 +1010,19 @@ setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, 
 input = "g1_scene_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1076, fields = ["zm0"], note = "G1's fight (routine 1) isn't ported yet (docs/re2-deviations.md)" }
+expect = { tick = 1217, fields = ["zm0"], note = "G1's lunge (routine 2) isn't ported yet (docs/re2-deviations.md)" }
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_flee_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2400
+# as g1_scene_303, but after the scene the player runs east, and G1 walks after them across the room
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_flee_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 1485, fields = ["zm0"], note = "G1's lunge (routine 2) isn't ported yet (docs/re2-deviations.md)" }
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
