@@ -409,23 +409,30 @@ distance ahead of the spitter and `speed` a tick, and `bite` (the keep-away
 from its melee). The bot runs off the glob lines from the tell, and holds
 its fire while a lock could root it (`BotTactics.spit_holds_fire`).
 An optional `<kite>` child marks a boss that is kept at a distance rather
-than stood and fought (303's Tyrant), in a room with a `<kite>` loop. It
-names action behaviours: `walk` (only then does the bot stop to shoot),
-`entrance` (no kiting before it ends), `charge` (a straight run with its
-facing locked, run across), and `rise` and `rush` (the bot takes a spot
-`flank` from it, off its facing line, during the rise, and runs past its
-flank once the swing starts). It also gives the walk `speed` a tick, the
-`cooldown` (walking ticks from its last hit to the rush), and the Manhattan
-distances of a stop: shoot from `shoot` (from `urgent` once the cooldown
-nears its end), never from past `edge` (it charges from there), and drop
-the aim for the run inside `lower`. Before the stop's first hit the aim
+than stood and fought (303's and 513's Tyrants), in a room with a `<kite>`
+loop. It names action behaviours: `walk` (only then does the bot stop to
+shoot), and, each optional, `entrance` (no kiting before it ends), `charge`
+(a straight run with its facing locked, run across), and `rise` and `rush`
+(the bot takes a spot `flank` from it, off its facing line, during the
+rise, and runs past its flank once the swing starts). Optional `scene` is
+the enemy state in which a room scene drives it (513's pod and Wesker
+scene, state 8): its behaviours are the scene's, so the bot only runs. It
+also gives the walk `speed` a tick, the `cooldown` (walking ticks from its
+last hit to the rush; with `flank`, required with a rush and refused
+without one), and the Manhattan distances of a stop: shoot from `shoot`
+(from `urgent` once the cooldown nears its end), never from past `edge` (it
+charges from there; without a charge, the farthest a slow gun's stop starts
+from, which the run goes on to reach), and drop the aim for the run inside
+`lower`. Before the stop's first hit the aim
 stays up down to `hold`, and for the `prefer`red weapon down to `commit`.
 They must order `commit <= hold <= lower < urgent <= shoot <= edge`. A gun
 slower than the handgun's `cadence` drops its aim earlier; one too slow to
 fit a stop (the shotgun) fires only from past `edge` or while the boss
 stands out a swing. The bot fetches a dropped `prefer`red weapon when the
 boss can't reach the way to it first, and equips it on the run while the
-gap is wide (`kite_step` in `tactics.lua`).
+gap is wide (`kite_step` in `tactics.lua`). With no gun left, it fetches
+rounds lying in the room for a held gun the same way (513's handgun
+ammunition), and a launcher's general reserve is spent rather than kept.
 `staple="yes"` on a `<weapon>` marks the firearm whose ammunition is the
 most common (the handgun): a full inventory never boxes it.
 `melee="yes"` on a `<weapon>` marks a hand weapon (the knife): it has no
@@ -986,7 +993,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<door>` | `slot`, `via` (another slot), optional `bank` + `bit` + `while`, optional `label` | Door AOT `slot` is parked at the room origin (or, with a gate, held elsewhere) until the player presses AOT `via`, whose event sets the door around the player. With a gate the fact holds only while flag `bank`/`bit` is `while` (`set` or `clear`), and the door is routed through `via` even when it is not at the origin. Routes may pass through it (any other door zone at the origin is a scripted transfer and never routed), and leaving by it presses `via`; the room's `<answer>` settles a prompt. The via goal is done once the room changes or the fact no longer holds (305's stairs event leaves the player beside the door). A body-probe `via` (flag `0x40`, as 302's elevator call) is walked into instead of pressed, and a `via` zone is never taken for a passage check. Read by `bot:door_facts()` for every room. |
 | `<keep_out>` | `slot`, `reason`, optional `bank` + `bit` + `while` | Every walk plans around AOT `slot`'s zone as if it were a wall, while the gate holds (always without one): a floor probe that springs a trap (507's plate starts the gas). The engine reads it: the zone joins the path planner's object boxes. |
 | `<leave>` | `slot`, `bank`, `bit`, optional `escape` (`yes`/`no`), optional `label` | Once flag `bank`/`bit` is set, the bot's next goal is door AOT `slot`, before the room's puzzle and pickups: a room event that keeps hurting until the room changes. Until the flag is set the room's steps wait for a heal-up, unless `escape="yes"`: the flag marks a chase that the door ends (30F's boulder, room bit `0x13` while it rolls). |
-| `<kite>` | `enemy`, `x`, `z`, `radius` | The loop the bot runs while it kites entity id `enemy` (a knowledge `<kite>`) in this room: its run headings keep inside the circle of `radius` about (`x`, `z`), the room's open floor. |
+| `<kite>` | `enemy`, `x`, `z`, `radius` | The loop the bot runs while it kites entity id `enemy` (a knowledge `<kite>`) in this room: its run headings keep inside the circle of `radius` about (`x`, `z`), the room's open floor. Two or more for one enemy make a ring instead: the corners, in order, of the middle line of a circuit of corridors around a block (513), each `radius` the half width of the corridor that starts there. The bot runs along the circuit the way that leaves the enemy behind, keeping the way until the other is clearly longer, and measures the gap as the shorter way round when that is longer than the straight one; off the corridors (a pocket) it follows the walk's path back, and it stops to shoot only on them. |
 | `<ride>` | `slot`, `from` (a room id), optional `label` | Door AOT `slot` sits at the room origin, a scripted transfer, but it is the way out when the room was entered from `from`: a lift whose event picks the far door by where the player came from. The route planner takes it only on a path that enters this room from `from`, and the room's own event then carries the player through. Read by `bot:ride_facts()`. |
 | `<holds>` | `item` (non-zero), optional `label` | The room holds `item`: what is where, never when to go. Read by `bot:item_facts()` for every room. |
 | `<deliver>` | `item` (non-zero), `cut`, `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Bring `item` here and walk into camera `cut`, where a room event takes it; flag `bank`/`bit` set means done. With an `after` flag, wanted only once it is set. Read by `bot:errand_facts()` for every room. |
@@ -1121,7 +1128,7 @@ files. The checked-in facts:
 | 50C | `<interact slot="5" bank="0" bit="1" after_bank="0" after_bit="45">` with `<answer choice="yes" slot="5">`: the switch calls the elevator once the power is on, which turns door 4 to 515 from a message (129) into a door. |
 | 50F | `<interact slot="2" bank="0" bit="46">` with `<answer choice="yes" slot="2">`: the power panel supplies the blacked-out areas. |
 | 511 | `<interact slot="1" bank="0" bit="45" after_bank="0" after_bit="46">` with `<answer choice="yes" slot="1">`: the connection switch wires the elevator's circuit. It connects without 50F's supply too; the gate makes 45 mean both halves are on, so 50C waits for 45 only. |
-| 513 | `<fight enemy="0x0C" bank="3" bit="112" label="the Tyrant">`, then one exit per branch of common bit `0x5B`. Clear (Wesker's branch): the Tyrant's death (enemy bit 112) shows the master key (AOT 2) on the floor, and `<interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0">` with `<answer choice="yes" slot="1">` has the control device turn door 0 from a message (159) back into a door; room bit 3 is set only on the entry where the Tyrant dies. Set (Barry's branch): door 0 is message 131 and AOT 1 message 160 for the whole entry, and the death arms AOT 3 as Barry's event, whose end makes door 0 a door and sets no flag: `<interact slot="3" bank="1" bit="0x5B" done="clear" opens="0">`, ahead of the control device. The bot fights the Tyrant with the grenade launcher (`prefer`), which the loadout rule takes from 50E's box on the way. |
+| 513 | `<fight enemy="0x0C" bank="3" bit="112" label="the Tyrant">`, then one exit per branch of common bit `0x5B`. Clear (Wesker's branch): the Tyrant's death (enemy bit 112) shows the master key (AOT 2) on the floor, and `<interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0">` with `<answer choice="yes" slot="1">` has the control device turn door 0 from a message (159) back into a door; room bit 3 is set only on the entry where the Tyrant dies. Set (Barry's branch): door 0 is message 131 and AOT 1 message 160 for the whole entry, and the death arms AOT 3 as Barry's event, whose end makes door 0 a door and sets no flag: `<interact slot="3" bank="1" bit="0x5B" done="clear" opens="0">`, ahead of the control device. The bot kites the Tyrant around the ring of corridors about the central block (five `<kite enemy="0x0C">` corners; the south leg bows north at x 10800: on the straight line, Wesker's branch stalled the run against an unseen obstacle near (11000, 8400)), stopping to shoot while it is far, and spends the grenade launcher (`prefer`, which the loadout rule takes from 50E's box) when it has one. |
 | 515 | Two `<ride>` facts: the lift's doors are both at the origin. Entered from 514 it rides up to 50C (slot 0); entered from 50C, down to 514 (slot 1). |
 | 501 | `<use slot="4" item="0x27" bank="1" bit="0x46">`: the battery (from 50A) powers the escape lift; its scene starts the 180-second self-destruct countdown. `<avoid slot="5">`: the pulled-out battery's message. |
 | 303 | `<use slot="6" item="0x2A" bank="4" bit="0">`: the flare (AOT 2) used on the deck calls the helicopter. Without scenario `0x2B` (the partner's self-destruct scenes in 505/514) the helicopter takes the player away and the game ends; with it, `<fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0" stage="5">`: the Tyrant comes up; `<kite enemy="0x10" x="19650" z="14000" radius="8000">`: the Tyrant is kited around the deck. The bot stops to shoot while it walks far off (each hit holds its rush off), runs across its charge, and runs past its flank in a rush. The rocket launcher (AOT 1, the knowledge `prefer`) drops once the Tyrant is down to 200 health, or 1800 ticks after its entrance. The bot fetches it while the Tyrant is clear of the way, and its rocket kills the Tyrant, which starts the ending. The doors are locked behind the flare, so the fight is fought even when not ready (`fighting anyway`). |

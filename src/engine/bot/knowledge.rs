@@ -165,35 +165,40 @@ pub struct Spit {
 }
 
 /// A boss that no gun out-damages before it closes, kept at a distance
-/// instead (303's Tyrant: the rocket launcher Brad drops ends it). The bot
-/// runs a loop around the room's `<kite>` centre and stops to shoot while
-/// it is far. Each hit holds off its rush (the `cooldown` walking ticks
-/// after the last one); its charge is run across and its rush dodged past
-/// its flank.
+/// instead (303's Tyrant: the rocket launcher Brad drops ends it; 513's
+/// Tyrant: its slash outreaches a stand). The bot runs a loop around the
+/// room's `<kite>` centre and stops to shoot while it is far. Each hit holds
+/// off its rush (the `cooldown` walking ticks after the last one); its
+/// charge is run across and its rush dodged past its flank. The charge, the
+/// rise and rush, and the entrance are optional: 513's Tyrant has none.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Kite {
     /// The action behaviour of its walk (`walk`): only then the bot stops
     /// to shoot.
     pub walk: u8,
     /// Its entrance (`entrance`): no kiting before it ends.
-    pub entrance: u8,
+    pub entrance: Option<u8>,
+    /// The enemy state in which a room scene drives it (`scene`): its
+    /// action behaviours are the scene's, so the bot only runs.
+    pub scene: Option<u8>,
     /// Its charge (`charge`): a straight run that locks its facing for the
     /// swing, so it is run across.
-    pub charge: u8,
+    pub charge: Option<u8>,
     /// Its rise (`rise`) and the rush it starts (`rush`): the rush homes in
     /// and its swing still turns, so the bot sets up during the rise and
     /// runs past its flank once the swing starts.
-    pub rise: u8,
-    pub rush: u8,
+    pub rise: Option<u8>,
+    pub rush: Option<u8>,
     /// Its walk speed a tick (`speed`).
     pub speed: i32,
-    /// Walking ticks from a hit to its rush (`cooldown`).
-    pub cooldown: i32,
+    /// Walking ticks from a hit to its rush (`cooldown`, with the rush).
+    pub cooldown: Option<i32>,
     /// The Manhattan distance a stop to shoot starts from (`shoot`), and
     /// the nearer one once the rush draws close (`urgent`).
     pub shoot: i32,
     pub urgent: i32,
-    /// The Manhattan gap past which it charges (`edge`, less a margin).
+    /// The Manhattan gap past which it charges (`edge`, less a margin);
+    /// with no charge, the farthest a stop starts from.
     pub edge: i32,
     /// The aim drops for the run inside `lower` (inside `hold` while the
     /// stop has not hit yet, inside `commit` for the killing weapon).
@@ -201,8 +206,9 @@ pub struct Kite {
     pub hold: i32,
     pub commit: i32,
     /// The distance from it of the spot the bot takes off its facing line
-    /// during the rise (`flank`), dashing past once the rush swings.
-    pub flank: i32,
+    /// during the rise (`flank`, with the rush), dashing past once the rush
+    /// swings.
+    pub flank: Option<i32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -431,29 +437,52 @@ fn parse_kite(node: Node<'_, '_>) -> Result<Kite> {
     check_attributes(
         node,
         &[
-            "walk", "entrance", "charge", "rise", "rush", "speed", "cooldown", "shoot", "urgent",
-            "edge", "lower", "hold", "commit", "flank",
+            "walk", "entrance", "scene", "charge", "rise", "rush", "speed", "cooldown", "shoot",
+            "urgent", "edge", "lower", "hold", "commit", "flank",
         ],
     )?;
     check_leaf(node)?;
+    fn optional<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str) -> Result<Option<T>> {
+        node.attribute(name).map(|_| attr(node, name)).transpose()
+    }
     let kite = Kite {
         walk: attr(node, "walk")?,
-        entrance: attr(node, "entrance")?,
-        charge: attr(node, "charge")?,
-        rise: attr(node, "rise")?,
-        rush: attr(node, "rush")?,
+        entrance: optional(node, "entrance")?,
+        scene: optional(node, "scene")?,
+        charge: optional(node, "charge")?,
+        rise: optional(node, "rise")?,
+        rush: optional(node, "rush")?,
         speed: attr(node, "speed")?,
-        cooldown: attr(node, "cooldown")?,
+        cooldown: optional(node, "cooldown")?,
         shoot: attr(node, "shoot")?,
         urgent: attr(node, "urgent")?,
         edge: attr(node, "edge")?,
         lower: attr(node, "lower")?,
         hold: attr(node, "hold")?,
         commit: attr(node, "commit")?,
-        flank: attr(node, "flank")?,
+        flank: optional(node, "flank")?,
     };
-    if kite.speed <= 0 || kite.cooldown <= 0 || kite.flank <= 0 {
-        bail!("{}: needs speed, cooldown and flank > 0", at(node));
+    if kite.speed <= 0 {
+        bail!("{}: needs speed > 0", at(node));
+    }
+    // A rush comes with its rise, the cooldown that times it and the flank
+    // spot it is dodged from.
+    let rush = kite.rise.is_some() || kite.rush.is_some();
+    let rush_parts = kite.rise.is_some()
+        && kite.rush.is_some()
+        && kite.cooldown.is_some_and(|c| c > 0)
+        && kite.flank.is_some_and(|f| f > 0);
+    if rush && !rush_parts {
+        bail!(
+            "{}: `rise` and `rush` need each other, cooldown and flank > 0",
+            at(node)
+        );
+    }
+    if !rush && (kite.cooldown.is_some() || kite.flank.is_some()) {
+        bail!(
+            "{}: `cooldown` and `flank` need a `rise` and `rush`",
+            at(node)
+        );
     }
     if !(kite.commit <= kite.hold
         && kite.hold <= kite.lower
@@ -772,6 +801,7 @@ impl Knowledge {
                 let t = lua.create_table()?;
                 t.set("walk", kite.walk)?;
                 t.set("entrance", kite.entrance)?;
+                t.set("scene", kite.scene)?;
                 t.set("charge", kite.charge)?;
                 t.set("rise", kite.rise)?;
                 t.set("rush", kite.rush)?;
@@ -954,21 +984,41 @@ mod tests {
             k.enemies[0].kite,
             Some(Kite {
                 walk: 1,
-                entrance: 9,
-                charge: 8,
-                rise: 11,
-                rush: 10,
+                entrance: Some(9),
+                scene: None,
+                charge: Some(8),
+                rise: Some(11),
+                rush: Some(10),
                 speed: 120,
-                cooldown: 210,
+                cooldown: Some(210),
                 shoot: 10000,
                 urgent: 8500,
                 edge: 11500,
                 lower: 7500,
                 hold: 6000,
                 commit: 3500,
-                flank: 1600,
+                flank: Some(1600),
             })
         );
+        // 513's form: no entrance, charge, rise or rush, a scene state.
+        let lab = text.replace(
+            r#"entrance="9" charge="8" rise="11" rush="10""#,
+            r#"scene="8""#,
+        );
+        let bare = lab
+            .replace(r#"cooldown="210" "#, "")
+            .replace(r#" flank="1600""#, "");
+        let k = parse(&bare).unwrap();
+        let kite = k.enemies[0].kite.clone().unwrap();
+        assert_eq!(
+            (kite.scene, kite.charge, kite.rise, kite.rush),
+            (Some(8), None, None, None)
+        );
+        assert_eq!((kite.cooldown, kite.flank), (None, None));
+        // A cooldown or flank without the rush, or a rise without its rush,
+        // fails.
+        assert!(parse(&lab).is_err());
+        assert!(parse(&text.replace(r#" rush="10""#, "")).is_err());
         // The bands out of order, a zero speed or flank, a missing or
         // misspelt attribute, and two kites all fail.
         for (from, to) in [

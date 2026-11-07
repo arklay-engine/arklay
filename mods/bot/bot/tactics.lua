@@ -1600,10 +1600,102 @@ local function kite_cross(bot, player, e)
     return nil
 end
 
+-- A ring loop (two or more room <kite> facts for one enemy: the corners of
+-- a circuit of corridors around a block, 513's): the circuit's segments
+-- with their start along it, and its length.
+local function ring_build(corners)
+    local ring = { segs = {}, length = 0 }
+    for i, a in ipairs(corners) do
+        local b = corners[i % #corners + 1]
+        local len = ((b.x - a.x) ^ 2 + (b.z - a.z) ^ 2) ^ 0.5
+        ring.segs[#ring.segs + 1] = { ax = a.x, az = a.z, bx = b.x, bz = b.z, len = len,
+            at = ring.length, width = a.radius }
+        ring.length = ring.length + len
+    end
+    return ring
+end
+
+-- The nearest point of the circuit to (x, z): how far along it, and how
+-- far off it compared with the corridor's half width there.
+local function ring_project(ring, x, z)
+    local best_at, best_off, best_seg
+    for _, g in ipairs(ring.segs) do
+        local t = ((x - g.ax) * (g.bx - g.ax) + (z - g.az) * (g.bz - g.az)) / (g.len * g.len)
+        t = t < 0 and 0 or (t > 1 and 1 or t)
+        local px, pz = g.ax + (g.bx - g.ax) * t, g.az + (g.bz - g.az) * t
+        local off = ((x - px) ^ 2 + (z - pz) ^ 2) ^ 0.5
+        if not best_off or off < best_off then
+            best_at, best_off, best_seg = g.at + g.len * t, off, g
+        end
+    end
+    return best_at, best_off, best_seg
+end
+
+local function ring_point(ring, at)
+    at = at % ring.length
+    for _, g in ipairs(ring.segs) do
+        if at <= g.at + g.len then
+            local t = (at - g.at) / g.len
+            return g.ax + (g.bx - g.ax) * t, g.az + (g.bz - g.az) * t
+        end
+    end
+    local g = ring.segs[1]
+    return g.ax, g.az
+end
+
+-- The run on a ring: along the circuit to a point RANGE * 2 / 3 ahead,
+-- the way that leaves `e` behind (the longer way round to it). The way is
+-- kept until the other is clearly longer, so a tyrant across the block
+-- does not flip it each tick; off the circuit (a pocket) the run follows
+-- the walk's path to a point farther on.
+local KITE_RING_SWITCH = C.FIGHT_RANGE
+local KITE_RING_BESIDE = C.FIGHT_RANGE // 3
+local function ring_heading(bot, player, e, kk, ring)
+    local sp, off, seg = ring_project(ring, player.x, player.z)
+    local se = ring_project(ring, e.x, e.z)
+    local ahead = (sp - se) % ring.length
+    local behind = ring.length - ahead
+    -- `ahead`: how far the bot is ahead of it along the circuit's order;
+    -- `behind`: the other way round. The run goes the way it is ahead. One
+    -- beside it (the corridor's width off, 513's entry) passes it either
+    -- way, so the run keeps the way it faces: a turn stands still.
+    local way = kk.ring_way
+    if not way then
+        local fx, fz = heading(player.angle)
+        way = (fx * (seg.bx - seg.ax) + fz * (seg.bz - seg.az) >= 0) and 1 or -1
+    end
+    local front, back = behind, ahead
+    if way < 0 then
+        front, back = ahead, behind
+    end
+    if front + KITE_RING_SWITCH < back and front > KITE_RING_BESIDE then
+        way = -way
+        bot:log(string.format("kite: ring way %d (it is %d ahead, %d behind)", way, front // 1, back // 1))
+    end
+    kk.ring_way = way
+    local tx, tz = ring_point(ring, sp + way * RANGE * 2 // 3)
+    -- Off the corridor (a pocket: 513's ammunition), the walk's way there:
+    -- a straight line back to the middle line ran at the tyrant.
+    if off > seg.width then
+        tx, tz = ring_point(ring, sp + way * RANGE * 2)
+        local path = bot:path(tx // 1, tz // 1)
+        for _, p in ipairs(path.status == "ok" and path.points or {}) do
+            if bot:distance(p.x, p.z) > C.APPROACH then
+                tx, tz = p.x, p.z
+                break
+            end
+        end
+    end
+    return norm(tx - player.x, tz - player.z)
+end
+
 -- The run heading: the best of 24 by the swing off straight away from `e`
 -- (weighted up as it closes), how far out of the deck's loop it leads, the
 -- room ahead and, close to it, any part toward it.
-local function kite_run_heading(bot, player, e, kite, loop)
+local function kite_run_heading(bot, player, e, kite, loop, kk)
+    if loop.ring then
+        return ring_heading(bot, player, e, kk, loop.ring)
+    end
     local ax, az = norm(player.x - e.x, player.z - e.z)
     local away = angle_of(ax, az)
     local d = manhattan(player.x, player.z, e.x, e.z)
@@ -1637,7 +1729,17 @@ local function kite_target(bot, s, k)
     if s.kite_room_id ~= room then
         s.kite_room_id = room
         local meta = bot:room_meta()
-        s.kite_loop = meta and meta.kites and meta.kites[1] or false
+        local kites = meta and meta.kites or {}
+        s.kite_loop = kites[1] or false
+        local corners = {}
+        for _, f in ipairs(kites) do
+            if f.enemy == kites[1].enemy then
+                corners[#corners + 1] = f
+            end
+        end
+        if #corners > 1 then
+            s.kite_loop = { enemy = kites[1].enemy, ring = ring_build(corners) }
+        end
     end
     local loop = s.kite_loop
     if not loop then
@@ -1667,8 +1769,38 @@ local function kite_step(bot, s, player)
     end
     local kk = s.kite
     local now = bot:tick()
+    -- A scene or a menu took the ticks since the last step: a quick turn
+    -- it broke off is over (513's entry scene: the bot stood out the rest
+    -- of it), and a ring's way round is chosen again.
+    if kk.step_tick and now - kk.step_tick > 2 then
+        if kk.mode == "turn" then
+            kk.mode = "run"
+        end
+        kk.ring_way = nil
+    end
+    kk.step_tick = now
     local d = manhattan(player.x, player.z, e.x, e.z)
+    -- On a ring the block between keeps it off longer than the straight
+    -- gap: its walk is the shorter way round (the straight gap still
+    -- counts beside it, a corridor's width off).
+    if loop.ring then
+        local sp = ring_project(loop.ring, player.x, player.z)
+        local se = ring_project(loop.ring, e.x, e.z)
+        local ahead = (sp - se) % loop.ring.length
+        local round = loop.ring.length - ahead
+        if ahead < round then
+            round = ahead
+        end
+        if round > d then
+            d = round // 1
+        end
+    end
+    -- In its scene state (513's pod and Wesker) a room scene drives it:
+    -- its behaviours are the scene's, so the bot only runs.
     local ab = e.action_behavior
+    if kite.scene and e.state == kite.scene then
+        ab = -1
+    end
     local to_e = angle_of(norm(e.x - player.x, e.z - player.z))
     local facing_err = abs(angle_delta(player.angle % C.FULL_TURN, to_e))
     local weapon = bot:weapon()
@@ -1817,13 +1949,26 @@ local function kite_step(bot, s, player)
     if kk.mode == "cross" then
         set_mode("run", "threat over")
     end
-    -- The rocket launcher dropped: go for it while safe.
+    -- With no gun the rest leave, the rounds kept for the fights ahead
+    -- (a launcher's general reserve) are spent here: 513's flame rounds
+    -- stayed held while the tyrant walked the bot round its ring.
+    local gun = firearm(bot, k, e) or firearm(bot, k, e, nil, true)
+    -- The rocket launcher dropped: go for it while safe. With no gun
+    -- left, rounds lying here for a held one (513's handgun ammunition).
     local goal
-    if entry.prefer and not bot:has_item(entry.prefer) then
-        for _, g in ipairs(bot:world().frontier or {}) do
-            if g.kind == "item" and g.room == bot:room().id and g.item == entry.prefer then
-                goal = g
+    local function ammo_here(item)
+        for _, row in ipairs(bot:menu().items or {}) do
+            if row.kind == "weapon" and bot:ammo_for(row.item) == item then
+                return true
             end
+        end
+        return false
+    end
+    for _, g in ipairs(bot:world().frontier or {}) do
+        if g.kind == "item" and g.room == bot:room().id
+            and ((entry.prefer and g.item == entry.prefer and not bot:has_item(entry.prefer))
+                or (not gun and ammo_here(g.item))) then
+            goal = g
         end
     end
     -- Fetch it while the tyrant is well off its way: run there, and press
@@ -1875,7 +2020,6 @@ local function kite_step(bot, s, player)
     elseif kk.mode == "fetch" then
         set_mode("run", "fetch off")
     end
-    local gun = firearm(bot, k, e)
     -- The stop's gun: the killing weapon when held; from past the charge's
     -- edge, combat's own pick (the launcher's rounds land while the gap is
     -- wide); nearer, the quickest gun with rounds (a known cadence: the
@@ -1995,7 +2139,7 @@ local function kite_step(bot, s, player)
         end
         -- The way to run decides the turn: a quick turn when it lies
         -- behind, else a turn in place onto it.
-        local ux, uz = kite_run_heading(bot, player, e, kite, loop)
+        local ux, uz = kite_run_heading(bot, player, e, kite, loop, kk)
         local delta = abs(angle_delta(angle_of(ux, uz), player.angle % C.FULL_TURN))
         if delta > KITE_QUICK_FROM then
             return quick_turn("run")
@@ -2007,7 +2151,7 @@ local function kite_step(bot, s, player)
     -- The rush comes `cooldown` walking ticks after its last hit: two
     -- seconds short of it without one, a nearer stop.
     local shoot_from = kite.shoot
-    if now - (kk.last_hit or now) > kite.cooldown - 2 * C.SECOND then
+    if kite.cooldown and now - (kk.last_hit or now) > kite.cooldown - 2 * C.SECOND then
         shoot_from = kite.urgent
     end
 
@@ -2021,6 +2165,10 @@ local function kite_step(bot, s, player)
     -- A stop needs the run after it: room straight away from the tyrant
     -- (a stop against the deck's edge leaves only a run past its side).
     local function escape()
+        if loop.ring then
+            local _, off, seg = ring_project(loop.ring, player.x, player.z)
+            return off <= seg.width
+        end
         local ax, az = norm(player.x - e.x, player.z - e.z)
         return kite_room(bot, player, ax, az) >= RANGE // 2
     end
@@ -2036,7 +2184,9 @@ local function kite_step(bot, s, player)
         return true
     end
     -- No gun: hold at the top of the band, run when it closes.
-    if not stop and d >= kite.shoot and kk.mode == "run" then
+    -- (Without a charge, a gun too slow for an ordinary stop runs on to
+    -- the edge, where its stop fits: 513's shotgun.)
+    if not stop and d >= kite.shoot and kk.mode == "run" and (not gun or kite.charge) then
         set_mode("hold", "no gun")
         bot:face_to(e.x, e.z)
         return true
@@ -2060,12 +2210,20 @@ local function kite_step(bot, s, player)
         and menu_reload(bot, s, weapon) then
         return true
     end
-    local ux, uz = kite_run_heading(bot, player, e, kite, loop)
+    local ux, uz = kite_run_heading(bot, player, e, kite, loop, kk)
     -- Close to it, steer within the run's own turn (a turn in place stops
     -- the run), through the clear heading nearest the one wanted. A turn
     -- just planned (off the aim) runs free until it is done.
     local cur = player.angle % C.FULL_TURN
     local want = angle_of(ux, uz)
+    -- On a ring, close to it with the way behind (513's entry: the scene
+    -- leaves the bot facing the tyrant): a quick turn, not a turn in place
+    -- (the bot stood seven ticks and took the slash).
+    if loop.ring and d < kite.lower + 2 * C.APPROACH and abs(angle_delta(want, cur)) > KITE_QUICK_FROM
+        and now - (kk.quick_tick or -KITE_TURN_WAIT) > KITE_TURN_WAIT then
+        kk.quick_tick = now
+        return quick_turn("run")
+    end
     if kk.free_turn and abs(angle_delta(want, cur)) < DASH_TURN then
         kk.free_turn = nil
     end
@@ -2074,7 +2232,7 @@ local function kite_step(bot, s, player)
     if abs(angle_delta(want, cur)) > C.FULL_TURN // 4 then
         kk.free_turn = true
     end
-    if d < kite.lower + 2 * C.APPROACH and not kk.free_turn then
+    if d < kite.lower + 2 * C.APPROACH and not kk.free_turn and not loop.ring then
         local best, best_cost
         for off = -4, 4 do
             local a = (cur + off * KITE_STEER_MAX // 4) % C.FULL_TURN
@@ -2087,8 +2245,9 @@ local function kite_step(bot, s, player)
         end
         ux, uz = heading(best)
     end
-    if goal then
-        -- Head for the launcher while the tyrant is not that way.
+    if goal and not loop.ring then
+        -- Head for the launcher while the tyrant is not that way (a ring's
+        -- run keeps to its way round: the turns between stood still).
         local gx, gz = norm(goal.x - player.x, goal.z - player.z)
         local ex, ez = norm(e.x - player.x, e.z - player.z)
         if gx * ex + gz * ez < 0.3 then
