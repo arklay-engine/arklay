@@ -1,0 +1,1 @@
+Runs for `scripts/re2-regress.py`, read after `../re2-regress.toml` in file-name order. Each `.toml` file here holds only `[[run]]` tables, which take the main file's `defaults` and field sets. Put a new run in a file of its own, named after the run or its family, so that branches adding runs don't conflict. See "The regression runner" in `oracle/re2.md`.
