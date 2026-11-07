@@ -11,3 +11,17 @@ input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 509:13248:-1800:-16378:3480:5 --flag 1:1 --flag 4:99 --life 200"
+
+# G3 (Em_33) in room 509, scenario B: the player stands in the area that starts the room's scene,
+# where G3 rises and starts the fight (oracle/re2.md, "G3")
+[[run]]
+name = "g3_scene_509"
+room = "509"
+character = 0
+sound = false
+ticks = 779
+setup = { pos = [-3670, 0, -14172], angle = 2048, health = 2000, rnd = 6114, camera = 0, flags = [[1, 1], [4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 2000"
