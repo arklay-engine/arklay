@@ -1761,6 +1761,14 @@ function Re2EnemyApi:noise() end
 ---@return boolean easy
 function Re2EnemyApi:easy() end
 
+---Whether the new game is on HARD (`hard_mode`, `0x6805B1`).
+---@return boolean hard
+function Re2EnemyApi:hard_mode() end
+
+---Whether the new game is ARRANGE MODE (`censorship_off`, `0x6805B3`).
+---@return boolean uncensored
+function Re2EnemyApi:censorship_off() end
+
 ---`fg_common`'s `0xA4`, which takes some life off a licker.
 ---@return boolean set
 function Re2EnemyApi:common_a4() end

@@ -473,6 +473,8 @@ pub struct Target {
     /// A hit by an effect whose row has bit 8: `poison_status` 0x1518,
     /// `poison_timer` 0x1E.
     pub poisoned: bool,
+    /// The new game's choice, which `Pl_life_down` reads.
+    pub difficulty: crate::zombie2::Difficulty,
 }
 
 impl Target {
@@ -495,7 +497,7 @@ impl Target {
         }
         self.routine = Some(2);
         let (left, near_death, result) =
-            crate::zombie2::life_down(self.life, down, false, self.near_death);
+            crate::zombie2::life_down(self.life, down, false, self.near_death, self.difficulty);
         self.life = left;
         self.near_death = near_death;
         if result == 2 {
@@ -2375,6 +2377,17 @@ mod tests {
         let this = effects.slots[slot];
         assert_eq!((this.anim, this.update, this.flags), (0, 0, 0xB001));
         assert!(effects.sounds.iter().any(|&(id, _)| id == 0x304_0001));
+    }
+
+    #[test]
+    fn a_hit_in_hard_mode_takes_a_quarter_more() {
+        let mut target = Target {
+            life: 100,
+            difficulty: crate::zombie2::Difficulty { hard: true, uncensored: false },
+            ..player_at(0)
+        };
+        assert!(target.hit([0, 0, 0], 800, 20));
+        assert_eq!(target.life, 75);
     }
 
     #[test]
