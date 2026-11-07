@@ -35,7 +35,8 @@ counts from the most significant end.
 `FG_RUN` (group 6) is not a group of its own: it is the engine's run word
 (the systems that update each frame, the `RUN_*` bits) and the word next to
 it. Bits 16 to 31 address the run word, high bit first, and bits 0 to 15 the
-word before it; a bit past 31 is refused. `set(FG_RUN, F_RUN_CONTROLS,
+word before it. A bit past 31 addresses the ordinary bank 6, as it does
+for [`ck`](ck.md). `set(FG_RUN, F_RUN_CONTROLS,
 FALSE)` is how a cutscene takes the controls away from the player.
 
 A `mode` other than 0, 1 or 2, or a group the engine does not have, changes

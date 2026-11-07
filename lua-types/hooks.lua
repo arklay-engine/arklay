@@ -94,7 +94,7 @@ function on_tick(api, tick) end
 ---id is the one displayed.
 ---@param api HookApi
 ---@param id integer The message id word.
----@return integer? id The replacement id word; `nil` keeps the original.
+---@return integer? id The replacement id word, clamped to `0..=65535`; `nil` keeps the original.
 function on_message(api, id) end
 
 -- source: src/lua.rs#GameState
@@ -279,12 +279,14 @@ function HookApi:message(id) end
 
 ---Define one preset of up to three numeric music tracks. The track id names
 ---`bgm/<id:03x>`; the group id is a logical preset, not a file. An empty group
----is silent.
+---is silent. More than three tracks, or group `0xFF` (reserved for "no
+---group"), raises an error.
 ---@param group integer
 ---@param tracks { [1]: integer, [2]: boolean? }[] Up to three `{ track, loop }` pairs.
 function HookApi:set_music_group(group, tracks) end
 
----Replace a room's up-to-four group variants.
+---Replace a room's up-to-four group variants. A stage or room outside the
+---music table, or more than four groups, raises an error.
 ---@param stage integer The 1-based stage digit, `1..=5`.
 ---@param room integer
 ---@param groups integer[]

@@ -900,8 +900,8 @@ every instruction and the `.s` assembler.
 
 ## Lua scripts
 
-A pack can carry Lua for four jobs. Each has its own sandboxed API, documented
-on its own page. The pages are generated from LuaLS definition files, which
+Lua runs in several places, each with its own sandboxed API documented on its
+own page. The pages are generated from LuaLS definition files, which
 the engine also ships for linting and completion in an editor:
 
 ```sh
@@ -910,7 +910,8 @@ arklay mod lua-types --out ~/arklay-lua-types
 
 writes them (they are also in
 [`lua-types/`](https://github.com/arklay-engine/arklay/tree/main/lua-types)
-in the repository, and next to these pages as `lua-types/*.lua`). Point the
+in the repository, and next to these pages as `lua-types/*.lua` and
+[`arklay-lua-types.zip`](arklay-lua-types.zip)). Point the
 Lua language server at the directory in a `.luarc.json` beside the scripts:
 
 ```json
@@ -923,7 +924,8 @@ Lua language server at the directory in a `.luarc.json` beside the scripts:
 - [Screen scripts](lua/screen.md): whole screens in Lua, the engine's own
   `ui/<id>.lua` screens and a save/load screen a pack registers with
   `api:register_save_screen`.
-- [GUI DOM](lua/gui.md): the scripting surface of the XML menu markup.
+- [GUI DOM](lua/gui.md): the scripting surface of the engine's XML menu
+  markup. A pack cannot supply a GUI script yet.
 - [Enemy scripts](lua/enemy.md) and [RE 2 enemy scripts](lua/re2-enemy.md):
   the per-tick `update(e)` behaviour of every enemy and character, from the
   `enemy/<id>/` folders.

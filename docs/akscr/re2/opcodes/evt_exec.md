@@ -41,7 +41,10 @@ running one and starts at once.
 A task that `init_00` starts during the room's load does not run during the
 init. It first runs in the load's pass, alongside `main_00`, and it runs the
 *main* procedure with that number (see
-[what runs when](../index.md#what-runs-when)). Slot 0 is a poor choice
+[what runs when](../index.md#what-runs-when)). The port starts it only
+when the number is also an init procedure's, so with a single `init_00`
+only procedure 0 can be started from the init; this is a known gap in the
+port. Slot 0 is a poor choice
 outside the load: the scheduler restarts `main_01` in task 0 at every tick.
 
 ## Example

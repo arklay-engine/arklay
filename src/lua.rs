@@ -21,7 +21,7 @@
 //! item box, player health/position/character, room identity/camera, FILE and
 //! item-use flags, raw flag banks, state bytes and the static room-music
 //! tables). Methods use Lua's colon
-//! syntax (`api:flag_set(0, 1, true)`); `docs/modding.md` is the full table.
+//! syntax (`api:flag_set(0, 1, true)`); `lua-types/hooks.lua` is the full table.
 //!
 //! The sandbox loads only the base, `string` and `table` libraries, so `os`,
 //! `io`, `package`, `debug`, `coroutine` and `math` do not exist; the base

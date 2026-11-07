@@ -67,6 +67,41 @@
 ---reuses a family by calling that family's `lib/` module with a table of what
 ---sets it apart, as the shipped lickers and zombies do.
 ---
+---## Variants
+---
+---The zombies and the lickers share one machine per family, and each id's
+---script passes a `VARIANT` table saying what sets it apart. A zombie's
+---(`lib/zombie.lua`, `zombie.run(e, VARIANT)`):
+---
+---| Key | Effect |
+---| --- | --- |
+---| `burns_unmarked` | The body burns without the charred mark (`e:set_burnt(false)`). |
+---| `life` | The starting life, in place of the room's. |
+---| `tough` | The bite does more damage (10 crawling, `0x1E` standing). |
+---| `init_draws` | How many `e:rnd()` draws the init makes first, as the original's do. |
+---| `parts0_y` | The first part's y scale (`e:set_parts0_y`). |
+---| `skins` | Picks one of three skins at random (`e:set_skin`) when the model type allows it. |
+---
+---A licker's (`lib/licker.lua`, `licker.run(e, VARIANT)`, ids `0x22` and
+---`0x24`):
+---
+---| Key | Effect |
+---| --- | --- |
+---| `life`, `life_easy` | Sixteen starting lives, indexed by a random draw; `life_easy` on easy. |
+---| `down`, `down_easy` | What common flag `0xA4` takes off the life. |
+---| `starts`, `starts_scripted` | The first state for each surface kind; `starts_scripted` when the room placed it with kind bit `0x4000`. |
+---| `init_late` | The `e:joint` argument of the init. |
+---| `clips` | The named animation clips (`slash`, `leap`, ...). |
+---| `blood` | Per-weapon blood effects, over the shared table. |
+---| `em24` | `Em_24`'s own choices where it differs from `Em_22`. |
+---
+---The other families (the dog, the crow, the alligator, the spiders, Mr. X,
+---the ivy and G1/G2) each have a script of their own. The dog also routes
+---between guide areas with `e:root_ck_area` and `e:goto_ck` and bites with
+---`e:jaw`; the crow sees with `e:line_to_player`, banks with `e:wall_side`,
+---`e:tilt` and `e:set_tilt`, calls the other crows with `e:call_kin`, and
+---scatters its parts with `e:blow_part` and `e:fling_part`.
+---
 ---## Loading, `require` and the sandbox
 ---
 ---RE 2 scripts share the enemy-script host with RE 1's (see
@@ -174,10 +209,12 @@
 ---Positions are the room's world units, `y` growing downward (a higher body
 ---has a smaller `y`). Angles are 12-bit: `0x1000` is a full turn, `0x400` a
 ---quarter, and a facing of 0 looks along `+x`. A *rate* is an angle step per
----tick unless a method says otherwise. Values are passed as Lua integers; each
----setter truncates to the field's own width exactly like the original's C
----store, so a script may compute in 64-bit integers and store without
----narrowing by hand. Collision records are numbered from 1 in the order the
+---tick unless a method says otherwise. Values are passed as Lua integers. A
+---parameter documented as truncated is taken as a 64-bit integer and cut to
+---the field's own width exactly like the original's C store, so a script may
+---compute in 64-bit integers and store without narrowing by hand. Every other
+---integer parameter must fit its type: a value out of range raises an error
+---(which parks the script, see Errors). Collision records are numbered from 1 in the order the
 ---room's `.sca` holds them.
 ---
 ---## Errors
@@ -233,7 +270,7 @@ function Re2EnemyApi:var(index) end
 
 ---Store a spare field.
 ---@param index integer From 0: up to 33, or up to 19 on a licker.
----@param value integer Truncated to 32 bits.
+---@param value integer A signed 32-bit value; one out of range raises an error.
 function Re2EnemyApi:set_var(index, value) end
 
 ---One of the routine bytes `Routine_0` to `Routine_3`: the mode, the state,
@@ -724,7 +761,7 @@ function Re2EnemyApi:clear_neck() end
 function Re2EnemyApi:neck_turn() end
 
 ---Set the neck's yaw.
----@param turn integer Truncated to 16 bits.
+---@param turn integer A signed 16-bit value; one out of range raises an error.
 function Re2EnemyApi:set_neck_turn(turn) end
 
 ---`FUN_0045f5b0`: `Rot_neck_em` on both of the dog's neck joints, toward the

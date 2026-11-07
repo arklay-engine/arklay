@@ -152,6 +152,14 @@
 ---No clock, no `math.random` and no other entropy are reachable, so a capture
 ---or headless run with scripts stays deterministic.
 ---
+---## Damage
+---
+---A script never applies damage itself. The player's weapons are the
+---engine's (`src/weapons.rs`): a hit writes the target's `health` and
+---`hit_state`, sets `state` to 3 for a killing blow or 2 when it survives,
+---and zeroes `ignore`, `action_behavior` and `action_state`. The script
+---reacts to state 2 or 3 on its next `update`.
+---
 ---## Sandbox and errors
 ---
 ---The enemy scripts run in their own per-session VM with the same sandbox as
@@ -1447,6 +1455,14 @@ function EnemyApi:set_plant42_capture_t0(value) end
 function EnemyApi:vector_normal(x, y, z) end
 
 -- # Yawn
+
+---Yawn (ids `0x0d` and `0x12`) is one fifteen-joint model spread over
+---thirteen enemy slots: the head and twelve body segments.
+---[`e:yawn_spawn_segments()`](#EnemyApi.yawn_spawn_segments) builds the
+---segment slots from the head's record, each with `behavior_flags = 1` and
+---linked to the joint it mirrors, and each segment's frame runs in the engine
+---([`e:yawn_segment_tick()`](#EnemyApi.yawn_segment_tick)), because Lua
+---cannot hold joint pointers or allocate slots.
 
 ---The head's init back-off: subtract the head joint's local X, rotated by the
 ---entity's rotation, from the entity's position.

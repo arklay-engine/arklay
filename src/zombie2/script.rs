@@ -1,5 +1,5 @@
 //! The `e` of an RE2 enemy script: the fields of the original's work, and the
-//! low-level calls behaviour is written with. See `docs/modding.md`.
+//! low-level calls behaviour is written with. See `lua-types/re2-enemy.lua`.
 
 use mlua::{UserData, UserDataMethods};
 

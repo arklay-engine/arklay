@@ -17,7 +17,7 @@
 //! the presented band (320x180 at 16:9) at a wider aspect, or the full-height
 //! canvas (427x240 at 16:9) a screen drawn on black asks for with
 //! `api:set("canvas", 1)`. The full
-//! method table is in `docs/modding.md`.
+//! method table is in `lua-types/screen.lua`.
 //!
 //! There is no Rust fallback: a script that fails to load is an error the
 //! opener handles (a registered mod save screen falls back to the shipped

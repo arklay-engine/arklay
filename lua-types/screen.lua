@@ -173,6 +173,7 @@
 ---the table has them. `open`, `update` and `draw` are the entry points; the
 ---rest are signals the engine sends particular screens, each called with
 ---the `api` and any values shown, at the moment described.
+-- calls: src/ui/lua_screen/mod.rs src/engine.rs
 ---@class ScreenModule
 local ScreenModule = {}
 
@@ -181,6 +182,12 @@ local ScreenModule = {}
 ---@param api ScreenApi
 ---@param args ScreenArgs The opener's arguments; empty for a save/load screen.
 function ScreenModule.open(api, args) end
+
+---The older name of [`open`](#ScreenModule.open), used when a script
+---defines no `open`.
+---@param api ScreenApi
+---@param args ScreenArgs
+function ScreenModule.on_open(api, args) end
 
 ---Called once per fixed 30 Hz tick with that tick's input. Required.
 ---@param api ScreenApi
@@ -246,6 +253,13 @@ function ScreenModule.begin_exit(api) end
 ---@param shown boolean
 function ScreenModule.cursor_shown(api, shown) end
 
+---Signal to the pause menu while the item box is open over it: after each
+---frame of the box's input, the slot its cursor is on. None of the shipped
+---menus handles it; a menu that draws its own item-box cursor can.
+---@param api ScreenApi
+---@param cursor integer The item box cursor's slot.
+function ScreenModule.move_cursor(api, cursor) end
+
 -- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs
 ---The screen surface, passed to every entry point and signal. Only these
 ---methods exist; call them with Lua colon syntax (`api:width()`).
@@ -294,7 +308,7 @@ function ScreenApi:set(key, value) end
 ---fallback from an engine screen. An unknown action, or `new_game` or
 ---`load_game` without `arg`, raises an error.
 ---@param action? ScreenExit
----@param arg? integer `new_game`: the character. `load_game`: the slot, clamped to `0..=7`.
+---@param arg? integer `new_game`: the character, clamped to `0..=255`. `load_game`: the slot, clamped to `0..=7`.
 ---@param choice? NewGameChoice `new_game` only: the options the title chose.
 function ScreenApi:exit(action, arg, choice) end
 

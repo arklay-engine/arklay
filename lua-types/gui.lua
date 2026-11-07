@@ -131,9 +131,7 @@ function GuiUi:on(event, handler) end
 ---@return any
 function GuiUi:_node(op, id, ...) end
 
--- The node methods are registered in a loop (src/gui/dom/lua/methods.rs,
--- `impl UserData for NodeRef`), which `lua-api-doc.py check` cannot see, so
--- this class has no `source:` line.
+-- source: src/gui/dom/lua/methods.rs#NodeRef
 ---A node of the screen whose script created or found it. Every method
 ---raises `the node was removed` once the node has left the tree.
 ---@class GuiNode

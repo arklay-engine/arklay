@@ -18,8 +18,13 @@ Format, a subset of LuaLS annotations:
 - `---` lines are documentation (Markdown); plain `--` comments are not.
 - `-- # Title` starts a group of definitions on the page.
 - `-- source: src/a.rs src/b.rs#Type` (before a `---@class`) names the Rust
-  files that register the class's methods, for `check`; `#Type` narrows a
-  file to its `impl UserData for Type` block.
+  files that register the class's methods and properties, for `check`;
+  `#Type` narrows a file to its `impl UserData for Type` block. The
+  properties are checked against the class's `---@field`s and those of the
+  classes it inherits (`---@class A : B, C`).
+- `-- calls: src/a.rs ...` (before a `---@class`) names the Rust files that
+  call the class's functions by name (`lookup("update")`,
+  `signal_with("animate", ...)`), for `check`.
 - `---@class Name` / `---@field name type desc` before `local Name = {}`.
 - `---@alias Name type` documents a type name.
 - `---@param name[?] type desc` and `---@return type [name] [desc]` before
@@ -40,6 +45,14 @@ DIRECTIVE = re.compile(r"\{\{#lua-api\s+([^}\s]+)\s*\}\}")
 FUNC = re.compile(r"^function\s+([A-Za-z_][\w]*)(?:([:.])([A-Za-z_]\w*))?\s*\(([^)]*)\)")
 LOCAL_TABLE = re.compile(r"^local\s+([A-Za-z_]\w*)\s*=")
 REGISTER = re.compile(r'add_(?:async_)?(?:method|function)(?:_mut)?\(\s*"([^"]+)"')
+# Methods registered in a loop: `for op in ["a", "b"] { methods.add_method(op, ...`.
+REGISTER_LOOP = re.compile(r'for\s+\w+\s+in\s+\[([^\]]*)\]\s*\{\s*methods\.add_method')
+# Properties: `fields.add_field_method_get("name", ...` and the `field!("name", ...)`
+# macro that pairs a getter with a setter.
+# Callbacks the engine looks up on a script's table by name.
+CALLS = re.compile(r'\b(?:lookup|signal|signal_with|signal_with_game)\(\s*"([^"]+)"'
+                   r'|\bmenu_signal\([^,()]*,\s*"([^"]+)"')
+REGISTER_FIELD = re.compile(r'add_field_method_[gs]et\(\s*"([^"]+)"|\bfield!\(\s*"([^"]+)"')
 
 
 class Item:
@@ -51,13 +64,17 @@ class Item:
 def split_tags(doc_lines):
     """Split a doc block into description text and @tag lines."""
     text, tags = [], []
+    continuing = False
     for line in doc_lines:
         if line.startswith("@"):
             tags.append(line)
-        elif tags and not line.strip() == "" and not tags[-1].startswith("@class"):
-            # A continuation of the previous tag's description.
+            continuing = not line.startswith("@class")
+        elif continuing and line.strip():
+            # A continuation of the previous tag's description; a blank line
+            # ends it, and what follows is prose again.
             tags[-1] += " " + line.strip()
         else:
+            continuing = False
             text.append(line)
     return "\n".join(text).strip(), tags
 
@@ -92,6 +109,7 @@ def parse_file(path):
     items = []
     doc = []
     source = []
+    calls = []
     lines = path.read_text().splitlines()
     for raw in lines + [""]:
         line = raw.rstrip()
@@ -128,8 +146,10 @@ def parse_file(path):
                               args=[a.strip() for a in args.split(",") if a.strip()],
                               text=text, params=params, returns=returns))
         elif tags and any(t.startswith("@class ") for t in tags):
-            cname = next(t for t in tags if t.startswith("@class "))[7:].split()[0]
-            cname = cname.split(":")[0]
+            decl = next(t for t in tags if t.startswith("@class "))[7:]
+            cname, _, parents = decl.partition(":")
+            cname = cname.split()[0]
+            parents = [x.strip() for x in parents.split(",") if x.strip()]
             fields = []
             for tag in tags:
                 if tag.startswith("@field "):
@@ -137,8 +157,9 @@ def parse_file(path):
                     ftype, fdesc = parse_type_and_rest(rest)
                     fields.append((fname.rstrip("?"), ftype, fdesc, fname.endswith("?")))
             items.append(Item("class", name=cname, text=text, fields=fields,
-                              source=source))
+                              source=source, parents=parents, calls=calls))
             source = []
+            calls = []
         elif tags and any(t.startswith("@alias ") for t in tags):
             tag = next(t for t in tags if t.startswith("@alias "))
             aname, _, rest = tag[7:].strip().partition(" ")
@@ -149,6 +170,8 @@ def parse_file(path):
             items.append(Item("group", title=line[5:].strip()))
         elif line.startswith("-- source:"):
             source = line[len("-- source:"):].split()
+        elif line.startswith("-- calls:"):
+            calls = line[len("-- calls:"):].split()
         _ = m_local
     return items
 
@@ -176,10 +199,16 @@ def cell(s):
     return s.replace("|", "\\|").replace("\n", " ")
 
 
+ABBREVIATIONS = ("Mr.", "Mrs.", "Dr.", "e.g.", "i.e.", "etc.", "vs.")
+
+
 def first_sentence(text):
     para = text.split("\n\n")[0].replace("\n", " ")
-    m = re.match(r"(.+?\.)(\s|$)", para)
-    return m.group(1) if m else para
+    for m in re.finditer(r"\.(\s|$)", para):
+        head = para[:m.start() + 1]
+        if not head.endswith(ABBREVIATIONS):
+            return head
+    return para
 
 
 class Renderer:
@@ -289,8 +318,15 @@ def source_text(src):
     m = re.search(r"impl(?:<[^>]*>)?\s+UserData\s+for\s+" + re.escape(ty) + r"\b[^{]*\{", text)
     if not m:
         raise SystemExit(f"{src}: no `impl UserData for {ty}`")
+    # Match braces, skipping comments and string and char literals.
+    skip = re.compile(r'//[^\n]*|/\*.*?\*/|r(#*)".*?"\1|"(?:\\.|[^"\\])*"'
+                      r"|'(?:\\.|[^'\\])'", re.S)
     depth, i = 1, m.end()
     while depth and i < len(text):
+        literal = skip.match(text, i)
+        if literal:
+            i = literal.end()
+            continue
         depth += {"{": 1, "}": -1}.get(text[i], 0)
         i += 1
     return text[m.start():i]
@@ -300,19 +336,56 @@ def check():
     errors = []
     for path in sorted(LUA_DIR.glob("*.lua")):
         items = parse_file(path)
-        for cls in (i for i in items if i.kind == "class" and i.source):
-            registered = set()
-            for src in cls.source:
-                registered |= set(REGISTER.findall(source_text(src)))
+        classes = {i.name: i for i in items if i.kind == "class"}
+
+        def all_fields(name, seen=()):
+            cls = classes.get(name)
+            if not cls or name in seen:
+                return set()
+            names = {f[0] for f in cls.fields}
+            for parent in cls.parents:
+                names |= all_fields(parent, seen + (name,))
+            return names
+
+        rel = path.relative_to(ROOT)
+        for cls in (i for i in classes.values() if i.calls):
+            called = set()
+            for src in cls.calls:
+                called |= {a or b for a, b in CALLS.findall(source_text(src))}
             documented = {i.name for i in items
                           if i.kind == "function" and i.owner == cls.name}
-            rel = path.relative_to(ROOT)
-            for name in sorted(registered - documented):
+            where = " ".join(cls.calls)
+            for name in sorted(called - documented):
+                errors.append(f"{rel}: {cls.name}.{name} is called in {where} "
+                              f"but not documented")
+            for name in sorted(documented - called):
+                errors.append(f"{rel}: {cls.name}.{name} is documented but "
+                              f"never called in {where}")
+        for cls in (i for i in classes.values() if i.source):
+            methods, fields = set(), set()
+            for src in cls.source:
+                text = source_text(src)
+                methods |= set(REGISTER.findall(text))
+                for names in REGISTER_LOOP.findall(text):
+                    methods |= set(re.findall(r'"([^"]+)"', names))
+                fields |= {a or b for a, b in REGISTER_FIELD.findall(text)}
+            where = " ".join(cls.source)
+            documented = {i.name for i in items
+                          if i.kind == "function" and i.owner == cls.name}
+            for name in sorted(methods - documented):
                 errors.append(f"{rel}: {cls.name}:{name} is registered in "
-                              f"{' '.join(cls.source)} but not documented")
-            for name in sorted(documented - registered):
+                              f"{where} but not documented")
+            for name in sorted(documented - methods):
                 errors.append(f"{rel}: {cls.name}:{name} is documented but "
-                              f"not registered in {' '.join(cls.source)}")
+                              f"not registered in {where}")
+            if fields:
+                documented = all_fields(cls.name)
+                for name in sorted(fields - documented):
+                    errors.append(f"{rel}: {cls.name}.{name} is a property in "
+                                  f"{where} but not a documented field")
+                for name in sorted(documented - fields):
+                    errors.append(f"{rel}: {cls.name}.{name} is a documented "
+                                  f"field but not a property in {where}")
     for e in errors:
         print(e, file=sys.stderr)
     if errors:
@@ -325,8 +398,7 @@ def check():
 # ---------------------------------------------------------------- mdbook
 
 def preprocess():
-    context, book = json.load(sys.stdin)
-    src = Path(context["root"]) / context["config"]["book"].get("src", "src")
+    _context, book = json.load(sys.stdin)
 
     chapters = []
 
@@ -339,18 +411,24 @@ def preprocess():
 
     walk(book.get("items", book.get("sections", [])))
 
-    pages = {}
+    # Every file a chapter names, parsed once; the index of type names spans
+    # them all, so a type links to whichever page defines it.
+    files = {}
     for ch in chapters:
-        if not ch.get("path"):
-            continue
-        for m in DIRECTIVE.finditer(ch["content"]):
-            lua = LUA_DIR / m.group(1)
-            pages[ch["path"]] = parse_file(lua)
-    renderer = Renderer(build_index(pages))
+        for m in DIRECTIVE.finditer(ch.get("content", "")) if ch.get("path") else ():
+            name = m.group(1)
+            if name not in files:
+                files[name] = parse_file(LUA_DIR / name)
+    index = {}
     for ch in chapters:
-        if ch.get("path") in pages:
+        for m in DIRECTIVE.finditer(ch.get("content", "")) if ch.get("path") else ():
+            index.update(build_index({ch["path"]: files[m.group(1)]}))
+    renderer = Renderer(index)
+    for ch in chapters:
+        if ch.get("path") and DIRECTIVE.search(ch["content"]):
             ch["content"] = DIRECTIVE.sub(
-                lambda _m, p=ch["path"]: renderer.render(pages[p], p), ch["content"])
+                lambda m, p=ch["path"]: renderer.render(files[m.group(1)], p),
+                ch["content"])
     json.dump(book, sys.stdout)
     return 0
 

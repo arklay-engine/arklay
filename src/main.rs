@@ -881,7 +881,7 @@ fn decompile_rooms(
         .collect())
 }
 
-/// Build a mod source directory and print its summary and aggregated warnings.
+/// Write the embedded Lua definition files into `out`.
 fn write_lua_types(out: &Path) -> Result<()> {
     fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
     for (name, text) in LUA_TYPES {
@@ -896,6 +896,7 @@ fn write_lua_types(out: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Build a mod source directory and print its summary and aggregated warnings.
 fn build_mod_pack(dir: &Path, out: &Path, base: Option<&Path>) -> Result<()> {
     let summary = arklay::modding::build_mod(dir, out, base)?;
     for warning in &summary.warnings {

@@ -154,7 +154,11 @@ the tick, or until the procedure ends.
   procedure), or `evt_exec`, `evt_chain` or `gosub`.
 - A task that `init_00` starts with `evt_exec` does not run during the init.
   It first runs in the load's pass, alongside `main_00`, and it runs the
-  *main* procedure with that number.
+  *main* procedure with that number. The port only starts it when the
+  number is also an *init* procedure's (it checks the number against the
+  list running at the time), so with the usual single `init_00`, only
+  `evt_exec(task, 0, 0)` starts a task from the init. This is a known gap,
+  not the original's behaviour.
 
 Within a tick the tasks run in slot order, so a task that `evt_exec` starts in
 a later slot runs in the same tick. A task can run at most 65,536
