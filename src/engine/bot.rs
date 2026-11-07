@@ -358,6 +358,9 @@ struct SessionSnapshot {
     /// The room's active objects.
     objects: Vec<ObjectSnapshot>,
     enemies: Vec<EnemySnapshot>,
+    /// The acid globs in flight (effect behaviours 22 and 55, the drop and
+    /// splash tests that hurt the player): their world positions.
+    projectiles: Vec<[i32; 3]>,
     weapon: WeaponSnapshot,
     /// The pause menu as the engine shows it, read-only.
     menu: MenuSnapshot,
@@ -478,6 +481,9 @@ struct PlayerSnapshot {
     grabbed: bool,
     /// `GameState::health_status`: [`POISON`] and [`SERIOUS_POISON`].
     health_status: u8,
+    /// The player entity's animation clip. The Black Tiger's acid hits only
+    /// clip 1, the standing idle (`effects::behaviour`'s splash timer).
+    animation: u8,
 }
 
 /// The health-status bit a blue herb clears (`cure_poison`): the drain that
@@ -992,6 +998,30 @@ fn enemy_snapshots(
     enemies
 }
 
+/// The effect behaviours whose splash tests the player
+/// (`effect_projectile_hit_check`): the drop splat and the splash timer.
+const PROJECTILE_BEHAVIOURS: [u8; 2] = [22, 55];
+
+/// The acid globs in flight: the live effects running a behaviour that
+/// tests the player (the Black Tiger's spit, Plant 42's).
+fn projectile_snapshots(game: &game::GameState) -> Vec<[i32; 3]> {
+    (0..crate::effects::pool::EFFECT_POOL_SIZE)
+        .filter_map(|index| game.effects.slot(index))
+        .filter(|effect| {
+            effect.anim_id != 0
+                && (PROJECTILE_BEHAVIOURS.contains(&effect.anim_id)
+                    || PROJECTILE_BEHAVIOURS.contains(&effect.update_id))
+        })
+        .map(|effect| {
+            [
+                i32::from(effect.pos[0]),
+                i32::from(effect.pos[1]),
+                i32::from(effect.pos[2]),
+            ]
+        })
+        .collect()
+}
+
 /// The weapon and inventory state the aim/fire machine reads.
 fn weapon_snapshot(game: &game::GameState, state: &WeaponState) -> WeaponSnapshot {
     let weapon = game.equipped_weapon_id;
@@ -1097,6 +1127,7 @@ impl SessionSnapshot {
             collision_flags: session.player.collision_flags,
             grabbed: entity.zone_flags & 0x80 != 0,
             health_status: game.health_status,
+            animation: entity.animation_id,
         };
         let actions = game
             .room_actions
@@ -1186,6 +1217,7 @@ impl SessionSnapshot {
             (Vec::new(), Vec::new(), Vec::new())
         };
         let enemies = enemy_snapshots(game, session.player.pos, &session.loaded.room);
+        let projectiles = projectile_snapshots(game);
         let weapon = weapon_snapshot(game, &session.player.weapon);
         let menu = MenuSnapshot::build(session);
         Self {
@@ -1198,6 +1230,7 @@ impl SessionSnapshot {
             doors,
             objects,
             enemies,
+            projectiles,
             weapon,
             menu,
             flags: game.flags,
@@ -3118,6 +3151,7 @@ impl UserData for BotCtx {
             table.set("grabbed", p.grabbed)?;
             table.set("poisoned", p.health_status & POISON != 0)?;
             table.set("seriously_poisoned", p.health_status & SERIOUS_POISON != 0)?;
+            table.set("animation", p.animation)?;
             Ok(table)
         });
 
@@ -3140,6 +3174,18 @@ impl UserData for BotCtx {
                 row.set("hit_state", enemy.hit_state)?;
                 row.set("distance", enemy.distance)?;
                 row.set("visible", enemy.visible)?;
+                table.set(index + 1, row)?;
+            }
+            Ok(table)
+        });
+
+        methods.add_method("projectiles", |lua, bot, ()| {
+            let table = lua.create_table()?;
+            for (index, pos) in bot.snapshot.projectiles.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("x", pos[0])?;
+                row.set("y", pos[1])?;
+                row.set("z", pos[2])?;
                 table.set(index + 1, row)?;
             }
             Ok(table)
@@ -4217,6 +4263,7 @@ mod tests {
             "room_meta",
             "player",
             "enemies",
+            "projectiles",
             "weapon",
             "scene",
             "actions",
@@ -4722,6 +4769,7 @@ mod tests {
             collision_flags: 0,
             grabbed: false,
             health_status: 0,
+            animation: 0,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
@@ -4756,6 +4804,7 @@ mod tests {
             collision_flags: 0,
             grabbed: false,
             health_status: 0,
+            animation: 0,
         }
     }
 
@@ -4959,6 +5008,7 @@ mod tests {
             collision_flags: 0,
             grabbed: false,
             health_status: 0,
+            animation: 0,
         };
         let mut nav = BotNav::default();
         nav.sync_room(
