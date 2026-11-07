@@ -8,6 +8,7 @@ they can call.
 | Where | What | Runs |
 |---|---|---|
 | `ui/<screen>.lua` | [screens](#screens) | while the screen is open |
+| `interactive/<screen>.lua` | [interactive screens](#interactive-screens) | each tick, while the room shows one |
 | `game/initial_state.lua`, `game/new_game.lua` | [the new-game state](#the-new-game-state) | once, when a new game starts |
 | `game/music.lua` | the room music tables (see [BGM](bgm.md#room-music)) | once, when a game session starts |
 | `game/flags.lua` | [flag names](#flag-names) for the debug menu | when the debug menu's FLAGS screen opens |
@@ -30,6 +31,16 @@ on. Each returns a table with `on_open`, `update` and `draw` functions.
 Helpers shared by several screens go in `ui/lib/` (`ui/lib/fade.lua`,
 `ui/lib/menu_grid.lua`). A hook can register its own save screen with
 `api:register_save_screen`. See [Screen scripts](../scripting/lua/screen.md).
+
+## Interactive screens
+
+A few of the original's screens draw over the live room instead of pausing
+it: the room keeps running, and the screen moves its camera and props. RE 1's
+lab computer in room 506 is `interactive/computer_lab.lua`. While scenario
+flag `0x20` is up, the engine calls the script that a system flag selects
+once a tick, between the room's scripts and its camera switch. It runs in the
+enemy scripts' VM and keeps its state in a table the engine stores with the
+game. See [Interactive screens](../scripting/lua/interactive.md).
 
 ## The new-game state
 

@@ -403,9 +403,11 @@ Arklay's input class determines what the code may assume:
 - **Lua is sandboxed.** `lua/**.lua` runs in one 16 MiB-limited VM with the
   documented hook API and no filesystem, package or `os` access; a failing
   hook logs and disables itself rather than failing the session. Enemy scripts
-  (`enemy/{id:02x}/enemy.lua` plus shared `lib/**.lua`) run in a second,
-  identical sandbox owned by the session; they must hold no state of their own,
-  so resetting that VM between two updates cannot change behaviour. A screen
+  (`enemy/{id:02x}/enemy.lua` plus shared `lib/**.lua`) and the interactive
+  screens (`interactive/*.lua`) run in a second, identical sandbox owned by
+  the session; they must hold no state of their own (a screen's state table
+  is kept in the game state), so resetting that VM between two calls cannot
+  change behaviour. A screen
   script (the entry a pack registers with `api:register_save_screen`) runs in a
   third sandbox with the same limits; its only file access is the host's save
   API, which validates every name to one component under the save directory. A

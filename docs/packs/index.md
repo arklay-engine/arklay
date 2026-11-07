@@ -51,7 +51,7 @@ arklay re1 --room 100                        # run the directory
 | Folder | Page |
 |---|---|
 | `manifest.toml` | [Manifest](manifest.md) |
-| `game/`, `lib/`, `lua/`, `ui/*.lua` | [Scripting](scripting.md) |
+| `game/`, `interactive/`, `lib/`, `lua/`, `ui/*.lua` | [Scripting](scripting.md) |
 | `bgm/` | [BGM](bgm.md) |
 | `demo/` | [Demos](demos.md) |
 | `door/` | [Doors](doors.md) |

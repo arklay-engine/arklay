@@ -589,6 +589,10 @@ const LUA_TYPES: &[(&str, &str)] = &[
     ("screen.lua", include_str!("../lua-types/screen.lua")),
     ("gui.lua", include_str!("../lua-types/gui.lua")),
     ("enemy.lua", include_str!("../lua-types/enemy.lua")),
+    (
+        "interactive.lua",
+        include_str!("../lua-types/interactive.lua"),
+    ),
     ("re2-enemy.lua", include_str!("../lua-types/re2-enemy.lua")),
 ];
 

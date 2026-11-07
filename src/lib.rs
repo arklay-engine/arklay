@@ -17,7 +17,6 @@ pub mod character2;
 pub mod charset;
 pub mod cinepak;
 pub mod combat;
-pub mod computer_lab;
 pub mod config;
 pub mod controls;
 pub mod convert;
@@ -46,6 +45,7 @@ pub mod hash;
 #[cfg(feature = "hd")]
 pub mod hdfilm;
 pub mod hires;
+pub mod interactive;
 pub mod item_art;
 pub mod item_catalog;
 pub mod items;

@@ -26,6 +26,7 @@
     - [Screen scripts](scripting/lua/screen.md)
     - [GUI DOM](scripting/lua/gui.md)
     - [Enemy scripts](scripting/lua/enemy.md)
+    - [Interactive screens](scripting/lua/interactive.md)
     - [RE 2 enemy scripts](scripting/lua/re2-enemy.md)
   - [Room scripts](scripting/room/index.md)
     - [RE 1](scripting/room/re1/index.md)
