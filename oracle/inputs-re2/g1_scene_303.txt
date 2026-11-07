@@ -1,0 +1,3 @@
+# room 303 in scenario B: walk from cut 3 into cut 2, which starts the room's scene with G1 (oracle/re2.md)
+344 up
+380

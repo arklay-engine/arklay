@@ -985,3 +985,30 @@ fields = "ti,tlogo,tfade,tsel,snd"
 frames = [189, 720]
 expect = "match"
 record = ""
+
+[[run]]
+name = "g1_wait_303"
+room = "303"
+character = 2
+sound = false
+ticks = 1400
+# scenario B, entered from room 30B's door: G1 waits for the room's scene
+setup = { pos = [-24972, -5400, -13739], angle = 552, health = 200, rnd = 6114, camera = 5, flags = [[1, 1], [4, 55]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 1:1 --flag 4:55 --life 200"
+
+[[run]]
+name = "g1_scene_303"
+room = "303"
+character = 2
+sound = false
+ticks = 2400
+# scenario B: the player walks into cut 2, the room's scene runs, and G1 waits, changes and goes for the player
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55]] }
+input = "g1_scene_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = { tick = 1076, fields = ["zm0"], note = "G1's fight (routine 1) isn't ported yet (docs/re2-deviations.md)" }
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200"
