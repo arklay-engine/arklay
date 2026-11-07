@@ -289,7 +289,21 @@ impl BotMemory {
     fn log(&mut self, line: String) {
         eprintln!("[bot] {line}");
     }
+
+    /// Carry the values a reload keeps over from `current` (the memory at
+    /// the death): the bosses met (`fight_met:` keys). A player who died to
+    /// a boss knows it is there, though the save was written before it.
+    fn keep_lessons(&mut self, current: &BotMemory) {
+        for (key, value) in &current.values {
+            if key.starts_with(LESSON_PREFIX) {
+                self.values.insert(key.clone(), value.clone());
+            }
+        }
+    }
 }
+
+/// The memory keys a reload keeps ([`BotMemory::keep_lessons`]).
+const LESSON_PREFIX: &str = "fight_met:";
 
 impl From<&ActionSnapshot> for ActionMemory {
     fn from(action: &ActionSnapshot) -> Self {
@@ -4044,6 +4058,7 @@ impl BotRuntime {
         self.was_dead = false;
         let room_path = std::mem::take(&mut self.shares.memory.borrow_mut().room_path);
         let mut memory = self.checkpoint.clone().unwrap_or_default();
+        memory.keep_lessons(&self.shares.memory.borrow());
         memory.room_path = room_path;
         memory.current_room = None;
         let last = self.save_log.last;
@@ -4528,6 +4543,27 @@ mod tests {
         assert!(!memory.is_visited_key("105"));
         assert!(memory.is_visited_code(0x106));
         assert!(!memory.is_visited_code(0x105));
+    }
+
+    #[test]
+    fn reload_keeps_the_bosses_met_only() {
+        let mut checkpoint = BotMemory::default();
+        checkpoint.remember("steps_done".to_string(), Some("1".to_string()));
+        let mut current = BotMemory::default();
+        current.remember("steps_done".to_string(), Some("4".to_string()));
+        current.remember("fight_met:30C:04".to_string(), Some("1".to_string()));
+        checkpoint.keep_lessons(&current);
+        assert_eq!(
+            checkpoint.values.get("steps_done").map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(
+            checkpoint
+                .values
+                .get("fight_met:30C:04")
+                .map(String::as_str),
+            Some("1")
+        );
     }
 
     #[test]

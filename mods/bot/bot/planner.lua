@@ -1295,7 +1295,22 @@ local function fight_due(bot, fight)
             held_back = true
         end
     end
-    return held_back and (BotSurvival.fight_ready(bot, fight))
+    if not (held_back and BotSurvival.fight_ready(bot, fight)) then
+        return false
+    end
+    -- An earlier fight of the room's sequence not ready holds it: the web's
+    -- knife was at hand, the Black Tiger before it was not, and the bot
+    -- walked 30B and 30C until the loop rule ended the run.
+    for _, other in ipairs(bot:fight_facts()) do
+        if other.room == fight.room and other.enemy == fight.enemy then
+            break
+        end
+        if other.room == fight.room and not (other.bank and bot:flag(other.bank, other.bit))
+            and not BotSurvival.fight_ready(bot, other) then
+            return false
+        end
+    end
+    return true
 end
 
 local function target_goal(bot, world, t)
@@ -1989,6 +2004,7 @@ local function choose(bot)
     local boss_rooms = {}
     for _, fight in ipairs(bot:fight_facts()) do
         if not (fight.bank and bot:flag(fight.bank, fight.bit))
+            and BotNav.fight_met(bot, fight)
             and not BotSurvival.fight_ready(bot, fight) then
             boss_rooms[fight.room] = true
         end
@@ -2143,6 +2159,12 @@ local function choose(bot)
             -- marks it again. The box (box_why) or a combine makes room first.
             local fits = allow_unfit or goal.kind ~= "item"
                 or pickup_fits(bot, goal.item, full)
+            -- A room whose pickups wait on the hurt rule (step 2) is no
+            -- item trip until the inventory changes: 109 and 114 walked
+            -- back and forth for 114's herbs until the loop rule ended it.
+            if goal.kind == "item" and p.hurt[goal.room] == inventory_sig(bot) then
+                fits = false
+            end
             local useless = goal.kind == "item" and (goal.item_kind == "file"
                 or goal.item_kind == "ammo" and not gun_rounds[goal.item])
             if goal.room ~= room and fits and not useless then
