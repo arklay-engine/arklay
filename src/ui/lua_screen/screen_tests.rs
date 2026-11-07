@@ -408,7 +408,13 @@ fn select_confirm_starts_a_new_game_for_the_picked_character() {
     // reference's case 6 at frame 496.
     let (action, ticks) = run_to_result(&mut screen, &cx, 700);
     assert_eq!(ticks, 496, "the confirm chain's fixed length");
-    assert_eq!(action, ScreenAction::NewGame { character: 1 });
+    assert_eq!(
+        action,
+        ScreenAction::NewGame {
+            character: 1,
+            choice: Default::default(),
+        }
+    );
 }
 
 #[test]
@@ -481,7 +487,13 @@ fn select_confirm_runs_the_white_flash_chain_before_the_new_game() {
     assert_eq!(screen.overlay(), None);
     let (action, ticks) = run_to_result(&mut screen, &cx, 240);
     assert_eq!(ticks, 240);
-    assert_eq!(action, ScreenAction::NewGame { character: 0 });
+    assert_eq!(
+        action,
+        ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        }
+    );
 }
 
 #[test]

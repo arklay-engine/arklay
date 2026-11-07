@@ -9027,6 +9027,7 @@ enum RestartPoint {
     File(Box<save::SaveFile>),
     NewGame {
         character: u8,
+        choice: crate::ui::NewGameChoice,
     },
 }
 
@@ -9598,11 +9599,19 @@ impl App {
     /// `apply`'s arms used to add up to most of a megabyte of them, over the
     /// Windows main thread's 1 MiB stack. Keeping the moves in this small
     /// helper bounds the frame.
-    fn start_new_game(&mut self, character: u8) -> Result<()> {
-        let session =
+    fn start_new_game(&mut self, character: u8, choice: crate::ui::NewGameChoice) -> Result<()> {
+        let mut session =
             GameSession::new_with(&self.pack, character, &self.save_dir, self.player_options)?;
+        // RE 2's title passes its difficulty and ARRANGE MODE on; no choice
+        // leaves the game as it starts.
+        if choice != crate::ui::NewGameChoice::default() {
+            session
+                .game
+                .re2
+                .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
+        }
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
-        self.restart_point = Some(RestartPoint::NewGame { character });
+        self.restart_point = Some(RestartPoint::NewGame { character, choice });
         Ok(())
     }
 
@@ -9633,8 +9642,10 @@ impl App {
         let result = match self.restart_point.clone() {
             Some(RestartPoint::Slot(slot)) => self.continue_from_slot(slot),
             Some(RestartPoint::File(file)) => self.continue_from_file(*file),
-            Some(RestartPoint::NewGame { character }) => self.start_new_game(character),
-            None => self.start_new_game(character),
+            Some(RestartPoint::NewGame { character, choice }) => {
+                self.start_new_game(character, choice)
+            }
+            None => self.start_new_game(character, Default::default()),
         };
         // A failed load leaves the frozen session and its menu up, so the
         // player can pick something else; anything else replaced the session.
@@ -9949,7 +9960,7 @@ impl App {
         match action {
             ScreenAction::CharSelect => self.open_select()?,
             ScreenAction::SaveLoad => self.open_load()?,
-            ScreenAction::NewGame { character } => {
+            ScreenAction::NewGame { character, choice } => {
                 // The interactive root boot plays the prologue film (id 1)
                 // with the chosen character before the session is built. The
                 // film's follow-up action comes back here and builds the
@@ -9961,18 +9972,19 @@ impl App {
                     // starts; the UI mixer is that cue's home.
                     self.ui_music = None;
                     match self.open_movie(PROLOGUE_ID, character) {
-                        Ok(session) => {
-                            self.queue_movie(session, Some(ScreenAction::NewGame { character }))
-                        }
+                        Ok(session) => self.queue_movie(
+                            session,
+                            Some(ScreenAction::NewGame { character, choice }),
+                        ),
                         Err(err) => {
                             eprintln!("warning: intro film unavailable: {err:#}");
                             self.prologue_pending = false;
-                            self.start_new_game(character)?;
+                            self.start_new_game(character, choice)?;
                         }
                     }
                 } else {
                     self.prologue_pending = false;
-                    self.start_new_game(character)?;
+                    self.start_new_game(character, choice)?;
                 }
             }
             ScreenAction::LoadGame { slot } => {
@@ -10922,7 +10934,7 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
 /// title's first tick with the scripted `--input`, each followed by a draw,
 /// one trace line and, on the `capture_every` cadence, a `f%05d.bmp` frame.
 /// The line carries the fields the RE 2 oracle's `--boot` record writes for
-/// the title (`ti`, `tlogo`, `tfade`, `snd`), from the values the title's
+/// the title (`ti`, `tlogo`, `tfade`, `tsel`, `snd`), from the values the title's
 /// script publishes; a tick off the title writes `ti=-`.
 fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()> {
     use std::io::Write as _;
@@ -10969,7 +10981,8 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     if let Mode::Title(screen) = &app.mode {
         let v = |key: &str| screen.value(key);
         line.push_str(&format!(
-            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{}",
+            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
+             tsel={:x},{},{}",
             v("ti_fgsys") as u32,
             v("ti_mv"),
             v("ti_disp"),
@@ -10990,6 +11003,9 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_fade_mode"),
             v("ti_kido"),
             v("ti_add"),
+            v("ti_fgsys") as u32 & 0x0002_0060,
+            v("ti_hard_mode"),
+            v("ti_censorship_off"),
         ));
     } else {
         line.push_str(" ti=-");
@@ -30916,11 +30932,21 @@ off_0010:
         let pack = film_pack(&dir, &[(1, "pj")]);
         let mut app = App::new(pack, dir.0.clone(), false);
         app.films = true;
-        app.apply(ScreenAction::NewGame { character: 1 }).unwrap();
+        app.apply(ScreenAction::NewGame {
+            character: 1,
+            choice: Default::default(),
+        })
+        .unwrap();
         let pending = app.pending_movie.as_ref().expect("the intro film");
         assert_eq!(pending.session.id(), 1);
         assert_eq!(pending.session.character(), 1, "the chosen character");
-        assert_eq!(pending.action, Some(ScreenAction::NewGame { character: 1 }));
+        assert_eq!(
+            pending.action,
+            Some(ScreenAction::NewGame {
+                character: 1,
+                choice: Default::default(),
+            })
+        );
         assert!(matches!(app.mode, Mode::Boot), "the session waits");
 
         // The intro finishes and the NewGame action builds the session.
@@ -30943,7 +30969,11 @@ off_0010:
 
         // A later confirm queues the prologue again, like the original.
         app.films = true;
-        app.apply(ScreenAction::NewGame { character: 0 }).unwrap();
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
         let pending = app.pending_movie.as_ref().expect("a second intro film");
         assert_eq!(pending.session.id(), 1);
         assert_eq!(pending.session.character(), 0);

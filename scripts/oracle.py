@@ -89,9 +89,9 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "ib", "box"}
+OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
 # A screen's own fields, compared only when named.
-SCREEN_FIELDS = ("ti", "tlogo", "tfade", "ib", "box")
+SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box")
 
 
 def normalize_room(stage: str, room: str) -> str:

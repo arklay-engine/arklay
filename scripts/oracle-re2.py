@@ -90,6 +90,11 @@ TITLE_FLASH = 0x00691B96  # the white tiles' level
 TITLE_LOGO = 0x00691B98  # the logo's offset
 TITLE_LOGO_COUNT = 0x00691B9C  # the logo's slide count
 FADE = 0x0098F07C  # `Fade_set`'s slot 0: level, step, mode
+HARD_MODE = 0x006805B1  # `hard_mode`: the difficulty's HARD
+CENSORSHIP_OFF = 0x006805B3  # `censorship_off`: ARRANGE MODE's
+# `fg_system`'s bits the new-game choice sets: EASY (0x20), `censorship_off`'s
+# (0x40) and the difficulty confirm's (0x20000).
+FG_SYSTEM_CHOICE = 0x00020060
 
 ENTITY_ROUTINES = 0x04
 ENTITY_ID = 0x08
@@ -1099,7 +1104,8 @@ def read_pace(path: Path) -> dict[int, float]:
 
 
 def title_trace(game: Game) -> str:
-    """The title's state (`Title`, `0x5035B0`): its task's steps, the menu's and the fade's."""
+    """The title's state (`Title`, `0x5035B0`): its task's steps, the menu's and the fade's, and what the new-game
+    choice has set."""
     task = game.read(TASKS, 0x14)
     fade = game.read(FADE, 0x10)
     kido, add = struct.unpack_from("<hh", fade, 0)
@@ -1108,7 +1114,8 @@ def title_trace(game: Game) -> str:
         f"{game.u8(TITLE_MENU)},{game.u8(TITLE_MENU + 1)},{game.u8(TITLE_SEL_MODE)},{game.u8(TITLE_CUR)},"
         f"{game.u8(TITLE_PULSE)},{game.u8(TITLE_SLIDE)},{game.u16(TITLE_DEMO)} "
         f"tlogo={game.i16(TITLE_FLASH)},{game.i16(TITLE_LOGO)},{game.i32s(TITLE_LOGO_COUNT, 1)[0]} "
-        f"tfade={kido},{add},{fade[4]},{game.u16(TITLE_KIDO)},{game.u16(TITLE_ADD)}"
+        f"tfade={kido},{add},{fade[4]},{game.u16(TITLE_KIDO)},{game.u16(TITLE_ADD)} "
+        f"tsel={game.u32(FG_SYSTEM) & FG_SYSTEM_CHOICE:x},{game.u8(HARD_MODE)},{game.u8(CENSORSHIP_OFF)}"
     )
 
 
