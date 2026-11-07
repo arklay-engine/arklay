@@ -3233,6 +3233,9 @@ pub struct GameState {
     /// the areas after `Player_move`, so the routine changes after this
     /// tick's move.
     pub re2_crouch_start: bool,
+    /// What `fg_stop` was before a message's stop word went up, until the
+    /// message is dismissed ([`GameState::hold_re2_message_stop`]).
+    pub re2_message_stop: Option<u32>,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -3722,6 +3725,7 @@ impl Default for GameState {
             re2_item_get: None,
             re2_crouch_item: None,
             re2_crouch_start: false,
+            re2_message_stop: None,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
@@ -8667,6 +8671,11 @@ impl GameState {
                 // whose `Pl_init` hands the player back standing, from a
                 // crouch too (`0x4C000D`).
                 crate::player2::pl_init(&mut self.re2.player);
+                // Mode 5 leaves `fg_stop` at `0xEF000000`, input bit
+                // included, for the next tick's `Pad_set`, as a door does: a
+                // direction held through the close moves the player a tick
+                // later.
+                self.re2.door_key_stop = true;
                 return None;
             }
             phase => (phase, get.ticks),
@@ -8778,6 +8787,25 @@ impl GameState {
         let id = u16::from(id);
         self.message.set_re2_timing(false, false);
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
+    }
+
+    /// `message_on`'s stop word: while the message shows, `fg_stop` has it
+    /// in its top half, so the player, the enemies and the scripts wait, and
+    /// its dismissal puts back what `fg_stop` was.
+    pub fn hold_re2_message_stop(&mut self, stop: u16) {
+        if stop == 0 || !self.message.active || self.re2_message_stop.is_some() {
+            return;
+        }
+        let fg_stop = self.re2.fg_stop_mut();
+        self.re2_message_stop = Some(*fg_stop);
+        *fg_stop |= u32::from(stop) << 16;
+    }
+
+    /// The end of a message's [`Self::hold_re2_message_stop`].
+    fn release_re2_message_stop(&mut self) {
+        if let Some(saved) = self.re2_message_stop.take() {
+            *self.re2.fg_stop_mut() = saved;
+        }
     }
 
     /// The player's weapon for [`crate::player2::player_move`].
@@ -8978,6 +9006,7 @@ impl GameState {
     pub fn cancel_message(&mut self) {
         if self.message.active {
             self.message_flags = self.message_flags_backup;
+            self.release_re2_message_stop();
         }
         self.message = MessageWindow::default();
         self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = 0;
@@ -9054,6 +9083,7 @@ impl GameState {
                 self.dpad_blanked |= self.dpad_held & DPAD_DIRECTIONS;
             }
             self.message_flags = self.message_flags_backup;
+            self.release_re2_message_stop();
         }
         let pause = self.message.pause;
         for action in self.message.take_actions() {
