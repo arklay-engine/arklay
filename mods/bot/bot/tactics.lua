@@ -1262,7 +1262,7 @@ local SPIT_RINGS = 14
 -- flight, and moves at once otherwise.
 local SPIT_SLACK = 4
 -- The hold ends once the spit is this old and no glob is within
--- SPIT_NEAR of the bot (they fly 373 a tick), or once the tiger is back in
+-- SPIT_NEAR of the bot (they fly glob_speed a tick), or once the tiger is back in
 -- a bite's early sub-states with no spit thrown.
 local SPIT_PASS = C.SECOND // 4
 local SPIT_NEAR = 10 * C.APPROACH
@@ -1291,6 +1291,23 @@ local function heading(units)
     return sin_turn(units + C.FULL_TURN // 4), -sin_turn(units)
 end
 
+-- The nearest of 64 headings to direction (dx, dz), or `angle` for none.
+local function spit_units(dx, dz, angle)
+    if dx == 0 and dz == 0 then
+        return angle % C.FULL_TURN
+    end
+    local best, best_dot = 0, nil
+    for j = 0, 63 do
+        local a = j * (C.FULL_TURN // 64)
+        local hx, hz = heading(a)
+        local dot = hx * dx + hz * dz
+        if not best_dot or dot > best_dot then
+            best, best_dot = a, dot
+        end
+    end
+    return best
+end
+
 -- The glob lines of spitter `e` (its knowledge `entry`): {ox, oz, ux, uz}.
 -- With `wide`, only the wide fan's three (the narrow fan, one volley in
 -- four, is a risk taken when no spot clears both).
@@ -1301,9 +1318,12 @@ local function spit_lines(e, entry, wide)
     if wide then
         offs = { 0, entry.fan, -entry.fan }
     end
+    -- They fan out from glob_apex ahead on its facing.
+    local fx, fz = heading(e.angle)
+    local ox, oz = e.x + fx * entry.glob_apex, e.z + fz * entry.glob_apex
     for _, off in ipairs(offs) do
         local ux, uz = heading(e.angle + off)
-        lines[#lines + 1] = { ox = e.x, oz = e.z, ux = ux, uz = uz, hit = entry.glob_hit }
+        lines[#lines + 1] = { ox = ox, oz = oz, ux = ux, uz = uz, hit = entry.glob_hit }
     end
     return lines
 end
@@ -1332,8 +1352,16 @@ end
 -- Whether spitter `e`'s lines are live: every state but a bite's early
 -- sub-states (before the tell, the facing still follows the bot and no
 -- spit can come for about 20 ticks). A walk or a strafe spits the moment
--- the bot is lined up, with no tell, so their lines count at once.
+-- the bot is lined up, with no tell, so their lines count at once. A
+-- bite's end and an idle (behaviour 0) spit through the spitter's picker,
+-- which spits only inside spit_range: out of it their lines are not live.
+-- (A walk's are: it spits the moment it comes in range with the bot lined
+-- up, so the bot keeps off them before.)
 local function spit_live(e, entry)
+    if (e.action_behavior == entry.tell_behavior or e.action_behavior == 0)
+        and e.distance > entry.spit_range then
+        return false
+    end
     if e.action_behavior == entry.tell_behavior then
         return e.action_state >= entry.tell_state
     end
@@ -1345,9 +1373,102 @@ local function spit_biting(e, entry)
     return e.action_behavior == entry.tell_behavior and e.distance < entry.bite_keep + C.APPROACH
 end
 
+-- When spitter `e`'s next volley leaves: ticks from now until its globs
+-- stand at glob_spawn (negative once they fly). The tell's lock leads the
+-- spit by SPIT_LEAD (19 measured in 30C, one less for margin), the globs
+-- show the tick after the spit starts, and a walk, strafe or pick may spit
+-- now. A bite before its tell spits no sooner than SPIT_LEAD. Each phase is
+-- timed from its first tick seen, so spit_dodge calls this every tick.
+local SPIT_LEAD = 18
+local function spit_due(s, e, entry, now)
+    s.spit_phase = s.spit_phase or {}
+    local phase = "walk"
+    if e.action_behavior == entry.spit_behavior then
+        phase = "spit"
+    elseif e.action_behavior == entry.tell_behavior then
+        phase = e.action_state >= entry.tell_state and "tell" or "bite"
+    end
+    local seen = s.spit_phase[e.slot]
+    if not seen or seen.phase ~= phase then
+        seen = { phase = phase, tick = now }
+        s.spit_phase[e.slot] = seen
+    end
+    if phase == "spit" then
+        return seen.tick + 1 - now
+    elseif phase == "tell" then
+        return seen.tick + SPIT_LEAD - now
+    elseif phase == "bite" then
+        return SPIT_LEAD
+    end
+    return 0
+end
+
+-- How far a run from the player to (x, z), `r` away on heading `units`,
+-- keeps out of the globs of `lines` thrown `due` ticks from now: the least
+-- distance past glob_hit + SPIT_CLEAR, negative for a hit. The bot turns in
+-- place down to SPIT_DASH_TURN off, runs at the run speed and stands at the
+-- spot; each glob leaves its line glob_spawn - glob_apex along it and flies
+-- glob_speed a tick. A line crossed before its glob comes, or after it
+-- passed, costs nothing: the static clearance (line_clearance) sent seeds
+-- to spots their turn and run could not reach before the volley, and back
+-- across lines a walk swept.
+local SPIT_DASH_TURN = C.FULL_TURN // 8
+local function spit_margin(player, units, r, x, z, e, entry, lines, due)
+    local err = abs(angle_delta(units, player.angle % C.FULL_TURN))
+    local t0 = 0
+    if r > 0 and err > SPIT_DASH_TURN then
+        t0 = (err - SPIT_DASH_TURN) / C.TURN_STEP
+    end
+    local run = r / C.SPEED.run
+    local fx, fz = x - e.x, z - e.z
+    local far = e.distance
+    if fx * fx + fz * fz > far * far then
+        far = (fx * fx + fz * fz) ^ 0.5
+    end
+    local keep = entry.glob_hit + SPIT_CLEAR
+    local horizon = due + (far + keep - entry.glob_apex) / entry.glob_speed + 1
+    local t = due > 0 and due or 0
+    local least = nil
+    while t <= horizon do
+        local f = 0
+        if run > 0 and t > t0 then
+            f = (t - t0) / run
+            if f > 1 then
+                f = 1
+            end
+        end
+        local px, pz = player.x + (x - player.x) * f, player.z + (z - player.z) * f
+        local along = entry.glob_spawn - entry.glob_apex + entry.glob_speed * (t - due)
+        for _, l in ipairs(lines) do
+            local gx, gz = l.ox + l.ux * along - px, l.oz + l.uz * along - pz
+            local d2 = gx * gx + gz * gz
+            if not least or d2 < least then
+                least = d2
+            end
+        end
+        t = t + 1
+    end
+    if not least then
+        return keep
+    end
+    return least ^ 0.5 - keep
+end
+
 -- The quickest reachable spot clear of `lines` and of the bite of `e`.
-local function spit_escape(bot, player, e, entry, lines)
+-- With `due` (spit_due), clear means out of the globs' way in time
+-- (spit_margin); without it, past SPIT_CLEAR of every line. With `due` and
+-- no clear spot, the reachable one (or the bot's own) that keeps furthest
+-- from the globs, flagged `risky`: a fallback to the static clearance's
+-- spots ran seed 1 of v3 down the walk-spit's line.
+-- Out of spit_range, a spot the run cannot go on SPIT_ROOM past ranks
+-- SPIT_CORNER ticks dearer: the tiger cannot spit yet, but its walk turns
+-- after the bot, and the v4 start ran ahead of it into 30C's north-east
+-- corner, where the walk's spit found it with no way out.
+local SPIT_ROOM = 4 * C.APPROACH
+local SPIT_CORNER = C.SECOND // 2
+local function spit_escape(bot, player, e, entry, lines, due)
     local best, best_cost
+    local fallback = {}
     for j = 0, 15 do
         local units = j * (C.FULL_TURN // 16)
         local ux, uz = heading(units)
@@ -1362,21 +1483,58 @@ local function spit_escape(bot, player, e, entry, lines)
                 reach = e.distance
             end
             local fx, fz = x - e.x, z - e.z
-            if line_clearance(lines, x, z) >= SPIT_CLEAR
-                and fx * fx + fz * fz >= (entry.bite_keep + C.APPROACH) ^ 2
-                and segment_dist2(e.x, e.z, player.x, player.z, x, z) >= reach * reach * 1.0 then
+            local bite_ok = fx * fx + fz * fz >= (entry.bite_keep + C.APPROACH) ^ 2
+                and segment_dist2(e.x, e.z, player.x, player.z, x, z) >= reach * reach * 1.0
+            local clear
+            if due then
+                local margin = spit_margin(player, units, r, x, z, e, entry, lines, due)
+                clear = margin >= 0
+                if bite_ok and not clear then
+                    fallback[#fallback + 1] = { x = x, z = z, r = r, units = units,
+                        margin = margin, cost = turn + r / C.SPEED.run }
+                end
+            else
+                clear = line_clearance(lines, x, z) >= SPIT_CLEAR
+            end
+            if clear and bite_ok then
                 local cost = turn + r / C.SPEED.run
                 if not best_cost or cost < best_cost then
                     local path = bot:path(x, z)
                     if path.status == "ok" and path.length <= r * 1.3 then
-                        best, best_cost = { x = x, z = z, cost = cost }, cost
+                        local rank = cost
+                        if e.distance > entry.spit_range then
+                            local room = SPIT_ROOM + r
+                            local on = bot:path((player.x + ux * room) // 1, (player.z + uz * room) // 1)
+                            if on.status ~= "ok" or on.length > room * 1.3 then
+                                rank = cost + SPIT_CORNER
+                            end
+                        end
+                        if not best_cost or rank < best_cost then
+                            best, best_cost = { x = x, z = z, cost = cost, units = units }, rank
+                        end
                     end
                 end
                 break
             end
         end
     end
-    return best
+    if best or not due then
+        return best
+    end
+    local stay = spit_margin(player, player.angle, 0, player.x, player.z, e, entry, lines, due)
+    table.sort(fallback, function(p, q)
+        return p.margin > q.margin
+    end)
+    for _, c in ipairs(fallback) do
+        if c.margin <= stay then
+            break
+        end
+        local path = bot:path(c.x, c.z)
+        if path.status == "ok" and path.length <= c.r * 1.3 then
+            return { x = c.x, z = c.z, cost = c.cost, units = c.units, risky = true }
+        end
+    end
+    return { x = player.x, z = player.z, cost = 0, units = player.angle, risky = true }
 end
 
 -- Whether a spitter here may lock onto the bot before a swing or a shot
@@ -1454,8 +1612,15 @@ local function spit_dodge(bot, s, player)
             end
         end
         local flight = e and (e.distance - entry.glob_spawn) // entry.glob_speed or 0
+        -- A walk, an idle or a strafe spits only as the bot comes in line,
+        -- along its facing: once the bot stands clear of its lines, the hold
+        -- is over (held on, the dodges chased a walk's lines into corners).
+        local told = e and (e.action_behavior == entry.tell_behavior
+            or e.action_behavior == entry.spit_behavior)
+        local walk_clear = told == false and not d.spat and not near
+            and line_clearance(spit_lines(e, entry, d.wide), player.x, player.z) >= SPIT_CLEAR
         local over = not e or (d.spat and now - d.spat >= SPIT_PASS + flight and not near)
-            or (not d.spat and not live) or now - d.tick >= SPIT_TIMEOUT
+            or (not d.spat and not live) or now - d.tick >= SPIT_TIMEOUT or walk_clear
         if over then
             bot:log(string.format("spit dodge over (%s) at (%d,%d) health=%d",
                 d.spat and "the volley passed" or "no spit came", player.x, player.z, player.health))
@@ -1463,13 +1628,26 @@ local function spit_dodge(bot, s, player)
             s.aim_ticks = 0
             return false
         end
-        -- The tiger turned (a walk keeps turning): a spot on a line is
-        -- planned again.
+        -- The tiger turned (a walk keeps turning), or the run there is too
+        -- slow for the volley: the spot is planned again.
         local lines = spit_lines(e, entry, d.wide)
-        if line_clearance(lines, d.x, d.z) < SPIT_SAFE then
-            local spot = spit_escape(bot, player, e, entry, lines)
-            if spot then
-                d.x, d.z = spot.x, spot.z
+        local due = spit_due(s, e, entry, now)
+        local r = bot:distance(d.x, d.z)
+        local units = spit_units(d.x - player.x, d.z - player.z, player.angle)
+        -- Told or spat, the timing is known: the run is checked against
+        -- it. A walk's lines sweep with its turn and may spit any tick: only
+        -- a spot on them moves (planning against a spit now each tick ran
+        -- v3's seed 1 down the corridor ahead of the walk).
+        local slow = told and not d.risky
+            and spit_margin(player, units, r, d.x, d.z, e, entry, lines, due) < 0
+        if line_clearance(lines, d.x, d.z) < SPIT_SAFE or slow then
+            local spot = spit_escape(bot, player, e, entry, lines, due)
+            d.x, d.z, d.risky = spot.x, spot.z, spot.risky
+        elseif told and d.risky then
+            -- A risky run takes a clear spot once one shows.
+            local spot = spit_escape(bot, player, e, entry, lines, due)
+            if not spot.risky then
+                d.x, d.z, d.risky = spot.x, spot.z, false
             end
         end
         if line_clearance(lines, player.x, player.z) < SPIT_CLEAR
@@ -1483,6 +1661,7 @@ local function spit_dodge(bot, s, player)
     for _, e in ipairs(bot:enemies()) do
         local entry = k.enemies[e.id]
         local biting = entry and entry.spit_behavior and spit_biting(e, entry)
+        local due = entry and entry.spit_behavior and spit_due(s, e, entry, now)
         if entry and entry.spit_behavior and (e.health or 0) >= 0
             and (biting or spit_live(e, entry)) then
             local lines = spit_lines(e, entry)
@@ -1492,28 +1671,34 @@ local function spit_dodge(bot, s, player)
                 clear = 0
             end
             if clear < SPIT_SAFE then
-                local spot = spit_escape(bot, player, e, entry, lines)
+                -- Out of the globs' way in time, every line, then the wide
+                -- fan's; else the static clearance's spots.
+                local spot = spit_escape(bot, player, e, entry, lines, due)
                 local wide = false
-                if not spot then
-                    spot = spit_escape(bot, player, e, entry, spit_lines(e, entry, true))
-                    wide = spot ~= nil
+                if spot.risky then
+                    local other = spit_escape(bot, player, e, entry, spit_lines(e, entry, true), due)
+                    if not other.risky then
+                        spot, wide = other, true
+                    end
                 end
                 -- No tell (a walk, strafe or pick): the spit itself is the
                 -- signal while the escape beats the globs' flight.
                 local told = e.action_behavior == entry.tell_behavior
                     or e.action_behavior == entry.spit_behavior
                 local flight = (e.distance - entry.glob_spawn) / entry.glob_speed
-                if spot and not told and spot.cost + SPIT_SLACK < flight then
+                -- (With no spot clear, too: the walk may not spit at all.)
+                if not told and (spot.risky or spot.cost + SPIT_SLACK < flight) then
                     spot = nil
                     clear = nil
                 end
                 if spot then
                     s.spit = { slot = e.slot, tick = now, x = spot.x, z = spot.z, cost = spot.cost,
-                        wide = wide }
+                        wide = wide, risky = spot.risky }
                     bot:log(string.format(
-                        "spit dodge: slot=%d ab=%d as=%d dist=%d clear=%d: to (%d,%d) cost %.0f%s",
+                        "spit dodge: slot=%d ab=%d as=%d dist=%d clear=%d: to (%d,%d) cost %.0f%s%s",
                         e.slot, e.action_behavior, e.action_state, e.distance, clear // 1,
-                        spot.x, spot.z, spot.cost, wide and " (wide fan only)" or ""))
+                        spot.x, spot.z, spot.cost, wide and " (wide fan only)" or "",
+                        spot.risky and " (no spot clears the globs)" or ""))
                     return spit_dodge(bot, s, player)
                 end
                 if clear and s.spit_stuck ~= now - 1 then
