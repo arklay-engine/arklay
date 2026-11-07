@@ -287,6 +287,14 @@ end
 function BotSurvival.heal(bot, player)
     local s = state()
     s.heal_cooldown = (s.heal_cooldown or 0) - 1
+    -- A heal item just came (out of the box): the cooldown a check with
+    -- none held set is over. 100's box gave seed 5 a heal at 14 health,
+    -- which waited out that cooldown and was used on the walk out.
+    local held = #heal_rows(bot)
+    if held > (s.heals_held or 0) then
+        s.heal_cooldown = 0
+    end
+    s.heals_held = held
     -- A fight does not hold off a heal: the menu pauses the game, and a
     -- fight played on under the threshold ends at the low-health floor,
     -- one grab lower (two bites).
@@ -320,6 +328,13 @@ end
 
 -- The critical-health floor as a fraction of max health: 0.2 at risk 0,
 -- 0.05 at risk 1.
+-- Whether a heal is due and a heal item is held (BotSurvival.heal acts
+-- once its cooldown ends).
+function BotSurvival.heal_pending(bot)
+    local player = bot:player()
+    return player.health < player.max_health * heal_fraction(bot) and #heal_rows(bot) > 0
+end
+
 function BotSurvival.critical_fraction(r)
     return 0.2 - 0.15 * r
 end

@@ -76,6 +76,12 @@ local RETRY = 60 * C.SECOND
 local TRIP_GAPS = 2
 -- How often the decision is evaluated while a typewriter is in reach.
 local DECIDE_EVERY = C.SECOND
+-- Damage this recent lets combat take a save walk's tick, and stops the
+-- way out being held for a heal.
+local HURT_HOLD = 2 * C.SECOND
+BotSave.HURT_HOLD = HURT_HOLD
+-- The longest the way out waits for a due heal (BotSurvival.heal's cooldown).
+local HEAL_HOLD = 3 * C.SECOND
 -- Deaths on one save before the run gives up.
 local MAX_DEATHS = 3
 -- One pad edge per this many ticks on the screens.
@@ -446,10 +452,34 @@ end
 
 -- One controllable tick: run the save job, or start one at a typewriter
 -- here when BotSave.wants says so. Returns true when it owns the tick.
+-- What the save decision depends on that changes at a box or a heal:
+-- health and the inventory.
+local function decide_sig(bot, player)
+    local parts = { tostring(player.health) }
+    for _, row in ipairs(bot:menu().items or {}) do
+        parts[#parts + 1] = row.item .. "x" .. tostring(row.quantity or 0)
+    end
+    return table.concat(parts, ",")
+end
+
+-- Whether a save walk is under way (the press not yet answered).
+function BotSave.walking()
+    local job = state().job
+    return job ~= nil and not job.prompted
+end
+
 function BotSave.step(bot, player, critical)
     local s = state()
     local tick = bot:tick()
     local job = s.job
+    -- A walk to a typewriter of another room: the decision came as a door
+    -- opened (seed 5 left 100 the tick it chose 100's typewriter, then
+    -- walked 101 for that zone while a hunter cut it down).
+    if job and job.room ~= bot:room().id then
+        bot:log(string.format("save: %s was in room %s; dropped", job.label, tostring(job.room)))
+        s.job = nil
+        job = nil
+    end
     if job then
         if job.prompted then
             -- The prompt was answered and the screen never came, or a save
@@ -471,13 +501,38 @@ function BotSave.step(bot, player, critical)
         return true
     end
     -- A fight in progress finishes first.
-    if BotSurvival.active() or tick - (s.decided or -DECIDE_EVERY) < DECIDE_EVERY then
+    if BotSurvival.active() then
+        return false
+    end
+    -- Decided again at once when health or the inventory changed (a heal,
+    -- a box visit), and every tick on a walk out of the room, so the bot
+    -- saves before it leaves rather than as the door opens.
+    local sig = decide_sig(bot, player)
+    local leaving = BotPlanner.leaving()
+    if sig == s.decided_sig and not leaving
+        and tick - (s.decided or -DECIDE_EVERY) < DECIDE_EVERY then
         return false
     end
     s.decided = tick
+    s.decided_sig = sig
     local action = typewriter_here(bot)
     if not action then
         return false
+    end
+    -- On the way out with a heal due and held: wait for it (its cooldown),
+    -- then decide on the save, unless something is hurting the bot.
+    local hurt = BotSurvival.hurt_tick()
+    if leaving and BotSurvival.heal_pending(bot)
+        and not (hurt and tick - hurt <= HURT_HOLD) then
+        if s.heal_hold ~= tick - 1 then
+            s.heal_hold_from = tick
+            bot:log(string.format("typewriter slot %d: a heal is due first; holding the way out",
+                action.slot))
+        end
+        s.heal_hold = tick
+        if tick - s.heal_hold_from <= HEAL_HOLD then
+            return true
+        end
     end
     local saves = bot:saves()
     local latest = BotSave.latest(bot:memory())
@@ -511,6 +566,7 @@ function BotSave.step(bot, player, critical)
     end
     BotPlanner.drop_goal(bot)
     s.job = {
+        room = bot:room().id,
         slot = action.slot,
         zone = { x = action.x, z = action.z, width = action.width, depth = action.depth },
         label = string.format("typewriter slot %d", action.slot),

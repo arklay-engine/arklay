@@ -131,6 +131,18 @@ function on_bot_tick(bot)
         return
     end
     local critical = BotSurvival.critical(bot, player)
+    -- A fight, or a monster that just hurt the bot, takes a save walk's
+    -- tick: seed 5 walked 101 for a typewriter while a hunter hit it ten
+    -- times and the fight never started.
+    local hurt = BotSurvival.hurt_tick()
+    local fought = false
+    if BotSave.walking() and (BotTactics.active()
+            or (hurt and bot:tick() - hurt <= BotSave.HURT_HOLD)) then
+        fought = true
+        if BotTactics.step(bot, scene, player) then
+            return
+        end
+    end
     if BotSave.step(bot, player, critical) then
         return
     end
@@ -139,7 +151,7 @@ function on_bot_tick(bot)
             "health critical with no heal item and no save while under attack")
         return
     end
-    if BotTactics.step(bot, scene, player) then
+    if not fought and BotTactics.step(bot, scene, player) then
         return
     end
     BotPlanner.step(bot)
