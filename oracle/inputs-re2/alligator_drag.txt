@@ -1,0 +1,5 @@
+# room 40A: after the scene, run along the corridor and stop just inside its second leg, where the alligator's turn brings its body past the player: its reach catches and drags them (oracle/re2.md)
+822 up run
+859 up run right
+877 up run
+900
