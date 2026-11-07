@@ -65,6 +65,22 @@ pub struct BotOptions {
     /// The room whose entry ends the run (`--bot-goal-room`), such as
     /// `"20D"`; read-only to Lua as `bot:goal_room()`.
     pub goal_room: Option<String>,
+    /// The game-RNG seed (`--bot-seed`); `None` leaves the game's own random
+    /// stream untouched.
+    pub seed: Option<u32>,
+}
+
+/// The game RNG state for the `session`th session of a `--bot-seed` run
+/// (0 for the first, then one more per bot reload). A pure function of
+/// both, so a seeded run replays exactly; different seeds, and a reload,
+/// land on different streams. Never 1, the unseeded start state.
+pub fn seeded_rand_state(seed: u32, session: u32) -> u32 {
+    let mut x = (u64::from(seed) << 32 | u64::from(session)).wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^= x >> 31;
+    let state = (x ^ (x >> 32)) as u32;
+    if state == 1 { 2 } else { state }
 }
 
 impl Default for BotOptions {
@@ -76,6 +92,7 @@ impl Default for BotOptions {
             stats_path: None,
             risk: DEFAULT_RISK,
             goal_room: None,
+            seed: None,
         }
     }
 }
