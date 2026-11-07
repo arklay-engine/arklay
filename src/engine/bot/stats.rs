@@ -39,6 +39,11 @@
 //! held, or the player grabbed), `walking` (up or down held), `turning`
 //! (left or right only), `uncontrolled` (no control for another reason) and
 //! `waiting` (in control with no input).
+//!
+//! `timeline` is the run-length encoding of the buckets, `[start tick,
+//! length, bucket]` rows, for `scripts/bot-idle-report.py` to join with the
+//! log. `stalled_walk_ticks` counts ticks after a walking tick that left
+//! the player's position unchanged (a push into a wall or an object).
 
 use super::{BotInput, EnemySnapshot, MenuSnapshot, SessionSnapshot};
 use serde_json::{Value, json};
@@ -99,6 +104,17 @@ pub(super) struct BotStats {
     /// This tick's bucket when the snapshot alone decides it, else `None`
     /// with the snapshot facts the input still needs.
     pending_activity: Option<PendingActivity>,
+    /// Run-length timeline of the buckets: `(start tick, length, bucket)`.
+    timeline: Vec<(u64, u64, &'static str)>,
+    /// The player's position this tick, and whether the previous tick held
+    /// up or down while in control (`stalled_walk_ticks` counts the ticks
+    /// that moved the pad but not the player).
+    pos: (i32, i32),
+    prev_pos: Option<(i32, i32)>,
+    prev_walk: bool,
+    stalled_walk_ticks: u64,
+    /// Run-length rows `(start tick, length)` of the stalled walking ticks.
+    stalled_runs: Vec<(u64, u64)>,
 }
 
 /// What the snapshot said about the tick, before the input is known.
@@ -352,6 +368,14 @@ impl BotStats {
         self.prev_enemies = now;
 
         self.pending_activity = Some(snapshot_activity(snapshot));
+        self.pos = (snapshot.player.x, snapshot.player.z);
+        if self.prev_walk && self.prev_pos == Some(self.pos) {
+            self.stalled_walk_ticks += 1;
+            match self.stalled_runs.last_mut() {
+                Some((start, len)) if *start + *len == tick => *len += 1,
+                _ => self.stalled_runs.push((tick, 1)),
+            }
+        }
 
         let equipped = snapshot.player.equipped;
         self.menu
@@ -389,6 +413,14 @@ impl BotStats {
             None => "uncontrolled",
         };
         *self.activity.entry(bucket).or_default() += 1;
+        self.prev_walk = bucket == "walking";
+        self.prev_pos = Some(self.pos);
+        match self.timeline.last_mut() {
+            Some((start, len, last)) if *last == bucket && *start + *len == self.last_tick => {
+                *len += 1;
+            }
+            _ => self.timeline.push((self.last_tick, 1, bucket)),
+        }
         if let Some(room) = &self.current_room {
             *self
                 .room_activity
@@ -460,6 +492,7 @@ impl BotStats {
             "movement": {
                 "turn_in_place_ticks": self.turn_in_place_ticks,
                 "move_ticks": self.move_ticks,
+                "stalled_walk_ticks": self.stalled_walk_ticks,
             },
             "states": {
                 "message_ticks": self.message_ticks,
@@ -470,6 +503,8 @@ impl BotStats {
             },
             "menu": self.menu.to_json(),
             "activity": self.activity,
+            "timeline": self.timeline,
+            "stalled_runs": self.stalled_runs,
             "room_activity": self.room_activity,
             "door_unlocks": unlocks,
             "unlock_to_room_change_ticks_total": known.iter().sum::<u64>(),
