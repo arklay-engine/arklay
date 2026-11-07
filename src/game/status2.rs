@@ -51,7 +51,7 @@ pub const MAP_FLOOR: u8 = 4;
 /// The FILE page's subs (`0x4FA178`) as far as the binders go: 0 loads them
 /// and starts 1, the slide in; 2 slides out, 3 waits on the binders, and 4
 /// and 5 turn them left and right. Subs 6 to 18 open a binder and read its
-/// files, which no route state reaches (`docs/re2-deviations.md`).
+/// files, which no route state reaches (`docs/internals/deviations/re2.md`).
 pub const FILE_LOAD: u8 = 0;
 pub const FILE_IN: u8 = 1;
 pub const FILE_OUT: u8 = 2;

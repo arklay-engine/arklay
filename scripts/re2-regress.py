@@ -147,7 +147,7 @@ def voice_ticks(trace: Path) -> list[int]:
     """How long each voice line held `fg_status`'s voice bit (flag 1:26, `0x20`) in the recording, in order.
 
     With `--sound` the original ends a line by DirectSound's clock, so a line's length in ticks follows the
-    recording's pace (`docs/re2-deviations.md`, "Voice lines"); a run with `voice_from_ref` hands arklay these."""
+    recording's pace (`docs/internals/deviations/re2.md`, "Voice lines"); a run with `voice_from_ref` hands arklay these."""
     held = []
     start = None
     with open(trace) as lines:

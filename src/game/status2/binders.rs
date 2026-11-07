@@ -12,7 +12,7 @@
 //! binder's own CLUT row (the work's draw flag, the binder's index).
 //!
 //! The label and the binder opening (FILE's subs 6 to 18) aren't drawn: no
-//! route binder holds a file (`docs/re2-deviations.md`).
+//! route binder holds a file (`docs/internals/deviations/re2.md`).
 
 use anyhow::{Context, Result, bail};
 

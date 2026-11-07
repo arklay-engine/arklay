@@ -6,7 +6,7 @@
 
 [book]
 title = "Arklay"
-description = "Documentation for the Arklay engine: game packs, mods, the Lua API and .akscr scripts."
+description = "Documentation for the Arklay engine: game packs, mods, the Lua API and room scripts."
 authors = ["The Arklay contributors"]
 language = "en"
 # The pages live directly in docs/, next to the files the README already links.
@@ -33,7 +33,7 @@ command = "python3 ../scripts/lua-api-doc.py"
 [preprocessor.opcode-index]
 command = "python3 ../scripts/opcode-index.py"
 
-# The opcode lists are long: fold the sidebar below the dialect pages.
+# The opcode lists are long: fold the sidebar below the RE 1 and RE 2 pages.
 [output.html.fold]
 enable = true
-level = 2
+level = 3

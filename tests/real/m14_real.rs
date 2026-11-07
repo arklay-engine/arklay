@@ -11,7 +11,7 @@
 //! (never committed). The golden sets used so far were produced by a
 //! same-author Python reimplementation of the codec, not a third-party
 //! decoder, so the comparison is a cross-implementation check rather than
-//! fully independent verification; see `docs/m14-deviations.md` item 8. A set
+//! fully independent verification; see `docs/internals/deviations/m14.md` item 8. A set
 //! variable with missing goldens fails; only an unset variable skips.
 
 use crate::common;
@@ -231,7 +231,7 @@ fn decoded_frames_match_the_independent_goldens() {
             "note: ARKLAY_MOVIE_GOLDEN is unset; skipping the golden comparison. \
              The goldens used by this project come from a same-author \
              reimplementation, not a third-party decoder \
-             (docs/m14-deviations.md item 8)."
+             (docs/internals/deviations/m14.md item 8)."
         );
         return;
     };

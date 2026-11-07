@@ -212,7 +212,7 @@ setup_script = "route_100_200.lua"
 input = "weapon_pickup_101.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,em"
 # room 100's door, and the head after each get-item window and the status screen's close, 1 to 3 units
-# high on the first ticks (oracle/re2.md, docs/re2-deviations.md, "The head after the get-item window")
+# high on the first ticks (oracle/re2.md, docs/internals/deviations/re2.md, "The head after the get-item window")
 ignore = [
     [790, "rng"],
     [790, "rseed"],
@@ -793,7 +793,7 @@ input = "route_100_200.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 7399]
 frame_max_mean = 0.8
-# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
 ignore = [
     [790, "rng"],
     [790, "rseed"],
@@ -819,7 +819,7 @@ record = "--no-enemies --keep-enemy-in 101:0 --flag 4:135"
 name = "route_100_200_enemies"
 room = "new"
 offset = 0
-# The route's input with the enemies on: room 100's zombies kill the player and the game over returns to the title after tick 1459, in both games (docs/re2-deviations.md, "The route with the enemies on"). Recorded over 7400 ticks.
+# The route's input with the enemies on: room 100's zombies kill the player and the game over returns to the title after tick 1459, in both games (docs/internals/deviations/re2.md, "The route with the enemies on"). Recorded over 7400 ticks.
 ticks = 1460
 setup_script = "route_100_200_enemies.lua"
 input = "route_100_200.txt"
@@ -850,7 +850,7 @@ ticks = 1594
 setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1219, fields = ["p.z"], note = "the dead player's body is pushed a unit off: the alligator's neck aims at the dying player's head, which arklay places differently (docs/re2-deviations.md)" }
+expect = { tick = 1219, fields = ["p.z"], note = "the dead player's body is pushed a unit off: the alligator's neck aims at the dying player's head, which arklay places differently (docs/internals/deviations/re2.md)" }
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
 [[run]]
@@ -947,7 +947,7 @@ input = "route_100_200_fight.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 9599]
 frame_max_mean = 0.8
-# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
 ignore = [
     [356, "rng"],
     [356, "rseed"],
@@ -997,7 +997,7 @@ expect = "match"
 record = ""
 
 # OPTION: the decide cue and a fade to black; the title hands over to the option task on tick 409, which arklay
-# doesn't have (docs/re2-deviations.md, "The title").
+# doesn't have (docs/internals/deviations/re2.md, "The title").
 [[run]]
 name = "title_option"
 ui = "title"
@@ -1026,7 +1026,7 @@ expect = "match"
 record = ""
 
 # No input: the idle count reaches 0x708 at tick 1990, the screen fades to black over 128 ticks, and on tick 2118 the
-# title hands over to the attract demo (arklay's own reel; docs/re2-deviations.md, "The title").
+# title hands over to the attract demo (arklay's own reel; docs/internals/deviations/re2.md, "The title").
 [[run]]
 name = "title_demo"
 ui = "title"
@@ -1334,9 +1334,9 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [0, 9719]
 frame_max_mean = 0.8
 ignore = [
-    # zombie 1's angle on the first tick (docs/re2-deviations.md, "Zombies")
+    # zombie 1's angle on the first tick (docs/internals/deviations/re2.md, "Zombies")
     [0, "zm1"],
-    # the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+    # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
     [356, "rng"],
     [356, "rseed"],
     [2627, "rng"],

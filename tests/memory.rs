@@ -5,7 +5,7 @@
 //! synthetic pack loaded and dropped repeatedly. The tests are deliberately
 //! always-run (synthetic bytes only, no ignored attribute): they are the cheap
 //! local mirror of the ignored soak's memory ceilings and pin the cap-first
-//! allocation policy documented in `docs/architecture.md`.
+//! allocation policy documented in `docs/internals/architecture.md`.
 //!
 //! Every test takes a process-wide lock, so the counters only see this
 //! binary's own measured section.

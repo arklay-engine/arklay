@@ -18,7 +18,7 @@
 -- and opens the load screen; ORIGINAL MODE and ARRANGE MODE lead to the
 -- new-game choice (`ui/char_select.lua`); SPECIAL slides up to its extras,
 -- whose modes aren't ported; OPTION fades out and, arklay having no option
--- screen, the title starts again (`docs/re2-deviations.md`, "The title"). An
+-- screen, the title starts again (`docs/internals/deviations/re2.md`, "The title"). An
 -- idle title fades into the attract demo after 0x708 ticks.
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.

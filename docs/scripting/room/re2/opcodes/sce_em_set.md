@@ -63,7 +63,7 @@ Builds the character in slot `slot`, replacing whatever was there:
 
 The `Type` word, the floor and the model type go to the character's own
 routines; for the enemies, see the enemy scripts under `enemy/` and
-[Modding](../../../modding.md).
+[Enemies](../../../../packs/enemies.md).
 
 ## Example
 

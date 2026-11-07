@@ -1,7 +1,9 @@
-# `.akscr` scripts
+# Room scripts
 
-`.akscr` is Arklay's structured source form for the room scripts of the
-original games, the bytecode the original games keep in each room's RDT
+A room's scripts set it up when the player enters, run every frame while
+the player is in it, and drive its events: doors, items, cut scenes,
+enemies. They are written in `.akscr`, Arklay's structured text form of
+the original games' room scripts: the bytecode the original games keep in each room's RDT
 file (SCD scripts). A script reads like C: procedures in braces, commands as
 function calls, and `if`, `else` and loops instead of the bytecode's jump
 opcodes. The compiler turns a script back into bytecode, and the decompiler
@@ -11,42 +13,25 @@ games, decompiling and compiling again gives the same bytes.
 There are two dialects, one per game. Their instruction sets have nothing in
 common, and each dialect has its own compiler:
 
-- [RE 1 scripts](re1/index.md): the RE 1 command and event VMs, the include
+- [RE 1](re1/index.md): the RE 1 command and event VMs, the include
   files and names, the room variants, and the `.s` assembler.
-- [RE 2 scripts](re2/index.md): the RE 2 procedure lists and their block opcodes.
+- [RE 2](re2/index.md): the RE 2 procedure lists and their block opcodes.
 
 This page covers what the two dialects share: where scripts live, how they
 are built, and the common shape of the language.
 
 ## Where scripts live
 
-**RE 1.** The repository owns the room scripts. Each room has one script,
-`games/re1/room/<room>/room.akscr` (room 103's is
-`games/re1/room/103/room.akscr`), beside its `room.xml`. It covers every
-variant of the room: both players, both mansion visits and every release.
-The scripts include the named constants in `games/re1/inc/*.akinc`. The
-engine runs bytecode, not text. When Arklay itself is compiled, its build
-script compiles every room script and stores the bytecode in the executable.
-`arklay convert-game` then writes that bytecode into the base pack as each
-room's `room/<room>/room.scd`. The script text is not packed.
+A room's scripts are one file in its folder: `room.scd`, the compiled
+bytecode, or `room.akscr`, the text the engine compiles when the room loads.
+A mod replaces them as a whole; there is no way to patch one procedure or
+event. See [Rooms](../../packs/rooms.md#scripts).
 
-**RE 2.** `arklay convert-game` decompiles each RE 2 room's scripts and packs
-the text as `room.akscr` in the room's folder. The engine compiles that file
-each time it loads the room.
-
-**Mods.** A mod replaces a room's scripts as a whole: there is no way to
-patch one procedure or event. For RE 1 a mod ships `room/<room>/room.scd`,
-built from a script. Put the script in a mod source directory as
-`room/<room>/room.akscr` or `room/<room>.akscr` (three hex digits), and
-`arklay mod build` compiles it (see
-[Mod source directories](../modding.md#mod-source-directories)). The
-compiled `room.scd` replaces the base pack's. For RE 2, the engine reads
-`room.akscr` through the layered pack, so a mod layer's file at the same
-path replaces the base pack's.
-
-`arklay mod build` compiles every `.akscr` in a room folder as an RE 1
-script, and it rejects an RE 2 one. So a mod source directory cannot carry
-an RE 2 room script yet.
+`arklay mod build` compiles a mod source directory's `room/<room>/room.akscr`
+or `room/<room>.akscr` into `room/<room>/room.scd` (see
+[Building a mod](../../mods.md#building-a-mod)). It compiles every `.akscr`
+as an RE 1 format script, so an RE 2 format script goes in a mod directory
+that is run as it is, without `mod build`.
 
 ## Commands
 

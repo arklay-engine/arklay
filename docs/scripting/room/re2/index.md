@@ -83,7 +83,7 @@ other file, so the highest layer that has the file wins.
 
 Because `arklay mod build` cannot compile RE 2 scripts yet (it tries to
 compile any `room/<id>/*.akscr` as RE 1), load the mod as a
-[mod source directory](../../modding.md#mod-source-directories): pass the
+[mod source directory](../../../mods.md#building-a-mod): pass the
 directory to `--mod`, or put it in a `mods/` directory that discovery scans.
 A directory layer's files are read as they are, and the engine compiles the
 script when the room loads.
