@@ -1,0 +1,13 @@
+# G3 (Em_33) in room 509, scenario B: off the lift from room 505, the player stands; G3 waits off stage
+# for the room's scene (oracle/re2.md, "G3")
+[[run]]
+name = "g3_wait_509"
+room = "509"
+character = 0
+sound = false
+ticks = 1400
+setup = { pos = [13248, -1800, -16378], angle = 3480, health = 200, rnd = 6114, camera = 5, flags = [[1, 1], [4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:13248:-1800:-16378:3480:5 --flag 1:1 --flag 4:99 --life 200"
