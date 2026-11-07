@@ -558,6 +558,7 @@ fn run_zombie(
         Vec::new()
     };
     let alligator = character.id == crate::zombie2::ALLIGATOR_ID;
+    let camera_cut = game.camera.current_cut as u8;
     let objects = if alligator {
         game.objects
             .records
@@ -662,6 +663,7 @@ fn run_zombie(
         cut: None,
         objects,
         sub1: false,
+        camera_cut,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
@@ -672,6 +674,7 @@ fn run_zombie(
     let flag_ops = std::mem::take(&mut world.flag_ops);
     let cut = world.cut;
     let sub1 = world.sub1;
+    let objects = std::mem::take(&mut world.objects);
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     if let Some(angle) = world.turn_player {
@@ -690,6 +693,10 @@ fn run_zombie(
     }
     for (bank, index, op) in flag_ops {
         re2.set_flag(bank, index, op);
+    }
+    // The alligator moves the gas tank it bites (`FUN_004697f0`).
+    for (record, pos) in game.objects.records.iter_mut().zip(objects) {
+        record.pos = pos;
     }
     if let Some(cut) = cut {
         // `Cut_change`: the cut changes, and the zones carry on from it.

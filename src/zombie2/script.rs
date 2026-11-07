@@ -1156,6 +1156,65 @@ impl UserData for Api {
             let [x, y, z] = e.em().world.objects.get(index).copied().unwrap_or_default();
             Ok((x, y, z))
         });
+        methods.add_method_mut("cut", |_, e, ()| Ok(e.em().world.camera_cut));
+        methods.add_method_mut(
+            "set_object_pos",
+            |_, e, (index, x, y, z): (usize, i32, i32, i32)| {
+                if let Some(pos) = e.em().world.objects.get_mut(index) {
+                    *pos = [x, y, z];
+                }
+                Ok(())
+            },
+        );
+        // A point given on `part`'s matrix, as the last draw left it, in the
+        // world (`Rot_add_matrix`'s translation); and back (`MulLMatrix`'s).
+        methods.add_method_mut(
+            "drawn_part_point",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let matrix = e.em().z.parts.get(part).copied().flatten();
+                let Some(matrix) = matrix else {
+                    return Ok((x, y, z));
+                };
+                let at = [x, y, z];
+                let [wx, wy, wz] = std::array::from_fn(|row| {
+                    let turned: i64 = (0..3)
+                        .map(|k| i64::from(matrix.m[row][k]) * i64::from(at[k]))
+                        .sum();
+                    matrix.t[row].wrapping_add((turned >> 12) as i32)
+                });
+                Ok((wx, wy, wz))
+            },
+        );
+        methods.add_method_mut(
+            "part_local",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let matrix = e.em().z.parts.get(part).copied().flatten();
+                let Some(matrix) = matrix else {
+                    return Ok((x, y, z));
+                };
+                let point = player2::Matrix {
+                    m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+                    t: [x, y, z],
+                };
+                let [lx, ly, lz] = point.relative_to(&matrix).t;
+                Ok((lx, ly, lz))
+            },
+        );
+        // `Rot_neck` with `Neck_flg`'s 4: `Neck_no` `joint` turns toward
+        // `Neck_point` (`+0x170`) rather than the player's head. Only the
+        // yaw is turned; the pitch (`+0x9A`) isn't ported.
+        methods.add_method_mut(
+            "rot_neck_point",
+            |_, e, (joint, rate, limit, x, y, z): (usize, i32, i32, i32, i32, i32)| {
+                let em = e.em();
+                let from = em.z.parts.get(joint).copied().flatten().map(|m| m.t);
+                let angle = em.mover.player.angle as i16;
+                em.work().neck.joint = Some(joint as u8);
+                em.mover
+                    .rot_neck_joint(joint, from, Some([x, y, z]), angle, rate, limit);
+                Ok(())
+            },
+        );
         // `Rot_neck_em` on `Neck_no` `joint`, with the joint's rate and limit
         // (its `+0x9C` and `+0xA0`), from where the last draw left it toward
         // the player's head.
@@ -2730,5 +2789,64 @@ mod tests {
         assert_eq!((alligator.get("draws"), alligator.get("effects")), (12, 3));
         let alligator = run_alligator(30, "SCE = 1 TOUCH = true");
         assert_eq!(alligator.get("draws"), 12);
+    }
+
+    /// `FUN_004697f0`: once its swim reaches the gas tank, it raises
+    /// `fg_room`'s 0x1d, opens its jaws over 13 ticks pushing the tank ahead,
+    /// takes it in them and settles it 1750 ahead and 210 up on part 6 over
+    /// 26 more.
+    #[test]
+    fn an_alligator_takes_the_gas_tank_in_its_jaws() {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        let script = include_str!("../../games/re2/enemy/23/enemy.lua");
+        budget.begin();
+        lua.load(format!(
+            "SCE = 0 DIST = 20000 CLIP_LEN = 4 TOUCH = false
+             {ALLIGATOR_STUB}
+             {script}
+             w.flags = {{}}
+             w.tank = {{ -22816, -1984, -14000 }}
+             function e:flag() return false end
+             function e:set_flag(bank, index, on) w.flags[#w.flags + 1] = bank * 0x100 + index end
+             function e:object_pos() return w.tank[1], w.tank[2], w.tank[3] end
+             function e:set_object_pos(_, x, y, z) w.tank = {{ x, y, z }} end
+             function e:part_local(_, x, y, z) return x - 1000, y, z end
+             function e:drawn_part_point(_, x, y, z) return x, y, z end
+             update(e)
+             w.pos = {{ -24299, -1800, -18000 }}
+             w.r = {{ [0] = 1, 1, 0, 0 }}
+             w.vars[7] = 1"
+        ))
+        .exec()
+        .unwrap();
+        let state = |lua: &mlua::Lua| -> (i64, i64, i64, i64) {
+            lua.load("return w.vars[7], w.tank[3], w.vars[24] or 0, w.vars[25] or 0")
+                .eval()
+                .unwrap()
+        };
+        budget.begin();
+        lua.load("update(e)").exec().unwrap();
+        // Pushed to 0x1FA4 ahead of it, and `fg_room`'s 0x1d raised.
+        assert_eq!(state(&lua), (2, -18000 + 0x1FA4, 0, 0));
+        assert_eq!(lua.load("return w.flags[1]").eval::<i64>().unwrap(), 0x51D);
+        for _ in 0..12 {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        // Taken on part 6 on the 13th tick.
+        assert_eq!(state(&lua), (3, -18000 + 0x1FA4, -22816 - 1000, -1984));
+        for _ in 0..26 {
+            budget.begin();
+            lua.load("update(e)").exec().unwrap();
+        }
+        assert_eq!(state(&lua).0, 7);
+        budget.begin();
+        lua.load("update(e)").exec().unwrap();
+        let (_, _, x, y) = state(&lua);
+        // Settling on 1750 and -210, by 100 and 0x1E a tick.
+        assert!(x > -23816 && y > -1984, "{x} {y}");
+        // Where the original's jaws (`+0x22a`, `+0x228`) rest with the tank.
+        let jaws: (i64, i64) = lua.load("return w.vars[10], w.vars[9]").eval().unwrap();
+        assert_eq!(jaws, (34, -161));
     }
 }
