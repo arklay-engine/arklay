@@ -1094,6 +1094,9 @@ impl Em<'_, '_, '_> {
         self.script();
         self.oba_ck_em();
         self.sca_ck_em();
+        // The parts as this tick's draw leaves them, which the step in's hit
+        // (`Workm` of part 6) reads on the next.
+        self.z.parts = self.mover.posed_parts();
     }
 
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
