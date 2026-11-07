@@ -1264,13 +1264,15 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
 
 /// `Oba_ck_em` and `Sca_ck_em` push the player after `Rot_neck`, and the
 /// head's `+0x5C` is on the pushed body: move the head by what the pushes
-/// moved the body since it was placed.
+/// moved the body since it was placed, a slope's height (`Sca_hit_slope`)
+/// included.
 pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
     let Some(body) = work.neck.body else {
         return;
     };
     if let Some(head) = &mut work.neck.position {
         head[0] += pos[0] - body[0];
+        head[1] += pos[1] - body[1];
         head[2] += pos[2] - body[2];
     }
     work.neck.body = Some(pos);
@@ -7037,16 +7039,18 @@ mod tests {
     }
 
     #[test]
-    fn the_head_follows_the_bodys_push_in_x_and_z() {
+    fn the_head_follows_the_bodys_push_and_a_slopes_height() {
         let mut work = Work::default();
         work.neck.position = Some([100, -1700, 200]);
         work.neck.body = Some([0, 0, 0]);
+        // A push out in x and z, and a slope's `Sca_hit_slope` raising the
+        // body 40: the head is on the moved body.
         follow_pushes(&mut work, [30, -40, -50]);
-        assert_eq!(work.neck.position, Some([130, -1700, 150]));
+        assert_eq!(work.neck.position, Some([130, -1740, 150]));
         assert_eq!(work.neck.body, Some([30, -40, -50]));
         // A second push moves it by what the body moved since the first.
         follow_pushes(&mut work, [35, -40, -50]);
-        assert_eq!(work.neck.position, Some([135, -1700, 150]));
+        assert_eq!(work.neck.position, Some([135, -1740, 150]));
     }
 
     #[test]
