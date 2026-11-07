@@ -379,6 +379,53 @@ pub fn item_stacks(item: u8) -> bool {
     (0x14..=0x1F).contains(&item)
 }
 
+/// HARD's ammunition counts, the table `Sce_Item` (`0x4E96F0`) and
+/// `St_get_item` (`0x4FD88A`) both apply: the handgun rounds' 15 becomes 10
+/// and any other count 20 (`SUB AX,0xF; NEG; SBB; AND 0xA; ADD 0xA`), and the
+/// shells, magnum, grenade, flame, acid rounds and bolts get a fixed count.
+/// The rest are left alone.
+fn hard_item_count(item: u8, count: u8) -> u8 {
+    match item {
+        0x14 if count == 15 => 10,
+        0x14 => 20,
+        0x15 => 5,
+        0x16 => 6,
+        0x18..=0x1A => 4,
+        0x1D => 12,
+        _ => count,
+    }
+}
+
+/// `Sce_Item`'s rewrite of an item area's count (`0x4E96E4`), which it
+/// writes back into the area, before the check sees it: ARRANGE MODE's ink
+/// ribbons come two at a time, then HARD's table ([`hard_item_count`]).
+///
+/// The take ([`st_get_item_count`]) applies HARD's table to the same area
+/// again, and the table isn't idempotent for the handgun rounds: an area of
+/// 15 is 10 at the check and 20 at the take, the count the inventory gets.
+pub fn sce_item_count(item: u8, count: u8, difficulty: crate::zombie2::Difficulty) -> u8 {
+    let count = if difficulty.uncensored && item == 0x1E {
+        2
+    } else {
+        count
+    };
+    if difficulty.hard {
+        hard_item_count(item, count)
+    } else {
+        count
+    }
+}
+
+/// `St_get_item`'s rewrite at the take (sub 3, `0x4FD88A`): HARD's table
+/// alone, on the area [`sce_item_count`] already rewrote.
+pub fn st_get_item_count(item: u8, count: u8, difficulty: crate::zombie2::Difficulty) -> u8 {
+    if difficulty.hard {
+        hard_item_count(item, count)
+    } else {
+        count
+    }
+}
+
 /// The most of `item` one slot holds: byte 0 of the executable's item table
 /// (`0x53DE28`, eight bytes an id). A weapon's is its magazine.
 pub fn item_max(item: u8) -> u8 {
@@ -655,6 +702,14 @@ impl Re2State {
         self.set_flag(STATUS_BANK, FG_STATUS_EASY, u8::from(easy));
         self.hard_mode = hard_mode;
         self.censorship_off = censorship_off;
+    }
+
+    /// The choice's two bytes, as the routines that read them see them.
+    pub fn difficulty(&self) -> crate::zombie2::Difficulty {
+        crate::zombie2::Difficulty {
+            hard: self.hard_mode,
+            uncensored: self.censorship_off,
+        }
     }
 
     /// Whether a script holds the player's input, or a door has just handed
@@ -2989,6 +3044,105 @@ mod tests {
         let mut host = GameHost { game: &mut game };
         host.exec(0, item, &ops);
         assert_eq!(game.room_actions[8].unwrap().handler, 0);
+    }
+
+    #[test]
+    fn the_difficulty_rewrites_the_item_counts() {
+        use crate::zombie2::Difficulty;
+        let hard = Difficulty {
+            hard: true,
+            uncensored: false,
+        };
+        let uncensored = Difficulty {
+            hard: false,
+            uncensored: true,
+        };
+        assert_eq!(sce_item_count(0x14, 15, hard), 10);
+        assert_eq!(sce_item_count(0x14, 30, hard), 20);
+        assert_eq!(sce_item_count(0x14, 10, hard), 20);
+        assert_eq!(sce_item_count(0x15, 7, hard), 5);
+        assert_eq!(sce_item_count(0x16, 8, hard), 6);
+        for item in 0x18..=0x1A {
+            assert_eq!(sce_item_count(item, 9, hard), 4);
+        }
+        assert_eq!(sce_item_count(0x1D, 18, hard), 12);
+        for item in [0x17, 0x1B, 0x1C, 0x1E, 0x26] {
+            assert_eq!(sce_item_count(item, 3, hard), 3);
+        }
+        assert_eq!(sce_item_count(0x1E, 3, uncensored), 2);
+        assert_eq!(sce_item_count(0x14, 15, uncensored), 15);
+        for item in 0x14..=0x1F {
+            assert_eq!(sce_item_count(item, 15, Difficulty::default()), 15);
+            assert_eq!(st_get_item_count(item, 15, Difficulty::default()), 15);
+        }
+        // The take's pass is the table alone: no ribbons, and 10 becomes 20.
+        assert_eq!(st_get_item_count(0x1E, 3, uncensored), 3);
+        assert_eq!(st_get_item_count(0x14, 10, hard), 20);
+        assert_eq!(st_get_item_count(0x15, 5, hard), 5);
+    }
+
+    /// A HARD pick-up of a 15-round area: `Sce_Item` leaves the area at 10
+    /// for the check, and the take rewrites it again, to the 20 the
+    /// inventory gets.
+    #[test]
+    fn a_hard_pick_up_rewrites_its_area_twice() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.start_new_game(false, true, false);
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 15, 3, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        assert_eq!(game.room_actions[8].unwrap().params[1], 10);
+        take_through_the_window(&mut game, false);
+        assert_eq!(game.item_count(0x14), 20);
+        assert_eq!(game.room_actions[8].unwrap().params[1], 20);
+    }
+
+    /// A refused HARD pick-up leaves the area at the check's count, which
+    /// the next check rewrites again: 15, 10, then 20.
+    #[test]
+    fn a_refused_hard_pick_up_keeps_the_checks_count() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.start_new_game(false, true, false);
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 15, 3, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        game.fire_re2_area(game.room_actions[8].unwrap());
+        take_through_the_window(&mut game, true);
+        assert_eq!(game.item_count(0x14), 0);
+        assert_eq!(game.room_actions[8].unwrap().params[1], 10);
+        game.fire_re2_area(game.room_actions[8].unwrap());
+        assert_eq!(game.room_actions[8].unwrap().params[1], 20);
+        take_through_the_window(&mut game, false);
+        assert_eq!(game.item_count(0x14), 20);
+    }
+
+    /// The stack the check chose takes the take's count with a byte add:
+    /// 240 and HARD's 20 wrap to 4, in the same slot.
+    #[test]
+    fn a_hard_pick_up_onto_a_full_stack_wraps() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.start_new_game(false, true, true);
+        game.inventory = vec![crate::game::InventoryItem {
+            id: 0x14,
+            quantity: 240,
+        }];
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 15, 3, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        game.fire_re2_area(game.room_actions[8].unwrap());
+        take_through_the_window(&mut game, false);
+        assert_eq!(
+            game.inventory,
+            [crate::game::InventoryItem {
+                id: 0x14,
+                quantity: 4
+            }]
+        );
     }
 
     /// Run the get-item window to its close, answering its question as the

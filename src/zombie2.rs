@@ -733,6 +733,14 @@ pub struct Spawn {
     pub run_now: bool,
 }
 
+/// The new game's choice as play reads it: the title's HARD (`hard_mode`,
+/// `0x6805B1`) and ARRANGE MODE's `censorship_off` (`0x6805B3`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Difficulty {
+    pub hard: bool,
+    pub uncensored: bool,
+}
+
 /// The rest of the game, as a zombie sees it.
 pub struct World<'a> {
     /// `Ck_em_id`: how many others of this id are in the room.

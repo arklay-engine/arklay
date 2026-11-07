@@ -900,6 +900,10 @@ pub struct Re2ItemGet {
     pub ticks: u8,
     /// The item's picture on its way to the slot.
     pub fly: item_get2::Fly,
+    /// Where the check (`0x4FD5C0`) put the item when the window opened:
+    /// `BYTE_00691f63` and `BYTE_00691f77`. `None` until the check runs, and
+    /// when the inventory is full.
+    pub slot: Option<crate::scd2::host::ItemGetSlot>,
 }
 
 /// The get-item window's steps: its routines (`0x691F61`) and routine 3's
@@ -8557,11 +8561,21 @@ impl GameState {
     /// world from the next tick. An item whose action has bit 0 is picked
     /// up crouching instead: the player's routine goes to 1, 6, 0, and
     /// `pl_mv06` opens the window when the crouch ends
-    /// ([`Self::tick_re2_crouch`]). The difficulty's count changes are not
-    /// ported.
-    fn pick_up_re2_item(&mut self, action: RoomAction) {
+    /// ([`Self::tick_re2_crouch`]). First it rewrites the area's count for
+    /// the difficulty ([`crate::scd2::host::sce_item_count`]), in the room's
+    /// area itself, so the change stays until the room's script sets the
+    /// area again.
+    fn pick_up_re2_item(&mut self, mut action: RoomAction) {
         if self.message.active || self.re2_item_get.is_some() || self.re2_crouch_item.is_some() {
             return;
+        }
+        action.params[1] = crate::scd2::host::sce_item_count(
+            action.params[0],
+            action.params[1],
+            self.re2.difficulty(),
+        );
+        if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
+            entry.params[1] = action.params[1];
         }
         if action.params[4] & 1 != 0 {
             self.re2_crouch_item = Some(action);
@@ -8610,6 +8624,7 @@ impl GameState {
             phase: Re2ItemGetPhase::Open,
             ticks: 0,
             fly: item_get2::Fly::default(),
+            slot: None,
         });
     }
 
@@ -8641,7 +8656,8 @@ impl GameState {
         let (phase, ticks) = match get.phase {
             Re2ItemGetPhase::Open if get.ticks == ITEM_GET_ASK_TICK => {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
-                if self.re2_item_get_slot(get.action).is_some() {
+                get.slot = self.re2_item_get_slot(get.action);
+                if get.slot.is_some() {
                     self.show_re2_global(MESSAGE_TAKE);
                     next(Re2ItemGetPhase::Ask)
                 } else {
@@ -8653,14 +8669,14 @@ impl GameState {
                 if self.message.menu_choice_id() & 1 == 0 {
                     // Sub 1 starts the picture's fly to the slot the check
                     // found (`0x4FD79A`).
-                    get.fly.start(self.re2_item_get_fly_slot(get.action));
+                    get.fly.start(self.re2_item_get_fly_slot(get.slot));
                     next(Re2ItemGetPhase::Fly)
                 } else {
                     next(Re2ItemGetPhase::Refuse)
                 }
             }
             Re2ItemGetPhase::Fly if get.ticks == ITEM_GET_TAKE_TICK => {
-                self.take_re2_item(get.action);
+                self.take_re2_item(get.action, get.slot);
                 next(Re2ItemGetPhase::Shown)
             }
             Re2ItemGetPhase::Fly => {
@@ -8739,8 +8755,8 @@ impl GameState {
 
     /// The slot the picture flies to: the stack it joins, or the first free
     /// slot (`0x502620`).
-    fn re2_item_get_fly_slot(&self, action: RoomAction) -> usize {
-        match self.re2_item_get_slot(action) {
+    fn re2_item_get_fly_slot(&self, slot: Option<crate::scd2::host::ItemGetSlot>) -> usize {
+        match slot {
             Some(crate::scd2::host::ItemGetSlot::Merge(index)) => index,
             _ => self
                 .inventory
@@ -8756,15 +8772,30 @@ impl GameState {
         crate::scd2::host::item_get_slot(&self.inventory, self.inventory_capacity(), item, amount)
     }
 
-    /// Routine 3's sub 3 (`0x4FD875`): the item joins its stack or the first
-    /// free slot (`0x502820`), its flag is set and its area and object go.
-    fn take_re2_item(&mut self, action: RoomAction) {
+    /// Routine 3's sub 3 (`0x4FD875`): the item joins the stack the check
+    /// chose, or the first free slot (`0x502820`), its flag is set and its
+    /// area and object go. HARD's table rewrites the area's count once more
+    /// first ([`crate::scd2::host::st_get_item_count`]), and the stack's add is
+    /// a byte add, which wraps.
+    fn take_re2_item(
+        &mut self,
+        mut action: RoomAction,
+        slot: Option<crate::scd2::host::ItemGetSlot>,
+    ) {
         use crate::scd2::host::{ITEM_BANK, ItemGetSlot, MESSAGE_TAKEN};
+        action.params[1] = crate::scd2::host::st_get_item_count(
+            action.params[0],
+            action.params[1],
+            self.re2.difficulty(),
+        );
+        if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
+            entry.params[1] = action.params[1];
+        }
         let [item, amount, flag, ..] = action.params;
-        match self.re2_item_get_slot(action) {
+        match slot {
             Some(ItemGetSlot::Merge(index)) => {
                 let stack = &mut self.inventory[index];
-                stack.quantity = stack.quantity.saturating_add(amount);
+                stack.quantity = stack.quantity.wrapping_add(amount);
             }
             Some(ItemGetSlot::New) | None => self.inventory.push(InventoryItem {
                 id: item,

@@ -106,6 +106,18 @@ def setup_lua(setup: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def choice_args(run: dict) -> list[str]:
+    """The new game's choice a run asks for (`difficulty = "hard"`, `arrange = true`), for both engines: the
+    original's title route and arklay's start take the same options. It is not in the setup script, which runs after
+    the room's first load."""
+    choice = []
+    if run.get("difficulty", "normal") != "normal":
+        choice += ["--difficulty", run["difficulty"]]
+    if run.get("arrange"):
+        choice.append("--arrange")
+    return choice
+
+
 def shift_input(source: Path, dest: Path, shift: int, drop_early: bool = False) -> None:
     """The input with every tick moved `shift` ticks earlier, for a run that starts at the original's tick `shift`.
 
@@ -295,7 +307,7 @@ def run_one(run: dict, ctx: dict) -> dict:
             str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,
             "--character", str(run.get("character", 0)),
             "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
-            "--setup-script", str(setup), "--input", str(input_path),
+            "--setup-script", str(setup), "--input", str(input_path), *choice_args(run),
         ]
         if run.get("sound", True):
             command.append("--sound")
@@ -443,7 +455,7 @@ def record_run(run: dict, args, refs: Path) -> int:
         command.append("--boot")
     if run.get("frames"):
         command += ["--shot-dir", str(dest / "frames"), "--shot-every", "1"]
-    command += shlex.split(run["record"])
+    command += choice_args(run) + shlex.split(run["record"])
     if not args.dry_run:
         dest.mkdir(parents=True, exist_ok=True)
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)

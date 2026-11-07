@@ -2410,6 +2410,7 @@ impl GameSession {
         game.re2.scenario_b = scenario_b;
         seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
+        seed_new_game_choice(&mut game, options);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
         if scenario_b {
@@ -2464,6 +2465,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
+        seed_new_game_choice(&mut game, options);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
         player_state.angle = NEW_GAME_ANGLE;
@@ -2590,6 +2592,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
+        seed_new_game_choice(&mut game, options);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
@@ -8550,6 +8553,18 @@ fn pack_start_room(pack: &Pack, character: u8) -> Option<RoomId> {
     RoomId::from_room_and_player(room, character & 1).ok()
 }
 
+/// RE 2's new-game choice in the run options (`--difficulty`, `--arrange`,
+/// or the title's), as `FUN_004b73c0` and `Title_game_init` leave it: before
+/// the room's boot, so that the room's scripts and the enemies' inits read
+/// it. No choice leaves the game as it starts.
+fn seed_new_game_choice(game: &mut game::GameState, options: player::Options) {
+    let choice = options.new_game;
+    if choice != crate::ui::NewGameChoice::default() {
+        game.re2
+            .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
+    }
+}
+
 /// Apply the character-specific new-game seed over the fresh state:
 /// `SetInitialItems`, the save counter and the Jill first-run flags. The
 /// room-BGM bytes, item box and room-item bank come from
@@ -9473,16 +9488,13 @@ impl App {
     /// Windows main thread's 1 MiB stack. Keeping the moves in this small
     /// helper bounds the frame.
     fn start_new_game(&mut self, character: u8, choice: crate::ui::NewGameChoice) -> Result<()> {
-        let mut session =
-            GameSession::new_with(&self.pack, character, &self.save_dir, self.player_options)?;
-        // RE 2's title passes its difficulty and ARRANGE MODE on; no choice
-        // leaves the game as it starts.
-        if choice != crate::ui::NewGameChoice::default() {
-            session
-                .game
-                .re2
-                .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
-        }
+        // RE 2's title passes its difficulty and ARRANGE MODE on, and the
+        // session starts with them, before the first room's first tick.
+        let options = player::Options {
+            new_game: choice,
+            ..self.player_options
+        };
+        let session = GameSession::new_with(&self.pack, character, &self.save_dir, options)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
         self.restart_point = Some(RestartPoint::NewGame { character, choice });
         Ok(())
@@ -19821,6 +19833,52 @@ mod tests {
         let simulated = simulate_new_game(&pack, 0, 0, player::Input::default()).unwrap();
         assert_eq!(simulated.id, session.game.id);
         assert_eq!(simulated.player.pos, session.player.pos);
+    }
+
+    /// `--difficulty` and `--arrange` reach the game before the room's boot,
+    /// whichever way the session starts it, as the original sets the choice
+    /// before room 100 loads.
+    #[test]
+    fn a_new_game_starts_with_the_runs_choice() {
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        let options = player::Options {
+            new_game: crate::ui::NewGameChoice {
+                easy: false,
+                hard_mode: true,
+                censorship_off: true,
+            },
+            ..player::Options::default()
+        };
+        let id = RoomId::parse("1000").unwrap();
+        let sessions = [
+            GameSession::new_with(&pack, 0, &dir.0, options).unwrap(),
+            GameSession::new_in_room_with(&pack, id, 0, &dir.0, options).unwrap(),
+            GameSession::from_room_with(&pack, id, &dir.0, options).unwrap(),
+        ];
+        for session in sessions {
+            assert!(session.game.re2.hard_mode && session.game.re2.censorship_off);
+            assert_eq!(
+                session.game.re2.difficulty(),
+                crate::zombie2::Difficulty {
+                    hard: true,
+                    uncensored: true
+                }
+            );
+            // ARRANGE MODE's `fg_system` bit, which room scripts read.
+            assert!(session.game.re2.flag(0, 25), "ARRANGE MODE's `ck 0:25`");
+        }
+        let plain = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(plain.game.re2.difficulty(), Default::default());
     }
 
     #[test]

@@ -200,6 +200,12 @@ pub struct Options {
     /// player is not poisoned. Command line only and off by default;
     /// `arklay.toml` has no key for it.
     pub authentic: bool,
+    /// RE 2's new-game choice (the difficulty and ARRANGE MODE) for a game
+    /// the session starts itself: `--difficulty` and `--arrange`, or the
+    /// title's. The session applies it before the first room's first tick,
+    /// as the original sets the choice before room 100 loads; a continue
+    /// keeps the save's.
+    pub new_game: crate::ui::NewGameChoice,
 }
 
 /// Keyboard state for one tick.
