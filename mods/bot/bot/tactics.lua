@@ -2258,6 +2258,25 @@ local function kite_step(bot, s, player)
     return true
 end
 
+-- A <fight> enemy down with its death flag still clear (s.await): the bot
+-- stands until the flag is set, or DEATH_WAIT has passed. 30C's Black Tiger
+-- set it about 220 ticks after the shot that killed it.
+local DEATH_WAIT = 15 * C.SECOND
+local function await_death(bot, s)
+    local w = s.await
+    if not w then
+        return false
+    end
+    if bot:flag(w.bank, w.bit) or s.now >= w.till then
+        bot:log(string.format("death of 0x%02X: %s", w.enemy,
+            bot:flag(w.bank, w.bit) and "its flag is set" or "no flag; waited enough"))
+        s.await = nil
+        return false
+    end
+    bot:set_input({})
+    return true
+end
+
 function BotTactics.step(bot, scene, player)
     local s = state()
     s.now = bot:tick()
@@ -2310,15 +2329,31 @@ function BotTactics.step(bot, scene, player)
         s.focus = nil
         s.trap_room = nil
         s.kite = nil
+        s.await = nil
     end
     if bot:tick() < (s.calm_until or 0) and not s.active then
-        return false
+        return await_death(bot, s)
     end
     local k = bot:knowledge()
     local enemies = bot:enemies()
     local target = s.active and enemy_by_slot(enemies, s.target) or nil
     if s.active and not target then
+        local id = s.target_id
         stop(bot, s, string.format("target down health=%s", tostring(s.last_health)))
+        -- A <fight> enemy of this room is won once its death flag is set,
+        -- at the end of its death throes: the bot waits for it. Seed 1's
+        -- cave backtrack shot 30C's Black Tiger down in passing eight
+        -- times and left within 200 ticks each time; the flag stayed
+        -- clear and the tiger was back on the next entry.
+        for _, fight in ipairs(bot:fight_facts()) do
+            if fight.room == room and fight.enemy == id and fight.bank
+                and not bot:flag(fight.bank, fight.bit) then
+                s.await = { bank = fight.bank, bit = fight.bit, enemy = id,
+                    till = s.now + DEATH_WAIT }
+                bot:log(string.format("waiting for the death of 0x%02X (flag %d:%d)",
+                    id, fight.bank, fight.bit))
+            end
+        end
         return false
     end
     -- The target's preferred weapon lies here as a pickup: the planner
@@ -2332,12 +2367,13 @@ function BotTactics.step(bot, scene, player)
         local gun
         target, gun = choose(bot, s, k, enemies, player)
         if not target then
-            return false
+            return await_death(bot, s)
         end
         reset(s)
         s.active = true
         s.gun = gun
         s.target = target.slot
+        s.target_id = target.id
         s.must = target.must
         s.last_health = target.health
         s.avoid_until = nil

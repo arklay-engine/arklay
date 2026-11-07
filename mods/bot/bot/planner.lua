@@ -2226,8 +2226,17 @@ local function choose(bot)
             goal = nil
         end
         if goal and goal.kind == "fight" and goal.room == room then
-            -- Here: the room's own steps take the fight; its marks lifted
-            -- with the inventory change that made the bot ready.
+            -- Here: the room's own steps take the fight. Its readiness
+            -- marks are lifted, as fight_due found the bot ready: a third
+            -- `not ready` mark held the step for good, and seed 1's cave
+            -- backtrack walked to 30C and away again eight times, killing
+            -- the Black Tiger in passing, until the flame rounds ran out.
+            for key, m in pairs(p.marks) do
+                if m.kind == "interact" and m.room == room
+                    and m.reason:find("not ready for the fight", 1, true) then
+                    p.marks[key] = nil
+                end
+            end
             p.target = nil
             goal = nil
         end
