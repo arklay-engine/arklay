@@ -622,6 +622,42 @@ def zombie_parts_trace(game: Game) -> str:
     return "zp=" + (";".join(rows) or "-")
 
 
+SPL_POS_CK_TIMER = 0x0053CDEF  # `Spl_pos_ck_timer`, `Sherry_move`'s count to its enemy check
+
+
+def partner_trace(game: Game) -> str:
+    """`splayer_work`'s own words for `Spl_Auto`: `Type`, the follow point, its state, distance and wall turn, the wall and touch counts, the timers, `Dest`, the life, `Sca_info & 1`, `Root_ck`'s count, `Spl_pos_ck_timer`, `Neck_flg` and `At_em_flg`."""
+    work = game.u32(SPLAYER)
+    if work == 0 or game.u8(work + ENTITY_ID) < 0x40:
+        return "spl=-"
+    (timer2,) = struct.unpack("b", bytes((game.u8(work + 0x16A),)))
+    values = [
+        f"{game.u16(work + ENTITY_TYPE):x}",
+        game.i16(work + 0x218),
+        game.i16(work + 0x21A),
+        f"{game.u16(work + 0x21C):x}",
+        game.u16(work + 0x21E),
+        game.u16(work + 0x220),
+        game.i16(work + 0x224),
+        game.u8(work + 0x223),
+        game.u8(work + 0x22A),
+        game.i16(work + 0x158),
+        game.i16(work + 0x15A),
+        timer2,
+        game.u8(work + 0x16B),
+        game.i16(work + 0x1C4),
+        game.i16(work + 0x1C6),
+        game.i16(work + ENTITY_LIFE),
+        game.i16(work + 0x162),
+        game.u8(work + 0x110) & 1,
+        game.u8(work + 0x150),
+        game.u8(SPL_POS_CK_TIMER),
+        f"{game.u8(work + 0x1C0):x}",
+        f"{game.u16(work + 0x0E):x}",
+    ]
+    return "spl=" + ",".join(str(value) for value in values)
+
+
 def inventory_trace(game: Game) -> str:
     """`Item_work`'s eleven slots, `id:count` (the tenth is the lighter's or the lockpick's), then the player's slot count."""
     work = game.read(ITEM_WORK, 11 * 4)
@@ -715,6 +751,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
                 f"{routine[3]},{motion[0]},{motion[1]},{motion[2]},{game.u8(work + ENTITY_D_LIFE_U)},"
                 f"{speed[0]},{speed[1]},{speed[2]}"
             )
+    fields.append(partner_trace(game))
     fields.append(zombie_trace(game))
     fields.append(zombie_parts_trace(game))
     fields.append(esp_trace(game))

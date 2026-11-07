@@ -72,6 +72,7 @@ pub mod music;
 pub mod objects;
 pub mod pacer;
 pub mod pack;
+pub mod partner2;
 pub mod paths;
 pub mod player;
 pub mod player2;

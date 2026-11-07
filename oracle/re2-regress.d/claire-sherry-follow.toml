@@ -1,0 +1,30 @@
+# Sherry as Claire's partner in room 21B, from a warp with 21B's second state (3:64), her scene done (3:8) and
+# Irons's radio call heard (3:12): `main_25` places her at (-16641, -23700) and raises fg_status's partner bit.
+
+[[run]]
+name = "sherry_21b_follow"
+room = "21B"
+player = 1
+character = 1
+sound = false
+ticks = 2400
+input = "sherry_21b_follow.txt"
+input_shift = 344
+setup = { pos = [-18460, 0, -22987], angle = 2048, health = 200, rnd = 6114, camera = 0, flags = [[3, 64], [3, 8], [3, 12]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl"
+expect = "match"
+record = "--start claire --warp 21B:-18460:0:-22987:2048:0 --flag 3:64 --flag 3:8 --flag 3:12 --life 200"
+
+[[run]]
+name = "sherry_21b_lost"
+room = "21B"
+player = 1
+character = 1
+sound = false
+ticks = 1200
+input = "sherry_21b_lost.txt"
+input_shift = 344
+setup = { pos = [-26159, 0, -18908], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[3, 64], [3, 8], [3, 12]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl"
+expect = "match"
+record = "--start claire --warp 21B:-26159:0:-18908:1024:0 --flag 3:64 --flag 3:8 --flag 3:12 --life 200"

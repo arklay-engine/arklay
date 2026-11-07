@@ -176,6 +176,19 @@ pub struct Re2State {
     /// `SsInit2`: the sound comes back, and the music that `SsClose` stopped
     /// starts again from its start.
     pub sound_init: bool,
+    /// `Spl_pos_ck_timer` (`0x53cdef`): `Sherry_move`'s count to its enemy
+    /// check. A static of the original that nothing resets, not a room, a new
+    /// game nor a load: only a fresh process starts it at 0x0F.
+    pub spl_pos_ck_timer: u8,
+    /// The nearest-enemy cache's distances (`0x692fc8`): `Spl_enemy_ck`
+    /// rewrites them only in a room with enemies, so a room without any keeps
+    /// the last room's, or a fresh process's 0. Another static.
+    pub nearest_dist: [u16; 3],
+    /// `saved_splayer_health` (`0x98ee7c`): the partner's life, 200 at a new
+    /// game.
+    pub partner_life: i16,
+    /// `BYTE_0098ee7b`'s bit 0: the partner is poisoned.
+    pub partner_poisoned: bool,
 }
 
 /// What a script did to a fade.
@@ -276,6 +289,8 @@ pub struct Character {
     pub work: crate::player2::Work,
     pub body: crate::player::PlayerState,
     /// `Type`, whose `0x400` gives it to `Spl_Auto` rather than the scripts.
+    /// For the partner it is the live `Type`, whose low nibble `Sherry_move`
+    /// writes; `work.kind` holds only what stops it being moved.
     pub kind: u16,
     /// `sce_em_set`'s last two words: `Em_init_move`'s second `_Spl`.
     pub start: (u16, u16),
@@ -292,6 +307,9 @@ pub struct Character {
     pub held_bank: Option<std::sync::Arc<crate::game::PlayerDamageBank>>,
     /// What it needs if `Em_Zombie` runs it.
     pub zombie: Option<crate::zombie2::Zombie>,
+    /// `splayer_work`'s own words, for `Spl_Root_ck_sys` and `Spl_Auto`:
+    /// placed with any character in that slot.
+    pub partner: Option<Box<crate::partner2::Partner>>,
     /// The last `kage_set`, in place of `Em_init`'s shadow.
     pub kage: Option<Kage>,
 }
@@ -394,6 +412,8 @@ pub const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
 pub const STATUS_PLAYER: u8 = 0;
+/// `fg_status`'s `0x10000000`: the partner is with the player.
+const PARTNER_BIT: u8 = 3;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
@@ -654,6 +674,10 @@ impl Default for Re2State {
             movie_set: None,
             sound_close: None,
             sound_init: false,
+            spl_pos_ck_timer: crate::partner2::SPL_POS_CK_START,
+            nearest_dist: [0; 3],
+            partner_life: 200,
+            partner_poisoned: false,
         }
     }
 }
@@ -925,6 +949,52 @@ impl Re2State {
         ])
     }
 
+    /// The `spl` field: `splayer_work`'s own words for `Spl_Auto`, `-` with no
+    /// character there. `Type`, the follow point, its state, distance and
+    /// wall turn, the wall and touch counts, the wait, `Timer0` to `Timer3`,
+    /// `Dest`, the life, `Sca_info`'s 1, `Root_ck`'s turn,
+    /// `Spl_pos_ck_timer`, `Neck_flg` and `At_em_flg`, which only the
+    /// player's `Oba_ck_em2` writes and so is 0 here.
+    pub fn partner_trace(&self) -> String {
+        let Some(character) = self
+            .characters
+            .0
+            .get(SPLAYER_SLOT)
+            .and_then(|character| character.as_deref())
+            .filter(|character| character.zombie.is_none() && character.id >= 0x40)
+        else {
+            return "-".to_string();
+        };
+        let Some(p) = character.partner.as_deref() else {
+            return "-".to_string();
+        };
+        let [dest_x, dest_z] = character.work.dest;
+        format!(
+            "{:x},{},{},{:x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:x},0",
+            character.kind,
+            p.soba[0],
+            p.soba[1],
+            p.state,
+            p.dist,
+            p.turn,
+            p.stuck,
+            p.touch,
+            p.wait,
+            p.timer0,
+            p.timer1,
+            p.timer2,
+            p.timer3,
+            dest_x,
+            dest_z,
+            p.life,
+            p.max_life,
+            u8::from(p.sca_hit),
+            p.root_cnt,
+            self.spl_pos_ck_timer,
+            character.work.neck.flags,
+        )
+    }
+
     /// `fg_stop`'s second bit keeps `splayer_work` from running, and its third
     /// the enemy slots. A door the scripts opened this tick has raised them all
     /// before the enemies' pass ([`Self::script_door`]).
@@ -1131,8 +1201,7 @@ impl Re2State {
     /// `player_work`'s table of necks, by `plc_neck`'s number.
     /// Who `Pl_neck` can look at: the second player, then the enemy slots.
     pub fn neck_targets(&self) -> Vec<crate::player2::NeckTarget> {
-        // `fg_status`'s `0x10000000`.
-        if self.enemies == 0 && !self.flag(1, 3) {
+        if self.enemies == 0 && !self.partner_bit() {
             return Vec::new();
         }
         let slots = std::iter::once(SPLAYER_SLOT).chain(0..SPLAYER_SLOT);
@@ -1152,7 +1221,12 @@ impl Re2State {
                     distance: character.distance,
                     // A script character's `Life` is -1: Kendo's is, in room 101,
                     // so the back walk's look (`FUN_004daa60`) passes him by.
-                    life: character.zombie.as_ref().map_or(-1, |zombie| zombie.life),
+                    // The partner's is hers (`Spl_in45`).
+                    life: match (&character.zombie, &character.partner) {
+                        (Some(zombie), _) => zombie.life,
+                        (None, Some(partner)) => partner.life,
+                        (None, None) => -1,
+                    },
                     angle: character.body.angle,
                 })
             })
@@ -1199,6 +1273,15 @@ impl Re2State {
                 bits
             }
         })
+    }
+
+    /// `fg_status`'s `0x10000000`: the partner is with the player.
+    pub fn partner_bit(&self) -> bool {
+        self.flag(STATUS_BANK, PARTNER_BIT)
+    }
+
+    pub fn set_partner_bit(&mut self, on: bool) {
+        self.set_flag(STATUS_BANK, PARTNER_BIT, u8::from(on));
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
@@ -1711,6 +1794,8 @@ impl GameHost<'_> {
             with_room: self.game.re2.room_loading,
             held_bank: None,
             kage: None,
+            partner: (slot == SPLAYER_SLOT && !zombie)
+                .then(|| Box::new(crate::partner2::Partner::placed())),
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;

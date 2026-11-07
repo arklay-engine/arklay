@@ -25,6 +25,9 @@ pub fn tick(
     }
     let scenario = game.id.player_flag & 1;
     for slot in run_order() {
+        if slot == SPLAYER_SLOT {
+            partner_root_ck_sys(game, room, false);
+        }
         // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
         let stopped = game.re2.character_stopped(slot);
         let zombie = game
@@ -72,9 +75,13 @@ pub fn tick(
         if let Some(model) = model.filter(|_| moves(&character)) {
             let held = character.held_bank.clone();
             let tick = tick_of(room, game, &character, slot, &model, held.as_deref());
-            let arrived = spl(&mut character, &tick);
+            let old = character.body.pos;
+            let arrived = spl(game, &mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
+            }
+            if character.partner.is_some() && game.re2.partner_bit() {
+                partner_oba_ck_em(game, &mut character, old);
             }
             sce_blood(game, &mut character);
             // `Snd_se_walk` from the character's own walk. Their `Floor` isn't
@@ -112,16 +119,17 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)
         .flat_map(|(slot, other)| {
+            let height = player2::character_height(other.id);
             let atd = other.zombie.as_ref().map_or_else(
                 || crate::zombie2::Atd {
                     ofs_x: 0,
-                    ofs_y: -0x5FA,
+                    ofs_y: -(height as i16),
                     at_w: other.body.radius as u16,
-                    at_h: 0x5FA,
+                    at_h: height,
                     w: other.body.radius as u16,
                     at: [
                         other.body.pos[0],
-                        other.body.pos[1] - 0x5FA,
+                        other.body.pos[1] - i32::from(height),
                         other.body.pos[2],
                     ],
                 },
@@ -1075,7 +1083,7 @@ pub fn init(
                 continue;
             }
             let tick = tick_of(room, game, &character, slot, &model, None);
-            let arrived = em_init_move(room, &mut character, &tick);
+            let arrived = em_init_move(game, room, &mut character, &tick);
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
@@ -1227,6 +1235,11 @@ fn run_load_stop(
     let was_stopped = game.re2.enemies_stopped();
     game.re2.set_enemies_stopped(true);
     for slot in run_order() {
+        if slot == SPLAYER_SLOT {
+            // A position a door or a script gave is still pending in the
+            // load's last pass.
+            partner_root_ck_sys(game, room, true);
+        }
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
         };
@@ -1259,22 +1272,65 @@ fn run_order() -> impl Iterator<Item = usize> {
     std::iter::once(SPLAYER_SLOT).chain(0..SPLAYER_SLOT)
 }
 
-/// `_Spl`'s routine: `Spl_Init` for one no script has given a routine, and
-/// `Spl_Scenario`. `Spl_Auto` isn't ported: one of its own stands still.
-fn spl(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
+/// `_Spl`'s routine: `Spl_Init` for one no script has given a routine,
+/// `Spl_Auto` for Sherry as the partner (`partner2`), and `Spl_Scenario`.
+/// Anyone else's `Spl_Auto` isn't ported: they stand still.
+fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
+    let sherry = matches!(character.id, 0x45 | 0x4F);
     let arrived = if player2::uninitialised(&character.work) {
+        // `Spl_Init`: `Type`'s `0x400` makes the partner, and the scene's
+        // Ada or Sherry stops being one.
+        let partner = character.kind & SPL_AUTO != 0;
+        if partner {
+            game.re2.set_partner_bit(true);
+        } else if matches!(character.id, 0x41 | 0x43 | 0x45 | 0x4F) {
+            game.re2.set_partner_bit(false);
+        }
+        let partner = partner && sherry && character.partner.is_some();
         player2::spl_init(
             &mut character.work,
             &mut character.body,
             tick,
             character.kind,
+            partner,
         );
         if character.id == MARVIN {
             spl_in4a(character);
         }
+        if sherry && let Some(words) = character.partner.as_deref_mut() {
+            words.spl_in45(game.re2.partner_bit(), game.re2.partner_life);
+        }
         None
     } else if player2::in_scenario(&character.work) {
         player2::player_move(&mut character.work, &mut character.body, tick)
+    } else if player2::in_auto(&character.work)
+        && sherry
+        && let Some(words) = character.partner.as_deref_mut()
+    {
+        let (player, player_angle) = game
+            .entities
+            .first()
+            .map_or(([0; 3], 0), |p| (p.pos, p.angle));
+        let mut timer = game.re2.spl_pos_ck_timer;
+        let mut world = crate::partner2::PartnerWorld {
+            player,
+            player_angle,
+            player_routine: game.re2.player.routine[1],
+            distance: character.distance,
+            enemy: None,
+            enemy_dist: game.re2.nearest_dist[0],
+            rnd: &mut game.re2.rnd,
+            pos_ck_timer: &mut timer,
+            water: 0,
+            ground: character.body.pos[1],
+            poisoned: game.re2.partner_poisoned,
+        };
+        let kind = &mut character.kind;
+        player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
+            crate::partner2::spl_auto(mover, words, kind, &mut world);
+        });
+        game.re2.spl_pos_ck_timer = timer;
+        None
     } else {
         None
     };
@@ -1283,6 +1339,106 @@ fn spl(character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
         spl_mv4a(character);
     }
     arrived
+}
+
+/// `Type`'s bit that gives a character to `Spl_Auto`.
+const SPL_AUTO: u16 = 0x400;
+
+/// `_Spl`'s `Spl_Root_ck_sys` for `splayer_work`, which runs before the stop
+/// test: on a stopped tick it is all `_Spl` does.
+fn partner_root_ck_sys(game: &mut GameState, room: &RoomState, loading: bool) {
+    let Some(mut character) = game
+        .re2
+        .characters
+        .0
+        .get_mut(SPLAYER_SLOT)
+        .and_then(Option::take)
+    else {
+        return;
+    };
+    if moves(&character) && character.zombie.is_none() {
+        root_ck_sys(game, room, &mut character, loading);
+    }
+    game.re2.characters.0[SPLAYER_SLOT] = Some(character);
+}
+
+/// `loading`: the room's load, where the player is where the door or a
+/// script's `pos_set` put them, which the port applies only at the next tick.
+fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, loading: bool) {
+    let Some(partner) = character.partner.as_deref_mut() else {
+        return;
+    };
+    let sca = room
+        .sca
+        .as_ref()
+        .map_or(&[][..], |sca| sca.records.as_slice());
+    let (player, player_angle) = game
+        .entities
+        .first()
+        .map_or(([0; 3], 0), |p| (p.pos, p.angle));
+    let pending = &game.re2.pending_player;
+    let (player, player_angle) = if loading {
+        (
+            pending.pos.unwrap_or(player),
+            pending.angle.unwrap_or(player_angle),
+        )
+    } else {
+        (player, player_angle)
+    };
+    let world = crate::partner2::RootSys {
+        guides: &room.guides,
+        sca,
+        player,
+        player_angle,
+        player_neck: game.re2.player.neck.position,
+        partner: game.re2.partner_bit(),
+    };
+    crate::partner2::root_ck_sys(
+        partner,
+        &mut character.work,
+        character.body.pos,
+        character.id,
+        character.kind,
+        &world,
+    );
+}
+
+/// The partner's `Oba_ck_em`: pushed out of the player's box as the player's
+/// last `Oba_ck_em2` left it, then out of the bodies in the enemy slots. It
+/// leaves `At_em_flg` alone.
+fn partner_oba_ck_em(game: &GameState, character: &mut Character, old: [i32; 3]) {
+    let height = player2::character_height(character.id);
+    let width = character.body.radius as u16;
+    let pos = character.body.pos;
+    let mut atd = crate::zombie2::Atd {
+        ofs_x: 0,
+        ofs_y: -(height as i16),
+        at_w: width,
+        at_h: height,
+        w: width,
+        at: [pos[0], pos[1] - i32::from(height), pos[2]],
+    };
+    let player = game.entities.first().map_or([0; 3], |p| p.pos);
+    let mut bodies = vec![crate::zombie2::Oba {
+        slot: crate::zombie2::PLAYER_BODY,
+        be_flg: game.re2.player.be_flg,
+        atd: game
+            .re2
+            .player
+            .atd
+            .unwrap_or_else(|| player_atd(game, player)),
+        pos: player,
+    }];
+    bodies.extend(slot_bodies(game));
+    for other in &bodies {
+        crate::zombie2::oba_hit(
+            other,
+            character.be_flg,
+            &mut atd,
+            &mut character.body.pos,
+            Some(old),
+        );
+    }
 }
 
 /// `_Spl`'s `Sca_ck_em`, after its routine.
@@ -1297,21 +1453,32 @@ fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
     let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
     body.pos = resolved.pos;
     body.collision_mirror = [body.pos[0], body.pos[2]];
+    if let Some(partner) = character.partner.as_deref_mut() {
+        partner.sca_hit = resolved.hit;
+    }
 }
 
 /// `Em_init_move`'s `_Spl` calls for a character the room places, each with
 /// its `Sca_ck_em`: room 202's Marvin, placed in the wall at the desks'
 /// corner, is pushed out while the room loads.
-fn em_init_move(room: &RoomState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
+fn em_init_move(
+    game: &mut GameState,
+    room: &RoomState,
+    character: &mut Character,
+    tick: &Tick<'_>,
+) -> Option<u8> {
     character.with_room = false;
-    let arrived = spl(character, tick);
+    // `_Spl`'s `Spl_Root_ck_sys` runs before `Spl_Init`, on what the work's
+    // memory held: the follow point's kind is taken as 0.
+    root_ck_sys(game, room, character, true);
+    let arrived = spl(game, character, tick);
     spl_sca_ck_em(room, character);
     let (start, flags) = character.start;
     if start == 0 {
         return arrived;
     }
     player2::spl_start(&mut character.work, start, flags);
-    let arrived = spl(character, tick).or(arrived);
+    let arrived = spl(game, character, tick).or(arrived);
     spl_sca_ck_em(room, character);
     arrived
 }
@@ -1389,6 +1556,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         assert!(moves(&character));
@@ -1418,6 +1586,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         let mut game = GameState::default();
@@ -1482,6 +1651,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         for (player_flag, x) in [(0, -901), (1, -850)] {
@@ -1495,6 +1665,125 @@ mod tests {
             assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
             assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
         }
+    }
+
+    fn sherry(kind: u16) -> Character {
+        let mut body = crate::player::spawn(RoomId::parse("21B1").unwrap(), &RoomState::default());
+        body.pos = [0, 0, 0];
+        body.radius = 250;
+        let mut work = player2::Work::default();
+        work.routine = [0; 4];
+        Character {
+            id: 0x45,
+            model: 0x45,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 1,
+            work,
+            body,
+            kind,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: Some(Box::new(crate::partner2::Partner::placed())),
+            zombie: None,
+        }
+    }
+
+    /// `_Spl` with no model: banks without clips.
+    fn spl_tick(room: &RoomState, skeleton: &crate::model::Skeleton) -> Tick<'static> {
+        let empty: (&[Clip], &[Keyframe]) = (&[], &[]);
+        // The test's room and skeleton live as long as the test.
+        let room: &'static RoomState = Box::leak(Box::new(room.clone()));
+        let skeleton: &'static crate::model::Skeleton = Box::leak(Box::new(skeleton.clone()));
+        Tick {
+            room,
+            skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: empty,
+                weapon: empty,
+                room: empty,
+                held: empty,
+            },
+            input: Default::default(),
+            options: Default::default(),
+            id: 0x45,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: Default::default(),
+            necks: [None; player2::NECK_WORKS],
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+        }
+    }
+
+    #[test]
+    fn a_partner_sherry_raises_the_partner_bit_and_keeps_routine_1() {
+        let mut game = GameState::default();
+        game.re2.partner_life = 150;
+        let mut character = sherry(0x400);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.work.routine[0], 1);
+        assert_eq!(character.kind, 0x400);
+        let partner = character.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (150, 200));
+        assert_eq!(character.work.neck.flags, 0);
+        assert_eq!(
+            character.work.neck.target,
+            Some(0),
+            "she looks at the player"
+        );
+    }
+
+    #[test]
+    fn a_scene_sherry_clears_the_partner_bit() {
+        let mut game = GameState::default();
+        game.re2.set_partner_bit(true);
+        let mut character = sherry(0);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(!game.re2.partner_bit());
+        assert_eq!(character.work.routine[..2], [4, 6]);
+        let partner = character.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (-1, -1));
+        assert_eq!(character.work.neck.flags, 0x92);
+    }
+
+    #[test]
+    fn the_partners_box_is_810_high_and_250_wide() {
+        assert_eq!(player2::character_height(0x45), 810);
+        assert_eq!(player2::character_height(0x4F), 810);
+        assert_eq!(player2::character_height(0x48), 0x5FA);
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![Some(Box::new(sherry(0x400)))];
+        let bodies = slot_bodies(&game);
+        let atd = bodies[0].atd;
+        assert_eq!((atd.ofs_y, atd.at_h, atd.at_w), (-810, 810, 250));
+    }
+
+    #[test]
+    fn sherry_is_pushed_out_of_claire() {
+        let mut game = GameState::default();
+        game.id = RoomId::parse("21B1").unwrap();
+        let mut player = crate::player::spawn(game.id, &RoomState::default());
+        player.pos = [-400, 0, 0];
+        game.entities[0].pos = player.pos;
+        // The box the player's last `Oba_ck_em2` left.
+        let at = player.pos;
+        oba_ck_em2(&mut game, &mut player, at);
+        let mut character = sherry(0x400);
+        partner_oba_ck_em(&game, &mut character, [0; 3]);
+        assert!(character.body.pos[0] > 0, "{:?}", character.body.pos);
+        assert_eq!(character.body.pos[2], 0);
     }
 
     #[test]
@@ -1515,6 +1804,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         let meshes = joint_meshes(&character, 15, 24).unwrap();
@@ -1551,6 +1841,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         spl_in4a(&mut character);

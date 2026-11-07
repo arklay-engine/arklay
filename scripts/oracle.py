@@ -67,6 +67,7 @@ class Tick:
     motion: str | None = None
     character: str | None = None
     splayer: str | None = None
+    partner: str | None = None
     music: str | None = None
     zombies: str | None = None
     # RE2's `zp` field: the enemies' hidden parts and `Poly_rgb`.
@@ -101,7 +102,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg"}
+OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "spl"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg")
 
@@ -198,6 +199,7 @@ def parse_trace(path: str) -> list[Tick]:
                     motion=fields.get("mot"),
                     character=fields.get("em"),
                     splayer=fields.get("es"),
+                    partner=fields.get("spl"),
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
                     zombie_parts=fields.get("zp"),
@@ -235,6 +237,11 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("em", ",".join(tick.character.split(",")[:13])))
     if tick.splayer is not None:
         items.append(("es", ",".join(tick.splayer.split(",")[:13])))
+    if tick.partner is not None:
+        # Without `Timer2` and `Timer3`, which `Sce_em_set` leaves as the
+        # work's memory held them until a state writes them.
+        values = tick.partner.split(",")
+        items.append(("spl", ",".join(values[:11] + values[13:])))
     if tick.music is not None:
         items.append(("bgm", tick.music))
     if tick.neck_position is not None:
