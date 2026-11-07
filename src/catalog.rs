@@ -111,14 +111,18 @@ impl CatalogMod {
     }
 }
 
+/// The catalog location that turns the hosted catalog off.
+pub const OFF: &str = "none";
+
 /// Where the catalog is: the environment, else `configured`, else
-/// [`DEFAULT_URL`].
+/// [`DEFAULT_URL`]; `None` when that is [`OFF`].
 pub fn location(configured: Option<&str>) -> Option<String> {
     std::env::var(URL_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
         .or_else(|| configured.map(str::to_string))
         .or_else(|| DEFAULT_URL.map(str::to_string))
+        .filter(|location| !location.trim().eq_ignore_ascii_case(OFF))
 }
 
 /// The directory thumbnails are cached in.
@@ -405,6 +409,12 @@ mod tests {
             Path::new(r"G:\arklay\mods").join("a/1.0/a.akpak")
         );
         assert_eq!(extension("https://x/y/thumbnail.webp?v=2"), Some("webp"));
+        // `none` turns the catalog off; nothing configured is the default.
+        if std::env::var_os(URL_ENV).is_none() {
+            assert_eq!(location(Some("None")), None);
+            assert_eq!(location(None).as_deref(), DEFAULT_URL);
+            assert_eq!(location(Some("index.json")).as_deref(), Some("index.json"));
+        }
         // Only picture formats name a thumbnail's cache file.
         assert_eq!(thumbnail_extension("a/1.0/thumbnail.WEBP"), Some("webp"));
         assert_eq!(thumbnail_extension("a/1.0/t.bat"), None);

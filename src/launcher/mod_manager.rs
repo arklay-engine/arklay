@@ -85,7 +85,7 @@ impl Filter {
 /// Where fetching the catalog stands.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 enum Status {
-    /// No catalog is configured.
+    /// The catalog is turned off (`[mods] catalog = "none"`).
     #[default]
     Unset,
     Loading,
@@ -449,7 +449,7 @@ impl Launcher {
     pub(super) fn publish_catalog(&mut self) {
         let status = match &self.catalog.status {
             Status::Unset => {
-                "No mod catalog is configured: set [mods] catalog in arklay.toml.".to_string()
+                "Hosted mods are turned off: [mods] catalog is \"none\" in arklay.toml.".to_string()
             }
             Status::Loading => "Loading the mod catalog...".to_string(),
             Status::Failed(err) => format!("The mod catalog could not be loaded: {err}"),

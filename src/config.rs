@@ -148,7 +148,8 @@ pub struct Mods {
     /// manifest `(load_order, id)`.
     pub order: Vec<String>,
     /// The launcher's online mod catalog: an `index.json` URL or a local
-    /// path; `None` means [`crate::catalog::DEFAULT_URL`].
+    /// path, or `"none"` to turn it off; `None` means
+    /// [`crate::catalog::DEFAULT_URL`].
     pub catalog: Option<String>,
 }
 
