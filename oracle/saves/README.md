@@ -48,6 +48,8 @@ All saves were generated from the Japanese MediaKite assets at
 | `door_chris_10B.dat` | room 10B, Chris | player at the foot of the stairwell door to 207 (a stage change), facing it. |
 | `door_chris_103.dat` | room 103, Chris | player in front of the dining room's door to 101 (same stage), facing it. |
 | `bootcam_chris_104.dat` | room 104, Chris | player inside a collision volume at the room's far wall (3700, 6600, facing north); the block carries the boot camera (cut 2), not the cut the saved position selects. |
+| `computer_chris_506.dat` | room 506, Chris | player where walking east into the small laboratory's console stops (15886, 7717, facing east), inside the lab computer's action rect: confirm, confirm opens the terminal. |
+| `computer_jill_506.dat` | room 506, Jill | the same spot for Jill, whose hands type every other character at fixed gaps. |
 
 ## Format notes
 

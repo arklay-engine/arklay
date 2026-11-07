@@ -219,6 +219,11 @@ pub struct Input {
     /// which its edge-detected `g_PlayerPadHeld` exposes): starts the special
     /// lock-on fire while a target is in range.
     pub run_pressed: bool,
+    /// The cancel key's held level. The original has one raw pad bit
+    /// (`0x0040`) for cancel and run; the port binds them to separate keys,
+    /// so the screens that read that bit as cancel (the lab terminal) take
+    /// either.
+    pub cancel_held: bool,
     pub action_held: bool,
     pub action_pressed: bool,
     /// The aim button (the original's D-pad bit `0x100`): raises the weapon.

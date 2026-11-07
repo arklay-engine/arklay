@@ -1,0 +1,127 @@
+# Lab computer (room 506), either computer save: computer_unlock.txt with the
+# password's middle letters left out, so the login is refused ("Permission
+# Denied! Try Enter Password") and the rest of the presses land on the retry.
+5 confirm
+6
+80 confirm
+81
+150 confirm
+151
+640 down
+641
+644 right
+645
+648 confirm
+649
+652 right
+653
+656 right
+657
+660 right
+661
+664 right
+665
+668 right
+669
+672 confirm
+673
+676 right
+677
+680 confirm
+681
+684 left
+685
+688 left
+689
+692 confirm
+693
+696 down
+697
+700 right
+701
+704 confirm
+705
+720 up
+721
+724 up
+725
+728 right
+729
+732 right
+733
+736 confirm
+737
+756 left
+757
+760 left
+761
+764 left
+765
+768 confirm
+769
+772 down
+773
+776 down
+777
+780 left
+781
+784 left
+785
+788 confirm
+789
+1120 confirm
+1121
+1440 down
+1441
+1444 right
+1445
+1448 right
+1449
+1452 right
+1453
+1456 right
+1457
+1460 confirm
+1461
+1464 right
+1465
+1468 right
+1469
+1472 confirm
+1473
+1476 left
+1477
+1480 left
+1481
+1484 left
+1485
+1488 confirm
+1489
+1492 up
+1493
+1496 right
+1497
+1500 confirm
+1501
+1504 down
+1505
+1508 down
+1509
+1512 right
+1513
+1516 right
+1517
+1520 confirm
+1521
+2020 down
+2021
+2024 confirm
+2025
+2500 down
+2501
+2504 down
+2505
+2508 confirm
+2509
+2600 confirm
+2601

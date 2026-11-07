@@ -504,9 +504,15 @@ pub(crate) fn look_at_joint_origin(game: &GameState, slot: usize) -> Option<[i32
 /// bit as a whole-entity gate, hiding every non-member joint (and off-zone
 /// member joints) of a character that has not entered the zone.
 pub fn in_camera_zone(room: &RoomState, camera: usize, pos: [i32; 3]) -> bool {
-    room.zones
-        .iter()
-        .find(|zone| zone.cam_from >= 0 && zone.cam_from as usize == camera)
+    let header = |camera: usize| {
+        room.zones
+            .iter()
+            .find(|zone| zone.cam_from >= 0 && zone.cam_from as usize == camera)
+    };
+    // A camera with a group of its own always moves the zone pointer onto
+    // it; only a camera without one leaves the pointer where it was.
+    header(camera)
+        .or_else(|| room.zone_group.and_then(header))
         .is_some_and(|zone| {
             if room.sca.is_some() {
                 zone.contains_signed(pos[0], pos[2])
@@ -672,5 +678,25 @@ mod tests {
         assert!(in_camera_zone(&room, 1, [50, 0, 50]));
         assert!(!in_camera_zone(&room, 1, [150, 0, 50]));
         assert!(!in_camera_zone(&room, 0, [50, 0, 50]));
+    }
+
+    #[test]
+    fn a_camera_with_no_group_keeps_the_previous_zone_group() {
+        use crate::state::Zone;
+        let zone = |cam_from, x| Zone {
+            cam_from,
+            cam_to: 0,
+            corners: [[x, 0], [x, 100], [x + 100, 100], [x + 100, 0]],
+        };
+        let room = RoomState {
+            zones: vec![zone(0, 0), zone(1, 200)],
+            zone_group: Some(0),
+            ..RoomState::default()
+        };
+        // Camera 4 has no group: the test reads camera 0's.
+        assert!(in_camera_zone(&room, 4, [50, 0, 50]));
+        // Camera 1 has its own, so the stale group is ignored.
+        assert!(in_camera_zone(&room, 1, [250, 0, 50]));
+        assert!(!in_camera_zone(&room, 1, [50, 0, 50]));
     }
 }

@@ -3206,6 +3206,9 @@ pub struct GameState {
     pub flag_names: crate::flag_names::FlagNames,
     /// Voice-line state behind the `voice_play` wait handshake.
     pub voice: VoiceState,
+    /// The room-5060 lab computer terminal (`ComputerLab.cpp`). Its statics
+    /// persist across visits, like the original's.
+    pub lab_terminal: Box<crate::computer_lab::Terminal>,
     /// Film state behind the `movie_on` request handshake.
     pub fmv: FmvState,
     /// The player's inventory.
@@ -3721,6 +3724,7 @@ impl Default for GameState {
             music: crate::music::MusicTables::default(),
             flag_names: crate::flag_names::FlagNames::default(),
             voice: VoiceState::default(),
+            lab_terminal: Box::default(),
             fmv: FmvState::default(),
             inventory: Vec::new(),
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
@@ -5155,6 +5159,7 @@ impl GameState {
         // (room 210's bit 15) would start room 106's Barry scenes with no
         // Barry in the room and hold the player in state 8 for good.
         self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[0..4].fill(0);
+        self.lab_terminal.room_reset();
         // `room_set` parks the special-room-light state at -1 (no overlay) and
         // clears the delta and the scripted channel masks.
         self.state_words[1] = 0xFFFF;

@@ -1867,6 +1867,13 @@ pub(crate) const UI_ASSETS: &[(&str, &str, UiKind)] = &[
     ("ui/staitem.tim", "STAITEM.TIM", UiKind::Raw),
     ("ui/itemboxn.tim", "ITEMBOXN.TIM", UiKind::Raw),
     ("ui/died.tim", "DIED.TIM", UiKind::Raw),
+    // The lab computer terminal's pages (room 5060) and the 8x8 font its
+    // masked fields print through.
+    ("ui/umb00.tim", "UMB00.TIM", UiKind::Raw),
+    ("ui/umb01.tim", "UMB01.TIM", UiKind::Raw),
+    ("ui/umb02.tim", "UMB02.TIM", UiKind::Raw),
+    ("ui/umbrella.tim", "UMBRELLA.TIM", UiKind::Raw),
+    ("ui/font.tim", "FONT.TIM", UiKind::Raw),
     (
         "ui/title.bmp",
         "TITLE.PIX",
@@ -2642,7 +2649,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 23;
+pub const CONVERT_VERSION: u32 = 24;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, the language sheets, the

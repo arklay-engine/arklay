@@ -11,8 +11,8 @@ language/ja-JP.txt
 ```
 
 Every string the engine shows comes from these files: global and room
-messages, item names and descriptions, the save screen, the debug overlay,
-the F9 prompt and the lab terminal. The text of a room and of an item can
+messages, item names and descriptions, the save screen, the debug overlay and
+the F9 prompt. The text of a room and of an item can
 also sit in its own definition (see [Keys](#keys)). A mod may add a
 language or replace single strings.
 
@@ -80,7 +80,6 @@ are rejected as `\xNN`: a value carries its stream's terminator itself.
 | `ITEM_<nn>_NAME_UNCHECKED` | the generic name shown before the item is examined, only where it differs from `NAME` |
 | `ITEM_<nn>_DESCRIPTION` | item description by item id |
 | `UI_SAVE_*` | save-screen headers, exits, character names, slots, prompts, errors |
-| `UI_LAB_*` | lab terminal labels and the expected `UI_LAB_PASSWORD_*` credentials |
 | `UI_PROMPT_RETURN_TITLE_*`, `UI_DEBUG_*` | the F9 prompt and the F1 debug tools (tool labels, hints, stage columns, ending names, flag group names) |
 
 The item keys for an item with a definition come from the `<strings>` of its

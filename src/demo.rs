@@ -265,6 +265,8 @@ impl AttractState {
                 right,
                 run,
                 run_pressed: false,
+                // The demo's raw `0x40` bit already arrives as `run`.
+                cancel_held: false,
                 action_held: action,
                 action_pressed: false,
                 // The original has no separate fire button: the action button

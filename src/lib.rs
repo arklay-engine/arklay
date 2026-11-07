@@ -17,6 +17,7 @@ pub mod character2;
 pub mod charset;
 pub mod cinepak;
 pub mod combat;
+pub mod computer_lab;
 pub mod config;
 pub mod controls;
 pub mod convert;
