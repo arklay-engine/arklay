@@ -60,3 +60,8 @@ two batches of one commit match seed for seed.
 | b23-E2 | 1c3b51c+E2 | E2: E with the and-truncation fixed | 6/17 | 16 | 54 | 99 | 191546.0 | 8 | NO | reject (6/17: a held red herb is boxed and taken back in a loop) |
 | b24-E3 | 1c3b51c+E3 | E3: E2, and a red herb that mixes with a held herb is kept and mixed at once | 10/17 | 25 | 67 | 121 | 202462.5 | 5 | NO | reject (10/17, default stalls in 304; deaths fell in seeds 1, 2, 8, 16) |
 | b25-spareherb | 1c3b51c+F2 | F2: a second stack of a held non-healing herb stays on the floor while 2 or fewer slots are free | 11/17 | 38 | 73 | 116 | 202034 | 2 | yes | reject (11/17, deaths 38>16) |
+| b26-metforce | 1c3b51c+G1 | G1: an empty frontier also forces a met fight still pending elsewhere (a reload drops the marks) | 13/17 | 16 | 68 | 98 | 202349 | 3 | yes | reject (no change at any level; seed 5 has no route out of 302) |
+| b27-stairfirst | 1c3b51c+G2 | G2: a door whose every approach failed takes an untried stair first | 13/17 | 16 | 68 | 94 | 202349 | 3 | yes | reject (identical to b16: both of 301's stairs were already used that entry) |
+| b28-keyswap | 1c3b51c+H3 | H3: a key pickup boxes loadout ammo whose gun is not held | 7/17 | 18 | 57 | 87 | 206320 | 8 | NO | reject (7/17, 8 stalls) |
+| b29-rearmhere | 1c3b51c+J2 | J2: at a box here, a boxed reserve gun comes out while no held firearm has a round | 11/17 | 10 | 54 | 88 | 202680 | 6 | yes | reject (11/17: the launcher went in and out in a loop; deaths 10) |
+| b30-rearmhere2 | 1c3b51c+J2b | J2b: J2, and the only held firearm with a round is no spare gun | 14/17 | 10 | 57 | 88 | 200607.0 | 3 | yes | accept |
