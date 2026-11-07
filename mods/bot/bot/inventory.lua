@@ -138,6 +138,7 @@ end
 function BotInventory.deposits(items, ctx)
     local out = {}
     local cure_kept = false
+    local weapons = {}
     for _, row in ipairs(items) do
         local why = row.item ~= 0 and BotInventory.keep(row, ctx)
         if why == "cure" then
@@ -145,6 +146,14 @@ function BotInventory.deposits(items, ctx)
                 why = nil
             end
             cure_kept = true
+        end
+        -- A second copy of a held weapon goes in: two knives, both kept for
+        -- 30C's web, left no slot for the flame rounds its tiger needed.
+        if why and row.kind == "weapon" then
+            if weapons[row.item] then
+                why = nil
+            end
+            weapons[row.item] = true
         end
         if row.item ~= 0 and not why then
             out[#out + 1] = row
@@ -516,10 +525,13 @@ function BotInventory.context(bot)
             end
         end
     end
-    -- The loadout: the weapon (and its ammunition) a <fight> still ahead in
-    -- this stage prefers, so a boss is met with it (513's Tyrant and the
-    -- grenade launcher). The stage is the room id's first character.
-    local here = bot:room().id
+    -- The loadout: the weapon (and its ammunition) a met <fight> still to
+    -- be won prefers (BotNav.fight_met: the bot entered its room), so the
+    -- bot comes back to it from the box with that weapon (513's Tyrant and
+    -- the grenade launcher). A boss not met yet asks nothing: the run does
+    -- not know it, and holding its kit kept the shotgun's shells (the gun
+    -- boxed) and the launcher in a full inventory that 408's key then never
+    -- fitted (five of eight seeds ended there).
     local box = BotInventory.remembered(bot)
     for _, fight in ipairs(bot:fight_facts()) do
         local entry = knowledge and knowledge.enemies[fight.enemy]
@@ -532,29 +544,30 @@ function BotInventory.context(bot)
         end
         local row = prefer and knowledge.weapons[prefer]
         local pending = row and not (fight.bank and bot:flag(fight.bank, fight.bit))
-        -- A firearm for a fight in a room already seen counts in any
-        -- stage: a box trip into stage 4 deposited the launcher and its
-        -- rounds that 30C's Black Tiger wanted, and the bot met the tiger
-        -- with an empty handgun, twice. (A hand weapon waits for its
-        -- fight's stage: the knife.)
-        -- So does a fight whose `stage` attribute names this stage (303's
-        -- Tyrant, met from the lab's escape lift), and a firearm for a
-        -- fight not seen yet: 403's box left the launcher behind for 20C's
-        -- Yawn 2, met from the guardhouse before the bot had seen 20C, and
-        -- the handgun lost that fight four times.
-        -- A hand weapon counts in any stage once its fight's room was
-        -- visited: 30C's web, met without the knife (boxed in 118 as a
-        -- spare in stage 1), sent the bot to 403's box, where stage 4
-        -- asked nothing out, and the bot walked 30C and 403 poisoned.
-        local met = bot:visited(fight.room)
-        if pending and (fight.room:sub(1, 1) == here:sub(1, 1)
-            or fight.stage == here:sub(1, 1)
-            or not row.melee or met) then
+        if pending and BotNav.fight_met(bot, fight) then
             ctx.loadout = ctx.loadout or {}
             ctx.loadout[prefer] = true
             local ammo = bot:ammo_for(prefer)
             if ammo then
                 ctx.loadout[ammo] = true
+            end
+            -- With the preferred gun neither held nor boxed, a held or
+            -- boxed gun with a band for the enemy stands in
+            -- (BotSurvival.fight_ready). Held ones too: kept only while
+            -- boxed, the handgun went in as a spare and came out as the
+            -- stand-in at 50E's box until the run's ticks ran out.
+            if not bot:has_item(prefer) and not box[prefer] then
+                for id, band in pairs(entry.keep or {}) do
+                    local gun = knowledge.weapons[id]
+                    if gun and not gun.melee and (box[id] or bot:has_item(id))
+                        and (band.damage or 0) > 0 then
+                        ctx.loadout[id] = true
+                        local rounds = bot:ammo_for(id)
+                        if rounds then
+                            ctx.loadout[rounds] = true
+                        end
+                    end
+                end
             end
             -- The same weapon loaded with other rounds (variant_of: the
             -- launcher with flame rounds is 0x09), held or boxed, is that
@@ -566,21 +579,24 @@ function BotInventory.context(bot)
             -- deposit for 30A's hex crank, and the run ended there; but one
             -- explosive round left counted as held, the acid and flame
             -- rounds went into 30E's box, and the bot met the lab with one.
-            -- In the fight's own stage the bar is doubled: the lab's
-            -- zombies and hunters spent six explosive rounds before 513's
-            -- Tyrant, with the acid and flame ones left in the box at 502.
-            local floor = OWN_ROUNDS
-            if fight.room:sub(1, 1) == here:sub(1, 1) or fight.stage == here:sub(1, 1) then
-                floor = 2 * OWN_ROUNDS
+            -- A loading that hits the enemy harder than the preferred one
+            -- keeps its rounds whatever the own ones hold: six explosive
+            -- rounds dropped the flame ones (205 a hit on 30C's Black Tiger
+            -- to their 60) into 100's box, and the tiger fight never came.
+            local own = ammo and bot:item_count(ammo) >= OWN_ROUNDS
+            local function damage_of(id)
+                local band = entry.keep and entry.keep[id]
+                return band and band.damage or 0
             end
-            local own = ammo and bot:item_count(ammo) >= floor
             for id, gun in pairs(knowledge.weapons) do
                 if gun.variant_of == prefer then
                     local other = bot:ammo_for(id)
                     if bot:has_item(id) or box[id] then
                         ctx.loadout[id] = true
                     end
-                    if other and not own and (bot:item_count(other) > 0 or box[other]) then
+                    local better = damage_of(id) > damage_of(prefer)
+                    if other and (not own or better)
+                        and (bot:item_count(other) > 0 or box[other]) then
                         ctx.loadout[other] = true
                     end
                 end
@@ -801,6 +817,16 @@ function BotInventory.needed_pickups(bot, ctx, skip)
     return n, progress
 end
 
+-- Whether a <fight> the bot has met (BotNav.fight_met) is still to be won.
+function BotInventory.met_fight_pending(bot)
+    for _, fight in ipairs(bot:fight_facts()) do
+        if not (fight.bank and bot:flag(fight.bank, fight.bit)) and BotNav.fight_met(bot, fight) then
+            return true
+        end
+    end
+    return false
+end
+
 -- What a deposit puts in the box: the keep rule's leftovers, else the soft
 -- keeps (BotInventory.soft_deposits) when a needed pickup has no slot.
 function BotInventory.make_room(bot, ctx, items, skip)
@@ -819,8 +845,12 @@ function BotInventory.make_room(bot, ctx, items, skip)
             -- So is a heal while the bot needs one (or a fight's readiness
             -- does) and holds none: 30C's Black Tiger left it at 48/96 with every slot used, its fight
             -- held back for the boxed spray, and the run ended there.
+            -- And for a met boss still to be won (BotNav.fight_met), whose
+            -- readiness asks for the boxed heal (BotSurvival.fight_ready):
+            -- 30C's tiger waited on the spray at 88/96 with no trip for it.
             local heal = why == "no heal item held"
-                and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight"))
+                and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight")
+                    or BotInventory.met_fight_pending(bot))
             if heal then
                 ctx.heal_swap = true
             end

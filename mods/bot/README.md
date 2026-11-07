@@ -341,7 +341,10 @@ Each `<weapon>` gives the cone (`near`, `side`), `cadence`, the shotgun's
 and `prefer`, and one `<keep>` band per weapon. A band's optional `spare`
 is the rounds of that weapon (every loading) it leaves held: a reserve gun
 opens the fight only with more (a zombie gets one grenade only while six
-more are held). Every entry has a comment saying how it was
+more are held). A reserve gun also keeps, from any monster but a met
+boss's own, the rounds the met bosses still to be won need (`save`, else
+the kill) and a general reserve for bosses not met yet: four rounds at
+full health, fewer as health drops (`BotTactics.saved_rounds`). Every entry has a comment saying how it was
 measured. `parts="yes"` marks a monster made of several entities (Plant 42's
 body and vines): a hit holds only the part it struck, so the bot fires on
 while its target is still reacting instead of waiting for the reaction to
@@ -666,13 +669,20 @@ drives the box screen with pad input only.
   twice the reserve floor, and every heal stack, as long as one slot stays
   free (the top-ups; no trip is made for them).
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
-  pending `<fight>` in the current stage (the room id's first character)
-  or in the stage its `stage` attribute names (303's Tyrant, met from the
-  lab: `stage="5"`), or, for a firearm, in a room already seen (a box trip into stage 4 put
-  away the launcher and rounds 30C's Black Tiger wanted), and its
+  pending `<fight>` the bot has met (`BotNav.fight_met`: it entered the
+  fight's room and fought or held back, or saw the boss there), and its
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
-  way it does for a needed pickup (`loadout: a fight ahead prefers it`). A fight
+  way it does for a needed pickup (`loadout: a fight ahead prefers it`). A
+  boss not met yet asks nothing: the bot does not peek at what is ahead.
+  Meeting one is remembered past a reload (a player who died to it knows it
+  is there). Another loading of the preferred launcher keeps its rounds
+  while the preferred one runs short, or always when its band hits the
+  enemy harder (flame on the Black Tiger). With the preferred weapon
+  neither held nor boxed, a held or boxed gun with a band for the enemy
+  stands in. A met fight is not ready while the box holds its preferred
+  weapon (or, with no held gun banded for it, any banded one), and a met
+  fight still to be won makes the boxed heal worth a trip. A fight
   step whose preferred weapon is not held waits while a frontier pickup of
   it is in the room (`BotPuzzle.preferred_pickup`), so it is taken first.
 - Cure: poisoned with no cure for that poison held, the `<cure>` items

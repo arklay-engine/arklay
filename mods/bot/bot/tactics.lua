@@ -491,55 +491,57 @@ function BotTactics.pick_gun(guns, entry, health, margin, crowd)
     return fewest(1, true) or plain
 end
 
+-- Rounds of a reserve gun (the launcher, every loading of it) kept from
+-- ordinary monsters for a boss the bot has not met: it knows only that
+-- bosses come, not which or where. Scaled by health: a bot near full health
+-- runs past or uses the handgun; a hurt one spends what clears the room.
+local GENERAL_RESERVE = 4
+
+local function general_reserve(bot)
+    local player = bot:player()
+    local max = player.max_health or 0
+    if max <= 0 then
+        return GENERAL_RESERVE
+    end
+    return (GENERAL_RESERVE * player.health + max // 2) // max
+end
+
+-- The rounds a met <fight> still to be won (BotNav.fight_met) keeps from
+-- weapon `base`: its `save`, else the kill at its `base` band's damage.
+local function fight_rounds(bot, k, fight, base)
+    local entry = k.enemies[fight.enemy]
+    if not (entry and (entry.prefer == base or entry.open == base))
+        or (fight.bank and bot:flag(fight.bank, fight.bit))
+        or not BotNav.fight_met(bot, fight) then
+        return nil
+    end
+    local band = entry.keep and entry.keep[base]
+    local damage = band and band.damage
+    local kill = damage and damage > 0 and entry.health
+        and entry.health // damage + 1
+    return entry.save or kill or 0
+end
+
 -- Rounds of weapon `base` (every loading of it: knowledge variant_of)
--- kept for the <fight>s of this stage still to be won that prefer or open
--- with it (the stage is the room id's first character, or the fight's
--- `stage`): each keeps its `save`, else the kill at its `base` band's
--- damage. Such a fight's own enemy (`enemy_id`) spends them all (rationing
--- 40C's Plant 42 for the later bosses killed the bot there), so it gives
--- 0. Later stages' bosses keep nothing: their rounds are picked up on the
--- way (219's and 309's), and a hunter left alive in the mansion hit the
--- bot again on every pass. The hunters of 308 and 309 took the launcher's
--- rounds 30C's Black Tiger needed.
+-- kept from the monster `enemy_id`: the met <fight>s still to be won that
+-- prefer or open with it, plus the general reserve for a reserve gun. A
+-- fight's own enemy spends them all (rationing 40C's Plant 42 for the later
+-- bosses killed the bot there), so it gives 0. Bosses not met yet keep
+-- nothing beyond the general reserve: the bot does not know them.
 function BotTactics.saved_rounds(bot, k, base, enemy_id)
     local saved = 0
-    local pending = {}
-    local here = bot:room().id:sub(1, 1)
     for _, fight in ipairs(bot:fight_facts()) do
-        local entry = k.enemies[fight.enemy]
-        if entry and (entry.prefer == base or entry.open == base)
-            and (fight.room:sub(1, 1) == here or fight.stage == here)
-            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+        local rounds = fight_rounds(bot, k, fight, base)
+        if rounds then
             if fight.enemy == enemy_id then
                 return 0
             end
-            pending[#pending + 1] = entry
+            saved = saved + rounds
         end
     end
-    for _, entry in ipairs(pending) do
-        local band = entry.keep and entry.keep[base]
-        local damage = band and band.damage
-        local kill = damage and damage > 0 and entry.health
-            and entry.health // damage + 1
-        saved = saved + (entry.save or kill or 0)
-    end
-    return saved
-end
-
--- Rounds of weapon `base` the <fight>s still to be won in any stage keep
--- for their kills (BotTactics.saved_rounds, beyond this stage's).
-local function saved_everywhere(bot, k, base)
-    local saved = 0
-    for _, fight in ipairs(bot:fight_facts()) do
-        local entry = k.enemies[fight.enemy]
-        if entry and (entry.prefer == base or entry.open == base)
-            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
-            local band = entry.keep and entry.keep[base]
-            local damage = band and band.damage
-            local kill = damage and damage > 0 and entry.health
-                and entry.health // damage + 1
-            saved = saved + (entry.save or kill or 0)
-        end
+    local row = k.weapons[base]
+    if row and row.reserve then
+        saved = saved + general_reserve(bot)
     end
     return saved
 end
@@ -644,13 +646,13 @@ local function firearm(bot, k, enemy, crowd)
             end
         end
     end
-    -- The crowd rule spends only what every boss ahead leaves: 308's
-    -- hunters took the rounds 513's Tyrant needed.
+    -- The crowd rule spends only what the met bosses and the general
+    -- reserve leave: 308's hunters took the rounds 513's Tyrant needed.
     local crowd_n = crowd and #crowd or 0
     for _, row in ipairs(guns) do
         if row.reserve and crowd_n >= 2 then
             local base = row.base or row.item
-            if family_rounds(bot, k, base) - saved_everywhere(bot, k, base) <= 0 then
+            if family_rounds(bot, k, base) - BotTactics.saved_rounds(bot, k, base) <= 0 then
                 crowd_n = 0
             end
         end
@@ -813,7 +815,7 @@ local function choose(bot, s, k, enemies, player)
         -- The whole room's: 308's second hunter joined a fight opened on
         -- the first.
         for i = 1, #enemies do
-            if enemies[i].id == nearest.id and (enemies[i].health or 0) > 0 then
+            if enemies[i].id == nearest.id and (enemies[i].health or 0) >= 0 then
                 crowd[#crowd + 1] = enemies[i]
             end
         end
@@ -983,6 +985,22 @@ function BotTactics.step(bot, scene, player)
         return false
     end
     local room = bot:room().id
+    -- A boss seen in its <fight>'s room is met (BotNav.fight_met): what the
+    -- bot carries and saves now counts it.
+    if s.met_tick ~= s.now // C.SECOND then
+        s.met_tick = s.now // C.SECOND
+        for _, fight in ipairs(bot:fight_facts()) do
+            if fight.room == room and not BotNav.fight_met(bot, fight) then
+                for _, e in ipairs(bot:enemies()) do
+                    if e.id == fight.enemy and (e.health or 0) >= 0 then
+                        bot:remember(BotNav.fight_met_key(room, fight.enemy), "1")
+                        bot:log(string.format("met the fight in %s (enemy 0x%02X)", room, fight.enemy))
+                        break
+                    end
+                end
+            end
+        end
+    end
     if s.room ~= room then
         stop(bot, s, "left the room")
         s.room = room
@@ -1270,7 +1288,7 @@ function BotTactics.step(bot, scene, player)
     if entry and entry.parts then
         reacting = true
         for _, e in ipairs(enemies) do
-            if e.id == target.id and e.health > 0 and e.hit_state == 0 then
+            if e.id == target.id and e.health >= 0 and e.hit_state == 0 then
                 reacting = false
             end
         end

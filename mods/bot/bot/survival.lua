@@ -221,10 +221,47 @@ function BotSurvival.fight_ready(bot, fact)
             known = true
             damage = damage + rounds * band.damage
         end
+        -- The other loadings' rounds held for a held launcher count at
+        -- their own bands (the flame rounds for an acid-loaded launcher).
+        local gun = row.kind == "weapon" and k and k.weapons[row.item]
+        local base = gun and (gun.variant_of or row.item)
+        for id, other in pairs(base and k.weapons or {}) do
+            local other_band = entry.keep[id]
+            local ammo = bot:ammo_for(id)
+            if id ~= row.item and (id == base or other.variant_of == base)
+                and other_band and (other_band.damage or 0) > 0 and ammo then
+                known = true
+                damage = damage + bot:item_count(ammo) * other_band.damage
+            end
+        end
     end
     if known and damage < entry.health then
         return false, string.format("not ready for the fight: rounds for %d of %d health",
             damage, entry.health)
+    end
+    -- The box holds the weapon the fight prefers (or, with no held weapon
+    -- that has a band for it, any that has one): it comes out first. A boss
+    -- met with the wrong gun is a trip to the box, not a fight: 30C's Black
+    -- Tiger, met with the shotgun (no band) and the launcher boxed, spat the
+    -- bot to death six times.
+    local box = BotInventory.remembered(bot)
+    local function boxed_gun(id)
+        local ammo = bot:ammo_for(id)
+        return box[id] and not bot:has_item(id)
+            and (ammo == nil or box[ammo] or bot:item_count(ammo) > 0)
+    end
+    if entry.prefer and boxed_gun(entry.prefer) then
+        return false, string.format("not ready for the fight: the box holds 0x%02X",
+            entry.prefer)
+    end
+    if not known then
+        for id, _ in pairs(entry.keep) do
+            local gun = k.weapons[id]
+            if gun and not gun.melee and boxed_gun(id) then
+                return false, string.format(
+                    "not ready for the fight: no held gun fits it, the box holds 0x%02X", id)
+            end
+        end
     end
     -- The heal in the box is fetched first, unless a monster here already
     -- hurt the bot (every walk in costs that hit again) and the bot comes
