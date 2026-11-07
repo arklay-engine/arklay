@@ -112,6 +112,82 @@ const PROLOGUE_ID: u8 = 1;
 /// holding a whole film's PCM. See [`MovieSession::advance_due`].
 const AUDIO_LEAD_SECONDS: u32 = 2;
 
+/// One row of RE2's film tables (`movie_tbl_leon` 0x532C28, `movie_tbl_claire`
+/// 0x532D00), the films a script's `movie_on` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Re2Film {
+    /// The pack stem: `movie/<name>`, the `.bin`'s basename in lower case.
+    pub name: &'static str,
+    /// The skip mask over the raw pad (`+4`): 0x9F0, the face buttons, select
+    /// and start, or 0 for a film that can't be skipped.
+    pub skip_mask: u16,
+    /// The subtitle set (`+6`), an index into `movietext_tbl1` (Leon) or
+    /// `movietext_tbl0` (Claire). Not drawn.
+    pub subtitles: Option<u8>,
+}
+
+/// RE2's films by id: Leon's name, Claire's, the raw skip mask and the
+/// subtitle sets (Leon's, Claire's). Ids 1 and 2 are null in both tables.
+#[allow(clippy::type_complexity)]
+const RE2_FILMS: [Option<(&str, &str, u16, Option<u8>, Option<u8>)>; 18] = [
+    Some(("title_l", "titlec", 0x9F0, None, None)),
+    None,
+    None,
+    Some(("opn1stl", "opn1stc", 0x9F0, Some(4), Some(5))),
+    Some(("r10b", "r10b", 0x9F0, None, None)),
+    Some(("r200", "r200", 0x9F0, None, None)),
+    Some(("r505", "r505", 0x9F0, None, None)),
+    Some(("r602", "r602", 0x9F0, None, None)),
+    Some(("r108l", "r108c", 0x9F0, Some(1), Some(1))),
+    Some(("r109", "r109", 0x9F0, None, None)),
+    Some(("r204l", "r204c", 0x9F0, Some(2), Some(2))),
+    Some(("r409", "r408", 0x9F0, Some(3), Some(3))),
+    Some(("r700l", "r700c", 0, Some(6), Some(6))),
+    Some(("r703l", "r703c", 0, Some(7), Some(7))),
+    Some(("r704l", "r704c", 0, Some(8), Some(8))),
+    Some(("opn2ndl", "opn2ndc", 0x9F0, Some(12), Some(12))),
+    Some(("opn2ndrl", "opn2ndrc", 0x9F0, Some(0), Some(0))),
+    Some(("staff", "staff", 0, None, None)),
+];
+
+/// The films' attribute bytes (`0x532DD8`), which `Bg_set_mode` reads as a
+/// film ends: `0x40` clear gives mode 0, the room's own. Only the title and
+/// opening films (0 to 3), 12, 14 and 15 to 17 set it. Of the films a room's
+/// `movie_on` names, only room 700's 12 does (`Bg_set_mode(2, ..)`, which the
+/// port doesn't model).
+pub const RE2_ATTR: [u8; 18] = [
+    0xC0, 0x40, 0x40, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0x40, 0, 0x40, 0x40, 0x40, 0x40,
+];
+
+/// Film `id` of RE2's tables for Leon or Claire, or `None` for the null ids
+/// (1, 2) and ids past the table.
+pub fn re2_film(id: u8, claire: bool) -> Option<Re2Film> {
+    let (leon, claire_name, skip_mask, leon_subs, claire_subs) =
+        (*RE2_FILMS.get(usize::from(id))?)?;
+    Some(Re2Film {
+        name: if claire { claire_name } else { leon },
+        skip_mask,
+        subtitles: if claire { claire_subs } else { leon_subs },
+    })
+}
+
+/// An RE2 raw skip mask in the port's film button word ([`MovieSession`]'s
+/// `skip_mask`): of 0x9F0's bits, the port's pad has confirm (0x80), cancel
+/// and run (0x40) and start (0x800). The d-pad and the shoulders never skip.
+pub fn re2_skip_buttons(raw_mask: u16) -> u16 {
+    let mut word = 0;
+    if raw_mask & 0x80 != 0 {
+        word |= 0x0001;
+    }
+    if raw_mask & 0x40 != 0 {
+        word |= 0x0002;
+    }
+    if raw_mask & 0x800 != 0 {
+        word |= 0x0008;
+    }
+    word
+}
+
 /// The lower-case basename of film `id`, or `None` for the null entry and ids
 /// past the table.
 pub fn name(id: u8) -> Option<&'static str> {
@@ -372,6 +448,15 @@ impl MovieSession {
             .with_context(|| format!("missing film {stem}"))?;
         let mut session = Self::from_asset(&asset, NAMED_ID, 0)?;
         session.skip_mask = SKIPPABLE_MASK;
+        Ok(session)
+    }
+
+    /// Open RE2's film `id` for Leon or Claire ([`re2_film`]), skippable by
+    /// its table mask.
+    pub fn open_re2(pack: &Pack, id: u8, claire: bool) -> Result<Self> {
+        let film = re2_film(id, claire).with_context(|| format!("RE2 film {id} is null"))?;
+        let mut session = Self::open_named(pack, film.name)?;
+        session.skip_mask = re2_skip_buttons(film.skip_mask);
         Ok(session)
     }
 
@@ -1369,6 +1454,60 @@ mod tests {
         assert!(MovieSession::open(&pack, 10, 0).is_err());
         assert!(MovieSession::open(&pack, 3, 0).is_err());
         assert!(MovieSession::open(&pack, 0, 0).is_ok());
+    }
+
+    #[test]
+    fn re2_film_table_matches_the_executable() {
+        let name = |id, claire| re2_film(id, claire).map(|film| film.name);
+        assert_eq!(name(5, false), Some("r200"));
+        assert_eq!(name(5, true), Some("r200"));
+        assert_eq!(name(10, false), Some("r204l"));
+        assert_eq!(name(10, true), Some("r204c"));
+        assert_eq!(name(11, false), Some("r409"));
+        assert_eq!(name(11, true), Some("r408"));
+        assert_eq!(name(1, false), None);
+        assert_eq!(name(2, true), None);
+        assert_eq!(name(18, false), None);
+        for id in 0..18 {
+            let Some(film) = re2_film(id, false) else {
+                continue;
+            };
+            let expected = if [12, 13, 14, 17].contains(&id) {
+                0
+            } else {
+                0x9F0
+            };
+            assert_eq!(film.skip_mask, expected, "id {id}");
+        }
+        assert_eq!(re2_film(10, false).unwrap().subtitles, Some(2));
+        assert_eq!(re2_film(3, true).unwrap().subtitles, Some(5));
+        assert_eq!(re2_film(5, false).unwrap().subtitles, None);
+        assert_eq!(RE2_ATTR[5] & 0x40, 0);
+        assert_eq!(RE2_ATTR[10] & 0x40, 0);
+        assert_eq!(re2_skip_buttons(0x9F0), 0x000B);
+        assert_eq!(re2_skip_buttons(0), 0);
+    }
+
+    #[test]
+    fn open_re2_opens_a_named_mpeg_with_the_table_mask() {
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "movie/r204l.mpg",
+                include_bytes!("mpeg/testdata/tiny.mpg").to_vec(),
+            )
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert!(MovieSession::open_re2(&pack, 10, true).is_err());
+        assert!(MovieSession::open_re2(&pack, 1, false).is_err());
+        let mut session = MovieSession::open_re2(&pack, 10, false).unwrap();
+        assert_eq!(session.skip_mask(), 0x000B);
+        // The first poll latches; a d-pad edge doesn't skip, a confirm does.
+        assert!(!session.poll_skip(0));
+        assert!(!session.poll_skip(0x0010));
+        assert!(!session.poll_skip(0));
+        assert!(session.poll_skip(0x0001));
+        assert!(session.skipped());
     }
 
     #[test]
