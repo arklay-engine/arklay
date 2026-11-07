@@ -15,10 +15,24 @@
      0x25 (the pass number for 201's keypad) and hands over the radio and
      the pass-number file (AOT 7 and 8, zones at the origin). The timer
      lives in the room's event task, so leaving by the ladder first loses
-     it: the bot waits for 0x25 before anything else. -->
+     it: the bot waits for 0x25 before anything else.
+
+     With rope=leave the bot gets out first. The pit's AOT 6 floor probe
+     sets room flag 0x3E; with it set, AOT 4 at the ladder hatch asks
+     "There's a switch below. Will you push it?", and Yes slides the cover
+     off (scenario 0x28) and arms AOT 10 in the same zone as door 1 to
+     21A: "There's a ladder. Will you descend it?", whose Yes turns the
+     door on. The planner then takes door 1, the pit's only way out
+     without the rope (21A is a room not yet entered), and its press
+     there answers the ladder's prompt. On seed 1 the bot is down the
+     ladder about 170 frames after the fall, well inside the 600-frame
+     timer, so Barry never comes back with the rope and 0x25 stays clear. -->
 <bot format="2">
   <interact slot="2" bank="0" bit="0x27" character="jill" label="wake Yawn by the west wall"/>
   <fight enemy="0x12" bank="3" bit="0x3E" character="jill" label="Yawn 2"/>
   <interact slot="3" bank="1" bit="0x26" character="jill" label="the dark hole"/>
-  <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" character="jill" label="Barry's rope"/>
+  <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" character="jill"
+        when="rope=wait" label="Barry's rope"/>
+  <interact slot="4" bank="0" bit="0x28" after_bank="1" after_bit="0x26" character="jill"
+            when="rope=leave" label="the switch below the hatch"/>
 </bot>

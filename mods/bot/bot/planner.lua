@@ -399,6 +399,12 @@ local function clear_unreachable(bot, room, doors)
             -- So may a door of this room a room event had made a message:
             -- 302's battery powers the elevator whose call showed 132.
             plan().marks[key] = nil
+        elseif doors and m.room == room and m.reason:find("hurt while trying", 1, true) then
+            -- And an item the bot was hurt going for: the step may have
+            -- ended what hurt it. 513's master key was marked while the
+            -- Tyrant still stood, two ticks before it fell, and the key
+            -- the lab's exit needs stayed on the floor.
+            plan().marks[key] = nil
         end
     end
 end
@@ -571,8 +577,13 @@ end
 -- an ungated one always, a gated one while its gate holds (302's north
 -- elevator before the power is on). Remote planning reads it; in the room
 -- BotPuzzle.avoided does.
+local avoid_cache = { tick = nil, facts = nil }
 local function avoid_holds(bot, room_id, slot)
-    for _, fact in ipairs(bot:avoid_facts()) do
+    -- Routes ask once per door: read the facts once per tick.
+    if avoid_cache.tick ~= bot:tick() then
+        avoid_cache.tick, avoid_cache.facts = bot:tick(), bot:avoid_facts()
+    end
+    for _, fact in ipairs(avoid_cache.facts) do
         if fact.room == room_id and fact.slot == slot
             and BotPuzzle.gate_holds(bot, { bank = fact.bank, bit = fact.bit,
                 set = fact["while"] == "set", unless_held = fact.unless_held }) then
@@ -619,6 +630,13 @@ local function door_passable(bot, room_id, door, from)
             and rides_out(bot, room_id, door.slot, from)
     end
     if blocked(bot, "door", room_id, door.slot, true) then
+        return false
+    end
+    -- A door an <avoid> holds shut is no way through either, while its
+    -- gate holds: 214's door to 201 under rope=leave, which reads message
+    -- 128 until 201's key panel has the pass number, was the first door of
+    -- every route back into the mansion.
+    if avoid_holds(bot, room_id, door.slot) then
         return false
     end
     if door.locked and not door.unlocked then
@@ -1311,6 +1329,11 @@ local function frontier_goal(world, target)
     return nil
 end
 
+-- The memory key of a <fight> seen won in its own room (fight_due).
+local function fight_won_key(room, enemy)
+    return string.format("fight_won:%s:%d", room, enemy)
+end
+
 -- A pursued target's goal row while it is still worth pursuing, or nil: a
 -- frontier door or item, or a <use> fact whose item is held and whose done
 -- flag is clear.
@@ -1319,10 +1342,18 @@ end
 -- mark `not ready for the fight`), and the bot is ready now (a heal
 -- fetched from the box, rounds found). Fight steps are room-local, so
 -- without this a frontier emptied elsewhere never returns to them (40C's
--- Plant 42 after its heal trip to 403).
+-- Plant 42 after its heal trip to 403). A held-back fight won while the
+-- bot was away is due once as well (see below).
 local function fight_due(bot, fight)
     if fight.bank and bot:flag(fight.bank, fight.bit) then
-        return false
+        -- Won while the bot was away from a fight it was held back from:
+        -- due once, for the steps the win opens. In Barry's chemical
+        -- branch his flamethrower finishes Plant 42 after the bot has
+        -- left 40C short of rounds, and the fireplace's helmet key (the
+        -- step after the fight) was never fetched.
+        local memory = bot:memory()
+        return memory[BotNav.fight_met_key(fight.room, fight.enemy)] ~= nil
+            and memory[fight_won_key(fight.room, fight.enemy)] == nil
     end
     -- An optional fight the bot is not armed for is passed, not due (30C's
     -- Black Tiger, dodged while the knife cut the web: the bot went back
@@ -1619,6 +1650,16 @@ local function choose(bot)
     local room = bot:room().id
     local world = bot:world()
     local here = world_room(world, room)
+
+    -- A fight of this room seen won: no trip back for it (fight_due).
+    for _, fight in ipairs(bot:fight_facts()) do
+        if fight.room == room and fight.bank and bot:flag(fight.bank, fight.bit) then
+            local key = fight_won_key(room, fight.enemy)
+            if bot:memory()[key] == nil then
+                bot:remember(key, "1")
+            end
+        end
+    end
 
     -- 0. A <leave> whose flag is set: out through its door first (507's
     -- gas drains health until the room changes).
@@ -2289,8 +2330,12 @@ local function choose(bot)
     -- A held item with a <use> fact in another room: go there.
     for _, fact in ipairs(bot:use_facts()) do
         local m = plan().marks[mark_key("use", fact.room, fact.slot)]
+        -- A looping mark is held off only for its LOOP_HOLD (11A's moon
+        -- crest, marked looping once on a stair detour, was never carried
+        -- back and the run ended on an empty frontier).
         if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
-            and (not m or (m.reason:find("inventory full", 1, true)
+            and (not m or ((m.reason:find("inventory full", 1, true)
+                    or m.reason:find("looping", 1, true))
                 and not blocked(bot, "use", fact.room, fact.slot, true))) then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)

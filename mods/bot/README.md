@@ -119,7 +119,12 @@ Priorities, highest first:
    it alive; both are kept in the memory (`fight_met:ROOM:ENEMY`), which a
    reload puts back as it was at the save, while the planner's marks are
    lost with the rebuilt VM (40C's Plant 42, never returned to after a
-   death). A held-back fight in the room the bot stands in is fought
+   death). A held-back fight whose enemy dies while the bot is away is
+   due once too, for the steps the win opens: in Barry's chemical branch
+   his flamethrower finishes Plant 42 after the bot has left 40C short of
+   rounds, and the fireplace's helmet key waits there. A fight seen won in
+   its own room is remembered (`fight_won:ROOM:ENEMY`) and never draws the
+   bot back. A held-back fight in the room the bot stands in is fought
    anyway once nothing else is left (`frontier empty; fighting anyway`,
    for the rest of that room entry): 303's heliport locks every door
    behind the flare, and holding back there only ended the run. Then a save at a
@@ -302,7 +307,10 @@ the room's other pickups wait until the inventory changes, so the bot does
 not walk back into what hurt it. The preferred weapon of a `<fight>` in the
 room still to be won is never dropped this way (`BotPlanner.preferred_here`):
 taking it is how the fight ends (Brad's rocket launcher, with the Tyrant on
-the bot).
+the bot). A puzzle step done in the room lifts its `hurt while trying`
+marks, as it lifts the approach marks: the step may have ended what hurt
+the bot (513's master key, marked two ticks before the Tyrant fell, was
+left on the floor and the lab's exit door to 501 never opened).
 
 Approach points sit outside each side of a zone, at a quarter, a half and
 three quarters of the action reach, and a quarter reach inside the edge. On
@@ -310,7 +318,11 @@ a long side there are also points a quarter of the way in from each end. On
 a short side (`BotNav.side_offsets`, under two approaches long) they sit a
 quarter approach in from each end. A narrow zone beside a wall has its
 middle inside the wall's grown box, so only its open end can be stood at:
-102's broken shotgun (x 6500..7000) is taken from x 6575.
+102's broken shotgun (x 6500..7000) is taken from x 6575. When the path
+planner reaches none of these points, the sides also get points
+`REACH - APPROACH / 6` (550) out, where the probe lands just inside the
+zone: 213's lift door zone lies 100 inside a solid block, so every nearer
+point is inside the block's grown box.
 Points the path planner reaches come first, by path length; then up to 6
 unplanned points by distance, each with a short walk budget. A point where
 a press got nothing (`nothing on approach N`) marks its side of the zone
@@ -926,7 +938,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<wait>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Stand still in the room until flag `bank`/`bit` is set: a timed room event that must play out before the player leaves (1-minute timeout). With an `after` flag it is offered only once that flag is set. One step of the `<interact>` sequence. |
 | `<camera>` | `cut`, optional `bank`+`bit`, optional `label` | Walk into a camera switch zone that cuts to camera `cut` (a room event keyed on the camera). With a flag, it is done once the flag is set; without one, once the cut is entered on this room entry. It is one step of the same sequence as `<interact>`. |
 | `<answer>` | `choice` (`yes` or `no`), any of `slot`, `bank`+`bit` and `message`, optional `label` | At the yes/no prompt opened by AOT `slot`, while flag `bank`/`bit` is set, and/or showing message id `message` (less the fast-reveal bit), choose `choice`; every given key must match. `message` tells apart prompts a scene opens with no press and no flag between them (308's Barry prompts 23, 24 and 25). At least one key is required; `bank` and `bit` go together. |
-| `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state; remote planning reads every room's avoids (`bot:avoid_facts()`) and never heads for a door one holds shut. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
+| `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state; remote planning reads every room's avoids (`bot:avoid_facts()`) and never heads for a door one holds shut, nor routes through it. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
 | `<push>` | `object`, `slot`, optional `direction` (and `clear="full"` or `until="stop"`) or `axis`, optional `bank` + `bit`, optional `after_bank` + `after_bit`, optional `reveals`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, 400 and 300 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter, or with `clear="full"` its far edge (an object pushed out of another one's way). With `until="stop"` it is pushed that way until it stalls against a wall, whatever the zone. Without a direction, `axis` (`x` or `z`) lines the centre up with the zone on that axis only. Such a step is also done once the zone is gone or the item it names was taken. With `bank` and `bit` (both or neither) the step is also done once that flag is set: a zone event that takes the object away (a statue that falls). A push the bot stops for a fight or a heal walks back behind the object before it measures a stall. With an `after` flag the step holds the sequence until that flag is set, as for `<interact>` (306's box waits for the crank). With `reveals` (the item AOT slot the puzzle makes live), a full inventory holds the step until a slot is free (306's box resets once the slab is cranked). |
 | `<use>` | `slot`, `item`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `until_bank` + `until_bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done, or clear with `done="clear"`. With an `after` flag the use is open only while that flag is set, and with an `until` flag only while that flag is clear, so one item can take one zone twice (301's crank drains the pool, then fills it after Plant 42). A use whose menu closes by itself counts as done when the item stays held: the cranks are picked up with quantity 0 and never used up. A use that goes in but leaves its done flag clear is tried again at once, up to three times, for a piece that turns one step a use (30F's crank). |
 | `<climb>` | `object`, `slot`, `bank`, `bit`, optional `done`, optional `label` | Take an item off a high shelf, or press an event zone only reachable from on top (507's air shaft): push room object `object` until it covers AOT `slot`'s zone (and has stalled against the wall at least once; an object an earlier `<push>` step of the entry left over the zone is climbed at once), stand behind its face away from the zone, press action to climb it, press facing the zone to take the item, then face away and press to climb down. A climb whose flag is not a bank-7 item bit needs no free inventory slot. The engine's vault only starts facing along the object's yaw, so the face away from the zone must be that one. It is one step of the `<interact>` sequence, done once flag `bank`/`bit` reads done (`done="clear"` for a bank-7 item bit) and the player is off the object. |
@@ -973,6 +985,19 @@ not hold before Lua sees them, as for `character`. Lua reads a value as
 line, in a `when` (a unit test loads every shipped room file with the
 declarations) and in `bot:param`. The run log starts with the run's values
 (`params: richard=leave`).
+
+Many branches are a matter of route order: which room is entered first.
+The planner has no route, so a parameter steers one by holding a door
+shut until the scene that must come first has played: a door `<avoid>`
+with a flag gate and a `when` (`<avoid slot="1" bank="1" bit="0x07"
+while="clear" when="barry_early=chemical">` in 211). Remote planning never
+heads for or routes through a door an avoid holds shut, so the rest of the frontier is
+explored first, and the gate lifts once the flag changes. Holding a room
+off is enough when the scene that must come first lies on the frontier
+anyway (118's herbicide, 116's rack); a room that would otherwise be done
+with is kept out the same way (109's door to 115 once the trap has
+sprung). The route-order parameters are `barry_early` (211), `sandwich`
+(211, 116 and 109) and `rope` (20C, 21A, 200, 201 and 214).
 
 Coverage: every run logs each story flag it changes, scenario (bank 0) and
 common (bank 1) bits, as `story: common 0x61 set`. `scripts/bot-coverage.sh`
@@ -1030,7 +1055,9 @@ files. The checked-in facts:
 | 10F | `<push object="1" slot="5" direction="east">`: the bookshelf off the music score's pickup. `<use>` the music score (`0x23`) at slot 13, the piano; done flag bank 1 `0xA5` (the bar counter moves off the gold emblem). `<use>` the wood emblem (`0x1F`) at slot 6, the hollow; done flag bank 1 `0xA7`. |
 | 11A | Four `<use>` crests at slots 5, 3, 4 and 6 (star `0x2D`, sun `0x2E`, moon `0x2C`, wind `0x29`); done flags bank 0 `0x6A`, `0x69`, `0x6B`, `0x6C`. |
 | 106 | `<camera cut="4">`, then `<camera cut="2" bank="1" bit="0x05">`: Barry's hall scene plays out as Jill walks into the north cut, then the middle cut; the flag marks it done and the east-wing door is restored. |
-| 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). |
+| 116 | `<avoid slot="1" unless_held="0x1C">`: lifting the shotgun without the broken one springs the 115 ceiling trap, so the rack is used only while the broken shotgun is held. `<use>` the broken shotgun (`0x1C`) at slot 5, the rack's probe (armed once the shotgun is lifted); done flag bank 7 `0x01` (the broken one hangs on the rack; room main also clears common `0x20`). The avoid and that `<use>` hold with `sandwich=no`; with `sandwich=yes` the rack is lifted bare, so leaving through 115 springs its ceiling trap (Barry's rescue, common `0x20`, while `0x07` and `0x5F` are clear), and the bot does not come back (109). |
+| 109 | `sandwich=yes` only: `<avoid slot="3" bank="1" bit="0x21" while="set">`: with 116's rack bare, 115's trap springs on every entry, and once common `0x07` or `0x5F` is set it is the Barry-less ceiling that kills Jill. 115 and 116 hold nothing the bot needs afterwards, so the door to 115 stays shut once the trap has sprung. |
+| 211 | `<avoid slot="1" bank="1" bit="0x07" while="clear" when="barry_early=chemical">` and `<avoid slot="1" bank="1" bit="0x21" while="clear" when="sandwich=yes">`: door 1 to 212 is held shut until Barry's acid-rounds scene (the herbicide from 118, then 106 or 203 entered again) or 115's ceiling trap has played. 212's Forest scene (common `0x5F`, `0x0A`) rules both out, and the planner's own order reaches 212 early. A gated `<avoid>` on a door is the route-order tool: remote planning never routes through a door one holds shut, so the rest of the frontier is explored first. |
 | 11B | `<climb object="0" slot="3" bank="7" bit="35" done="clear">`: the square crank lies on a shelf over the crate's corner; room main keeps its pickup an item only while the player stands on the crate (`FG_STATUS` 24 clear). |
 | 119 | Second mansion visit only. `<interact slot="2" bank="7" bit="67" done="clear" reveals="1">` with `<answer choice="yes" slot="2">`: the init sets room bit 10 on every entry, which hides Doom Book I (AOT 1) and the magnum rounds (AOT 4); the switch's Yes clears it and both become items. A doom book taken out of the item box has quantity 0, so it counts as held and is opened anyway. The planner then opens the book in the menu's CHECK viewer (a held doom book always gets a `BotMenu.examine` job), which turns it into the Eagle Medal (`0x25`). |
 | 117 | Seven `<interact>` paintings in picture order; each push keeps only its own bank-4 bit, the last sets scenario `0x03`. |
@@ -1070,8 +1097,10 @@ files. The checked-in facts:
 | 205 | `<push>` armor object 1 onto vent slot 1 and object 2 onto vent slot 2, then `<interact slot="3" bank="0" bit="0x3A">` (the switch) and `<answer choice="yes" slot="3">`. With both vents covered Yes opens the sun crest (item slot 9); with one open it releases the gas. |
 | 20D | Jill: `<deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62">`: poisoned Richard waits (`0x62`) for the serum; walking into camera 3 with it hands it over and sets `0x61` (so does his death after 420 seconds). Until then the door to 20E is a message. |
 | 100 | Jill: `<fetch slot="5" item="0x42" bank="1" bit="0x23">`: the serum on the shelf, offered once Richard's scene sets `0x23`. A second `<fetch>` with bit `0x24`: the shelf's other serum, which 20E's collapse scene offers after Yawn's bite; the bot takes it as its cure. |
-| 20C | Jill: `<interact slot="2" bank="0" bit="0x27">` plays Yawn's entrance, then `<fight enemy="0x12">` Yawn 2 (enemy bit `0x3E`), whose death arms the hole (AOT 3); `<interact slot="3">` there (common `0x26`) drops Jill into the pit, and `<wait bank="1" bit="0x25">` holds until Barry comes back with the rope 600 frames later and sets the pass number. Leaving first by the ladder loses the timer. |
-| 201 | Jill: `<interact slot="5" bank="0" bit="0x46">` after common `0x25`: the key panel shares door 1's zone, and room init switches the door to 214 off until the pass number is entered. |
+| 20C | Jill: `<interact slot="2" bank="0" bit="0x27">` plays Yawn's entrance, then `<fight enemy="0x12">` Yawn 2 (enemy bit `0x3E`), whose death arms the hole (AOT 3); `<interact slot="3">` there (common `0x26`) drops Jill into the pit, and `<wait bank="1" bit="0x25">` holds until Barry comes back with the rope 600 frames later and sets the pass number. Leaving first by the ladder loses the timer. The wait holds with `rope=wait`. With `rope=leave` two steps take its place: `<interact slot="4" bank="0" bit="0x28">`, the switch below the ladder hatch (asked only while the pit's AOT 6 floor probe holds room bit `0x3E`), whose Yes slides the cover off and arms the ladder (AOT 10, in door 1's zone); the planner then leaves by door 1 to 21A, and its press there answers the ladder's prompt. Common `0x25` stays clear: 308's Barry scene is skipped and 502 plays "Tell my family". |
+| 21A | `rope=leave` only: `<avoid>` slots 0 and 2 while common `0x25` is clear: the ladder (door 0, turned on by AOT 2's prompt) comes out in 20C's pit, a dead end without Barry's rope, though the remembered doors make it look like the way back to 20B. |
+| 200 | `rope=leave` only: two `<ride>` facts, the old lift between 21C and 213 with both doors at the origin. Entered from 213 it rides down to 21C (slot 1); from 21C, up to 213 (slot 0). It is the way from 20C's pit (21A, 21B, 21C) to 213 without 201's key panel. |
+| 201 | Jill: `<interact slot="5" bank="0" bit="0x46">` after common `0x25`: the key panel shares door 1's zone, and room init switches the door to 214 off until the pass number is entered. With `rope=leave` the pass number never comes: `<avoid slot="1" bank="0" bit="0x46" while="clear">` here and the same on 214's door 0 (deleted for message 128 until `0x46`) keep remote planning from routing between 201 and 214, so it goes round by 21C and the 200 lift. |
 | 219 | `<interact slot="4" bank="7" bit="0x39" done="clear">`: the shelf event hands over the battery, whose own pickup zone sits at the room origin. |
 
 `set_input` keys are literal: `up down left right` (player directions plus the

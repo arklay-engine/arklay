@@ -7,9 +7,13 @@
      one hangs on the rack), clears common 0x20 and gives the door back.
      With both item flags clear (the rack left empty), entering 115 springs
      its ceiling trap. So the rack is lifted only while the broken shotgun is
-     held, and the swap follows at once. -->
+     held, and the swap follows at once. With sandwich=yes the rack is
+     lifted bare to spring the trap, and the bot never comes back (109
+     holds the door to 115 shut once the trap has sprung), so the broken
+     shotgun is not wanted here. -->
 <bot format="2">
-  <use slot="5" item="0x1C" bank="7" bit="0x01" label="broken shotgun on the rack"/>
-  <avoid slot="1" unless_held="0x1C"
+  <use slot="5" item="0x1C" bank="7" bit="0x01" when="sandwich=no"
+       label="broken shotgun on the rack"/>
+  <avoid slot="1" unless_held="0x1C" when="sandwich=no"
          reason="the shotgun rack springs the 115 ceiling trap"/>
 </bot>

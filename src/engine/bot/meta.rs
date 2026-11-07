@@ -776,6 +776,7 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 | "kite"
                 | "tap"
                 | "brew"
+                | "ride"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -2652,6 +2653,7 @@ mod tests {
             <answer choice="no" message="23" when="first=no"/>
             <deliver item="0x42" cut="3" bank="1" bit="0x61" when="richard=save" character="jill"/>
             <avoid slot="1" reason="x" when="richard!=save first=no"/>
+            <ride slot="0" from="21C" when="richard=leave"/>
         </bot>"#;
         // Without parameters every fact is kept (syntax checked only).
         let all = parse(text).unwrap();
@@ -2664,6 +2666,7 @@ mod tests {
         assert!(defaults.answers[0].yes);
         assert_eq!(defaults.answers[0].message, Some(23));
         assert_eq!((defaults.errands.len(), defaults.avoids.len()), (1, 0));
+        assert!(defaults.rides.is_empty());
         // `character` and `when` both have to hold.
         assert!(
             parse_for(text, Some(false), Some(&params))
@@ -2676,6 +2679,7 @@ mod tests {
         let other = parse_for(text, Some(true), Some(&params)).unwrap();
         assert!(!other.answers[0].yes);
         assert_eq!((other.errands.len(), other.avoids.len()), (0, 1));
+        assert_eq!(other.rides.len(), 1);
         // An undeclared name or value fails, even on a fact the character
         // drops; a bad `when` fails without parameters too.
         for bad in [

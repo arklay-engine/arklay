@@ -183,13 +183,35 @@ function BotNav.approach_points(bot, zone)
             candidates[#candidates + 1] = { cx + a, zone.z + zone.depth + d }
         end
     end
-    for _, p in ipairs(candidates) do
-        local path = bot:path(p[1], p[2])
-        if path.status == "ok" then
-            planned[#planned + 1] = { p[1], p[2], cx, cz, path.length, true }
-        else
-            rest[#rest + 1] = { p[1], p[2], cx, cz, bot:distance(p[1], p[2]), false }
+    local function plan(points, planned_only)
+        for _, p in ipairs(points) do
+            local path = bot:path(p[1], p[2])
+            if path.status == "ok" then
+                planned[#planned + 1] = { p[1], p[2], cx, cz, path.length, true }
+            elseif not planned_only then
+                rest[#rest + 1] = { p[1], p[2], cx, cz, bot:distance(p[1], p[2]), false }
+            end
         end
+    end
+    plan(candidates)
+    if #planned == 0 and not zone.inside then
+        -- None planned: the zone may sit inside a solid block, its face
+        -- more than the deepest offset plus the body radius from it (213's
+        -- lift door, its zone 100 inside the shaft's block). Stand nearly a
+        -- reach out, so the probe lands just inside the zone. Only the
+        -- points the planner reaches count: the unplanned tries stay the
+        -- nearer ones.
+        local d = C.REACH - C.APPROACH // 6
+        local deep = {}
+        for _, a in ipairs(along(zone.depth)) do
+            deep[#deep + 1] = { zone.x - d, cz + a }
+            deep[#deep + 1] = { zone.x + zone.width + d, cz + a }
+        end
+        for _, a in ipairs(along(zone.width)) do
+            deep[#deep + 1] = { cx + a, zone.z - d }
+            deep[#deep + 1] = { cx + a, zone.z + zone.depth + d }
+        end
+        plan(deep, true)
     end
     local function order(a, b)
         if a[5] ~= b[5] then

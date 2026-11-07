@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 214 rough passage, Jill on the second mansion visit. Door 0 leads to
+     201, but room init deletes it (message 128 in its place) until 201's
+     key panel has taken the pass number (scenario 0x46). With rope=leave
+     the pass number never comes, so the door is held shut; the way back
+     to the mansion is 213's lift down to 21C (room/200/bot.xml). -->
+<bot format="2">
+  <avoid slot="0" bank="0" bit="0x46" while="clear" character="jill" when="rope=leave"
+         reason="the door to 201 opens only once 201's key panel has the pass number"/>
+</bot>

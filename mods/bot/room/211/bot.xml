@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 211 terrace passage. Door 1 leads to 212, the terrace where Forest
+     lies. 212's init puts Barry at the body only with common 0x07 (Barry's
+     acid-rounds scene) and 0x21 (115's ceiling trap) clear and 0x4F set;
+     its scene sets 0x5F and 0x0A, which rule out both of those scenes.
+     So a story parameter that wants one of them first holds the door shut
+     until its flag is set. The planner's own order reaches 212 early. -->
+<bot format="2">
+  <avoid slot="1" bank="1" bit="0x07" while="clear" character="jill"
+         when="barry_early=chemical"
+         reason="Barry's acid-rounds scene comes before Forest"/>
+  <avoid slot="1" bank="1" bit="0x21" while="clear" character="jill"
+         when="sandwich=yes"
+         reason="115's ceiling trap comes before Forest"/>
+</bot>
