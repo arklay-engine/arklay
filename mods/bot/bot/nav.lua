@@ -34,6 +34,14 @@ function BotNav.fight_met_key(room, enemy)
     return string.format("fight_met:%s:%02X", room, enemy)
 end
 
+-- Whether the bot has come across <fight> `fight`: it entered the fight's
+-- room and fought or held back (remembered past a reload). Only a met
+-- boss shapes what the bot carries and saves: the run does not know the
+-- others yet.
+function BotNav.fight_met(bot, fight)
+    return bot:memory()[BotNav.fight_met_key(fight.room, fight.enemy)] ~= nil
+end
+
 function BotNav.abs(value)
     if value < 0 then
         return -value
@@ -846,7 +854,7 @@ function BotNav.hold_fight(bot, job)
     end
     local target
     for _, e in ipairs(bot:enemies()) do
-        if e.id == job.enemy and e.health > 0 then
+        if e.id == job.enemy and e.health >= 0 then
             if e.slot == job.slot and (not weakest or aimable(e)) then
                 target = e
                 break
@@ -901,6 +909,27 @@ function BotNav.hold_fight(bot, job)
         end
         bot:face_to(target.x, target.z)
         return "busy"
+    end
+    -- A gun with a band for the enemy is walked into the band (40C's
+    -- Plant 42: the fixed range was inside its vines and unreachable, and
+    -- the bot stood out of the shotgun's reach for 7000 ticks).
+    local gun = bot:weapon().equipped
+    local gun_band = entry and entry.keep and gun and entry.keep[gun]
+    if gun_band and target.distance > gun_band.max then
+        job.stand = job.stand or BotNav.stand_near(bot, target, gun_band.min, gun_band.max)
+        if job.stand then
+            local result = bot:walk_to(job.stand.x, job.stand.z, {
+                tolerance = C.APPROACH // 2, face = { x = target.x, z = target.z },
+            })
+            if result.status == "moving" then
+                return "busy"
+            end
+            job.stand = nil
+            if result.status == "arrived" then
+                bot:face_to(target.x, target.z)
+                return "busy"
+            end
+        end
     end
     local range = FIGHT_RANGE
     if target.distance > range + C.APPROACH then
