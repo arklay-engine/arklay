@@ -31,6 +31,11 @@ pub struct Re2State {
     pub xa_volume: u8,
     /// The camera `cut_old` returns to.
     pub cut_old: u8,
+    /// `fg_status`'s `0x80`, which the aim routine (`pl_mv_05`) raises each
+    /// frame and `Player_move` clears: while it is set at the frame's end,
+    /// `Swap_Cbuff` loads no background, so a cut `Cut_check` switched to
+    /// waits there and `scd_var_cut`, the cut on screen, stays.
+    pub view_held: bool,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
@@ -469,6 +474,7 @@ impl Default for Re2State {
             door_locks: [0; 2],
             random: 0x1382_01C3,
             cut_old: 0,
+            view_held: false,
             voice: VoiceLine::default(),
             xa_volume: XA_VOLUME,
             pending_events: Vec::new(),

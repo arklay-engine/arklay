@@ -870,6 +870,12 @@ impl Work {
         self
     }
 
+    /// Whether the player is aiming (`pl_mv_05`), which raises `fg_status`'s
+    /// `0x80` and so holds the cut on screen (`Re2State::view_held`).
+    pub fn holds_view(&self) -> bool {
+        self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
+    }
+
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
     /// off the ground, nothing collides.
     pub fn climbing(&self) -> bool {

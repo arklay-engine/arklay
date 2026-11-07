@@ -16225,8 +16225,12 @@ fn tick_room_timed(
     // writes `g_roomCameraId` directly and the render reads it. The zone scan
     // itself already ran before the player's movement; this only propagates a
     // mid-tick script write.
+    if context.game.is_re2_room {
+        context.game.re2.view_held = context.game.re2.player.holds_view();
+    }
     if context.game.camera.current_cut < context.room.cuts.len()
         && context.room.current_cut != context.game.camera.current_cut
+        && !(context.game.is_re2_room && context.game.re2.view_held && !context.game.camera.locked)
     {
         context.room.current_cut = context.game.camera.current_cut;
         context.game.reproject_effects(context.room);
@@ -16332,6 +16336,11 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
         return;
     }
     game.set_camera_cut(selected);
+    // RE2's `Cut_check` only moves the live cut; the frame's `Swap_Cbuff`
+    // brings it on screen unless the player is aiming.
+    if game.is_re2_room && game.re2.view_held && pos.is_some() && !game.camera.locked {
+        return;
+    }
     room.current_cut = selected;
 }
 
@@ -21966,6 +21975,56 @@ mod tests {
         game.set_camera_cut(0);
         apply_camera(&mut room, &mut game, Some([50, 0, 50]));
         assert_eq!(game.camera.current_cut, 1, "the zone switch still works");
+    }
+
+    #[test]
+    fn an_re2_zone_switch_waits_on_screen_while_the_player_aims() {
+        use crate::state::{Cut, Zone, ZoneGate};
+
+        let mut room = RoomState {
+            cuts: vec![Cut::default(); 2],
+            sca: Some(Default::default()),
+            ..RoomState::default()
+        };
+        room.zones = vec![
+            Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[0; 2]; 4],
+            },
+            Zone {
+                cam_to: 1,
+                cam_from: 0,
+                corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+        ];
+        room.zone_gates = vec![
+            ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let mut game = game::GameState::new(id, &room);
+        game.is_re2_room = true;
+
+        // `Cut_check` moves the live cut; `Swap_Cbuff` loads no background
+        // while `fg_status`'s 0x80 is up, so the screen keeps cut 0.
+        game.re2.view_held = true;
+        apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(game.camera.current_cut, 1);
+        assert_eq!(room.current_cut, 0);
+
+        // Once the aim ends, the next pass brings the live cut on screen.
+        game.re2.view_held = false;
+        apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(room.current_cut, 1);
     }
 
     #[test]
