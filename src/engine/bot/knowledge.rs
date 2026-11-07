@@ -135,6 +135,9 @@ pub struct Enemy {
     /// A ranged attack the bot dodges ahead of time (an optional `<spit>`
     /// element): see [`Spit`].
     pub spit: Option<Spit>,
+    /// A boss kept at a distance with shots between runs (an optional
+    /// `<kite>` element): see [`Kite`].
+    pub kite: Option<Kite>,
     pub keeps: Vec<Keep>,
 }
 
@@ -159,6 +162,47 @@ pub struct Spit {
     /// The spitter's melee keep-away: a spot this far from its centre is
     /// out of its bite (`bite`).
     pub bite: i32,
+}
+
+/// A boss that no gun out-damages before it closes, kept at a distance
+/// instead (303's Tyrant: the rocket launcher Brad drops ends it). The bot
+/// runs a loop around the room's `<kite>` centre and stops to shoot while
+/// it is far. Each hit holds off its rush (the `cooldown` walking ticks
+/// after the last one); its charge is run across and its rush dodged past
+/// its flank.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Kite {
+    /// The action behaviour of its walk (`walk`): only then the bot stops
+    /// to shoot.
+    pub walk: u8,
+    /// Its entrance (`entrance`): no kiting before it ends.
+    pub entrance: u8,
+    /// Its charge (`charge`): a straight run that locks its facing for the
+    /// swing, so it is run across.
+    pub charge: u8,
+    /// Its rise (`rise`) and the rush it starts (`rush`): the rush homes in
+    /// and its swing still turns, so the bot sets up during the rise and
+    /// runs past its flank once the swing starts.
+    pub rise: u8,
+    pub rush: u8,
+    /// Its walk speed a tick (`speed`).
+    pub speed: i32,
+    /// Walking ticks from a hit to its rush (`cooldown`).
+    pub cooldown: i32,
+    /// The Manhattan distance a stop to shoot starts from (`shoot`), and
+    /// the nearer one once the rush draws close (`urgent`).
+    pub shoot: i32,
+    pub urgent: i32,
+    /// The Manhattan gap past which it charges (`edge`, less a margin).
+    pub edge: i32,
+    /// The aim drops for the run inside `lower` (inside `hold` while the
+    /// stop has not hit yet, inside `commit` for the killing weapon).
+    pub lower: i32,
+    pub hold: i32,
+    pub commit: i32,
+    /// The distance from it of the spot the bot takes off its facing line
+    /// during the rise (`flank`), dashing past once the rush swings.
+    pub flank: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -377,6 +421,48 @@ fn name_attr(node: Node<'_, '_>) -> Result<String> {
     Ok(name)
 }
 
+fn parse_kite(node: Node<'_, '_>) -> Result<Kite> {
+    check_attributes(
+        node,
+        &[
+            "walk", "entrance", "charge", "rise", "rush", "speed", "cooldown", "shoot", "urgent",
+            "edge", "lower", "hold", "commit", "flank",
+        ],
+    )?;
+    check_leaf(node)?;
+    let kite = Kite {
+        walk: attr(node, "walk")?,
+        entrance: attr(node, "entrance")?,
+        charge: attr(node, "charge")?,
+        rise: attr(node, "rise")?,
+        rush: attr(node, "rush")?,
+        speed: attr(node, "speed")?,
+        cooldown: attr(node, "cooldown")?,
+        shoot: attr(node, "shoot")?,
+        urgent: attr(node, "urgent")?,
+        edge: attr(node, "edge")?,
+        lower: attr(node, "lower")?,
+        hold: attr(node, "hold")?,
+        commit: attr(node, "commit")?,
+        flank: attr(node, "flank")?,
+    };
+    if kite.speed <= 0 || kite.cooldown <= 0 || kite.flank <= 0 {
+        bail!("{}: needs speed, cooldown and flank > 0", at(node));
+    }
+    if !(kite.commit <= kite.hold
+        && kite.hold <= kite.lower
+        && kite.lower < kite.urgent
+        && kite.urgent <= kite.shoot
+        && kite.shoot <= kite.edge)
+    {
+        bail!(
+            "{}: needs commit <= hold <= lower < urgent <= shoot <= edge",
+            at(node)
+        );
+    }
+    Ok(kite)
+}
+
 fn parse_spit(node: Node<'_, '_>) -> Result<Spit> {
     check_attributes(
         node,
@@ -457,7 +543,15 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     };
     let mut keeps = Vec::new();
     let mut spit = None;
+    let mut kite = None;
     for child in elements(node) {
+        if child.tag_name().name() == "kite" {
+            if kite.is_some() {
+                bail!("{}: one <kite> per enemy", at(child));
+            }
+            kite = Some(parse_kite(child)?);
+            continue;
+        }
         if child.tag_name().name() == "spit" {
             if spit.is_some() {
                 bail!("{}: one <spit> per enemy", at(child));
@@ -548,6 +642,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         open,
         save,
         spit,
+        kite,
         keeps,
     })
 }
@@ -666,6 +761,24 @@ impl Knowledge {
                 row.set("glob_spawn", spit.spawn)?;
                 row.set("glob_speed", spit.speed)?;
                 row.set("bite_keep", spit.bite)?;
+            }
+            if let Some(kite) = &enemy.kite {
+                let t = lua.create_table()?;
+                t.set("walk", kite.walk)?;
+                t.set("entrance", kite.entrance)?;
+                t.set("charge", kite.charge)?;
+                t.set("rise", kite.rise)?;
+                t.set("rush", kite.rush)?;
+                t.set("speed", kite.speed)?;
+                t.set("cooldown", kite.cooldown)?;
+                t.set("shoot", kite.shoot)?;
+                t.set("urgent", kite.urgent)?;
+                t.set("edge", kite.edge)?;
+                t.set("lower", kite.lower)?;
+                t.set("hold", kite.hold)?;
+                t.set("commit", kite.commit)?;
+                t.set("flank", kite.flank)?;
+                row.set("kite", t)?;
             }
             let keeps = lua.create_table()?;
             for keep in &enemy.keeps {
@@ -817,6 +930,61 @@ mod tests {
         assert!(parse(&text.replace(" bite=\"2600\"", "")).is_err());
         assert!(parse(&text.replace("bite=", "bit=")).is_err());
         let twice = text.replace("</enemy>", "<spit behavior=\"1\" tell=\"1:1\" fan=\"1\" hit=\"1\" spawn=\"1\" speed=\"1\" bite=\"1\"/></enemy>");
+        assert!(parse(&twice).is_err());
+    }
+
+    #[test]
+    fn a_kite_parses_and_rejects_bad_bands() {
+        let text = r#"<knowledge format="1">
+            <enemy id="16" name="tyrant" policy="fight" stand="torso" downed="none"
+                up="no" reach="3500" grabs="no" outrun="no" speed="unknown" health="unknown">
+                <kite walk="1" entrance="9" charge="8" rise="11" rush="10" speed="120"
+                    cooldown="210" shoot="10000" urgent="8500" edge="11500" lower="7500"
+                    hold="6000" commit="3500" flank="1600"/>
+            </enemy>
+        </knowledge>"#;
+        let k = parse(text).unwrap();
+        assert_eq!(
+            k.enemies[0].kite,
+            Some(Kite {
+                walk: 1,
+                entrance: 9,
+                charge: 8,
+                rise: 11,
+                rush: 10,
+                speed: 120,
+                cooldown: 210,
+                shoot: 10000,
+                urgent: 8500,
+                edge: 11500,
+                lower: 7500,
+                hold: 6000,
+                commit: 3500,
+                flank: 1600,
+            })
+        );
+        // The bands out of order, a zero speed or flank, a missing or
+        // misspelt attribute, and two kites all fail.
+        for (from, to) in [
+            ("hold=\"6000\"", "hold=\"8000\""),
+            ("urgent=\"8500\"", "urgent=\"7500\""),
+            ("edge=\"11500\"", "edge=\"9000\""),
+            ("commit=\"3500\"", "commit=\"6500\""),
+            ("speed=\"120\"", "speed=\"0\""),
+            ("flank=\"1600\"", "flank=\"0\""),
+            (" flank=\"1600\"", ""),
+            ("cooldown=", "cooldwn="),
+        ] {
+            assert!(parse(&text.replace(from, to)).is_err(), "{to}");
+        }
+        let kite = text
+            .split("<kite")
+            .nth(1)
+            .unwrap()
+            .split("/>")
+            .next()
+            .unwrap();
+        let twice = text.replace("</enemy>", &format!("<kite{kite}/></enemy>"));
         assert!(parse(&twice).is_err());
     }
 

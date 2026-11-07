@@ -21,4 +21,7 @@
   <use slot="6" item="0x2A" bank="4" bit="0" label="light the flare"/>
   <fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0" stage="5"
          label="the Tyrant on the heliport"/>
+  <!-- The kiting loop: the middle of the deck's open floor (x 9800 to
+       29500, z 4700 to 24000, the Tyrant's walk zone). -->
+  <kite enemy="0x10" x="19650" z="14000" radius="8000"/>
 </bot>
