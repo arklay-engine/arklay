@@ -71,6 +71,10 @@ mod imp {
         modules: Rc<RefCell<HashMap<String, Value>>>,
         /// Modules currently being loaded, for `require` cycle detection.
         loading: Rc<RefCell<HashSet<String>>>,
+        /// Compiled `display` functions of the interactive screens, by entry.
+        screens: HashMap<String, Function>,
+        /// Screen entries the pack lacks, or whose script failed.
+        screens_parked: HashSet<String>,
     }
 
     impl Default for LuaEnemyHost {
@@ -92,6 +96,8 @@ mod imp {
                 pack: Rc::new(Cell::new(std::ptr::null())),
                 modules: Rc::new(RefCell::new(HashMap::new())),
                 loading: Rc::new(RefCell::new(HashSet::new())),
+                screens: HashMap::new(),
+                screens_parked: HashSet::new(),
             }
         }
 
@@ -110,6 +116,8 @@ mod imp {
             self.failed.clear();
             self.modules = Rc::new(RefCell::new(HashMap::new()));
             self.loading = Rc::new(RefCell::new(HashSet::new()));
+            self.screens.clear();
+            self.screens_parked.clear();
         }
 
         /// The number of compiled scripts held.
@@ -225,6 +233,107 @@ mod imp {
                     false
                 }
             }
+        }
+
+        /// Run `display(api, s)` of the interactive screen script `entry`
+        /// (see [`crate::interactive`]), with its state table `s` built from
+        /// and written back to `state`.
+        ///
+        /// Returns whether the script ran. A missing script is parked
+        /// silently; one that fails to load, or errors, is logged and parked.
+        /// A parked script stays off until the VM is reset. An erroring call
+        /// leaves `state` as it was.
+        pub fn call_screen<T: UserData + 'static>(
+            &mut self,
+            pack: &Pack,
+            entry: &str,
+            state: &mut crate::interactive::ScriptValue,
+            api: &mut T,
+        ) -> bool {
+            self.pack.set(pack as *const Pack);
+            let Some(function) = self.screen_function(pack, entry) else {
+                return false;
+            };
+            self.budget.begin();
+            let result = {
+                let lua = self.lua.as_ref().expect("a compiled function implies a VM");
+                crate::interactive::to_lua(lua, state).and_then(|table| {
+                    lua.scope(|scope| {
+                        let api = scope.create_userdata_ref_mut(api)?;
+                        function.call::<()>((api, table.clone()))
+                    })?;
+                    crate::interactive::from_lua(&table)
+                })
+            };
+            match result {
+                Ok(value) => {
+                    *state = value;
+                    true
+                }
+                Err(err) => {
+                    eprintln!("[interactive] {entry} disabled: {err}");
+                    self.screens.remove(entry);
+                    self.screens_parked.insert(entry.to_string());
+                    false
+                }
+            }
+        }
+
+        /// The compiled `display` function of the screen script `entry`,
+        /// loading it from the pack on first use.
+        fn screen_function(&mut self, pack: &Pack, entry: &str) -> Option<Function> {
+            if let Some(function) = self.screens.get(entry) {
+                return Some(function.clone());
+            }
+            if self.screens_parked.contains(entry) {
+                return None;
+            }
+            self.screens_parked.insert(entry.to_string());
+            let bytes = pack.read(entry).ok()?;
+            if let Err(err) = budget::check_len(
+                bytes.len(),
+                budget::MAX_LUA_CHUNK,
+                &format!("screen script {entry}"),
+            ) {
+                eprintln!("[interactive] {err:#}");
+                return None;
+            }
+            if !self.ensure_vm() {
+                return None;
+            }
+            let lua = self.lua.as_ref().expect("ensure_vm created the state");
+            let env = match create_env(
+                lua,
+                Rc::clone(&self.pack),
+                Rc::clone(&self.modules),
+                Rc::clone(&self.loading),
+                entry,
+            ) {
+                Ok(env) => env,
+                Err(err) => {
+                    eprintln!(
+                        "[interactive] failed to create the environment for {entry}: {err:#}"
+                    );
+                    return None;
+                }
+            };
+            self.budget.begin();
+            if let Err(err) = lua
+                .load(&*bytes)
+                .set_name(entry.to_string())
+                .set_environment(env.clone())
+                .exec()
+            {
+                eprintln!("[interactive] failed to load {entry}: {err:#}");
+                return None;
+            }
+            let Ok(Value::Function(display)) = env.get::<Value>("display") else {
+                eprintln!("[interactive] {entry} defines no display function");
+                return None;
+            };
+            self.screens_parked.remove(entry);
+            self.screens.insert(entry.to_string(), display.clone());
+            Some(display)
         }
 
         /// The compiled `update` function of `id`, loading the script from the

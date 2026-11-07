@@ -12,6 +12,7 @@ file, network or clock access. A script reaches other pack files only with
 | [Screen scripts](screen.md) | whole screens in Lua: the title, the menus, a save screen a pack registers with `api:register_save_screen` | `ui/<screen>.lua` |
 | [GUI DOM](gui.md) | the scripting side of the engine's XML menu markup; a pack cannot supply a GUI script yet | |
 | [Enemy scripts](enemy.md) | RE 1's per-tick `update(e)` for every enemy and character | `enemy/<id>/enemy.lua` |
+| [Interactive screens](interactive.md) | RE 1's screens over the live room, such as the lab computer: a per-tick `display(api, s)` | `interactive/<screen>.lua` |
 | [RE 2 enemy scripts](re2-enemy.md) | RE 2's per-tick `update(e)` | `enemy/<id>/enemy.lua` |
 
 The pages are generated from the LuaLS definition files the engine ships,

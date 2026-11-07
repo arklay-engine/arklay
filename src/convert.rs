@@ -4672,10 +4672,14 @@ mod tests {
         assert_eq!(
             pack.paths()
                 .filter(|path| path.ends_with(".lua"))
-                .filter(|path| path.starts_with("enemy/") || path.starts_with("lib/"))
+                .filter(|path| {
+                    ["enemy/", "interactive/", "lib/"]
+                        .iter()
+                        .any(|dir| path.starts_with(dir))
+                })
                 .count(),
             crate::enemy::ENEMY_SCRIPTS.len(),
-            "the checked-in enemy scripts are independent of the install"
+            "the checked-in enemy-VM scripts are independent of the install"
         );
 
         // Present files resolve; only the missing two are named.

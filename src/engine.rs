@@ -14973,9 +14973,9 @@ struct EffectPageCache {
     room: Option<RoomId>,
     pages: EffectPages,
     re2: Re2EffectPages,
-    /// The lab computer's texture pages ([`crate::computer_lab::PAGE_ENTRIES`]),
-    /// decoded the first time the terminal draws.
-    lab: Option<Vec<Option<Image>>>,
+    /// The interactive screens' texture pages by pack entry, decoded the
+    /// first time a screen draws from them.
+    interactive: HashMap<String, Option<Image>>,
 }
 
 impl EffectPageCache {
@@ -14988,23 +14988,21 @@ impl EffectPageCache {
         &self.pages
     }
 
-    /// The lab computer's pages, decoded once.
-    fn lab_pages(&mut self, pack: &Pack) -> &[Option<Image>] {
-        self.lab.get_or_insert_with(|| {
-            crate::computer_lab::PAGE_ENTRIES
-                .iter()
-                .map(|entry| {
-                    let page = pack
-                        .read(entry)
-                        .ok()
-                        .and_then(|data| crate::computer_lab::decode_page(&data));
-                    if page.is_none() {
-                        eprintln!("warning: missing lab computer page {entry}");
-                    }
-                    page
-                })
-                .collect()
-        })
+    /// Decode the interactive screens' pages `entries` not decoded yet.
+    fn load_interactive_pages(&mut self, pack: &Pack, entries: &[String]) {
+        for entry in entries {
+            if self.interactive.contains_key(entry) {
+                continue;
+            }
+            let page = pack
+                .read(entry)
+                .ok()
+                .and_then(|data| crate::interactive::decode_page(&data));
+            if page.is_none() {
+                eprintln!("warning: missing interactive screen page {entry}");
+            }
+            self.interactive.insert(entry.clone(), page);
+        }
     }
 }
 
@@ -15809,26 +15807,27 @@ struct RoomContext<'a> {
     enemy_lua: Option<&'a mut enemy::LuaEnemyHost>,
 }
 
-/// One frame of the room-5060 lab computer (`display_computer_lab`), while
-/// the interactive-screen gate is up. An RE1 room only: the gate bits mean
-/// something else in RE2.
-fn tick_lab_terminal(context: &mut RoomContext<'_>, cancel_held: bool) {
+/// One frame of the interactive screens (`check_and_display_interactive_
+/// screen`), the pack's `interactive/*.lua` scripts. An RE1 room only: the
+/// gate bits mean something else in RE2. The scripts run in the enemy VM; a
+/// context without one (a test fixture) shows no screen.
+fn tick_interactive(context: &mut RoomContext<'_>, cancel_held: bool) {
     if context.game.is_re2_room {
         return;
     }
-    let mut terminal = std::mem::take(&mut context.game.lab_terminal);
-    let pad = terminal.pad_from_dpad(
-        context.game.dpad_held,
-        context.game.dpad_pressed,
+    let Some(lua) = context.enemy_lua.as_deref_mut() else {
+        return;
+    };
+    crate::interactive::tick(
+        &mut crate::interactive::Host {
+            game: context.game,
+            room: context.room,
+            player: context.player,
+            pack: context.pack,
+        },
+        lua,
         cancel_held,
     );
-    terminal.tick(&mut crate::computer_lab::Host {
-        game: context.game,
-        room: context.room,
-        player: context.player,
-        pad,
-    });
-    context.game.lab_terminal = terminal;
 }
 
 /// The pad-driven half of the player's frame: the control gate has passed, so
@@ -16130,11 +16129,12 @@ fn tick_room_timed(
     // re-slice follows the flag here too, ahead of the camera switch.
     apply_screen_border(context.game, context.room);
     // `check_and_display_interactive_screen` runs right after the scripts: the
-    // room action's event has raised scenario flag 0x20 by now, and room
-    // 5060's init set the system bit that selects the lab computer. Its forced
-    // cuts count as a switch for the effect reprojection below.
+    // room action's event has raised scenario flag 0x20 by now, and the
+    // room's init set the system bit that selects its screen (room 5060's
+    // lab computer). A screen's forced cuts count as a switch for the effect
+    // reprojection below.
     let previous_cut = context.room.current_cut;
-    tick_lab_terminal(&mut context, input.cancel_held);
+    tick_interactive(&mut context, input.cancel_held);
     // The original's `check_camera_switch(0)` runs after the scripts and
     // BEFORE `update_entities`/`update_player_anim`, so it tests the position
     // the scripts left rather than this tick's movement. That is what makes a
@@ -19035,10 +19035,8 @@ fn render_frame_on(
         .re2
         .prepare(&game.re2.effects, &game.re2.effects.pages());
     effect_cache.pages_for(pack, id, &game.room_effects);
-    let lab_sprites = game.lab_terminal.sprites().to_vec();
-    if !lab_sprites.is_empty() {
-        effect_cache.lab_pages(pack);
-    }
+    let screen_sprites = game.interactive.sprites();
+    effect_cache.load_interactive_pages(pack, game.interactive.pages());
     let pages = &effect_cache.pages;
     let re2_images = &effect_cache.re2;
     let mut quads = build_effect_quads(game, room, id, &camera, pages, tween);
@@ -19064,16 +19062,18 @@ fn render_frame_on(
             ..quad
         }));
     }
-    // The lab computer's monitor and keyboard sprites, which sort among the
-    // arms' triangles like the original's ordering table.
-    if let Some(lab) = effect_cache
-        .lab
-        .as_ref()
-        .filter(|_| !lab_sprites.is_empty())
-    {
+    // An interactive screen's sprites (the lab computer's monitor and
+    // keyboard), which sort among the scene's triangles like the original's
+    // ordering table.
+    if !screen_sprites.is_empty() {
         let first = page_refs.len();
-        page_refs.extend(lab.iter().map(Option::as_ref));
-        quads.extend(lab_sprites.iter().map(|quad| EffectQuad {
+        page_refs.extend(
+            game.interactive
+                .pages()
+                .iter()
+                .map(|entry| effect_cache.interactive.get(entry).and_then(Option::as_ref)),
+        );
+        quads.extend(screen_sprites.iter().map(|quad| EffectQuad {
             page: quad.page + first,
             ..*quad
         }));

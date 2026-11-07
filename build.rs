@@ -73,8 +73,14 @@ fn main() {
         }
     }
 
-    // The enemy scripts carry the shared top-level `lib/` modules they require.
-    emit_scripts(&["enemy", "lib"], "ENEMY_SCRIPTS", "enemy_scripts.rs", &[]);
+    // The enemy scripts carry the shared top-level `lib/` modules they require,
+    // and the interactive screens that run in the same VM.
+    emit_scripts(
+        &["enemy", "interactive", "lib"],
+        "ENEMY_SCRIPTS",
+        "enemy_scripts.rs",
+        &[],
+    );
     emit_scripts(&["ui"], "UI_SCRIPTS", "ui_scripts.rs", &[]);
     let flags = emit_flag_names();
     emit_scripts(&["game"], "GAME_SCRIPTS", "game_scripts.rs", &[flags]);

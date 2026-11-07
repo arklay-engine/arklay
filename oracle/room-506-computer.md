@@ -1,12 +1,13 @@
 # Room 506, the lab computer against the reference
 
 The room-5060 terminal (`display_computer_lab`, `ComputerLab.cpp`, with the
-two forearm models of the `ComputerArms` enemy) is `src/computer_lab.rs`. It
-runs inside the game loop where the reference runs
-`check_and_display_interactive_screen`: after the room scripts, before
-`check_camera_switch(0)` and the entity update. The world keeps ticking under
-it, so the arms, the camera switches and the random stream are compared
-through the trace as well as through the frames.
+two forearm models of the `ComputerArms` enemy) is the pack script
+`games/re1/interactive/computer_lab.lua`, over the engine's
+interactive-screen host (`src/interactive.rs`). It runs inside the game loop
+where the reference runs `check_and_display_interactive_screen`: after the
+room scripts, before `check_camera_switch(0)` and the entity update. The
+world keeps ticking under it, so the arms, the camera switches and the random
+stream are compared through the trace as well as through the frames.
 
 ## Scenarios
 
@@ -44,7 +45,7 @@ through the credentials-again path at B2. Both match.
   the forearms are culled.
 - **Cancel.** The terminal reads cancel off the raw pad bit `0x0040`, which
   run shares. `arklay` binds cancel and run to separate keys, so the terminal
-  folds the cancel key into that bit (`Terminal::pad_from_dpad`).
+  folds the cancel key into that bit (`InteractiveState::pad_from_dpad`).
 - **Masked characters.** The password and command fields print `*` with
   `PrintText8x8(.., 0xf0, 0)`: brightness nibble 15 draws the glyph at
   15 * 255 / 30 = 127, half grey.
