@@ -1423,6 +1423,11 @@ impl GameHost<'_> {
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
             work.kind = kind;
+            let room = u16::from(self.game.id.stage) << 8 | u16::from(self.game.id.room);
+            let given = &mut self.game.re2_enemy_dest;
+            if let Some(index) = given.iter().position(|&(r, s, _)| (r, s) == (room, slot)) {
+                work.dest = given.remove(index).2;
+            }
         }
         let characters = &mut self.game.re2.characters.0;
         characters.resize_with(CHARACTER_SLOTS, || None);
@@ -2342,6 +2347,22 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    #[test]
+    fn a_setup_scripts_dest_starts_the_next_zombie_in_its_slot_and_room() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("1020").unwrap();
+        game.re2_enemy_dest = vec![(0x102, 2, [224, 28708]), (0x118, 2, [5, 6])];
+        let zombie = [
+            0, 2, 0x1F, 70, 128, 0, 7, 0, 54, 20000, 20000, 20000, 4056, 0, 0,
+        ];
+        let dest = |game: &GameState| game.re2.characters.0[2].as_ref().unwrap().work.dest;
+        exec(&mut game, "sce_em_set", &zombie);
+        assert_eq!(dest(&game), [224, 28708]);
+        assert_eq!(game.re2_enemy_dest, [(0x118, 2, [5, 6])], "used once");
+        exec(&mut game, "sce_em_set", &zombie);
+        assert_eq!(dest(&game), [0, 0], "the room's next load starts it at 0");
     }
 
     #[test]
