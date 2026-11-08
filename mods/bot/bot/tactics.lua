@@ -1992,8 +1992,17 @@ local function kite_step(bot, s, player)
     -- The last hit on it (its health drops; at 200 it springs back).
     if kk.health and e.health < kk.health then
         kk.last_hit = now
+        bot:log(string.format("kite: hit health %d -> %d", kk.health, e.health))
     end
     kk.health = e.health
+    do
+        local w = bot:weapon()
+        if kk.shot_gun == w.equipped and kk.shot_clip and w.clip < kk.shot_clip then
+            bot:log(string.format("kite: shot 0x%02X clip %d d=%d beh=%d", w.equipped or 0,
+                w.clip, d, w.behavior or -1))
+        end
+        kk.shot_gun, kk.shot_clip = w.equipped, w.clip
+    end
 
     local function set_mode(mode, why)
         if kk.mode ~= mode then
@@ -2259,6 +2268,17 @@ local function kite_step(bot, s, player)
     if stop and slow(stop) and not (d >= kite.edge or (recovering and d >= kite.urgent)) then
         stop = nil
     end
+    -- No stop without the sight line (bot:enemies' `visible`): on 513's
+    -- ring the gap is measured the way round the central block, and a stop
+    -- with the tyrant round a corner shot into the wall (five of the
+    -- handgun's last rounds; it was left on 0 health, one hit short, and
+    -- kited with no rounds until the run ended). Out of sight, the bot
+    -- holds at the top of the band below, so it walks round into view:
+    -- running on, the two circled the block on opposite sides.
+    local hidden = not e.visible
+    if hidden then
+        stop = nil
+    end
     if kk.mode == "aim" then
         -- The stop's gun while it has rounds (its loading and ammunition).
         local rounds = 0
@@ -2306,13 +2326,23 @@ local function kite_step(bot, s, player)
             local input = BotTactics.aim_input("torso")
             input.right = err > FACE_BAND
             input.left = err < -FACE_BAND
-            if weapon.behavior == C.HOLD_BEHAVIOR and abs(err) <= FACE_BAND * 2 then
+            -- Only with the sight line clear (see `hidden` below).
+            if weapon.behavior == C.HOLD_BEHAVIOR and abs(err) <= FACE_BAND * 2 and e.visible then
                 input.fire = true
                 input.fire_pressed = true
             end
             bot:set_input(input)
             return true
         end
+    end
+    if kk.mode == "hold" and stop and d >= kite.lower and (ab == kite.walk or ab == 0) then
+        -- Held facing it out of sight: it came round into view, so the
+        -- stop starts here (no run and turn back first).
+        kk.gun = stop
+        bot:log(string.format("kite: stop with gun %s from the hold", tostring(stop)))
+        set_mode("aim", "in sight")
+        kk.aim_start = now
+        return true
     end
     if kk.mode == "hold" and (d < kite.lower or stop) then
         set_mode("lower", "hold over")
@@ -2371,8 +2401,8 @@ local function kite_step(bot, s, player)
     -- No gun: hold at the top of the band, run when it closes.
     -- (Without a charge, a gun too slow for an ordinary stop runs on to
     -- the edge, where its stop fits: 513's shotgun.)
-    if not stop and d >= kite.shoot and kk.mode == "run" and (not gun or kite.charge) then
-        set_mode("hold", "no gun")
+    if not stop and d >= kite.shoot and kk.mode == "run" and (not gun or kite.charge or hidden) then
+        set_mode("hold", gun and "out of sight" or "no gun")
         bot:face_to(e.x, e.z)
         return true
     end

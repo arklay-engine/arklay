@@ -2927,7 +2927,18 @@ function BotPlanner.enter_room(bot, room)
     if t then
         local world = bot:world()
         local goal = target_goal(bot, world, t)
-        local steps = goal and route(bot, world, room.id, goal.room)
+        -- Measured on the route the pursuit walks: a box or a typewriter
+        -- by the map's walking distance (choose). The fewest doors there
+        -- marked every box looping on the richard=leave run, the way over
+        -- the 2F corridors taking more doors than the shortest door count:
+        -- the square crank stayed boxed and the run timed out.
+        local steps
+        if goal and (t.kind == "box" or t.kind == "save") then
+            steps = map_route(bot, world, room.id, goal.room, nil,
+                BotPlanner.action_point(world, goal.room, goal.slot))
+        else
+            steps = goal and route(bot, world, room.id, goal.room)
+        end
         if steps and BotPlanner.pursue(t, #steps) then
             mark_loop(bot, t.kind, t.room, t.slot, string.format(
                 "%d entries without a shorter route", t.stalls))
