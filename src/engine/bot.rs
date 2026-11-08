@@ -3129,6 +3129,10 @@ impl UserData for BotCtx {
                 row.set("bit", entry.fact.gate.flag.1)?;
                 row.set("set", entry.fact.gate.set)?;
                 row.set("same_entry", entry.fact.same_entry)?;
+                if let Some((bank, bit)) = entry.fact.here {
+                    row.set("here_bank", bank)?;
+                    row.set("here_bit", bit)?;
+                }
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }

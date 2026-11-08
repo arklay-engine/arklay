@@ -268,6 +268,15 @@ local function reach_fact(bot, room, slot)
     return nil
 end
 
+-- Whether a <reach> fact's flag is in its state now: its here flag while
+-- the bot is in the fact's room (216's shelf probe), else bank/bit.
+local function reach_state(bot, fact)
+    if fact.here_bank and fact.room == bot:room().id then
+        return bot:flag(fact.here_bank, fact.here_bit) == fact.set
+    end
+    return bot:flag(fact.bank, fact.bit) == fact.set
+end
+
 -- Whether a <reach> fact keeps door `slot` of room `room` out of reach now:
 -- its flag is not in its state, or (entry="same") the bot is not in the
 -- room on the entry the flag got there. False for a door with no fact.
@@ -276,7 +285,7 @@ local function reach_closed(bot, room, slot)
     if not fact then
         return false
     end
-    if bot:flag(fact.bank, fact.bit) ~= fact.set then
+    if not reach_state(bot, fact) then
         return true
     end
     if fact.same_entry then
@@ -296,8 +305,7 @@ local function note_reaches(p, bot, room_id)
     p.reach_entry = p.reach_entry or {}
     for _, fact in ipairs(bot:reach_facts()) do
         if fact.room == room_id and fact.same_entry then
-            p.reach_entry[room_id .. ":" .. fact.slot] =
-                bot:flag(fact.bank, fact.bit) == fact.set
+            p.reach_entry[room_id .. ":" .. fact.slot] = reach_state(bot, fact)
         end
     end
 end
@@ -315,7 +323,11 @@ local function mark(bot, kind, room, slot, reason, permanent)
     -- A door with a <reach> fact: the mark lifts once the fact's flag
     -- changes (blocked), not on a puzzle step anywhere (clear_unreachable).
     local reach = kind == "door" and reach_fact(bot, room, slot)
-    m.reach_state = reach and (bot:flag(reach.bank, reach.bit) == reach.set) or nil
+    if reach then
+        m.reach_state = reach_state(bot, reach)
+    else
+        m.reach_state = nil
+    end
     p.marks[key] = m
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
 end
@@ -377,7 +389,7 @@ local function blocked(bot, kind, room, slot, remote)
         -- A door with a <reach> fact, marked with its flag in one state:
         -- tried again once the flag is in the other.
         local reach = reach_fact(bot, room, slot)
-        if reach and (bot:flag(reach.bank, reach.bit) == reach.set) ~= m.reach_state then
+        if reach and reach_state(bot, reach) ~= m.reach_state then
             plan().marks[mark_key(kind, room, slot)] = nil
             return false
         end

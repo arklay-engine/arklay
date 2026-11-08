@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 216, library A (doors to 213, 217 and, behind the bookshelf, 218).
+
+     Door 2 to 218, the hidden library, sits behind bookshelf object 0,
+     which init puts in front of it at x 4732 until 218 has been entered
+     (scenario 0x4F, set by 218's init on the second visit), and on its
+     spot at x 2532 after. AOT 6 (SCE_USEITEM, SAT_UNDER | SAT_OBJECT) is
+     an object probe on that spot: each tick, after the room's main pass,
+     it sets room flag 0x18 while the shelf stands on it. On the second
+     mansion visit main runs every tick: it reads 0x18, clears it, and
+     turns door 2 on while it was set, off while it was clear. So the door
+     is live only while the shelf stands on the spot; nothing marks that
+     but the pulse and, once 218 was entered, scenario 0x4F.
+
+     218 holds nothing the story needs: 15 handgun rounds, ink ribbons and
+     the heliport seen from the window (scenario 0x60, which no other room
+     reads), so the bot leaves the shelf alone. (On the first visit main
+     leaves door 2 alone, but 218's init then sets no door back to 216.)
+     A push does work on the second visit, for a later route that wants
+     the rounds: <push object="0" slot="6" axis="x" bank="0" bit="0x4F"
+     after_bank="0" after_bit="0x00">, from the south end of the shelf's
+     east face (a wall box, x 6354..8316 from z 15336, stands behind the
+     rest: it needs stand lines five sixths of the half depth out, past
+     nav.lua's PUSH_LATERALS), done also at 0x4F since init's spot, x 2532,
+     is short of the middle half of the probe's zone. Tried on seed 1 it
+     took the detour (about 1200 ticks) and the sandwich run then ended on
+     an empty frontier, the MO disk in 217 never fitting the inventory.
+
+     The <reach> keeps the planner off door 2 while the shelf is not on
+     its spot: in the room the probe's room flag decides, from elsewhere
+     scenario 0x4F. Without it the bot walked back from far away to try
+     the door and gave up on every approach, over and over. -->
+<bot format="2">
+  <reach slot="2" bank="0" bit="0x4F" while="set" here_bank="4" here_bit="0x18"
+         label="the door to 218 is live only while the bookshelf stands on its spot"/>
+</bot>
