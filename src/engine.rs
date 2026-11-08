@@ -15652,6 +15652,7 @@ fn run_re2_init(
     game.re2.characters = Default::default();
     game.re2.enemies = 0;
     game.re2.room_enemy = 0;
+    game.re2.em2d_groan = 0;
     game.re2.sound_types = [0; 2];
     game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;

@@ -1,0 +1,42 @@
+# Room 205's bodies in the walls, `Em_2D` (oracle/re2.md, "Em_2D"). Each run warps to the door from
+# room 206, with 4:48 set as room 10C sets it, so that the room's two areas run events 3 and 4.
+
+[[run]]
+name = "em2d_load_205"
+room = "205"
+sound = false
+ticks = 1400
+# the load: the ten bodies' inits and the freeze, with the player standing at the door
+setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+expect = "match"
+record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
+
+[[run]]
+name = "em2d_watch_205"
+room = "205"
+sound = false
+ticks = 1500
+# both groups released, each standing far enough off that no arm reaches: the hidden wait, the arming, the way out, the head turn, the retreat and the end, for all ten
+setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
+input = "em2d_watch_205.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+expect = "match"
+record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
+
+[[run]]
+name = "em2d_watch_205_claire"
+room = "205"
+player = 1
+character = 1
+sound = false
+ticks = 1500
+# the same walk as Claire, in Claire A
+setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
+input = "em2d_watch_205.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+expect = "match"
+record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
