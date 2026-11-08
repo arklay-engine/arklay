@@ -17150,8 +17150,7 @@ fn tick_room_timed(
     {
         // `Sce_at`: RE2's action areas answer the check a `pl_br_*` asked for
         // this tick, from where the move left the player.
-        let check = context.game.is_re2_room
-            && std::mem::take(&mut context.game.re2.player.check);
+        let check = context.game.is_re2_room && std::mem::take(&mut context.game.re2.player.check);
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, check);
     }
