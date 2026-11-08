@@ -373,6 +373,8 @@ pub struct Work {
     pub(crate) sce_blood: Option<(bool, [i16; 3])>,
     /// The part `Mag_set` drops.
     pub(crate) magazine: Option<Magazine>,
+    /// The bowgun's bolts, while it's held (`Plw_init_tbl` sets them up).
+    pub quiver: Option<crate::bow2::Quiver>,
     /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
     pub fired: bool,
     /// The magazine was filled this tick (`Tama_reload`), for the inventory.
@@ -869,6 +871,7 @@ impl Default for Work {
             status_flg: 0,
             sce_blood: None,
             magazine: None,
+            quiver: None,
             fired: false,
             reloaded: false,
             neck: Neck {
@@ -1028,7 +1031,7 @@ impl Weapon {
     /// Whether [`Mover::pl_mv_aim`] handles it: the knife, the starting
     /// handguns, the magnums, the shotguns and the grenade launcher.
     fn aims(&self) -> bool {
-        matches!(self.id, KNIFE | 2 | 3 | 5..=8 | GRENADES..=ACID_ROUNDS)
+        matches!(self.id, KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW)
     }
 
     /// `pl_mv05_w1_t2` looks for no body itself with the launchers and the
@@ -1054,6 +1057,7 @@ impl Weapon {
             7 => [7, 10, 28],
             8 => [0x88, 0x8A, 35],
             GRENADES..=ACID_ROUNDS => [0x8A, 0x8C, 26],
+            crate::bow2::BOW => [0x86, 0x87, 10],
             _ => [0x85, 0x87, 8],
         }
     }
@@ -1307,6 +1311,9 @@ pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
 /// `Joint_move` plays at once, unblended, so `Move_cnt` is 1. The head looks
 /// ahead again. The engine poses that frame on the same tick ([`pose_init`]).
 pub fn pl_init(work: &mut Work) {
+    if let Some(quiver) = &mut work.quiver {
+        quiver.clear();
+    }
     work.routine = [MODE_MOVE, 0, 0, 0];
     work.bank = Bank::Pld;
     work.move_no = 2;
@@ -2757,6 +2764,7 @@ impl Mover<'_, '_> {
                         from: hand.t,
                         matrix: hand.m,
                     });
+            let bow_hand = self.part_matrix(SHOT_PART);
             let clip = match self.work.status_flg >> 13 {
                 1 => AIM_FIRE_CLIPS[0],
                 2 => AIM_FIRE_CLIPS[1],
@@ -2765,6 +2773,16 @@ impl Mover<'_, '_> {
             };
             self.aim_clip(clip);
             self.work.noise |= 1;
+            if self.tick.weapon.id == crate::bow2::BOW {
+                // `FUN_004d58c0`: a silent shot of three bolts.
+                self.work.noise &= !1;
+                if let Some(hand) = bow_hand {
+                    let quiver = self.work.quiver.get_or_insert_with(Default::default);
+                    for side in 0..3 {
+                        quiver.launch(side, &hand, self.player.angle);
+                    }
+                }
+            }
             let hand = self
                 .part_point(HAND_PART, [0; 3])
                 .unwrap_or(self.player.pos);
@@ -2816,7 +2834,8 @@ impl Mover<'_, '_> {
             self.aim_stage(1);
             self.work.spd = [0; 3];
         }
-        let sounds = matches!(self.tick.weapon.id, 7 | GRENADES..=ACID_ROUNDS);
+        // `pl_w01_t2_move`, the bowgun's, only plays them.
+        let sounds = matches!(self.tick.weapon.id, 7 | GRENADES..=crate::bow2::BOW);
         if sounds && self.work.now_seq & FRAME_SOUND != 0 {
             self.player
                 .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
@@ -5636,11 +5655,11 @@ mod weapon_tests {
     #[test]
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
-            [KNIFE, 2, 3, 5, 6, 7, 8]
+            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC]
                 .iter()
                 .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0xC, 13].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 13].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);

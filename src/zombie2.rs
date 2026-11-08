@@ -548,6 +548,13 @@ pub struct Zombie {
     pub(crate) parts: Vec<Option<player2::Matrix>>,
     /// The parts' own rotations on that pose (`+0x68`).
     pub rotations: Vec<[i16; 3]>,
+    /// The parts' `Workm` as this tick's move left them for the draw, which
+    /// the player's bolts read on the next tick (kept while the bowgun is held).
+    pub(crate) drawn: Vec<Option<player2::Matrix>>,
+    /// `pDamage_work`'s `+0x99`: the part the last bolt stuck in.
+    pub bolt_part: u8,
+    /// Its `+0x9a`: the way it flew.
+    pub bolt_yaw: i16,
 }
 
 impl Zombie {
@@ -929,9 +936,12 @@ pub fn em_zombie(
     if let Some(mut body) = em.z.licker.take() {
         licker::run(&mut em, &mut body);
         em.z.licker = Some(body);
-        return;
+    } else {
+        em.run();
     }
-    em.run();
+    if em.world.weapon == crate::bow2::BOW {
+        em.z.drawn = em.mover.posed_parts();
+    }
 }
 
 impl Em<'_, '_, '_> {

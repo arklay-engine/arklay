@@ -866,6 +866,12 @@ function Re2EnemyApi:set_damage_cnt(value) end
 ---@return integer no
 function Re2EnemyApi:damage_no() end
 
+---`pDamage_work`'s `+0x99` and `+0x9a` when the last hit was a bowgun bolt:
+---the part it stuck in and the way it flew.
+---@return integer part
+---@return integer yaw
+function Re2EnemyApi:bolt() end
+
 ---Set `Damage_no`.
 ---@param value integer Truncated to a byte.
 function Re2EnemyApi:set_damage_no(value) end
