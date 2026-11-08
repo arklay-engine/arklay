@@ -372,6 +372,12 @@ impl MessageWindow {
         self.choice_at = Some(choice);
     }
 
+    /// Where [`MessageWindow::place`] put the message, or `None` for the
+    /// font's place.
+    pub fn origin(&self) -> Option<(i32, i32)> {
+        self.origin
+    }
+
     /// Set RE2's typed bit (`fg_message & 0x40`), for a reset that keeps it.
     pub fn set_typed(&mut self, typed: bool) {
         self.typed = typed;
