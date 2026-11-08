@@ -819,7 +819,14 @@ drives the box screen with pad input only.
   a reserve gun's rounds`; no trip is made for it), and the planner loads
   the empty launcher with them: 502's swap boxed the empty launcher for
   the MO disks beside its acid and flame rounds, and the bot met 509's
-  four zombies with four handgun rounds.
+  four zombies with four handgun rounds. Until the held reserve gun is
+  loaded, it and its rounds stay held (`a reserve gun being rearmed`);
+  rounds held beside a boxed launcher are not kept that way, so they can
+  go in (kept, they stopped the rearm and held two slots: with
+  `vjolt=yes` 409's V-JOLT brew found no slot for its last bottle).
+- A box visit takes out one copy of a weapon: the deposit rule boxes a
+  second, and two boxed knives the loadout wanted came out and went back
+  in turn until the run's ticks ran out.
 - Combine first, when every slot is used and a pickup needs room: the best
   pair of heal, ammo or weapon stacks that `bot:combine_result` says the
   engine applies and that empties a slot, heals first (rank 1, guns and

@@ -4174,8 +4174,7 @@ impl BotRuntime {
             self.holds = Rc::new(meta::load_holds(pack, Some(jill), Some(&self.params))?);
             self.fights = Rc::new(meta::load_fights(pack, Some(jill), Some(&self.params))?);
             self.rides = Rc::new(meta::load_rides(pack, Some(jill), Some(&self.params))?);
-            self.revisits =
-                Rc::new(meta::load_revisits(pack, Some(jill), Some(&self.params))?);
+            self.revisits = Rc::new(meta::load_revisits(pack, Some(jill), Some(&self.params))?);
             self.errands = Rc::new(meta::load_errands(pack, Some(jill), Some(&self.params))?);
             self.brews = Rc::new(meta::load_brews(pack, Some(jill), Some(&self.params))?);
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
@@ -6397,6 +6396,23 @@ mod tests {
             return table.concat(out, ",")"#,
         );
         assert_eq!(rearm, "0C,03");
+        // Two boxed knives the loadout wants: one comes out (the deposit
+        // rule would box the second again).
+        let knives = eval::<String>(
+            &vm,
+            r#"local ctx = { heals = 1, loadout = { [0x01] = true } }
+            local rows = {
+                { slot = 0, item = 0x01, kind = "weapon" },
+                { slot = 1, item = 0x44, kind = "heal" },
+                { slot = 2, item = 0x01, kind = "weapon" },
+            }
+            local out = {}
+            for _, row in ipairs(BotInventory.withdrawals(rows, ctx, 4)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end
+            return table.concat(out, ",")"#,
+        );
+        assert_eq!(knives, "01");
         assert_eq!(heal_top_up(4, false), "44,4A");
         assert_eq!(heal_top_up(2, false), "44");
         assert_eq!(heal_top_up(1, false), "");
