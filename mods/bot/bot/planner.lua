@@ -241,6 +241,14 @@ local function plan()
     return BOT_STATE.plan
 end
 
+-- Bumped whenever a mark is added, removed or changes what it holds, so
+-- the per-tick caches of the marks (steps_needing_room, needed_items_left,
+-- the pickup context) never serve a stale count within a tick.
+local function marks_changed()
+    local p = plan()
+    p.marks_gen = (p.marks_gen or 0) + 1
+end
+
 -- The inventory as a string: a failed goal is retried once this changes.
 local function inventory_sig(bot)
     local ids = {}
@@ -329,6 +337,7 @@ local function mark(bot, kind, room, slot, reason, permanent)
         m.reach_state = nil
     end
     p.marks[key] = m
+    marks_changed()
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
 end
 
@@ -339,9 +348,19 @@ end
 -- again, and a done step's mark goes stale with the item it handed over.
 -- With `any_sig`, every such step still held, whatever the inventory: the
 -- slots the pickups that no step or use needs must leave free.
+-- Read once per tick, inventory and marks generation: pickup_fits asks for
+-- every frontier item, and a sorted pairs over every mark per candidate
+-- ran the planner out of its instruction budget (bad route, tick 130880).
+local steps_cache = {}
 function BotPlanner.steps_needing_room(bot, any_sig)
-    local n = 0
     local sig = inventory_sig(bot)
+    local key = string.format("%d|%s|%s|%d", bot:tick(), sig, tostring(any_sig == true),
+        plan().marks_gen or 0)
+    local hit = steps_cache[any_sig and "any" or "sig"]
+    if hit and hit.key == key then
+        return hit.n
+    end
+    local n = 0
     for _, m in pairs(plan().marks) do
         local done = m.done_flag ~= nil
             and bot:flag(m.done_flag.bank, m.done_flag.bit) ~= m.done_flag.clear
@@ -350,6 +369,7 @@ function BotPlanner.steps_needing_room(bot, any_sig)
             n = n + 1
         end
     end
+    steps_cache[any_sig and "any" or "sig"] = { key = key, n = n }
     return n
 end
 
@@ -361,10 +381,11 @@ end
 -- freed for it to every nearer pickup, and the lab had two disks of three.
 -- Read once per tick and inventory: pickup_fits asks for every frontier
 -- item, and bot:world() builds the whole world table.
-local needed_cache = { tick = nil, sig = nil, n = 0 }
+local needed_cache = { key = nil, n = 0 }
 function BotPlanner.needed_items_left(bot)
-    local sig = inventory_sig(bot)
-    if needed_cache.tick == bot:tick() and needed_cache.sig == sig then
+    local key = string.format("%d|%s|%d|%s", bot:tick(), inventory_sig(bot),
+        plan().marks_gen or 0, bot:memory().box_items or "")
+    if needed_cache.key == key then
         return needed_cache.n
     end
     local present = {}
@@ -399,7 +420,7 @@ function BotPlanner.needed_items_left(bot)
             n = n + want
         end
     end
-    needed_cache.tick, needed_cache.sig, needed_cache.n = bot:tick(), sig, n
+    needed_cache.key, needed_cache.n = key, n
     return n
 end
 
@@ -443,6 +464,7 @@ local function blocked(bot, kind, room, slot, remote)
         local reach = reach_fact(bot, room, slot)
         if reach and reach_state(bot, reach) ~= m.reach_state then
             plan().marks[mark_key(kind, room, slot)] = nil
+            marks_changed()
             return false
         end
     end
@@ -453,6 +475,7 @@ local function blocked(bot, kind, room, slot, remote)
             return true
         end
         plan().marks[mark_key(kind, room, slot)] = nil
+        marks_changed()
         return false
     end
     if m.event then
@@ -471,6 +494,7 @@ local function blocked(bot, kind, room, slot, remote)
             return true
         end
         plan().marks[mark_key(kind, room, slot)] = nil
+        marks_changed()
         return false
     end
     if m.lock_bit and bot:flag(C.LOCK_BANK, m.lock_bit) then
@@ -478,6 +502,7 @@ local function blocked(bot, kind, room, slot, remote)
         -- is set: opened from the far side (507's door 0 opens 505's
         -- door 2).
         plan().marks[mark_key(kind, room, slot)] = nil
+        marks_changed()
         return false
     end
     -- A full inventory is no failure of a needed pickup (a key or a <use>
@@ -545,16 +570,19 @@ local function clear_unreachable(bot, room, doors)
             or (doors and m.kind == "door" and not m.permanent
                 and m.reason:find("timed out", 1, true)) then
             plan().marks[key] = nil
+            marks_changed()
         elseif doors and m.event and m.room == room then
             -- So may a door of this room a room event had made a message:
             -- 302's battery powers the elevator whose call showed 132.
             plan().marks[key] = nil
+            marks_changed()
         elseif doors and m.room == room and m.reason:find("hurt while trying", 1, true) then
             -- And an item the bot was hurt going for: the step may have
             -- ended what hurt it. 513's master key was marked while the
             -- Tyrant still stood, two ticks before it fell, and the key
             -- the lab's exit needs stayed on the floor.
             plan().marks[key] = nil
+            marks_changed()
         end
     end
 end
@@ -1626,6 +1654,19 @@ local function inventory_full(bot)
     return used >= (bot:menu().capacity or used + 1)
 end
 
+-- The <use>/keep set of BotInventory.context, read once per tick,
+-- inventory, marks generation and remembered box: pickup_fits asks for it
+-- per frontier item, and the context walks the whole world.
+local uses_cache = { key = nil, uses = nil }
+local function context_uses(bot)
+    local key = string.format("%d|%s|%d|%s", bot:tick(), inventory_sig(bot),
+        plan().marks_gen or 0, bot:memory().box_items or "")
+    if uses_cache.key ~= key then
+        uses_cache.key, uses_cache.uses = key, BotInventory.context(bot).uses
+    end
+    return uses_cache.uses
+end
+
 -- A pickup of `item` fits: a free slot, or a held stack it merges into.
 local function pickup_fits(bot, item, full)
     local kind, merge = bot:item_kind(item)
@@ -1644,7 +1685,7 @@ local function pickup_fits(bot, item, full)
             end
         end
         local free = (bot:menu().capacity or used) - used
-        return free > held or BotInventory.context(bot).uses[item] == true
+        return free > held or context_uses(bot)[item] == true
     end
     -- A document goes to the FILE tab, not a slot.
     return kind == "file" or (merge and bot:has_item(item))
@@ -1912,6 +1953,7 @@ local function choose(bot)
                 -- however it got done (steps_needing_room).
                 m.done_flag = fact.bank and { bank = fact.bank, bit = fact.bit,
                     clear = fact.done_clear == true } or nil
+                marks_changed()
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
             if holds_slot(fact) then
@@ -1920,6 +1962,7 @@ local function choose(bot)
                 local m = plan().marks[key]
                 if m and m.reason:find("inventory full", 1, true) then
                     plan().marks[key] = nil
+                    marks_changed()
                 end
             end
             -- A boss fight ahead waits for health and rounds, a hazard
@@ -2113,6 +2156,7 @@ local function choose(bot)
                 if bot:item_kind(action.item) == "key" or ctx.uses[action.item]
                     or (ctx.required and ctx.required[action.item]) then
                     m.needed = true
+                    marks_changed()
                 end
             elseif BotNav.is_origin_zone(action) then
                 mark(bot, "item", room, action.slot,
@@ -2442,6 +2486,7 @@ local function choose(bot)
                 if m.kind == "interact" and m.room == room
                     and m.reason:find("not ready for the fight", 1, true) then
                     p.marks[key] = nil
+                    marks_changed()
                 end
             end
             p.target = nil
@@ -2606,7 +2651,10 @@ local function choose(bot)
                                 + BotInventory.boxed_count(bot, goal.item) then
                                 bonus = ITEM_BONUS + USE_BONUS + HELD_USE_BONUS
                                 tag = "for " .. (use_label or "a use")
-                                left.needed = true
+                                if not left.needed then
+                                    left.needed = true
+                                    marks_changed()
+                                end
                             end
                         end
                         heal_target = heals and goal.item_kind == "heal" or nil
@@ -2899,6 +2947,7 @@ local function forgive_approaches(bot)
             else
                 m.sig = ""
                 m.entry = nil
+                marks_changed()
                 bot:log("frontier empty; retrying " .. key .. " (" .. m.reason .. ")")
             end
             n = n + 1
@@ -2921,6 +2970,7 @@ local function forgive_fight(bot)
         if m.reason:find("not ready for the fight", 1, true) then
             if m.room == room then
                 p.marks[key] = nil
+                marks_changed()
                 p.forced_fight = { room = room, entry = (p.entries or {})[room] }
                 forgiven = true
                 bot:log("frontier empty; fighting anyway: " .. key .. " (" .. m.reason .. ")")
@@ -2936,6 +2986,7 @@ local function forgive_fight(bot)
         for key, m in pairs(p.marks) do
             if m.room == remote.room and m.reason:find("not ready for the fight", 1, true) then
                 p.marks[key] = nil
+                marks_changed()
             end
         end
         p.forced_fight = { room = remote.room, entry = ((p.entries or {})[remote.room] or 0) + 1 }
@@ -3419,6 +3470,7 @@ function BotPlanner.step(bot)
             if goal.kind == "use" then
                 -- A retried turning piece (see use_goal) did its step.
                 p.marks[mark_key("use", room, goal.slot)] = nil
+                marks_changed()
             end
             -- A room event (an object moved off an item) may open what
             -- was unreachable here.
