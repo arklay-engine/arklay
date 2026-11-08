@@ -601,23 +601,22 @@ impl InteractiveState {
     }
 
     /// `PrintText8x8(text, x, y, colour, 0)`: the 8x8 font at screen pixel
-    /// `(x, y)`, in the overlay pass after every sprite. The colour's high
-    /// nibble is the brightness (`n * 255 / 30`, 0 and 2 meaning full), the low
-    /// nibble the CLUT tint (0 white, 1 green, 2 red, 3 grey, else yellow).
+    /// `(x, y)`, in the overlay pass after every sprite. The colour's low
+    /// nibble is the CLUT tint (0 white, 1 green, 2 red, 3 grey, else
+    /// yellow). The high nibble is the brightness, which the original's
+    /// `AddTintSprite` (JPN 0x00441120) only turns into the sprite's ordering
+    /// depth (`n * 16 + 0x1C2`): it never scales the colour, so the lab
+    /// terminal's `0xF0` star is plain white. Every glyph here draws in the
+    /// overlay pass, so the brightness is ignored.
     fn print8x8(&mut self, x: i32, y: i32, text: &[u8], colour: u8) {
         let page = self.page_index(FONT_PAGE);
-        let brightness = match u32::from(colour >> 4) {
-            0 | 2 => 255,
-            level => (level * 255 / 30).min(255),
-        };
-        let tint: [u32; 3] = match colour & 0xf {
+        let tint: [u8; 3] = match colour & 0xf {
             0 => [255, 255, 255],
             1 => [0, 255, 0],
             2 => [255, 0, 0],
             3 => [204, 204, 204],
             _ => [255, 255, 0],
         };
-        let tint = tint.map(|channel| (channel * brightness / 255) as u8);
         let mut x = x;
         for &ch in text {
             if ch != b' ' {
@@ -1168,11 +1167,11 @@ mod tests {
     }
 
     #[test]
-    fn the_masked_star_is_half_grey() {
+    fn the_masked_star_is_white_whatever_its_brightness() {
         let mut state = InteractiveState::default();
         state.print8x8(10, 20, b"* *", 0xf0);
         assert_eq!(state.sprites.len(), 2);
-        assert_eq!(state.sprites[0].tint, [127; 3]);
+        assert_eq!(state.sprites[0].tint, [255; 3]);
         assert_eq!(state.sprites[0].uv[..2], [80, 0]);
         assert_eq!(state.sprites[1].pos, [26, 20]);
     }

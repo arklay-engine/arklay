@@ -252,9 +252,10 @@ function ScreenApi:effect_sprite(desc, key, slot, count) end
 function ScreenApi:add_sprite(desc, depth, slot, count) end
 
 ---`PrintText8x8`: `text` in the 8x8 font at screen pixel `(x, y)`, in the
----overlay pass after every sprite. `colour`'s high nibble is the brightness
----(`n * 255 / 30`, `0` and `2` full), its low nibble the tint (`0` white, `1` green,
----`2` red, `3` grey, otherwise yellow). Unlike the original it leaves the
+---overlay pass after every sprite. `colour`'s low nibble is the tint (`0`
+---white, `1` green, `2` red, `3` grey, otherwise yellow). Its high nibble,
+---the brightness, does not change the colour: the original only sorts the
+---glyphs by it, and arklay ignores it. Unlike the original it leaves the
 ---script's descriptor alone; a script that relies on the fields the
 ---original leaves behind sets them itself.
 ---@param x integer

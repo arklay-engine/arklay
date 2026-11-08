@@ -47,5 +47,12 @@ through the credentials-again path at B2. Both match.
   run shares. `arklay` binds cancel and run to separate keys, so the terminal
   folds the cancel key into that bit (`InteractiveState::pad_from_dpad`).
 - **Masked characters.** The password and command fields print `*` with
-  `PrintText8x8(.., 0xf0, 0)`: brightness nibble 15 draws the glyph at
-  15 * 255 / 30 = 127, half grey.
+  `PrintText8x8(.., 0xf0, 0)`, in white. The original's `AddTintSprite`
+  (JPN `Bio.exe` 0x00441120) uses the brightness nibble only for the
+  sprite's ordering depth (`n * 16 + 0x1C2`), never for its colour. The
+  reference port scales the colour by `n * 255 / 30` and draws the star half
+  grey, so the frames differ from the reference's there. The font is
+  `ui/font.tim`, which the conversion takes from `FONT.TIM` (Japanese) or,
+  failing that, `FONTUS.TIM` (Western installs, which ship no `FONT.TIM`).
+  The two sheets share the 8x8 ASCII rows and CLUT row. Without either, the
+  masked fields stay blank.
