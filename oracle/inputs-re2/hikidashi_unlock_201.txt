@@ -1,0 +1,12 @@
+# Room 201's drawer (oracle/re2.md, "The drawer"): press at the locked desk with a small key, page on to the question, answer Yes, close "You have used the Small Key.", press again (the drawer opens).
+0
+420 action
+423
+520 confirm
+523
+620 confirm
+623
+720 confirm
+723
+820 action
+823

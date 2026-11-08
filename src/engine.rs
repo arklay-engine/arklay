@@ -646,6 +646,7 @@ pub fn run_with_options(
                         re2_typewriter: None,
                         re2_game_mode: None,
                         re2_computer: None,
+                        re2_hikidashi: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -7894,6 +7895,10 @@ impl GameSession {
                     .map(|byte| format!("{byte:02x}"))
                     .collect();
                 format!("fgcom={common} pc={}", self.game.re2_computer_trace())
+            }),
+            re2_hikidashi: self.game.is_re2_room.then(|| {
+                self.game
+                    .re2_hikidashi_trace(self.loaded.room.re2_object_count.into())
             }),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
@@ -16559,10 +16564,14 @@ fn tick_room_timed(
     // The desk flow, the item-box lid ramp and the deferred key consumption run
     // before the scripts (the original's `check_desk_state`/`check_itembox_state`/
     // `check_event_item_usage` are the first gameplay calls each frame).
-    // RE2's `pG + 0x82B0` hook (`Key_lost`) runs before them, ahead of
-    // `Cut_check` and `Sce_scheduler`.
+    // RE2's `pG + 0x82B0` hook (Sce_Door's `Key_lost` or a drawer's
+    // `Hikidashi_entrance`) runs before them, ahead of `Cut_check` and
+    // `Sce_scheduler`. The cut on screen is the one the previous frame's
+    // swap loaded.
     if context.game.is_re2_room {
+        context.game.re2.shown_cut = context.room.current_cut as u8;
         context.game.tick_re2_key_lost();
+        context.game.tick_re2_hikidashi();
     }
     context.game.check_desk_state();
     context.game.check_itembox_state();

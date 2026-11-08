@@ -115,6 +115,9 @@ pub struct TraceTick<'a> {
     /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
     /// bytes) and the computer's state (`pc`, `-` without one).
     pub re2_computer: Option<String>,
+    /// RE2: the drawer's hook, its state and the room objects' `Be_flg &
+    /// 0x11`, the oracle's `hk`.
+    pub re2_hikidashi: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -321,6 +324,9 @@ impl TraceWriter {
         if let Some(fields) = &tick.re2_computer {
             write!(self.out, " {fields}")?;
         }
+        if let Some(fields) = &tick.re2_hikidashi {
+            write!(self.out, " {fields}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -447,6 +453,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
+            re2_hikidashi: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -509,6 +516,7 @@ mod tests {
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_computer: None,
+                re2_hikidashi: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -567,6 +575,7 @@ mod tests {
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_computer: None,
+                re2_hikidashi: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -622,6 +631,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
+            re2_hikidashi: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -682,6 +692,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
+            re2_hikidashi: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };

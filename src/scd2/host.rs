@@ -42,6 +42,10 @@ pub struct Re2State {
     pub xa_volume: u8,
     /// The camera `cut_old` returns to.
     pub cut_old: u8,
+    /// `scd_var_cut` as the tick began: the cut on screen, which
+    /// `Swap_Cbuff` loaded at the previous frame's end. A cut `Cut_check`
+    /// switched to this tick isn't on it yet.
+    pub shown_cut: u8,
     /// `fg_status`'s `0x80`, which the aim routine (`pl_mv_05`) raises each
     /// frame and `Player_move` clears: while it is set at the frame's end,
     /// `Swap_Cbuff` loads no background, so a cut `Cut_check` switched to
@@ -592,6 +596,9 @@ pub const SCE_FLAG_CHANGE: u8 = 6;
 pub const SCE_WATER: u8 = 7;
 pub const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
+/// `Sce_Hikidashi`'s area (`0x4E9CB0`): a drawer
+/// ([`crate::game::hikidashi2`]).
+pub const SCE_HIKIDASHI: u8 = 13;
 pub const SCE_DAMAGE: u8 = 11;
 /// `Sce_Windows` (`0x4EA0B0`): game mode 7, the computer
 /// ([`crate::game::computer2`]).
@@ -611,6 +618,7 @@ impl Default for Re2State {
             door_locks: [0; 2],
             random: 0x1382_01C3,
             cut_old: 0,
+            shown_cut: 0,
             view_held: false,
             bg_load: false,
             cut_no_load: false,
@@ -1488,13 +1496,20 @@ fn area_action(slot: u8, sce: u8, sat: u8, zone: [i16; 4], params: [u8; 8]) -> R
 }
 
 /// Note a script instruction with no game side yet, once per run.
-fn log_unmodelled(mnemonic: &'static str) {
+pub(crate) fn log_unmodelled(mnemonic: &'static str) {
     use std::collections::BTreeSet;
     use std::sync::Mutex;
     static SEEN: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
     if SEEN.lock().is_ok_and(|mut seen| seen.insert(mnemonic)) {
         crate::logging::write(&format!("RE2 script: {mnemonic} is not modelled"));
     }
+}
+
+/// Run one script instruction on `game`, for the tests outside this module.
+#[cfg(test)]
+pub(crate) fn run_op_for_test(game: &mut GameState, mnemonic: &str, operands: &[i64]) {
+    let op = crate::scd2::opcode::by_mnemonic(mnemonic).unwrap();
+    GameHost { game }.exec(0, op, operands);
 }
 
 /// The script host over the game state.

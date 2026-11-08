@@ -1437,6 +1437,7 @@ pub struct ScaVolume {
 pub mod computer2;
 pub mod door2;
 mod entity;
+pub mod hikidashi2;
 pub mod item_get2;
 pub mod itembox2;
 pub mod save2;
@@ -3289,6 +3290,8 @@ pub struct GameState {
     /// press scan runs before the player's move, the original's `Sce_at`
     /// after it, so `Sce_Save` waits for `Sce_at`'s place in the tick.
     pub re2_save_fired: Option<u8>,
+    /// RE2's drawer hook (`Hikidashi_entrance`).
+    pub re2_hikidashi: hikidashi2::Hikidashi,
     /// RE2's item box page while its screen is up.
     pub re2_box: Option<itembox2::BoxPage>,
     /// The box page's bytes as the trace shows them; they stay after the
@@ -3792,6 +3795,7 @@ impl Default for GameState {
             re2_save_place: 0,
             re2_save_requested: false,
             re2_save_fired: None,
+            re2_hikidashi: hikidashi2::Hikidashi::default(),
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
@@ -5223,6 +5227,7 @@ impl GameState {
         self.got_item_slot = None;
         self.pending_reach = None;
         self.re2_key_lost = None;
+        self.re2_hikidashi = hikidashi2::Hikidashi::default();
         // The load re-centres the screen offset (`CenterScreenOrigin`).
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when
@@ -8601,6 +8606,10 @@ impl GameState {
             self.re2.set_flag(word(0) as u8, word(1) as u8, op);
             return;
         }
+        if action.sce == crate::scd2::host::SCE_HIKIDASHI {
+            self.sce_hikidashi(action);
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_WATER {
             // `Sce_Water`: the area's first word is the water's level.
             self.re2.player.water = i16::from_le_bytes([action.params[0], action.params[1]]);
@@ -9063,7 +9072,7 @@ impl GameState {
     /// `Mess_set(0, 0x100, n, 0xFF000000)`: `Mess_disp`'s first pass raises
     /// the stop word at the end of the request's tick, after the moves, and
     /// the dismissal puts `fg_stop` back.
-    fn show_re2_door_message(&mut self, id: u8) {
+    pub(crate) fn show_re2_door_message(&mut self, id: u8) {
         self.message.set_re2_timing(true, false);
         let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);

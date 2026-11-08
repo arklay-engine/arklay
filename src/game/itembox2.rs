@@ -337,7 +337,7 @@ impl GameState {
         false
     }
 
-    pub(super) fn push_re2_sound(&mut self, id: u32) {
+    pub(crate) fn push_re2_sound(&mut self, id: u32) {
         if let Some(id) = crate::se2::SoundId::decode(id) {
             self.re2
                 .sounds
