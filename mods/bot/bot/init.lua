@@ -52,6 +52,7 @@ local function enter_room(bot, room)
     bot:log(string.format("room %s pos=(%d,%d) camera=%d health=%d/%d",
         room.id, p.x, p.z, room.camera, p.health, p.max_health))
     BOT_STATE.room = room.id
+    BotInventory.enter_room()
     BotPlanner.enter_room(bot, room)
 end
 

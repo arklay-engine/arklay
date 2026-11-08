@@ -790,8 +790,13 @@ drives the box screen with pad input only.
   At most the free slots, after the deposits. At a box in this room, also
   every stack of the equipped gun's ammunition while its rounds are under
   twice the reserve floor, and every heal stack, as long as one slot stays
-  free, or every slot this visit's soft deposits freed for pickups (the
-  top-ups; no trip is made for them).
+  free, or every slot the soft deposits freed for pickups (the top-ups;
+  no trip is made for them). Those slots stay held for the rest of the
+  stay in the box's room, over later box opens, until pickups fill them:
+  with rope=leave 403's swap boxed the handgun and three heals for 401's
+  red book, the next open took the handgun and two heals straight back,
+  the pair of visits repeated on every trip, and the bot met 201's
+  hunters with no heal.
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
   pending `<fight>` the bot has met (`BotNav.fight_met`: it entered the
   fight's room and fought or held back, or saw the boss there), and its
@@ -829,8 +834,9 @@ drives the box screen with pad input only.
   key comes back once shells are picked up, and the shotgun put away
   empty comes back with its boxed shells when the handgun runs dry. The
   rearm counts the slots it takes (the gun, and its ammunition when
-  boxed) and waits while a key or `<use>` pickup needs the free slots;
-  otherwise the swap would put the gun straight back. At a box in this
+  boxed) and waits while a key or `<use>` pickup needs the free slots,
+  or while the soft deposits' slots are held (above); otherwise the swap
+  would put the gun straight back. At a box in this
   room while sourcing ammunition, a `reserve` gun (the launcher), held or
   boxed, comes out with one kind of rounds the box holds for any of its
   loadings while none of them is held (`rearm: sourcing, and the box holds
