@@ -71,6 +71,8 @@ class Tick:
     zombies: str | None = None
     # RE2's `zp` field: the enemies' hidden parts and `Poly_rgb`.
     zombie_parts: str | None = None
+    # RE2's `esp` field: `Esp_`'s live count and taken slots.
+    effects: str | None = None
     # RE2's `pneck` field: where the player's head is in the world.
     neck_position: str | None = None
     # RE2's `xavol` field: `xa_vol`'s level for the voice channel.
@@ -187,6 +189,7 @@ def parse_trace(path: str) -> list[Tick]:
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
                     zombie_parts=fields.get("zp"),
+                    effects=fields.get("esp"),
                     neck_position=fields.get("pneck"),
                     xa_volume=fields.get("xavol"),
                     movie=fields.get("movie"),
@@ -245,6 +248,17 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
             items.append((f"zm{slot}", ",".join(values.split(",")[:14])))
     if tick.zombie_parts is not None:
         items.append(("zp", tick.zombie_parts))
+    if tick.effects is not None:
+        live, _, rows = tick.effects.partition("/")
+        rows = [] if rows == "-" else rows.split(";")
+        items.append(("espn", live))
+        # The kinds and rows that are out, without their slots: one effect
+        # missing on one side moves the slot of every later one.
+        items.append(("espk", ",".join(sorted(
+            ":".join(row.partition(":")[2].split(",")[2:4]) for row in rows))))
+        for row in rows:
+            slot, _, values = row.partition(":")
+            items.append((f"esp{slot}", values))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:
@@ -253,7 +267,11 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
 
 
 def selected(key: str, fields: list[str] | None) -> bool:
-    """Whether `key` is compared: `None` compares everything, else a name or `e*`."""
+    """Whether `key` is compared: `None` compares everything but the opt-in
+    fields, else a name or `e*`. The `esp` keys are opt-in: `esp` selects all
+    of them, `espn` and `espk` only themselves."""
+    if key.startswith("esp"):
+        return fields is not None and (key in fields or "esp" in fields)
     if fields is None:
         return key not in OPT_IN_FIELDS
     return key in fields or (key.startswith("e") and "e*" in fields)
@@ -331,6 +349,7 @@ def tick_line(tick: Tick) -> str:
     return (
         f"t={tick.t} room={tick.room} rng={tick.rng} rseed={tick.rseed} "
         f"fade={tick.fade} p={player} cam={tick.cam} {entities} f={tick.frame_hash}"
+        + ("" if tick.effects is None else f" esp={tick.effects}")
     )
 
 
@@ -533,7 +552,8 @@ def main() -> int:
                          help="scan this many start offsets for the best alignment")
     compare.add_argument("--json", dest="json_out", default=None)
     compare.add_argument("--fields", default=None,
-                         help="comma-separated fields to compare (room, cam, p.x, ..., e*); "
+                         help="comma-separated fields to compare (room, cam, p.x, ..., e*; "
+                              "the opt-in esp, or espn/espk alone, compare the effect pool); "
                               "default: every field")
 
     pixels = sub.add_parser("pixels", help="compare the capture frame directories")

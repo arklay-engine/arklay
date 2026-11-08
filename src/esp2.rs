@@ -1766,6 +1766,33 @@ impl Effects {
         quads.reverse();
         (quads, pages)
     }
+
+    /// The oracle's `esp` field: how many slots are live (`+0x18`'s `0x8000`),
+    /// then every slot whose `+0x18` isn't 0, the slots `Esp_call`'s free search
+    /// sees as taken, as `slot:anim,update,kind,row,flags,frame,x,y,z` (`+0`,
+    /// `+1`, `+0x1c`, `+0x1e`, `+0x18` and `+0x21` in hex, `+0x34` in decimal),
+    /// joined by `;`, or `-` for none.
+    pub fn trace_field(&self) -> String {
+        let live = self.slots.iter().filter(|slot| slot.live()).count();
+        let rows: Vec<String> = self
+            .slots
+            .iter()
+            .enumerate()
+            .filter(|(_, slot)| slot.flags != 0)
+            .map(|(index, slot)| {
+                let [x, y, z] = slot.pos;
+                format!(
+                    "{index}:{:x},{:x},{:x},{:x},{:x},{:x},{x},{y},{z}",
+                    slot.anim, slot.update, slot.kind, slot.row, slot.flags, slot.frame
+                )
+            })
+            .collect();
+        if rows.is_empty() {
+            format!("{live}/-")
+        } else {
+            format!("{live}/{}", rows.join(";"))
+        }
+    }
 }
 
 /// A page's place in the frame's list.
@@ -2022,6 +2049,42 @@ mod tests {
         assert_eq!(slot.tpage & 0x60, 0x20);
         assert_eq!(slot.anim, 0);
         assert_eq!(slot.pos, [100, 0, 0]);
+    }
+
+    /// The trace lists the slots `Esp_call`'s search sees as taken, the
+    /// deferred one included, after the count of live ones.
+    #[test]
+    fn the_trace_field_lists_the_taken_slots_after_the_live_count() {
+        let mut held = [0u8; BLOCK_LEN];
+        held[4..6].copy_from_slice(&0x1000u16.to_le_bytes());
+        held[6..8].copy_from_slice(&0x1000u16.to_le_bytes());
+        let mut effects = Effects::default();
+        assert_eq!(effects.trace_field(), "0/-");
+        effects.enter_room(bank(&[fire_block(), held]));
+        assert_eq!(effects.trace_field(), "0/-");
+        effects.call(7, 0, 0x1000, 0, [100, 0, 0], false).unwrap();
+        effects.call(7, 0, 0x1000, 0, [100, 0, 0], true).unwrap();
+        assert_eq!(
+            effects.trace_field(),
+            "1/94:2,0,7,0,4000,0,0,0,0;95:2,0,7,0,a003,0,0,0,0"
+        );
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(
+            effects.trace_field(),
+            "2/94:0,0,7,0,b003,1,100,0,0;95:0,0,7,0,b003,1,100,0,0"
+        );
+    }
+
+    /// `Esp_kill` clears `+0x18` but leaves the kind and row, so the trace
+    /// goes by the flags.
+    #[test]
+    fn a_killed_slot_leaves_the_trace_but_keeps_its_kind() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block()]));
+        let slot = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        effects.kill(7, 0);
+        assert_eq!(effects.slots[slot].kind, 7);
+        assert_eq!(effects.trace_field(), "0/-");
     }
 
     /// `Esp_die` leaves only kind 5's rows 2 and 3.
