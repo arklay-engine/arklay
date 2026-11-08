@@ -41,7 +41,9 @@ const SYMBOLS: [usize; 2] = [0x02, 0x0B];
 /// places. The first line's cells start at x 16 and y 175, so the glyphs'
 /// ink tops sit at y 177 and each line 16 lower; the item page draws in the
 /// same box. A question's choice is on its last line: `Yes` at 100, `No` at
-/// 150, each cursor cell 18 to the left.
+/// 150, each cursor cell 18 to the left. That is the status screen's and the
+/// get-item window's place (`Mess_set`'s `0xAF0010`); a message in play is
+/// placed at `0xB90022` instead, by the game (`GameState::show_re2_message`).
 const HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!--
   RE2's message font (Common/Data/font0.tim), its glyphs moved onto the

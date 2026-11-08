@@ -8953,7 +8953,13 @@ impl GameState {
                     self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = BLUE_CARD_KEY;
                     // The door table's "Will you use the {item}?", with the
                     // delays `Mess_disp` doubles while the computer runs.
+                    // `Mess_set(0, 0x100, 7, ...)`: in play's place, not
+                    // the get-item window's.
+                    let shown = self.message.menu_choice_id() & 0x80 == 0;
                     self.show_re2_global(crate::scd2::host::door_message(DOOR_MESSAGE_USE));
+                    if shown && self.message.active {
+                        self.place_re2_in_play();
+                    }
                 }
                 Effect::FadeOff => self
                     .re2
@@ -9116,7 +9122,11 @@ impl GameState {
     pub fn show_re2_message(&mut self, id: u8) {
         let id = u16::from(id);
         self.message.set_re2_timing(false, false);
+        let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
+        if shown && self.message.active {
+            self.place_re2_in_play();
+        }
     }
 
     /// `message_on`'s stop word: while the message shows, `fg_stop` has it
@@ -9192,20 +9202,29 @@ impl GameState {
         let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
         if shown && self.message.active {
-            // Attr `0x100` puts it at `0xB90022` (x 34, y 185), and its
-            // `{branch 0}` takes `choice_data_e`'s first entry (`0x52E554`):
-            // `Yes` at 210 and `No` 50 to its right, each cursor cell where
-            // the font's get-item choice has it against its label.
-            self.message.place(
-                (34, 185),
-                crate::font::ChoiceLayout {
-                    yes_x: 210,
-                    no_x: 260,
-                    cursor_dx: -18,
-                },
-            );
+            self.place_re2_in_play();
             self.re2_message_stop_pending = 0xFF00;
         }
+    }
+
+    /// Put the message just requested where `Mess_set` puts an in-play one.
+    /// Attrs `0x100` (the executable's own table: doors, desks, the
+    /// typewriter, room 200's computer) and `0x300` (the room's messages)
+    /// both force `Pos_xy` to `0xB90022` (x 34, y 185); only the status
+    /// screen and the get-item window pass their own `0xAF0010` (x 16,
+    /// y 175), the font's place. A `{branch 0}` takes `choice_data_e`'s
+    /// first entry (`0x52E554`): `Yes` at 210 and `No` 50 to its right,
+    /// each cursor cell where the font's get-item choice has it against its
+    /// label.
+    fn place_re2_in_play(&mut self) {
+        self.message.place(
+            (34, 185),
+            crate::font::ChoiceLayout {
+                yes_x: 210,
+                no_x: 260,
+                cursor_dx: -18,
+            },
+        );
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop
@@ -19696,5 +19715,34 @@ mod tests {
         assert_eq!(state.scaled_down_dist, 0);
         assert_eq!(state.hunter_scream_latch, 0);
         assert_eq!(state.hunter_intro_jump_kind, 0);
+    }
+
+    /// `Mess_set` puts every in-play message at `0xB90022` (x 34, y 185):
+    /// a room's message (attr `0x300`) and the executable's own (attr
+    /// `0x100`), whichever delays it keeps; the get-item window's and the
+    /// status screen's stay at the font's place (`0xAF0010`).
+    #[test]
+    fn in_play_messages_draw_where_mess_set_puts_them() {
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+
+        state.show_re2_message(3);
+        assert!(state.message.active);
+        assert_eq!(state.message.origin(), Some((34, 185)));
+
+        state.message = MessageWindow::default();
+        state.show_re2_door_message(crate::scd2::host::door_message(
+            crate::scd2::host::DOOR_UNLOCKED,
+        ));
+        assert_eq!(state.message.origin(), Some((34, 185)));
+
+        state.message = MessageWindow::default();
+        state.show_re2_global(crate::scd2::host::MESSAGE_TAKE);
+        assert!(state.message.active);
+        assert_eq!(state.message.origin(), None);
+
+        // A request refused while one is up leaves the open one's place.
+        state.show_re2_message(3);
+        assert_eq!(state.message.origin(), None);
     }
 }
