@@ -95,6 +95,10 @@ pub struct Re2State {
     pub key_trg: u16,
     /// A stop was masking `key` last tick.
     pub key_was_stopped: bool,
+    /// This frame's [`Self::set_key`] has run: the room tick's, or the one
+    /// the session runs for a frame the status screen, the map, the box or
+    /// another screen owns (`Psx_main` runs `Pad_set` on every frame).
+    pub key_read: bool,
     /// Characters in the enemy slots.
     pub characters: Characters,
     /// Room flags of `plc_dest`s on works that aren't modelled, not yet raised.
@@ -672,6 +676,7 @@ impl Default for Re2State {
             key: 0,
             key_trg: 0,
             key_was_stopped: false,
+            key_read: false,
             characters: Characters::default(),
             unmodelled_arrivals: Vec::new(),
             room_loading: false,

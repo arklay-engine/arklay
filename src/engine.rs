@@ -3146,7 +3146,16 @@ impl GameSession {
         } else {
             (ui, input, action)
         };
+        let frozen = self.system_menu_open;
+        self.game.re2.key_read = false;
         let result = self.tick_inner(pack, ui, input, action);
+        // `Psx_main` (0x4C3C70) runs `Pad_set` on every frame, whichever
+        // task owns it: a frame of the status screen, the map, the box or
+        // their close keeps `Key` too, so a button held through the close is
+        // no new press on the room's first frame.
+        if self.game.is_re2_room && !frozen && !self.game.re2.key_read {
+            self.game.re2.set_key(crate::player2::key_word(&input));
+        }
         // `main_loop` ramps the cutscene screen intensity in its draw phase,
         // after this frame's scripts, entities and message window have run, so
         // the ramp sees a flag a script raised on the same frame. Stepping it
@@ -16700,6 +16709,7 @@ fn tick_room_timed(
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
     context.game.re2.set_key(crate::player2::key_word(&input));
+    context.game.re2.key_read = true;
     // `Swap_Cbuff` ends each of these frames.
     context.game.re2.draw_buffer ^= 1;
     // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
@@ -22756,6 +22766,52 @@ mod tests {
             "the cancel resumes the game sounds"
         );
         assert!(!session.return_title_requested, "no return was requested");
+    }
+
+    /// `Psx_main` (0x4C3C70) runs `Pad_set` on the status screen's frames
+    /// too, so fire held through the screen's close keeps `Key` and is no new
+    /// press on the room's first frame: it starts no check. A press after
+    /// the close is new.
+    #[test]
+    fn re2_fire_held_through_the_status_close_starts_no_check() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.open_menu(&pack);
+        assert!(session.menu.is_some());
+        session.re2_status_close = Some(0);
+        let fire = |pressed: bool| player::Input {
+            fire: true,
+            fire_pressed: pressed,
+            ..player::Input::default()
+        };
+        let mut first = true;
+        let mut room_ticks = 0;
+        for _ in 0..u32::from(RE2_STATUS_CLOSE_TICKS) + 8 {
+            session
+                .tick(
+                    &pack,
+                    UiInput::default(),
+                    fire(std::mem::take(&mut first)),
+                    false,
+                )
+                .unwrap();
+            if session.game.re2.key_read {
+                room_ticks += 1;
+                assert_eq!(session.game.re2.key_trg, 0, "held through the close");
+                assert!(!session.game.re2.player.check);
+            }
+        }
+        assert!(session.menu.is_none(), "the close ended");
+        assert!(room_ticks > 0, "the room ran after the close");
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), fire(true), false)
+            .unwrap();
+        assert_ne!(session.game.re2.key_trg & 0x40, 0, "a new press");
     }
 
     #[test]
