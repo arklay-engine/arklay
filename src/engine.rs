@@ -16150,6 +16150,8 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
         // weapon behaviour owns the frame-1 dispatch.
         if context.player.locked == player::LockedAction::None
             && context.player.weapon.behavior == 0
+            && (!context.game.is_re2_room
+                || crate::player2::takes_check_key(&context.game.re2.player))
         {
             context
                 .game

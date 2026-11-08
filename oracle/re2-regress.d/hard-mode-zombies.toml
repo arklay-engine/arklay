@@ -1,0 +1,55 @@
+# The zombies under the new game's choice (oracle/re2.md, "The new-game choice"): `Em10_Init`'s HARD branch (five
+# times the life up to stage 4, three times after, the quick step and one more draw) and ARRANGE MODE's roll (two
+# draws, a third and the quick step for one in three), and `Pl_life_down`'s HARD and ARRANGE MODE scaling of the
+# bites. The title's longer routes leave `Rnd` at 58231 (HARD) when play begins, and at 52295 (ARRANGE MODE's NORMAL), so each setup sets the reference's.
+
+[[run]]
+name = "stand_11b_hard"
+difficulty = "hard"
+room = "11B"
+sound = false
+ticks = 1400
+setup = { pos = [8000, 0, -19500], angle = 0, health = 200, rnd = 58231, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--warp 11B:8000:0:-19500:0 --life 200"
+
+[[run]]
+name = "stand_610_hard"
+difficulty = "hard"
+room = "610"
+sound = false
+ticks = 1400
+setup = { pos = [-19771, 0, -26129], angle = 0, health = 200, rnd = 58231, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--warp 610:-19500:0:-27000:0 --life 200"
+
+[[run]]
+name = "run_119_hard"
+difficulty = "hard"
+room = "118"
+sound = false
+ticks = 3000
+input = "run_119.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
+setup = { pos = [-24617, 0, -24996], angle = 1024, health = 200, rnd = 58231, camera = 0 }
+# the door opens on tick 364 and draws the original's Rnd differently (oracle/re2.md)
+ignore = [[364, "rng"]]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200"
+
+[[run]]
+name = "stand_11b_arrange"
+arrange = true
+room = "11B"
+sound = false
+ticks = 1400
+setup = { pos = [8000, 0, -19500], angle = 0, health = 200, rnd = 52295, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = { tick = 894, fields = ["p.x", "p.z", "zm0", "zm1", "zm2", "zm3", "zm4", "zm5"], note = "the player dies on tick 893 and ARRANGE MODE's Die (censorship_off) holds the world from 894, where arklay's censored game over still runs it; Die's uncensored game over is not ported (docs/internals/deviations/re2.md)" }
+record = "--warp 11B:8000:0:-19500:0 --life 200"

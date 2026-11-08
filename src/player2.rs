@@ -1456,6 +1456,19 @@ pub fn player_held(
     mover.latch_parts();
 }
 
+/// Whether this tick's `pl_br_*` can take the check key: only `pl_br_00` to
+/// `pl_br_04` and `pl_br_09` (past its fourth step) raise `fg_status`'s
+/// `0x200000`, for `Sce_at`'s press pass. A player held, hurt or aiming
+/// presses nothing.
+pub fn takes_check_key(work: &Work) -> bool {
+    work.routine[0] == MODE_MOVE
+        && match work.routine[1] {
+            MOVE_IDLE..=MOVE_ROTATE => true,
+            MOVE_JUMP_DOWN => work.routine[3] > 4,
+            _ => false,
+        }
+}
+
 /// Whether [`player_held`] runs the player, not [`player_move`].
 pub fn is_held(work: &Work) -> bool {
     matches!(work.routine[0], MODE_HELD | MODE_HELD_DIE)
@@ -7376,6 +7389,19 @@ mod tests {
         setup.tick(input(true, false, false), 20);
         assert_eq!(setup.work.d_life_u, 2);
         assert_eq!(setup.work.move_no, WALK_CLIPS[2]);
+    }
+
+    #[test]
+    fn only_the_pads_branches_take_the_check_key() {
+        let at = |routine: [u8; 4]| takes_check_key(&Work { routine, ..Work::default() });
+        assert!(at([MODE_MOVE, MOVE_IDLE, 0, 0]));
+        assert!(at([MODE_MOVE, MOVE_ROTATE, 0, 0]));
+        assert!(!at([MODE_MOVE, MOVE_AIM, 0, 0]));
+        assert!(!at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 4]));
+        assert!(at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 5]));
+        // A zombie's grab: `pl_br_*` doesn't run, so a press opens no door.
+        assert!(!at([MODE_HELD, 1, 0, 0]));
+        assert!(!at([MODE_DAMAGE, 0, 0, 0]));
     }
 
     #[test]
