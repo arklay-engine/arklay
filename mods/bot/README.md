@@ -276,7 +276,12 @@ pursued target and resets the counts. Without it:
   progress`;
 - a pursued target whose route from a newly entered room is no shorter
   (in doors) than the shortest seen counts a stall, and the third stall
-  marks it looping.
+  marks it looping. The route is the one the pursuit walks: for a box or
+  a typewriter, the mental map's walking-distance route; for the rest,
+  the fewest doors. (Measured in fewest doors, a box trip along a route
+  with more doors stalled in every room: with richard=leave every box was
+  marked looping three times, the square crank stayed boxed, and the run
+  timed out in the mansion.)
 
 A looping mark holds for 3 minutes of game time or until the inventory
 changes, and counts as an attempt. The limits are three times what the
@@ -437,7 +442,13 @@ charges from there; without a charge, the farthest a slow gun's stop starts
 from, which the run goes on to reach), and drop the aim for the run inside
 `lower`. Before the stop's first hit the aim
 stays up down to `hold`, and for the `prefer`red weapon down to `commit`.
-They must order `commit <= hold <= lower < urgent <= shoot <= edge`. A gun
+They must order `commit <= hold <= lower < urgent <= shoot <= edge`.
+A stop starts, and the gun fires, only with the sight line clear (the
+enemy row's `visible`): on a ring the gap counts the way round, and out of
+sight the bot holds at the top of the band, facing it, and stops from
+there once it comes into view (513's handgun shot into the central block's
+walls and left the Tyrant on 0 health; running on instead, the two circled
+the block on opposite sides). A gun
 slower than the handgun's `cadence` drops its aim earlier; one too slow to
 fit a stop (the shotgun) fires only from past `edge` or while the boss
 stands out a swing. The bot fetches a dropped `prefer`red weapon when the
