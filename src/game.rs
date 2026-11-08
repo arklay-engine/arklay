@@ -8702,6 +8702,21 @@ impl GameState {
         })
     }
 
+    /// Whether `Esp_move` runs on this tick of the get-item window, and
+    /// under `fg_stop`'s `0x10000000`: the opening fade's frames are under
+    /// `0xFF000000`, so only the kinds that carry on move, and the close's
+    /// last frame is under `0xEF000000`, which moves them all.
+    pub fn re2_item_get_effects_frame(&self) -> Option<bool> {
+        self.re2_item_get.and_then(|get| {
+            let tick = get.ticks.saturating_add(1);
+            match get.phase {
+                Re2ItemGetPhase::Open if tick <= ITEM_GET_FADE_TICKS => Some(true),
+                Re2ItemGetPhase::Close if tick == ITEM_GET_CLOSE_TICKS => Some(false),
+                _ => None,
+            }
+        })
+    }
+
     /// One tick of the get-item window, before its message's. Returns the
     /// cue it plays: the cancel cue when the "taken" or "full" message has
     /// closed or a no has counted out (sub 0, `0x4FD701`).

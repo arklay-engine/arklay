@@ -1,0 +1,17 @@
+# room 201 from room 200's door: run west past the bar's north end, which crosses into cut 2, then south into cut 4, which starts the licker behind the window, and out through door 1 into 204 (oracle/re2.md, "Leon A past the card")
+350 right
+352
+354 up run
+386
+388 left
+390
+392 up run
+424
+426 left
+439
+441 up run
+461
+463 right
+466
+468 action
+472

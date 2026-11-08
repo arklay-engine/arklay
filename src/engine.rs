@@ -3732,6 +3732,16 @@ impl GameSession {
                     Some(&mut self.enemy_lua),
                 );
             }
+            if let Some(stopped) = self.game.re2_item_get_effects_frame() {
+                let player = self
+                    .game
+                    .entities
+                    .first_mut()
+                    .map(|player| (player.pos, &mut player.health));
+                self.game
+                    .re2
+                    .tick_effects_as(stopped, self.loaded.room.sca.as_ref(), player);
+            }
             if let Some(cue) = self.game.tick_re2_item_get() {
                 self.play_re2_status_sounds(pack, &[cue]);
             }
