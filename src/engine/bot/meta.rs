@@ -42,6 +42,10 @@
 //! `entry="same"`, only on the entry it got there: 20C's door to 21A
 //! stands in the pit Jill drops into). A failed approach to such a door is
 //! retried once the flag changes, not on every puzzle step anywhere.
+//! With `here_bank`/`here_bit`, that flag decides instead while the bot is
+//! in the door's room (216's door to 218 is live while the room's object
+//! probe sees the bookshelf on its spot; from elsewhere, scenario 0x4F says
+//! the shelf starts there).
 //! A format-1 document may not use them.
 //!
 //! Every fact element takes an optional `character="jill"|"chris"`: the fact
@@ -186,12 +190,14 @@ pub struct Revisit {
 /// `<reach slot bank bit while [entry="same"] [label]>`: door AOT `slot`
 /// can be walked to only while the flag is in the `while` state; with
 /// `entry="same"`, only on the room entry the flag reached that state
-/// (`bot:reach_facts()`).
+/// (`bot:reach_facts()`). With `here_bank`/`here_bit`, that flag (in the
+/// same `while` state) decides while the bot is in the room.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reach {
     pub slot: u8,
     pub gate: Gate,
     pub same_entry: bool,
+    pub here: Option<(u8, u8)>,
     pub label: Option<String>,
 }
 
@@ -1269,12 +1275,32 @@ fn parse_reach(node: Node<'_, '_>) -> Result<Reach> {
             "bit",
             "while",
             "entry",
+            "here_bank",
+            "here_bit",
             "label",
             "character",
             "when",
         ],
     )?;
     check_leaf(node)?;
+    let here = match (node.attribute("here_bank"), node.attribute("here_bit")) {
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, "here_bank")?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: here_bank {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Some((bank, attr(node, "here_bit")?))
+        }
+        _ => bail!(
+            "{}: <reach> needs both `here_bank` and `here_bit`, or neither",
+            at(node)
+        ),
+    };
     let gate = parse_gate(node)?
         .ok_or_else(|| anyhow::anyhow!("{}: <reach> needs `bank`, `bit` and `while`", at(node)))?;
     let same_entry = match node.attribute("entry") {
@@ -1289,6 +1315,7 @@ fn parse_reach(node: Node<'_, '_>) -> Result<Reach> {
         slot: attr(node, "slot")?,
         gate,
         same_entry,
+        here,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -2456,6 +2483,14 @@ mod tests {
         assert!(meta.reaches[0].same_entry);
         assert!(!meta.reaches[1].same_entry);
         assert!(!meta.reaches[1].gate.set);
+        assert_eq!(meta.reaches[0].here, None);
+        let here = r#"<bot format="2">
+            <reach slot="2" bank="0" bit="0x4F" while="set" here_bank="4" here_bit="0x18"/>
+        </bot>"#;
+        assert_eq!(parse(here).unwrap().reaches[0].here, Some((4, 0x18)));
+        let half =
+            r#"<bot format="2"><reach slot="2" bank="0" bit="1" while="set" here_bank="4"/></bot>"#;
+        assert!(parse(half).is_err());
         let gateless = r#"<bot format="2"><reach slot="1"/></bot>"#;
         assert!(parse(gateless).is_err());
         let entry =
