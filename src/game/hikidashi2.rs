@@ -75,14 +75,6 @@ impl GameState {
         self.re2.door_locks[word] & mask != 0
     }
 
-    /// `Mess_set(0, 0x100, n, 0xFF000000)`: door message `n`, which holds
-    /// `fg_stop`'s top byte while it shows (the player, the enemies, the
-    /// scripts and the random draws wait from this very frame).
-    fn show_desk_message(&mut self, id: u8) {
-        self.show_re2_door_message(id);
-        self.hold_re2_message_stop(0xFF00);
-    }
-
     /// `Sce_Hikidashi`: the press on a drawer's area.
     pub fn sce_hikidashi(&mut self, action: crate::game::RoomAction) {
         if self.re2_hook_set() || self.re2.player.damage_cnt != 0 {
@@ -111,7 +103,7 @@ impl GameState {
             return;
         };
         if self.re2.flag(crate::scd2::host::ITEM_BANK, item.params[2]) {
-            self.show_desk_message(door_message(DESK_EMPTY));
+            self.show_re2_door_message(door_message(DESK_EMPTY));
             return;
         }
         if self.re2_key_set(area[0]) {
@@ -119,7 +111,7 @@ impl GameState {
             return;
         }
         if self.re2_key_slot(SMALL_KEY).is_none() && self.re2.personal_item[0] != LOCKPICK {
-            self.show_desk_message(door_message(DESK_LOCKED));
+            self.show_re2_door_message(door_message(DESK_LOCKED));
             return;
         }
         self.re2_hikidashi = Hikidashi {
@@ -148,7 +140,7 @@ impl GameState {
                     SMALL_KEY
                 };
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
-                self.show_desk_message(door_message(DESK_ASK));
+                self.show_re2_door_message(door_message(DESK_ASK));
                 hook.state = 2;
             }
             2 => {
@@ -167,7 +159,7 @@ impl GameState {
                         SMALL_KEY
                     };
                     self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
-                    self.show_desk_message(door_message(DOOR_USED_KEY));
+                    self.show_re2_door_message(door_message(DOOR_USED_KEY));
                 }
                 hook = Hikidashi::default();
             }
@@ -295,10 +287,9 @@ mod tests {
         press(&mut game);
         assert_eq!(message(&game), Some(door_message(DESK_LOCKED)));
         assert!(!game.re2_hikidashi.active);
-        // The message holds `fg_stop`'s top byte until it closes.
-        assert_eq!(*game.re2.fg_stop_mut() & 0xFF00_0000, 0xFF00_0000);
-        game.cancel_message();
-        assert_eq!(*game.re2.fg_stop_mut(), 0);
+        // `Mess_disp` raises `fg_stop`'s top byte at the end of the tick,
+        // after the moves.
+        assert_eq!(game.re2_message_stop_pending, 0xFF00);
     }
 
     #[test]

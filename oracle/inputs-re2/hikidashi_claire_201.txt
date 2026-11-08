@@ -1,0 +1,12 @@
+# Room 201's drawer (oracle/re2.md, "The drawer"): Claire presses at the locked desk with her lockpick in the personal slot, pages on to the question, answers Yes, closes "You have used the Lockpick.", and presses again (the drawer opens).
+0
+420 action
+423
+520 confirm
+523
+620 confirm
+623
+720 confirm
+723
+820 action
+823

@@ -1,0 +1,16 @@
+# Room 201's drawer (oracle/re2.md, "The drawer"): press at the locked desk with a small key, page on to the question, move to No and answer, then press again (it asks again) and answer Yes.
+0
+420 action
+423
+520 confirm
+523
+600 right
+603
+620 confirm
+623
+720 action
+723
+820 confirm
+823
+920 confirm
+923

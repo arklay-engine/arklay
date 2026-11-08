@@ -5188,6 +5188,7 @@ impl GameState {
         self.got_item_slot = None;
         self.pending_reach = None;
         self.re2_key_lost = None;
+        self.re2_hikidashi = hikidashi2::Hikidashi::default();
         // The load re-centres the screen offset (`CenterScreenOrigin`).
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when

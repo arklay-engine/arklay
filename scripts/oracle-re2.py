@@ -682,6 +682,8 @@ def map_flags_trace(game: Game) -> str:
     if game.u8(STATUS_PAGE) == 4:
         page = f"{game.u8(MAP_FLOOR)},{game.u8(MAP_BLINK)},{game.u8(MAP_BLINK + 1)}"
     return f"mapfg={flags} map={page}"
+
+
 HOOK = 0x98E790  # `pG + 0x82B0`: the per-tick hook Sce_Door's `Key_lost` and Sce_Hikidashi's `Hikidashi_entrance` share
 HOOK_STATE = 0x98E541  # the hook's state byte
 HOOK_HIKIDASHI = 0x4E9EA0

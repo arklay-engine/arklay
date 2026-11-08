@@ -298,6 +298,7 @@ impl TraceWriter {
         }
         if let Some(scene) = tick.re2_scene {
             write!(self.out, " scene={}", u8::from(scene))?;
+        }
         if let Some(fields) = &tick.re2_hikidashi {
             write!(self.out, " {fields}")?;
         }
@@ -537,6 +538,7 @@ mod tests {
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_hikidashi: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
