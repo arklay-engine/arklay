@@ -1,0 +1,7 @@
+# room 20B: the heart door without its key, both pages of its message (oracle/re2.md, "Locked doors")
+364 action
+368
+500 action
+504
+650 action
+654

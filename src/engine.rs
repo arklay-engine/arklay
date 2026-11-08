@@ -634,6 +634,7 @@ pub fn run_with_options(
                         re2_inventory: None,
                         re2_item_page: None,
                         re2_item_box: None,
+                        re2_doors: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -7547,6 +7548,10 @@ impl GameSession {
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
+            re2_doors: self
+                .game
+                .is_re2_room
+                .then(|| (self.game.message.message_state(), self.game.re2.door_locks)),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -16145,6 +16150,11 @@ fn tick_room_timed(
     // The desk flow, the item-box lid ramp and the deferred key consumption run
     // before the scripts (the original's `check_desk_state`/`check_itembox_state`/
     // `check_event_item_usage` are the first gameplay calls each frame).
+    // RE2's `pG + 0x82B0` hook (`Key_lost`) runs before them, ahead of
+    // `Cut_check` and `Sce_scheduler`.
+    if context.game.is_re2_room {
+        context.game.tick_re2_key_lost();
+    }
     context.game.check_desk_state();
     context.game.check_itembox_state();
     context.game.check_event_item_usage();

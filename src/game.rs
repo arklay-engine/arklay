@@ -1430,6 +1430,7 @@ pub struct ScaVolume {
     pub offset: [i16; 3],
 }
 
+pub mod door2;
 mod entity;
 pub mod item_get2;
 pub mod itembox2;
@@ -3244,6 +3245,9 @@ pub struct GameState {
     /// What `fg_stop` was before a message's stop word went up, until the
     /// message is dismissed ([`GameState::hold_re2_message_stop`]).
     pub re2_message_stop: Option<u32>,
+    /// A door message's stop word, which `Mess_disp`'s first pass raises
+    /// ([`GameState::update_message`]).
+    pub re2_message_stop_pending: u16,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -3262,6 +3266,9 @@ pub struct GameState {
     /// The lid's swing ended this tick: the box's screen opens on the next
     /// (game mode 1).
     pub re2_box_open: bool,
+    /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
+    /// saved: it is only armed while a door message holds the game.
+    pub re2_key_lost: Option<door2::KeyLost>,
     /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
     /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
     /// cleared, so nothing runs, draws or touches it, but for the
@@ -3741,6 +3748,7 @@ impl Default for GameState {
             re2_crouch_item: None,
             re2_crouch_start: false,
             re2_message_stop: None,
+            re2_message_stop_pending: 0,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
@@ -3748,6 +3756,7 @@ impl Default for GameState {
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
+            re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
             stair_zones: StairZones::default(),
@@ -5174,6 +5183,7 @@ impl GameState {
         self.special_light_masks = [0; 3];
         self.got_item_slot = None;
         self.pending_reach = None;
+        self.re2_key_lost = None;
         // The load re-centres the screen offset (`CenterScreenOrigin`).
         self.screen_offset = [0, 0];
         // The original's door-animation window clears the 0x80 reach lock when
@@ -5277,7 +5287,11 @@ impl GameState {
         // kept; otherwise the message resets and only the BioCard menu-choice
         // byte's low bit survives.
         if !self.message.active {
+            // RE2's `fg_message` keeps its typed bit too: only `Mess_set`
+            // clears it.
+            let typed = self.message.message_state() & 0x40 != 0;
             self.message = MessageWindow::default();
+            self.message.set_typed(typed);
             let choice = self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] & 0x7F;
             self.message.set_menu_choice_id(choice);
             self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = choice;
@@ -8280,10 +8294,11 @@ impl GameState {
     /// transitions on the next probe, exactly as in the original. The key is
     /// consumed logically (`g_eventItemUsedFlag` + the selected item) but the
     /// physical removal waits for the prompt's dismissal via
-    /// [`Self::check_event_item_usage`]. The locked/key-turn bank-2 cues are
-    /// queued in [`GameState::sfx_requests`]; the port has no bank mapping for
-    /// them yet, so the engine drains and drops them. Returns whether a room
-    /// transition was requested.
+    /// [`Self::check_event_item_usage`]. RE1's locked/key-turn bank-2 cues
+    /// are queued in [`GameState::sfx_requests`]; the port has no bank
+    /// mapping for them yet, so the engine drains and drops them. An RE2 door
+    /// goes to `try_re2_door`, which queues its room-bank sounds in
+    /// `re2.sounds`. Returns whether a room transition was requested.
     pub fn try_door(&mut self, slot: u8) -> bool {
         let Some(door) = self.doors.get(usize::from(slot)).copied().flatten() else {
             return false;
@@ -8462,9 +8477,10 @@ impl GameState {
         true
     }
 
-    /// `Sce_door`: an open door starts the transition. A locked one (bit
-    /// `0x80` of its lock byte, unlocked by its bit in `door_locks`) stays
-    /// shut until R8 brings the keys and their messages.
+    /// `Sce_Door` (`0x4E9460`): an open door starts the transition. A
+    /// locked one (bit `0x80` of its lock byte, unlocked by its bit in
+    /// `door_locks`) shows its message and plays its sound; a key turn or
+    /// an unlock raises the bit, and the door opens on a later press.
     #[cfg(test)]
     pub(crate) fn try_re2_door_for_test(&mut self, door: &Door) -> bool {
         self.try_re2_door(door)
@@ -8475,6 +8491,11 @@ impl GameState {
             DOOR_LOCKED_OTHER_SIDE, DOOR_UNLOCKED, DOOR_USED_KEY, KEY_LOCKED, KEY_UNLOCK,
             door_locked_message, door_message,
         };
+        use door2::{DOOR_PARTNER, SOUND_DOOR_LOCKED, SOUND_KEY_USED, SOUND_UNLOCKED};
+        if self.re2_partner_blocks_door() {
+            self.show_re2_door_message(door_message(DOOR_PARTNER));
+            return false;
+        }
         let bit = door.lock & 0x3F;
         let word = usize::from(bit >> 5) & 1;
         let mask = 0x8000_0000 >> (bit & 31);
@@ -8483,19 +8504,32 @@ impl GameState {
         }
         // `sce_door`: a locked door opens on a later press once this one has
         // unlocked it.
+        // The sound and message orders are the original's: a refused
+        // `Mess_set` (a message already up) still plays the sound.
         match door.key {
-            KEY_UNLOCK => self.show_re2_door_message(door_message(DOOR_UNLOCKED)),
+            KEY_UNLOCK => {
+                self.show_re2_door_message(door_message(DOOR_UNLOCKED));
+                self.push_re2_sound(SOUND_UNLOCKED);
+            }
             KEY_LOCKED => {
+                self.push_re2_sound(SOUND_DOOR_LOCKED);
                 self.show_re2_door_message(door_message(DOOR_LOCKED_OTHER_SIDE));
                 return false;
             }
-            key if !self.has_item(key) => {
-                self.show_re2_door_message(door_locked_message(key));
-                return false;
-            }
             key => {
+                let Some(slot) = self.re2_key_slot(key) else {
+                    self.push_re2_sound(SOUND_DOOR_LOCKED);
+                    self.show_re2_door_message(door_locked_message(key));
+                    return false;
+                };
+                // The message's `{string 0}` (`0x98504F`).
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = key;
                 self.show_re2_door_message(door_message(DOOR_USED_KEY));
+                self.push_re2_sound(SOUND_KEY_USED);
+                self.re2_key_lost = Some(door2::KeyLost {
+                    slot: slot as u8,
+                    first: true,
+                });
             }
         }
         self.re2.door_locks[word] |= mask;
@@ -8898,9 +8932,28 @@ impl GameState {
 
     /// One of the executable's door messages, which shows in play: its
     /// delays are the stream's own.
+    /// `Mess_set(0, 0x100, n, 0xFF000000)`: `Mess_disp`'s first pass raises
+    /// the stop word at the end of the request's tick, after the moves, and
+    /// the dismissal puts `fg_stop` back.
     fn show_re2_door_message(&mut self, id: u8) {
         self.message.set_re2_timing(true, false);
+        let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
+        if shown && self.message.active {
+            // Attr `0x100` puts it at `0xB90022` (x 34, y 185), and its
+            // `{branch 0}` takes `choice_data_e`'s first entry (`0x52E554`):
+            // `Yes` at 210 and `No` 50 to its right, each cursor cell where
+            // the font's get-item choice has it against its label.
+            self.message.place(
+                (34, 185),
+                crate::font::ChoiceLayout {
+                    yes_x: 210,
+                    no_x: 260,
+                    cursor_dx: -18,
+                },
+            );
+            self.re2_message_stop_pending = 0xFF00;
+        }
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop
@@ -9118,6 +9171,8 @@ impl GameState {
             let bytes = text.message(room, id).unwrap_or(&[]).to_vec();
             self.message.feed_source(&bytes);
         }
+        let stop = std::mem::take(&mut self.re2_message_stop_pending);
+        self.hold_re2_message_stop(stop);
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
         self.message.update(input, text, selected);
         // A dismissal (input, timer or an empty source) releases the pause

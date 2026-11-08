@@ -1,0 +1,5 @@
+# room 20A: unlock the door to room 200 from this side, close the message (oracle/re2.md, "Locked doors")
+364 action
+368
+500 action
+504
