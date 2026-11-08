@@ -3114,10 +3114,10 @@ mod tests {
         let action = game.room_actions[8].unwrap();
         game.fire_re2_area(action);
         for _ in 0..5 {
-            game.tick_re2_item_get();
+            game.tick_re2_item_get(crate::game::status2::Input::default());
             assert_eq!(game.pad_repeat.mask, TITLE_SETTING.0);
         }
-        game.tick_re2_item_get();
+        game.tick_re2_item_get(crate::game::status2::Input::default());
         assert_eq!(
             (game.pad_repeat.mask, game.pad_repeat.delays),
             STATUS_SETTING

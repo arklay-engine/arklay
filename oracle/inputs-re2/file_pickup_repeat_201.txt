@@ -1,0 +1,16 @@
+# Room 201's memo as file_pickup_201 reads it, with the directions held (oracle/re2.md, "Key repeat"): press at the desk, right held through the pages to the end marker, left held back, right held to the marker again, file it with a press, close message 10, press again.
+0
+350 action
+352
+404 right
+440
+480 left
+500
+520 right
+560
+600 action
+602
+700 action
+702
+800 action
+802

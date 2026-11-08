@@ -368,7 +368,7 @@ A recording's start leaves the counter at 8 in all three runs (the title's phase
 - `status_repeat_file` (files 1 and 3 in binder 0 and file 4 in binder 1): left held through three turns of the carousel, binder 0's list with down held, file 1 read with right held to its end marker, then left held back.
 - `box_repeat_201` (`box_201`'s record): the box's rows and its inventory column with down, up and right held, up onto EXIT, and down and up held together.
 
-The pick-up's pages (`St_get_file`) read the same gated input once it lands (#549); `file_pickup_repeat_201` is left for then.
+- `file_pickup_repeat_201` (`file_pickup_201`'s record): the pick-up's pages (`St_get_file`) read the same gated input. Right held from 404 to 440 turns the memo's pages at 405 and then every 7 ticks to the end marker, left held from 480 and right from 520 do the same, and `prep` shows `Status`'s setting (0xF01C, 0x60A) from the window's sixth tick, 357.
 
 ## Locked doors
 

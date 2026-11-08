@@ -3899,14 +3899,11 @@ impl GameSession {
                 if self.game.message.active {
                     Input::default()
                 } else {
+                    // The pages read the directions through the repeat, as
+                    // the status screen's do.
                     Input {
-                        up: ui.up,
-                        down: ui.down,
-                        left: ui.left,
-                        right: ui.right,
-                        confirm: ui.confirm,
-                        cancel: ui.cancel,
                         start: false,
+                        ..self.status_input(ui)
                     }
                 }
             };
