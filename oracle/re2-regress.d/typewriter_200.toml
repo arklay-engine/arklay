@@ -1,0 +1,23 @@
+[[run]]
+name = "typewriter_200_no_ribbon"
+room = "200"
+# the typewriter without an ink ribbon: Sce_Save holds the world, its back routine releases it and shows door message 0 (oracle/re2.md, "The typewriter")
+setup_script = "typewriter_200.lua"
+input = "typewriter_200_no_ribbon.txt"
+input_shift = 344
+ticks = 700
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm"
+expect = "match"
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200"
+
+[[run]]
+name = "typewriter_200_no"
+room = "200"
+# the typewriter with ink ribbons: the prompt (door message 1) answered No twice, which puts fg_stop back (oracle/re2.md, "The typewriter")
+setup_script = "typewriter_200_ribbon.lua"
+input = "typewriter_200_no.txt"
+input_shift = 344
+ticks = 840
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm"
+expect = "match"
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

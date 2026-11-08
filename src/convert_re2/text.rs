@@ -154,11 +154,9 @@ pub(super) fn language_file(
         .map_or("", |(_, source)| source)
         .lines()
         .filter(|line| {
-            // The interface, and the typewriter's three prompts.
-            (line.starts_with("UI_") && !line.starts_with("UI_SAVE_CHARACTER_"))
-                || ["MESSAGE_1E", "MESSAGE_1F", "MESSAGE_20"]
-                    .iter()
-                    .any(|key| line.starts_with(key))
+            // The interface. The typewriter's messages are the executable's
+            // door messages 0 and 1 (`MESSAGE_21`, `MESSAGE_22`), not RE1's.
+            line.starts_with("UI_") && !line.starts_with("UI_SAVE_CHARACTER_")
         })
     {
         text.push_str(line);

@@ -102,6 +102,12 @@ pub struct TraceTick<'a> {
     /// RE2: whether a scene is up, `fg_status & 0x10` (the bars' bit), the
     /// trace's `scene` field.
     pub re2_scene: Option<bool>,
+    /// RE2's back routine slot 2, its state and the save place, the
+    /// oracle's `tw` field ([`crate::game::GameState::re2_typewriter_trace`]).
+    pub re2_typewriter: Option<String>,
+    /// RE2's game mode (`Game`), the oracle's `gm` (`gi`'s first value).
+    /// arklay follows it only on the typewriter's path.
+    pub re2_game_mode: Option<u8>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -296,6 +302,12 @@ impl TraceWriter {
         if let Some(scene) = tick.re2_scene {
             write!(self.out, " scene={}", u8::from(scene))?;
         }
+        if let Some(fields) = &tick.re2_typewriter {
+            write!(self.out, " {fields}")?;
+        }
+        if let Some(mode) = tick.re2_game_mode {
+            write!(self.out, " gm={mode}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -418,6 +430,8 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_typewriter: None,
+            re2_game_mode: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -476,6 +490,8 @@ mod tests {
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_typewriter: None,
+                re2_game_mode: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -530,6 +546,8 @@ mod tests {
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_typewriter: None,
+                re2_game_mode: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -581,6 +599,8 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_typewriter: None,
+            re2_game_mode: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -637,6 +657,8 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_typewriter: None,
+            re2_game_mode: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };
@@ -654,5 +676,59 @@ mod tests {
         assert!(lines[2].ends_with(" neck=0,8,0,0,0 pneck=-9500,-2514,-20302 snd=-"));
         assert!(!lines[2].contains("scene="));
         assert!(lines[3].ends_with(" pneck=-9500,-2514,-20302 scene=1 snd=-"));
+    }
+
+    #[test]
+    fn the_typewriter_fields_follow_the_item_box() {
+        let game = GameState::default();
+        let path = temp_path("tw");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        let tick = TraceTick {
+            room: RoomId {
+                stage: 1,
+                room: 0,
+                player_flag: 0,
+                mansion2: false,
+            },
+            rng: 0,
+            rseed: 0,
+            fade_counter: 0,
+            fade_state: -1,
+            cam: 0,
+            player_flags: 0,
+            entities: &*game.entities,
+            re2_player: None,
+            re2_character: None,
+            re2_splayer: None,
+            re2_zombies: None,
+            re2_zombie_parts: None,
+            re2_effects: None,
+            re2_music: None,
+            re2_die: None,
+            re2_neck: None,
+            re2_neck_position: None,
+            re2_xa_volume: None,
+            re2_movie: None,
+            re2_inventory: None,
+            re2_map_flags: None,
+            re2_item_page: None,
+            re2_item_box: Some("ib=1 box=-".to_string()),
+            re2_doors: Some((0x81, [0, 0])),
+            re2_scene: None,
+            re2_typewriter: Some("tw=4e9930,1,1".to_string()),
+            re2_game_mode: Some(0),
+            re2_sounds: Some(String::new()),
+            frame_hash: 0,
+        };
+        writer.write_tick(&tick).unwrap();
+        writer.flush().unwrap();
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(
+            lines[1]
+                .ends_with(" ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 snd=-")
+        );
     }
 }

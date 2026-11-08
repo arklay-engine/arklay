@@ -642,6 +642,8 @@ pub fn run_with_options(
                         re2_item_box: None,
                         re2_doors: None,
                         re2_scene: None,
+                        re2_typewriter: None,
+                        re2_game_mode: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -3927,17 +3929,28 @@ impl GameSession {
         // out (counter 0x1000, armed and stepped on this frame) and the save
         // screen opens when it completes; the rest of the room's tick is
         // skipped.
-        if let Some(ink_ribbon) = self.game.take_typewriter_confirm() {
+        // RE2's prompt is `Sce_Save_backfunc`'s (`game::save2`), which saw its
+        // Yes in the room tick. Until the original's game modes 1 and 2 are
+        // ported, it takes RE1's hand-off, with `fg_stop` put back first.
+        if self.game.is_re2_room && std::mem::take(&mut self.game.re2_save_requested) {
+            *self.game.re2.fg_stop_mut() = self.game.re2_box_entrance.saved_stop;
+            self.typewriter_arm = Some(true);
+            return Ok(());
+        }
+        if !self.game.is_re2_room
+            && let Some(ink_ribbon) = self.game.take_typewriter_confirm()
+        {
             self.typewriter_arm = Some(ink_ribbon);
             return Ok(());
         }
         // A typewriter runs its save prompt; the item-box overlay opens when
         // the lid has settled (`MSF_MENU_MODE_ITEMBOX`). The interaction is
-        // consumed so the next probe has to fire again.
+        // consumed so the next probe has to fire again. RE2's area ran
+        // `Sce_Save` instead.
         let interaction = self.game.last_interaction.take();
         let typewriter_fired = interaction
             .is_some_and(|interaction| interaction.kind == game::RoomActionKind::Typewriter);
-        if typewriter_fired {
+        if typewriter_fired && !self.game.is_re2_room {
             self.game.check_typewriter();
         }
         // The room fade-out that a confirmed typewriter save armed completes on
@@ -3984,8 +3997,10 @@ impl GameSession {
                 .first_mut()
                 .map(|player| (player.pos, &mut player.health));
             re2.tick_effects(self.loaded.room.sca.as_ref(), player);
-            // `played` was cleared at the tick's start: a yes/no's cue that
-            // the message window played above stays in the trace's `snd`.
+            // `played` was cleared at the tick's start. A yes/no's cue, which
+            // the message window played above, comes after the room's sounds
+            // in the trace's `snd`: `Mess_disp` runs after the scheduler.
+            let cues = std::mem::take(&mut self.re2_sounds.played);
             self.re2_sound_close_and_init(pack);
             let cut = self.sound_cut();
             play_re2_sounds(
@@ -3998,6 +4013,7 @@ impl GameSession {
                 &mut self.player,
                 cut,
             );
+            self.re2_sounds.played.extend(cues);
         }
         // `MSF2_EFFECT_ZONE` (the second dword of main-state flag bank 5) is
         // the original's slippery/effect-zone bit: it shifts every footstep
@@ -7774,6 +7790,12 @@ impl GameSession {
                 .is_re2_room
                 .then(|| (self.game.message.message_state(), self.game.re2.door_locks)),
             re2_scene: self.game.is_re2_room.then(|| self.game.scene_bars()),
+            re2_typewriter: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2_typewriter_trace()),
+            // The typewriter's game modes are RE1's hand-off for now.
+            re2_game_mode: self.game.is_re2_room.then_some(0),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -15796,6 +15818,8 @@ fn new_game_state(
         game.set_health_copy(health);
     }
     seed_re2_music_table(pack, &mut game, false);
+    // RE2's new game sets the save place for its scenario (`0x4B73C0`).
+    game.re2_save_place = game::save2::new_game_place(id.player_flag, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -16803,10 +16827,25 @@ fn tick_room_timed(
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, false);
     }
-    // `Item_box_entrance`, the routine `Sce_Itembox` set: the lid swings,
-    // and when it stops the box's screen opens on the next tick.
-    if context.game.is_re2_room && context.game.tick_re2_box_entrance() {
-        context.game.re2_box_open = true;
+    // Slot 2's back routine. `Item_box_entrance`, the routine `Sce_Itembox`
+    // set: the lid swings, and when it stops the box's screen opens on the
+    // next tick. `Sce_Save_backfunc`, the typewriter's: its prompt, whose
+    // Yes raises `re2_save_requested`.
+    if context.game.is_re2_room {
+        if let Some(place) = context.game.re2_save_fired.take() {
+            context.game.sce_save(place);
+        }
+        match context.game.re2_back {
+            game::save2::BackRoutine::ItemBox => {
+                if context.game.tick_re2_box_entrance() {
+                    context.game.re2_box_open = true;
+                }
+            }
+            game::save2::BackRoutine::Save => {
+                context.game.tick_re2_save();
+            }
+            game::save2::BackRoutine::None => {}
+        }
     }
     for (zone, kind, damage) in std::mem::take(&mut context.game.re2.pending_damage) {
         crate::player2::sce_damage(

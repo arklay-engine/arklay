@@ -71,15 +71,16 @@ pub const SOUND_SCROLL: u32 = 0x0214_0000;
 /// their last values after the swing, as the original's do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Entrance {
-    /// Whether the routine is set (`DWORD_0098E794`).
-    pub active: bool,
-    /// `0x98E542`.
+    /// `0x98E542`, which the typewriter's back routine shares
+    /// ([`super::save2`]). Whether the lid's routine is set
+    /// (`DWORD_0098E794`) is [`GameState::re2_back`].
     pub state: u8,
     pub speed: i16,
     pub step: i16,
     /// The box's object slot.
     pub object: u8,
-    /// `fg_stop` before the swing (`0x991FC4`).
+    /// `fg_stop` before the swing (`0x991FC4`), or before the typewriter's
+    /// prompt.
     pub saved_stop: u32,
 }
 
@@ -254,12 +255,13 @@ impl Work {
 impl GameState {
     /// `Sce_Itembox` (`0x4E99F0`): set the lid's routine for the box's
     /// object (its area's first parameter).
+    /// The original has no guard; arklay keeps a swing that is running.
     pub fn open_re2_box_entrance(&mut self, object: u8) {
-        let entrance = &mut self.re2_box_entrance;
-        if entrance.active {
+        if self.re2_back == super::save2::BackRoutine::ItemBox {
             return;
         }
-        entrance.active = true;
+        self.re2_back = super::save2::BackRoutine::ItemBox;
+        let entrance = &mut self.re2_box_entrance;
         entrance.state = 0;
         entrance.object = object;
     }
@@ -274,12 +276,13 @@ impl GameState {
     /// One tick of `Item_box_entrance`. Returns true on the tick the swing
     /// ends and the screen opens (game mode 1, `fg_status | 0x8000`).
     pub fn tick_re2_box_entrance(&mut self) -> bool {
-        let mut entrance = self.re2_box_entrance;
-        if !entrance.active {
+        if self.re2_back != super::save2::BackRoutine::ItemBox {
             return false;
         }
+        let mut entrance = self.re2_box_entrance;
         let mut lid = self.re2_lid().map_or(0, |lid| *lid);
         let mut open = false;
+        let mut shut = false;
         let swing = |entrance: &mut Entrance, lid: &mut i16| {
             *lid = lid.wrapping_sub(entrance.speed);
             entrance.speed = entrance.speed.wrapping_add(entrance.step);
@@ -307,10 +310,13 @@ impl GameState {
                     open = true;
                     entrance.speed = 0;
                     entrance.state = 3;
-                    Self::count_lid(&mut entrance, &mut lid);
+                    shut = Self::count_lid(&mut entrance, &mut lid);
                 }
             }
-            _ => Self::count_lid(&mut entrance, &mut lid),
+            _ => shut = Self::count_lid(&mut entrance, &mut lid),
+        }
+        if shut {
+            self.re2_back = super::save2::BackRoutine::None;
         }
         if let Some(record) = self.re2_lid() {
             *record = lid;
@@ -320,14 +326,15 @@ impl GameState {
     }
 
     /// The swing's last state: five ticks, then the lid back shut and the
-    /// routine cleared.
-    fn count_lid(entrance: &mut Entrance, lid: &mut i16) {
+    /// routine cleared: true when the caller clears [`GameState::re2_back`].
+    fn count_lid(entrance: &mut Entrance, lid: &mut i16) -> bool {
         entrance.speed += 1;
         if entrance.speed > 4 {
             *lid = 0;
             entrance.state = 0;
-            entrance.active = false;
+            return true;
         }
+        false
     }
 
     pub(super) fn push_re2_sound(&mut self, id: u32) {
