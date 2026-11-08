@@ -315,7 +315,15 @@ values:
 
 A failed goal is marked with its reason. It is retried when the inventory
 changes, and an approach failure is also retried on the next entry into the
-room (the bot may stand in another part of it). Remote planning never
+room (the bot may stand in another part of it). When the frontier is
+empty and a goal here failed every approach on this very entry, the bot
+steps out through the nearest door to a visited room (a door parked at the
+origin counts when its `via` action is live, as 305's passage to 30F) and
+the room it reaches takes it straight back through a door to the room it
+left (`p.reenter_back`), before any remote target, when a goal retried
+there is not a door or is a door to a room not yet visited: 305's stairs to
+310 go live only on the entry after the fountain drains. A retried door to
+a visited room is left to the frontier (301's lift doors). Remote planning never
 heads back to an item whose approach failed, even after the inventory
 changed. A `<use>` goal whose every approach failed remembers the room the
 bot had entered from (`bad_from`): the remote trip back to it, otherwise
@@ -1209,7 +1217,7 @@ files. The checked-in facts:
 | 300 | `<door slot="1" via="5">` while scenario `0x31` is set: the north elevator, parked at the room origin, rides down to 302 from AOT 5 on its platform; without it the shaft is walled off. |
 | 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. `<avoid slot="7" bank="0" bit="0x2F" while="set">`: the elevator call back down to 302 on the landing the 302 door brings you to. Once the north elevator stands at 300 (scenario `0x31`, after 302's battery) a second `<use>` of the crank (`done="clear"`, `after`) fills the pool again, which stops 302's waterfall; with the pool full `<door slot="1" via="7">` takes the elevator down to 302. |
 | 302 | `<avoid slot="7">`: the elevator call on the platform the 301 door lands on; it rides straight back up to 301. `<avoid slot="0" bank="0" bit="0x32" while="clear">`: door 0 to 300 is the north elevator's far end, called only with the power on (scenario `0x32`). `<use>` the battery (`0x27`) at slot 4 turns the power on (scenario `0x32`), and `<door slot="0" via="8">` (while scenario `0x31` is clear) rides the north elevator up to 300. `<door slot="3" via="10">` while scenario `0x2F` is clear: with the pool full the waterfall is gone and AOT 10 at the ladder asks to climb down to 307 (`<answer>` Yes). |
-| 305 | `<use slot="6" item="0x24" bank="0" bit="28">` and `<use slot="5" item="0x25" bank="0" bit="27">`: the Wolf and Eagle medals into the fountain; with both in, the main drains it (scenario 29). `<door slot="2" via="14">`: the passage to 30F, a door parked at the origin that the AOT 14 event at the west end fires. `<door slot="1" via="9" bank="4" bit="29" while="clear">`: once drained, the stairs zone AOT 9 (a touch event: the reach point fires it, no press needed) runs event_00 down to the fountain floor, which sets room 29; the via goal is then done and door 1 to 310 is an ordinary door. |
+| 305 | `<use slot="6" item="0x24" bank="0" bit="28">` and `<use slot="5" item="0x25" bank="0" bit="27">`: the Wolf and Eagle medals into the fountain; with both in, the main drains it (scenario 29). `<door slot="2" via="14">`: the passage to 30F, a door parked at the origin that the AOT 14 event at the west end fires. `<door slot="1" via="9" bank="4" bit="29" while="clear">`: once drained, the stairs zone AOT 9 (a touch event: the reach point fires it, no press needed) runs event_00 down to the fountain floor, which sets room 29; the via goal is then done and door 1 to 310 is an ordinary door. `<avoid slot="12" bank="4" bit="28" while="clear">`: AOT 0C, the stairs bottom, is reached only down the stairwell (room bit `0x1C`, set by event_00 or an entry from 310), so it is never taken for a stair check from the top. |
 | 310 | No facts. The lift: entered from 305, event_01 rides down and turns on door 1 to 500 at the room origin, which takes the player through by itself; the bot waits for it (step 7). |
 | 306 | Doom Book II (AOT 6) is live only while box object 2 stands in object probe AOT 5. The box starts against the north wall, so: `<push slot="5" axis="x">` puts it under the wall slab, `<use slot="1" item="0x1E" bank="0" bit="60">` cranks the slab out and it shoves the box off the wall, then `<push slot="7" axis="x">` and `<push slot="5">`, both `after` scenario 60, take it west of the slab, south and east into AOT 5. The book is taken from the floor and opened for its medal. |
 | 307 | `<use>` the hex crank (`0x1E`) at slot 4 turns the bridge (common `0x47`), which opens door 2 to 30B. In the BioRand pack slot 3 is a handover item at the room origin. |
