@@ -3821,9 +3821,24 @@ impl GameSession {
                     .re2
                     .tick_effects_as(stopped, self.loaded.room.sca.as_ref(), player);
             }
-            if let Some(cue) = self.game.tick_re2_item_get() {
-                self.play_re2_status_sounds(pack, &[cue]);
-            }
+            let window_input = {
+                use game::status2::Input;
+                if self.game.message.active {
+                    Input::default()
+                } else {
+                    Input {
+                        up: ui.up,
+                        down: ui.down,
+                        left: ui.left,
+                        right: ui.right,
+                        confirm: ui.confirm,
+                        cancel: ui.cancel,
+                        start: false,
+                    }
+                }
+            };
+            let cues = self.game.tick_re2_item_get(window_input);
+            self.play_re2_status_sounds(pack, &cues);
             if std::mem::take(&mut self.game.re2.player.init_pose) {
                 self.place_re2_neck(true);
             }
@@ -5045,6 +5060,14 @@ impl GameSession {
             return None;
         }
         let get = self.game.re2_item_get?;
+        // A file's pages aren't drawn yet (the reader's draw waits for
+        // #518): the black behind them, with no item screen (`0x691F79`).
+        if matches!(
+            get.phase,
+            game::Re2ItemGetPhase::FileFade | game::Re2ItemGetPhase::FileRead
+        ) {
+            return Some(Re2StatusView::Black);
+        }
         let closing = (get.phase == game::Re2ItemGetPhase::Close).then_some(get.ticks);
         Some(re2_item_get_view(self.re2_item_ticks, closing))
     }

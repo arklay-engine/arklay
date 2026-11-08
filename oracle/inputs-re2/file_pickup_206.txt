@@ -1,0 +1,14 @@
+# Room 206's report (oracle/re2.md, "Picking up a file"): press at the desk, page on twice, back once, file it from the page with cancel, close message 10.
+0
+350 action
+352
+404 right
+406
+434 right
+436
+464 left
+466
+494 cancel
+496
+594 action
+596

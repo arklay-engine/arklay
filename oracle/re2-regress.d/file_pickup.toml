@@ -1,0 +1,53 @@
+# A file taken in a room goes into the file list (St_get_file, oracle/re2.md, "Picking up a file"). The player stands at the file's area, facing it; the enemies are off. The frames are reported, not judged, until the file page's draw is ported.
+
+[[run]]
+name = "file_pickup_201"
+room = "201"
+setup_script = "file_pickup_201.lua"
+input = "file_pickup_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 800
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
+frames = [360, 799]
+expect = "match"
+record = "--no-enemies --warp 201:-19000:0:-24850:1024 --life 200 --file 0:0"
+
+[[run]]
+name = "file_pickup_206"
+room = "206"
+setup_script = "file_pickup_206.lua"
+input = "file_pickup_206.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 700
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
+frames = [360, 699]
+expect = "match"
+record = "--no-enemies --warp 206:-17200:0:-9100:3072 --life 200"
+
+[[run]]
+name = "file_pickup_208"
+room = "208"
+setup_script = "file_pickup_208.lua"
+input = "file_pickup_208.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
+frames = [360, 899]
+expect = "match"
+record = "--no-enemies --warp 208:-19000:0:-19400:0 --life 200"
+
+[[run]]
+name = "file_pickup_115"
+room = "115"
+setup_script = "file_pickup_115.lua"
+input = "file_pickup_115.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1000
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
+frames = [360, 999]
+expect = "match"
+record = "--no-enemies --warp 115:-20000:0:-18100:3072 --life 200"

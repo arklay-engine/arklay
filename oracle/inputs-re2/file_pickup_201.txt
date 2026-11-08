@@ -1,0 +1,20 @@
+# Room 201's memo (oracle/re2.md, "Picking up a file"): press at the desk, read Police Memorandum's three pages to the end marker, back a page, to the marker again, file it with a press, close message 10, press again (nothing is left).
+0
+350 action
+352
+404 right
+406
+434 right
+436
+464 right
+466
+494 left
+496
+514 right
+516
+544 action
+546
+644 action
+646
+704 action
+706

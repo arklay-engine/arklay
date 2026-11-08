@@ -565,6 +565,15 @@ pub const MESSAGE_TAKE: u8 = 0;
 pub const MESSAGE_FULL: u8 = 1;
 /// The get-item window's "You've taken the item."
 pub const MESSAGE_TAKEN: u8 = 6;
+/// The file pick-up's "filed" message (`St_get_file`'s sub 6, `Mess_set(0xAF0010, 0xE400, 10, 0)`).
+pub const MESSAGE_FILED: u8 = 10;
+/// The first item id that is a file (`St_init02`: an id above 0x67), file `id - 0x68`.
+pub const FIRST_FILE_ITEM: u8 = 0x68;
+
+/// The file an item area's id stands for, if it is one.
+pub fn file_of_item(id: u8) -> Option<u8> {
+    id.checked_sub(FIRST_FILE_ITEM)
+}
 
 /// The global message id of door message 0 (the executable's door table at
 /// `0x52F9B4`); door message `n` is `DOOR_MESSAGES + n`.
@@ -3784,7 +3793,7 @@ mod tests {
         let mut cue = None;
         for tick in 1..400 {
             let before = game.inventory.clone();
-            if let Some(sound) = game.tick_re2_item_get() {
+            for sound in game.tick_re2_item_get(crate::game::status2::Input::default()) {
                 assert_eq!(sound, Sound::Cancel);
                 assert_eq!(cue, None, "one cue");
                 cue = Some(tick);
@@ -4028,7 +4037,7 @@ mod tests {
         game.fire_re2_area(action);
         let mut cuts = Vec::new();
         for _ in 0..7 {
-            game.tick_re2_item_get();
+            game.tick_re2_item_get(crate::game::status2::Input::default());
             cuts.push(game.re2_item_get_cut(3));
         }
         // `0x501CD9` on the sixth tick; the question shows on the seventh.
@@ -4040,13 +4049,13 @@ mod tests {
             .re2_item_get
             .is_some_and(|get| get.phase != crate::game::Re2ItemGetPhase::Close)
         {
-            game.tick_re2_item_get();
+            game.tick_re2_item_get(crate::game::status2::Input::default());
             game.message.active = false;
         }
         let mut cuts = Vec::new();
         while game.re2_item_get.is_some() {
             cuts.push(game.re2_item_get_cut(3));
-            game.tick_re2_item_get();
+            game.tick_re2_item_get(crate::game::status2::Input::default());
         }
         // `0x502027` on the close's eighth tick.
         assert_eq!(cuts, [0, 0, 0, 0, 0, 0, 0, 0, 3, 3]);
@@ -4070,7 +4079,7 @@ mod tests {
                 game.re2_item_get_stopped_frame(),
                 "the effects run on the window's game frames, and only there"
             );
-            game.tick_re2_item_get();
+            game.tick_re2_item_get(crate::game::status2::Input::default());
             game.message.active = false;
         }
         // The opening fade's three frames are under `0xFF000000`: only the
@@ -4089,6 +4098,131 @@ mod tests {
             state.tick_effects_as(held == 0, None, None);
             assert_eq!(state.flag(STOP_BANK, STOP_EFFECTS), held == 1);
         }
+    }
+
+    /// A hand-built room with one standing item area in slot 8: `item` with
+    /// `flag` and object `model`, the press fired and the window open.
+    fn press_item_area(item: u8, flag: u8, model: u8) -> GameState {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let (item, flag, model) = (i64::from(item), i64::from(flag), i64::from(model));
+        let ops = [
+            8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, flag, model, 0,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        game
+    }
+
+    /// Run the file window's ticks until it is in `phase`.
+    fn run_to(game: &mut GameState, phase: crate::game::Re2ItemGetPhase) {
+        for _ in 0..60 {
+            if game.re2_item_get.is_some_and(|get| get.phase == phase) {
+                return;
+            }
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        panic!("the window never reached {phase:?}");
+    }
+
+    /// Cancel on the first page, then let message 10 go down; returns the
+    /// cues of the ticks after the cancel.
+    fn file_it(game: &mut GameState) -> Vec<crate::game::status2::Sound> {
+        use crate::game::status2::{Input, Sound};
+        run_to(game, crate::game::Re2ItemGetPhase::FileRead);
+        for _ in 0..13 {
+            game.tick_re2_item_get(Input::default());
+        }
+        let cancel = Input {
+            cancel: true,
+            ..Input::default()
+        };
+        assert_eq!(game.tick_re2_item_get(cancel), [Sound::Cancel]);
+        assert!(game.message.active, "message 10 is up");
+        game.message.active = false;
+        let mut cues = Vec::new();
+        while game.re2_item_get.is_some() {
+            cues.extend(game.tick_re2_item_get(Input::default()));
+        }
+        cues
+    }
+
+    #[test]
+    fn a_file_area_skips_the_question_and_the_inventory() {
+        use crate::game::Re2ItemGetPhase;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let capacity = game.inventory_capacity();
+        game.inventory = (0..capacity)
+            .map(|_| crate::game::InventoryItem { id: 2, quantity: 1 })
+            .collect();
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x6B, 1, 94, 2, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        let before = game.inventory.clone();
+        let mut cuts = Vec::new();
+        for _ in 0..6 {
+            assert_eq!(game.re2.files[0], 0xFF, "the file goes in on tick 6");
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            cuts.push(game.re2_item_get_cut(3));
+        }
+        assert_eq!(cuts, [3, 3, 3, 3, 3, 0]);
+        assert_eq!(game.re2.files[0], 3);
+        assert_eq!(
+            game.re2_file.blink,
+            crate::game::status2::files::Blink::OPEN
+        );
+        assert_eq!(game.re2_file.x, 0x138);
+        assert_eq!(game.re2_item_get.unwrap().phase, Re2ItemGetPhase::FileFade);
+        for _ in 0..5 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            assert!(!game.message.active, "no question");
+            assert_eq!(game.re2_item_get_cut(3), 0);
+        }
+        assert_eq!(game.inventory, before);
+    }
+
+    #[test]
+    fn closing_the_filed_message_takes_the_area() {
+        use crate::game::status2::Sound;
+        let mut game = press_item_area(0x6B, 94, 2);
+        let cues = file_it(&mut game);
+        assert!(cues.contains(&Sound::Cancel));
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 94));
+        assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
+        assert!(game.inventory.is_empty());
+        // The window closed as the item path's does, and a second press
+        // finds nothing.
+        assert!(game.re2.door_key_stop);
+        assert!(game.re2_item_get.is_none());
+    }
+
+    #[test]
+    fn a_file_from_aot_on_goes_to_the_file_list() {
+        // Room 115's diary: a one-unit area, set on by the script.
+        let mut game = press_item_area(0x68, 20, 7);
+        file_it(&mut game);
+        assert_eq!(game.re2.files[0], 0);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 20));
+        assert!(game.inventory.is_empty());
+    }
+
+    #[test]
+    fn an_item_area_still_asks() {
+        let mut game = press_item_area(0x47, 104, 0xFF);
+        for _ in 0..7 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        assert!(game.message.active);
+        assert_eq!(
+            game.re2_item_get.unwrap().phase,
+            crate::game::Re2ItemGetPhase::Ask
+        );
+        assert_eq!(game.re2.files, [NO_FILE; FILE_SLOTS]);
     }
 
     #[test]

@@ -30,6 +30,7 @@ use super::GameState;
 use crate::scd2::host::item_max;
 
 pub mod binders;
+pub mod file_get;
 pub mod files;
 pub mod map;
 
@@ -82,9 +83,9 @@ pub const FILE_PREV_IN: u8 = 0x12;
 pub const FILE_READ_STEPS: u8 = 14;
 /// The page's x at rest (`St_init_disp_file`), where the next page comes
 /// in from (sub 0xF's end) and the page before (sub 0x11's end).
-const PAGE_X: i16 = 0x19;
-const PAGE_X_NEXT: i16 = 0x138;
-const PAGE_X_PREV: i16 = -262;
+pub(crate) const PAGE_X: i16 = 0x19;
+pub(crate) const PAGE_X_NEXT: i16 = 0x138;
+pub(crate) const PAGE_X_PREV: i16 = -262;
 /// The binders' spin a draw in subs 8 and 9 (`0x500560`).
 const SPIN_STEP: i16 = 0x26;
 /// The binders on FILE's carousel (`0x691F71` wraps 0 to 2).
