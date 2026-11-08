@@ -783,15 +783,24 @@ drives the box screen with pad input only.
 - Look in the box when no box was ever opened and a slot is free: at a box
   in this room on the way (`look in the box on the way: never opened`), or
   from anywhere while sourcing ammunition ([Ammunition](#ammunition)).
-- A puzzle step held for a free slot (a `<push reveals>` marked `inventory
-  full`) counts as a pickup needing room, and its mark waits for an
+- A puzzle step held for a free slot (a `<push reveals>`, or an
+  `<interact>` on a bank 7 item flag with `done="clear"` and no `reveals`,
+  an item handover like 219's battery shelf, marked `inventory full`; an
+  `<interact reveals>` like 119's switch only turns its items into pickups,
+  so it needs no slot) counts as a pickup
+  needing room until its done flag shows it done, and its mark waits for an
   inventory change however often it was tried, like a key's
-  (`BotPlanner.steps_needing_room`). Until it runs, a pickup that is no
+  (`BotPlanner.steps_needing_room`). So does a needed item (a key or a
+  `<use>` item) left behind on a full inventory while fewer copies are held
+  and boxed than the open `<use>` facts that take it
+  (`BotPlanner.needed_items_left`). Until they run, a pickup that is no
   key, file, `<use>` item or merge into a held stack leaves that many slots
   free, and so does every box withdrawal (`ctx.hold_free`): 30E's herbs,
   then the launcher 30C's tiger fight prefers, took the slot a box visit
   had freed for 306's Doom Book on every pass, and the book (the Wolf
-  Medal, the way to the lab) was lost.
+  Medal, the way to the lab) was lost. A remote trip to such an item
+  outranks carrying a held `<use>` item to its zone: 217's MO disk lost
+  the freed slot to the battery's errand and never fit again.
 - Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
   written whenever the box screen is up) when a `<use>` fact or an open
   `<brew>`'s recipe (`BotMix.needs`: its bottle and chemicals) needs it, a
@@ -1196,7 +1205,7 @@ files. The checked-in facts:
 | 30B | `<interact slot="10" reveals="5">`: the corridor's west end sets a room flag that the main clears at once, so the step is done when it arms AOT 5. `<interact slot="5">` then sets the boulder rolling (scenario `0x3D`), and the init opens the way to 30C. |
 | 30C | `<fight enemy="0x13" bank="3" bit="138">`: the web over door 1 to 30D, cut with the knife picked up in the room (AOT 2). The init deletes the door while the web stands, and the main arms it again once enemy bit 138 is set. Before it, `<fight enemy="0x04" bank="3" bit="137" label="Black Tiger">`: the spider's knockback breaks the web cut, so it is killed first with the grenade launcher (its knowledge `prefer`). `<avoid slot="1" bank="3" bit="138" while="clear">`: the bot still saw door 1 while the web stood, walked into the web and stood stuck there until the tiger's poison killed it. |
 | 30F | Two `<use slot="6" item="0x1E">` facts: the hex crank turns the passages one step a use, cycling scenario bits 74 and 75 through (0,0), (1,0), (0,1), (1,1). Only (1,1) joins the 30D door to door 1 (306). The first fact waits for bit 75, the second for bit 74 after 75; a use whose done flag stays clear is retried at once. `<door slot="0" via="3">`: the passage to 305 from the AOT 3 event at the east end. The MO disk (AOT 5) lies at the corridor's west end behind the boulder's collision until the boulder has rolled (scenario `0x4C`): `<interact slot="11" reveals="8">` walks into the west end (room bit `0x24`), which turns AOT 8 into the boulder's trigger, and `<interact slot="8" bank="0" bit="0x4C">` sets it rolling. The boulder is faster than a run and crushes a player in the corridor band (AOT 9) within 3800 of it, so `<leave slot="2" bank="4" bit="0x13" escape="yes">` takes the bot out to 30D while it rolls (room bit `0x13`, cleared when it stops). The init on the next entry opens the west end, and the disk is taken. The first step waits for bit 74 (`after`). |
-| 500 | `<avoid slot="1">`: the lift back up to 310. The lab needs nothing from before it, and an ungated `<avoid>` on a door is marked for good, so remote planning never routes through it either. |
+| 500 | `<avoid slot="1" bank="7" bit="0x4D" while="clear">`: the lift back up to 310, avoided once 217's MO disk is taken (its item flag clears; bank 7 is global, so the gate reads from the lab). Then the lab needs nothing from before it. While the disk still lies in the library the lift stays open, so a disk left behind on a full inventory is fetched rather than losing 510's lamp. |
 | 504 | `<interact slot="7" bank="4" bit="0">`, then `<interact slot="7" bank="0" bit="102" reveals="1">`, each with `<answer choice="yes" slot="7">`: the switch lowers the first panel, then the one in front of the lab key (AOT 1). |
 | 506 | Two `<interact slot="1">` facts with `<answer choice="yes" slot="1">`: the terminal releases lock 37 (503's door to 504), then lock 38 (508's door to 509). `BotTerminal` drives the screen. |
 | 507 | The gas room. `<keep_out slot="8">` while room bit 3 is clear: the plate starts the gas, and the way to the box's north face runs past it. Three `<push object="2" slot="8">` steps: south and west `until="stop"` (crates take the box's east side), then north `axis="z"` onto the plate, done at room bit 36. `<climb object="2" slot="9" bank="4" bit="7">`: AOT 9, the air shaft, is armed only while the player stands on the box (main-state bit 24); its Yes crawls through to the west half. `<leave slot="0" bank="4" bit="7">`: the gas has set the fast health drain by then, which ends with the room. `<use slot="12" item="0x28">` on the next entry from 505: the MO disk prints pass code 02. |
@@ -1228,7 +1237,7 @@ files. The checked-in facts:
 | 201 | Jill: `<interact slot="5" bank="0" bit="0x46">` after common `0x25`: the key panel shares door 1's zone, and room init switches the door to 214 off until the pass number is entered. With `rope=leave` the pass number never comes: `<avoid slot="1" bank="0" bit="0x46" while="clear">` here and the same on 214's door 0 (deleted for message 128 until `0x46`) keep remote planning from routing between 201 and 214, so it goes round by 21C and the 200 lift. |
 | 216 | Second visit only. Door 2 to 218, the hidden library, is live only while bookshelf object 0 stands on AOT 6, an object probe that sets room flag `0x18` each tick it sees the shelf; room main reads and clears it every tick and turns the door on or off. Init puts the shelf in front of the door until 218 has been entered (scenario `0x4F`), on the spot after. 218 holds nothing the story needs (15 handgun rounds, ink ribbons, the heliport seen from its window: scenario `0x60`, read by no other room), so there is no `<push>`: `<reach slot="2" bank="0" bit="0x4F" while="set" here_bank="4" here_bit="0x18">` keeps the planner off the door while the shelf is not on its spot (before, sandwich seed 1 walked back for it from across the map and lost 19k ticks). The room's bot.xml notes the push that would work. |
 | 217 | `<push object="0" slot="3" bank="0" bit="0x68">`: the statue onto the floor mark (object probe AOT 3, 100 by 100); its event slides the bookshelf (object 1) off the way to the MO disk (AOT 5), which is taken from the strip at the desk's north-west corner. |
-| 219 | `<interact slot="4" bank="7" bit="0x39" done="clear">`: the shelf event hands over the battery, whose own pickup zone sits at the room origin. |
+| 219 | `<interact slot="4" bank="7" bit="0x39" done="clear">`: the shelf event hands over the battery, whose own pickup zone sits at the room origin. The handover needs a free slot (on a full inventory the game refuses it, message 194), so on a full inventory the step is marked and holds a slot like a `<push reveals>`: the box visit comes before the walk. |
 
 `set_input` keys are literal: `up down left right` (player directions plus the
 UI edge/held flag), `held_up` etc. (UI held only), `up_pressed` etc. (UI edge
