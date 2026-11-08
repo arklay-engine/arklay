@@ -93,6 +93,12 @@ TITLE_FLASH = 0x00691B96  # the white tiles' level
 TITLE_LOGO = 0x00691B98  # the logo's offset
 TITLE_LOGO_COUNT = 0x00691B9C  # the logo's slide count
 FADE = 0x0098F07C  # `Fade_set`'s slot 0: level, step, mode
+FADE_SLOT = 0x4C  # the size of a fade slot: slot n is at FADE + n * FADE_SLOT
+TITLE_MENU_2 = 0x00691B84  # the title's second page byte (the 4TH title's)
+TITLE_DIM = 0x00691B8B  # the slide's dim
+TITLE_B8C = 0x00691B8C  # the slide's second count (the 4TH title's logo level)
+TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
+EX_LEVEL = 0x00989E91
 HARD_MODE = 0x006805B1  # `hard_mode`: the difficulty's HARD
 CENSORSHIP_OFF = 0x006805B3  # `censorship_off`: ARRANGE MODE's
 # `fg_system`'s bits the new-game choice sets: EASY (0x20), `censorship_off`'s
@@ -286,6 +292,10 @@ def prepare_game_windows(game: Path, work: Path, sound: bool = False) -> Path:
     return tree
 
 
+# `--config KEY=VALUE`: keys of config.ini set for this run (SPECIAL below 15, for one).
+CONFIG_OVERRIDES: dict[str, str] = {}
+
+
 def write_config(game: Path, tree: Path, sound: bool) -> None:
     settings = (game / "config.ini").read_text(errors="replace")
     # A fixed config: no dialogs or sound device to wait on, none of Classic
@@ -294,7 +304,7 @@ def write_config(game: Path, tree: Path, sound: bool) -> None:
         "BootConfig": "0", "MovieEnable": "0", "DirectSoundEnable": "1" if sound else "0",
         "QuickturnEnable": "0", "TacticalReloadEnable": "0", "AutoAimEnable": "0",
         "CutsceneSkip": "0", "DebugMode": "0", "FocusIgnore": "1",
-    }
+    } | CONFIG_OVERRIDES
     lines = []
     for line in settings.splitlines():
         key = line.split("=", 1)[0].strip()
@@ -1329,8 +1339,19 @@ def title_trace(game: Game) -> str:
         f"{game.u8(TITLE_PULSE)},{game.u8(TITLE_SLIDE)},{game.u16(TITLE_DEMO)} "
         f"tlogo={game.i16(TITLE_FLASH)},{game.i16(TITLE_LOGO)},{game.i32s(TITLE_LOGO_COUNT, 1)[0]} "
         f"tfade={kido},{add},{fade[4]},{game.u16(TITLE_KIDO)},{game.u16(TITLE_ADD)} "
-        f"tsel={game.u32(FG_SYSTEM) & FG_SYSTEM_CHOICE:x},{game.u8(HARD_MODE)},{game.u8(CENSORSHIP_OFF)}"
+        f"tsel={game.u32(FG_SYSTEM) & FG_SYSTEM_CHOICE:x},{game.u8(HARD_MODE)},{game.u8(CENSORSHIP_OFF)} "
+        f"tx={task[0xA]},{game.u8(TITLE_MENU_2)},{game.u8(TITLE_DIM)},{game.u8(TITLE_B8C)},"
+        f"{game.u8(TITLE_EF2)},{game.u8(TITLE_EF2 + 1)},{game.u8(EX_LEVEL)},"
+        f"{game.u32(FG_SYSTEM) & 0x01020009:x},{game.u32(FG_STATUS) & 0x02004000:x} "
+        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)}"
     )
+
+
+def fade_slot(game: Game, slot: int) -> str:
+    """A fade slot's level, step and mode (`Fade_set`)."""
+    fade = game.read(FADE + slot * FADE_SLOT, 5)
+    level, add = struct.unpack_from("<hh", fade, 0)
+    return f"{level},{add},{fade[4]}"
 
 
 def boot_trace_line(game: Game, tick: int, pad: int) -> str:
@@ -1563,6 +1584,10 @@ def main() -> int:
             "--arrange", action="store_true",
             help="ARRANGE MODE rather than ORIGINAL MODE (`censorship_off`, `fg_system`'s 0x40)",
         )
+        command.add_argument(
+            "--config", action="append", default=[], metavar="KEY=VALUE",
+            help="set a key of the game's config.ini for this run (repeatable), such as SPECIAL=0x1 (the game reads its numbers in hex, 0x first)",
+        )
         command.add_argument("--input", default=None)
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
@@ -1668,6 +1693,9 @@ def main() -> int:
     command.set_defaults(func=patches_command)
 
     args = parser.parse_args()
+    for setting in getattr(args, "config", []):
+        key, _, value = setting.partition("=")
+        CONFIG_OVERRIDES[key.strip()] = value.strip()
     return args.func(args)
 
 

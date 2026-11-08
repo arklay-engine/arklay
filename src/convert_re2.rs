@@ -18,6 +18,8 @@
 //! | `Common/Data/type00.adt` | `ui/type00.bmp` |
 //! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
 //! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
+//! | `Common/Data/Title_o.adt`, `Title_o2.adt` | `ui/title/title_o.bmp`, `ui/title/title_o2.bmp` |
+//! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
@@ -1606,6 +1608,35 @@ fn copy_title_art(
             warnings.push("no Common/Data/Title_bg.adt; the title has no background".into());
         }
         None => {}
+    }
+    // The 4th Survivor's and To-fu's titles (`Load_title_survivor`): their
+    // backgrounds and their logos' sheets (texture 0x15).
+    for (stem, entry) in [("TITLE_O", "title_o"), ("TITLE_O2", "title_o2")] {
+        if let Some(path) = find(stem) {
+            let decoded =
+                adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+            let image =
+                adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+            tally.add(
+                writer,
+                "ui",
+                &format!("ui/title/{entry}.bmp"),
+                bmp::encode_to_vec(&image)?,
+            )?;
+        } else if layout.common.is_some() {
+            warnings.push(format!(
+                "no Common/Data/{entry}.adt; SPECIAL's title has no background"
+            ));
+        }
+    }
+    for (stem, entry) in [("SPY_LOGO", "spy_logo"), ("TOFULOGO", "tofulogo")] {
+        if let Some(path) = find(stem) {
+            tally.add(writer, "ui", &format!("ui/title/{entry}.tim"), read(path)?)?;
+        } else if layout.common.is_some() {
+            warnings.push(format!(
+                "no Common/Data/{entry}.tim; SPECIAL's title has no logo"
+            ));
+        }
     }
     let english = ddraw
         .and_then(sevenz::find)

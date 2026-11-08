@@ -1,0 +1,97 @@
+# SPECIAL's extras on the title (oracle/re2.md, "The title"): the confirm on 4TH or TO-FU, the fade to their own title, its logo and its START or EXIT, and SPECIAL's layouts for config.ini's SPECIAL below 15. Boot records, compared from the title's first tick.
+
+[[run]]
+name = "special_4th"
+ui = "title"
+offset = 189
+# recorded for 1300 ticks; START hands off to the new game on 1270, which arklay doesn't port
+ticks = 1270
+input = "special_4th.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1269]
+expect = "match"
+record = ""
+
+[[run]]
+name = "special_4th_exit"
+ui = "title"
+offset = 189
+ticks = 1100
+input = "special_4th_exit.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1099]
+expect = "match"
+record = ""
+
+[[run]]
+name = "special_tofu"
+ui = "title"
+offset = 189
+ticks = 1350
+input = "special_tofu.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1349]
+expect = "match"
+record = ""
+
+[[run]]
+name = "special_s0"
+ui = "title"
+special = 0
+offset = 189
+ticks = 800
+input = "special_layout.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 799]
+expect = "match"
+record = "--config SPECIAL=0x0"
+
+[[run]]
+name = "special_s1"
+ui = "title"
+special = 1
+offset = 189
+ticks = 800
+input = "special_layout.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 799]
+expect = "match"
+record = "--config SPECIAL=0x1"
+
+[[run]]
+name = "special_s2"
+ui = "title"
+special = 2
+offset = 189
+ticks = 800
+input = "special_layout.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 799]
+expect = "match"
+record = "--config SPECIAL=0x2"
+
+[[run]]
+name = "special_s5"
+ui = "title"
+special = 5
+offset = 189
+ticks = 800
+input = "special_layout.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 799]
+expect = "match"
+record = "--config SPECIAL=0x5"

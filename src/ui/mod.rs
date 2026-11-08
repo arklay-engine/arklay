@@ -195,6 +195,9 @@ pub enum UiCue {
     /// An RE 2 core-bank slot (`Snd_se_on(0x4nn0000)`), from the bank the
     /// screen's game loaded (the title's `Snd_load_core(0x10)`).
     Core(u8),
+    /// `Snd_load_core(id)`: the core bank the later [`UiCue::Core`] cues
+    /// play from (the 4th Survivor's title loads 0x12, To-fu's 0x13).
+    CoreBank(u8),
 }
 
 impl UiCue {
@@ -213,7 +216,7 @@ impl UiCue {
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
             UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
             UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
-            UiCue::RoomSound(_) | UiCue::Core(_) => None,
+            UiCue::RoomSound(_) | UiCue::Core(_) | UiCue::CoreBank(_) => None,
         }
     }
 }

@@ -9566,7 +9566,7 @@ impl App {
     fn play_core_cues(&mut self, cues: Vec<ui::UiCue>) -> Vec<ui::UiCue> {
         let (core, rest): (Vec<_>, Vec<_>) = cues
             .into_iter()
-            .partition(|cue| matches!(cue, ui::UiCue::Core(_)));
+            .partition(|cue| matches!(cue, ui::UiCue::Core(_) | ui::UiCue::CoreBank(_)));
         if core.is_empty() {
             return rest;
         }
@@ -9588,8 +9588,16 @@ impl App {
             *ui_music = Mixer::open();
         }
         for cue in core {
-            let ui::UiCue::Core(slot) = cue else {
-                continue;
+            let slot = match cue {
+                ui::UiCue::Core(slot) => slot,
+                ui::UiCue::CoreBank(id) => {
+                    // `Snd_load_core`: the bank the title's later cues play.
+                    let mut loaded = crate::se2::Banks::new();
+                    loaded.load_core(pack, id);
+                    *banks = loaded;
+                    continue;
+                }
+                _ => continue,
             };
             let kind = crate::se2::Kind::Core;
             if banks.stem(kind, slot).is_none() {
@@ -9718,10 +9726,14 @@ impl App {
             .save_screen
             .as_deref()
             .is_some_and(|entry| self.pack.contains(entry));
+        let special = i64::from(self.player_options.title_special.unwrap_or(15));
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
-            &[("folder_saves", ScreenArg::Bool(folder_saves))],
+            &[
+                ("folder_saves", ScreenArg::Bool(folder_saves)),
+                ("special", ScreenArg::Int(special)),
+            ],
             ScreenAction::Quit,
             &mut cx,
         )?;
@@ -11290,6 +11302,24 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_fgsys") as u32 & 0x0002_0060,
             v("ti_hard_mode"),
             v("ti_censorship_off"),
+        ));
+        line.push_str(&format!(
+            " tx={},{},{},{},{},{},{},{:x},{:x} tfade2={},{},{} tfade3={},{},{}",
+            v("ti_sub2"),
+            v("ti_page2"),
+            v("ti_dim"),
+            v("ti_b8c"),
+            v("ti_ef2"),
+            v("ti_ef3"),
+            v("ti_level"),
+            v("ti_fgsys") as u32 & 0x0102_0009,
+            v("ti_fgstatus") as u32 & 0x0200_4000,
+            v("ti_fade2_level"),
+            v("ti_fade2_add"),
+            v("ti_fade2_mode"),
+            v("ti_fade3_level"),
+            v("ti_fade3_add"),
+            v("ti_fade3_mode"),
         ));
     } else {
         line.push_str(" ti=-");

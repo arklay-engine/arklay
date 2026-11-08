@@ -16,8 +16,13 @@
 --
 -- What each row leads to: LOAD GAME takes the confirm's white flash and fade
 -- and opens the load screen; ORIGINAL MODE and ARRANGE MODE lead to the
--- new-game choice (`ui/char_select.lua`); SPECIAL slides up to its extras,
--- whose modes aren't ported; OPTION fades out and, arklay having no option
+-- new-game choice (`ui/char_select.lua`); SPECIAL slides up to the extras
+-- config.ini's `SPECIAL` opens (`args.special`, 15 by default), where 4TH
+-- and TO-FU fade to their own title (`title_mv_state` 3 and 4, with
+-- `title_o.adt`, `title_o2.adt` and the logos `spy_logo.tim` and
+-- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
+-- (the title starts again) and whose EXIT goes back to `Title_init`, and
+-- EX.BATTLE's and GALLERY's confirms do nothing; OPTION fades out and, arklay having no option
 -- screen, the title starts again (`docs/internals/deviations/re2.md`, "The title"). An
 -- idle title fades into the attract demo after 0x708 ticks.
 --
@@ -147,11 +152,23 @@ local function new_state()
         game_mode = 0,
         fg_system = 0,
         censorship_off = 0,
-        -- `Fade_set`'s slot 0: the level, its step and the blend.
-        fade = { level = -1, add = 0, mode = 0 },
-        -- The fade the frame draws: `System_trans` takes the level before
+        -- `Fade_set`'s four slots (0x98F07C, 0x4C bytes each): the level,
+        -- its step and the blend. Slot 3 is drawn behind the sprites.
+        fades = {
+            [0] = { level = -1, add = 0, mode = 0 },
+            { level = -1, add = 0, mode = 0 },
+            { level = -1, add = 0, mode = 0 },
+            { level = -1, add = 0, mode = 0 },
+        },
+        -- The fades the frame draws: `System_trans` takes each level before
         -- this tick's step.
-        drawn_fade = nil,
+        drawn_fades = {},
+        -- config.ini's `SPECIAL` (`Special`, 0x524EB8): which extras show.
+        special = 15,
+        -- Task 0's second sub-step (+0xA), the 4th Survivor's title's.
+        sub2 = 0,
+        -- `fg_status`'s bits the extras set (flag 1:6, `0x02000000`).
+        fg_status = 0,
         -- `Pad_set`'s state.
         raw = 0,
         rep_mask = 0,
@@ -240,18 +257,36 @@ end
 
 -- ---------------------------------------------------------------- the fade
 
+-- `Fade_set(a0, add)`: the slot is `a0`'s low byte, the blend its high one.
 local function fade_set(a0, add)
-    s.fade.mode = (a0 >> 8) & 3
-    s.fade.add = i16(add)
-    s.fade.level = add < 0 and i16(add + 0x8000) or 0
+    local fade = s.fades[a0 & 0xFF]
+    fade.mode = (a0 >> 8) & 3
+    fade.add = i16(add)
+    fade.level = add < 0 and i16(add + 0x8000) or 0
 end
 
-local function fade_adjust(level)
-    s.fade.level = i16(level)
+-- `Fade_adjust(n, level, ...)`: slot `n` (0 when not given) at `level`.
+local function fade_adjust(level, n)
+    s.fades[n or 0].level = i16(level)
 end
 
-local function fade_done()
-    return s.fade.level < 0
+-- `Fade_status(n)`: the slot is done (its level negative).
+local function fade_done(n)
+    return s.fades[n or 0].level < 0
+end
+
+local function fade_off(n)
+    s.fades[n].level = -1
+end
+
+-- `Init_global` (0x4C4D70) as the title sees it: the four fades off,
+-- `fg_status` cleared and `fg_system` down to 0x1000899.
+local function init_global()
+    s.fg_status = 0
+    s.fg_system = s.fg_system & 0x1000899
+    for n = 0, 3 do
+        fade_off(n)
+    end
 end
 
 -- ---------------------------------------------------------------- the words
@@ -259,7 +294,12 @@ end
 local function moji_set_work()
     for i = 0, #MOJI do
         local m = MOJI[i]
-        s.work[i] = { r = 0x80, y = m[2] }
+        s.work[i] = { r = 0x80, x = m[1], y = m[2] }
+    end
+    -- To-fu's title moves its name (word 21) by (+16, -4).
+    if s.fg_system & 1 ~= 0 then
+        s.work[21].x = s.work[21].x + 0x10
+        s.work[21].y = s.work[21].y - 4
     end
 end
 
@@ -488,68 +528,176 @@ local SPECIAL_ROWS = {
 }
 local SPECIAL_EXIT = 3
 
--- SPECIAL (`0x504900`) as `Special` 15 has it (the executable's start
--- value, every extra open): its row slides up by 37 over the others' fade,
--- and the five choices below it take the directions. EXIT and the cancel
--- slide back to the rows; the extras and the gallery (the confirm's step 4
--- and page 7) aren't ported, and their confirm does nothing.
+-- `0x504900`'s draw case for `Special` (read signed): 0 EXIT alone, 1 with
+-- GALLERY, 2 and 3 with EX.BATTLE, 4 to 7 with 4TH, and anything else
+-- (this install's 15) every extra.
+local function special_case()
+    local v = s.special
+    if v == 0 or v == 1 then
+        return v
+    elseif v == 2 or v == 3 then
+        return 2
+    elseif v >= 4 and v <= 7 then
+        return 3
+    end
+    return 4
+end
+
+-- Step 0's cursor for each case.
+local SPECIAL_OPEN = { [0] = 3, 4, 2, 0, 0 }
+
+-- `0x505FC0`'s cases 0 to 3: the rows each shows, as { row, word, x, y }.
+local SPECIAL_LAYOUTS = {
+    [0] = { { 3, 12, 120, 160 } },
+    { { 4, 13, 126, 156 }, { 3, 12, 120, 179 } },
+    { { 2, 11, 8, 156 }, { 3, 12, 120, 179 }, { 4, 13, 184, 156 } },
+    { { 0, 9, 32, 147 }, { 2, 11, 128, 152 }, { 3, 12, 120, 190 }, { 4, 13, 124, 173 } },
+}
+
+local function special_draw(case)
+    if case == 4 then
+        for row = 0, 4 do
+            local r = SPECIAL_ROWS[row]
+            draw_word_at(r[1], row == s.cur and u8(s.pulse + 0x20) or 0x20, r[2], r[3])
+        end
+        return
+    end
+    for _, r in ipairs(SPECIAL_LAYOUTS[case]) do
+        local lit = r[1] == s.cur
+        if case == 0 then
+            lit = true
+        elseif case == 1 then
+            -- GALLERY is lit unless EXIT is chosen.
+            lit = (r[1] == 4) == (s.cur ~= 3)
+        end
+        draw_word_at(r[2], lit and u8(s.pulse + 0x20) or 0x20, r[3], r[4])
+    end
+end
+
+-- Step 2's moves for the cases other than 4, each with the cursor cue.
+local function special_moves(case)
+    local down, up = s.edge & PAD_DOWN ~= 0, s.edge & PAD_UP ~= 0
+    local left, right = s.edge & PAD_LEFT ~= 0, s.edge & PAD_RIGHT ~= 0
+    local function go(to)
+        s.cur = to
+        s.cue(SE_CURSOR)
+    end
+    if case == 0 then
+        s.cur = SPECIAL_EXIT
+    elseif case == 1 then
+        if down and s.cur == 4 then
+            go(3)
+        elseif up and s.cur == 3 then
+            go(4)
+        end
+    elseif case == 2 then
+        if down and s.cur ~= 3 then
+            go(3)
+        elseif up and s.cur == 3 then
+            go(2)
+        end
+        if left and s.cur == 4 then
+            go(2)
+        elseif right and s.cur == 2 then
+            go(4)
+        end
+    else
+        if down and s.cur == 4 then
+            go(3)
+        elseif down and (s.cur == 0 or s.cur == 2) then
+            go(4)
+        end
+        if up and s.cur == 3 then
+            go(4)
+        elseif up and s.cur == 4 then
+            go(0)
+        end
+        if left and s.cur == 2 then
+            go(0)
+        elseif right and s.cur == 0 then
+            go(2)
+        end
+    end
+end
+
+-- `Special` 15's moves (the default case).
+local function special_moves_all()
+    if s.edge & PAD_DOWN ~= 0 then
+        local to = ({ [0] = 2, 4, 3, nil, 3 })[s.cur]
+        if to then
+            s.cur = to
+            s.cue(SE_CURSOR)
+        end
+    elseif s.edge & PAD_UP ~= 0 then
+        local to
+        if s.cur == 2 then
+            to = 0
+        elseif s.cur == SPECIAL_EXIT then
+            to = s.special_column ~= 2 and 4 or 2
+        elseif s.cur == 4 then
+            to = 1
+        end
+        if to then
+            s.cur = to
+            s.cue(SE_CURSOR)
+        end
+    end
+    local left, right = s.edge & PAD_LEFT ~= 0, s.edge & PAD_RIGHT ~= 0
+    if left and s.cur == 4 then
+        s.cur = 2
+        s.cue(SE_CURSOR)
+    end
+    if right and s.cur == 2 then
+        s.cur = 4
+        s.cue(SE_CURSOR)
+    end
+    if left and s.cur == 1 then
+        s.cur = 0
+        s.cue(SE_CURSOR)
+    end
+    if right and s.cur == 0 then
+        s.cur = 1
+        s.cue(SE_CURSOR)
+    end
+    if s.cur == 2 or s.cur == 4 then
+        s.special_column = s.cur
+    end
+end
+
+-- SPECIAL (`0x504900`): its row slides up by 37 over the others' fade, and
+-- the choices `Special` opens show below it and take the directions. EXIT
+-- and the cancel slide back to the rows. A confirm on 4TH or TO-FU fades
+-- slot 2 to black (steps 4 and 5) and, on the tick it is done, starts that
+-- mode's title (`title_mv_state` 3). EX.BATTLE's and GALLERY's confirms
+-- aren't ported and do nothing.
 local function special()
     local stepped = s.step
+    local case = special_case()
     if s.step == 0 then
-        s.cur = 0
+        s.cur = SPECIAL_OPEN[case]
         slide_start()
         slide_in()
     elseif s.step == 1 then
         slide_in()
     elseif s.step == 2 then
-        if s.edge & PAD_DOWN ~= 0 then
-            local to = ({ [0] = 2, 4, 3, nil, 3 })[s.cur]
-            if to then
-                s.cur = to
-                s.cue(SE_CURSOR)
-            end
-        elseif s.edge & PAD_UP ~= 0 then
-            local to
-            if s.cur == 2 then
-                to = 0
-            elseif s.cur == SPECIAL_EXIT then
-                to = s.special_column ~= 2 and 4 or 2
-            elseif s.cur == 4 then
-                to = 1
-            end
-            if to then
-                s.cur = to
-                s.cue(SE_CURSOR)
-            end
-        end
-        local left, right = s.edge & PAD_LEFT ~= 0, s.edge & PAD_RIGHT ~= 0
-        if left and s.cur == 4 then
-            s.cur = 2
-            s.cue(SE_CURSOR)
-        end
-        if right and s.cur == 2 then
-            s.cur = 4
-            s.cue(SE_CURSOR)
-        end
-        if left and s.cur == 1 then
-            s.cur = 0
-            s.cue(SE_CURSOR)
-        end
-        if right and s.cur == 0 then
-            s.cur = 1
-            s.cue(SE_CURSOR)
-        end
-        if s.cur == 2 or s.cur == 4 then
-            s.special_column = s.cur
+        if case == 4 then
+            special_moves_all()
+        else
+            special_moves(case)
         end
         pulse()
         if s.key_trg & KEY_CANCEL ~= 0 then
             s.cur = SPECIAL_EXIT
             s.cue(SE_CANCEL)
             s.step = 3
-        elseif confirm() and s.cur == SPECIAL_EXIT then
-            s.cue(SE_CANCEL)
-            s.step = 3
+        elseif confirm() then
+            if s.cur == SPECIAL_EXIT then
+                s.cue(SE_CANCEL)
+                s.step = 3
+            elseif s.cur == 0 or s.cur == 1 then
+                s.cue(SE_DECIDE)
+                s.step = 4
+            end
         end
     elseif s.step == 3 then
         if slide_out() then
@@ -557,12 +705,30 @@ local function special()
             s.menu = MENU_ROWS
             s.step = 0
         end
-    end
-    if stepped == 2 then
-        for row = 0, 4 do
-            local r = SPECIAL_ROWS[row]
-            draw_word_at(r[1], row == s.cur and u8(s.pulse + 0x20) or 0x20, r[2], r[3])
+    elseif s.step == 4 or s.step == 5 then
+        if s.step == 4 then
+            fade_set(0x202, 0x800)
+            fade_adjust(0x200, 2)
+            s.step = 5
         end
+        if fade_done(2) then
+            fade_set(0x202, 0)
+            fade_adjust(0x7FFF, 2)
+            if s.cur == 0 then
+                s.fg_system = (s.fg_system & ~1) | 8
+            else
+                s.fg_system = s.fg_system | 9
+            end
+            -- `FUN_004B73C0`: the new game's work, with flag 1:6.
+            s.fg_status = 0x02000000
+            s.mv = 3
+            s.menu = 0
+            s.step = 0
+            return
+        end
+    end
+    if stepped == 2 or stepped >= 4 then
+        special_draw(case)
     else
         -- While sliding, the draw's case is a register the caller left (ECX,
         -- which `Fade_status(0)` leaves 0): case 0, EXIT alone at 120, 160.
@@ -969,6 +1135,15 @@ local function title_main(api)
         title_enter()
     elseif s.disp == 2 then
         s.exit = "save_load"
+    elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
+        -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
+        -- extras branch) isn't ported: the title starts again from
+        -- `Title_init`, as after OPTION (docs/internals/deviations/re2.md,
+        -- "The title").
+        s.fg_system = s.fg_system & ~(9 | FG_NEW_GAME)
+        init_global()
+        api:core_bank(0x10)
+        s.mv = 1
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
         s.character = s.claire and 1 or 0
@@ -989,6 +1164,216 @@ local function title_main(api)
     end
 end
 
+-- ------------------------------------------- the 4th Survivor's title
+
+-- `FUN_005064E0(c, c21, semi)`: the logo's four pieces (words 17 to 20, on
+-- texture 0x15, depth 11) at `c` when it isn't 0, then the name (word 21,
+-- depth 12) at `c21`. Their code has no semi-transparent bit, so both are
+-- opaque, `semi` or not.
+local function survivor_logo(c, c21)
+    local function add(entry, colour, depth)
+        local m = MOJI[entry]
+        local w = s.work[entry]
+        s.sprites[#s.sprites + 1] = {
+            page = 3, u = m[5], v = m[6], w = m[3], h = m[4],
+            x = w.x, y = w.y, colour = colour, depth = depth,
+        }
+    end
+    if c ~= 0 then
+        for entry = 17, 20 do
+            add(entry, c, 11)
+        end
+    end
+    add(21, c21, 12)
+end
+
+-- `FUN_00506440`: START and EXIT (words 14 and 15), the chosen one lit.
+local function survivor_rows()
+    for row = 0, 1 do
+        local entry = 14 + row
+        draw_word(entry, row == s.cur and u8(s.pulse + 0x20) or 0x20, s.work[entry].y)
+    end
+end
+
+-- `Load_title_survivor` (0x505460, `title_mv_state` 3), all in one tick:
+-- the mode's core bank (0x12, or To-fu's 0x13), its logo's sheet as
+-- texture 0x15, slot 3 at 0x7C00 over its background (`title_o.adt`, or
+-- `title_o2.adt`), and the counts for the logo's build-up.
+local function survivor_load(api)
+    local tofu = s.fg_system & 1 ~= 0
+    api:core_bank(tofu and 0x13 or 0x12)
+    pages[3] = api:indexed_page(tofu and "ui/title/tofulogo" or "ui/title/spy_logo")
+    fade_off(0)
+    fade_off(1)
+    fade_off(2)
+    fade_set(0x203, 0)
+    fade_adjust(0x7C00, 3)
+    s.background = api:picture(tofu and "ui/title/title_o2" or "ui/title/title_o")
+    moji_set_work()
+    s.mv = 4
+    s.cur = 0
+    s.add = 0
+    s.kido = 0
+    s.pulse = 0
+    s.pulse_step = 2
+    s.disp = 0
+    s.menu = 0
+    s.step = 0
+    s.dim = 0
+    s.b8c[0] = 0
+    s.logo = 0xF0
+    s.flash = 0
+    s.logo_count = -1
+    fade_off(0)
+    s.sub = 0
+end
+
+-- `FUN_00505670`'s `Ti_Disp_add` 0: the name fades in over 64 ticks (page
+-- 0), the logo over 128 (page 1), then slot 3 lifts off the background
+-- (page 2) and the decide cue plays. A button skips it all.
+local function survivor_build()
+    fade_adjust(0x7C00, 3)
+    if s.menu == 0 then
+        s.dim = u8(s.dim + 2)
+        survivor_logo(0, s.dim)
+        if s.dim >= 0x80 then
+            s.dim = 0x80
+            s.menu = s.menu + 1
+        end
+    elseif s.menu == 1 then
+        s.b8c[0] = u8(s.b8c[0] + 1)
+        survivor_logo(s.b8c[0], 0x80)
+        if s.b8c[0] >= 0x80 then
+            s.b8c[0] = 0x80
+            s.add = 0xFF00
+            s.kido = 0x5A00
+            s.menu = s.menu + 1
+        end
+    elseif s.menu == 2 then
+        survivor_logo(0x80, 0x80)
+        s.kido = (s.kido + s.add) & 0xFFFF
+        fade_adjust(s.kido, 3)
+        if fade_done(3) then
+            s.cue(SE_DECIDE)
+            s.add = 0
+            s.kido = 0xFFFF
+            s.disp = 1
+        end
+    end
+    if s.edge & 0x9FF ~= 0 then
+        s.cue(SE_DECIDE)
+        s.disp = s.disp + 1
+        s.add = 0xF000
+        if s.kido == 0 then
+            s.kido = 0x5A00
+        end
+    end
+end
+
+-- `FUN_00505670`'s `Ti_Disp_add` 1, by task 0's +0xA: the rows (0, then
+-- 5), START's flash and fade (1, 2) and EXIT's fade (2), then the hand-off
+-- (3, 4): START to the new game, EXIT back to `Title_init`.
+local function survivor_menu(api)
+    local sub = s.sub2
+    if sub == 3 or sub == 4 then
+        if sub == 3 and s.cur ~= 0 then
+            s.sub2 = 4
+            api:core_bank(0x10)
+        end
+        -- `Title_bg_reload`.
+        s.background = api:picture("ui/title/title_bg")
+        if s.cur == 0 then
+            s.mv = 2
+            s.disp = 3
+        else
+            s.mv = 1
+        end
+        s.sub2 = 0
+        return
+    end
+    if sub ~= 1 and sub ~= 2 and sub ~= 5 then
+        s.kido = (s.kido + s.add) & 0xFFFF
+        fade_adjust(s.kido, 3)
+        if fade_done(3) then
+            s.add = 0
+            s.kido = 0xFFFF
+        end
+        if confirm() then
+            if not fade_done(3) then
+                s.add = 0xF000
+                sub = 5
+            elseif s.cur == 0 then
+                s.fg_system = s.fg_system | FG_NEW_GAME
+                s.cue(SE_CONFIRM_A)
+                s.cue(SE_CONFIRM_B)
+                fade_set(0x100, -0x800)
+                s.sub2 = 1
+                sub = 1
+            else
+                s.cue(SE_CANCEL)
+                s.fg_system = s.fg_system & 0xFFFFFFF6
+                init_global()
+                fade_set(0x200, 0x1800)
+                fade_adjust(0x200)
+                s.sub2 = 2
+                sub = 2
+            end
+        else
+            sub = 5
+        end
+    end
+    if sub == 5 then
+        pulse()
+        if s.edge & PAD_UP ~= 0 and s.cur == 1 then
+            s.cue(SE_CURSOR)
+            s.cur = 0
+        end
+        if s.edge & PAD_DOWN ~= 0 and s.cur == 0 then
+            s.cue(SE_CURSOR)
+            s.cur = 1
+        end
+        s.dim = s.dim + 0x10 >= 0x80 and 0x80 or s.dim + 0x10
+        s.b8c[0] = s.b8c[0] + 0x10 >= 0x80 and 0x80 or s.b8c[0] + 0x10
+        survivor_logo(s.b8c[0], s.dim)
+        survivor_rows()
+        s.sub2 = 0
+        return
+    end
+    if sub == 1 then
+        if not fade_done(0) then
+            survivor_logo(0x80, 0x80)
+            survivor_rows()
+            s.sleeping = true
+            return
+        end
+        fade_set(0x200, 0x80)
+        fade_adjust(0x200)
+        s.sub2 = 2
+    end
+    -- Sub-step 2.
+    if not fade_done(0) then
+        survivor_logo(0x80, 0x80)
+        survivor_rows()
+        s.sleeping = true
+        return
+    end
+    fade_set(0x200, 0)
+    fade_adjust(0x7FFF)
+    s.sub2 = 3
+    s.sleeping = true
+end
+
+-- `FUN_00505670` (`title_mv_state` 4). A skip on the logo's last tick
+-- leaves `Ti_Disp_add` at 2, which the original's two-entry table sends
+-- into EX.BATTLE's title; that isn't ported, and the title holds.
+local function survivor_main(api)
+    if s.disp == 0 then
+        survivor_build()
+    elseif s.disp == 1 then
+        survivor_menu(api)
+    end
+end
+
 -- ---------------------------------------------------------------- the screen
 
 local function publish(api)
@@ -1006,9 +1391,25 @@ local function publish(api)
     api:set("ti_flash", s.flash)
     api:set("ti_logo", s.logo)
     api:set("ti_logo_count", s.logo_count)
-    api:set("ti_fade_level", s.fade.level)
-    api:set("ti_fade_add", s.fade.add)
-    api:set("ti_fade_mode", s.fade.mode)
+    api:set("ti_fade_level", s.fades[0].level)
+    api:set("ti_fade_add", s.fades[0].add)
+    api:set("ti_fade_mode", s.fades[0].mode)
+    for _, n in ipairs({ 2, 3 }) do
+        api:set("ti_fade" .. n .. "_level", s.fades[n].level)
+        api:set("ti_fade" .. n .. "_add", s.fades[n].add)
+        api:set("ti_fade" .. n .. "_mode", s.fades[n].mode)
+    end
+    -- The trace's `tx`: task 0's +0xA, the page bytes, the slide's two
+    -- counts, EX.BATTLE's level page (not ported) and `fg_status`'s bits.
+    api:set("ti_sub2", s.sub2)
+    api:set("ti_page2", 0)
+    api:set("ti_dim", s.dim)
+    api:set("ti_b8c", s.b8c[0])
+    api:set("ti_ef2", 0)
+    api:set("ti_ef3", 0)
+    -- EX.BATTLE's level (`0x989E91`), which the boot leaves at 2.
+    api:set("ti_level", 2)
+    api:set("ti_fgstatus", s.fg_status)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)
@@ -1051,6 +1452,9 @@ function M.open(api, args)
     s.fg_system = args and args.choice and 0 or FG_FROM_LOGO
     s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
+    -- config.ini's SPECIAL, read as the signed byte it is.
+    local special = args and args.special or 15
+    s.special = special >= 0x80 and special - 0x100 or special
     moji_set_work()
     publish(api)
 end
@@ -1068,16 +1472,23 @@ function M.update(api, input)
         title_init()
     elseif s.mv == 2 then
         title_main(api)
+    elseif s.mv == 3 then
+        survivor_load(api)
+    elseif s.mv == 4 then
+        survivor_main(api)
     end
     if not s.sleeping and (s.mv == 2 or s.mv == 3) then
         title_image()
     end
-    -- `System_trans`: the fade is drawn at its level, then steps.
-    if s.fade.level >= 0 then
-        s.drawn_fade = { level = s.fade.level, mode = s.fade.mode }
-        s.fade.level = i16(s.fade.level + s.fade.add)
-    else
-        s.drawn_fade = nil
+    -- `System_trans`: each fade is drawn at its level, then steps.
+    for n = 0, 3 do
+        local fade = s.fades[n]
+        if fade.level >= 0 then
+            s.drawn_fades[n] = { level = fade.level, mode = fade.mode }
+            fade.level = i16(fade.level + fade.add)
+        else
+            s.drawn_fades[n] = nil
+        end
     end
     for _, slot in ipairs(cues) do
         api:core_sound(slot)
@@ -1134,18 +1545,43 @@ function M.draw(api)
     if s.background then
         api:draw_background(s.background, ox, oy)
     end
-    local cache = M.cache or {}
-    M.cache = cache
-    for k = 0, 2 do
-        if pages[k] and not cache[k] then
-            cache[k] = { palette = api:page_palette(pages[k], 0) or {} }
+    local function fade(n)
+        local f = s.drawn_fades[n]
+        if f then
+            local level = (f.level >> 7) & 0xFF
+            if level ~= 0 then
+                api:fade_tile(f.mode, level)
+            end
         end
     end
-    -- The words (depth 10) behind the logo (depth 6).
-    for pass = 1, 2 do
+    -- Slot 3 goes on the back list (`AddTile`'s `is_back`): over the
+    -- background, under every sprite.
+    fade(3)
+    local cache = M.cache or {}
+    M.cache = cache
+    for k = 0, 3 do
+        if pages[k] and (not cache[k] or cache[k].page ~= pages[k]) then
+            cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
+        end
+    end
+    -- By depth, the farthest first: the 4th Survivor's name (12) and logo
+    -- (11), the words (10), then the title's logo (6). A depth's sprites go
+    -- last-added first, as `AddPrimitiveFront` lists them.
+    local depths = {}
+    for _, sp in ipairs(s.sprites) do
+        depths[sp.depth or (sp.logo and 6 or 10)] = true
+    end
+    local order = {}
+    for depth in pairs(depths) do
+        order[#order + 1] = depth
+    end
+    table.sort(order, function(a, b)
+        return a > b
+    end)
+    for _, depth in ipairs(order) do
         for i = #s.sprites, 1, -1 do
             local sp = s.sprites[i]
-            if (pass == 1) == (not sp.logo) and pages[sp.page] then
+            if (sp.depth or (sp.logo and 6 or 10)) == depth and pages[sp.page] then
                 local colour = sp.colour or 0x80
                 local lut = lut_for(cache[sp.page], colour)
                 local options = nil
@@ -1156,13 +1592,10 @@ function M.draw(api)
             end
         end
     end
-    local f = s.drawn_fade
-    if f then
-        local level = (f.level >> 7) & 0xFF
-        if level ~= 0 then
-            api:fade_tile(f.mode, level)
-        end
-    end
+    -- Slots 0 to 2 in front, slot 0 on top.
+    fade(2)
+    fade(1)
+    fade(0)
     if s.bands then
         api:fade_tile(2, s.bands, ox, oy, 320, 40)
         api:fade_tile(2, s.bands, ox, oy + 200, 320, 40)

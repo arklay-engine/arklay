@@ -1,0 +1,18 @@
+# The title from boot: SPECIAL, 4TH, a confirm that skips the logo, then down to EXIT and confirm: the title again from black (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+520 confirm
+523
+700 down
+703
+760 confirm
+763
