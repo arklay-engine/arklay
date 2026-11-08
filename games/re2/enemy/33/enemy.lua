@@ -4,8 +4,8 @@
 -- and 1 the move (`FUN_00496c90`), which runs `Routine_1` from `0x52a610`.
 -- Of those, routine 0 (`FUN_00496d00`) is room 509's scene: G3 waits off
 -- the stage, walks in and rises as the room's script steps `Sce_free0`
--- through 1, 2 and 3, and starts the fight in routine 1. The fight, the hit (2,
--- `FUN_00499210`) and the death (3, `FUN_00499e00`) aren't ported yet.
+-- through 1, 2 and 3, and starts the fight in routine 1. `Routine_0` 2 is the
+-- hit (`FUN_00499210`) and 3 the death (`FUN_00499e00`).
 --
 -- Everything that lasts past a tick lives on the entity: `e:var` and
 -- `e:set_var` are the fields of the original's work that the engine doesn't
@@ -44,7 +44,21 @@ local STUCK <const> = 19
 local AGAIN <const> = 20 -- `+0x224`: the swipe swung twice, or 1 makes `FUN_00497ab0` turn.
 local LAST_TURN <const> = 21 -- `+0x230`: routine 3's last way to turn, 1 or -1.
 local TURNS <const> = 22 -- `+0x231`: how often in a row it turned that way.
-local B221 <const> = 23 -- `+0x221`: the swipe throws the player down rather than back.
+local B221 <const> = 23 -- `+0x221`: it is off the floor (a jump or the death's climb); the swipe throws the player down rather than back.
+-- `+0x21e` to `+0x220`: the routines the move left, which a hit goes back
+-- to.
+local SAVED_1 <const> = 24
+local SAVED_2 <const> = 25
+local SAVED_3 <const> = 26
+local FLINCHED <const> = 27 -- `+0x234`: a flinch (routine 8 or 9) is under way.
+-- `+0x23c` to `+0x23e`: a magnum's spurt (`FUN_00499750`), its count of
+-- drops and its heading.
+local SPURT <const> = 28
+local SPURT_N <const> = 29
+local SPURT_DIR <const> = 30
+-- The grip of this frame (`pNow_seq`'s bits 20 to 23), which the player's
+-- knock-back reads (the engine's `G3_GRIP`).
+local GRIP <const> = 31
 
 -- The init's life: normal and with `fg_system`'s `0x20`.
 local LIFE <const> = 900
@@ -121,7 +135,7 @@ local function init(e)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
     e:set_damage_cnt(0)
-    for index = CNT_219, B221 do
+    for index = CNT_219, GRIP do
         e:set_var(index, 0)
     end
     e:set_speed(0, 0, 0)
@@ -402,10 +416,17 @@ local ROUTINE_7 <const> = {
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1,
     },
 }
--- `DAT_0052a828`: the blood of `FUN_0049add0`, by kind: `Esp_call`'s kind,
--- row and size.
+-- `DAT_0052a828`: the blood of `FUN_0049add0` and `FUN_0049af50`, by kind:
+-- `Esp_call`'s kind, row and size, and whether it follows the part's matrix.
 local BLOOD <const> = {
-    [0] = { 0, 1, 0x1800 }, { 0, 1, 0x2000 }, nil, nil, nil, nil, { 1, 6, 0x2000 },
+    [0] = { 0, 1, 0x1800 },
+    { 0, 1, 0x2000 },
+    { 5, 4, 0x1800, true },
+    { 5, 1, 0x1000, true },
+    { 4, 15, 0x1000, true },
+    { 4, 15, 0x1800, true },
+    { 1, 6, 0x2000 },
+    { 6, 0, 0x1000, true },
 }
 
 local function player_xz(e)
@@ -426,16 +447,21 @@ end
 -- `FUN_0049add0` at a part as the last draw left it (`Workm.t`), facing the
 -- player. Only kinds 0, 1 and 6 are modelled; their `Esp_call`s draw no
 -- `Rnd`.
-local function blood(e, part, kind)
+local function blood(e, part, kind, ox)
     local row = BLOOD[kind]
     if not row then
+        return
+    end
+    local dir = i16(e:direction_to_player())
+    if row[4] then
+        e:effect(row[1], row[2], row[3], dir, part, ox or 300, 0, 0)
         return
     end
     local x, y, z = e:drawn_part_point(part, 0, 0, 0)
     if not x then
         return
     end
-    e:call_effect(row[1], row[2], row[3], e:direction_to_player(), x, y, z)
+    e:call_effect(row[1], row[2], row[3], dir, x + (ox or 0), y, z)
 end
 
 -- `FUN_00497820`: whether to swipe. Toward a player near death (below 20
@@ -642,7 +668,7 @@ end
 -- `FUN_0049b0b0`: the player within the arm's reach of its part (as the last
 -- draw left it), and within 0xce4 of G3's height.
 local function arm_reaches(e, side)
-    if e:pl_damage_cnt() & 0x80 ~= 0 or e:player_life() < 0 then
+    if e:pl_damage_cnt() & 0x80 ~= 0 or e:player_life() < 0 or not ARM[side] then
         return false
     end
     local part, reach = ARM[side][1], ARM[side][2]
@@ -676,6 +702,202 @@ local function swipe_hit(e, side)
         e:pl_set_routine(2, same + 2, 0, 0)
     end
     return 1
+end
+
+-- `FUN_0049b230`: routine 5's hits, 15 life (5 for reaches 2 and 3). The
+-- first (0) knocks the player down (routine 2, 4 or 5); the others knock
+-- them back in G3's grip (`em_damage_table[0x33]`'s `Routine_1` 2 or 3),
+-- with `Timer0` by the reach's side. 1 on a hit, -1 on a kill.
+local function grip_hit(e, reach)
+    if not arm_reaches(e, reach) then
+        return 0
+    end
+    if e:pl_life_down(reach & 2 ~= 0 and 5 or 15, false) == 2 then
+        e:pl_set_routine(3, 0, 0, 0)
+        return -1
+    end
+    local same = e:cdir_player() and 1 or 0
+    if reach == 0 then
+        e:pl_set_routine(2, same + 4, 0, 0)
+        e:pl_set_timer(0, 0)
+    else
+        e:pl_set_routine(5, same + 2, 0, 0)
+        e:pl_hold()
+        e:pl_set_timer(0, reach & 1)
+    end
+    return 1
+end
+
+-- `WORD_0052a594`: routine 5's blood, by `Timer2`: the part (its first two
+-- entries are the table before it).
+local GRIP_BLOOD <const> = { [0] = 0xFA, 0xD, 0x13, 6, 9, 6 }
+
+-- Routine 5 (`FUN_00497f70`), in mode 2: the second swipes. `Routine_2` 0
+-- turns to the player on clip 9 and grabs with a hit frame from 0x70000
+-- (reach 3), or goes on to clip 12 at 0x80000 and back to the walk with the
+-- right arm resting 30 ticks. `Routine_2` 1 strikes on each frame's reach
+-- (bits 16 to 18), with sound 3, or 13 for the far reaches, and blood. 2
+-- roars (clip 6) and waits 31 ticks on clip 0, then walks with the right
+-- arm resting 60 ticks. The wall strikes (`FUN_00497df0`) aren't modelled.
+local function swipe_2(e)
+    local two = e:routine(2)
+    if two == 0 then
+        local three = e:routine(3)
+        if three == 0 then
+            e:set_routine(3, 1)
+            e:clip(9, 0, 0xF)
+            e:spd()
+            e:joint(0x100)
+            e:set_var(SIDE, facing(e, 0x20) & 0xFFFF)
+            e:set_var(TURNS, 0)
+            e:set_neck_flags(e:neck_flags() | 1)
+        elseif three == 1 then
+            e:spd()
+            e:joint(0x100)
+            e:add_speed_xz()
+            e:set_angle(e:angle() + i16(e:var(SIDE)))
+            if e:now_seq() & 0x70000 ~= 0 and grip_hit(e, 3) ~= 0 then
+                e:sound(0xD)
+                e:routines(1, 5, 1, 0)
+                e:seq_sound()
+                return
+            end
+            if e:now_seq() & 0x80000 ~= 0 then
+                e:set_routine(3, 2)
+                e:clip(0xC, 0, 0xF)
+                e:spd()
+                e:joint(0x100)
+                e:seq_sound()
+                return
+            end
+        elseif three == 2 then
+            e:spd()
+            if e:joint(0x100) then
+                set_routine_1(e, 2)
+                e:set_var(MODE, 0)
+                e:set_var(CNT_21C, 0x1E)
+                e:sound(10)
+            end
+            e:add_speed_xz()
+        end
+        e:seq_sound()
+    elseif two == 1 then
+        if e:routine(3) == 0 then
+            e:set_routine(3, 1)
+            e:set_timer(2, 4)
+            e:set_timer(3, 4)
+        end
+        e:spd()
+        if e:joint(0x100) then
+            e:routines(1, 5, 2, 0)
+        end
+        e:add_speed_xz()
+        e:seq_sound()
+        local reach = (e:now_seq() >> 16) & 7
+        if reach ~= 0 and i8(e:timer(2)) ~= reach and grip_hit(e, reach - 1) ~= 0 then
+            e:sound(reach > 2 and 13 or 3)
+            e:set_timer(2, reach)
+            e:set_timer(3, 4)
+        end
+        if e:timer(3) ~= 0 then
+            local index = i8(e:timer(2))
+            local part = GRIP_BLOOD[index]
+            if part then
+                if index < 3 then
+                    blood(e, part + 1, 1)
+                    blood(e, part + 3, 1)
+                else
+                    blood(e, part, 1)
+                end
+            end
+            e:set_timer(3, e:timer(3) - 1)
+        end
+    elseif two == 2 then
+        local three = e:routine(3)
+        if three == 0 then
+            e:set_routine(3, 1)
+            e:clip(6, 0, 0xF)
+            e:spd()
+            e:joint(0x100)
+            e:sound(0xB)
+        elseif three == 1 then
+            e:spd()
+            if e:joint(0x100) then
+                e:set_routine(3, 2)
+                e:set_timer(0, 0x1F)
+                e:clip(0, 0, 0x3F)
+                e:joint(0x40)
+            end
+            e:add_speed_xz()
+        elseif three == 2 then
+            e:joint(0x40)
+            e:set_timer(0, e:timer(0) - 1)
+            if e:timer(0) == 0 then
+                set_routine_1(e, 2)
+                e:set_var(MODE, 0)
+                e:set_var(CNT_21C, 0x3C)
+                player_dead_ck(e)
+            end
+        end
+    end
+end
+
+-- Routine 8 (`FUN_00499050`): the flinch at 600 life or more (clip 4, sound
+-- 10); at its frame 0x10000 it walks on, or starts routine 7 where the
+-- guide areas allow it.
+local function flinch(e)
+    local two = e:routine(2)
+    if two == 0 then
+        e:set_routine(2, 1)
+        e:clip(4, 0, 0xF)
+        e:spd()
+        e:joint(0x100)
+        e:sound(10)
+        return
+    end
+    e:spd()
+    if two == 1 then
+        e:joint(0x100)
+        if e:now_seq() & 0x10000 ~= 0 then
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+            local px, pz = player_xz(e)
+            local x, _, z = e:pos()
+            if ROUTINE_7[true][e:guide_at(px, pz) + e:guide_at(x, z) * 0xB] == 0 then
+                e:set_var(FLINCHED, 0)
+                e:routines(1, 7, 0, 0)
+            else
+                e:set_routine(2, 2)
+                e:set_routine(3, 0)
+            end
+        end
+    elseif two == 2 then
+        if e:joint(0x100) then
+            e:routines(1, 2, 0, 0)
+            e:set_var(FLINCHED, 0)
+        end
+    end
+    e:add_speed_xz()
+end
+
+-- Routine 9 (`FUN_00499170`): the flinch below 600 life (clip 6, sound 11),
+-- after which it walks in mode 2.
+local function flinch_low(e)
+    if e:routine(2) == 0 then
+        e:set_routine(2, 1)
+        e:set_var(MODE, 2)
+        e:clip(6, 0, 0xF)
+        e:spd()
+        e:joint(0x100)
+        e:sound(0xB)
+        return
+    end
+    e:spd()
+    if e:joint(0x100) then
+        e:routines(1, 2, 0, 0)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        e:set_var(FLINCHED, 0)
+    end
+    e:add_speed_xz()
 end
 
 -- Routine 4's `Routine_2` 0 (`0x497b90`): the swipe's start, with the arm on
@@ -914,9 +1136,310 @@ local function move(e)
         turn(e)
     elseif one == 4 then
         swipe(e)
+    elseif one == 5 then
+        swipe_2(e)
     elseif one == 6 then
         finish(e)
+    elseif one == 8 then
+        flinch(e)
+    elseif one == 9 then
+        flinch_low(e)
     end
+    -- `FUN_00496c90` keeps the routines for a hit to go back to.
+    e:set_var(SAVED_1, e:routine(1))
+    e:set_var(SAVED_2, e:routine(2))
+    e:set_var(SAVED_3, e:routine(3))
+end
+
+-- `BYTE_0052a5c3`: the kind of a hit's blood by weapon; `BYTE_0052a5d8`:
+-- the parts it comes from, by `Damage_no`; `BYTE_0052a5dc`: the parts of
+-- the blood of weapons 4, 0xf and 0x12, by `Damage_no` and a `Rnd`.
+local HIT_KIND <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 0 }
+local HIT_PART <const> = { [0] = 0x18, 1, 3 }
+-- `BYTE_0052a7cb` and `BYTE_0052a7df`: what each weapon takes from
+-- `AT_EM_FLG`, which flinches it at 0, at 600 life or more and below.
+local STUN_HIGH <const> = { [0] = 0, 10, 10, 10, 10, 20, 10, 10, 10, 10, 40, 10, 10, 10, 20, 4, 4, 40, 4, 10 }
+local STUN_LOW <const> = { [0] = 10, 10, 10, 10, 10, 20, 10, 20, 40, 20, 40, 40, 10, 10, 40, 10, 20, 40, 4, 10 }
+
+-- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
+-- spurt; the others' (9 to 0xb, 0xe, 0x10 and 0x11) aren't ported, and
+-- 4, 0xf and 0x12's blood draws its `Rnd` only.
+local function weapon_blood(e, weapon)
+    if weapon == 5 or weapon == 6 then
+        e:set_var(SPURT, 1)
+    elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
+        e:rnd()
+    end
+end
+
+local function flinch_to(e, one)
+    e:set_var(AGAIN, 0)
+    e:set_var(AT_EM_FLG, 0x28)
+    e:set_var(FLINCHED, 1)
+    e:routines(1, one, 0, 0)
+    e:set_var(SAVED_1, one)
+    e:set_var(SAVED_2, 0)
+    e:set_var(SAVED_3, 0)
+end
+
+-- Routine 0 2's first tick (`FUN_00499260`): a hit. The eye blinks, a sound
+-- and blood; each hit wears `AT_EM_FLG` down by the weapon's share, and
+-- when it runs out it flinches (routine 8 at 600 life or more, 9 below in
+-- mode 0); otherwise it goes on with what the move left on this tick.
+local function hit(e)
+    local weapon = e:routine(1)
+    weapon_blood(e, weapon)
+    e:set_var(LOOK, 2)
+    e:set_var(LOOK_STEP, 0)
+    if weapon ~= 0x10 then
+        e:sound(2)
+    end
+    if weapon ~= 1 then
+        local part = HIT_PART[e:damage_no() % 3]
+        local kind = HIT_KIND[weapon] or 0
+        blood(e, part, kind, 300)
+        blood(e, part, kind, -100)
+    end
+    if e:player_life() > 0x13 and e:var(B221) == 0 and e:var(FLINCHED) == 0 then
+        local stun = i16(e:var(AT_EM_FLG))
+        if e:life() >= (e:easy() and 500 or 600) then
+            stun = stun - (STUN_HIGH[weapon] or 0)
+            e:set_var(AT_EM_FLG, stun & 0xFFFF)
+            if stun < 1 then
+                flinch_to(e, 8)
+                return
+            end
+        else
+            stun = stun - (STUN_LOW[weapon] or 0)
+            e:set_var(AT_EM_FLG, stun & 0xFFFF)
+            if stun < 1 then
+                e:set_var(AGAIN, 0)
+                e:set_var(AT_EM_FLG, 0x28)
+                if e:var(MODE) == 0 then
+                    flinch_to(e, 9)
+                    return
+                end
+            end
+        end
+    end
+    e:routines(1, e:var(SAVED_1), e:var(SAVED_2), e:var(SAVED_3))
+    move(e)
+end
+
+-- Routine 0 2 (`FUN_00499210`): the hit, or (`FUN_004994f0`) a stagger
+-- played to its end.
+local function hurt(e)
+    if e:routine(2) == 0 then
+        hit(e)
+        return
+    end
+    e:spd()
+    if e:joint(0x100) then
+        e:routines(1, 2, 0, 0)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        e:set_var(SAVED_1, 2)
+        e:set_var(SAVED_2, 0)
+        e:set_var(SAVED_3, 0)
+    end
+    e:add_speed_xz()
+end
+
+-- Routine 0 3 (`FUN_00499e00`): the death. It staggers (clip 4), turns to
+-- its guide area's heading on clip 2 until a wall stops it facing within
+-- 0x3ff, climbs it (clips 17, 18 twice and 19), leaps (clip 15 from 1500
+-- or 1600 up, by the heading), falls back (clip 20, its dead flag), and
+-- sinks to -13000. Each tick one `Rnd` may spill blood; off the floor, two
+-- may.
+local function death(e)
+    local two = e:routine(2)
+    if two == 0 then
+        e:set_routine(2, 1)
+        e:clip(4, 0, 0xF)
+        e:spd()
+        e:joint(0x100)
+        local x, _, z = e:pos()
+        local heading = WALL_TURN[e:guide_at(x, z)] or 0
+        e:set_timer(0, 0x2D)
+        e:set_var(SIDE, heading)
+        e:set_timer(2, heading & 0x3FF ~= 0 and 1 or 0)
+        e:set_timer(3, 2)
+        weapon_blood(e, e:routine(1))
+        e:set_var(B221, 0)
+        e:sound(10)
+        e:set_neck_flags(e:neck_flags() | 1)
+    elseif two == 1 then
+        e:spd()
+        if e:joint(0x100) then
+            e:set_routine(2, 2)
+            e:clip(2, 0, 0xF)
+            e:spd()
+            e:joint(0x100)
+            e:set_be_flg(e:be_flg() | 4)
+        else
+            e:add_speed_xz()
+        end
+    elseif two == 2 then
+        turn_to_side(e, 0x10)
+        e:spd()
+        e:joint(0x100)
+        if e:sca_info() & 1 == 0 or abs(i16(e:var(SIDE)) - (e:angle() & 0xFFF)) > 0x3FF then
+            e:seq_sound()
+            e:add_speed_xz()
+        else
+            e:set_routine(2, 3)
+            e:clip(0x11, 0, 0xF)
+            e:spd()
+            e:joint(0x100)
+            e:sound(0xC)
+        end
+    elseif two == 3 then
+        turn_to_side(e, 0x18)
+        e:spd()
+        e:joint(0x100)
+        e:add_speed_xz()
+        if e:now_seq() & 0x10000 ~= 0 then
+            e:set_routine(2, 4)
+            e:clip(0x12, 0, 0xF)
+        end
+    elseif two == 4 then
+        if e:joint(0x100) then
+            e:set_hokan(0xF)
+        end
+        if e:now_seq() & 0x10000 ~= 0 then
+            local count = (e:timer(3) - 1) & 0xFF
+            e:set_timer(3, count)
+            if count == 0 then
+                e:set_routine(2, 5)
+                e:clip(0x13, 0, 0xF)
+                e:set_be_flg(e:be_flg() | 0x4A)
+            end
+        end
+    elseif two == 5 then
+        e:spd()
+        e:joint(0x100)
+        if e:now_seq() & 0x10000 ~= 0 then
+            e:set_routine(2, 6)
+            e:set_timer(3, 0)
+            local _, _, sz = e:speed()
+            e:set_speed(0xDC, -1000, sz)
+            e:set_var(B221, 1)
+            e:set_be_flg(e:be_flg() | 0x400)
+        end
+    elseif two == 6 then
+        if e:timer(3) == 0 and e:joint(0x100) then
+            e:set_timer(3, 1)
+        end
+        e:add_speed_xyz()
+        local high = e:timer(2) ~= 0
+        local sx, sy, sz = e:speed()
+        sy = i16(sy + 0xA0)
+        e:set_speed(sx, sy, sz)
+        local top = high and -1500 or -1600
+        local _, y = e:pos()
+        if sy > 0 and y > top then
+            e:set_routine(2, 7)
+            e:set_pos_y(top)
+            e:clip(0xF, 0, 1)
+            e:sound(high and 9 or 8)
+        end
+    elseif two == 7 then
+        if e:joint(0x800) then
+            e:set_routine(2, 8)
+            local sx, _, sz = e:speed()
+            e:set_speed(sx, -900, sz)
+            e:clip(0x14, 0, 3)
+            e:sound(6)
+            e:set_died()
+        end
+    elseif two == 8 then
+        e:joint(0x400)
+        e:add_speed_xyz()
+        local sx, sy, sz = e:speed()
+        sy = i16(sy + 0xA0)
+        e:set_speed(sx, sy, sz)
+        if sy >= 0 then
+            e:set_routine(2, 9)
+            e:sound(0xE)
+        end
+    elseif two == 9 then
+        if e:joint(0x400) then
+            e:set_routine(2, 10)
+        end
+    elseif two == 10 then
+        local _, y = e:pos()
+        y = y - 0xB4
+        e:set_pos_y(y)
+        if y < -13000 then
+            e:set_routine(2, 11)
+        end
+    elseif two == 11 then
+        e:set_routine(2, 12)
+    end
+    if e:routine(2) > 0xB then
+        return
+    end
+    if e:var(B221) == 0 then
+        if e:rnd() & 0xF == 0xF then
+            blood(e, HIT_PART[e:damage_no() % 3], 0)
+        end
+    else
+        local _, y = e:pos()
+        if y >= -9999 and (1 << (e:rnd() & 0xF)) & 0x17E4 ~= 0 then
+            if (1 << (e:rnd() & 0xF)) & 0x17E4 ~= 0 then
+                blood(e, 2, 9)
+            end
+        end
+    end
+end
+
+-- `FUN_00499750`: a magnum's spurt out of G3's far side, toward where the
+-- player was when it began, for three ticks: eight drops a tick along a
+-- line from part 9's height, each other one scattered by two `Rnd`s, 20
+-- `Rnd`s a tick in all.
+local function spurt(e)
+    local state = e:var(SPURT)
+    if state == 1 then
+        e:set_var(SPURT, 2)
+        e:set_var(SPURT_N, 0)
+        e:set_var(SPURT_DIR, e:direction_to_player())
+    elseif state ~= 2 then
+        return
+    end
+    local dir = i16(e:var(SPURT_DIR))
+    local n = e:var(SPURT_N)
+    local ax, ay, az = e:rot_apply(0, dir, 0, i16(n * -100), 200, 0)
+    local step_y = e:damage_no() % 3 == 0 and 500 or -500
+    local bx, _, bz = e:rot_apply(0, dir, 0, -100, step_y, 0)
+    local x, _, z = e:pos()
+    x, z = i16(x), i16(z)
+    local _, part_y = e:drawn_part_point(9, 0, 0, 0)
+    local y = i16((part_y or 0) + ay)
+    for drop = 1, 8 do
+        local k = drop - 1
+        local px, pz, row, size
+        if drop % 2 == 1 then
+            px = i16(bx * k + x + ax)
+            pz = i16(bz * k + z + az)
+            size = 0x65C - n * 0x24 - e:rnd()
+            row = 1
+        else
+            px = i16(bx * k - e:rnd() + x + 0x80 + ax)
+            pz = i16(bz * k - e:rnd() + z + 0x80 + az)
+            size = 0x65C - n * (drop == 8 and 0x1E or 0x24) - e:rnd()
+            row = e:rnd() & 1 == 0 and 1 or 0
+        end
+        e:call_effect(0, row, size & 0xFFFF, dir, px, y, pz)
+        if drop == 2 and n == 1 then
+            e:call_effect(0, 2, 0x17D0, i16(dir + 0x800), px, y, pz)
+            e:call_effect(0, 2, 0xC18, i16(dir + 0x800), px, y, pz)
+        end
+        local was = n
+        n = (n + 1) & 0xFF
+        if drop == 8 and was > 0x10 then
+            e:set_var(SPURT, 0)
+        end
+    end
+    e:set_var(SPURT_N, n)
 end
 
 -- `FUN_0049aad0` on `LOOK` 0: the eye looks across, from -15 to 15 and
@@ -1031,6 +1554,10 @@ function update(e)
         init(e)
     elseif zero == 1 then
         move(e)
+    elseif zero == 2 then
+        hurt(e)
+    elseif zero == 3 then
+        death(e)
     end
     local mode = e:var(LOOK)
     if mode == 0 then
@@ -1041,4 +1568,6 @@ function update(e)
         blink(e)
     end
     pulse(e)
+    spurt(e)
+    e:set_var(GRIP, (e:now_seq() >> 20) & 0xF)
 end

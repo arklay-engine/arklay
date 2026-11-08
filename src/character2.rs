@@ -227,6 +227,15 @@ pub fn player_held(
         .get(slot)
         .and_then(|character| character.as_deref())
         .map_or(0, |character| character.work.move_cnt);
+    let holder_grip = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .filter(|character| character.id == crate::zombie2::G3_ID)
+        .and_then(|character| character.zombie.as_ref())
+        .and_then(|zombie| zombie.g3_grip());
     let re2 = &mut game.re2;
     let mut held = player2::Held {
         holder,
@@ -234,6 +243,7 @@ pub fn player_held(
         holder_aim,
         holder_id,
         holder_move_cnt,
+        holder_grip,
         draw_buffer: re2.draw_buffer,
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,
