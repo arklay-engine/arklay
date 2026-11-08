@@ -6543,6 +6543,11 @@ impl GameState {
             // (`Sce_at_check(pPl, 1, 0)`).
             if action_press {
                 self.probe_actions(pos, angle, 0, pos, true);
+                // `Sce_at` runs after `Player_move`: a crouching pick-up's
+                // `Sce_Item` sets the routine there and then.
+                if self.re2_crouch_start {
+                    self.tick_re2_crouch();
+                }
             }
             self.probe_actions(pos, angle, 1, pos, false);
         } else {
