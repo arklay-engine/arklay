@@ -1,0 +1,43 @@
+# Claire A from the new game to room 200's computer and the Blue Card Key's use, with the enemies on (oracle/re2.md, "The route"). No flags: the new game as it starts.
+
+[[run]]
+name = "route_claire_a_card"
+room = "new"
+character = 1
+offset = 0
+ticks = 14800
+setup_script = "route_claire_a_card.lua"
+input = "route_claire_a_card.txt"
+# Marvin's lines in room 202 hold for as many ticks as the recording's pace gave them
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,zm0,zm1,zm2,zm3,zm4,zm5,fgcom,pc"
+# the frames stop before the computer, whose console arklay doesn't draw yet (#502)
+frames = [0, 13952]
+frame_max_mean = 0.85
+ignore = [
+    # zombie 1's angle on the first tick (docs/internals/deviations/re2.md, "Zombies")
+    [0, "zm1"],
+    # the doors' own ticks (oracle/re2.md)
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5527, "rng"],
+    [5527, "rseed"],
+    [6656, "rng"],
+    [6656, "rseed"],
+    [7008, "rng"],
+    [7008, "rseed"],
+    [8062, "rng"],
+    [8062, "rseed"],
+    [8379, "rng"],
+    [8379, "rseed"],
+    [8892, "rng"],
+    [8892, "rseed"],
+    [10086, "rng"],
+    [10086, "rseed"],
+    [12936, "rng"],
+    [12936, "rseed"],
+]
+expect = "match"
+record = "--start claire"
