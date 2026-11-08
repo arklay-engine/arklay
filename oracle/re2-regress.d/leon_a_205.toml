@@ -1,0 +1,20 @@
+# Leon A past the card, room 205 (oracle/re2.md, "Leon A past the card"): from room 204's door 1, as leon_a_204 leaves
+# Leon, along the corridor past the frozen bodies in the walls (4:48 clear, so areas 3 and 4 are off) to door 2 and
+# room 207's load.
+[[run]]
+name = "leon_a_205"
+room = "205"
+setup_script = "leon_a_205.lua"
+input = "leon_a_205.txt"
+input_shift = 344
+ticks = 900
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 899]
+# 0.44 measured
+frame_max_mean = 0.55
+expect = "match"
+# the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 355
+ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"],
+  # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+  [730, "rng"], [730, "rseed"]]
+record = "--warp 205:-25670:0:-25775:3072:0 --life 60 --give 0:2:3 --give 2:0x14:54"

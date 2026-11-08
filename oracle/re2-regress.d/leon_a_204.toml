@@ -10,12 +10,29 @@ input_shift = 344
 ticks = 1700
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
 frames = [380, 1699]
-# 0.98 measured, 0.61 with the message box blanked: before #551 arklay drew room 204's body messages (a room's)
-# 18 pixels left of and 10 above the original's (docs/internals/deviations/re2.md, "Messages"); the door's frames
-# (model 9) are about 1.3
-frame_max_mean = 1.05
+# 0.83 measured (0.98 before #551 drew the body's messages, a room's, where Mess_set puts them), 0.61 with the
+# message box blanked; the door's frames (model 9) are about 1.3
+frame_max_mean = 0.9
 boxes = [[0, 170, 320, 222]]
 expect = "match"
 # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
 ignore = [[468, "rng"], [468, "rseed"]]
+record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"
+
+# leon_a_204_entry's run carried on: area 7's window scene (main_09, film 10 with the oracle's films off), the
+# fight with the licker from the east wall, and the run north to door 1 and room 205's load.
+[[run]]
+name = "leon_a_204"
+room = "201"
+setup_script = "leon_a_204_entry.lua"
+input = "leon_a_204.txt"
+input_shift = 344
+ticks = 2600
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
+frames = [1700, 2599]
+# 0.54 measured; the worst, about 3.9, is the door's frame into room 205
+frame_max_mean = 0.65
+expect = "match"
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
+ignore = [[468, "rng"], [468, "rseed"], [2296, "rng"], [2296, "rseed"]]
 record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"

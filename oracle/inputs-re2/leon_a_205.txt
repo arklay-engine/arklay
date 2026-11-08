@@ -1,0 +1,13 @@
+# room 205 from room 204's door 1, with 4:48 clear so the bodies in the walls stay frozen: run north up the west corridor, turn east and run along its north wall, turn south-east at the east end and slide along the walls to door 2, pressing nothing in the check areas, into room 207 (oracle/re2.md, "Leon A past the card")
+350 up run
+450
+452 right
+468
+468 up run
+590
+590 right
+611
+611 up run
+724
+730 action
+734
