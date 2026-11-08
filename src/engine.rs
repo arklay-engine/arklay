@@ -3458,9 +3458,15 @@ impl GameSession {
         }
         // RE2's pad has one button for the confirm and the shot (raw 0x80,
         // which `Pad_set` gives both): held fire is a held confirm for the
-        // windows, the menus and the messages too.
+        // windows and the messages too, and a new press of it confirms in
+        // the status screen, the item box and the map, which test
+        // `Key_trg & 0x1000` (`St_menu0_select` 0x4F8050, `St_menu0_item`
+        // 0x4F8160).
         if self.game.is_re2_room && input.fire {
             action = true;
+        }
+        if self.game.is_re2_room && input.fire_pressed {
+            ui.confirm = true;
         }
         // The trace's `snd` is this tick's `SsPlay`s, whichever path plays them.
         if self.game.is_re2_room {
@@ -3775,8 +3781,9 @@ impl GameSession {
                 self.swallow_action = false;
             }
             let was_active = self.game.message.active;
-            // The confirm `Computer200` reads is the held one (`Key`).
-            if let Some(cut) = self.game.tick_re2_computer(input.action_held) {
+            // The confirm `Computer200` reads is the held one (`Key & 0x1000`),
+            // which fire raises too.
+            if let Some(cut) = self.game.tick_re2_computer(input.action_held || input.fire) {
                 // `Bg_loadPC` loads the cut in this tick's `Swap_Cbuff`.
                 let cut = usize::from(cut);
                 if cut < self.loaded.room.cuts.len() {
@@ -7221,6 +7228,7 @@ impl GameSession {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         if init {
             crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
@@ -16554,6 +16562,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         neck_targets: &neck_targets,
         enemies: context.game.re2.enemies,
         pushing: context.game.re2.pushing(),
+        // Only the keys the pad still holds: a tick whose input a message
+        // or a stop blanked starts nothing.
+        key_trg: context.game.re2.key_trg & crate::player2::key_word(&pad),
     };
     let old = context.player.pos;
     crate::player2::seed_pose(&mut context.game.re2.player, context.player, &tick);

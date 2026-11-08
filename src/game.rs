@@ -19035,16 +19035,23 @@ mod tests {
             room_items_flag: 0xFF,
             reach_animation: false,
         };
-        // Two action areas (`sat` 0x10, at the body) and one that isn't.
+        // Two action areas (`sat` 0x10, at the body), and one that isn't in a
+        // slot below them.
+        state.room_actions[1] = Some(area(1, 0x41, 10));
         state.room_actions[2] = Some(area(2, 0xC1, 8));
         state.room_actions[3] = Some(area(3, 0xC1, 9));
-        state.room_actions[4] = Some(area(4, 0x41, 10));
         state.interact([0, 0, 0], 0, false);
         assert!(!state.re2.flag(5, 8) && !state.re2.flag(5, 9));
         assert!(state.re2.flag(5, 10));
+        assert_eq!(state.re2.vars[crate::scd2::host::VAR_BODY_AREA], 1);
+        state.re2.vars[crate::scd2::host::VAR_BODY_AREA] = 0;
         state.interact([0, 0, 0], 0, true);
         assert!(state.re2.flag(5, 8), "the first action area");
         assert!(!state.re2.flag(5, 9), "only the first");
+        // Each pass writes the area it matches into the variable the scripts
+        // read. The plain pass runs second, so slot 1 is the last written. One
+        // pass over the slots, or the plain pass first, would leave slot 2.
+        assert_eq!(state.re2.vars[crate::scd2::host::VAR_BODY_AREA], 1);
     }
 
     #[test]
