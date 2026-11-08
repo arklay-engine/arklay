@@ -14,6 +14,7 @@
 //!
 //! | cap | limit | corpus peak | formats |
 //! |---|---|---|---|
+//! | [`STREAM_PACK_BYTES`] | 256 MiB | 1.46 GiB | base `.akpak` size above which it is streamed |
 //! | [`MAX_PACK_BYTES`] | 2 GiB | 458 MiB | `.akpak` image held in memory |
 //! | [`MAX_STREAMED_PACK_BYTES`] | 64 GiB | 3.3 GiB | `.akpak` image read on demand (mods) |
 //! | [`MAX_PACK_ENTRIES`] | 1,048,576 | 3,242 | pack table of contents |
@@ -61,9 +62,16 @@ use std::mem::size_of;
 
 use anyhow::{Context, Result, anyhow, bail};
 
+/// Size above which a base pack image is streamed (read from its file on
+/// demand) instead of being read into memory whole. Every process that opens
+/// the pack would otherwise hold a private copy of an image that is mostly
+/// never touched; streamed, the processes share the page cache. Mods are
+/// always streamed. Smaller packs (fixtures, unit tests) stay in memory.
+pub const STREAM_PACK_BYTES: u64 = 256 << 20;
 /// Largest pack image accepted from disk or memory.
 pub const MAX_PACK_BYTES: u64 = 2 << 30;
-/// Largest pack image read on demand: only its table of contents and paths
+/// Largest pack image read on demand (a mod, or a base above
+/// [`STREAM_PACK_BYTES`]): only its table of contents and paths
 /// are held in memory (themselves bounded by [`MAX_PACK_BYTES`]), and each
 /// entry is read when it is asked for.
 pub const MAX_STREAMED_PACK_BYTES: u64 = 64 << 30;
@@ -148,6 +156,7 @@ pub const MAX_CINEPAK_PIXELS: usize = MAX_PIXELS;
 /// The caps must stay mutually ordered; a wrong edit fails the build.
 const _: () = {
     assert!(MAX_ENTRY_BYTES <= MAX_PACK_BYTES);
+    assert!(STREAM_PACK_BYTES <= MAX_PACK_BYTES);
     assert!(MAX_LZW_OUTPUT <= MAX_DECODE_ALLOC);
     assert!(MAX_ZSTD_OUTPUT <= MAX_DECODE_ALLOC);
     assert!(MAX_PIXELS * 4 <= MAX_DECODE_ALLOC);

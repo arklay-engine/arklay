@@ -1297,19 +1297,35 @@ impl Pack {
     /// A directory is treated as a pack whose entries are its regular files,
     /// named by their directory-relative `/`-separated path. Those entries are
     /// read lazily; the directory is only indexed here. A file is an `.akpak`
-    /// image, and its size is checked against [`budget::MAX_PACK_BYTES`]
-    /// before the image is read, so an oversized pack is rejected without
-    /// allocating it.
+    /// image. An image larger than [`budget::STREAM_PACK_BYTES`], and every
+    /// mod, is streamed: only its header, table of contents and paths are
+    /// held in memory and each entry is read from the file when it is asked
+    /// for, so processes opening the same large pack share the page cache
+    /// instead of each holding a private copy of the whole image. A smaller
+    /// base pack is read into memory whole, which the size check against
+    /// [`budget::MAX_PACK_BYTES`] bounds before anything is allocated. Nothing
+    /// in the engine needs the whole image once the table is parsed, so the
+    /// two paths read identically.
+    ///
+    /// A streamed pack keeps its file open, so the pack must be replaced by
+    /// renaming a new file over it (as the converter and the mod builder do),
+    /// never rewritten in place.
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_with_threshold(path, budget::STREAM_PACK_BYTES)
+    }
+
+    /// [`Pack::open`] with the size above which a base image is streamed.
+    fn open_with_threshold(path: &Path, stream_above: u64) -> Result<Self> {
         let metadata = std::fs::metadata(path)
             .with_context(|| format!("failed to read pack {}", path.display()))?;
         if metadata.is_dir() {
             return Self::open_dir(path);
         }
         // A mod (HD art, films) can be gigabytes and is mostly never read in
-        // one session, so it is streamed; a base pack is held in memory, as
-        // every room load reads from it.
-        let streamed = metadata.len() > budget::MAX_PACK_BYTES
+        // one session, so it is streamed, as is a large base pack: most of
+        // its image is never touched, and a private in-memory copy per
+        // process adds up. A small base pack stays in memory.
+        let streamed = metadata.len() > stream_above
             || read_manifest(path)
                 .ok()
                 .flatten()
@@ -2780,7 +2796,7 @@ mod tests {
             );
         }
 
-        // A base pack is still held in memory.
+        // A small base pack is still held in memory.
         let base = dir.join("base.akpak");
         let mut writer = PackWriter::new();
         writer
@@ -2792,6 +2808,67 @@ mod tests {
         writer.add("a.bin", vec![1, 2, 3]).unwrap();
         writer.write(&base).unwrap();
         assert!(Pack::open(&base).unwrap().image.is_none());
+    }
+
+    #[test]
+    fn a_base_image_above_the_threshold_is_streamed_and_reads_like_one_in_memory() {
+        let dir = TempDir::new("streamed-base");
+        let path = dir.join("base.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                manifest::ENTRY,
+                manifest::Manifest::base("re2").render().into_bytes(),
+            )
+            .unwrap();
+        writer.add("room/1000/room.rdt", vec![7; 3000]).unwrap();
+        writer.add("movie/00.mp4", b"film".repeat(2000)).unwrap();
+        writer.add("a.bin", vec![1, 2, 3]).unwrap();
+        writer
+            .compress_entries(1, |path| path.ends_with(".mp4"))
+            .unwrap();
+        writer.write(&path).unwrap();
+        let len = std::fs::metadata(&path).unwrap().len();
+
+        let memory = Pack::open_with_threshold(&path, len).unwrap();
+        let streamed = Pack::open_with_threshold(&path, len - 1).unwrap();
+        assert!(memory.image.is_none() && streamed.image.is_some());
+        assert!(streamed.data.len() < memory.data.len());
+        assert_eq!(streamed.manifest(), memory.manifest());
+        assert_eq!(streamed.source.as_deref(), Some(path.as_path()));
+        assert!(
+            streamed
+                .entries
+                .iter()
+                .any(|entry| entry.compression == Compression::Zstd)
+                && streamed
+                    .entries
+                    .iter()
+                    .any(|entry| entry.compression == Compression::None)
+        );
+        assert_eq!(
+            streamed.entries().collect::<Vec<_>>(),
+            memory.entries().collect::<Vec<_>>()
+        );
+        for path in memory.paths() {
+            assert_eq!(
+                *streamed.read(path).unwrap(),
+                *memory.read(path).unwrap(),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            *streamed.read("movie/00.mp4").unwrap(),
+            b"film".repeat(2000)
+        );
+        assert_eq!(*streamed.read("a.bin").unwrap(), [1, 2, 3]);
+
+        // Renaming a new image over the path leaves the open pack reading the
+        // old file.
+        let mut replacement = PackWriter::new();
+        replacement.add("a.bin", vec![9]).unwrap();
+        replacement.write(&path).unwrap();
+        assert_eq!(*streamed.read("a.bin").unwrap(), [1, 2, 3]);
     }
 
     #[test]
