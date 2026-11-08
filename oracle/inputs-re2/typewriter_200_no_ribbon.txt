@@ -1,0 +1,9 @@
+# room 200: press action at the typewriter with no ink ribbon, page through its two-page message, close it, then walk away (oracle/re2.md, "The typewriter")
+364 action
+368
+420 action
+424
+520 action
+524
+560 down
+600

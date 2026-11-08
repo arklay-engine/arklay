@@ -46,6 +46,17 @@ const MESSAGE_NO_RIBBON: u8 = 0;
 /// Door message 1: "... Will you use the Ink Ribbon?", with its yes/no.
 const MESSAGE_PROMPT: u8 = 1;
 
+/// The save place a new game starts with (`0x98E9A7`), by the scenario's
+/// index (`0x989E7E`: Leon A, Claire A, Leon B, Claire B, then the two
+/// extras), from the new game's set-up (`0x4B73C0`).
+const NEW_GAME_PLACES: [u8; 6] = [0x0F, 0x10, 0x0F, 0x10, 0x11, 0x12];
+
+/// The save place before any typewriter fires, for a new game as
+/// `character` (0 Leon, 1 Claire) in scenario A or B.
+pub fn new_game_place(character: u8, scenario_b: bool) -> u8 {
+    NEW_GAME_PLACES[usize::from(character & 1) + 2 * usize::from(scenario_b)]
+}
+
 /// The stop word the two messages hold the world with (`Stop_data`
 /// `0xFF000000`).
 const MESSAGE_STOP: u16 = 0xFF00;
@@ -160,6 +171,14 @@ mod tests {
         game.message.active = false;
         game.message.set_menu_choice_id(answer);
         game.release_re2_message_stop();
+    }
+
+    #[test]
+    fn a_new_game_starts_on_its_scenarios_place() {
+        assert_eq!(new_game_place(0, false), 0x0F);
+        assert_eq!(new_game_place(1, false), 0x10);
+        assert_eq!(new_game_place(0, true), 0x0F);
+        assert_eq!(new_game_place(1, true), 0x10);
     }
 
     #[test]

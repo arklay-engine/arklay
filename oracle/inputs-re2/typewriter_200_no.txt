@@ -1,0 +1,21 @@
+# room 200: press action at the typewriter with ink ribbons, page to the question, move to No and take it; then the same prompt again, whose cursor starts on Yes again, answered No the same way (oracle/re2.md, "The typewriter")
+364 action
+368
+410 action
+414
+460 action
+464
+510 right
+514
+540 action
+544
+600 action
+604
+650 action
+654
+700 action
+704
+750 right
+754
+780 action
+784

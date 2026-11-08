@@ -3997,8 +3997,10 @@ impl GameSession {
                 .first_mut()
                 .map(|player| (player.pos, &mut player.health));
             re2.tick_effects(self.loaded.room.sca.as_ref(), player);
-            // `played` was cleared at the tick's start: a yes/no's cue that
-            // the message window played above stays in the trace's `snd`.
+            // `played` was cleared at the tick's start. A yes/no's cue, which
+            // the message window played above, comes after the room's sounds
+            // in the trace's `snd`: `Mess_disp` runs after the scheduler.
+            let cues = std::mem::take(&mut self.re2_sounds.played);
             self.re2_sound_close_and_init(pack);
             let cut = self.sound_cut();
             play_re2_sounds(
@@ -4011,6 +4013,7 @@ impl GameSession {
                 &mut self.player,
                 cut,
             );
+            self.re2_sounds.played.extend(cues);
         }
         // `MSF2_EFFECT_ZONE` (the second dword of main-state flag bank 5) is
         // the original's slippery/effect-zone bit: it shifts every footstep
@@ -15815,6 +15818,8 @@ fn new_game_state(
         game.set_health_copy(health);
     }
     seed_re2_music_table(pack, &mut game, false);
+    // RE2's new game sets the save place for its scenario (`0x4B73C0`).
+    game.re2_save_place = game::save2::new_game_place(id.player_flag, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -16827,6 +16832,9 @@ fn tick_room_timed(
     // next tick. `Sce_Save_backfunc`, the typewriter's: its prompt, whose
     // Yes raises `re2_save_requested`.
     if context.game.is_re2_room {
+        if let Some(place) = context.game.re2_save_fired.take() {
+            context.game.sce_save(place);
+        }
         match context.game.re2_back {
             game::save2::BackRoutine::ItemBox => {
                 if context.game.tick_re2_box_entrance() {

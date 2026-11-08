@@ -3269,6 +3269,10 @@ pub struct GameState {
     /// The typewriter's prompt was answered Yes this tick (game mode 1,
     /// `fg_system | 0x40000`): the engine hands the room to the save screen.
     pub re2_save_requested: bool,
+    /// The typewriter's area fired this tick with its save place. arklay's
+    /// press scan runs before the player's move, the original's `Sce_at`
+    /// after it, so `Sce_Save` waits for `Sce_at`'s place in the tick.
+    pub re2_save_fired: Option<u8>,
     /// RE2's item box page while its screen is up.
     pub re2_box: Option<itembox2::BoxPage>,
     /// The box page's bytes as the trace shows them; they stay after the
@@ -3767,6 +3771,7 @@ impl Default for GameState {
             re2_back: save2::BackRoutine::None,
             re2_save_place: 0,
             re2_save_requested: false,
+            re2_save_fired: None,
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
@@ -8602,8 +8607,9 @@ impl GameState {
                 self.record_interaction(slot, action.kind, None);
             }
             RoomActionKind::Typewriter => {
-                // `Sce_Save`: the area's first parameter is the save place.
-                self.sce_save(action.params[0]);
+                // `Sce_Save`, whose first parameter is the save place. It runs
+                // where `Sce_at` does, after `Player_move` (`GameState::sce_save`).
+                self.re2_save_fired = Some(action.params[0]);
                 self.record_interaction(slot, action.kind, None);
             }
             _ => {}
