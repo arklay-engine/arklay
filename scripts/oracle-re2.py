@@ -191,6 +191,7 @@ PTRACE_O_EXITKILL = 1 << 20
 PTRACE_EVENT_CLONE = 3
 PTRACE_EVENT_STOP = 128
 WALL = 0x40000000
+PR_SET_PDEATHSIG = 1
 PR_SET_CHILD_SUBREAPER = 36
 
 WINDOWS = sys.platform == "win32"
@@ -367,17 +368,158 @@ def prepare_prefix(work: Path, env: dict[str, str], sound: bool = False) -> None
     )
 
 
-def start_display() -> tuple[subprocess.Popen, str]:
-    """A private virtual display, numbered by the X server itself."""
-    read_end, write_end = os.pipe()
-    server = subprocess.Popen(
-        ["Xvfb", "-displayfd", str(write_end), "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
-        pass_fds=(write_end,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    os.close(write_end)
-    number = os.read(read_end, 16).decode().strip()
-    os.close(read_end)
-    return server, f":{number}"
+# Display numbers the virtual display may take. They start well above a desktop's
+# own (`:0`, `:1`): an X server unlinks its socket file when it exits, so a record
+# on the desktop's number would leave the desktop's X clients unable to connect.
+DISPLAY_FIRST = 100
+DISPLAY_COUNT = 100
+
+
+def display_taken(number: int) -> bool:
+    """Whether display `number` has a lock file, or a socket some process has bound (by path or abstract name).
+
+    The recorder's own servers, started with `-displayfd`, write no lock file, so a lock
+    is another X server's, and it blocks the number even when its process is gone: that
+    process may be alive in another PID namespace that shares /tmp. The socket file a
+    killed server leaves behind doesn't count, since a new server replaces it."""
+    socket_path = f"/tmp/.X11-unix/X{number}"
+    if os.path.lexists(f"/tmp/.X{number}-lock"):
+        return True
+    try:
+        with open("/proc/net/unix") as table:
+            return any(line.rstrip().endswith((" " + socket_path, " @" + socket_path)) for line in table)
+    except OSError:
+        return os.path.lexists(socket_path)
+
+
+def display_answers(number: int) -> bool:
+    """Whether an X server accepts a connection on display `number` (the setup's first reply byte is 1).
+
+    It tries the socket file, then the abstract socket of the same name."""
+    import socket
+    path = f"/tmp/.X11-unix/X{number}"
+    for address in (path, "\0" + path):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(10)
+                connection.connect(address)
+                # Little-endian, protocol 11.0, no authorisation.
+                connection.sendall(b"l\0\x0b\0" + bytes(8))
+                if connection.recv(1) == b"\x01":
+                    return True
+        except OSError:
+            pass
+    return False
+
+
+def read_display_number(read_end: int) -> str | None:
+    """The number the X server writes to `-displayfd`, or None if it exits first.
+
+    The server writes the number and its newline separately, and exits if either write
+    fails, so the pipe stays open until the newline has arrived."""
+    received = b""
+    while b"\n" not in received:
+        chunk = os.read(read_end, 16)
+        if not chunk:
+            return None
+        received += chunk
+    return received.decode().strip()
+
+
+def tail(path: Path, lines: int = 5) -> str:
+    try:
+        return " | ".join(path.read_text(errors="replace").strip().splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
+STOP_SIGNALS = {signal.SIGINT, signal.SIGTERM} | ({signal.SIGHUP} if hasattr(signal, "SIGHUP") else set())
+
+
+class signals_held:
+    """Hold Ctrl-C, SIGTERM and SIGHUP back until the block ends, so that a second one can't cut it short.
+
+    The first that arrives meanwhile is raised again when the block ends. Handlers,
+    not the signal mask, so that the children started inside the block (which get
+    the default handlers back when they start their program) don't inherit it. A
+    terminal's Ctrl-C or hang-up and `timeout` signal the whole process group, so
+    the block's children run in a session of their own (`ALONE`), out of its reach."""
+
+    def __enter__(self) -> None:
+        self.arrived: list[int] = []
+        self.previous = {
+            number: signal.signal(number, lambda received, frame: self.arrived.append(received))
+            for number in STOP_SIGNALS
+        }
+
+    def __exit__(self, *exc: object) -> None:
+        for number, handler in self.previous.items():
+            signal.signal(number, signal.SIG_DFL if handler is None else handler)
+        if self.arrived:
+            signal.raise_signal(self.arrived[0])
+
+
+# For the children of a `signals_held` block: a session of their own, so that a signal
+# sent to the recorder's process group doesn't stop them half done.
+ALONE = {"start_new_session": True} if not WINDOWS else {}
+
+
+def stop_with_recorder() -> None:
+    """In a child, before it runs its program: have the kernel send it SIGTERM when the recorder dies, even by SIGKILL.
+
+    The signal follows the thread that started the child; the recorder has only one."""
+    libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0)
+
+
+def stop_display(server: subprocess.Popen) -> None:
+    """Stop the X server so that it removes its lock and socket files: terminated, and killed only if it is still running after 5 s."""
+    server.terminate()
+    try:
+        server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        server.kill()
+        server.wait()
+
+
+def start_display(log: Path) -> tuple[subprocess.Popen, str]:
+    """A private virtual display on the first free number from `DISPLAY_FIRST`, answering.
+
+    The server's output goes to `log`. A number another server takes meanwhile is
+    skipped; a server that dies otherwise, or doesn't answer, stops the record. Until
+    this returns, any error or interruption stops the server it started; after, the
+    caller stops it with `stop_display`, and the kernel does if the recorder dies."""
+    for number in range(DISPLAY_FIRST, DISPLAY_FIRST + DISPLAY_COUNT):
+        if display_taken(number):
+            continue
+        read_end, write_end = os.pipe()
+        with open(log, "w") as output:
+            server = subprocess.Popen(
+                ["Xvfb", f":{number}", "-displayfd", str(write_end),
+                 "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
+                pass_fds=(write_end,), stdout=output, stderr=subprocess.STDOUT,
+                preexec_fn=stop_with_recorder,
+            )
+        os.close(write_end)
+        try:
+            try:
+                reported = read_display_number(read_end)
+            finally:
+                os.close(read_end)
+            if reported is None:
+                server.wait()
+                if display_taken(number):
+                    continue  # Another server took the number between our check and its start.
+                raise SystemExit(f"Xvfb exited before giving its display: {tail(log)}")
+            if reported != str(number):
+                raise SystemExit(f"Xvfb took display :{reported}, not :{number}")
+            if server.poll() is not None or not display_answers(number):
+                raise SystemExit(f"Xvfb on :{number} doesn't answer: {tail(log)}")
+        except BaseException:
+            if server.poll() is None:
+                stop_display(server)
+            raise
+        return server, f":{number}"
+    raise SystemExit(f"no free display from :{DISPLAY_FIRST} to :{DISPLAY_FIRST + DISPLAY_COUNT - 1}")
 
 
 def find_game(deadline: float) -> int:
@@ -456,6 +598,15 @@ class PtraceGame(Game):
         self.pid = pid
         self.mem = os.open(f"/proc/{pid}/mem", os.O_RDWR)
         self.traced: set[int] = set()
+        self.breaks = 0  # Stops at `BREAK_PAD` so far.
+
+    def exited(self, status: int) -> SystemExit:
+        """What to stop with when the game's main thread has ended with `status`."""
+        if self.breaks == 0 and os.WIFEXITED(status) and os.WEXITSTATUS(status) == 13:
+            # `WinMain`'s `error_no` 0xD: no Direct3D device, which under Wine
+            # means no display driver. See game.log and xvfb.log under --work.
+            return SystemExit("the game exited at start-up (code 13: no display or GPU; see game.log and xvfb.log)")
+        return SystemExit("the game exited")
 
     def note_sound(self, tid: int, regs: Regs) -> None:
         """Record a stop on `SsPlay`, and run the instruction under it."""
@@ -489,7 +640,7 @@ class PtraceGame(Game):
             if os.WIFEXITED(status) or os.WIFSIGNALED(status):
                 self.traced.discard(tid)
                 if tid == self.pid:
-                    raise SystemExit("the game exited")
+                    raise self.exited(status)
                 continue
             if not os.WIFSTOPPED(status):
                 continue
@@ -504,6 +655,7 @@ class PtraceGame(Game):
                 regs = Regs()
                 ptrace(PTRACE_GETREGS, tid, 0, ctypes.addressof(regs))
                 if regs.rip - 1 == BREAK_PAD:
+                    self.breaks += 1
                     return tid, regs
                 if self.sound_byte is not None and regs.rip - 1 == BREAK_SOUND:
                     self.note_sound(tid, regs)
@@ -527,7 +679,7 @@ class PtraceGame(Game):
                     and status >> 16 == 0:
                 break
             if os.WIFEXITED(status) or os.WIFSIGNALED(status):
-                raise SystemExit("the game exited")
+                raise self.exited(status) if stopped == self.pid else SystemExit("the game exited")
             # Another signal arrived first: deliver it and step again.
             ptrace(PTRACE_SINGLESTEP, tid, 0, os.WSTOPSIG(status) if status >> 16 == 0 else 0)
         self.write(address, b"\xcc")
@@ -943,18 +1095,32 @@ class WineSession:
         # Wine double-forks the game. As a subreaper we adopt it, and Yama's
         # default policy lets a process trace its own descendants without root.
         libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
-        self.display_server, self.display = start_display()
-        self.env = wine_env(work, self.display)
+        self.display_server: subprocess.Popen | None = None
+        self.env: dict[str, str] | None = None
+        self.launcher: subprocess.Popen | None = None
         self.sink_module = None
         self.sound_capture = None
         self.capture_started = 0.0
+        # The callers' `finally: session.close()` starts only once this returns,
+        # so a start that fails stops what it has started itself.
+        try:
+            self.start(game_dir, work, sound_out)
+        except BaseException:
+            self.close()
+            raise
+
+    def start(self, game_dir: Path, work: Path, sound_out: str | None) -> None:
+        self.display_server, self.display = start_display(work / "xvfb.log")
+        self.env = wine_env(work, self.display)
         sound = sound_out is not None
         if sound:
             # A sink of its own: the game is heard by nothing but the recording.
-            self.sink_module = subprocess.run(
-                ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
-                check=True, capture_output=True, text=True,
-            ).stdout.strip()
+            # Held, so that a module that loads is always one close() unloads.
+            with signals_held():
+                self.sink_module = subprocess.run(
+                    ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
+                    check=True, capture_output=True, text=True, **ALONE,
+                ).stdout.strip()
             self.env["PULSE_SINK"] = SOUND_SINK
             self.sound_capture = subprocess.Popen(
                 ["parec", f"--device={SOUND_SINK}.monitor", "--file-format=wav", sound_out],
@@ -967,9 +1133,10 @@ class WineSession:
             stdout=open(work / "game.log", "w"), stderr=subprocess.STDOUT,
         )
         self.game = PtraceGame(find_game(time.monotonic() + 60))
-        # Classic Rebirth applies its patches as it loads, so the code is only
-        # final once the game has started running: wait for the code we break
-        # on, then for the window.
+        # The code we break on is the executable's own (Classic Rebirth doesn't
+        # patch it), so this passes as soon as the image is mapped, before the
+        # game's code has run: it checks the executable, not that patching has
+        # finished.
         deadline = time.monotonic() + 60
         while self.game.read(BREAK_PAD, len(BREAK_PAD_BYTES)) != BREAK_PAD_BYTES:
             if time.monotonic() > deadline:
@@ -984,18 +1151,29 @@ class WineSession:
         time.sleep(seconds)
 
     def close(self) -> None:
-        # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
-        try:
-            subprocess.run(["wineserver", "-k"], env=self.env, check=False)
-        except FileNotFoundError:
-            subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False)
-        self.launcher.kill()
-        self.display_server.kill()
+        """Stop the game, Wine, the display and the sound capture: whichever of them have started.
+
+        A second Ctrl-C, SIGTERM or SIGHUP waits until it is done."""
+        with signals_held():
+            self.stop_all()
+
+    def stop_all(self) -> None:
+        if self.env is not None:
+            # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
+            try:
+                subprocess.run(["wineserver", "-k"], env=self.env, check=False, **ALONE)
+            except FileNotFoundError:
+                subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False, **ALONE)
+        if self.launcher:
+            self.launcher.kill()
+        if self.display_server:
+            stop_display(self.display_server)
+            self.display_server = None
         if self.sound_capture:
             self.sound_capture.terminate()
             self.sound_capture.wait()
         if self.sink_module:
-            subprocess.run(["pactl", "unload-module", self.sink_module], check=False)
+            subprocess.run(["pactl", "unload-module", self.sink_module], check=False, **ALONE)
 
 
 class DebugGame(Game):
@@ -1707,6 +1885,14 @@ def main() -> int:
     command.set_defaults(func=patches_command)
 
     args = parser.parse_args()
+    # SIGTERM (from `timeout`, `docker stop` or a queue) and SIGHUP end the record
+    # as an error does, so that every `finally` runs and the session stops its
+    # display and Wine.
+    def stop(signum: int, frame: object) -> None:
+        raise SystemExit(f"stopped by signal {signum}")
+    for name in ("SIGTERM", "SIGHUP"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
     for setting in getattr(args, "config", []):
         key, _, value = setting.partition("=")
         CONFIG_OVERRIDES[key.strip()] = value.strip()
