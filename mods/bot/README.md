@@ -259,9 +259,14 @@ Priorities, highest first:
    50F's power panel while the bot idled at 50C's dark elevator door. 514 starts the
    self-destruct, which unlocks the lab's exit, only when entered after
    the Tyrant's death; with the lab's other goals done before that fight,
-   nothing else led back there. Then
-   `frontier empty: nothing reachable is left` (with the count of goals
-   marked looping). Entering the `--bot-goal-room` finishes with
+   nothing else led back there. At most 8 revisits run between two real
+   progress changes (the loop rule's below; `frontier empty; 8 revisits
+   without progress, no more`): with richard=leave, scenario flags that
+   301's and 302's scripts kept flipping gave every mansion room a new
+   story state again and again, and the revisits walked stage 2 for 24k
+   ticks until the run timed out, the real blocker never named. Then
+   `frontier empty: nothing reachable is left` (with the goals marked
+   looping, by key). Entering the `--bot-goal-room` finishes with
    `goal room X reached`. Every finish lists the locked doors
    (`needs key 0x..`) and the blocked goals with their reason.
 
@@ -277,11 +282,16 @@ pursued target and resets the counts. Without it:
 - a pursued target whose route from a newly entered room is no shorter
   (in doors) than the shortest seen counts a stall, and the third stall
   marks it looping. The route is the one the pursuit walks: for a box or
-  a typewriter, the mental map's walking-distance route; for the rest,
-  the fewest doors. (Measured in fewest doors, a box trip along a route
-  with more doors stalled in every room: with richard=leave every box was
-  marked looping three times, the square crank stayed boxed, and the run
-  timed out in the mansion.)
+  a typewriter, the mental map's walking-distance route, measured at the
+  room's first goal choice with the same planned exit lengths the
+  pursuit uses; for the rest, the fewest doors. (Measured in fewest
+  doors, a box trip along a route with more doors stalled in every room;
+  measured on entry, before the room's approaches were planned, the
+  first leg was a straight line from the doorway and picked other exits.
+  Either way, with richard=leave, trips to box 118 and 403 that lost a
+  door at every room were marked looping three times, the grenade
+  launcher and the square crank stayed boxed, and the run timed out in
+  the mansion.)
 
 A looping mark holds for 3 minutes of game time or until the inventory
 changes, and counts as an attempt. The limits are three times what the
@@ -869,7 +879,15 @@ then inside each room from the point the bot arrived at through that door
 (`bot:world()` keeps each door's and box's zone centre) to the next door
 or the box, plus `MAP_DOOR` (15 reach) per door load. A leg inside a room
 is the path length the bot measured from that arrival point when it last
-chose a goal near it, else the straight line. The price comes from the
+chose a goal near it, else the straight line. The arrival point is where
+the bot stands at its first goal choice in the room, not at the room
+change: through 106's stair to 203 the player still reads 106's landing
+then, so 203's legs from 106 were never measured, the straight line from
+that point made 203's far doors look close, and every box trip from the
+hall went up to 203 and straight back down. The stair also lands in
+different parts of 203; when a remeasured leg changes which doors are
+reachable from an arrival, the pursued target's stall count starts
+over. The price comes from the
 map, never from which box the bot chose before. The screen driver waits out the
 lid, then per operation: in browse mode d-pad the inventory cursor to the
 slot and confirm; in armed mode page the box cursor with up/down to the
