@@ -1143,14 +1143,13 @@ impl Re2State {
     }
 
     /// `Sce_work_clr` (`0x4E3DA0`), at the end of every `Sce_scheduler_main`
-    /// pass and before a room's init scripts: variables 2 and 3 go back to
+    /// pass and before a room's init scripts: variables 0 to 3 go back to
     /// `0xFFFF`, and `fg_tick` and `fg_use`'s four words to 0, so a USE's
-    /// item and an area's key item last one pass. `Mizu_div_ctr`, which it
+    /// item, an area's key item and the areas the player was in last one
+    /// pass. `Mizu_div_ctr`, which it
     /// also zeroes, isn't modelled (`mizu_div_set` is a no-op).
     pub fn sce_work_clr(&mut self) {
-        for var in [VAR_USED_ITEM, 3] {
-            self.vars[var] = 0xFFFF;
-        }
+        self.vars[..4].fill(0xFFFF);
         if let Some(words) = self.banks.get_mut(usize::from(ROOM_BANK)) {
             words[1] = 0;
         }
@@ -3760,7 +3759,7 @@ mod tests {
         assert_eq!(state.banks[usize::from(FG_USE_BANK)][..4], [0; 4]);
         assert_eq!(state.banks[usize::from(FG_USE_BANK)][4], 0xFFFF_FFFF);
         assert_eq!(state.banks[usize::from(ROOM_BANK)][1], 0);
-        assert_eq!(state.vars[2..4], [0xFFFF; 2]);
+        assert_eq!(state.vars[..4], [0xFFFF; 4]);
         assert_eq!(state.vars[4], 7);
     }
 
@@ -3796,6 +3795,10 @@ mod tests {
         game.re2.pending_events.clear();
         game.re2.sce_work_clr();
         assert!(!game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(
+            game.re2.vars[VAR_FORWARD_AREA], 0xFFFF,
+            "no area until a hit"
+        );
         // The open's room ticks: `Sce_at` with the scheduler off.
         game.re2_stopped_area_pass(STATUE_POS, STATUE_ANGLE);
         assert!(game.re2.flag(FG_USE_BANK, MEDAL));

@@ -36529,15 +36529,16 @@ end
     fn a_rooms_load_clears_the_script_work_before_its_init() {
         // `Sce_scheduler_set` runs `Sce_work_clr` before the init scripts.
         let scripts = crate::scd2::akscr::compile(
-            "#version 1\n#game re2\nproc init_00 { copy(16, 2); evt_end(0); }\nproc main_00 { evt_end(0); }",
+            "#version 1\n#game re2\nproc init_00 { copy(16, 0); copy(17, 2); evt_end(0); }\nproc main_00 { evt_end(0); }",
         )
         .unwrap();
         let mut vm = crate::scd2::vm::Vm::new(&scripts);
         let mut game = game::GameState::default();
+        game.re2.vars[0] = 5;
         game.re2.vars[2] = 5;
         game.re2.set_flag(10, 71, 1);
         run_re2_init(Some(&mut vm), &Default::default(), &mut game);
-        assert_eq!(game.re2.vars[16], 0xFFFF);
+        assert_eq!(game.re2.vars[16..18], [0xFFFF; 2]);
         assert!(!game.re2.flag(10, 71));
     }
 
