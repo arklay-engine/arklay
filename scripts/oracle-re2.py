@@ -652,6 +652,19 @@ OBJECTS = 0x98A61C  # `pOm`: 0x1F8 bytes an object, the lid's turn at +0x78
 ITEM_BOX_PAGE = [0x691F61, 0x691F62, 0x691F63, 0x691F6C, 0x691F76, 0x691F84]
 
 
+FILE_TAG_BK = 0x98EE60  # `File_tag_bk`: the files held, three binders of eight, 0xFF for none
+# The FILE page's work: the binder in front, the slot, the page, the blink's level and way, the zoom, the carousel's turn, the page's x.
+FILE_WORK = ((0x691F71, "b"), (0x691F72, "b"), (0x691F73, "B"), (0x691F88, "B"), (0x691F89, "B"), (0x691F8E, "<h"), (0x691F90, "<h"), (0x691FBC, "<h"))
+
+
+def file_trace(game: Game) -> str:
+    """The status screen's FILE page (`St_menu0_file`): its work bytes, then the files held."""
+    work = ",".join(
+        str(struct.unpack(kind, game.read(address, struct.calcsize(kind)))[0]) for address, kind in FILE_WORK
+    )
+    return f"fl={work}/{game.read(FILE_TAG_BK, 24).hex()}"
+
+
 def item_box_trace(game: Game) -> str:
     """The item box (`Item_box_entrance` and `St_main01`): the lid's state, speed, step and turn, the screen's routine, sub, count, cursor and repeat gate, the box's top row and its scroll, the cursor lines' pulse; then the inventory's two-slot marks and the box's filled slots."""
     lid = game.i16(OBJECTS + game.u8(ITEM_BOX_OBJECT) * 0x1F8 + 0x78)
@@ -758,6 +771,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"{game.u8(ITEM_GET_ROUTINE)},{game.u8(ITEM_GET_ROUTINE + 1)},{game.u8(MESSAGE_STATE):x},"
         + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
+    fields.append(file_trace(game))
     fields.append(item_box_trace(game))
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
@@ -1156,6 +1170,9 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         for item in args.box:
                             slot, item_id, count, *mark = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_BOX_WORK + slot * 4, bytes((item_id, count, mark[0] if mark else 0)))
+                        for held in args.file:
+                            index, file = (int(part, 0) for part in held.split(":"))
+                            game.write(FILE_TAG_BK + index, bytes((file,)))
                         if args.life is not None:
                             game.write(PL + ENTITY_LIFE, struct.pack("<h", args.life))
                 if settled and args.equip is not None:
@@ -1497,6 +1514,10 @@ def main() -> int:
         command.add_argument(
             "--box", action="append", default=[], metavar="SLOT:ID:COUNT[:MARK]",
             help="put an item in the item box when play begins; MARK 3 for a two-slot weapon",
+        )
+        command.add_argument(
+            "--file", action="append", default=[], metavar="INDEX:FILE",
+            help="hold a file when play begins: File_tag_bk[INDEX] = FILE (binder INDEX / 8, slot INDEX mod 8)",
         )
         command.add_argument(
             "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",
