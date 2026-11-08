@@ -675,6 +675,53 @@ impl UserData for Api {
             Ok(at.map_or((None, None, None), |[x, y, z]| (Some(x), Some(y), Some(z))))
         });
 
+        // `CompM(Workm, M).t` for the player's part `part` as the last tick
+        // left it (`Work::parts`), with `M.t` the point: nils without a pose
+        // of it. Part 0 is `player_root_point`'s.
+        methods.add_method_mut(
+            "player_part_point",
+            |_, e, (part, x, y, z): (usize, i32, i32, i32)| {
+                let point = [x, y, z];
+                let at = e
+                    .em()
+                    .world
+                    .pl
+                    .parts
+                    .get(part)
+                    .copied()
+                    .flatten()
+                    .map(|matrix| {
+                        std::array::from_fn::<i32, 3, _>(|axis| {
+                            let turned: i32 = (0..3)
+                                .map(|index| i32::from(matrix.m[axis][index]) * point[index])
+                                .sum();
+                            matrix.t[axis] + (turned >> 12)
+                        })
+                    });
+                Ok(at.map_or((None, None, None), |[x, y, z]| (Some(x), Some(y), Some(z))))
+            },
+        );
+        // The cockroaches' globals (`Re2State::swarm`), 0 to 3.
+        methods.add_method_mut("swarm", |_, e, index: usize| {
+            e.em()
+                .world
+                .swarm
+                .get(index)
+                .copied()
+                .map(i64::from)
+                .ok_or_else(|| mlua::Error::RuntimeError(format!("no swarm word {index}")))
+        });
+        methods.add_method_mut("set_swarm", |_, e, (index, value): (usize, i64)| {
+            let word = e
+                .em()
+                .world
+                .swarm
+                .get_mut(index)
+                .ok_or_else(|| mlua::Error::RuntimeError(format!("no swarm word {index}")))?;
+            *word = value as u32;
+            Ok(())
+        });
+
         // The rest of the game.
         methods.add_method_mut("weapon", |_, e, ()| Ok(e.em().world.weapon));
         methods.add_method_mut("noise", |_, e, ()| Ok(e.em().world.noise));
@@ -1642,6 +1689,14 @@ impl UserData for Api {
                 Ok((x, y, z))
             },
         );
+        // `RotMatrix(&Super_vector, pSuper)` while `pSuper` is `&Super_matrix`:
+        // the surface the body is drawn on.
+        methods.add_method_mut("set_super", |_, e, (x, y, z): (i64, i64, i64)| {
+            e.em().work().super_matrix = Some(player2::rot_matrix([x as i16, y as i16, z as i16]));
+            Ok(())
+        });
+        methods.add_method_mut("rsin", |_, _, angle: i64| Ok(player2::rsin(angle as i32)));
+        methods.add_method_mut("rcos", |_, _, angle: i64| Ok(player2::rcos(angle as i32)));
         methods.add_method_mut("set_shadow", |_, e, half: i32| {
             e.em().z.shadow_half = Some(half);
             Ok(())
@@ -1786,6 +1841,7 @@ mod tests {
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
+        include_str!("../../games/re2/enemy/29/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2f/enemy.lua"),
         include_str!("../../games/re2/lib/ivy.lua"),
@@ -3338,5 +3394,421 @@ mod tests {
         assert_eq!((em.get("r2"), em.get("joints")), (2, 1));
         let em = run_em2d(0, &[], 2, setup);
         assert_eq!((em.get("r1"), em.get("r2")), (1, 0));
+    }
+
+    /// A cockroach for `enemy/29/enemy.lua`: `DRAWS` feeds `Rnd`, a clip
+    /// ends on its `CLIP_LEN`th frame, the player stands at `PLAYER` and an
+    /// attach point is at `PART_AT` (or nowhere). The turns, the
+    /// trigonometry and `SquareRoot0` are the engine's own.
+    const ROACH_STUB: &str = "
+        local draws, drawn = DRAWS or {}, 0
+        local clip_len = CLIP_LEN or 1000
+        w = { r = ROUTINES or { [0] = 0, 0, 0, 0 }, vars = VARS or {},
+            timers = { [0] = 0, 0, 0 }, be = 1, kind = 0, life = 0, angle = ANGLE or 0,
+            cdir = { 0, 0 }, spd = { 0, 0, 0 }, pos = POS or { -15372, -3600, -25133 },
+            clip = -1, frame = 0, hidden = 0, sounds = {}, faced = {},
+            swarm = SWARM or { [0] = 0, 0, 0, 0 } }
+        local player = PLAYER or { -7824, 0, -25140 }
+        local e = {}
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:timer(i) return w.timers[i] end
+        function e:set_timer(i, v) w.timers[i] = i == 2 and v & 0xFF or v & 0xFFFF end
+        function e:rnd() drawn = drawn + 1; return draws[drawn] + 0 end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:kind() return w.kind end
+        function e:set_kind(v) w.kind = v end
+        function e:set_life(v) w.life = v end
+        function e:swarm(i) return w.swarm[i] end
+        function e:set_swarm(i, v) w.swarm[i] = v end
+        function e:move_no() return w.clip end
+        function e:clip(n) w.clip = n; w.frame = 0 end
+        function e:joint() w.frame = w.frame + 1; return w.frame >= clip_len end
+        function e:hidden_parts() return w.hidden end
+        function e:set_hidden_parts(v) w.hidden = v end
+        function e:init_super() w.super = nil end
+        function e:set_super(x, y, z) w.super = { x, y, z } end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v & 0xFFFF end
+        function e:cdir() return w.cdir[1], w.cdir[2] end
+        function e:set_cdir(x, z) w.cdir = { x, z } end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:set_pos(x, y, z) w.pos = { x, y, z } end
+        function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+        function e:set_speed(x, y, z) w.spd = { i16(x), i16(y), i16(z) } end
+        function e:sound(n) w.sounds[#w.sounds + 1] = n end
+        function e:player_pos() return player[1], player[2], player[3] end
+        function e:player_part_point(part, x, y, z)
+            w.part = part
+            if PART_AT then return PART_AT[1], PART_AT[2], PART_AT[3] end
+            return nil, nil, nil
+        end
+        function e:direction(x0, z0, x1, z1) return rs_direction(x0, z0, x1, z1) end
+        function e:rsin(a) return rs_rsin(a) end
+        function e:rcos(a) return rs_rcos(a) end
+        function e:turn_to(to, rate) return rs_turn(w.angle, to, rate) end
+        function e:rotate(a, x, z) return rs_rotate(a, x, z) end
+        function e:hypot(x, z) return rs_hypot(x, z) end
+        function e:goto_point(x, z, rate)
+            w.faced[#w.faced + 1] = rate
+            w.angle = rs_goto(w.pos[1], w.pos[3], w.angle, x, z, rate)
+        end
+        function e:add_speed_xz()
+            local dx, dz = rs_rotate(w.angle, w.spd[1], w.spd[3])
+            w.pos = { w.pos[1] + dx, w.pos[2], w.pos[3] + dz }
+        end
+        for _, name in ipairs({ 'set_damage_flg', 'set_sce_flg', 'set_body_box', 'set_shadow',
+            'seq_sound' }) do
+            e[name] = function() end
+        end
+        E = e
+        function drawn_count() return drawn end
+    ";
+
+    /// The roach's script on `ROACH_STUB`, with `setup`'s globals set first.
+    struct Roach {
+        lua: mlua::Lua,
+        budget: std::rc::Rc<crate::lua::Budget>,
+    }
+
+    impl Roach {
+        fn eval<T: mlua::FromLuaMulti>(&self, code: &str) -> T {
+            self.budget.begin();
+            self.lua.load(code).eval().unwrap()
+        }
+
+        fn run(&self, code: &str) {
+            self.budget.begin();
+            self.lua.load(code).exec().unwrap();
+        }
+    }
+
+    fn spawn_roach(draws: &[u8], setup: &str) -> Roach {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        let globals = lua.globals();
+        let set = |name: &str, function: mlua::Function| globals.set(name, function).unwrap();
+        set(
+            "rs_direction",
+            lua.create_function(|_, (a, b, c, d): (i32, i32, i32, i32)| {
+                Ok(direction_ck(a, b, c, d))
+            })
+            .unwrap(),
+        );
+        set(
+            "rs_rsin",
+            lua.create_function(|_, a: i32| Ok(player2::rsin(a)))
+                .unwrap(),
+        );
+        set(
+            "rs_rcos",
+            lua.create_function(|_, a: i32| Ok(player2::rcos(a)))
+                .unwrap(),
+        );
+        set(
+            "rs_turn",
+            lua.create_function(|_, (a, to, rate): (i64, i64, i32)| {
+                Ok(turn_within(a as u16, to as u16, rate))
+            })
+            .unwrap(),
+        );
+        set(
+            "rs_rotate",
+            lua.create_function(|_, (a, x, z): (i64, i32, i32)| {
+                Ok(player2::rotate(a as u16, x, z))
+            })
+            .unwrap(),
+        );
+        set(
+            "rs_hypot",
+            lua.create_function(|_, (x, z): (i32, i32)| {
+                Ok(square_root0(
+                    x.wrapping_mul(x).wrapping_add(z.wrapping_mul(z)),
+                ))
+            })
+            .unwrap(),
+        );
+        set(
+            "rs_goto",
+            lua.create_function(
+                |_, (x, z, a, tx, tz, rate): (i32, i32, i64, i32, i32, i32)| {
+                    Ok(goto(a as u16, direction_ck(x, z, tx, tz), rate))
+                },
+            )
+            .unwrap(),
+        );
+        globals.set("DRAWS", draws.to_vec()).unwrap();
+        lua.load(setup).exec().unwrap();
+        let script = include_str!("../../games/re2/enemy/29/enemy.lua");
+        lua.load(format!(
+            "local function i16(v) v = v & 0xFFFF; return v >= 0x8000 and v - 0x10000 or v end
+             {ROACH_STUB}
+             {script}
+             function tick(n) for _ = 1, n or 1 do update(E) end end"
+        ))
+        .exec()
+        .unwrap();
+        Roach { lua, budget }
+    }
+
+    const ROUTINES: &str = "return { w.r[0], w.r[1], w.r[2], w.r[3] }";
+
+    /// `FUN_0047c0e0`: the wait's routines, a life of 10, `Type`'s `0x2000`,
+    /// the wings hidden, one draw for `Cdir_y`, the work's fields and the
+    /// swarm's cleared, and the body on the pipe's wall at the angle it was
+    /// at from the axis.
+    #[test]
+    fn a_roachs_init() {
+        let roach = spawn_roach(
+            &[0x37],
+            "VARS = { [0] = 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 }; SWARM = { [0] = 1, 2, 3, 4 }",
+        );
+        roach.run("tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 0, 0, 0]);
+        let (life, kind, angle): (i64, i64, i64) = roach.eval("return w.life, w.kind, w.angle");
+        assert_eq!((life, kind, angle), (10, 0x2000, 0x370));
+        let (be, hidden, drawn): (i64, i64, i64) =
+            roach.eval("return w.be, w.hidden, drawn_count()");
+        assert_eq!(be & 0x1E80_0002, 0x1E80_0002);
+        assert_eq!((hidden, drawn), (0xC, 1));
+        let swarm: Vec<i64> =
+            roach.eval("return { w.swarm[0], w.swarm[1], w.swarm[2], w.swarm[3] }");
+        assert_eq!(swarm, [0; 4]);
+        let vars: Vec<i64> = roach.eval(
+            "return { w.vars[1], w.vars[2], w.vars[3], w.vars[4], w.vars[5], w.vars[6],
+                w.vars[7], w.vars[8], w.vars[9] }",
+        );
+        assert_eq!(vars, [0; 9]);
+        // From (-15372, -3600, -25133), onto the circle, each coordinate
+        // rounded toward zero.
+        let (x, y, z, a, surface): (i32, i32, i32, i32, Vec<i64>) =
+            roach.eval("return w.pos[1], w.pos[2], w.pos[3], w.vars[0], w.super");
+        assert_eq!(a, i32::from(direction_ck(-25200, -1800, -25133, -3600)));
+        assert_eq!(x, -15372);
+        assert_eq!(z, player2::rcos(a) * 1800 / 4096 - 25200);
+        assert_eq!(y, -1800 - player2::rsin(a) * 1800 / 4096);
+        assert_eq!(surface, [0, 0xC00, i64::from((0xC00 - a) as i16)]);
+    }
+
+    /// The wait: clip 1, then a draw picks the crawl or clip 0, which a
+    /// draw ends unless it has ended itself.
+    #[test]
+    fn a_roach_waits_then_crawls() {
+        let wait = |draws: &[u8], sub: u8, clip_len: u8| -> ([u8; 4], i64) {
+            let roach = spawn_roach(
+                draws,
+                &format!("ROUTINES = {{ [0] = 1, 0, {sub}, 0 }}; CLIP_LEN = {clip_len}"),
+            );
+            roach.run("tick()");
+            (roach.eval(ROUTINES), roach.eval("return drawn_count()"))
+        };
+        assert_eq!(wait(&[0], 0, 1), ([1, 1, 0, 0], 1));
+        assert_eq!(wait(&[2], 0, 1), ([1, 0, 1, 0], 1));
+        assert_eq!(wait(&[], 0, 5), ([1, 0, 0, 0], 0));
+        // Clip 0 not ended: a draw of 2 goes back to clip 1, of 0 crawls.
+        assert_eq!(wait(&[2], 1, 5), ([1, 0, 0, 0], 1));
+        assert_eq!(wait(&[0], 1, 5), ([1, 1, 0, 0], 1));
+        // Clip 0's end draws nothing.
+        assert_eq!(wait(&[], 1, 1), ([1, 0, 0, 0], 0));
+    }
+
+    /// The crawl's decision costs one, two or three draws: a jump only from
+    /// the pipe's upper half.
+    #[test]
+    fn a_roachs_crawl_decides() {
+        let decide = |draws: &[u8], y: i32| -> ([u8; 4], i64, i64, i64) {
+            let roach = spawn_roach(
+                draws,
+                &format!(
+                    "ROUTINES = {{ [0] = 1, 1, 0, 0 }}; POS = {{ -15000, {y}, -25200 }}; ANGLE = 0x100"
+                ),
+            );
+            roach.run("tick()");
+            let (drawn, sounds, heading) =
+                roach.eval("return drawn_count(), #w.sounds, w.vars[2] or 0");
+            (roach.eval(ROUTINES), drawn, sounds, heading)
+        };
+        assert_eq!(decide(&[0, 0], -3000), ([1, 2, 0, 0], 2, 0, 0));
+        assert_eq!(decide(&[0, 1], -3000), ([1, 0, 0, 0], 2, 0, 0));
+        assert_eq!(decide(&[0], -600), ([1, 0, 0, 0], 1, 0, 0));
+        let heading = (0x50 * 8 - 0x400 + 0x100) & 0xFFFF;
+        let (routines, drawn, sounds, to) = decide(&[1, 2, 0x50], -600);
+        assert_eq!((routines[1], drawn, sounds, to), (1, 3, 1, heading));
+        assert_eq!(decide(&[1, 1, 0x50], -600).2, 0);
+    }
+
+    /// The crawl's step: the speed builds by 0x14 to 140, the heading turns
+    /// by 0x20 with `Goto01_ck`'s window, and the angle round the pipe moves
+    /// by the arc's length, toward zero.
+    #[test]
+    fn a_roachs_crawl_steps_along_the_pipe() {
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 1, 2, 0 }; VARS = { [2] = 0x800 }",
+        );
+        let speeds: Vec<i64> = (0..9)
+            .map(|_| roach.eval("tick(); return w.spd[1]"))
+            .collect();
+        assert_eq!(speeds, [20, 40, 60, 80, 100, 120, 140, 140, 140]);
+        // Within the window it goes back to the decision.
+        let edge = |heading: i64| -> (i64, i64) {
+            spawn_roach(
+                &[],
+                &format!(
+                    "ROUTINES = {{ [0] = 1, 1, 2, 0 }}; ANGLE = 0x400; VARS = {{ [2] = {heading} }}"
+                ),
+            )
+            .eval("tick(); return w.r[2], w.angle")
+        };
+        assert_eq!(edge(0x400 - 0x20), (1, 0x400));
+        assert_eq!(edge(0x400 + 0x20), (2, 0x420));
+        // Facing -z at 140, `vz` is -140: the step is -50, not -51.
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 1, 2, 0 }; ANGLE = 0x800; VARS = { [0] = 0x810, [2] = 0x800 }",
+        );
+        roach.run("w.spd = { 120, 0, 0 }; tick()");
+        let (step, angle): (i64, i32) = roach.eval("return w.vars[1], w.vars[0]");
+        assert_eq!((step, angle), (-50, 0x810 - 50));
+        // Where `rcos` is negative, z and y still round toward zero.
+        let (y, z): (i32, i32) = roach.eval("return w.pos[2], w.pos[3]");
+        assert!(player2::rcos(angle) < 0);
+        assert_eq!(z, player2::rcos(angle) * 1800 / 4096 - 25200);
+        assert_eq!(y, -1800 - player2::rsin(angle) * 1800 / 4096);
+        // The angle round the pipe wraps at 0xFFF.
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 1, 2, 0 }; ANGLE = 0; VARS = { [0] = 0x10, [2] = 0 }",
+        );
+        roach.run("w.spd = { 120, 0, 0 }; tick()");
+        assert_eq!(roach.eval::<i64>("return w.vars[0]"), 0x10 + 50);
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 1, 2, 0 }; ANGLE = 0x800; VARS = { [0] = 0x10, [2] = 0x800 }",
+        );
+        roach.run("w.spd = { 120, 0, 0 }; tick()");
+        assert_eq!(roach.eval::<i64>("return w.vars[0]"), 0x1000 + 0x10 - 50);
+    }
+
+    /// `Pos_x` stays within the pipe's ends while the roach is on it.
+    #[test]
+    fn a_roach_on_the_pipe_is_held_between_its_ends() {
+        let x = |flags: i64, x: i64| -> i64 {
+            spawn_roach(
+                &[],
+                &format!(
+                    "ROUTINES = {{ [0] = 1, 9, 0, 0 }}; VARS = {{ [3] = {flags} }}; POS = {{ {x}, 0, 0 }}"
+                ),
+            )
+            .eval("tick(); return w.pos[1]")
+        };
+        assert_eq!(
+            (x(8, -7000), x(8, -28000), x(8, -9000)),
+            (-7300, -27000, -9000)
+        );
+        assert_eq!((x(0, -7000), x(0, -28000)), (-7000, -28000));
+    }
+
+    /// `FUN_0047d150`: `Rnd >> 3` among the free points, else the scan, which
+    /// sets the index in the mask and not its bit.
+    #[test]
+    fn a_roach_picks_a_free_attach_point() {
+        let pick = |draws: &[u8], taken: u32| -> (i64, i64, i64) {
+            spawn_roach(
+                draws,
+                &format!("ROUTINES = {{ [0] = 1, 2, 0, 0 }}; SWARM = {{ [0] = 0, 0, {taken}, 0 }}"),
+            )
+            .eval("tick(); return w.vars[7], w.swarm[2], drawn_count()")
+        };
+        assert_eq!(pick(&[0x18], 0), (3, 0x8, 1));
+        assert_eq!(pick(&[0x18, 0x20], 0x8), (4, 0x18, 2));
+        assert_eq!(pick(&[0; 32], 0xFFFF_FFF7), (3, 0xFFFF_FFF7, 32));
+        assert_eq!(pick(&[0; 32], 0xFFFF_FFFF), (0x20, 0xFFFF_FFFF, 32));
+    }
+
+    /// The jump: its first tick shows the wings, picks the point and plays
+    /// clip 2 at once, and the clip's end faces the player. The flight speeds
+    /// up by `Timer1`, climbs toward the point at up to 100 a tick, falls once
+    /// `Timer0` reaches 0x5A, and beats its wings every 16 ticks.
+    #[test]
+    fn a_roachs_jump_flies_at_the_player() {
+        let roach = spawn_roach(
+            &[0x18],
+            "ROUTINES = { [0] = 1, 2, 0, 0 }; CLIP_LEN = 1; POS = { -10000, -3500, -25200 }",
+        );
+        roach.run("w.hidden = 0xC; tick()");
+        let (sub, hidden, clip, faced, sounds): (i64, i64, i64, Vec<i64>, Vec<i64>) =
+            roach.eval("return w.r[2], w.hidden, w.clip, w.faced, w.sounds");
+        assert_eq!(
+            (sub, hidden, clip, faced, sounds),
+            (2, 0, 2, vec![0x800], vec![3])
+        );
+        assert_eq!(
+            roach.eval::<(i64, i64)>("return w.vars[3], w.be & 0x2000"),
+            (9, 0x2000)
+        );
+        roach.run("PART_AT = { -12000, -500, -25200 }");
+        let (speeds, climbs): (Vec<i64>, Vec<i64>) = (0..25)
+            .map(|_| roach.eval::<(i64, i64)>("tick(); return w.spd[1], w.spd[2]"))
+            .unzip();
+        assert_eq!(&speeds[..5], [0, 1, 3, 6, 10]);
+        assert_eq!(*speeds.last().unwrap(), 210);
+        assert_eq!(climbs[0], 100);
+        assert_eq!(roach.eval::<Vec<i64>>("return w.sounds"), [3, 3]);
+        // `Timer0` stops at 0x5A, and then it falls.
+        let roach = roach_flying("POS = { -10000, -1800, -25200 }");
+        roach.run("w.timers[0] = 0x59");
+        assert_eq!(
+            roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"),
+            (0x5A, 1)
+        );
+        assert_eq!(
+            roach.eval::<(i64, i64)>("tick(); return w.timers[0], w.spd[2]"),
+            (0x5A, 2)
+        );
+    }
+
+    /// A roach in the flight, its point far off.
+    fn roach_flying(setup: &str) -> Roach {
+        spawn_roach(
+            &[],
+            &format!(
+                "ROUTINES = {{ [0] = 1, 2, 2, 0 }}; PART_AT = {{ -10000, -1800, -15200 }};
+                 VARS = {{ [3] = 9, [7] = 4 }}; SWARM = {{ [0] = 0, 0, 0x30, 0 }}; {setup}"
+            ),
+        )
+    }
+
+    /// Beyond the radius it slides along the wall, or once `Timer0` is past
+    /// 0x59 goes back onto it, its point freed.
+    #[test]
+    fn a_roachs_flight_ends_on_the_wall() {
+        let roach = roach_flying("POS = { -10000, -1800, -27100 }");
+        roach.run("w.timers[0] = 0x10; tick()");
+        let (z, move_kind): (i64, i64) = roach.eval("return w.pos[3], w.r[1]");
+        // Back on the circle, within `SquareRoot0`'s error.
+        assert_eq!(move_kind, 2);
+        assert!((-27002..=-26998).contains(&z), "{z}");
+        let roach = roach_flying("POS = { -10000, -1800, -27100 }");
+        roach.run("w.timers[0] = 0x5A; tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 0, 0, 0]);
+        let (hidden, taken, flags, z): (i64, i64, i64, i64) =
+            roach.eval("return w.hidden, w.swarm[2], w.vars[3], w.pos[3]");
+        assert_eq!((hidden, taken, flags & 3, z), (0xC, 0x20, 0, -27000));
+    }
+
+    /// Within 200 of the point it lands: attached, counted, and on the
+    /// player's routines (part 2 ports the rest).
+    #[test]
+    fn a_roach_lands_on_its_attach_point() {
+        let roach =
+            roach_flying("POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 }");
+        roach.run("w.be = 0x2001; tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 0, 0]);
+        let (flags, on, be): (i64, i64, i64) = roach.eval("return w.vars[3], w.swarm[1], w.be");
+        assert_eq!((flags, on, be), (3, 1, 1));
     }
 }

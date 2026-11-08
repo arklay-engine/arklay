@@ -357,6 +357,9 @@ pub struct Work {
     stopped: [u8; 4],
     /// Part 0's `Workm`, as the last tick left it, for what an enemy has handed over.
     pub(crate) root: Option<Matrix>,
+    /// Every part's `Workm`, as the last tick left it, at the same point as
+    /// `root`: where a cockroach (`Em_29`) aims at an attach point.
+    pub(crate) parts: Vec<Option<Matrix>>,
     /// `Kage_ofs`: how far along the body `Game_loop` probes the shadow's ground.
     kage_ofs: i16,
     /// The point `pl_mv_07` aims `pKage_work->pPos` at in place of part 0.
@@ -924,6 +927,7 @@ impl Default for Work {
             dest: [0; 2],
             stopped: [0; 4],
             root: None,
+            parts: Vec::new(),
             kage_ofs: 0,
             kage_pos: None,
             kage_probe: None,
@@ -1073,8 +1077,9 @@ pub struct NeckTarget {
 
 /// The necks of [`Tick::necks`].
 pub type Necks = [Option<[i32; 3]>; NECK_WORKS];
-/// `player_work`, `splayer_work` and `enemy_work`'s 16.
-pub const NECK_WORKS: usize = 18;
+/// `player_work`, `splayer_work` and `enemy_work`'s 32 (room 40B's swarm
+/// fills 24).
+pub const NECK_WORKS: usize = 34;
 
 /// What the player's `Type` and the inventory say about the held weapon.
 #[derive(Debug, Default, Clone, Copy)]
@@ -1346,6 +1351,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.work.neck.body = Some(mover.player.pos);
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
+    mover.latch_parts();
     mover.arrived
 }
 
@@ -1447,6 +1453,7 @@ pub fn player_held(
     mover.work.neck.body = Some(mover.player.pos);
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
+    mover.latch_parts();
 }
 
 /// Whether [`player_held`] runs the player, not [`player_move`].
@@ -2540,6 +2547,12 @@ impl Mover<'_, '_> {
             return None;
         }
         self.chain_matrix(&chain)
+    }
+
+    /// `Work::parts`: each part's `Workm` on the current pose, the head on
+    /// its neck's turn.
+    fn latch_parts(&mut self) {
+        self.work.parts = self.posed_parts();
     }
 
     /// Every part's `Workm` on the current pose, with the neck's turn on its
@@ -6003,7 +6016,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
@@ -6071,7 +6084,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,
@@ -6116,7 +6129,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
@@ -6176,7 +6189,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
@@ -6233,7 +6246,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
@@ -6397,7 +6410,7 @@ mod tests {
                 poisoned: false,
                 stopped: false,
                 weapon: self.weapon,
-                necks: Default::default(),
+                necks: [None; NECK_WORKS],
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
@@ -6425,7 +6438,7 @@ mod tests {
                 poisoned: false,
                 stopped: false,
                 weapon: self.weapon,
-                necks: Default::default(),
+                necks: [None; NECK_WORKS],
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: 0,
@@ -6545,7 +6558,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,
@@ -6617,7 +6630,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,
@@ -7354,7 +7367,7 @@ mod tests {
             poisoned: false,
             stopped: true,
             weapon: Weapon::default(),
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,
@@ -7415,7 +7428,7 @@ mod tests {
             poisoned: false,
             stopped: true,
             weapon: Weapon::default(),
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,
@@ -7542,7 +7555,7 @@ mod tests {
             poisoned: false,
             stopped: false,
             weapon: setup.weapon,
-            necks: Default::default(),
+            necks: [None; NECK_WORKS],
             targets: &[],
             neck_targets: &[],
             enemies: 0,

@@ -283,13 +283,18 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
 
 def selected(key: str, fields: list[str] | None) -> bool:
     """Whether `key` is compared: `None` compares everything but the opt-in
-    fields, else a name or `e*`. The `esp` keys are opt-in: `esp` selects all
-    of them, `espn` and `espk` only themselves."""
+    fields, else a name, `zm*` (every enemy slot's `zm<slot>`) or `e*`. The
+    `esp` keys are opt-in: `esp` selects all of them, `espn` and `espk` only
+    themselves."""
     if key.startswith("esp"):
         return fields is not None and (key in fields or "esp" in fields)
     if fields is None:
         return key not in OPT_IN_FIELDS
-    return key in fields or (key.startswith("e") and "e*" in fields)
+    if key in fields:
+        return True
+    if key.startswith("zm") and key[2:].isdigit() and "zm*" in fields:
+        return True
+    return key.startswith("e") and "e*" in fields
 
 
 def compare_pair(ref: list[Tick], ark: list[Tick], ref_offset: int, ark_offset: int,
@@ -567,7 +572,8 @@ def main() -> int:
                          help="scan this many start offsets for the best alignment")
     compare.add_argument("--json", dest="json_out", default=None)
     compare.add_argument("--fields", default=None,
-                         help="comma-separated fields to compare (room, cam, p.x, ..., e*; "
+                         help="comma-separated fields to compare (room, cam, p.x, ..., zm0, e*; "
+                              "zm* selects every enemy slot's zm<slot>; "
                               "the opt-in esp, or espn/espk alone, compare the effect pool); "
                               "default: every field")
 

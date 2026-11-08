@@ -320,6 +320,12 @@ function HookApi:set_re2_rnd(value) end
 ---@param value integer
 function HookApi:set_re2_sce_rnd(value) end
 
+---Set `Pl_neck`'s count (`BYTE_0053a7d8`): the ticks until the player's head
+---next looks for someone to turn to. It is a static that only counts, so a
+---warp's start leaves it wherever the original's boot and load left it.
+---@param count integer
+function HookApi:set_re2_neck_wait(count) end
+
 ---The oracle's `--no-enemies`: switch off every enemy slot at the top of each
 ---tick (bit 0 of `be_flg`) except the kept pairs, so a long route compares
 ---the player alone.

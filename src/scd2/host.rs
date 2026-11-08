@@ -138,6 +138,11 @@ pub struct Re2State {
     pub tongue_owner: u8,
     /// `BYTE_00689610`: `Em_2D`'s wait before the next wake groan.
     pub em2d_groan: u8,
+    /// The cockroaches' swarm (`Em_29`): `DWORD_00689590`, the ticks with
+    /// more than two on the player, `0x689594`, how many are on the player,
+    /// `0x689598`, the attach points taken, and `0x68959C`, the player was
+    /// killed. Every roach's init zeroes them; a room's load doesn't.
+    pub swarm: [u32; 4],
     /// `DWORD_009888d8`'s low byte: the draw buffer, which `Swap_Cbuff` flips
     /// once a frame.
     pub draw_buffer: u8,
@@ -634,6 +639,7 @@ impl Default for Re2State {
             rnd: Default::default(),
             tongue_owner: 0,
             em2d_groan: 0,
+            swarm: [0; 4],
             draw_buffer: 0,
             enemies: 0,
             sound_types: [0; 2],
@@ -1658,6 +1664,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
             || id == crate::zombie2::EM2D_ID
+            || id == crate::zombie2::ROACH_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -2761,6 +2768,36 @@ mod tests {
         assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
     }
 
+    /// Room 40B's `init_00` sets 24 cockroaches (id 0x29) at the top of its
+    /// pipe: each keeps its slot as an enemy with a script, and each is a
+    /// head the player can turn to.
+    #[test]
+    fn room_40bs_cockroaches_keep_their_slots() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("40B0").unwrap();
+        for slot in 0..24 {
+            exec(
+                &mut game,
+                "sce_em_set",
+                &[
+                    0, slot, 0x29, 0, 0, 0, 15, 0, 255, -15372, -3600, -25133, 1024, 0, 0,
+                ],
+            );
+        }
+        for slot in 0..24 {
+            let roach = game.re2.characters.0[slot].as_ref().unwrap();
+            assert_eq!(roach.id, crate::zombie2::ROACH_ID);
+            assert!(roach.zombie.is_some(), "slot {slot}");
+        }
+        assert!(game.re2.characters.0[24].is_none());
+        assert_eq!(game.re2.enemies, 24);
+        let targets = game.re2.neck_targets();
+        assert_eq!(targets.len(), 24);
+        let last = targets.iter().map(|t| t.index).max().unwrap();
+        assert_eq!(last, 25);
+        assert!(last < crate::player2::NECK_WORKS);
+    }
+
     #[test]
     fn neck_targets_give_a_script_character_no_life_and_each_its_facing() {
         let mut game = GameState::default();
@@ -3140,8 +3177,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A cockroach, which isn't modelled.
-        spawn_character(&mut game, 0x29, 255);
+        // An enemy that isn't modelled (`Em_2B`).
+        spawn_character(&mut game, 0x2B, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.

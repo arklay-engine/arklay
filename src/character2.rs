@@ -378,8 +378,9 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                         | crate::zombie2::MRX_ID
                         | crate::zombie2::SPIDER_ID
                         | crate::zombie2::YOUNG_ID
+                        | crate::zombie2::ROACH_ID
                 ) {
-                    // `Em_21`, `MrX_init`, `Em_25`'s and `Em_26`'s inits never
+                    // `Em_21`, `MrX_init`, `Em_25`'s, `Em_26`'s and `Em_29`'s inits never
                     // give it an `Atd[1]`.
                     0
                 } else {
@@ -725,6 +726,7 @@ fn run_zombie(
         kin: Vec::new(),
         tongue_owner: &mut re2.tongue_owner,
         em2d_groan: &mut re2.em2d_groan,
+        swarm: &mut re2.swarm,
         common_a4,
         draw_buffer: re2.draw_buffer,
         room_code,

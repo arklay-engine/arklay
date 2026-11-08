@@ -1333,7 +1333,7 @@ fn no_event_holds_the_player_for_good() {
                         poisoned: false,
                         stopped: game.re2.player_stopped(),
                         weapon: Default::default(),
-                        necks: Default::default(),
+                        necks: [None; arklay::player2::NECK_WORKS],
                         targets: &[],
                         neck_targets: &[],
                         enemies: 0,
