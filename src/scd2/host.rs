@@ -151,6 +151,19 @@ pub struct Re2State {
     /// Fades 1 to 3, over fade 0, and what each drew this tick.
     pub fades: [crate::transition::Fade; 3],
     pub fades_drawn: [Option<crate::transition::Overlay>; 3],
+    /// The films play: the original's `MovieEnable == 0`. The oracle runs with
+    /// the films off (`MovieEnable = 0` in `config.ini`), so a trace does too.
+    pub films: bool,
+    /// The film `movie_on` asked for, for the engine to play (`Movie_r0 == 1`).
+    pub film: Option<u8>,
+    /// `Movie_set`'s last write this tick: the frames `WinMain` holds.
+    pub movie_set: Option<u8>,
+    /// `movie_on`'s `SsClose`: every sound stops. It holds how many of
+    /// [`Self::sounds`] were asked for before it, which it stops too.
+    pub sound_close: Option<usize>,
+    /// `SsInit2`: the sound comes back, and the music that `SsClose` stopped
+    /// starts again from its start.
+    pub sound_init: bool,
 }
 
 /// What a script did to a fade.
@@ -337,6 +350,11 @@ const FG_SYSTEM_EASY: u8 = 26;
 const FG_SYSTEM_CENSORSHIP_OFF: u8 = 25;
 /// `fg_system`'s `0x80000`: EASY with `censorship_off`.
 const FG_SYSTEM_EASY_CENSORSHIP_OFF: u8 = 12;
+/// `fg_system`'s `0x200`: a film plays (`Init_movie_work` raises it, the
+/// film's end clears it). `Psx_main`'s pause gate reads it.
+pub const FG_SYSTEM_MOVIE: u8 = 22;
+/// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
+pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
 const FG_STATUS_EASY: u8 = 5;
 
@@ -611,6 +629,11 @@ impl Default for Re2State {
             screen_fades: Vec::new(),
             fades: [crate::transition::Fade::inactive(); 3],
             fades_drawn: [None; 3],
+            films: false,
+            film: None,
+            movie_set: None,
+            sound_close: None,
+            sound_init: false,
         }
     }
 }
@@ -1371,6 +1394,31 @@ pub struct GameHost<'a> {
 }
 
 impl GameHost<'_> {
+    /// `Movie_on` (0x4E8C40): `Init_movie_work(id)` (0x4CAEC0), then
+    /// `Movie_set(2)`. The script goes on in the same tick.
+    ///
+    /// `Init_movie_work` clears `fg_system`'s `0x8000`, raises `0x200` and
+    /// closes the sound (`SsClose`). With the films on it leaves the film to
+    /// `WinMain`, which plays it before the next `Psx_main`; with them off
+    /// (as the oracle runs) it opens the sound again at once (`SsInit2`) and
+    /// drops `0x200`, so no tick's end sees it. The gallery's registry flags
+    /// aren't kept, and neither is `BYTE_0098F07B = 0`, which cancels a cut
+    /// change's background load in the same tick: no room changes the cut and
+    /// calls `movie_on` with no wait between them.
+    fn movie_on(&mut self, id: u8) {
+        let re2 = &mut self.game.re2;
+        re2.set_flag(0, FG_SYSTEM_8000, 0);
+        re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
+        re2.sound_close = Some(re2.sounds.len());
+        if re2.films {
+            re2.film = Some(id);
+        } else {
+            re2.sound_init = true;
+            re2.set_flag(0, FG_SYSTEM_MOVIE, 0);
+        }
+        re2.movie_set = Some(2);
+    }
+
     /// `aot_set` and `aot_set_4p`: an interaction area with no door record.
     fn set_area(&mut self, ops: &[i64], four_points: bool) {
         let at = |index: usize| ops.get(index).copied().unwrap_or(0);
@@ -2412,6 +2460,7 @@ impl Host for GameHost<'_> {
             "sce_item_lost" => {
                 self.game.remove_item(at(0) as u8);
             }
+            "movie_on" => self.movie_on(at(0) as u8),
             _ => log_unmodelled(op.mnemonic),
         }
         Step::Next
@@ -2529,6 +2578,62 @@ mod tests {
     fn exec(game: &mut GameState, mnemonic: &str, operands: &[i64]) {
         let op = crate::scd2::opcode::by_mnemonic(mnemonic).unwrap();
         GameHost { game }.exec(0, op, operands);
+    }
+
+    #[test]
+    fn movie_on_with_the_films_off_leaves_0x200_down_and_asks_for_two_held_frames() {
+        let mut game = GameState::default();
+        game.re2.set_flag(0, FG_SYSTEM_8000, 1);
+        game.re2.sounds.push(SoundRequest {
+            id: crate::se2::SoundId::decode(0x0200_0001).unwrap(),
+            pos: [0; 3],
+        });
+        exec(&mut game, "movie_on", &[10]);
+        assert!(!game.re2.flag(0, FG_SYSTEM_MOVIE));
+        assert!(!game.re2.flag(0, FG_SYSTEM_8000));
+        assert_eq!(game.re2.film, None);
+        assert_eq!(game.re2.movie_set, Some(2));
+        assert_eq!(game.re2.sound_close, Some(1));
+        assert!(game.re2.sound_init);
+    }
+
+    #[test]
+    fn movie_on_with_the_films_on_raises_0x200_and_queues_the_film() {
+        let mut game = GameState::default();
+        game.re2.films = true;
+        exec(&mut game, "movie_on", &[10]);
+        assert!(game.re2.flag(0, FG_SYSTEM_MOVIE));
+        assert_eq!(game.re2.film, Some(10));
+        assert_eq!(game.re2.sound_close, Some(0));
+        assert!(!game.re2.sound_init);
+    }
+
+    #[test]
+    fn room_200s_wait_loop_runs_once_with_the_films_off_and_holds_while_0x200_is_up() {
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc main_00\n{\n    movie_on(5);\n    nop();\n    do\n    {\n        \
+             evt_next();\n        nop();\n    }\n    while (ck(0, 22, 1));\n    set(4, 99, 1);\n    \
+             evt_end(0);\n}\n",
+        )
+        .unwrap();
+        for films in [false, true] {
+            let mut game = GameState::default();
+            game.re2.films = films;
+            let mut vm = crate::scd2::vm::Vm::new(&scripts);
+            vm.start_main();
+            let mut tick = |game: &mut GameState| {
+                vm.tick(&mut GameHost { game });
+                game.re2.flag(4, 99)
+            };
+            assert!(!tick(&mut game), "the first tick waits at evt_next");
+            if films {
+                for _ in 0..4 {
+                    assert!(!tick(&mut game), "the loop waits while the film plays");
+                }
+                game.re2.set_flag(0, FG_SYSTEM_MOVIE, 0);
+            }
+            assert!(tick(&mut game), "films {films}");
+        }
     }
 
     /// `sce_em_set` of id `id` in slot 0, and `work_set` on it.

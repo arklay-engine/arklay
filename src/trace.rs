@@ -78,6 +78,9 @@ pub struct TraceTick<'a> {
     pub re2_neck_position: Option<String>,
     /// RE2's voice-channel level, `xa_vol`'s (`0x693E88`).
     pub re2_xa_volume: Option<u8>,
+    /// RE2's film state, the oracle's `movie`: `fg_system & 0x8200`,
+    /// `Movie_idx` after `WinMain`'s decrement and `Movie_r0` (0 or 1).
+    pub re2_movie: Option<String>,
     /// RE2's `Item_work`, the oracle's `inv`: the ten slots and the personal
     /// item as `id:count`, then the slot count.
     pub re2_inventory: Option<String>,
@@ -260,6 +263,9 @@ impl TraceWriter {
         if let Some(level) = tick.re2_xa_volume {
             write!(self.out, " xavol={level}")?;
         }
+        if let Some(movie) = &tick.re2_movie {
+            write!(self.out, " movie={movie}")?;
+        }
         if let Some(inventory) = &tick.re2_inventory {
             write!(self.out, " inv={inventory}")?;
         }
@@ -386,6 +392,7 @@ mod tests {
             re2_neck: None,
             re2_neck_position: None,
             re2_xa_volume: None,
+            re2_movie: None,
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,
@@ -440,6 +447,7 @@ mod tests {
                 re2_neck: None,
                 re2_neck_position: None,
                 re2_xa_volume: None,
+                re2_movie: None,
                 re2_inventory: None,
                 re2_item_page: None,
                 re2_item_box: None,
@@ -489,6 +497,7 @@ mod tests {
             re2_neck: None,
             re2_neck_position: None,
             re2_xa_volume: None,
+            re2_movie: None,
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,
@@ -541,6 +550,7 @@ mod tests {
             re2_neck: Some("0,8,0,0,0".to_string()),
             re2_neck_position: Some("-".to_string()),
             re2_xa_volume: None,
+            re2_movie: None,
             re2_inventory: None,
             re2_item_page: None,
             re2_item_box: None,

@@ -140,6 +140,11 @@ impl PresentSkip {
     pub fn black(&self) -> bool {
         self.black
     }
+
+    /// `Movie_idx`: the frames still to skip.
+    pub fn left(&self) -> u8 {
+        self.left
+    }
 }
 
 /// Which game's door loop the timeline follows.

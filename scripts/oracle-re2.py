@@ -226,6 +226,8 @@ SS_NAME_BGM = 0x006934E0
 SS_NAME_SBGM = 0x00693EA0
 SEQ_CTR = 0x00693800
 XA_VOLUME = 0x00693E88  # `xa_vol`'s level for the voice channel
+MOVIE_IDX = 0x006805C0  # `Movie_idx`: the frames `WinMain` still holds (`Movie_set`)
+MOVIE_R0 = 0x0068058E  # `Movie_r0`: the film's state, 0 when none plays
 
 
 def parse_input(path: Path | None) -> list[tuple[int, int]]:
@@ -705,6 +707,9 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(neck_position(game))
     fields.append(music_trace(game))
     fields.append(f"xavol={game.u32(XA_VOLUME)}")
+    fields.append(
+        f"movie={game.u32(FG_SYSTEM) & 0x8200:04x},{game.u32(MOVIE_IDX)},{game.u8(MOVIE_R0)}"
+    )
     fields.append(inventory_trace(game))
     status = game.u32(STATUS_WORK)
     fields.append(
