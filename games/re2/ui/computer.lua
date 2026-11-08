@@ -70,7 +70,7 @@ function M.draw(api)
         return
     end
     if s.page == nil then
-        s.page = api:page(PAGE) or false
+        s.page = api:indexed_page(PAGE) or false
         s.lut = s.page and lut_of(api:page_palette(s.page, 0) or {}) or {}
     end
     local d = { page = s.page, lut = s.lut, ox = api:width() // 2 - 160, oy = api:height() // 2 - 120 }
