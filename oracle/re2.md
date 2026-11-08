@@ -264,6 +264,17 @@ The runs warp in front of each door with `--no-enemies --life 200`, press the ac
 - `unlock_door_20A` (`--warp 20A:-15554:0:-15268:1866`): 0x26 at 364, on the message's tick, and bit 17 (`fgkey=0000400000000000`). The run doesn't go through: the door leads into room 200.
 - `locked_inside_116` (`--warp 116:-26159:-7200:-25126:2048`, floor 4): 0x16 at 364 and "It's locked from inside."; no bit goes up.
 
+## The typewriter
+
+`Sce_Save` (`0x4E98F0`) runs for the typewriter's area (kind 9) when the action key's front point lands in it. It sets back routine slot 2 (`0x98E794`, which `Sce_Itembox` also uses) to `Sce_Save_backfunc` (`0x4E9930`) with state 0 (`0x98E542`), saves `fg_stop` (`0x991FC4`) and holds the world (`fg_stop | 0xFF000000`), and copies the area's first data byte, the save place, to `0x98E9A7`. `Game_loop` calls slot 2 right after `Sce_at`, so the routine's state 0 runs on the press tick: with an ink ribbon (`Search_item_id(0x1E)`, the id only) it shows door message 1 ("Will you use the Ink Ribbon?") and goes to state 1; without one it puts `fg_stop` back and shows door message 0. State 1 waits for the message to close, then clears the slot; No puts `fg_stop` back, and Yes sets game mode 1 and `fg_system | 0x40000`, which hand the room to the save screen. The trace's `tw` field has slot 2, the state byte and the place, and `gm` the game mode (`gi`'s first value).
+
+The runs warp in front of the typewriter, left of the ink ribbons' area, with `--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200`, press the action key at 364, and compare `room,cam,rseed,p,mot,inv,ib,snd,msg,tw,gm` at `--offset 344`, with the input moved 344 ticks earlier and a setup script that puts the player where the original has them on tick 344 (`oracle/re2-regress.d/typewriter_200.toml`). Both match on every tick:
+
+- `typewriter_200_no_ribbon` (`typewriter_200_no_ribbon.txt`): at 364 `tw=0,0,1` (the place is 1, "Hall"; it was the new game's 15 before) and `msg=c0`. The presses at 420 and 520 page through the message and close it (`msg=40`), and the walk from 560 moves the player.
+- `typewriter_200_no` (`typewriter_200_no.txt`, `--give 2:0x1E:3`): at 364 `tw=4e9930,1,1`. After the pages, right at 510 moves to No (4:4, `msg=c1`) and the press at 540 answers it (4:5, `msg=41`); on 541 the slot is clear (`tw=0,0,1`) and the player is free again. The press at 600 asks again, with the cursor back on Yes, and it is answered No the same way at 780.
+
+No run takes Yes yet: arklay's hand-off is still RE 1's (`docs/internals/deviations/re2.md`, "The typewriter").
+
 ## Weapons
 
 Leon A's route (100, 101, 102, 118, 119, 11A, 11B, 103, 200) has three weapons: the handgun (0x02) and the knife (0x01) from the start, and the shotgun (0x07), the only weapon to pick up. The rooms' scripts (`arklay scd export`) have these weapon and ammunition pick-ups, with the run that takes each:
@@ -325,6 +336,8 @@ The recorder writes `MovieEnable = 0` to `config.ini`, which the executable read
 | `box` | the inventory's two-slot marks (`Item_work`'s third bytes), then the item box's filled slots, `slot:id:count:mark`, joined with `;`, or `-`. Compared only when `--fields` names it |
 | `msg` | the message state, `fg_message` (`0x98504C`), hex: `0x80` while a message is up, `0x40` once it has typed a glyph, bit 0 a question's No (see "Locked doors"). The original's is `gi`'s sixth field, which `oracle.py` reads when there is no `msg`. Compared only when `--fields` names it |
 | `fgkey` | the doors' lock bits, `fg_key`'s two words (`0x98ED2C`, `0x98ED30`), hex. Compared only when `--fields` names it |
+| `tw` | back routine slot 2 (`0x98E794`: 0, `4e9a20` for `Item_box_entrance`, `4e9930` for `Sce_Save_backfunc`), its state (`0x98E542`) and the save place (`0x98E9A7`) (see "The typewriter"). Compared only when `--fields` names it |
+| `gm` | the game mode (`Game`, `0x991F80`), `gi`'s first value on the original's side. arklay's follows only the typewriter's path, so only typewriter runs name it. Compared only when `--fields` names it |
 | `scene` | `fg_status & 0x10`: a scene is up, the bit that brings in the letterbox bars. arklay writes it; `scripts/oracle.py` takes it from the original's `fgstat`. Compared only when `--fields` names it |
 | `snd` | each sound started on the tick, `type:index:volume:pan`, joined with `/`; with `--sound` only. Compared only when `--fields` names it |
 | `esp` | `Esp_` (`0x992CA0`, 0x60 slots of 0x7C bytes): the live count (`+0x18`'s 0x8000), then each slot whose `+0x18` isn't 0 (the slots `Esp_call`'s free search sees as taken, deferred ones included) as `slot:anim,update,kind,row,flags,frame,x,y,z`: `+0x00`, `+0x01`, `+0x1C`, `+0x1E`, `+0x18` and `+0x21` in hex, and `+0x34`, the place `Esp_pos` writes in the world, in decimal; joined with `;`, or `-`. A dead slot keeps its kind (`Esp_init_R` and `Esp_kill` clear only the flags), so the flags decide. `scripts/oracle.py` compares it as `espn` (the count), `espk` (the kinds and rows that are out, without their slots: one effect missing on one side moves the slot of every later one, as the search goes from the top) and `esp<slot>`; `esp` selects all three. Compared only when `--fields` names it |

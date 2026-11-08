@@ -546,6 +546,8 @@ mod tests {
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_typewriter: None,
+                re2_game_mode: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -699,6 +701,8 @@ mod tests {
             re2_character: None,
             re2_splayer: None,
             re2_zombies: None,
+            re2_zombie_parts: None,
+            re2_effects: None,
             re2_music: None,
             re2_die: None,
             re2_neck: None,
@@ -722,6 +726,9 @@ mod tests {
         let text = std::fs::read_to_string(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         let lines: Vec<&str> = text.lines().collect();
-        assert!(lines[1].ends_with(" ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 snd=-"));
+        assert!(
+            lines[1]
+                .ends_with(" ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 snd=-")
+        );
     }
 }
