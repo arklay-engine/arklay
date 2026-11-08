@@ -408,11 +408,16 @@ end
 -- With `doors`, so are the door marks of every room: a puzzle step in one
 -- room can open the way to a door in another (301's refilled pool stops
 -- 302's waterfall, the way to its door to 307, which had used up its
--- attempts before).
+-- attempts before). A door whose goal timed out counts as unreachable
+-- too: 307's door to 30B ran out its time budget cycling approaches
+-- blocked by the chasm, twice, and stayed given up after the hex crank
+-- turned the bridge (sandwich=yes ended on an empty frontier).
 local function clear_unreachable(bot, room, doors)
     for key, m in pairs(plan().marks) do
-        if (m.room == room or (doors and m.kind == "door"))
-            and m.reason:find("approach", 1, true) then
+        if ((m.room == room or (doors and m.kind == "door"))
+                and m.reason:find("approach", 1, true))
+            or (doors and m.kind == "door" and not m.permanent
+                and m.reason:find("timed out", 1, true)) then
             plan().marks[key] = nil
         elseif doors and m.event and m.room == room then
             -- So may a door of this room a room event had made a message:
