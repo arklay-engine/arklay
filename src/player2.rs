@@ -412,9 +412,13 @@ pub struct Work {
     pub aim_target: Option<usize>,
     /// `Timer3` of the raise: it has been aimed again already.
     aimed_again: bool,
-    /// Last tick's `Key`, and `Key_trg`: what this tick's added to it.
-    last_key: u16,
+    /// `Key_trg`, as this tick's `Pad_set` left it ([`Tick::key_trg`]).
     key_trg: u16,
+    /// `fg_status`'s `0x200000`: a `pl_br_*` saw the action key go down with
+    /// no stairs or climb to take it, so this tick's `Sce_at` checks the
+    /// action areas (`Sce_at_check(pPl, 1, 0x10)`). `Psx_main` clears it at
+    /// the frame's end.
+    pub check: bool,
     /// `Be_flg`'s bits that `Oba_ck_hit` reads.
     pub be_flg: u32,
     /// `DAT_0098a0a4`: the slot of the enemy that has hold of the player.
@@ -900,8 +904,8 @@ impl Default for Work {
             lean: 0,
             aim_target: None,
             aimed_again: false,
-            last_key: 0,
             key_trg: 0,
+            check: false,
             be_flg: 1,
             held_by: None,
             held_kill: false,
@@ -1073,6 +1077,11 @@ pub struct Tick<'a> {
     pub enemies: u8,
     /// `fg_status`'s `0x2000`: last tick's `Om_move` pushed an object.
     pub pushing: bool,
+    /// `Key_trg`: the keys `Pad_set` saw go down this tick
+    /// ([`crate::scd2::host::Re2State::set_key`]). Under an input stop it
+    /// keeps only [`KEYS_IN_A_STOP`], and the tick the stop ends raises
+    /// nothing, so a key held through the stop is no new press.
+    pub key_trg: u16,
 }
 
 /// A body `Pl_neck` considers.
@@ -1329,9 +1338,8 @@ pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
 pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
-    let key = key_word(&tick.input);
-    work.key_trg = key & !work.last_key;
-    work.last_key = key;
+    work.key_trg = tick.key_trg;
+    work.check = false;
     if tick.stopped {
         // The head isn't placed on a stopped tick, so it doesn't follow what
         // moves the body either (a door's new position, for one).
@@ -1470,19 +1478,6 @@ pub fn player_held(
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.latch_parts();
-}
-
-/// Whether this tick's `pl_br_*` can take the check key: only `pl_br_00` to
-/// `pl_br_04` and `pl_br_09` (past its fourth step) raise `fg_status`'s
-/// `0x200000`, for `Sce_at`'s press pass. A player held, hurt or aiming
-/// presses nothing.
-pub fn takes_check_key(work: &Work) -> bool {
-    work.routine[0] == MODE_MOVE
-        && match work.routine[1] {
-            MOVE_IDLE..=MOVE_ROTATE => true,
-            MOVE_JUMP_DOWN => work.routine[3] > 4,
-            _ => false,
-        }
 }
 
 /// Whether [`player_held`] runs the player, not [`player_move`].
@@ -1659,15 +1654,28 @@ impl Mover<'_, '_> {
     }
 
     /// The action key at stairs, whether or not `Sca_hit_stairs` takes it.
+    /// Held or new, it tries the stairs and then a climb; new and taken by
+    /// neither, it asks for this tick's check ([`Work::check`]).
     fn stairs_branch(&mut self, key: u16) -> bool {
         if key & KEY_ACTION == 0 {
             return false;
         }
-        let Some(stairs) = self.stairs else {
-            return self.updown_ck();
-        };
-        self.sca_hit_stairs(stairs);
-        true
+        if let Some(stairs) = self.stairs {
+            self.sca_hit_stairs(stairs);
+            return true;
+        }
+        if self.updown_ck() {
+            return true;
+        }
+        self.raise_check();
+        false
+    }
+
+    /// `fg_status |= 0x200000` on `Key_trg`'s action bit.
+    fn raise_check(&mut self) {
+        if self.work.key_trg & KEY_ACTION != 0 {
+            self.work.check = true;
+        }
     }
 
     /// `Oma_pl_updown_ck`, without the object models: a box to climb in front
@@ -1739,6 +1747,14 @@ impl Mover<'_, '_> {
         }
         if key & KEY_TURN != 0 {
             self.set_routine(MOVE_ROTATE);
+        }
+        // `pl_br_09` asks for the check first and then tries the stairs, with
+        // no climb.
+        if self.work.key_trg & KEY_ACTION != 0 {
+            self.work.check = true;
+            if let Some(stairs) = self.stairs {
+                self.sca_hit_stairs(stairs);
+            }
         }
         self.aim_branch(key);
     }
@@ -2257,6 +2273,8 @@ impl Mover<'_, '_> {
             return;
         }
         self.turn(key, &BACK_TURN);
+        // `pl_br_03` doesn't try the stairs or a climb.
+        self.raise_check();
         self.aim_branch(key);
     }
 
@@ -6165,6 +6183,8 @@ mod tests {
         enemies: Option<u8>,
         /// `fg_status`'s `0x2000`.
         pushing: bool,
+        /// `Pad_set`'s last `Key`, for [`Self::tick`]'s `Key_trg`.
+        last_key: u16,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -6249,6 +6269,110 @@ mod tests {
         assert_eq!(setup.work.neck.target, None, "else its own");
     }
 
+    /// `pl_br_00` (0x4D9D60): the button going down, with no stairs and no
+    /// climb to take it, raises `fg_status`'s 0x200000 for `Sce_at`; held,
+    /// it doesn't, and the aim (`pl_mv05`) never does.
+    #[test]
+    fn a_new_press_while_standing_asks_for_the_check() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 1, 0];
+        let fire = Input {
+            fire: true,
+            ..Input::default()
+        };
+        setup.tick(fire, 200);
+        assert!(setup.work.check);
+        setup.tick(fire, 200);
+        assert!(!setup.work.check, "held");
+        setup.tick(Input::default(), 200);
+        assert!(!setup.work.check);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 0];
+        setup.tick(fire, 200);
+        assert!(!setup.work.check, "aiming");
+    }
+
+    /// The check takes `Pad_set`'s (0x4D0F30) `Key_trg`. Under
+    /// `fg_stop & 0x1000000` (a door, the get-item close, a check's message)
+    /// `Pad_set` keeps only `Key & 0x3C00`, and the first frame after the stop
+    /// sets the last key to this one's (`DWORD_0098860c = Key`), so fire held
+    /// through the stop is no new press. One released and pressed again is.
+    #[test]
+    fn a_button_held_through_a_stop_asks_for_no_check() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 1, 0];
+        let mut pad = crate::scd2::host::Re2State::default();
+        // One of `tick_room_timed`'s ticks: `Pad_set`, then the input a stop
+        // blanks, then `Player_move`.
+        let tick = |setup: &mut Setup, pad: &mut crate::scd2::host::Re2State, held: bool| {
+            let raw = Input {
+                fire: held,
+                ..Input::default()
+            };
+            pad.set_key(key_word(&raw));
+            let input = if pad.input_stopped() {
+                Input::default()
+            } else {
+                raw
+            };
+            pad.door_key_stop = false;
+            setup.tick_trg(input, pad.key_trg & key_word(&input), 200);
+            setup.work.check
+        };
+        assert!(tick(&mut setup, &mut pad, true));
+        // A door's stop, then a message's stop word, each held through.
+        pad.door_key_stop = true;
+        assert!(!tick(&mut setup, &mut pad, true));
+        assert!(!tick(&mut setup, &mut pad, true), "the door's stop ended");
+        *pad.fg_stop_mut() |= 0xFFFF << 16;
+        assert!(!tick(&mut setup, &mut pad, true));
+        assert!(!tick(&mut setup, &mut pad, true));
+        *pad.fg_stop_mut() &= 0xFFFF;
+        assert!(
+            !tick(&mut setup, &mut pad, true),
+            "the message's stop ended"
+        );
+        assert!(!tick(&mut setup, &mut pad, true));
+        // Let go during the stop, and a press after it is new. The
+        // first frame after it raises nothing, even for a press on that frame.
+        *pad.fg_stop_mut() |= 0xFFFF << 16;
+        assert!(!tick(&mut setup, &mut pad, false));
+        *pad.fg_stop_mut() &= 0xFFFF;
+        assert!(
+            !tick(&mut setup, &mut pad, true),
+            "pressed as the stop ended"
+        );
+        assert!(!tick(&mut setup, &mut pad, false));
+        assert!(
+            tick(&mut setup, &mut pad, true),
+            "a new press after the stop"
+        );
+    }
+
+    /// `pl_br_03` (0x4DA6C0) asks for the check while backing up, and
+    /// `pl_br_09` (0x4DB930) once the landing has run four frames.
+    #[test]
+    fn backing_up_and_landing_ask_for_the_check_too() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_BACKWARD, 1, 0];
+        let input = Input {
+            down: true,
+            fire: true,
+            ..Input::default()
+        };
+        setup.tick(input, 200);
+        assert!(setup.work.check);
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 0, 5];
+        setup.tick(
+            Input {
+                fire: true,
+                ..Input::default()
+            },
+            200,
+        );
+        assert!(setup.work.check);
+    }
+
     #[test]
     fn the_neck_turns_to_plc_necks_aim_and_back() {
         let mut setup = Setup::new(0);
@@ -6310,6 +6434,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.rot_neck_em(None);
@@ -6379,6 +6504,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         pose_init(&mut setup.work, &mut setup.player, &tick);
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
@@ -6425,6 +6551,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.em23_drag_blood(1);
@@ -6486,6 +6613,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.footstep(0);
@@ -6544,6 +6672,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.move_cnt = 2;
@@ -6758,10 +6887,20 @@ mod tests {
                 neck_targets: Vec::new(),
                 enemies: None,
                 pushing: false,
+                last_key: 0,
             }
         }
 
+        /// A tick with no stop: `Key_trg` is what `input` adds to the last
+        /// tick's keys.
         fn tick(&mut self, input: Input, life: i32) -> Option<u8> {
+            let key = key_word(&input);
+            let key_trg = key & !std::mem::replace(&mut self.last_key, key);
+            self.tick_trg(input, key_trg, life)
+        }
+
+        /// A tick whose `Pad_set` gave `key_trg`.
+        fn tick_trg(&mut self, input: Input, key_trg: u16, life: i32) -> Option<u8> {
             let bank = (self.clips.as_slice(), self.keyframes.as_slice());
             let tick = Tick {
                 room: &self.room,
@@ -6785,6 +6924,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
                 pushing: self.pushing,
+                key_trg,
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -6814,6 +6954,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: 0,
                 pushing: false,
+                key_trg: 0,
             };
             seed_pose(&mut self.work, &mut self.player, &tick);
         }
@@ -6843,6 +6984,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: 0,
                 pushing: false,
+                key_trg: 0,
             };
             let mover = Mover {
                 work: &mut self.work,
@@ -6936,6 +7078,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         let mut rnd = crate::zombie2::Rnd::default();
         for _ in 0..200 {
@@ -7011,6 +7154,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         let Setup {
             mut work,
@@ -7701,34 +7845,49 @@ mod tests {
     fn the_action_key_raises_the_shot_bit_too() {
         // `Pad_set`'s row 0 gives raw `0x80` the shot, the action and the
         // confirm, so `Gacha_ch`'s mask sees an action press.
-        let input = Input {
-            action_pressed: true,
-            ..Input::default()
-        };
-        let key = key_word(&input);
-        assert_eq!(
-            key & (KEY_FIRE | KEY_ACTION | KEY_CONFIRM),
-            KEY_FIRE | KEY_ACTION | KEY_CONFIRM
-        );
-        assert_ne!(key & 0x34F, 0);
+        // The fire key is the same button, so it raises the action bit that
+        // `pl_br_*` checks with.
+        for input in [
+            Input {
+                action_pressed: true,
+                ..Input::default()
+            },
+            Input {
+                fire: true,
+                ..Input::default()
+            },
+        ] {
+            let key = key_word(&input);
+            assert_eq!(
+                key & (KEY_FIRE | KEY_ACTION | KEY_CONFIRM),
+                KEY_FIRE | KEY_ACTION | KEY_CONFIRM
+            );
+            assert_ne!(key & 0x34F, 0);
+        }
     }
 
+    /// Only `pl_br_00` to `pl_br_04`, and `pl_br_09` past its fourth step,
+    /// raise `fg_status`'s `0x200000`: aiming or hurt, a press checks
+    /// nothing. (A held player runs [`player_held`], with no `pl_br_*`.)
     #[test]
     fn only_the_pads_branches_take_the_check_key() {
-        let at = |routine: [u8; 4]| {
-            takes_check_key(&Work {
-                routine,
-                ..Work::default()
-            })
+        let fire = Input {
+            fire: true,
+            ..Input::default()
         };
-        assert!(at([MODE_MOVE, MOVE_IDLE, 0, 0]));
-        assert!(at([MODE_MOVE, MOVE_ROTATE, 0, 0]));
-        assert!(!at([MODE_MOVE, MOVE_AIM, 0, 0]));
-        assert!(!at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 4]));
-        assert!(at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 5]));
-        // A zombie's grab: `pl_br_*` doesn't run, so a press opens no door.
-        assert!(!at([MODE_HELD, 1, 0, 0]));
-        assert!(!at([MODE_DAMAGE, 0, 0, 0]));
+        for (routine, checks) in [
+            ([MODE_MOVE, MOVE_IDLE, 1, 0], true),
+            ([MODE_MOVE, MOVE_ROTATE, 1, 0], true),
+            ([MODE_MOVE, MOVE_AIM, 1, 0], false),
+            ([MODE_MOVE, MOVE_JUMP_DOWN, 0, 4], false),
+            ([MODE_MOVE, MOVE_JUMP_DOWN, 0, 5], true),
+            ([MODE_DAMAGE, 0, 0, 0], false),
+        ] {
+            let mut setup = Setup::new(0);
+            setup.work.routine = routine;
+            setup.tick(fire, 200);
+            assert_eq!(setup.work.check, checks, "{routine:?}");
+        }
     }
 
     #[test]
@@ -7803,13 +7962,12 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: KEY_FORWARD | KEY_TILT_UP,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         // `Key_trg` comes from the pad, which goes on being read.
-        assert_eq!(setup.work.key_trg & KEY_TILT_UP, KEY_TILT_UP);
-        player_move(&mut setup.work, &mut setup.player, &tick);
-        assert_eq!(setup.work.key_trg, 0);
-        setup.work.last_key = before.last_key;
+        assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
+        setup.work.key_trg = before.key_trg;
         assert_eq!(setup.work, before);
     }
 
@@ -7865,6 +8023,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work.neck.body, None);
@@ -7993,6 +8152,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.bank = Bank::Pld;

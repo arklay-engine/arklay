@@ -3154,7 +3154,16 @@ impl GameSession {
         } else {
             (ui, input, action)
         };
+        let frozen = self.system_menu_open;
+        self.game.re2.key_read = false;
         let result = self.tick_inner(pack, ui, input, action);
+        // `Psx_main` (0x4C3C70) runs `Pad_set` on every frame, whichever
+        // task owns it: a frame of the status screen, the map, the box or
+        // their close keeps `Key` too, so a button held through the close is
+        // no new press on the room's first frame.
+        if self.game.is_re2_room && !frozen && !self.game.re2.key_read {
+            self.game.re2.set_key(crate::player2::key_word(&input));
+        }
         // `main_loop` ramps the cutscene screen intensity in its draw phase,
         // after this frame's scripts, entities and message window have run, so
         // the ramp sees a flag a script raised on the same frame. Stepping it
@@ -3463,6 +3472,18 @@ impl GameSession {
         // The native in-game menu owns the frozen tick; the app drives it.
         if self.system_menu_open {
             return Ok(());
+        }
+        // RE2's pad has one button for the confirm and the shot (raw 0x80,
+        // which `Pad_set` gives both): held fire is a held confirm for the
+        // windows and the messages too, and a new press of it confirms in
+        // the status screen, the item box and the map, which test
+        // `Key_trg & 0x1000` (`St_menu0_select` 0x4F8050, `St_menu0_item`
+        // 0x4F8160).
+        if self.game.is_re2_room && input.fire {
+            action = true;
+        }
+        if self.game.is_re2_room && input.fire_pressed {
+            ui.confirm = true;
         }
         // The trace's `snd` is this tick's `SsPlay`s, whichever path plays them.
         if self.game.is_re2_room {
@@ -3777,8 +3798,9 @@ impl GameSession {
                 self.swallow_action = false;
             }
             let was_active = self.game.message.active;
-            // The confirm `Computer200` reads is the held one (`Key`).
-            if let Some(cut) = self.game.tick_re2_computer(input.action_held) {
+            // The confirm `Computer200` reads is the held one (`Key & 0x1000`),
+            // which fire raises too.
+            if let Some(cut) = self.game.tick_re2_computer(input.action_held || input.fire) {
                 // `Bg_loadPC` loads the cut in this tick's `Swap_Cbuff`.
                 let cut = usize::from(cut);
                 if cut < self.loaded.room.cuts.len() {
@@ -7222,6 +7244,7 @@ impl GameSession {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            key_trg: 0,
         };
         if init {
             crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
@@ -16486,15 +16509,15 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
     // blanked for a closed controls latch, and the message gate is open here.
-    if pad.action_pressed {
+    // RE2 checks after the move instead, from `fg_status`'s 0x200000
+    // (`Sce_at`, [`crate::player2::Work::check`]).
+    if pad.action_pressed && !context.game.is_re2_room {
         context.game.player_action_press(context.player);
         // `check_action_object` follows the climb scan in the same dispatch,
         // still from the frame-start position, and only while no locked or
         // weapon behaviour owns the frame-1 dispatch.
         if context.player.locked == player::LockedAction::None
             && context.player.weapon.behavior == 0
-            && (!context.game.is_re2_room
-                || crate::player2::takes_check_key(&context.game.re2.player))
         {
             context
                 .game
@@ -16561,6 +16584,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         neck_targets: &neck_targets,
         enemies: context.game.re2.enemies,
         pushing: context.game.re2.pushing(),
+        // Only the keys the pad still holds: a tick whose input a message
+        // or a stop blanked starts nothing.
+        key_trg: context.game.re2.key_trg & crate::player2::key_word(&pad),
     };
     let old = context.player.pos;
     crate::player2::seed_pose(&mut context.game.re2.player, context.player, &tick);
@@ -16696,6 +16722,7 @@ fn tick_room_timed(
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
     context.game.re2.set_key(crate::player2::key_word(&input));
+    context.game.re2.key_read = true;
     // `Swap_Cbuff` ends each of these frames.
     context.game.re2.draw_buffer ^= 1;
     // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
@@ -17155,8 +17182,11 @@ fn tick_room_timed(
     // are not part of this pass: the press edge fired them through
     // `check_action_object` at the top of the player's dispatch.
     {
+        // `Sce_at`: RE2's action areas answer the check a `pl_br_*` asked for
+        // this tick, from where the move left the player.
+        let check = context.game.is_re2_room && std::mem::take(&mut context.game.re2.player.check);
         let mut host = game::ScdGameHost::new(context.game);
-        host.interact(context.player.pos, context.player.angle, false);
+        host.interact(context.player.pos, context.player.angle, check);
     }
     // Slot 2's back routine. `Item_box_entrance`, the routine `Sce_Itembox`
     // set: the lid swings, and when it stops the box's screen opens on the
@@ -22749,6 +22779,52 @@ mod tests {
             "the cancel resumes the game sounds"
         );
         assert!(!session.return_title_requested, "no return was requested");
+    }
+
+    /// `Psx_main` (0x4C3C70) runs `Pad_set` on the status screen's frames
+    /// too, so fire held through the screen's close keeps `Key` and is no new
+    /// press on the room's first frame: it starts no check. A press after
+    /// the close is new.
+    #[test]
+    fn re2_fire_held_through_the_status_close_starts_no_check() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.open_menu(&pack);
+        assert!(session.menu.is_some());
+        session.re2_status_close = Some(0);
+        let fire = |pressed: bool| player::Input {
+            fire: true,
+            fire_pressed: pressed,
+            ..player::Input::default()
+        };
+        let mut first = true;
+        let mut room_ticks = 0;
+        for _ in 0..u32::from(RE2_STATUS_CLOSE_TICKS) + 8 {
+            session
+                .tick(
+                    &pack,
+                    UiInput::default(),
+                    fire(std::mem::take(&mut first)),
+                    false,
+                )
+                .unwrap();
+            if session.game.re2.key_read {
+                room_ticks += 1;
+                assert_eq!(session.game.re2.key_trg, 0, "held through the close");
+                assert!(!session.game.re2.player.check);
+            }
+        }
+        assert!(session.menu.is_none(), "the close ended");
+        assert!(room_ticks > 0, "the room ran after the close");
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), fire(true), false)
+            .unwrap();
+        assert_ne!(session.game.re2.key_trg & 0x40, 0, "a new press");
     }
 
     #[test]

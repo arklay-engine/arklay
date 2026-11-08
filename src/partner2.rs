@@ -1040,6 +1040,7 @@ mod tests {
                 neck_targets: &[],
                 enemies: 0,
                 pushing: false,
+                key_trg: 0,
             };
             let mut world = PartnerWorld {
                 player: self.player,
