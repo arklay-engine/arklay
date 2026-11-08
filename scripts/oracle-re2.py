@@ -441,7 +441,9 @@ class signals_held:
 
     The first that arrives meanwhile is raised again when the block ends. Handlers,
     not the signal mask, so that the children started inside the block (which get
-    the default handlers back when they start their program) don't inherit it."""
+    the default handlers back when they start their program) don't inherit it. A
+    terminal's Ctrl-C or hang-up and `timeout` signal the whole process group, so
+    the block's children run in a session of their own (`ALONE`), out of its reach."""
 
     def __enter__(self) -> None:
         self.arrived: list[int] = []
@@ -455,6 +457,11 @@ class signals_held:
             signal.signal(number, signal.SIG_DFL if handler is None else handler)
         if self.arrived:
             signal.raise_signal(self.arrived[0])
+
+
+# For the children of a `signals_held` block: a session of their own, so that a signal
+# sent to the recorder's process group doesn't stop them half done.
+ALONE = {"start_new_session": True} if not WINDOWS else {}
 
 
 def stop_with_recorder() -> None:
@@ -1098,7 +1105,7 @@ class WineSession:
             with signals_held():
                 self.sink_module = subprocess.run(
                     ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
-                    check=True, capture_output=True, text=True,
+                    check=True, capture_output=True, text=True, **ALONE,
                 ).stdout.strip()
             self.env["PULSE_SINK"] = SOUND_SINK
             self.sound_capture = subprocess.Popen(
@@ -1140,9 +1147,9 @@ class WineSession:
         if self.env is not None:
             # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
             try:
-                subprocess.run(["wineserver", "-k"], env=self.env, check=False)
+                subprocess.run(["wineserver", "-k"], env=self.env, check=False, **ALONE)
             except FileNotFoundError:
-                subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False)
+                subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False, **ALONE)
         if self.launcher:
             self.launcher.kill()
         if self.display_server:
@@ -1152,7 +1159,7 @@ class WineSession:
             self.sound_capture.terminate()
             self.sound_capture.wait()
         if self.sink_module:
-            subprocess.run(["pactl", "unload-module", self.sink_module], check=False)
+            subprocess.run(["pactl", "unload-module", self.sink_module], check=False, **ALONE)
 
 
 class DebugGame(Game):
