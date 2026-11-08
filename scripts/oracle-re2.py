@@ -375,36 +375,15 @@ DISPLAY_FIRST = 100
 DISPLAY_COUNT = 100
 
 
-def lock_held(number: int) -> bool:
-    """Whether display `number`'s lock file (`/tmp/.X<n>-lock`) names a process that is still running.
-
-    An X server started without `-displayfd` writes its PID there and removes the lock
-    when it exits cleanly. One that was killed leaves the lock behind, naming a process
-    that is gone, and such a lock doesn't block the number. (The recorder's own servers,
-    started with `-displayfd`, write no lock.) A lock that can't be read counts as held."""
-    lock = f"/tmp/.X{number}-lock"
-    if not os.path.lexists(lock):
-        return False
-    try:
-        pid = int(Path(lock).read_text().strip())
-    except (OSError, ValueError):
-        return True
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass  # Another user's process.
-    return True
-
-
 def display_taken(number: int) -> bool:
-    """Whether display `number` has a lock held by a running process, or a socket some process has bound (by path or abstract name).
+    """Whether display `number` has a lock file, or a socket some process has bound (by path or abstract name).
 
-    The socket file a killed server leaves behind doesn't count, since a new server
-    replaces it, and nor does a lock whose process is gone."""
+    The recorder's own servers, started with `-displayfd`, write no lock file, so a lock
+    is another X server's, and it blocks the number even when its process is gone: that
+    process may be alive in another PID namespace that shares /tmp. The socket file a
+    killed server leaves behind doesn't count, since a new server replaces it."""
     socket_path = f"/tmp/.X11-unix/X{number}"
-    if lock_held(number):
+    if os.path.lexists(f"/tmp/.X{number}-lock"):
         return True
     try:
         with open("/proc/net/unix") as table:
@@ -452,6 +431,30 @@ def tail(path: Path, lines: int = 5) -> str:
         return " | ".join(path.read_text(errors="replace").strip().splitlines()[-lines:])
     except OSError:
         return ""
+
+
+STOP_SIGNALS = {signal.SIGINT, signal.SIGTERM} | ({signal.SIGHUP} if hasattr(signal, "SIGHUP") else set())
+
+
+class signals_held:
+    """Hold Ctrl-C, SIGTERM and SIGHUP back until the block ends, so that a second one can't cut it short.
+
+    The first that arrives meanwhile is raised again when the block ends. Handlers,
+    not the signal mask, so that the children started inside the block (which get
+    the default handlers back when they start their program) don't inherit it."""
+
+    def __enter__(self) -> None:
+        self.arrived: list[int] = []
+        self.previous = {
+            number: signal.signal(number, lambda received, frame: self.arrived.append(received))
+            for number in STOP_SIGNALS
+        }
+
+    def __exit__(self, *exc: object) -> None:
+        for number, handler in self.previous.items():
+            signal.signal(number, signal.SIG_DFL if handler is None else handler)
+        if self.arrived:
+            signal.raise_signal(self.arrived[0])
 
 
 def stop_with_recorder() -> None:
@@ -1091,10 +1094,12 @@ class WineSession:
         sound = sound_out is not None
         if sound:
             # A sink of its own: the game is heard by nothing but the recording.
-            self.sink_module = subprocess.run(
-                ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
-                check=True, capture_output=True, text=True,
-            ).stdout.strip()
+            # Held, so that a module that loads is always one close() unloads.
+            with signals_held():
+                self.sink_module = subprocess.run(
+                    ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
+                    check=True, capture_output=True, text=True,
+                ).stdout.strip()
             self.env["PULSE_SINK"] = SOUND_SINK
             self.sound_capture = subprocess.Popen(
                 ["parec", f"--device={SOUND_SINK}.monitor", "--file-format=wav", sound_out],
@@ -1125,7 +1130,13 @@ class WineSession:
         time.sleep(seconds)
 
     def close(self) -> None:
-        """Stop the game, Wine, the display and the sound capture: whichever of them have started."""
+        """Stop the game, Wine, the display and the sound capture: whichever of them have started.
+
+        A second Ctrl-C, SIGTERM or SIGHUP waits until it is done."""
+        with signals_held():
+            self.stop_all()
+
+    def stop_all(self) -> None:
         if self.env is not None:
             # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
             try:
