@@ -2715,11 +2715,13 @@ mod tests {
             assert_eq!(globals.get::<i64>("SKIN").unwrap(), 1);
             assert_eq!(globals.get::<Vec<i64>>("ROUTINES").unwrap(), routines);
         }
-        // `Model_type` 0x40 skips the roll and keeps skin 0.
+        // `Model_type` 0x40 skips the roll's three draws. The skin isn't
+        // asserted: on this path (`& 0xC0` set, `& 0x3F` zero) the original
+        // takes it from the low bits of the work's pointer (0x4522A6 to
+        // 0x4522F0), which arklay doesn't model.
         let lua = zombie_init_state("V = { skins = true }; MODEL_TYPE = 0x40", &[]);
         let r: Vec<i64> = lua.globals().get("R").unwrap();
         assert_eq!(r[3], 5);
-        assert_eq!(lua.globals().get::<i64>("SKIN").unwrap(), 0);
     }
 
     /// Room 207's slot 0 is a 0x13: five draws, as every id, and `Parts0_pos_y`

@@ -979,8 +979,9 @@ impl Re2State {
     }
 
     /// Where each zombie in play is heading: the oracle's `zd` field, the
-    /// slot and `Dest` (`+0x1c4`, `+0x1c6`). `Root_ck` writes it, and
-    /// `Sce_em_set` leaves it as the slot's last work had it.
+    /// slot and `Dest` (`+0x1c4`, `+0x1c6`). `Root_ck` writes it. Neither
+    /// `Sce_em_set` nor `Em10_Init` does: the new work is allocated at
+    /// `Mem_top`, so it starts as whatever last sat at that address.
     pub fn zombie_dest_trace(&self) -> String {
         let rows: Vec<String> = self
             .characters

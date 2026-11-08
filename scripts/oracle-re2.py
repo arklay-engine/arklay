@@ -758,7 +758,7 @@ def zombie_trace(game: Game) -> str:
 
 
 def zombie_dest_trace(game: Game) -> str:
-    """Where each enemy `zombie_trace` lists is heading: slot and `Dest` (`+0x1c4`, `+0x1c6`), which `Root_ck` writes and `Sce_em_set` leaves as the slot's last work had it."""
+    """Where each enemy `zombie_trace` lists is heading: slot and `Dest` (`+0x1c4`, `+0x1c6`), which `Root_ck` writes. Neither `Sce_em_set` nor `Em10_Init` does: the new work is allocated at `Mem_top`, so it starts as whatever last sat at that address."""
     rows = []
     for slot, pointer in enumerate(enemy_slots(game)):
         if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x23, 0x24, 0x25, 0x26, 0x27, 0x29, 0x2A, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x39)):
