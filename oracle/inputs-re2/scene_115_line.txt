@@ -1,0 +1,8 @@
+# Room 115 after the scene (oracle/re2.md, "Room 115's scene"): walk west to the desk's second area and press: event 8, the eighth line (xa 29) and its message, with Claire's clip.
+0
+350 action
+352
+1700 up
+1716
+1730 action
+1732

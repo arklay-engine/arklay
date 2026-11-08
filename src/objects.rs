@@ -229,6 +229,44 @@ pub struct TweenScratch {
     pub selector: u16,
 }
 
+/// What `Super_set` (`0x4E59E0`) hangs an object on (the object's `+0x80`):
+/// its position and rotation are then offsets on that matrix. `Om_trans`
+/// draws it there every frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SuperParent {
+    /// Mode 0: the identity, the world.
+    #[default]
+    World,
+    /// Mode 0x40 without a joint (bit 7 of the joint byte clear): the
+    /// player's own matrix (`0x989F14`).
+    Player,
+    /// Mode 0x40 with a joint: the player's joint.
+    PlayerJoint(u8),
+    /// Mode 0x80 | n without a joint: work `n` (0 the player, 1 the second
+    /// player, 2 + n enemy slot n), its matrix (`work + 0x24`).
+    Work(u8),
+    /// Mode 0x80 | n with a joint: work `n`'s joint.
+    WorkJoint(u8, u8),
+    /// Mode 0xC0 | n: object n's world matrix.
+    Object(u8),
+}
+
+impl SuperParent {
+    /// Decode `Super_set`'s mode byte and joint byte.
+    pub fn decode(mode: u8, joint: u8) -> Self {
+        let joint_index = (joint & 0x80 != 0).then_some(joint & 0x7F);
+        match mode & 0xC0 {
+            0 => Self::World,
+            0x40 => joint_index.map_or(Self::Player, Self::PlayerJoint),
+            0x80 => {
+                let work = mode & 0x3F;
+                joint_index.map_or(Self::Work(work), |j| Self::WorkJoint(work, j))
+            }
+            _ => Self::Object(mode & 0x3F),
+        }
+    }
+}
+
 /// One runtime object record. The original reuses a 0xA4-byte `Entity` head
 /// for these; the port keeps a named struct with only the fields the opcodes
 /// and the collision helpers address.
@@ -322,6 +360,9 @@ pub struct ObjectRecord {
     pub kind: u16,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
+    /// RE2's `+0x80`, from `Super_set`: what `pos` and `rotation` are offsets
+    /// on.
+    pub super_parent: SuperParent,
 }
 
 impl Default for ObjectRecord {
@@ -363,6 +404,7 @@ impl Default for ObjectRecord {
             routine: [0; 4],
             kind: 0,
             tween: TweenScratch::default(),
+            super_parent: SuperParent::World,
         }
     }
 }
@@ -866,6 +908,7 @@ impl ObjectTable {
             routine: [0; 4],
             kind: 0,
             tween: TweenScratch::default(),
+            super_parent: SuperParent::World,
         };
         self.built = self.built.wrapping_add(1);
         self.last_asset = Some(slot as u8);

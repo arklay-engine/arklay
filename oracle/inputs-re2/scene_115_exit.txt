@@ -1,0 +1,9 @@
+# Room 115 after the scene (oracle/re2.md, "Room 115's scene"): turn to face north, walk north to camera 1 and a little way on, then back south to camera 2, which sends Claire to the window (main_05, event 6), and stand.
+0
+350 action
+352
+1700 right
+1713
+1715 up
+1779 down
+1797
