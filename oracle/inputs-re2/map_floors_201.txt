@@ -1,0 +1,27 @@
+# room 201 with the police station's maps held: MAP, up two floors, up once more to nothing, down two, down once more to nothing, back out and close (oracle/re2.md, "MAP floors")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 confirm
+464
+520 up
+524
+560 up
+564
+600 up
+604
+640 down
+644
+680 down
+684
+720 down
+724
+760 cancel
+764
+820 start
+824

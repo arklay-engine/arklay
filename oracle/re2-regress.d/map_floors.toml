@@ -1,0 +1,13 @@
+# The MAP page in room 201 with the police station's maps held (oracle/re2.md, "MAP floors"): the map banks from the room load and the flags, the page up to the shown floor 2, then the floor changes, which arklay doesn't port yet. The frames stop before the first change; the floor's arrows and door icons aren't drawn yet, which is most of the map's error.
+[[run]]
+name = "map_floors_201"
+room = "201"
+setup_script = "map_floors_201.lua"
+input = "map_floors_201_arklay.txt"
+ticks = 1000
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,mapfg,snd"
+frames = [360, 515]
+frame_max_mean = 0.7
+boxes = [[0, 165, 232, 240]]
+expect = { tick = 520, fields = ["ip", "snd"], note = "up on MAP changes to floor 3 in the original (sub 4, cue 4:4); arklay doesn't port the floor change yet (docs/internals/deviations/re2.md, MAP and FILE)" }
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --life 200 --flag 33:2 --flag 33:3 --flag 33:4 --flag 35:3 --flag 35:4"
