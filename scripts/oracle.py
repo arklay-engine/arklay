@@ -102,11 +102,49 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "tw", "gm", "fgcom", "pc", "fl", "hk", "spl"}
+OPT_IN_FIELDS = {
+    "box",
+    "fgcom",
+    "fgkey",
+    "fl",
+    "gm",
+    "hk",
+    "ib",
+    "inv",
+    "ip",
+    "mapfg",
+    "movie",
+    "msg",
+    "pc",
+    "pneck",
+    "scene",
+    "snd",
+    "spl",
+    "tfade",
+    "ti",
+    "tlogo",
+    "tsel",
+    "tw",
+    "xavol",
+    "zp",
+}
 # A screen's own fields, compared only when named. `gm` (the game mode) is the original's `gi`
 # first value (`game_mode`); arklay's `gm` follows only the typewriter's path, so only typewriter
 # runs name it.
-SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "tw", "gm", "fgcom", "pc", "fl")
+SCREEN_FIELDS = (
+    "box",
+    "fgcom",
+    "fl",
+    "gm",
+    "ib",
+    "mapfg",
+    "pc",
+    "tfade",
+    "ti",
+    "tlogo",
+    "tsel",
+    "tw",
+)
 
 
 def normalize_room(stage: str, room: str) -> str:
