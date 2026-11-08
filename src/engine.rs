@@ -4466,13 +4466,15 @@ impl GameSession {
         if self.movie.is_some() {
             return Ok(());
         }
+        let mut session = MovieSession::open_re2(pack, id, claire)?;
+        // Checked once the film opens: a null or missing id has already
+        // returned its error above.
         debug_assert!(
             crate::movie::RE2_ATTR
                 .get(usize::from(id))
                 .is_none_or(|attr| attr & 0x40 == 0 || id == 12),
             "a room's film keeps the room's background mode"
         );
-        let mut session = MovieSession::open_re2(pack, id, claire)?;
         self.restore_cutscene_skip_music();
         if let Some(mixer) = &mut self.music {
             mixer.load_movie_audio(session.take_audio());
