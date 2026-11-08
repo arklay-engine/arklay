@@ -1,0 +1,371 @@
+# room 204: the walk of licker_204_scene, then the handgun at the licker: aim, fire and let go every 20 ticks from 470 to 2290, so that the aim starts again after a knock-back (oracle/re2.md, "Room 204's licker")
+360 up
+420
+470 aim
+478 aim fire
+483 aim
+488
+490 aim
+498 aim fire
+503 aim
+508
+510 aim
+518 aim fire
+523 aim
+528
+530 aim
+538 aim fire
+543 aim
+548
+550 aim
+558 aim fire
+563 aim
+568
+570 aim
+578 aim fire
+583 aim
+588
+590 aim
+598 aim fire
+603 aim
+608
+610 aim
+618 aim fire
+623 aim
+628
+630 aim
+638 aim fire
+643 aim
+648
+650 aim
+658 aim fire
+663 aim
+668
+670 aim
+678 aim fire
+683 aim
+688
+690 aim
+698 aim fire
+703 aim
+708
+710 aim
+718 aim fire
+723 aim
+728
+730 aim
+738 aim fire
+743 aim
+748
+750 aim
+758 aim fire
+763 aim
+768
+770 aim
+778 aim fire
+783 aim
+788
+790 aim
+798 aim fire
+803 aim
+808
+810 aim
+818 aim fire
+823 aim
+828
+830 aim
+838 aim fire
+843 aim
+848
+850 aim
+858 aim fire
+863 aim
+868
+870 aim
+878 aim fire
+883 aim
+888
+890 aim
+898 aim fire
+903 aim
+908
+910 aim
+918 aim fire
+923 aim
+928
+930 aim
+938 aim fire
+943 aim
+948
+950 aim
+958 aim fire
+963 aim
+968
+970 aim
+978 aim fire
+983 aim
+988
+990 aim
+998 aim fire
+1003 aim
+1008
+1010 aim
+1018 aim fire
+1023 aim
+1028
+1030 aim
+1038 aim fire
+1043 aim
+1048
+1050 aim
+1058 aim fire
+1063 aim
+1068
+1070 aim
+1078 aim fire
+1083 aim
+1088
+1090 aim
+1098 aim fire
+1103 aim
+1108
+1110 aim
+1118 aim fire
+1123 aim
+1128
+1130 aim
+1138 aim fire
+1143 aim
+1148
+1150 aim
+1158 aim fire
+1163 aim
+1168
+1170 aim
+1178 aim fire
+1183 aim
+1188
+1190 aim
+1198 aim fire
+1203 aim
+1208
+1210 aim
+1218 aim fire
+1223 aim
+1228
+1230 aim
+1238 aim fire
+1243 aim
+1248
+1250 aim
+1258 aim fire
+1263 aim
+1268
+1270 aim
+1278 aim fire
+1283 aim
+1288
+1290 aim
+1298 aim fire
+1303 aim
+1308
+1310 aim
+1318 aim fire
+1323 aim
+1328
+1330 aim
+1338 aim fire
+1343 aim
+1348
+1350 aim
+1358 aim fire
+1363 aim
+1368
+1370 aim
+1378 aim fire
+1383 aim
+1388
+1390 aim
+1398 aim fire
+1403 aim
+1408
+1410 aim
+1418 aim fire
+1423 aim
+1428
+1430 aim
+1438 aim fire
+1443 aim
+1448
+1450 aim
+1458 aim fire
+1463 aim
+1468
+1470 aim
+1478 aim fire
+1483 aim
+1488
+1490 aim
+1498 aim fire
+1503 aim
+1508
+1510 aim
+1518 aim fire
+1523 aim
+1528
+1530 aim
+1538 aim fire
+1543 aim
+1548
+1550 aim
+1558 aim fire
+1563 aim
+1568
+1570 aim
+1578 aim fire
+1583 aim
+1588
+1590 aim
+1598 aim fire
+1603 aim
+1608
+1610 aim
+1618 aim fire
+1623 aim
+1628
+1630 aim
+1638 aim fire
+1643 aim
+1648
+1650 aim
+1658 aim fire
+1663 aim
+1668
+1670 aim
+1678 aim fire
+1683 aim
+1688
+1690 aim
+1698 aim fire
+1703 aim
+1708
+1710 aim
+1718 aim fire
+1723 aim
+1728
+1730 aim
+1738 aim fire
+1743 aim
+1748
+1750 aim
+1758 aim fire
+1763 aim
+1768
+1770 aim
+1778 aim fire
+1783 aim
+1788
+1790 aim
+1798 aim fire
+1803 aim
+1808
+1810 aim
+1818 aim fire
+1823 aim
+1828
+1830 aim
+1838 aim fire
+1843 aim
+1848
+1850 aim
+1858 aim fire
+1863 aim
+1868
+1870 aim
+1878 aim fire
+1883 aim
+1888
+1890 aim
+1898 aim fire
+1903 aim
+1908
+1910 aim
+1918 aim fire
+1923 aim
+1928
+1930 aim
+1938 aim fire
+1943 aim
+1948
+1950 aim
+1958 aim fire
+1963 aim
+1968
+1970 aim
+1978 aim fire
+1983 aim
+1988
+1990 aim
+1998 aim fire
+2003 aim
+2008
+2010 aim
+2018 aim fire
+2023 aim
+2028
+2030 aim
+2038 aim fire
+2043 aim
+2048
+2050 aim
+2058 aim fire
+2063 aim
+2068
+2070 aim
+2078 aim fire
+2083 aim
+2088
+2090 aim
+2098 aim fire
+2103 aim
+2108
+2110 aim
+2118 aim fire
+2123 aim
+2128
+2130 aim
+2138 aim fire
+2143 aim
+2148
+2150 aim
+2158 aim fire
+2163 aim
+2168
+2170 aim
+2178 aim fire
+2183 aim
+2188
+2190 aim
+2198 aim fire
+2203 aim
+2208
+2210 aim
+2218 aim fire
+2223 aim
+2228
+2230 aim
+2238 aim fire
+2243 aim
+2248
+2250 aim
+2258 aim fire
+2263 aim
+2268
+2270 aim
+2278 aim fire
+2283 aim
+2288
+2290 aim
+2298 aim fire
+2303 aim
+2308
