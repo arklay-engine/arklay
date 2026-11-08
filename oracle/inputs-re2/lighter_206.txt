@@ -1,0 +1,11 @@
+# room 206: USE of the Lighter at the fireplace (area 2), which starts event 2 (oracle/re2.md, "Using a key item"): START, down twice to slot 4, the menu, USE
+354 start
+358
+390 down
+394
+410 down
+414
+430 confirm
+434
+450 confirm
+454

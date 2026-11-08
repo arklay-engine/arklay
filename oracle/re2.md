@@ -308,6 +308,17 @@ The four runs are in `oracle/re2-regress.d/file_pickup.toml`; each starts with t
 
 All four match on every compared field (`room,cam,rseed,p.*,mot,inv,fl,msg,snd,hk`) on every tick.
 
+## Using a key item
+
+USE of a key item goes through the room's area, the status and the scripts, in an order within the tick that the trace's `fguse` (`fg_use`), `scv` (variables 0 to 3) and `atsce` (the player's `At_sce_no`) show (`docs/internals/deviations/re2.md`, "Using a key item"):
+
+- In play, each tick's scheduler pass ends in `Sce_work_clr`, and then `Sce_at` finds the player in the USE area: at the end of the tick `fg_use` has the item's bit, variable 0 the area and `atsce` the area.
+- On START's tick the pass clears them and no `Sce_at` follows: `fguse` is 0 and `scv` all `ffff`.
+- From the next tick (game mode 1, then 2) the scheduler is off but `Sce_at` runs on the ticks that still show the room, so the bit is up again when the status's USE looks, and nothing clears it until the close.
+- USE's step 3 writes the item to variable 2 and closes the screen. The first scheduler pass after the close (game mode 5 back to 0) reads it, starts the room's event, and clears it.
+
+`statue_200` warps into room 200 facing the statue with the Unicorn Medal (`--warp 200:-13700:0:-9900:3072:11 --flag 4:6 --flag 4:7 --flag 4:70 --flag 4:102 --life 200 --give 0:2:13 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x47:1`), presses START at 354, goes down twice to slot 4 and USEs it at 450. In the reference `fguse` is cleared on 354 and up again on 355, `scv` holds `0047` from 452 to 462, and on 463 event 8 starts (cut 14, sound 2:d) with `member_cmp(0, 9, 0, 13)` holding. `lighter_206` does the same with the Lighter at room 206's fireplace (`--warp 206:-22050:0:-25600:1024:0`, area 2), whose event 2 starts on 463 (cut 11, sound 2:b) and lights the fire (cut 12). Both match the original on every compared field and tick, the three new fields included; `lighter_206`'s frames have a mean of 0.39. Event 2's sound needed one more fix: `Snd_se_3D` places a sound from `scd_var_cut`, which the event's `cut_chg(11)` sets at once, so a script's sound after its own cut change is placed from the new cut.
+
 ## The drawer
 
 Room 201's desk is a drawer: area 8 is `aot_set 8, 13, ...` (`Sce_Hikidashi`, `0x4E9CB0`), whose words are its `fg_key` bit (1), the slot of the `item_aot_set` area that holds its item (9, out of reach at (0, 0)) and its close-up's cut (6). Rooms 10E, 113 and 115 have the game's three other drawers. The runs in `oracle/re2-regress.d/hikidashi_201.toml` warp south of the desk, facing it, with the enemies off (which also keeps the room's licker scene out): `record --no-enemies --warp 201:-25400:0:-18450:3072 --life 200`, with `--give 2:0x1F:1` for a small key or `--start claire` for Claire's lockpick in the personal slot. arklay starts from `hikidashi_201.lua`, `hikidashi_key_201.lua` or `hikidashi_claire_201.lua`.
