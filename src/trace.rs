@@ -70,6 +70,9 @@ pub struct TraceTick<'a> {
     pub re2_zombies: Option<String>,
     /// Their hidden and coloured parts, as the oracle's `zp` field writes them.
     pub re2_zombie_parts: Option<String>,
+    /// Where each of them is heading (`Dest`), as the oracle's `zd` field
+    /// writes it.
+    pub re2_zombie_dests: Option<String>,
     /// RE2's `Esp_` pool, the oracle's `esp` field
     /// ([`crate::esp2::Effects::trace_field`]).
     pub re2_effects: Option<String>,
@@ -282,6 +285,9 @@ impl TraceWriter {
         if let Some(parts) = &tick.re2_zombie_parts {
             write!(self.out, " zp={parts}")?;
         }
+        if let Some(dests) = &tick.re2_zombie_dests {
+            write!(self.out, " zd={dests}")?;
+        }
         if let Some(effects) = &tick.re2_effects {
             write!(self.out, " esp={effects}")?;
         }
@@ -449,6 +455,7 @@ mod tests {
             re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
+            re2_zombie_dests: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -514,6 +521,7 @@ mod tests {
                 re2_partner: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
+                re2_zombie_dests: None,
                 re2_effects: None,
                 re2_music: None,
                 re2_die: None,
@@ -575,6 +583,7 @@ mod tests {
                 re2_partner: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
+                re2_zombie_dests: None,
                 re2_effects: effects,
                 re2_music: None,
                 re2_die: None,
@@ -633,6 +642,7 @@ mod tests {
             re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
+            re2_zombie_dests: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -696,6 +706,7 @@ mod tests {
             re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
+            re2_zombie_dests: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -759,6 +770,7 @@ mod tests {
             re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
+            re2_zombie_dests: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -818,6 +830,7 @@ mod tests {
             re2_partner: Some("400,1,2,0,3".to_string()),
             re2_zombies: Some("-".to_string()),
             re2_zombie_parts: None,
+            re2_zombie_dests: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
