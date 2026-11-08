@@ -341,6 +341,12 @@ function ScreenApi:sound(name) end
 ---@param slot integer The core-bank slot.
 function ScreenApi:core_sound(slot) end
 
+---Load RE 2's core bank `id` for the later `core_sound` cues, the
+---original's `Snd_load_core(id)` (the 4th Survivor's title loads 0x12,
+---To-fu's 0x13, and the title's own is 0x10).
+---@param id integer The core bank.
+function ScreenApi:core_bank(id) end
+
 ---Queue a current-room bank sound, the original's `play_sfx(2, slot)`:
 ---slot `slot` of the loaded room's sound-table row, played after the call
 ---like [`api:sound`](#ScreenApi.sound). It plays only on in-game screens;

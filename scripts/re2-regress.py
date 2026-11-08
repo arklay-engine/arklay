@@ -302,6 +302,9 @@ def run_one(run: dict, ctx: dict) -> dict:
             str(ctx["arklay"]), str(ctx["pack"]), "--ui", screen,
             "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace), "--input", str(input_path),
         ]
+        if "special" in run:
+            # config.ini's SPECIAL, which the record's `--config SPECIAL=N` sets.
+            command += ["--title-special", str(run["special"])]
     else:
         command = [
             str(ctx["arklay"]), str(ctx["pack"]), "--ui", "game", *start,

@@ -206,6 +206,17 @@ struct Cli {
     )]
     difficulty: DifficultyArg,
 
+    /// RE2's config.ini `SPECIAL`: which extras the title's SPECIAL shows
+    /// (0 EXIT alone, 1 GALLERY, 2 or 3 EX.BATTLE, 4 to 7 the 4th Survivor,
+    /// anything else all of them, To-fu too). The default is 15
+    #[arg(
+        long,
+        value_name = "N",
+        allow_negative_numbers = true,
+        requires = "pack"
+    )]
+    title_special: Option<i8>,
+
     /// An RE2 new game in ARRANGE MODE rather than ORIGINAL MODE
     /// (`censorship_off`), for a game this run starts
     #[arg(long, requires = "pack")]
@@ -1473,6 +1484,7 @@ fn main() -> Result<()> {
                 no_autosave: !config.game.autosave || tracing || cli.input.is_some(),
                 authentic: cli.authentic,
                 new_game: new_game_choice(cli.difficulty, cli.arrange),
+                title_special: cli.title_special,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {

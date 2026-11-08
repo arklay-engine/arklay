@@ -1,0 +1,28 @@
+# The title from boot with config.ini's SPECIAL below 15: SPECIAL, every direction, then cancel (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 up
+453
+480 left
+483
+510 right
+513
+540 down
+543
+570 up
+573
+600 right
+603
+630 left
+633
+680 cancel
+683

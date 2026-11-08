@@ -206,6 +206,10 @@ pub struct Options {
     /// as the original sets the choice before room 100 loads; a continue
     /// keeps the save's.
     pub new_game: crate::ui::NewGameChoice,
+    /// RE 2's config.ini `SPECIAL` (`Special`, `0x524EB8`), which picks the
+    /// extras SPECIAL shows on the title: `--title-special`. `None` is the
+    /// install's 15, every extra.
+    pub title_special: Option<i8>,
 }
 
 /// Keyboard state for one tick.

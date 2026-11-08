@@ -330,6 +330,11 @@ impl UserData for Api<'_> {
             api.cx.play_cue(UiCue::Core(slot));
             Ok(())
         });
+        // `Snd_load_core(id)`: the core bank the later `core_sound`s play from.
+        methods.add_method("core_bank", |_lua, api, id: u8| {
+            api.cx.play_cue(UiCue::CoreBank(id));
+            Ok(())
+        });
 
         // A current-room bank sound (`play_sfx(2, slot)`); the session
         // resolves the slot through the loaded room's sound table.

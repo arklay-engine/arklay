@@ -1,0 +1,14 @@
+# The title from boot: SPECIAL, confirm on 4TH: the fade to the 4th Survivor's title, its logo, then START (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+1000 start
+1003

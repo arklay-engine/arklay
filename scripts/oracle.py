@@ -121,10 +121,13 @@ OPT_IN_FIELDS = {
     "snd",
     "spl",
     "tfade",
+    "tfade2",
+    "tfade3",
     "ti",
     "tlogo",
     "tsel",
     "tw",
+    "tx",
     "xavol",
     "zp",
 }
@@ -140,10 +143,13 @@ SCREEN_FIELDS = (
     "mapfg",
     "pc",
     "tfade",
+    "tfade2",
+    "tfade3",
     "ti",
     "tlogo",
     "tsel",
     "tw",
+    "tx",
 )
 
 
