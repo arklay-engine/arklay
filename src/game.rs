@@ -904,6 +904,9 @@ pub struct Re2ItemGet {
     /// `BYTE_00691f63` and `BYTE_00691f77`. `None` until the check runs, and
     /// when the inventory is full.
     pub slot: Option<crate::scd2::host::ItemGetSlot>,
+    /// A file's pick-up (`St_get_file`) once the window has branched to it
+    /// on its sixth tick.
+    pub file: Option<status2::file_get::FileGet>,
 }
 
 /// The get-item window's steps: its routines (`0x691F61`) and routine 3's
@@ -922,6 +925,10 @@ pub enum Re2ItemGetPhase {
     Shown,
     /// Routines 0 and 1 again: the fade back to the room.
     Close,
+    /// A file: `St_init02`'s sub 3 draws the page until the fade is done.
+    FileFade,
+    /// A file: `St_get_file`, from the page's slide in to message 10.
+    FileRead,
 }
 
 /// The get-item window's ticks, from the oracle's room 102 pick-ups.
@@ -940,6 +947,9 @@ const ITEM_GET_FADE_TICKS: u8 = 3;
 /// (`0x502027`).
 const ITEM_GET_CUT_TICK: u8 = 6;
 const ITEM_GET_UNCUT_TICK: u8 = 8;
+/// A file's fade (`St_init02`'s sub 3) ends, and its page cue plays, this
+/// many ticks after the window's sixth.
+const ITEM_GET_FILE_FADE_TICKS: u8 = 5;
 
 /// One inventory stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8736,6 +8746,7 @@ impl GameState {
             ticks: 0,
             fly: item_get2::Fly::default(),
             slot: None,
+            file: None,
         });
     }
 
@@ -8772,14 +8783,60 @@ impl GameState {
     /// One tick of the get-item window, before its message's. Returns the
     /// cue it plays: the cancel cue when the "taken" or "full" message has
     /// closed or a no has counted out (sub 0, `0x4FD701`).
-    pub fn tick_re2_item_get(&mut self) -> Option<status2::Sound> {
-        use crate::scd2::host::{MESSAGE_FULL, MESSAGE_TAKE};
-        let mut get = self.re2_item_get.take()?;
-        let mut cue = None;
+    pub fn tick_re2_item_get(&mut self, input: status2::Input) -> Vec<status2::Sound> {
+        use crate::scd2::host::{MESSAGE_FILED, MESSAGE_FULL, MESSAGE_TAKE, file_of_item};
+        let Some(mut get) = self.re2_item_get.take() else {
+            return Vec::new();
+        };
+        let mut cues = Vec::new();
         get.ticks = get.ticks.saturating_add(1);
         let item = get.action.params[0];
         let next = |phase| (phase, 0);
         let (phase, ticks) = match get.phase {
+            // `Status`'s init, on the sixth tick for both paths: the blink
+            // starts over, and a file is filed, with the page off to the
+            // right (`St_init02`'s file case).
+            Re2ItemGetPhase::Open if get.ticks == ITEM_GET_CUT_TICK => {
+                self.re2_file.blink = status2::files::Blink::OPEN;
+                if let Some(file) = file_of_item(item) {
+                    get.file = Some(status2::file_get::open(
+                        &mut self.re2_file,
+                        &mut self.re2.files,
+                        file,
+                    ));
+                    next(Re2ItemGetPhase::FileFade)
+                } else {
+                    (Re2ItemGetPhase::Open, get.ticks)
+                }
+            }
+            Re2ItemGetPhase::FileFade if get.ticks == ITEM_GET_FILE_FADE_TICKS => {
+                cues.push(status2::Sound::Page);
+                next(Re2ItemGetPhase::FileRead)
+            }
+            Re2ItemGetPhase::FileFade => (Re2ItemGetPhase::FileFade, get.ticks),
+            Re2ItemGetPhase::FileRead => {
+                let mut page = get.file.expect("a file's window holds its pick-up");
+                let step = page.tick(
+                    &mut self.re2_file,
+                    &self.re2.files,
+                    input,
+                    self.message.active,
+                    &mut cues,
+                );
+                get.file = Some(page);
+                match step {
+                    status2::file_get::Step::Reading => (Re2ItemGetPhase::FileRead, get.ticks),
+                    status2::file_get::Step::Filed => {
+                        self.show_re2_global(MESSAGE_FILED);
+                        (Re2ItemGetPhase::FileRead, get.ticks)
+                    }
+                    status2::file_get::Step::Done => {
+                        self.take_re2_file(get.action);
+                        cues.push(status2::Sound::Cancel);
+                        next(Re2ItemGetPhase::Close)
+                    }
+                }
+            }
             Re2ItemGetPhase::Open if get.ticks == ITEM_GET_ASK_TICK => {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
                 get.slot = self.re2_item_get_slot(get.action);
@@ -8813,11 +8870,11 @@ impl GameState {
             }
             // The count out ends in sub 0 too, which plays the same cue.
             Re2ItemGetPhase::Refuse if get.ticks == ITEM_GET_REFUSE_TICKS => {
-                cue = Some(status2::Sound::Cancel);
+                cues.push(status2::Sound::Cancel);
                 next(Re2ItemGetPhase::Close)
             }
             Re2ItemGetPhase::Shown if !self.message.active => {
-                cue = Some(status2::Sound::Cancel);
+                cues.push(status2::Sound::Cancel);
                 next(Re2ItemGetPhase::Close)
             }
             Re2ItemGetPhase::Close if get.ticks == ITEM_GET_CLOSE_TICKS => {
@@ -8830,14 +8887,14 @@ impl GameState {
                 // direction held through the close moves the player a tick
                 // later.
                 self.re2.door_key_stop = true;
-                return None;
+                return cues;
             }
             phase => (phase, get.ticks),
         };
         get.phase = phase;
         get.ticks = ticks;
         self.re2_item_get = Some(get);
-        cue
+        cues
     }
 
     /// One tick of game mode 7's computer, with confirm held or not. Returns
@@ -8944,6 +9001,7 @@ impl GameState {
         let cleared = match get.phase {
             Re2ItemGetPhase::Open => get.ticks >= ITEM_GET_CUT_TICK,
             Re2ItemGetPhase::Close => get.ticks < ITEM_GET_UNCUT_TICK,
+            Re2ItemGetPhase::FileFade | Re2ItemGetPhase::FileRead => true,
             _ => true,
         };
         if cleared { 0 } else { cut }
@@ -9025,6 +9083,31 @@ impl GameState {
         }
         self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
         self.show_re2_global(MESSAGE_TAKEN);
+    }
+
+    /// `St_get_file`'s sub 6 once message 10 is down: a file has no stack
+    /// and no count, only the area's flag (bank 8, the same gap as an
+    /// item's), its object (any index but 0xFF) and the area itself. The
+    /// area's twinkle (an action byte with bit 7, `Esp_kill`) and
+    /// `WORD_0098eaea` (the area's first data word, which the item path
+    /// leaves out too) aren't modelled.
+    fn take_re2_file(&mut self, action: RoomAction) {
+        use crate::scd2::host::ITEM_BANK;
+        let [_, _, flag, model, flags, ..] = action.params;
+        if flags & 0x80 != 0 {
+            crate::warning!("warning: the file area's twinkle (Esp_kill) isn't killed");
+        }
+        self.re2.set_flag(ITEM_BANK, flag, 1);
+        if model != 0xFF
+            && let Some(record) = self.objects.record_mut(usize::from(model))
+        {
+            record.be_flg = 0;
+            record.flag = 0;
+        }
+        if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
+            entry.sce = crate::scd2::host::SCE_AUTO;
+            entry.handler = 0;
+        }
     }
 
     /// A room message by its RE2 number; the language key's index keeps the

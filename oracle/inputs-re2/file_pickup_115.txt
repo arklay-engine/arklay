@@ -1,0 +1,20 @@
+# Room 115's diary, by aot_on (oracle/re2.md, "Picking up a file"): press at the desk, read the diary to its end marker (six rights), file it with a press, close message 10, then the medal's question comes.
+0
+350 action
+352
+444 right
+446
+474 right
+476
+504 right
+506
+534 right
+536
+564 right
+566
+594 right
+596
+644 action
+646
+744 action
+746
