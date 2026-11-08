@@ -3930,7 +3930,7 @@ impl GameSession {
                         self.game
                             .re2
                             .sounds
-                            .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                            .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
                     }
                 }
             }
@@ -4449,7 +4449,7 @@ impl GameSession {
             self.game
                 .re2
                 .sounds
-                .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
         }
         if out.stop_music {
             let place = self.game.re2_music_place();
@@ -6785,7 +6785,7 @@ impl GameSession {
                 self.game
                     .re2
                     .sounds
-                    .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                    .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
             }
         }
         self.play_re2_status_sounds(pack, &outcome.sounds);
@@ -6839,7 +6839,7 @@ impl GameSession {
                 self.game
                     .re2
                     .sounds
-                    .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                    .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
             }
         }
         let cut = self.sound_cut();
@@ -14523,7 +14523,11 @@ fn play_re2_sounds(
     let mut played = std::mem::take(&mut sounds.played);
     // `forced` is a level `Snd_se_on` sets itself: the trace logs it, and the
     // sound plays at full volume, whatever the bank's table says.
-    let mut play = |id: SoundId, pos: [i32; 3], forced: Option<(u8, i32)>| {
+    let script_cuts = &room.cuts;
+    let mut play = |id: SoundId, pos: [i32; 3], forced: Option<(u8, i32)>, placed: Option<u8>| {
+        let cut = placed
+            .and_then(|placed| script_cuts.get(usize::from(placed)))
+            .unwrap_or(cut);
         let tone_volume = match forced {
             Some((volume, _)) => volume,
             None => sounds.banks.volume(id.kind, id.slot)?,
@@ -14574,7 +14578,7 @@ fn play_re2_sounds(
     };
     let room_200 = (game.id.stage, game.id.room) == (2, 0);
     for request in requests {
-        let logged = play(request.id, request.pos, None);
+        let logged = play(request.id, request.pos, None, request.cut);
         if room_200 && request.id.kind == Kind::Room && request.id.slot == 0x12 {
             // `Snd_se_on`'s case for room 200 (`0x4EDC77`): slot 0x13 starts
             // with 0x12 at full volume from the centre, the computer's door
@@ -14587,6 +14591,7 @@ fn play_re2_sounds(
                     },
                     request.pos,
                     Some(level),
+                    request.cut,
                 );
             }
         }
@@ -14599,6 +14604,7 @@ fn play_re2_sounds(
             se2::footstep_sound(&room.footstep_zones, &footstep, floor),
             footstep.pos,
             None,
+            None,
         );
     }
     for sound in weapon {
@@ -14608,10 +14614,10 @@ fn play_re2_sounds(
             positional: true,
             muffled: true,
         };
-        play(id, sound.pos, None);
+        play(id, sound.pos, None, None);
     }
     for request in effects {
-        play(request.id, request.pos, None);
+        play(request.id, request.pos, None, request.cut);
     }
     sounds.played = played;
 }
@@ -16336,6 +16342,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
         vm.exec_event(usize::from(task), usize::from(event));
     }
+    context.game.re2.script_cut = None;
     {
         let mut host = crate::scd2::host::GameHost {
             game: &mut *context.game,

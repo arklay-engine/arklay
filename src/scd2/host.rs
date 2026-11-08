@@ -71,6 +71,9 @@ pub struct Re2State {
     /// handlers that start something gate themselves off, and only an area's
     /// record, a flag change, water or damage acts.
     pub areas_stopped: bool,
+    /// The cut a script's `cut_chg` or `cut_old` set this pass, which its
+    /// later `se_on`s are placed from ([`SoundRequest::cut`]).
+    pub script_cut: Option<u8>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
@@ -224,6 +227,16 @@ impl FadeWrite {
 pub struct SoundRequest {
     pub id: crate::se2::SoundId,
     pub pos: [i32; 3],
+    /// The cut `Snd_se_3D` places it from (`scd_var_cut`), when a script's
+    /// `cut_chg` or `cut_old` set it earlier in the same pass; else the
+    /// tick's cut.
+    pub cut: Option<u8>,
+}
+
+impl SoundRequest {
+    pub fn new(id: crate::se2::SoundId, pos: [i32; 3]) -> Self {
+        Self { id, pos, cut: None }
+    }
 }
 
 /// `pos_set` and `dir_set` on the player.
@@ -672,6 +685,7 @@ impl Default for Re2State {
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             areas_stopped: false,
+            script_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             door_settling: false,
@@ -1294,7 +1308,7 @@ impl Re2State {
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
                 let pos = pos.map(i32::from);
-                self.effect_sounds.push(SoundRequest { id, pos });
+                self.effect_sounds.push(SoundRequest::new(id, pos));
             }
         }
     }
@@ -1846,6 +1860,9 @@ impl GameHost<'_> {
     /// `cut_old`. `FUN_004e5020` raises the pending load; `Cut_chg` drops
     /// it again when the operand's bit 7 is set.
     fn change_cut(&mut self, cut: u8) {
+        // `FUN_004e5020` sets `scd_var_cut` at once, so a sound the pass
+        // plays after it is placed from the new cut.
+        self.game.re2.script_cut = Some(cut & 0x7F);
         self.game.re2.cut_old = self.game.camera.current_cut as u8;
         self.game.camera.locked = true;
         self.game.set_camera_cut(usize::from(cut & 0x7F));
@@ -2033,6 +2050,7 @@ impl GameHost<'_> {
         self.game.re2.sounds.push(SoundRequest {
             id,
             pos: std::array::from_fn(|axis| origin[axis] + offset[axis]),
+            cut: self.game.re2.script_cut,
         });
     }
 
@@ -2355,6 +2373,7 @@ impl Host for GameHost<'_> {
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
                 let cut = self.game.re2.cut_old;
+                self.game.re2.script_cut = Some(cut);
                 self.game.camera.locked = false;
                 self.game.set_camera_cut(usize::from(cut));
                 // `Cut_old_0` goes through `FUN_004e5020` too.
@@ -2913,10 +2932,10 @@ mod tests {
     fn movie_on_with_the_films_off_leaves_0x200_down_and_asks_for_two_held_frames() {
         let mut game = GameState::default();
         game.re2.set_flag(0, FG_SYSTEM_8000, 1);
-        game.re2.sounds.push(SoundRequest {
-            id: crate::se2::SoundId::decode(0x0200_0001).unwrap(),
-            pos: [0; 3],
-        });
+        game.re2.sounds.push(SoundRequest::new(
+            crate::se2::SoundId::decode(0x0200_0001).unwrap(),
+            [0; 3],
+        ));
         exec(&mut game, "movie_on", &[10]);
         assert!(!game.re2.flag(0, FG_SYSTEM_MOVIE));
         assert!(!game.re2.flag(0, FG_SYSTEM_8000));
@@ -2973,6 +2992,18 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    /// Room 206's event 2: `cut_chg(11)` then `se_on(2, 267, 1, ...)`. The
+    /// sound is placed from cut 11, which `Cut_chg` made `scd_var_cut`.
+    #[test]
+    fn a_sound_after_a_scripts_cut_change_is_placed_from_the_new_cut() {
+        let mut game = GameState::default();
+        exec(&mut game, "se_on", &[2, 267, 1, 0, 0, 0]);
+        exec(&mut game, "cut_chg", &[11]);
+        exec(&mut game, "se_on", &[2, 267, 1, 0, 0, 0]);
+        let cuts: Vec<_> = game.re2.sounds.iter().map(|sound| sound.cut).collect();
+        assert_eq!(cuts, [None, Some(11)]);
     }
 
     #[test]
