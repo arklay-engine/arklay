@@ -158,6 +158,31 @@ fn a_herb_used_at_full_life_is_used_up() {
     assert_eq!(run.at(496).0, "0,0,0,0,2,2,3,0");
 }
 
+/// USE of a key item reads `fg_use` (bank 10), not `fg_system`, and gives
+/// the scripts the item in variable 2.
+#[test]
+fn a_key_item_is_used_where_fg_use_has_it() {
+    const MEDAL: u8 = 0x47;
+    let used = |bank: u8| {
+        let mut start = game(&[(0x02, 18), (0x01, 1), (MEDAL, 1)]);
+        start.re2.set_flag(bank, MEDAL, 1);
+        let mut run = Run::new(start, 399);
+        run.until(460, &[(400, DOWN), (420, CONFIRM), (440, CONFIRM)]);
+        run
+    };
+    let run = used(crate::scd2::host::FG_USE_BANK);
+    assert_eq!(
+        run.game.re2.vars[crate::scd2::host::VAR_USED_ITEM],
+        u16::from(MEDAL)
+    );
+    assert!(!run.game.message.active);
+    assert_eq!(run.game.re2_items.unwrap().page, 0, "the screen closes");
+    // Bank 0's bit is `fg_system`'s: "not now", and no item for the scripts.
+    let run = used(0);
+    assert_eq!(run.game.re2.vars[crate::scd2::host::VAR_USED_ITEM], 0);
+    assert!(run.game.message.active);
+}
+
 /// `inv_use`'s second USE: the red herb, which needs a mix.
 #[test]
 fn a_red_herb_is_not_needed_now() {

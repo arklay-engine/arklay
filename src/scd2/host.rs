@@ -455,6 +455,10 @@ const SPLAYER_OPERAND: i64 = 255;
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
+/// `fg_use` (`0x989ED8`): the key items the areas under the player want. A
+/// USE area (`Sce_Flg_chg`) raises the item's bit while the player's probe is
+/// in it, and `Sce_work_clr` clears the bank's first four words each pass.
+pub const FG_USE_BANK: u8 = 10;
 /// The ink ribbon's item id.
 pub const ITEM_INK_RIBBON: u8 = 0x1E;
 
@@ -612,6 +616,8 @@ pub fn door_locked_message(key: u8) -> u8 {
 /// The script variables the engine owns (`scd_var_*`).
 pub const VAR_FORWARD_AREA: usize = 0;
 pub const VAR_BODY_AREA: usize = 1;
+/// `scd_var_used_item` (`0x98EAE8`): the key item USE gave, for one pass.
+pub const VAR_USED_ITEM: usize = 2;
 const VAR_STAGE: u8 = 24;
 const VAR_ROOM: u8 = 25;
 const VAR_CUT: u8 = 26;
