@@ -20,6 +20,8 @@
 #       --max-ticks N    --bot-max-ticks         (BATCH_MAX_TICKS, default 400000)
 #   -P, --param K=V      --bot-param, repeatable (BATCH_PARAMS, space-separated K=V list):
 #                        a story decision (mods/bot/params/re1.xml declares them)
+#       --invincible     --bot-invincible: the INVINCIBLE cheat for every run
+#                        (BATCH_INVINCIBLE=1), to time a route without deaths
 #       --no-build       skip `cargo build --profile test-release`
 #       --keep-saves     keep seed-<s>.saves/ after each run (KEEP_SAVES=1), to
 #                        --load a save of the run later
@@ -46,6 +48,7 @@ PACK="${BOT_PACK:-/home/ted/repos/arklay/target/bot-pack/re1.akpak}"
 TIMEOUT="${BATCH_TIMEOUT:-1100}"
 MAX_TICKS="${BATCH_MAX_TICKS:-400000}"
 PARAMS="${BATCH_PARAMS:-}"
+INVINCIBLE="${BATCH_INVINCIBLE:-}"
 BUILD=1
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,6 +63,7 @@ while [ $# -gt 0 ]; do
     -P|--param) PARAMS="${PARAMS:+$PARAMS }${2:?}"; shift ;;
     --no-build) BUILD=0 ;;
     --keep-saves) KEEP_SAVES=1 ;;
+    --invincible) INVINCIBLE=1 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -94,7 +98,7 @@ printf 'pack=%s\nrisk=%s\nseeds=%s\nmax_ticks=%s\nparams=%s\ncommit=%s\n' \
   "$PACK" "$RISK" "$(echo $seed_list | tr ' ' ',')" "$MAX_TICKS" "$PARAMS" \
   "$(git rev-parse --short HEAD 2>/dev/null)" > "$DIR/batch.txt"
 
-export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS KEEP_SAVES
+export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS KEEP_SAVES INVINCIBLE
 run_one() {
   s="$1"
   rm -rf "$DIR/seed-$s.saves"; mkdir -p "$DIR/seed-$s.saves"
@@ -104,6 +108,7 @@ run_one() {
   [ "$s" = 0 ] && seed_arg=()
   param_arg=()
   for p in $PARAMS; do param_arg+=(--bot-param "$p"); done
+  [ -n "$INVINCIBLE" ] && param_arg+=(--bot-invincible)
   ( cd "$here" && timeout "$TIMEOUT" "$BIN" "$PACK" --mod mods/bot --bot --bot-headless \
       --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" "${seed_arg[@]}" "${param_arg[@]}" \
       --save-dir "$DIR/seed-$s.saves" ) > "$DIR/seed-$s.log" 2>&1

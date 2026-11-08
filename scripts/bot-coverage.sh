@@ -2,10 +2,14 @@
 # Run the bot down every story branch and report the coverage: one
 # bot-batch.sh batch per parameter set below, then bot-coverage.py report.
 #
-#   ./scripts/bot-coverage.sh [-n NAME] [-s SEEDS] [--only COMBO] [--no-build]
+#   ./scripts/bot-coverage.sh [-n NAME] [-s SEEDS] [-j N] [-t SEC] [--invincible]
+#                             [--only COMBO] [--no-build]
 #
 #   -n, --name NAME   batch name prefix (default: coverage-<timestamp>)
 #   -s, --seeds LIST  seeds per parameter set (default 1; see bot-batch.sh)
+#   -j, --jobs N      combinations run at once (default: all)
+#   -t, --timeout SEC per-run timeout (bot-batch.sh's -t)
+#       --invincible  the INVINCIBLE cheat for every run (bot-batch.sh's)
 #       --only COMBO  run only the named combination (repeatable)
 #       --no-build    skip the build
 #
@@ -37,13 +41,17 @@ NAME="coverage-$(date +%Y%m%d-%H%M%S)"
 SEEDS=1
 ONLY=()
 BUILD=()
+JOBS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--name) NAME="${2:?}"; shift ;;
     -s|--seeds) SEEDS="${2:?}"; shift ;;
     --only) ONLY+=("${2:?}"); shift ;;
+    -j|--jobs) JOBS="${2:?}"; shift ;;
+    -t|--timeout) export BATCH_TIMEOUT="${2:?}"; shift ;;
+    --invincible) export BATCH_INVINCIBLE=1 ;;
     --no-build) BUILD=(--no-build) ;;
-    -h|--help) sed -n 2,17p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,21p "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -61,7 +69,11 @@ for combo in "${COMBOS[@]}"; do
   fi
   args=()
   for p in $params; do args+=(-P "$p"); done
-  # One batch per combination, all at once: each run is one core.
+  # One batch per combination, all at once (or -j at a time): each run is
+  # one core.
+  while [ "$JOBS" -gt 0 ] && [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+    wait -n
+  done
   ( ./scripts/bot-batch.sh -n "$NAME-$name" -s "$SEEDS" --no-build "${args[@]}" > /dev/null
     echo "$name done" ) &
   dirs+=("target/bot-batches/$NAME-$name")
