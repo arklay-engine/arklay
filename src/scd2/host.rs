@@ -2246,11 +2246,7 @@ impl GameHost<'_> {
             be_flg &= !1;
         }
         let selector = (at(5) as u16 >> 8) as u8;
-        let parent = match selector & 0xC0 {
-            0x40 => 0xFE,
-            0xC0 => selector & 0x3F,
-            _ => 0xFF,
-        };
+        let parent = crate::objects::SuperParent::decode(selector, 0);
         let mut x = at(9) as i32;
         // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
         if stage_room == (2, 3) && slot < 4 {
@@ -2263,7 +2259,6 @@ impl GameHost<'_> {
                 0
             },
             model: slot as u8,
-            parent,
             pos: [x, at(10) as i32, at(11) as i32],
             rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
             asset: Some(slot as u8),
@@ -2289,6 +2284,7 @@ impl GameHost<'_> {
             at_obj_no: kept.at_obj_no,
             ..crate::objects::ObjectRecord::default()
         };
+        record.set_super_parent(parent);
         record.set_ofs();
     }
 
@@ -2521,7 +2517,7 @@ impl Host for GameHost<'_> {
             "super_set" if self.task_object(task).is_some() => {
                 let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
                 if let Some(object) = self.task_object(task) {
-                    object.super_parent = parent;
+                    object.set_super_parent(parent);
                     object.pos = [at(3), at(4), at(5)].map(|v| i32::from(v as i16));
                     object.rotation = [at(6) as i16, at(7) as i16, at(8) as i16];
                 }
@@ -3591,6 +3587,64 @@ mod tests {
         game.objects.record_mut(1).unwrap().pos = [-19000, -3600, -12500];
         game.interact([0, 0, 0], 0, false);
         assert!(on_plate_3(&mut game));
+    }
+
+    #[test]
+    fn obj_model_set_and_super_set_write_the_one_parent() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = |selector: i64| {
+            [
+                4,
+                2,
+                0,
+                0,
+                0,
+                selector << 8,
+                0,
+                0x10,
+                0,
+                100,
+                -200,
+                300,
+                1,
+                2,
+                3,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]
+        };
+        // `Obj_model_set` switches on `selector & 0xC0` too: 0x80 | n is
+        // work n (0 the player, 1 the second player, 2 + n an enemy slot).
+        for (selector, parent, draw) in [
+            (0x00, SuperParent::World, 0xFF),
+            (0x40, SuperParent::Player, 0xFE),
+            (0x82, SuperParent::Work(2), 0xFF),
+            (0xC3, SuperParent::Object(3), 3),
+        ] {
+            game.objects.record_mut(4).unwrap().be_flg = 0;
+            exec(&mut game, "obj_model_set", &call(selector));
+            let object = game.objects.record(4).unwrap();
+            assert_eq!(object.super_parent, parent, "{selector:#x}");
+            assert_eq!(object.parent, draw, "{selector:#x}");
+        }
+        // `Super_set` writes the same pointer, and the selector with it.
+        exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+        exec(&mut game, "super_set", &[0, 130, 142, 0, 220, 10, 0, 0, 0]);
+        let object = game.objects.record(4).unwrap();
+        assert_eq!(object.super_parent, SuperParent::WorkJoint(2, 14));
+        assert_eq!(object.parent, 0xFF);
+        assert!(object.hangs_on_a_character());
+        assert_eq!(object.pos, [0, 220, 10]);
+        exec(&mut game, "super_set", &[0, 0, 0, 5, 6, 7, 0, 0, 0]);
+        let object = game.objects.record(4).unwrap();
+        assert!(!object.hangs_on_a_character());
+        assert_eq!(object.parent, 0xFF);
     }
 
     #[test]

@@ -18451,7 +18451,10 @@ fn visible_objects<'a>(
     let view = room.cuts.get(camera).map(Camera::from_cut);
     let mut visible = Vec::new();
     for (slot, record) in objects.records.iter().enumerate() {
-        if !record.active() {
+        // On a joint or a character's matrix `pos` is an offset (`Super_set`),
+        // which isn't composed yet: the object isn't drawn, rather than drawn
+        // at the room's origin.
+        if !record.active() || record.hangs_on_a_character() {
             continue;
         }
         let Some(asset) = record.asset.and_then(|pair| {
@@ -20986,6 +20989,73 @@ mod tests {
             ..room
         };
         assert_eq!(visible_objects(&pinned, &objects, 0, [0, 0, 0], 0).len(), 1);
+    }
+
+    #[test]
+    fn a_super_set_object_stays_where_the_original_draws_it() {
+        use crate::objects::{OBJECT_FLAG_ACTIVE, ObjectAsset, ObjectTable, SuperParent};
+
+        let room = RoomState {
+            object_models: vec![ObjectAsset {
+                pair_index: 0,
+                hd_name: None,
+                model: crate::model::Tmd::default(),
+                texture: crate::model::Texture8 {
+                    width: 0,
+                    height: 0,
+                    indices: Vec::new(),
+                    palettes: Vec::new(),
+                    stp: Vec::new(),
+                },
+            }],
+            cuts: vec![crate::state::Cut {
+                pos: [2000, 0, 2000],
+                look_at: [2000, 0, 3000],
+                fov: 500,
+                ..crate::state::Cut::default()
+            }],
+            zones: vec![crate::state::Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[0, 0], [0, 5000], [5000, 5000], [5000, 0]],
+            }],
+            ..RoomState::default()
+        };
+        let mut objects = ObjectTable::new(1);
+        {
+            let record = objects.record_mut(0).unwrap();
+            record.flag = OBJECT_FLAG_ACTIVE;
+            record.asset = Some(0);
+            // Room 603's prop after `super_set(0, 128, 142, 0, 220, 10, ..)`:
+            // an offset on a hand, which lies in the camera's zone as a
+            // world position.
+            record.pos = [2000, 0, 2300];
+        }
+        // On the world (mode 0) `pos` is the place and it is drawn there.
+        objects
+            .record_mut(0)
+            .unwrap()
+            .set_super_parent(SuperParent::World);
+        assert_eq!(visible_objects(&room, &objects, 0, [0, 0, 0], 0).len(), 1);
+        // On a joint or a work's matrix `Om_trans` composes it with that
+        // matrix, which isn't done yet, so it isn't drawn at `pos`.
+        for parent in [
+            SuperParent::PlayerJoint(1),
+            SuperParent::WorkJoint(2, 14),
+            SuperParent::Work(0),
+        ] {
+            objects.record_mut(0).unwrap().set_super_parent(parent);
+            assert!(
+                visible_objects(&room, &objects, 0, [0, 0, 0], 0).is_empty(),
+                "{parent:?}"
+            );
+        }
+        // The player's own matrix is composed, as before.
+        objects
+            .record_mut(0)
+            .unwrap()
+            .set_super_parent(SuperParent::Player);
+        assert_eq!(objects.record(0).unwrap().parent, 0xFE);
     }
 
     #[test]

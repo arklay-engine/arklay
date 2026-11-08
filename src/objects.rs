@@ -252,7 +252,9 @@ pub enum SuperParent {
 }
 
 impl SuperParent {
-    /// Decode `Super_set`'s mode byte and joint byte.
+    /// Decode `Super_set`'s mode byte and joint byte, and `Obj_model_set`'s
+    /// parent selector (a mode byte with no joint): both switch on
+    /// `mode & 0xC0` and write the one pointer at `+0x80`.
     pub fn decode(mode: u8, joint: u8) -> Self {
         let joint_index = (joint & 0x80 != 0).then_some(joint & 0x7F);
         match mode & 0xC0 {
@@ -263,6 +265,19 @@ impl SuperParent {
                 joint_index.map_or(Self::Work(work), |j| Self::WorkJoint(work, j))
             }
             _ => Self::Object(mode & 0x3F),
+        }
+    }
+
+    /// The parent selector [`ObjectRecord::parent`] and [`world_matrix`]
+    /// read, for the parents they compose: the world, the player's own
+    /// matrix and another object. A joint and a work's matrix aren't
+    /// modelled.
+    fn selector(self) -> Option<u8> {
+        match self {
+            Self::World => Some(0xFF),
+            Self::Player => Some(0xFE),
+            Self::Object(n) => Some(n),
+            _ => None,
         }
     }
 }
@@ -681,6 +696,20 @@ pub fn floor_of_height(y: i32) -> u8 {
 }
 
 impl ObjectRecord {
+    /// Write the one parent pointer (`+0x80`) that `Obj_model_set` and
+    /// `Super_set` both set, and the selector the draw composes by.
+    pub fn set_super_parent(&mut self, parent: SuperParent) {
+        self.super_parent = parent;
+        self.parent = parent.selector().unwrap_or(0xFF);
+    }
+
+    /// Whether the object hangs on a joint or a character's matrix, which
+    /// the draw doesn't compose yet: `pos` is then an offset on that
+    /// matrix, not a place in the room, so the object isn't drawn.
+    pub fn hangs_on_a_character(&self) -> bool {
+        self.super_parent.selector().is_none()
+    }
+
     /// Whether the active/drawn flag is set.
     pub fn active(&self) -> bool {
         self.flag & OBJECT_FLAG_ACTIVE != 0
