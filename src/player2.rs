@@ -57,6 +57,8 @@ pub(crate) const MOVE_ITEM: u8 = 6;
 const MOVE_STAIRS: u8 = 7;
 const MOVE_CLIMB: u8 = 8;
 const MOVE_JUMP_DOWN: u8 = 9;
+/// `pl_mv_0a`: pushing a room object.
+const MOVE_PUSH: u8 = 10;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Plc_stop`'s routine, which no table entry animates.
@@ -131,6 +133,14 @@ const DROP_REACH: [i32; 20] = [
 const CLIMB_IS_DROP: u8 = 2;
 /// The room bank's clips: the climb, the jump down and its fall and landing.
 const CLIMB_CLIP: u8 = 6;
+/// `pl_mv_0a`'s clips of the player's own: the brace, played forward to
+/// start and backward to end, and the push.
+const PUSH_BRACE_CLIP: u8 = 7;
+const PUSH_CLIP: u8 = 8;
+/// The room bank's sounds 4, the push's step, and 0, its end
+/// (`Snd_se_on(0x2040001)`, `Snd_se_on(0x2000001)`).
+const PUSH_SOUND: u32 = 0x204_0001;
+const PUSH_END_SOUND: u32 = 0x200_0001;
 const JUMP_CLIP: u8 = 7;
 const JUMP_FALL_CLIP: u8 = 8;
 const LAND_CLIP: u8 = 9;
@@ -1057,6 +1067,8 @@ pub struct Tick<'a> {
     pub neck_targets: &'a [NeckTarget],
     /// `BYTE_00989eeb`: the room's enemies so far.
     pub enemies: u8,
+    /// `fg_status`'s `0x2000`: last tick's `Om_move` pushed an object.
+    pub pushing: bool,
 }
 
 /// A body `Pl_neck` considers.
@@ -1604,6 +1616,7 @@ impl Mover<'_, '_> {
             MOVE_BACKWARD => self.pl_br_backward(key),
             MOVE_ROTATE => self.pl_br_rotate(key),
             MOVE_JUMP_DOWN => self.pl_br_jump_down(key),
+            MOVE_PUSH => self.pl_br_push(key),
             _ => {}
         }
         // `pl_mv_05` reads the keys itself.
@@ -1621,6 +1634,7 @@ impl Mover<'_, '_> {
             MOVE_STAIRS => self.pl_mv_stairs(),
             MOVE_CLIMB => self.pl_mv_climb(),
             MOVE_JUMP_DOWN => self.pl_mv_jump_down(),
+            MOVE_PUSH => self.pl_mv_push(),
             MOVE_QUICK_TURN => self.mv_quick_turn(),
             _ => {}
         }
@@ -2107,7 +2121,102 @@ impl Mover<'_, '_> {
         if key & KEY_RUN != 0 {
             self.set_routine(MOVE_RUN);
         }
+        // An object gave way: push it, run or not. The aim still wins.
+        if self.tick.pushing {
+            self.set_routine(MOVE_PUSH);
+        }
         self.end_branch(key);
+    }
+
+    /// `pl_br_0a`: forward let go, or the object stopped giving way, ends the
+    /// push's walk (state 5) with motion 7 backward.
+    fn pl_br_push(&mut self, key: u16) {
+        if (key & KEY_TILT_UP == 0 || !self.tick.pushing) && self.work.routine[2] == 5 {
+            self.work.routine[2] = 6;
+            self.work.move_no = PUSH_BRACE_CLIP;
+            self.work.move_cnt = 0;
+            self.work.hokan = FULL_BLEND;
+            self.work.sounds.push(PUSH_END_SOUND);
+        }
+    }
+
+    /// `pl_mv_0a`: square up to the object, brace (motion 7), push (motion 8)
+    /// until `pl_br_0a` ends it, let go (motion 7 backward), and stand.
+    fn pl_mv_push(&mut self) {
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.work.routine[2] = 1;
+                    self.work.bank = Bank::Weapon;
+                    self.work.move_no = self.life_clip(&WALK_CLIPS);
+                    self.work.move_cnt = 0;
+                    self.work.hokan = FULL_BLEND;
+                }
+                // The step of the frame before.
+                if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+                    self.footstep(1);
+                    self.work.noise |= 4;
+                }
+                if self.square_up() {
+                    self.work.routine[2] = 2;
+                }
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    self.push_clip(PUSH_BRACE_CLIP);
+                }
+                if self.joint_move() {
+                    self.work.routine[2] += 1;
+                }
+            }
+            4 | 5 => {
+                if self.work.routine[2] == 4 {
+                    self.work.routine[2] = 5;
+                    self.push_clip(PUSH_CLIP);
+                }
+                if self.work.move_cnt == 1 {
+                    self.work.sounds.push(PUSH_SOUND);
+                }
+                // `Foot_set_pl`'s second mode: the step is how far the foot
+                // moved, from last tick's pose to this one's.
+                let chain = if self.tick.id == SMALL_ID {
+                    &AIM_FOOT_CHAIN
+                } else {
+                    &AIM_OTHER_FOOT_CHAIN
+                };
+                let planted = self.chain_position(chain);
+                self.joint_move();
+                if self.tick.id == SMALL_ID {
+                    self.work.spd[0] = 5;
+                }
+                if self.work.now_seq & FRAME_FOOTSTEP_ALT != 0
+                    && let (Some(planted), Some(foot)) = (planted, self.chain_position(chain))
+                {
+                    let (dx, dz) = (foot[0] - planted[0], foot[2] - planted[2]);
+                    self.work.spd[0] = crate::sca::square_root0(
+                        dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)),
+                    ) as i16;
+                }
+                self.work.spd[2] = 0;
+                self.add_speed_xz();
+            }
+            6 => {
+                if self.joint_move_late_reversed(BLEND_STEP, true) {
+                    self.work.routine[2] += 1;
+                }
+            }
+            _ => self.set_routine(MOVE_IDLE),
+        }
+    }
+
+    /// One of the push's clips of the player's own, from its first frame,
+    /// blended in.
+    fn push_clip(&mut self, clip: u8) {
+        self.work.bank = Bank::Pld;
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = FULL_BLEND;
     }
 
     fn pl_br_run(&mut self, key: u16) {
@@ -6045,6 +6154,8 @@ mod tests {
         neck_targets: Vec<NeckTarget>,
         /// `BYTE_00989eeb`, else as many as `neck_targets`.
         enemies: Option<u8>,
+        /// `fg_status`'s `0x2000`.
+        pushing: bool,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -6189,6 +6300,7 @@ mod tests {
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
+            pushing: false,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.rot_neck_em(None);
@@ -6257,6 +6369,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         pose_init(&mut setup.work, &mut setup.player, &tick);
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
@@ -6302,6 +6415,7 @@ mod tests {
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
+            pushing: false,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.em23_drag_blood(1);
@@ -6362,6 +6476,7 @@ mod tests {
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
+            pushing: false,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.footstep(0);
@@ -6419,6 +6534,7 @@ mod tests {
             targets: &[],
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
+            pushing: false,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.move_cnt = 2;
@@ -6528,6 +6644,81 @@ mod tests {
     }
 
     #[test]
+    fn the_push_routine_squares_the_heading_then_walks() {
+        let up = Input {
+            up: true,
+            ..Input::default()
+        };
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_FORWARD, 1, 0];
+        setup.player.angle = 1100;
+        setup.pushing = true;
+        // `pl_br_01` takes the bit with forward held, over a held run too.
+        setup.tick(Input { run: true, ..up }, 200);
+        assert_eq!(setup.work.routine[..2], [MODE_MOVE, MOVE_PUSH]);
+        assert_eq!(
+            (setup.work.bank, setup.work.move_no),
+            (Bank::Weapon, WALK_CLIPS[0])
+        );
+        // A quarter of `Cdir_y`'s low bits a tick, until square.
+        let mut angles = vec![setup.player.angle];
+        while setup.work.routine[2] == 1 {
+            setup.tick(up, 200);
+            angles.push(setup.player.angle);
+        }
+        assert_eq!(angles, [1081, 1067, 1057, 1024]);
+        // The brace, motion 7 of the player's own, to its end.
+        let mut ticks = 0;
+        while setup.work.routine[2] < 4 {
+            setup.tick(up, 200);
+            ticks += 1;
+            assert_eq!(
+                (setup.work.bank, setup.work.move_no),
+                (Bank::Pld, PUSH_BRACE_CLIP)
+            );
+            assert!(ticks < 20);
+        }
+        // Then motion 8, with the room's sound 4 on its second tick.
+        setup.tick(up, 200);
+        assert_eq!(setup.work.routine[2], 5);
+        assert_eq!(setup.work.move_no, PUSH_CLIP);
+        assert!(!setup.work.sounds.contains(&PUSH_SOUND));
+        setup.tick(up, 200);
+        assert!(setup.work.sounds.contains(&PUSH_SOUND));
+        // Forward let go: motion 7 backward and sound 0, then the stand.
+        setup.work.sounds.clear();
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2], 6);
+        assert!(setup.work.sounds.contains(&PUSH_END_SOUND));
+        assert_eq!(setup.work.move_no, PUSH_BRACE_CLIP);
+        let mut ticks = 0;
+        while setup.work.routine[1] == MOVE_PUSH {
+            setup.tick(Input::default(), 200);
+            ticks += 1;
+            assert!(ticks < 20);
+        }
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+    }
+
+    #[test]
+    fn the_push_ends_when_the_object_stops_giving_way() {
+        let up = Input {
+            up: true,
+            ..Input::default()
+        };
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_PUSH, 5, 0];
+        setup.work.bank = Bank::Pld;
+        setup.work.move_no = PUSH_CLIP;
+        setup.pushing = true;
+        setup.tick(up, 200);
+        assert_eq!(setup.work.routine[2], 5);
+        setup.pushing = false;
+        setup.tick(up, 200);
+        assert_eq!(setup.work.routine[2], 6);
+    }
+
+    #[test]
     fn the_neck_stays_within_its_limits() {
         let mut setup = Setup::new(0);
         for keyframe in &mut setup.keyframes {
@@ -6557,6 +6748,7 @@ mod tests {
                 keyframes,
                 neck_targets: Vec::new(),
                 enemies: None,
+                pushing: false,
             }
         }
 
@@ -6583,6 +6775,7 @@ mod tests {
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
+                pushing: self.pushing,
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -6611,6 +6804,7 @@ mod tests {
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: 0,
+                pushing: false,
             };
             seed_pose(&mut self.work, &mut self.player, &tick);
         }
@@ -6639,6 +6833,7 @@ mod tests {
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: 0,
+                pushing: false,
             };
             let mover = Mover {
                 work: &mut self.work,
@@ -6731,6 +6926,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         let mut rnd = crate::zombie2::Rnd::default();
         for _ in 0..200 {
@@ -6805,6 +7001,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         let Setup {
             mut work,
@@ -7578,6 +7775,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         // `Key_trg` comes from the pad, which goes on being read.
@@ -7639,6 +7837,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work.neck.body, None);
@@ -7766,6 +7965,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
         mover.work.bank = Bank::Pld;

@@ -428,6 +428,10 @@ const STATUS_ENEMY_FLAGS: u8 = 6;
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x10000000`: the partner is with the player.
 const PARTNER_BIT: u8 = 3;
+/// `fg_status`'s `0x2000`: `Om_move` pushed an object this tick.
+const PUSH_BIT: u8 = 18;
+/// `fg_stop`'s `0x8000000`: the objects don't move.
+const OBJECTS_STOP_BIT: u8 = 4;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
@@ -1343,6 +1347,21 @@ impl Re2State {
         self.set_flag(STATUS_BANK, PARTNER_BIT, u8::from(on));
     }
 
+    /// `fg_status`'s `0x2000`: last tick's `Om_move` pushed an object, which
+    /// `pl_br_01` turns into the push routine.
+    pub fn pushing(&self) -> bool {
+        self.flag(STATUS_BANK, PUSH_BIT)
+    }
+
+    pub fn set_pushing(&mut self, on: bool) {
+        self.set_flag(STATUS_BANK, PUSH_BIT, u8::from(on));
+    }
+
+    /// `fg_stop`'s `0x8000000`, which stops `Om_move`.
+    pub fn objects_stopped(&self) -> bool {
+        self.flag(STOP_BANK, OBJECTS_STOP_BIT)
+    }
+
     pub fn flag(&self, bank: u8, index: u8) -> bool {
         let bit = 0x8000_0000 >> (index & 31);
         if bank == KEY_BANK {
@@ -2133,6 +2152,7 @@ impl GameHost<'_> {
             be_flg,
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
+            id: at(1) as u8,
             item_flags,
             // The format reads `At_h` and `At_d` as byte pairs.
             atd2: crate::objects::ObjectAtd {

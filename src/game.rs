@@ -1440,6 +1440,7 @@ mod entity;
 pub mod hikidashi2;
 pub mod item_get2;
 pub mod itembox2;
+pub mod objects2;
 pub mod save2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
@@ -7869,155 +7870,141 @@ impl GameState {
             if !record.active() {
                 continue;
             }
-            let saved = record.pos;
+            // Steps 1 to 5 are RE1's push. An RE2 room's objects ran in
+            // `Om_move` ([`GameState::om_move`]) before the area pass.
+            if !self.is_re2_room {
+                let saved = record.pos;
 
-            // 1. every active character is pushed out of the object, with its
-            // own SCA volume (`ChkEntitySlide` reads the record's radius,
-            // half-height and rotated part offset).
-            for slot in 1..ENTITY_COUNT {
-                let entity = self.entities[slot];
-                if !entity.active() {
-                    continue;
+                // 1. every active character is pushed out of the object, with its
+                // own SCA volume (`ChkEntitySlide` reads the record's radius,
+                // half-height and rotated part offset).
+                for slot in 1..ENTITY_COUNT {
+                    let entity = self.entities[slot];
+                    if !entity.active() {
+                        continue;
+                    }
+                    let hit = crate::enemy::walk::ScaHit::character(entity.id, entity.sca_radius);
+                    let ext = objects::EntityCollision {
+                        flag: entity.status_flags,
+                        radius: hit.radius,
+                        height: hit.half_height,
+                        offsets: hit.world_offset(entity.angle),
+                        local_offset: [hit.offset[0], hit.offset[2]],
+                    };
+                    objects::chk_entity_slide(
+                        &mut self.entities[slot].pos,
+                        ext,
+                        &mut record,
+                        false,
+                    );
                 }
-                let hit = crate::enemy::walk::ScaHit::character(entity.id, entity.sca_radius);
-                let ext = objects::EntityCollision {
-                    flag: entity.status_flags,
-                    radius: hit.radius,
-                    height: hit.half_height,
-                    offsets: hit.world_offset(entity.angle),
-                    local_offset: [hit.offset[0], hit.offset[2]],
-                };
-                objects::chk_entity_slide(&mut self.entities[slot].pos, ext, &mut record, false);
-            }
 
-            // 2. the push probe.
-            let ent_ext = objects::EntityCollision::player(player.radius);
-            let mut player_pos = player.pos;
-            let moved = objects::chk_entity_slide(&mut player_pos, ent_ext, &mut record, true);
-            let reach = objects::chk_pl_reach_entity(player.pos, player.angle, &record);
-            if moved == 0 || !player.input.up || reach.is_none() {
-                record.push_counter = 0;
-            } else {
-                record.push_counter = record.push_counter.wrapping_add(1);
-                player.push_object = Some(index as u8);
-                player.push_heavy = record.model & 0x40 != 0;
-            }
-
-            // 3. start the push on the ninth frame.
-            let mut restore_position = true;
-            if record.flag & objects::OBJECT_FLAG_NOT_PUSHABLE == 0 && record.push_counter == 9 {
-                if self.object_floor_probe(room, &mut record) {
-                    // Parked at 10: a blocked object cannot re-trigger.
-                    record.push_counter = 10;
+                // 2. the push probe.
+                let ent_ext = objects::EntityCollision::player(player.radius);
+                let mut player_pos = player.pos;
+                let moved = objects::chk_entity_slide(&mut player_pos, ent_ext, &mut record, true);
+                let reach = objects::chk_pl_reach_entity(player.pos, player.angle, &record);
+                if moved == 0 || !player.input.up || reach.is_none() {
+                    record.push_counter = 0;
                 } else {
-                    push_started = true;
-                    record.push_counter = 8;
-                    player.angle = player.angle.wrapping_add(0x200) & 0xC00;
+                    record.push_counter = record.push_counter.wrapping_add(1);
+                    player.push_object = Some(index as u8);
+                    player.push_heavy = record.model & 0x40 != 0;
+                }
 
-                    // A character standing where the object would go parks the
-                    // counter at 10 (the original does not abort the push on
-                    // this path; it just shoves the object off the character).
-                    for slot in 1..ENTITY_COUNT {
-                        let entity = self.entities[slot];
-                        if !entity.active() {
-                            continue;
+                // 3. start the push on the ninth frame.
+                let mut restore_position = true;
+                if record.flag & objects::OBJECT_FLAG_NOT_PUSHABLE == 0 && record.push_counter == 9
+                {
+                    if self.object_floor_probe(room, &mut record) {
+                        // Parked at 10: a blocked object cannot re-trigger.
+                        record.push_counter = 10;
+                    } else {
+                        push_started = true;
+                        record.push_counter = 8;
+                        player.angle = player.angle.wrapping_add(0x200) & 0xC00;
+
+                        // A character standing where the object would go parks the
+                        // counter at 10 (the original does not abort the push on
+                        // this path; it just shoves the object off the character).
+                        for slot in 1..ENTITY_COUNT {
+                            let entity = self.entities[slot];
+                            if !entity.active() {
+                                continue;
+                            }
+                            let hit =
+                                crate::enemy::walk::ScaHit::character(entity.id, entity.sca_radius);
+                            let ext = objects::EntityCollision {
+                                flag: entity.status_flags,
+                                radius: hit.radius,
+                                height: hit.half_height,
+                                offsets: hit.world_offset(entity.angle),
+                                local_offset: [hit.offset[0], hit.offset[2]],
+                            };
+                            let mut ent_pos = entity.pos;
+                            if objects::chk_entity_slide(&mut ent_pos, ext, &mut record, true) != 0
+                            {
+                                record.push_counter = 10;
+                            }
                         }
-                        let hit =
-                            crate::enemy::walk::ScaHit::character(entity.id, entity.sca_radius);
-                        let ext = objects::EntityCollision {
-                            flag: entity.status_flags,
-                            radius: hit.radius,
-                            height: hit.half_height,
-                            offsets: hit.world_offset(entity.angle),
-                            local_offset: [hit.offset[0], hit.offset[2]],
-                        };
-                        let mut ent_pos = entity.pos;
-                        if objects::chk_entity_slide(&mut ent_pos, ext, &mut record, true) != 0 {
-                            record.push_counter = 10;
+
+                        // Another object in the way vetoes the whole push.
+                        let mut vetoed = false;
+                        for other_index in 0..slot_count {
+                            if other_index == index || !self.objects.records[other_index].active() {
+                                continue;
+                            }
+                            let mover = self.objects.records[other_index];
+                            if objects::chk_obj_slide(&mover, &mut record) {
+                                record.push_counter = 10;
+                                vetoed = true;
+                                break;
+                            }
+                        }
+
+                        if !vetoed {
+                            if self.entities[0].is_being_attacked != 0
+                                || player.locked == crate::player::LockedAction::Push
+                            {
+                                // The animation is already running (or the player
+                                // is otherwise committed): keep the probe's
+                                // displacement, which is what slides the object.
+                                restore_position = false;
+                            } else {
+                                // The starting frame: lock the menu out and undo
+                                // the probe - the object holds still while the
+                                // wind-up animation plays.
+                                self.message_flags &= !0x0040;
+                            }
                         }
                     }
+                }
+                if restore_position {
+                    record.pos = saved;
+                }
 
-                    // Another object in the way vetoes the whole push.
-                    let mut vetoed = false;
+                // 4. resolve the player out of the object.
+                let mut resolved = player.pos;
+                objects::chk_entity_slide(&mut resolved, ent_ext, &mut record, false);
+                player.pos = resolved;
+
+                // 5. commit the moved object and shove whatever it ran into.
+                if i32::from(record.committed[0]) != record.pos[0]
+                    || i32::from(record.committed[2]) != record.pos[2]
+                {
                     for other_index in 0..slot_count {
                         if other_index == index || !self.objects.records[other_index].active() {
                             continue;
                         }
-                        let mover = self.objects.records[other_index];
-                        if objects::chk_obj_slide(&mover, &mut record) {
-                            record.push_counter = 10;
-                            vetoed = true;
-                            break;
+                        let mut other = self.objects.records[other_index];
+                        if objects::chk_obj_slide(&record, &mut other) {
+                            self.objects.records[other_index] = other;
                         }
                     }
-
-                    if !vetoed {
-                        if self.entities[0].is_being_attacked != 0
-                            || player.locked == crate::player::LockedAction::Push
-                        {
-                            // The animation is already running (or the player
-                            // is otherwise committed): keep the probe's
-                            // displacement, which is what slides the object.
-                            restore_position = false;
-                        } else {
-                            // The starting frame: lock the menu out and undo
-                            // the probe - the object holds still while the
-                            // wind-up animation plays.
-                            self.message_flags &= !0x0040;
-                        }
-                    }
+                    record.committed[0] = record.pos[0] as i16;
+                    record.committed[2] = record.pos[2] as i16;
                 }
             }
-            if restore_position {
-                record.pos = saved;
-            }
-
-            // 4. resolve the player out of the object.
-            if self.is_re2_room {
-                // RE2's `Oma_ck_oba`, against the player's own `Atd[0]`.
-                if self.re2.player.be_flg & 0x40 == 0 {
-                    let ofs_y = -(crate::character2::PLAYER_HEIGHT as i16);
-                    let old = self.re2.player.old.unwrap_or(player.pos);
-                    let mut atd = objects::PlayerAtd {
-                        at: [
-                            player.pos[0],
-                            player.pos[1] + i32::from(ofs_y),
-                            player.pos[2],
-                        ],
-                        old: [
-                            old[0] as i16,
-                            (old[1] + i32::from(ofs_y)) as i16,
-                            old[2] as i16,
-                        ],
-                        ofs_y,
-                        at_w: crate::character2::player_width(self.id.player_flag),
-                        at_h: crate::character2::PLAYER_HEIGHT,
-                    };
-                    objects::oma_ck_oba(&mut player.pos, &mut atd, &record);
-                }
-            } else {
-                let mut resolved = player.pos;
-                objects::chk_entity_slide(&mut resolved, ent_ext, &mut record, false);
-                player.pos = resolved;
-            }
-
-            // 5. commit the moved object and shove whatever it ran into.
-            if i32::from(record.committed[0]) != record.pos[0]
-                || i32::from(record.committed[2]) != record.pos[2]
-            {
-                for other_index in 0..slot_count {
-                    if other_index == index || !self.objects.records[other_index].active() {
-                        continue;
-                    }
-                    let mut other = self.objects.records[other_index];
-                    if objects::chk_obj_slide(&record, &mut other) {
-                        self.objects.records[other_index] = other;
-                    }
-                }
-                record.committed[0] = record.pos[0] as i16;
-                record.committed[2] = record.pos[2] as i16;
-            }
-
             self.objects.records[index] = record;
             // 6. the object-side room-action probe (mask 4). The original's
             // `update_player_position` clears the passed entity's zone bit at

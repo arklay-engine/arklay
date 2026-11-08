@@ -648,6 +648,7 @@ pub fn run_with_options(
                         re2_game_mode: None,
                         re2_computer: None,
                         re2_hikidashi: None,
+                        re2_objects: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -7110,6 +7111,7 @@ impl GameSession {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         };
         if init {
             crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
@@ -7911,6 +7913,10 @@ impl GameSession {
             re2_hikidashi: self.game.is_re2_room.then(|| {
                 self.game
                     .re2_hikidashi_trace(self.loaded.room.re2_object_count.into())
+            }),
+            re2_objects: self.game.is_re2_room.then(|| {
+                self.game
+                    .re2_objects_trace(self.loaded.room.re2_object_count.into())
             }),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
@@ -16196,6 +16202,12 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     }
     context.game.re2.clear_tick_flags();
     context.game.re2.clear_enemy_areas();
+    // And every object in play (`At_sce_no`, member 9).
+    for record in &mut context.game.objects.records {
+        if record.be_flg & 1 != 0 {
+            record.at_sce_no = crate::scd2::host::NO_AREA;
+        }
+    }
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
@@ -16432,6 +16444,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         targets: &targets,
         neck_targets: &neck_targets,
         enemies: context.game.re2.enemies,
+        pushing: context.game.re2.pushing(),
     };
     let old = context.player.pos;
     crate::player2::seed_pose(&mut context.game.re2.player, context.player, &tick);
@@ -17011,6 +17024,11 @@ fn tick_room_timed(
     if let Some(phases) = phases.as_mut() {
         phases.effect += effect_start.elapsed();
     }
+    // `Om_move` runs after the player's move and before `Sce_at`: an RE2
+    // room's objects are pushed, and hold the characters out, here.
+    if context.game.is_re2_room {
+        context.game.om_move(context.room, context.player);
+    }
     // The original runs the room action probe after the player's movement, so
     // `stairs_height_update` measures the frame's final position and the climb
     // behaviour starts from where the player actually is. `update_player_position`
@@ -17058,6 +17076,10 @@ fn tick_room_timed(
     // probe: the push probe, the object-side action probe and the climb scan
     // all read the frame's final player state.
     context.game.tick_objects(context.room, context.player);
+    if context.game.is_re2_room {
+        // `Om_trans`, as the frame draws the objects.
+        context.game.om_trans_old();
+    }
     context.game.apply_stair_state(context.player);
     // A script that changed the camera id this frame (the desk's close-up, a
     // cutscene cut) owns the render cut from this frame on: the original

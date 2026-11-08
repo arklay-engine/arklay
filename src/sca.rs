@@ -52,8 +52,8 @@ pub struct Resolved {
     pub floor: Option<u8>,
 }
 
-/// The bit of the quadrant `(x, z)` lies in around the records' centre.
-fn area(sca: &Sca, x: i32, z: i32) -> u16 {
+/// `Sca_get_area`: the bit of the header's quarter that `(x, z)` is in.
+pub(crate) fn area(sca: &Sca, x: i32, z: i32) -> u16 {
     let quadrant = u32::from(x < i32::from(sca.cell_x)) + 2 * u32::from(z < i32::from(sca.cell_z));
     1 << quadrant
 }

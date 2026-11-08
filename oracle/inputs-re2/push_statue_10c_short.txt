@@ -1,0 +1,4 @@
+# Room 10C's statue 1 from 76 units off square (oracle/re2.md, "Pushing"): walk into its +z face, square up and push.
+0
+350 up
+470

@@ -42,6 +42,9 @@ pub fn tick(
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
         };
+        // `Old_x2`, `Old_y2` and `Old_z2` hold where it ended the last tick,
+        // for `Om_move`.
+        character.work.old = Some(character.body.pos);
         if moves(&character) {
             let (dx, dz) = (
                 character.body.pos[0] - game.entities[0].pos[0],
@@ -1551,6 +1554,7 @@ pub fn tick_of<'a>(
         targets: &[],
         neck_targets: &[],
         enemies: 0,
+        pushing: false,
     }
 }
 
@@ -1742,6 +1746,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         }
     }
 

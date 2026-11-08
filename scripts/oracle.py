@@ -92,6 +92,8 @@ class Tick:
     door_locks: str | None = None
     # RE2's `scene` field: `fg_status & 0x10`, arklay's `scene` or the original's `fgstat`.
     scene: str | None = None
+    # RE2's `om` field: each room object's `Be_flg`, position, `Cdir_y`, `Push_cnt`, `At_sce_no` and `nFloor`.
+    objects: str | None = None
     # RE2's screens' own fields: the title's (`ti`, `tlogo`, `tfade`, a `--boot` record's) and the item box's (`ib`, `box`).
     screen: dict[str, str] = field(default_factory=dict)
 
@@ -115,6 +117,7 @@ OPT_IN_FIELDS = {
     "mapfg",
     "movie",
     "msg",
+    "om",
     "pc",
     "pneck",
     "scene",
@@ -266,6 +269,7 @@ def parse_trace(path: str) -> list[Tick]:
                     message=message_state(fields),
                     door_locks=fields.get("fgkey"),
                     scene=scene(fields),
+                    objects=fields.get("om"),
                     screen={key: fields[key] for key in SCREEN_FIELDS if key in fields},
                 )
             )
@@ -323,6 +327,10 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
             items.append((f"zm{slot}", ",".join(values.split(",")[:14])))
     if tick.zombie_parts is not None:
         items.append(("zp", tick.zombie_parts))
+    if tick.objects not in (None, "-"):
+        for row in tick.objects.split(";"):
+            slot, _, values = row.partition(":")
+            items.append((f"om{slot}", values))
     if tick.effects is not None:
         live, _, rows = tick.effects.partition("/")
         rows = [] if rows == "-" else rows.split(";")
@@ -345,9 +353,11 @@ def selected(key: str, fields: list[str] | None) -> bool:
     """Whether `key` is compared: `None` compares everything but the opt-in
     fields, else a name, `zm*` (every enemy slot's `zm<slot>`) or `e*`. The
     `esp` keys are opt-in: `esp` selects all of them, `espn` and `espk` only
-    themselves."""
+    themselves. So are the room objects' `om<n>`: `om*` selects every one."""
     if key.startswith("esp"):
         return fields is not None and (key in fields or "esp" in fields)
+    if key.startswith("om") and key[2:].isdigit():
+        return fields is not None and (key in fields or "om*" in fields)
     if fields is None:
         return key not in OPT_IN_FIELDS
     if key in fields:
@@ -634,7 +644,8 @@ def main() -> int:
     compare.add_argument("--fields", default=None,
                          help="comma-separated fields to compare (room, cam, p.x, ..., zm0, e*; "
                               "zm* selects every enemy slot's zm<slot>; "
-                              "the opt-in esp, or espn/espk alone, compare the effect pool); "
+                              "the opt-in esp, or espn/espk alone, compare the effect pool; "
+                              "the opt-in om<n>, or om* for all, compare the room objects); "
                               "default: every field")
 
     pixels = sub.add_parser("pixels", help="compare the capture frame directories")

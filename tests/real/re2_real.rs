@@ -1337,6 +1337,7 @@ fn no_event_holds_the_player_for_good() {
                         targets: &[],
                         neck_targets: &[],
                         enemies: 0,
+                        pushing: false,
                     };
                     let arrived =
                         arklay::player2::player_move(&mut game.re2.player, &mut player, &tick);
