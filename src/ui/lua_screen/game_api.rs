@@ -59,15 +59,22 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
 
     // `re2_items()`: RE2's status screen as a table (`page`, `sub`,
     // `command`, `step`, `count`, `cursor`, `target`, `tab`,
-    // `command_cursor`, `result`, `follow`, FILE's `binder`, the condition
-    // panel's `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`,
-    // and whether the player is `poisoned`), or nil when it isn't up. The engine runs it; the
-    // script only draws it.
+    // `command_cursor`, `result`, `follow`, the condition panel's
+    // `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`, whether
+    // the player is `poisoned`, the screen's shared `blink` and
+    // `blink_falling`, FILE's `binder`, `slot`, `page_index`, `zoom`,
+    // `view_zoom`, `spin`, `file_x` and the 24 `files` held, 0xFF for
+    // none), or nil when it isn't up. The engine runs it; the script only
+    // draws it.
     methods.add_method("re2_items", |lua, api, ()| {
-        let Some((page, poisoned)) = api
-            .game()
-            .and_then(|game| Some((game.re2_items?, game.re2.player.poisoned)))
-        else {
+        let Some((page, poisoned, work, held)) = api.game().and_then(|game| {
+            Some((
+                game.re2_items?,
+                game.re2.player.poisoned,
+                game.re2_file,
+                game.re2.files,
+            ))
+        }) else {
             return Ok(mlua::Value::Nil);
         };
         let table = lua.create_table()?;
@@ -87,7 +94,16 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("target", page.target)?;
         table.set("tab", page.tab)?;
         table.set("command_cursor", page.command_cursor)?;
-        table.set("binder", page.binder)?;
+        table.set("blink", work.blink.level)?;
+        table.set("blink_falling", work.blink.falling)?;
+        table.set("binder", work.binder)?;
+        table.set("slot", work.slot)?;
+        table.set("page_index", work.page)?;
+        table.set("zoom", work.zoom)?;
+        table.set("view_zoom", work.view_zoom)?;
+        table.set("spin", work.spin)?;
+        table.set("file_x", work.x)?;
+        table.set("files", lua.create_sequence_from(held)?)?;
         Ok(mlua::Value::Table(table))
     });
 

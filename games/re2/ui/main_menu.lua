@@ -135,11 +135,12 @@ local COUNT_FLAGS = {
 }
 local INFINITE = 0xFF
 
--- The cursor (texture 0x15): three pieces over a slot, grey `pulse`.
+-- The cursor (texture 0x15): three pieces over a slot, grey: the screen's
+-- blink (`re2_items().blink`), which the engine steps (`0x4FE5F0`: up by 3
+-- a frame until past 120, then down by 3 until under 50; held at 60 under
+-- the menu). The item box's inventory cursor pulses here, `s.pulse`.
 local CURSOR_X, CURSOR_Y = 223, 71
 local PERSONAL_CURSOR_X, PERSONAL_CURSOR_Y = 263, 33
--- `0x4FE5F0`: up by 3 a frame until past 120, then down by 3 until under
--- 50; held at 60 off the grid, going on the way it was when it comes back.
 local PULSE_START, PULSE_HIGH, PULSE_LOW, PULSE_HELD, PULSE_STEP = 50, 120, 50, 60, 3
 -- COMBN's target cursor (`0x4FE7C0`) pulses on its own, from 80 when the
 -- screen opens: up by 3 until past 124, then down by 3 until under 70, a
@@ -235,10 +236,9 @@ local SIGN_PIECES = {
     { 250, 21, 32, 48, 96, 0 },
 }
 -- The player's marker (texture 0x14, translucent), its colour the blink
--- (`0x691F88`, its way at `0x691F89`) plus 40: down by 2 a tick until
--- under 10, then up by 2 until past 0x50, a step on each tick the shown
--- map's logic runs. The work block keeps it between openings; the first
--- after a new game starts at 50, going down.
+-- (`0x691F88`, its way at `0x691F89`) plus 40: the engine steps it up by 2
+-- a tick until past 0x50, then down by 2 until under 10, on each tick the
+-- shown map's logic runs. It is the item cursor's pulse too.
 local MARKER, MARKER_SIZE, MARKER_BASE = 0x14, 12, 40
 
 -- The FILE page (`0x4F95B0`): the message box drops out of the screen as a
@@ -261,7 +261,6 @@ local FILE_PANEL = {
 for k = 0, 7 do
     FILE_PANEL[#FILE_PANEL + 1] = { 226 + 16 * k, 134, 16, 9, 80, 155 }
 end
-local BLINK_START, BLINK_LOW, BLINK_HIGH, BLINK_STEP = 50, 10, 0x50, 2
 
 local s = {
     slots = 8,
@@ -281,8 +280,6 @@ local s = {
     target_shown = false,
     menu_item = 0,
     art = nil,
-    blink = BLINK_START,
-    blink_falling = true,
 }
 M.state = s
 
@@ -325,7 +322,6 @@ function M.open(api, args)
     s.slots = api:inventory_capacity()
     s.page, s.last = nil, nil
     s.open, s.close = 0, nil
-    s.pulse, s.pulse_falling = PULSE_START, false
     s.trace, s.trace_mode = 0, 0
     s.target_pulse, s.target_falling, s.target_shown = TARGET_START, false, false
     s.menu_item = 0
@@ -416,16 +412,6 @@ function M.animate(api, open, close)
         return
     end
     local page = s.page
-    local last = s.last
-    if last ~= nil and last.page == PAGE_MAP and last.sub == MAP_SHOWN then
-        if s.blink_falling then
-            s.blink_falling = s.blink >= BLINK_LOW
-            s.blink = s.blink - BLINK_STEP
-        else
-            s.blink_falling = s.blink > BLINK_HIGH
-            s.blink = s.blink + BLINK_STEP
-        end
-    end
     if draws_target(s.last) then
         s.target_shown = true
         if s.target_falling then
@@ -435,17 +421,6 @@ function M.animate(api, open, close)
             s.target_falling = s.target_pulse > TARGET_HIGH
             s.target_pulse = s.target_pulse + PULSE_STEP
         end
-    end
-    if page.page == PAGE_ITEMS and page.sub == SUB_GRID then
-        if s.pulse_falling then
-            s.pulse_falling = s.pulse >= PULSE_LOW
-            s.pulse = s.pulse - PULSE_STEP
-        else
-            s.pulse_falling = s.pulse > PULSE_HIGH
-            s.pulse = s.pulse + PULSE_STEP
-        end
-    else
-        s.pulse = PULSE_HELD
     end
     -- The menu's labels are set when it opens, from the item then under
     -- the cursor.
@@ -978,7 +953,8 @@ local function draw_map(api, d)
     end
     local marker = view.marker
     if marker ~= nil then
-        translucent(api, d, d.pages[MARKER], 0, s.blink + MARKER_BASE,
+        local blink = s.page and s.page.blink or PULSE_START
+        translucent(api, d, d.pages[MARKER], 0, blink + MARKER_BASE,
             marker.x, marker.y, MARKER_SIZE, MARKER_SIZE, marker.u, marker.v)
     end
 end
@@ -1414,7 +1390,7 @@ function M.draw(api)
     local cursor_shown = s.show_cursor and not closing and ran_items
     local cx, cy, tx, ty = slide(api, page)
     if cursor_shown then
-        draw_cursor(api, d, page.cursor, s.pulse, cx, cy)
+        draw_cursor(api, d, page.cursor, page.blink, cx, cy)
     end
     if panel_y ~= nil then
         check_picture(api, d, page, panel_y)

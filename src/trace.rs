@@ -93,6 +93,10 @@ pub struct TraceTick<'a> {
     /// RE2: the status screen's item page (`ip`), as the end of the
     /// oracle's `gi`.
     pub re2_item_page: Option<String>,
+    /// RE2: the status screen's FILE page and the files held (`fl`): the
+    /// binder, slot, page, blink, zoom, turn and page x, then
+    /// `File_tag_bk` in hex.
+    pub re2_file: Option<String>,
     /// RE2: the item box's lid and page and the box's slots, the oracle's
     /// `ib` and `box` fields.
     pub re2_item_box: Option<String>,
@@ -287,6 +291,9 @@ impl TraceWriter {
         if let Some(page) = &tick.re2_item_page {
             write!(self.out, " ip={page}")?;
         }
+        if let Some(file) = &tick.re2_file {
+            write!(self.out, " fl={file}")?;
+        }
         if let Some(fields) = &tick.re2_item_box {
             write!(self.out, " {fields}")?;
         }
@@ -415,6 +422,7 @@ mod tests {
             re2_inventory: None,
             re2_map_flags: None,
             re2_item_page: None,
+            re2_file: None,
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
@@ -473,6 +481,7 @@ mod tests {
                 re2_inventory: None,
                 re2_map_flags: None,
                 re2_item_page: None,
+                re2_file: None,
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
@@ -578,6 +587,7 @@ mod tests {
             re2_inventory: None,
             re2_map_flags: None,
             re2_item_page: None,
+            re2_file: None,
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
@@ -634,6 +644,7 @@ mod tests {
             re2_inventory: None,
             re2_map_flags: None,
             re2_item_page: None,
+            re2_file: None,
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,

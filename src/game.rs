@@ -3253,6 +3253,12 @@ pub struct GameState {
     /// The item page's bytes as the trace's `ip` shows them; like the
     /// original's work block they stay after the screen closes.
     pub re2_items_trace: String,
+    /// The FILE page's work bytes and the screen's shared blink, which
+    /// persist across the screen's openings as the original's do.
+    pub re2_file: status2::files::FileWork,
+    /// The page the item page's last tick started on, until the screen's
+    /// draw state steps ([`GameState::animate_re2_items`]).
+    pub re2_items_start: Option<u8>,
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
@@ -3751,6 +3757,8 @@ impl Default for GameState {
             re2_message_stop_pending: 0,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
+            re2_file: status2::files::FileWork::default(),
+            re2_items_start: None,
             re2_status_start: false,
             re2_box_entrance: itembox2::Entrance::default(),
             re2_box: None,

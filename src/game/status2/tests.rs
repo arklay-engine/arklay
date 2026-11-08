@@ -399,35 +399,55 @@ fn the_cues_are_the_core_banks_slots_4_to_7() {
     assert_eq!(Sound::Buzzer.id(), 0x0407_0000);
 }
 
-/// Ticks `page` with `tick` and `input` until `done`, returning the ticks
-/// it took and the sounds it played.
+/// Ticks the screen with `input` on the first tick until `done`, returning
+/// the ticks it took and the sounds it played.
 fn ticks_until(
-    page: &mut ItemPage,
-    tick: fn(&mut ItemPage, Input, &mut Outcome),
+    game: &mut GameState,
     input: Input,
-    done: impl Fn(&ItemPage) -> bool,
+    done: impl Fn(&ItemPage, &files::FileWork) -> bool,
 ) -> (u32, Vec<Sound>) {
-    let mut out = Outcome::default();
+    let mut sounds = Vec::new();
     let mut ticks = 0;
-    while !done(page) {
-        assert!(ticks < 100, "stuck at {page:?}");
-        tick(page, if ticks == 0 { input } else { NONE }, &mut out);
+    while !done(&game.re2_items.unwrap(), &game.re2_file) {
+        assert!(ticks < 100, "stuck at {:?}", game.re2_items);
+        let out = game
+            .tick_re2_items(if ticks == 0 { input } else { NONE })
+            .unwrap();
+        sounds.extend(out.sounds);
         ticks += 1;
     }
-    (ticks, out.sounds)
+    (ticks, sounds)
 }
+
+/// One tick with `input`, its sounds.
+fn tick(game: &mut GameState, input: Input) -> Vec<Sound> {
+    game.tick_re2_items(input).unwrap().sounds
+}
+
+fn page(game: &GameState) -> ItemPage {
+    game.re2_items.unwrap()
+}
+
+/// The screen on `page_byte`'s sub `sub`.
+fn on(game: &mut GameState, page_byte: u8, sub: u8) {
+    let page = game.re2_items.as_mut().unwrap();
+    page.page = page_byte;
+    page.sub = sub;
+    page.command = 0;
+}
+
+const LEFT: Input = Input { left: true, ..NONE };
 
 /// `status_map`: the map loads in a tick and slides in over 14, the last
 /// with the map's cue; the cancel key slides it out over 14 more.
 #[test]
 fn the_map_slides_in_and_out_over_fourteen_ticks() {
-    let mut page = game(&[(0x02, 18)]).re2_items.unwrap();
-    page.page = PAGE_MAP;
-    page.sub = MAP_LOAD;
-    let (ticks, sounds) = ticks_until(&mut page, re2_map, NONE, |p| p.sub == MAP_SHOWN);
+    let mut game = game(&[(0x02, 18)]);
+    on(&mut game, PAGE_MAP, MAP_LOAD);
+    let (ticks, sounds) = ticks_until(&mut game, NONE, |p, _| p.sub == MAP_SHOWN);
     assert_eq!((ticks, sounds), (15, vec![Sound::Map]));
     // Shown, only the cancel key does anything.
-    let (ticks, sounds) = ticks_until(&mut page, re2_map, CANCEL, |p| p.page == PAGE_TABS);
+    let (ticks, sounds) = ticks_until(&mut game, CANCEL, |p, _| p.page == PAGE_TABS);
     assert_eq!((ticks, sounds), (15, vec![Sound::Cancel]));
 }
 
@@ -435,22 +455,437 @@ fn the_map_slides_in_and_out_over_fourteen_ticks() {
 /// cue 10 (wrapping 0 to 2), and slide out on the cancel key.
 #[test]
 fn the_binders_slide_in_turn_and_slide_out() {
-    let mut page = game(&[(0x02, 18)]).re2_items.unwrap();
-    page.page = PAGE_FILE;
-    page.sub = FILE_LOAD;
-    let (ticks, sounds) = ticks_until(&mut page, re2_file, NONE, |p| p.sub == FILE_SHOWN);
+    let mut game = game(&[(0x02, 18)]);
+    on(&mut game, PAGE_FILE, FILE_LOAD);
+    let (ticks, sounds) = ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
     assert_eq!((ticks, sounds), (13, vec![]));
     // The decide key does nothing: no binder holds a file.
-    re2_file(&mut page, CONFIRM, &mut Outcome::default());
-    assert_eq!(page.sub, FILE_SHOWN);
-    let left = Input { left: true, ..NONE };
-    let (ticks, sounds) = ticks_until(&mut page, re2_file, left, |p| {
-        p.sub == FILE_SHOWN && p.binder != 0
-    });
+    tick(&mut game, CONFIRM);
+    assert_eq!(page(&game).sub, FILE_SHOWN);
+    let (ticks, sounds) = ticks_until(&mut game, LEFT, |p, w| p.sub == FILE_SHOWN && w.binder != 0);
     assert_eq!(
-        (ticks, sounds, page.binder),
+        (ticks, sounds, game.re2_file.binder),
         (14, vec![Sound::Turn], BINDERS - 1)
     );
-    let (ticks, sounds) = ticks_until(&mut page, re2_file, CANCEL, |p| p.page == PAGE_TABS);
+    let (ticks, sounds) = ticks_until(&mut game, CANCEL, |p, _| p.page == PAGE_TABS);
     assert_eq!((ticks, sounds), (14, vec![Sound::Cancel]));
+}
+
+/// A screen on FILE's carousel, shown, with `held` in binder 0's slots.
+fn file_game(held: &[u8]) -> GameState {
+    let mut game = game(&[(0x02, 18)]);
+    for (slot, &file) in held.iter().enumerate() {
+        game.re2.files[slot] = file;
+    }
+    on(&mut game, PAGE_FILE, FILE_LOAD);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
+    game
+}
+
+/// From the carousel, open binder 0 and wait for its list.
+fn open_list(game: &mut GameState) {
+    assert_eq!(tick(game, CONFIRM), vec![Sound::Decide]);
+    ticks_until(game, NONE, |p, _| p.sub == FILE_LIST);
+}
+
+/// From the list, open the file under the cursor and wait for its page.
+fn open_file(game: &mut GameState) {
+    assert_eq!(tick(game, CONFIRM), vec![Sound::Decide]);
+    ticks_until(game, NONE, |p, _| p.sub == FILE_PAGE);
+}
+
+#[test]
+fn move_file_tag_wraps_and_skips_empty_slots() {
+    let mut held = [NO_FILE; crate::scd2::host::FILE_SLOTS];
+    held[0] = 1;
+    held[1] = 3;
+    let mut slot = 1;
+    files::move_file_tag(&held, 0, &mut slot, false);
+    assert_eq!(slot, 0);
+    files::move_file_tag(&held, 0, &mut slot, true);
+    assert_eq!(slot, 1);
+    // One file: neither way moves.
+    held[1] = NO_FILE;
+    let mut slot = 0;
+    files::move_file_tag(&held, 0, &mut slot, true);
+    files::move_file_tag(&held, 0, &mut slot, false);
+    assert_eq!(slot, 0);
+    // An empty binder leaves the slot as it was.
+    let mut slot = 5;
+    files::move_file_tag(&held, 1, &mut slot, false);
+    assert_eq!(slot, 5);
+    // A file in a later slot only: down finds it.
+    held[0] = NO_FILE;
+    held[6] = 2;
+    let mut slot = 0;
+    files::move_file_tag(&held, 0, &mut slot, false);
+    assert_eq!(slot, 6);
+}
+
+#[test]
+fn file_sub0_resets_the_binder_slot_and_zoom() {
+    let mut game = game(&[(0x02, 18)]);
+    game.re2_file.binder = 2;
+    game.re2_file.slot = 4;
+    game.re2_file.zoom = 100;
+    game.re2_file.turn = 7;
+    on(&mut game, PAGE_FILE, FILE_LOAD);
+    tick(&mut game, NONE);
+    let work = game.re2_file;
+    assert_eq!(
+        (work.binder, work.slot, work.zoom, work.turn),
+        (0, 0, 0, 0x400)
+    );
+    // Binder 0's first slot empty but a later one held: the slot finds it.
+    game.re2.files[3] = 5;
+    game.re2_file.slot = 1;
+    on(&mut game, PAGE_FILE, FILE_LOAD);
+    tick(&mut game, NONE);
+    assert_eq!(game.re2_file.slot, 3);
+}
+
+#[test]
+fn decide_on_a_binder_with_a_file_opens_it() {
+    let mut game = file_game(&[1]);
+    game.re2_file.page = 9;
+    assert_eq!(tick(&mut game, CONFIRM), vec![Sound::Decide]);
+    assert_eq!((page(&game).sub, game.re2_file.page), (FILE_OPEN, 0));
+}
+
+#[test]
+fn the_binder_opens_spins_and_lists() {
+    let mut game = file_game(&[1]);
+    tick(&mut game, CONFIRM);
+    let mut zooms = Vec::new();
+    for _ in 0..11 {
+        tick(&mut game, NONE);
+        zooms.push(game.re2_file.zoom);
+    }
+    assert_eq!(zooms, [24, 52, 84, 120, 160, 204, 252, 304, 360, 420, 484]);
+    // The view lags the zoom by a tick.
+    assert_eq!(game.re2_file.view_zoom, 420);
+    tick(&mut game, NONE);
+    assert_eq!(page(&game).sub, FILE_SPIN_OUT);
+    for _ in 0..11 {
+        tick(&mut game, NONE);
+        assert_eq!(page(&game).sub, FILE_SPIN_OUT);
+    }
+    tick(&mut game, NONE);
+    assert_eq!(page(&game).sub, FILE_LIST);
+    assert_eq!(game.re2_file.spin, 0x26 * 12);
+    assert_eq!(game.re2_file.slot, 0);
+}
+
+#[test]
+fn the_binder_closes_back_to_the_carousel() {
+    let mut game = file_game(&[1]);
+    open_list(&mut game);
+    assert_eq!(tick(&mut game, CANCEL), vec![Sound::Cancel]);
+    assert_eq!(page(&game).sub, FILE_SPIN_BACK);
+    let (ticks, _) = ticks_until(&mut game, NONE, |p, _| p.sub == FILE_CLOSE);
+    assert_eq!(ticks, 12);
+    assert_eq!(game.re2_file.spin, 0);
+    let mut zooms = Vec::new();
+    for _ in 0..11 {
+        tick(&mut game, NONE);
+        zooms.push(game.re2_file.zoom);
+    }
+    assert_eq!(zooms, [460, 432, 400, 364, 324, 280, 232, 180, 124, 64, 0]);
+    tick(&mut game, NONE);
+    assert_eq!(page(&game).sub, FILE_SHOWN);
+}
+
+#[test]
+fn the_list_moves_with_the_cursor_cue_only_on_a_change() {
+    let mut game = file_game(&[1, 3]);
+    open_list(&mut game);
+    assert_eq!(tick(&mut game, UP), vec![Sound::Cursor]);
+    assert_eq!(game.re2_file.slot, 1);
+    assert_eq!(tick(&mut game, DOWN), vec![Sound::Cursor]);
+    assert_eq!(game.re2_file.slot, 0);
+    // Both in one tick: up then down, back where it was, no cue.
+    assert_eq!(
+        tick(
+            &mut game,
+            Input {
+                up: true,
+                down: true,
+                ..NONE
+            }
+        ),
+        vec![]
+    );
+    let mut one = file_game(&[1]);
+    open_list(&mut one);
+    assert_eq!(tick(&mut one, DOWN), vec![]);
+}
+
+#[test]
+fn a_file_opens_after_fourteen_steps_and_loads_on_the_fifteenth() {
+    let mut game = file_game(&[1]);
+    open_list(&mut game);
+    tick(&mut game, CONFIRM);
+    assert_eq!((page(&game).sub, game.re2_file.x), (FILE_READ_IN, 25));
+    for count in 1..=14 {
+        assert_eq!(tick(&mut game, NONE), vec![]);
+        assert_eq!(
+            (page(&game).sub, page(&game).command),
+            (FILE_READ_IN, count)
+        );
+    }
+    assert_eq!(tick(&mut game, NONE), vec![Sound::Page]);
+    assert_eq!((page(&game).sub, game.re2_file.x), (FILE_NEXT_IN, 312));
+}
+
+#[test]
+fn the_page_slides_in_to_25() {
+    let mut game = file_game(&[1]);
+    open_list(&mut game);
+    tick(&mut game, CONFIRM);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_NEXT_IN);
+    game.re2_file.blink = Blink {
+        level: 40,
+        falling: true,
+    };
+    let mut xs = Vec::new();
+    for _ in 0..11 {
+        tick(&mut game, NONE);
+        xs.push(game.re2_file.x);
+    }
+    assert_eq!(xs, [216, 152, 104, 72, 56, 46, 38, 32, 28, 26, 25]);
+    tick(&mut game, NONE);
+    assert_eq!(page(&game).sub, FILE_PAGE);
+    assert_eq!(game.re2_file.blink, Blink::RESET);
+}
+
+/// The page's x over a slide's 11 moving ticks, then the sub after its
+/// 12th.
+fn slide(game: &mut GameState) -> (Vec<i16>, u8) {
+    let mut xs = Vec::new();
+    for _ in 0..11 {
+        tick(game, NONE);
+        xs.push(game.re2_file.x);
+    }
+    tick(game, NONE);
+    (xs, page(game).sub)
+}
+
+#[test]
+fn next_and_previous_pages_follow_st_mv() {
+    let mut game = file_game(&[1]);
+    open_list(&mut game);
+    open_file(&mut game);
+    assert_eq!(tick(&mut game, RIGHT), vec![Sound::Page]);
+    assert_eq!((page(&game).sub, game.re2_file.page), (FILE_NEXT_OUT, 1));
+    let (xs, sub) = slide(&mut game);
+    assert_eq!(xs, [23, 19, 13, 5, -5, -21, -53, -101, -165, -261, -373]);
+    assert_eq!((sub, game.re2_file.x), (FILE_NEXT_IN, 312));
+    slide(&mut game);
+    assert_eq!(page(&game).sub, FILE_PAGE);
+    assert_eq!(tick(&mut game, LEFT), vec![Sound::Page]);
+    assert_eq!((page(&game).sub, game.re2_file.page), (FILE_PREV_OUT, 0));
+    let (xs, sub) = slide(&mut game);
+    assert_eq!(xs, [27, 31, 37, 45, 55, 71, 103, 151, 215, 311, 423]);
+    assert_eq!((sub, game.re2_file.x), (FILE_PREV_IN, -262));
+    let (xs, sub) = slide(&mut game);
+    assert_eq!(xs, [-166, -102, -54, -22, -6, 4, 12, 18, 22, 24, 25]);
+    assert_eq!(sub, FILE_PAGE);
+    // Left on the first page does nothing.
+    assert_eq!(tick(&mut game, LEFT), vec![]);
+    assert_eq!(page(&game).sub, FILE_PAGE);
+}
+
+#[test]
+fn right_on_the_last_page_lights_the_end_and_left_puts_it_out() {
+    // File 2 has two pages.
+    let mut game = file_game(&[2]);
+    open_list(&mut game);
+    open_file(&mut game);
+    tick(&mut game, RIGHT);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_PAGE);
+    assert_eq!(game.re2_file.page, 1);
+    assert_eq!(tick(&mut game, RIGHT), vec![Sound::Cursor]);
+    assert_eq!(page(&game).sub, FILE_END);
+    // Right again does nothing, and the blink holds.
+    game.re2_file.blink.level = 30;
+    assert_eq!(tick(&mut game, RIGHT), vec![]);
+    assert_eq!(game.re2_file.blink.level, 30);
+    assert_eq!(tick(&mut game, LEFT), vec![]);
+    assert_eq!(page(&game).sub, FILE_PAGE);
+    assert_eq!((game.re2_file.page, game.re2_file.blink), (1, Blink::RESET));
+}
+
+#[test]
+fn both_directions_on_the_last_page() {
+    let mut game = file_game(&[2]);
+    open_list(&mut game);
+    open_file(&mut game);
+    tick(&mut game, RIGHT);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_PAGE);
+    let both = Input {
+        left: true,
+        right: true,
+        ..NONE
+    };
+    assert_eq!(tick(&mut game, both), vec![Sound::Cursor, Sound::Page]);
+    assert_eq!((page(&game).sub, game.re2_file.page), (FILE_PREV_OUT, 0));
+}
+
+#[test]
+fn cancel_and_close_run_the_first_return_step_in_the_same_tick() {
+    let mut game = file_game(&[2]);
+    open_list(&mut game);
+    open_file(&mut game);
+    assert_eq!(tick(&mut game, CANCEL), vec![Sound::Cancel]);
+    assert_eq!((page(&game).sub, page(&game).command), (FILE_READ_OUT, 1));
+    let (ticks, _) = ticks_until(&mut game, NONE, |p, _| p.sub == FILE_LIST);
+    assert_eq!(ticks, 13);
+    // From the end marker, the decide key closes it with the decide cue.
+    open_file(&mut game);
+    tick(&mut game, RIGHT);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_PAGE);
+    tick(&mut game, RIGHT);
+    assert_eq!(page(&game).sub, FILE_END);
+    assert_eq!(tick(&mut game, CONFIRM), vec![Sound::Decide]);
+    assert_eq!((page(&game).sub, page(&game).command), (FILE_READ_OUT, 1));
+}
+
+#[test]
+fn the_blink_shows_rising_25_ticks_then_48_tick_periods() {
+    let mut blink = Blink::RESET;
+    let mut ways = Vec::new();
+    for _ in 0..121 {
+        blink.step_reader();
+        ways.push(blink.falling);
+    }
+    let first_falling = ways.iter().position(|&way| way).unwrap();
+    assert_eq!(first_falling, 25);
+    let back = ways[25..].iter().position(|&way| !way).unwrap() + 25;
+    assert_eq!(back, 49);
+    let again = ways[49..].iter().position(|&way| way).unwrap() + 49;
+    assert_eq!(again, 73);
+}
+
+#[test]
+fn the_shared_blink_steps_each_way() {
+    // The item cursor: by 3 between 0x32 and 0x78.
+    let mut blink = Blink::OPEN;
+    blink.step_cursor();
+    assert_eq!(
+        blink,
+        Blink {
+            level: 0x35,
+            falling: false
+        }
+    );
+    let mut top = Blink {
+        level: 0x79,
+        falling: false,
+    };
+    top.step_cursor();
+    assert_eq!(
+        top,
+        Blink {
+            level: 0x7C,
+            falling: true
+        }
+    );
+    let mut bottom = Blink {
+        level: 0x31,
+        falling: true,
+    };
+    bottom.step_cursor();
+    assert_eq!(
+        bottom,
+        Blink {
+            level: 0x2E,
+            falling: false
+        }
+    );
+    // MAP's marker: by 2 between 10 and 0x50.
+    let mut map = Blink {
+        level: 0x51,
+        falling: false,
+    };
+    map.step_map();
+    assert_eq!(
+        map,
+        Blink {
+            level: 0x53,
+            falling: true
+        }
+    );
+    // The screen's opening resets it; the grid steps it and the menu holds
+    // it at 0x3C on the frames the screen draws.
+    let mut game = game(&[(0x02, 18)]);
+    game.re2_file.blink = Blink {
+        level: 9,
+        falling: true,
+    };
+    game.open_re2_items();
+    assert_eq!(game.re2_file.blink, Blink::OPEN);
+    game.animate_re2_items(true);
+    assert_eq!(game.re2_file.blink.level, 0x35);
+    game.animate_re2_items(false);
+    assert_eq!(game.re2_file.blink.level, 0x35);
+    tick(&mut game, CONFIRM);
+    game.animate_re2_items(true);
+    assert_eq!(game.re2_file.blink.level, Blink::HELD);
+    // The tab bar leaves it alone, on the tick the grid leaves for it too.
+    let mut tabs = self::game(&[(0x02, 18)]);
+    tabs.re2_items.as_mut().unwrap().cursor = PERSONAL_SLOT;
+    tick(&mut tabs, UP);
+    assert_eq!(page(&tabs).page, PAGE_TABS);
+    tabs.animate_re2_items(true);
+    assert_eq!(tabs.re2_file.blink.level, 0x35);
+    tick(&mut tabs, NONE);
+    tabs.animate_re2_items(true);
+    assert_eq!(tabs.re2_file.blink.level, 0x35);
+}
+
+#[test]
+fn the_slot_survives_closing_and_reopening_one_binder() {
+    let mut game = file_game(&[1, 3]);
+    open_list(&mut game);
+    tick(&mut game, UP);
+    tick(&mut game, CANCEL);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
+    open_list(&mut game);
+    assert_eq!(game.re2_file.slot, 1);
+}
+
+#[test]
+fn turning_to_an_empty_binder_keeps_the_slot() {
+    let mut game = file_game(&[1, 3]);
+    open_list(&mut game);
+    tick(&mut game, UP);
+    tick(&mut game, CANCEL);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
+    tick(&mut game, RIGHT);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
+    assert_eq!((game.re2_file.binder, game.re2_file.slot), (1, 1));
+    // The empty binder doesn't open.
+    assert_eq!(tick(&mut game, CONFIRM), vec![]);
+    tick(&mut game, LEFT);
+    ticks_until(&mut game, NONE, |p, _| p.sub == FILE_SHOWN);
+    assert_eq!((game.re2_file.binder, game.re2_file.slot), (0, 0));
+}
+
+#[test]
+fn the_file_trace_is_the_work_then_the_files() {
+    let mut held = [NO_FILE; crate::scd2::host::FILE_SLOTS];
+    held[0] = 1;
+    held[1] = 0x13;
+    let work = files::FileWork {
+        slot: 1,
+        page: 3,
+        zoom: 484,
+        turn: 0x400,
+        x: -262,
+        ..Default::default()
+    };
+    assert_eq!(
+        work.trace(&held),
+        format!("0,1,3,0,0,484,1024,-262/0113{}", "ff".repeat(22))
+    );
 }

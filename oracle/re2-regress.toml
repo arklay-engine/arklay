@@ -18,6 +18,7 @@ offset = 344
 [fields]
 item = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd"
 inv = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd"
+file = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fl,snd"
 
 [[run]]
 name = "item_take"
