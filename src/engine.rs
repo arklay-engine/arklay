@@ -1945,6 +1945,9 @@ const RE2_STATUS_SHOWN: u8 = 7;
 /// The open's tick on which `Status` (`0x501BD0`) runs its start, once
 /// `St_load_gfx` is done.
 const RE2_STATUS_INIT: u8 = 6;
+/// The tick (counted from START's, 1) the item page starts reading the pad,
+/// under the screen's fade in.
+const RE2_STATUS_PAGE_TICK: u8 = 7;
 /// The close's ticks on which the item box's screen still runs.
 const RE2_BOX_CLOSE_DRAWN: u8 = 7;
 
@@ -3755,6 +3758,7 @@ impl GameSession {
             if counts {
                 self.game.advance_play_timer();
             }
+            self.tick_re2_items_in_fade(pack, ui);
             self.tick_menu_fade();
             return Ok(());
         }
@@ -6757,20 +6761,54 @@ impl GameSession {
         self.apply_menu_event(pack, event);
     }
 
+    /// The status screen's item page while the screen is still fading in:
+    /// `Status` has run its start by the open's sixth tick, and the page
+    /// reads the pad from the next, under the fade (a key held through START
+    /// moves the cursor on the first flag after it).
+    fn tick_re2_items_in_fade(&mut self, pack: &Pack, ui: UiInput) {
+        if !self.game.is_re2_room
+            || self.re2_status_close.is_some()
+            || self.game.re2_box.is_some()
+            || self.game.re2_items.is_none()
+            || self
+                .re2_status_open
+                .is_none_or(|ticks| ticks < RE2_STATUS_PAGE_TICK)
+        {
+            return;
+        }
+        let input = self.status_input(ui);
+        if let Some(outcome) = self.game.tick_re2_items(input) {
+            self.play_re2_status_sounds(pack, &outcome.sounds);
+            if outcome.close {
+                self.re2_status_close = Some(0);
+            }
+        }
+    }
+
+    /// What the status pages read of this tick's pad: the four directions
+    /// gated on `Pad_set`'s repeat flag, the edges for decide, cancel and
+    /// START, and the raw pad.
+    fn status_input(&self, ui: UiInput) -> game::status2::Input {
+        use game::pad_repeat as pad;
+        let repeat = &self.game.pad_repeat;
+        game::status2::Input {
+            up: repeat.gated(pad::UP),
+            down: repeat.gated(pad::DOWN),
+            left: repeat.gated(pad::LEFT),
+            right: repeat.gated(pad::RIGHT),
+            confirm: ui.confirm,
+            cancel: ui.cancel,
+            start: ui.start && !ui.cancel,
+            held: repeat.raw,
+        }
+    }
+
     /// One tick of RE2's status screen: its item page, as the original runs
     /// it, before the message's tick (a confirm that closes a message reaches
     /// the page on the next tick), then the menu script, which only draws.
     fn tick_re2_items(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
         use game::status2::Input;
-        let input = Input {
-            up: ui.up,
-            down: ui.down,
-            left: ui.left,
-            right: ui.right,
-            confirm: ui.confirm,
-            cancel: ui.cancel,
-            start: ui.start && !ui.cancel,
-        };
+        let input = self.status_input(ui);
         let input = if self.game.message.active {
             Input::default()
         } else {
@@ -6800,15 +6838,7 @@ impl GameSession {
     /// cues: the core bank's, and the room bank's for a row's scroll.
     fn tick_re2_box(&mut self, pack: &Pack, ui: UiInput, message_input: MessageInput) {
         use game::status2::Input;
-        let input = Input {
-            up: ui.up,
-            down: ui.down,
-            left: ui.left,
-            right: ui.right,
-            confirm: ui.confirm,
-            cancel: ui.cancel,
-            start: ui.start && !ui.cancel,
-        };
+        let input = self.status_input(ui);
         let input = if self.game.message.active {
             Input::default()
         } else {
@@ -6818,8 +6848,11 @@ impl GameSession {
             return;
         };
         if let Some(page) = self.game.re2_box.as_mut() {
-            let up = ui.up || ui.held_up;
-            let down = ui.down || ui.held_down;
+            // `St_disp_itembox` lights the arrows on the raw pad: 0x1004 for
+            // the up arrow and 0x4008 (the aim key) for the down one.
+            let raw = self.game.pad_repeat.raw;
+            let up = raw & 0x1004 != 0;
+            let down = raw & 0x4008 != 0;
             page.arrows = if page.sub == game::itembox2::SUB_INVENTORY {
                 0
             } else {

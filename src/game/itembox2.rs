@@ -442,8 +442,9 @@ impl GameState {
             ROUTINE_FADE_SET => page.routine = ROUTINE_FADE_WAIT,
             ROUTINE_FADE_WAIT => {}
             ROUTINE_EXIT => {
-                // `St_select_menu_m` (`0x4FC0C0`).
-                if input.down {
+                // `St_select_menu_m` (`0x4FC0C0`): a held down, with no
+                // repeat flag.
+                if input.held & super::pad_repeat::DOWN != 0 {
                     page.routine = ROUTINE_PAGE;
                     page.cursor = 1;
                     out.sounds.push(Sound::Cursor);
@@ -500,9 +501,19 @@ impl GameState {
                     page.scroll += if up { 3 } else { -3 };
                     page.count += 1;
                 } else {
-                    // A held key would keep scrolling, with the cue for each
-                    // row; the pad's edges don't hold.
-                    page.sub = SUB_BOX;
+                    // The seventh tick steps the row and tests the raw pad
+                    // again (`0x9885FC`, no repeat flag): a key still held
+                    // scrolls on, one row and one cue every 7 ticks.
+                    let key = if up {
+                        super::pad_repeat::UP
+                    } else {
+                        super::pad_repeat::DOWN
+                    };
+                    if input.held & key != 0 {
+                        out.room_sounds.push(SOUND_SCROLL);
+                    } else {
+                        page.sub = SUB_BOX;
+                    }
                     page.scroll = 0;
                     page.count = 0;
                     page.top = if up {
@@ -778,6 +789,7 @@ mod tests {
         confirm: false,
         cancel: false,
         start: false,
+        held: 0,
     };
     const DOWN: Input = Input {
         down: true,
@@ -789,6 +801,66 @@ mod tests {
         up: false,
         ..UP
     };
+
+    /// One tick with `bits` of the raw pad held, the directions gated on the
+    /// repeat flag as the engine builds them.
+    fn held(game: &mut GameState, bits: u16) -> BoxOutcome {
+        use crate::game::pad_repeat as pad;
+        game.pad_repeat.step(bits);
+        let repeat = game.pad_repeat;
+        let input = Input {
+            up: repeat.gated(pad::UP),
+            down: repeat.gated(pad::DOWN),
+            held: repeat.raw,
+            ..Input::default()
+        };
+        game.tick_re2_box(input).unwrap()
+    }
+
+    #[test]
+    fn a_held_down_scrolls_the_box_a_row_and_a_cue_every_7_ticks() {
+        use crate::game::pad_repeat as pad;
+        let mut game = game();
+        game.pad_repeat.set(pad::STATUS_SETTING);
+        // Into the box's rows with the cursor on the inventory's first slot.
+        press(&mut game, DOWN);
+        press(&mut game, CONFIRM);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_BOX);
+        let top = game.re2_box.unwrap().top;
+        let mut cues = Vec::new();
+        for t in 0..30 {
+            let out = held(&mut game, pad::DOWN);
+            if !out.room_sounds.is_empty() {
+                cues.push(t);
+            }
+        }
+        // The press scrolls (6 ticks and a seventh), and a held key goes on
+        // from the seventh, one row and one cue each time.
+        assert_eq!(cues, [0, 7, 14, 21, 28]);
+        assert_eq!(game.re2_box.unwrap().top, top.wrapping_add(4) & 0x3F);
+    }
+
+    #[test]
+    fn exit_goes_back_to_the_inventory_on_a_held_down_whatever_the_flag() {
+        use crate::game::pad_repeat as pad;
+        let mut game = game();
+        game.pad_repeat.set(pad::STATUS_SETTING);
+        let mut page = game.re2_box.unwrap();
+        page.routine = ROUTINE_EXIT;
+        game.re2_box = Some(page);
+        // A key held since before, no flag this tick.
+        game.pad_repeat.step(pad::DOWN);
+        game.pad_repeat.step(pad::DOWN);
+        assert!(!game.pad_repeat.flag);
+        let input = Input {
+            held: game.pad_repeat.raw,
+            ..Input::default()
+        };
+        let out = game.tick_re2_box(input).unwrap();
+        assert_eq!(game.re2_box.unwrap().routine, ROUTINE_PAGE);
+        assert_eq!(game.re2_box.unwrap().cursor, 1);
+        assert_eq!(out.sounds, vec![Sound::Cursor]);
+    }
 
     fn slots(game: &GameState) -> Vec<(u8, u8)> {
         game.inventory

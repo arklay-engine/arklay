@@ -128,6 +128,9 @@ const LAST_AMMO: u8 = 0x1D;
 /// One tick of the page's input: the pad's edges.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Input {
+    /// The four directions are gated on `Pad_set`'s repeat flag (`fg_system`
+    /// bit 31 and the key held): a press, then each repeat
+    /// ([`super::pad_repeat::PadRepeat::gated`]).
     pub up: bool,
     pub down: bool,
     pub left: bool,
@@ -135,6 +138,9 @@ pub struct Input {
     pub confirm: bool,
     pub cancel: bool,
     pub start: bool,
+    /// The raw pad as held (`0x9885FC`), for the few tests that read it
+    /// with no repeat flag.
+    pub held: u16,
 }
 
 /// The sounds the page plays: `Snd_se_on`'s core-bank cues `0x4040000`,
@@ -524,12 +530,12 @@ fn re2_file(
     input: Input,
     out: &mut Outcome,
 ) {
-    let turn = |page: &mut ItemPage, out: &mut Outcome| {
-        if input.left {
+    let turn = |page: &mut ItemPage, out: &mut Outcome, left: bool, right: bool| {
+        if left {
             out.sounds.push(Sound::Turn);
             page.sub = FILE_LEFT;
         }
-        if input.right {
+        if right {
             out.sounds.push(Sound::Turn);
             page.sub = FILE_RIGHT;
         }
@@ -566,7 +572,7 @@ fn re2_file(
             }
         }
         FILE_SHOWN => {
-            turn(page, out);
+            turn(page, out, input.left, input.right);
             // Decomp lines 155 to 181: the decide key on a binder whose
             // first slot is empty falls through to the cancel key's test.
             if input.confirm && files::file_at(held, work.binder, 0) != NO_FILE {
@@ -597,7 +603,14 @@ fn re2_file(
                 page.sub = FILE_SHOWN;
                 page.command = 0;
                 page.step = 0;
-                turn(page, out);
+                // A turn's end reads the raw pad, with no repeat flag: a
+                // key still held turns the binders again at once.
+                turn(
+                    page,
+                    out,
+                    input.held & super::pad_repeat::LEFT != 0,
+                    input.held & super::pad_repeat::RIGHT != 0,
+                );
             }
         }
         _ => binders_drawn = reader(page, work, held, input, out),

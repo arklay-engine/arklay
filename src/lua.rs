@@ -606,6 +606,14 @@ mod imp {
                 Ok(())
             });
 
+            // `set_re2_pad_repeat(count)`: `Pad_set`'s repeat counter
+            // (`0x533938`), which a recording's start leaves at some phase of
+            // the title's repeat; the setting itself isn't changed.
+            methods.add_method_mut("set_re2_pad_repeat", |_lua, game, count: u8| {
+                game.pad_repeat.count = count;
+                Ok(())
+            });
+
             methods.add_method_mut("item_box_clear", |_lua, game, ()| {
                 game.item_box =
                     [crate::game::InventoryItem::default(); crate::game::ITEM_BOX_SLOTS];

@@ -42,6 +42,7 @@ const NONE: Input = Input {
     confirm: false,
     cancel: false,
     start: false,
+    held: 0,
 };
 
 /// Ticks the page through `from..=to` with `presses` on their ticks. A
@@ -916,4 +917,82 @@ fn the_file_trace_is_the_work_then_the_files() {
         work.trace(&held),
         format!("0,1,3,0,0,484,1024,-262/0113{}", "ff".repeat(22))
     );
+}
+
+/// One tick with `bits` of the raw pad held, the way the engine builds the
+/// page's input: the directions gated on the repeat flag, the raw pad on the
+/// side.
+fn held_tick(game: &mut GameState, bits: u16) -> (Vec<Sound>, Input) {
+    use crate::game::pad_repeat as pad;
+    game.pad_repeat.step(bits);
+    let repeat = game.pad_repeat;
+    let input = Input {
+        up: repeat.gated(pad::UP),
+        down: repeat.gated(pad::DOWN),
+        left: repeat.gated(pad::LEFT),
+        right: repeat.gated(pad::RIGHT),
+        held: repeat.raw,
+        ..NONE
+    };
+    (tick(game, input), input)
+}
+
+#[test]
+fn a_held_right_moves_the_item_cursor_at_11_then_every_7() {
+    use crate::game::pad_repeat as pad;
+    let items = [(2, 18), (1, 1), (0x14, 30), (0x26, 1), (0x27, 1), (0x28, 1)];
+    let mut game = game(&items);
+    let mut moves = Vec::new();
+    for t in 0..40 {
+        let before = page(&game).cursor;
+        let (sounds, _) = held_tick(&mut game, pad::RIGHT);
+        if page(&game).cursor != before {
+            moves.push((t, page(&game).cursor));
+            assert_eq!(sounds, vec![Sound::Cursor], "tick {t}");
+        }
+    }
+    // The press, then +11 and every 7 after.
+    assert_eq!(moves, [(0, 1), (11, 2), (18, 3), (25, 4), (32, 5), (39, 6)]);
+    // Held on, it stops at the last of the eight slots (no wrap).
+    for _ in 0..30 {
+        held_tick(&mut game, pad::RIGHT);
+    }
+    assert_eq!(page(&game).cursor, 7);
+}
+
+#[test]
+fn a_held_left_in_the_carousel_turns_again_at_the_end_of_a_turn() {
+    use crate::game::pad_repeat as pad;
+    let mut game = file_game(&[1, 3]);
+    // The press turns the binders (sub 4): the flag and the key.
+    let (_, _) = held_tick(&mut game, pad::LEFT);
+    assert_eq!(page(&game).sub, FILE_LEFT);
+    // Each turn is 13 ticks: 12 counting ticks and the end tick, whose raw
+    // test starts the next turn at once, flag or not.
+    let mut ends = Vec::new();
+    for t in 1..40 {
+        let before = work_binder(&game);
+        held_tick(&mut game, pad::LEFT);
+        if work_binder(&game) != before {
+            ends.push(t);
+            assert_eq!(page(&game).sub, FILE_LEFT, "tick {t}: the next turn");
+        }
+    }
+    assert_eq!(ends, [13, 26, 39]);
+}
+
+fn work_binder(game: &GameState) -> u8 {
+    game.re2_file.binder
+}
+
+#[test]
+fn a_held_left_in_sub_3_moves_only_on_flag_ticks() {
+    use crate::game::pad_repeat as pad;
+    let mut game = file_game(&[1, 3]);
+    // Park the carousel in sub 3 with the key held from before: only the
+    // flag ticks turn it.
+    game.pad_repeat.step(0);
+    let (_, input) = held_tick(&mut game, pad::LEFT);
+    assert!(input.left);
+    assert_eq!(page(&game).sub, FILE_LEFT);
 }

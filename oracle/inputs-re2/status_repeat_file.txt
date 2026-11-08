@@ -1,0 +1,36 @@
+# room 102 with files 1 and 3 in binder 0 and file 4 in binder 1 (oracle/re2.md, "Key repeat"): FILE, left held through three turns of the binders, open binder 0 and move its list with down held, read file 1 with right held to its end marker, then left held back (the page turns and the end marker)
+0
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 left
+464
+480 confirm
+484
+520 left
+556
+600 confirm
+604
+640 down
+660
+680 up
+683
+720 confirm
+723
+780 right
+900
+960 left
+1020
+1100 cancel
+1103
+1140 cancel
+1143
+1180 cancel
+1183
+1240 start
+1244
