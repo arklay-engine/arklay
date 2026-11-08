@@ -12,12 +12,18 @@ game natively (see "On Windows" below). Either way nothing is written to the
 install.
 
 The virtual display is an `Xvfb` on the first number from `:100` with neither a
-lock file (`/tmp/.X<n>-lock`) nor a bound socket (`/tmp/.X11-unix/X<n>`, by path
-or abstract name), so a record never takes a desktop's `:0` or `:1`: an X server
-unlinks its socket file when it exits, which would cut the desktop's new X
-clients off. A number another server takes meanwhile is skipped, and a socket
-file nothing is bound to (a killed server's) doesn't count. At the end the
-server is terminated, not killed, so that it removes its socket. The tool
+bound socket (`/tmp/.X11-unix/X<n>`, by path or abstract name) nor a lock file
+(`/tmp/.X<n>-lock`) naming a running process, so a record never takes a
+desktop's `:0` or `:1`: an X server unlinks its socket file when it exits, which
+would cut the desktop's new X clients off. A number another server takes
+meanwhile is skipped (the second server on a number fails to bind its abstract
+socket and exits without touching the first one's socket file). A socket file a
+killed server left behind doesn't count, since the next server replaces it, and
+nor does a lock file whose process is gone. However the record ends (done, an
+error, Ctrl-C, SIGTERM or SIGHUP, or a start that fails before the game runs)
+the server is terminated, not killed, so that it removes its socket (with
+`-displayfd` it writes no lock file), and it is started with `PR_SET_PDEATHSIG`,
+so the kernel terminates it even when the recorder itself is killed. The tool
 reads `-displayfd` up to its newline before closing the pipe (Xvfb writes the
 number and the newline separately and exits if either write fails), then checks
 that the server is running and accepts a connection before Wine starts. Xvfb's

@@ -191,6 +191,7 @@ PTRACE_O_EXITKILL = 1 << 20
 PTRACE_EVENT_CLONE = 3
 PTRACE_EVENT_STOP = 128
 WALL = 0x40000000
+PR_SET_PDEATHSIG = 1
 PR_SET_CHILD_SUBREAPER = 36
 
 WINDOWS = sys.platform == "win32"
@@ -374,13 +375,36 @@ DISPLAY_FIRST = 100
 DISPLAY_COUNT = 100
 
 
-def display_taken(number: int) -> bool:
-    """Whether display `number` has a lock file, or a socket some process has bound (by path or abstract name).
+def lock_held(number: int) -> bool:
+    """Whether display `number`'s lock file (`/tmp/.X<n>-lock`) names a process that is still running.
 
-    A socket file nothing is bound to is left by a server that was killed; a new
-    server replaces it."""
+    An X server started without `-displayfd` writes its PID there and removes the lock
+    when it exits cleanly. One that was killed leaves the lock behind, naming a process
+    that is gone, and such a lock doesn't block the number. (The recorder's own servers,
+    started with `-displayfd`, write no lock.) A lock that can't be read counts as held."""
+    lock = f"/tmp/.X{number}-lock"
+    if not os.path.lexists(lock):
+        return False
+    try:
+        pid = int(Path(lock).read_text().strip())
+    except (OSError, ValueError):
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass  # Another user's process.
+    return True
+
+
+def display_taken(number: int) -> bool:
+    """Whether display `number` has a lock held by a running process, or a socket some process has bound (by path or abstract name).
+
+    The socket file a killed server leaves behind doesn't count, since a new server
+    replaces it, and nor does a lock whose process is gone."""
     socket_path = f"/tmp/.X11-unix/X{number}"
-    if os.path.lexists(f"/tmp/.X{number}-lock"):
+    if lock_held(number):
         return True
     try:
         with open("/proc/net/unix") as table:
@@ -390,17 +414,23 @@ def display_taken(number: int) -> bool:
 
 
 def display_answers(number: int) -> bool:
-    """Whether an X server accepts a connection on display `number` (the setup's first reply byte is 1)."""
+    """Whether an X server accepts a connection on display `number` (the setup's first reply byte is 1).
+
+    It tries the socket file, then the abstract socket of the same name."""
     import socket
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(10)
-            connection.connect(f"\0/tmp/.X11-unix/X{number}")
-            # Little-endian, protocol 11.0, no authorisation.
-            connection.sendall(b"l\0\x0b\0" + bytes(8))
-            return connection.recv(1) == b"\x01"
-    except OSError:
-        return False
+    path = f"/tmp/.X11-unix/X{number}"
+    for address in (path, "\0" + path):
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(10)
+                connection.connect(address)
+                # Little-endian, protocol 11.0, no authorisation.
+                connection.sendall(b"l\0\x0b\0" + bytes(8))
+                if connection.recv(1) == b"\x01":
+                    return True
+        except OSError:
+            pass
+    return False
 
 
 def read_display_number(read_end: int) -> str | None:
@@ -424,11 +454,30 @@ def tail(path: Path, lines: int = 5) -> str:
         return ""
 
 
+def stop_with_recorder() -> None:
+    """In a child, before it runs its program: have the kernel send it SIGTERM when the recorder dies, even by SIGKILL.
+
+    The signal follows the thread that started the child; the recorder has only one."""
+    libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0)
+
+
+def stop_display(server: subprocess.Popen) -> None:
+    """Stop the X server so that it removes its lock and socket files: terminated, and killed only if it is still running after 5 s."""
+    server.terminate()
+    try:
+        server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        server.kill()
+        server.wait()
+
+
 def start_display(log: Path) -> tuple[subprocess.Popen, str]:
     """A private virtual display on the first free number from `DISPLAY_FIRST`, answering.
 
     The server's output goes to `log`. A number another server takes meanwhile is
-    skipped; a server that dies otherwise, or doesn't answer, stops the record."""
+    skipped; a server that dies otherwise, or doesn't answer, stops the record. Until
+    this returns, any error or interruption stops the server it started; after, the
+    caller stops it with `stop_display`, and the kernel does if the recorder dies."""
     for number in range(DISPLAY_FIRST, DISPLAY_FIRST + DISPLAY_COUNT):
         if display_taken(number):
             continue
@@ -438,23 +487,27 @@ def start_display(log: Path) -> tuple[subprocess.Popen, str]:
                 ["Xvfb", f":{number}", "-displayfd", str(write_end),
                  "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
                 pass_fds=(write_end,), stdout=output, stderr=subprocess.STDOUT,
+                preexec_fn=stop_with_recorder,
             )
         os.close(write_end)
         try:
-            reported = read_display_number(read_end)
-        finally:
-            os.close(read_end)
-        if reported is None:
-            server.wait()
-            if display_taken(number):
-                continue  # Another server took the number between our check and its start.
-            raise SystemExit(f"Xvfb exited before giving its display: {tail(log)}")
-        if reported != str(number):
-            server.kill()
-            raise SystemExit(f"Xvfb took display :{reported}, not :{number}")
-        if server.poll() is not None or not display_answers(number):
-            server.kill()
-            raise SystemExit(f"Xvfb on :{number} doesn't answer: {tail(log)}")
+            try:
+                reported = read_display_number(read_end)
+            finally:
+                os.close(read_end)
+            if reported is None:
+                server.wait()
+                if display_taken(number):
+                    continue  # Another server took the number between our check and its start.
+                raise SystemExit(f"Xvfb exited before giving its display: {tail(log)}")
+            if reported != str(number):
+                raise SystemExit(f"Xvfb took display :{reported}, not :{number}")
+            if server.poll() is not None or not display_answers(number):
+                raise SystemExit(f"Xvfb on :{number} doesn't answer: {tail(log)}")
+        except BaseException:
+            if server.poll() is None:
+                stop_display(server)
+            raise
         return server, f":{number}"
     raise SystemExit(f"no free display from :{DISPLAY_FIRST} to :{DISPLAY_FIRST + DISPLAY_COUNT - 1}")
 
@@ -1018,11 +1071,23 @@ class WineSession:
         # Wine double-forks the game. As a subreaper we adopt it, and Yama's
         # default policy lets a process trace its own descendants without root.
         libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
-        self.display_server, self.display = start_display(work / "xvfb.log")
-        self.env = wine_env(work, self.display)
+        self.display_server: subprocess.Popen | None = None
+        self.env: dict[str, str] | None = None
+        self.launcher: subprocess.Popen | None = None
         self.sink_module = None
         self.sound_capture = None
         self.capture_started = 0.0
+        # The callers' `finally: session.close()` starts only once this returns,
+        # so a start that fails stops what it has started itself.
+        try:
+            self.start(game_dir, work, sound_out)
+        except BaseException:
+            self.close()
+            raise
+
+    def start(self, game_dir: Path, work: Path, sound_out: str | None) -> None:
+        self.display_server, self.display = start_display(work / "xvfb.log")
+        self.env = wine_env(work, self.display)
         sound = sound_out is not None
         if sound:
             # A sink of its own: the game is heard by nothing but the recording.
@@ -1060,18 +1125,18 @@ class WineSession:
         time.sleep(seconds)
 
     def close(self) -> None:
-        # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
-        try:
-            subprocess.run(["wineserver", "-k"], env=self.env, check=False)
-        except FileNotFoundError:
-            subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False)
-        self.launcher.kill()
-        # Terminated, not killed, so that the server removes its socket file.
-        self.display_server.terminate()
-        try:
-            self.display_server.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.display_server.kill()
+        """Stop the game, Wine, the display and the sound capture: whichever of them have started."""
+        if self.env is not None:
+            # Some Wine packages keep `wineserver` off the path; `wineboot` kills too.
+            try:
+                subprocess.run(["wineserver", "-k"], env=self.env, check=False)
+            except FileNotFoundError:
+                subprocess.run(["wine", "wineboot", "--kill"], env=self.env, check=False)
+        if self.launcher:
+            self.launcher.kill()
+        if self.display_server:
+            stop_display(self.display_server)
+            self.display_server = None
         if self.sound_capture:
             self.sound_capture.terminate()
             self.sound_capture.wait()
@@ -1788,6 +1853,14 @@ def main() -> int:
     command.set_defaults(func=patches_command)
 
     args = parser.parse_args()
+    # SIGTERM (from `timeout`, `docker stop` or a queue) and SIGHUP end the record
+    # as an error does, so that every `finally` runs and the session stops its
+    # display and Wine.
+    def stop(signum: int, frame: object) -> None:
+        raise SystemExit(f"stopped by signal {signum}")
+    for name in ("SIGTERM", "SIGHUP"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
     for setting in getattr(args, "config", []):
         key, _, value = setting.partition("=")
         CONFIG_OVERRIDES[key.strip()] = value.strip()
