@@ -2086,6 +2086,8 @@ struct GameSession {
     /// RE2's get-item window's art: the status screen's script in its
     /// `get` mode, while the window is up.
     re2_item_screen: Option<Box<LuaScreen>>,
+    /// RE2's computer console (`ui/computer.lua`), while game mode 7 runs.
+    re2_computer_screen: Option<Box<LuaScreen>>,
     /// The ticks since the get-item window's first, 1 on it: its open fade
     /// runs on these whatever the window's phase.
     re2_item_ticks: u8,
@@ -2793,6 +2795,7 @@ impl GameSession {
             re2_status_open: None,
             re2_status_return: None,
             re2_item_screen: None,
+            re2_computer_screen: None,
             re2_item_ticks: 0,
             menu_fade_pending: false,
             menu_fade_draw: None,
@@ -3744,6 +3747,7 @@ impl GameSession {
             match re2_computer_strings(pack) {
                 Some(strings) => {
                     self.game.re2_computer = Some(game::computer2::Computer::new(request, strings));
+                    self.open_re2_computer_screen(pack);
                 }
                 None => eprintln!(
                     "warning: the pack has no {}; the computer resumes at once",
@@ -3790,6 +3794,9 @@ impl GameSession {
             if was_active && !self.game.message.active && action {
                 self.swallow_action = true;
             }
+            // `Psx_main` runs `System_trans` outside the suspended game task:
+            // `Windows`' `Fade_off(0)` lands, and fades 1 to 3 step on.
+            self.tick_re2_fades();
             return Ok(());
         }
 
@@ -4996,6 +5003,68 @@ impl GameSession {
         ) {
             Ok(screen) => *re2_item_screen = Some(Box::new(screen)),
             Err(err) => crate::warning!("warning: get-item window's art unavailable: {err:#}"),
+        }
+    }
+
+    /// Open RE2's computer console screen (`ui/computer.lua`), which draws
+    /// what `Computer200` draws each tick over the cut's background.
+    fn open_re2_computer_screen(&mut self, pack: &Pack) {
+        let Self {
+            re2_computer_screen,
+            save_dir,
+            font,
+            text,
+            game,
+            ..
+        } = self;
+        let mut cx = UiContext {
+            authentic: game.player_options.authentic,
+            pack,
+            save_dir,
+            font: font.as_ref(),
+            text: Some(text),
+            ticks: game.frame,
+            cues: std::cell::RefCell::new(Vec::new()),
+            game: None,
+        };
+        match LuaScreen::open_screen_with_game("computer", &[], ScreenAction::Resume, &mut cx, game)
+        {
+            Ok(screen) => *re2_computer_screen = Some(Box::new(screen)),
+            Err(err) => {
+                *re2_computer_screen = None;
+                crate::warning!("warning: the computer's console art unavailable: {err:#}");
+            }
+        }
+    }
+
+    /// Draw RE2's computer console over the frame's background while the
+    /// computer runs; the screen closes with it.
+    fn draw_re2_computer(&mut self, pack: &Pack) {
+        if self.game.re2_computer.is_none() {
+            self.re2_computer_screen = None;
+            return;
+        }
+        let Self {
+            re2_computer_screen,
+            save_dir,
+            font,
+            text,
+            game,
+            framebuffer,
+            ..
+        } = self;
+        if let Some(screen) = re2_computer_screen.as_mut() {
+            let cx = UiContext {
+                authentic: game.player_options.authentic,
+                pack,
+                save_dir,
+                font: font.as_ref(),
+                text: Some(text),
+                ticks: game.frame,
+                cues: std::cell::RefCell::new(Vec::new()),
+                game: Some(game),
+            };
+            screen.draw(&cx, framebuffer);
         }
     }
 
@@ -8186,14 +8255,14 @@ impl GameSession {
             // letterbox bars, so an overlapping fade and bar ramp composite
             // bars-over-fade. The death fade overlays the falling room last,
             // and the menu/message overlays stay above all of it.
-            // Nothing of the play's fades draws while RE 2's computer has
-            // suspended the game task (`Windows` turns the fade off).
-            if self.game.re2_computer.is_none() {
-                self.draw_re2_die();
-                self.draw_room_fade();
-                self.draw_screen_intensity_bars();
-                self.draw_death_fade();
-            }
+            // RE 2's computer console sits on the background, under the
+            // fades (`AddTile` at otag 1) and the `Curtain` bars (otag 0),
+            // which `System_trans` draws outside the suspended game task.
+            self.draw_re2_computer(pack);
+            self.draw_re2_die();
+            self.draw_room_fade();
+            self.draw_screen_intensity_bars();
+            self.draw_death_fade();
             // The frozen frame a menu opened over is this far: the next GPU
             // frames draw over it again ([`GameSession::render_layers`]).
             if let Some(list) = self.framebuffer.list_mut() {
@@ -19758,11 +19827,6 @@ fn render_frame_on(
 /// The floor height the F4 debug views draw the collision and AOTs at.
 const DEBUG_FLOOR_Y: i32 = 0;
 
-/// The special-room-light overlay (`0x1C`): a full-screen saturated tint
-/// alpha-blended over the scene; the state advances once per gameplay tick in
-/// `tick_room`. Its absence (a parked state, an all-zero mask or a suppressing
-/// room) draws nothing, and the guardhouse control room draws the same rect
-/// twice.
 /// The display origin pans the background; in gameplay it is the frame's
 /// screen-shake offset. A screen-border room (`msf2` bit 2, the caves) runs
 /// `ApplyShakeAndRebuildSprites` instead, which parks the origin at (2, 2) so
@@ -19815,6 +19879,11 @@ fn draw_gameplay_scene(
     }
 }
 
+/// The special-room-light overlay (`0x1C`): a full-screen saturated tint
+/// alpha-blended over the scene; the state advances once per gameplay tick in
+/// `tick_room`. Its absence (a parked state, an all-zero mask or a suppressing
+/// room) draws nothing, and the guardhouse control room draws the same rect
+/// twice.
 fn draw_special_light(
     framebuffer: &mut Framebuffer,
     game: &game::GameState,
@@ -22878,6 +22947,35 @@ mod tests {
             }
         }
         assert_eq!(game.desk.state, 33, "the per-frame desk state machine ran");
+    }
+
+    #[test]
+    fn windows_turns_a_running_fade_0_off() {
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let mut game = game::GameState::new(id, &RoomState::default());
+        game.re2_computer = Some(game::computer2::Computer::new(
+            0xF0,
+            game::computer2::test_strings(),
+        ));
+        game.tick_re2_computer(false);
+        // A fade 0 left running when the computer starts.
+        let mut fade = transition::Fade::fade_out(8, 0x2000, 0);
+        assert!(fade.overlay().is_some());
+        for write in std::mem::take(&mut game.re2.screen_fades) {
+            write.apply(&mut fade);
+        }
+        // `Fade_off(0)`: the level word is 0xFFFF, so it stays off.
+        assert_eq!(fade.overlay(), None);
+        fade.tick();
+        assert_eq!(fade.overlay(), None);
+        // Only the first pass writes it.
+        game.tick_re2_computer(false);
+        assert!(game.re2.screen_fades.is_empty());
     }
 
     #[test]

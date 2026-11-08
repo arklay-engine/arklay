@@ -122,6 +122,9 @@ pub enum Effect {
     /// `Mess_set(0, 0x100, 7, 0xFF000000)` with the card selected: the door
     /// table's "Will you use the {item}?".
     AskCard,
+    /// `Fade_off(0)` (`0x4C4AB0`): fade 0's level word becomes `0xFFFF`, so
+    /// it is off until a later `Fade_set`. Fades 1 to 3 run on.
+    FadeOff,
     /// `Task_signal(0); Task_exit()`: the room's task runs again from the
     /// next tick.
     Resume,
@@ -419,7 +422,8 @@ impl Computer {
     /// `Windows` (`0x4D1F50`). Returns whether the pass slept.
     fn windows(&mut self, world: &World, effects: &mut Vec<Effect>) -> bool {
         if self.r0 == 0 {
-            // `Task_suspend(0); Fade_off(0)`: the engine holds the room.
+            // `Task_suspend(0)`: the engine holds the room.
+            effects.push(Effect::FadeOff);
             self.r0 = 1;
         } else if self.r0 != 1 {
             return false;

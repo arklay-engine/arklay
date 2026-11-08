@@ -301,38 +301,75 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
 /// The room's object models, what `Obj_model_set` binds: `rdt[2]` pairs of a
 /// TIM and an MD1 by slot, of which one with no MD1 is a slot left empty.
 pub fn object_models(data: &[u8]) -> Vec<(usize, &[u8], &[u8])> {
-    let count = usize::from(data.get(2).copied().unwrap_or(0));
-    let Ok(base) = offset(data, MODELS_SLOT) else {
-        return Vec::new();
-    };
-    let pair = |slot: usize| {
-        let at = base as usize + slot * 8;
-        Some((u32_at(data, at).ok()?, u32_at(data, at + 4).ok()?))
-    };
-    // A model has no length of its own: it ends where the next thing starts.
-    let mut starts: Vec<u32> = (0..OFFSET_COUNT)
-        .filter_map(|slot| offset(data, slot).ok())
-        .chain(
-            (0..count)
-                .filter_map(pair)
-                .flat_map(|(tim, md1)| [tim, md1]),
-        )
-        .collect();
-    starts.sort_unstable();
-    let span = |start: u32| {
-        let next = starts.iter().find(|next| **next > start);
-        let end = next.map_or(data.len(), |next| *next as usize);
-        data.get(start as usize..end.min(data.len()))
-    };
-    (0..count)
+    let spans = ObjectSpans::new(data);
+    (0..spans.count)
         .filter_map(|slot| {
-            let (tim, md1) = pair(slot)?;
+            let (tim, md1) = spans.pair(slot)?;
             if tim == 0 || md1 == 0 {
                 return None;
             }
-            Some((slot, span(tim)?, span(md1)?))
+            Some((slot, spans.span(tim)?, spans.span(md1)?))
         })
         .collect()
+}
+
+/// The TIM of object slot `slot`, even when the slot has no MD1: room 200's
+/// slot 0 is the computer console's page, which `Sce_model_init` uploads
+/// alone.
+pub fn object_texture(data: &[u8], slot: usize) -> Option<&[u8]> {
+    let spans = ObjectSpans::new(data);
+    if slot >= spans.count {
+        return None;
+    }
+    let (tim, _) = spans.pair(slot)?;
+    if tim == 0 {
+        return None;
+    }
+    spans.span(tim)
+}
+
+/// The object table's offsets. A model or TIM has no length of its own: it
+/// ends where the next thing starts.
+struct ObjectSpans<'a> {
+    data: &'a [u8],
+    count: usize,
+    base: Option<u32>,
+    starts: Vec<u32>,
+}
+
+impl<'a> ObjectSpans<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        let count = usize::from(data.get(2).copied().unwrap_or(0));
+        let base = offset(data, MODELS_SLOT).ok();
+        let mut spans = Self {
+            data,
+            count,
+            base,
+            starts: Vec::new(),
+        };
+        let mut starts: Vec<u32> = (0..OFFSET_COUNT)
+            .filter_map(|slot| offset(data, slot).ok())
+            .chain(
+                (0..count)
+                    .filter_map(|slot| spans.pair(slot))
+                    .flat_map(|(tim, md1)| [tim, md1]),
+            )
+            .collect();
+        starts.sort_unstable();
+        spans.starts = starts;
+        spans
+    }
+
+    fn pair(&self, slot: usize) -> Option<(u32, u32)> {
+        let at = self.base? as usize + slot * 8;
+        Some((u32_at(self.data, at).ok()?, u32_at(self.data, at + 4).ok()?))
+    }
+
+    fn span(&self, start: u32) -> Option<&'a [u8]> {
+        let next = self.starts.iter().find(|next| **next > start);
+        let end = next.map_or(self.data.len(), |next| *next as usize);
+        self.data.get(start as usize..end.min(self.data.len()))
+    }
 }
 
 /// The guide areas at `offset`: a count, then rectangles and their links.

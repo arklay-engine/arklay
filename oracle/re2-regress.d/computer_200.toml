@@ -1,5 +1,5 @@
 # Room 200's computer (game mode 7, Sce_Windows) from a warp into the counter computer's area (oracle/re2.md, "Room 200's computer").
-# The frames are compared but have no frame_max_mean: the cut's background is drawn alone while the computer runs, but the console and its frame are not drawn yet (#502).
+# The console, its frame and its cursor are drawn over the cut's background (#502). Each frame_max_mean leaves room above the first passing compare (0.27, 0.18, 0.17, 0.39): most of what's left is the message windows' frames before and during the computer, and the two stale captures of the frame's steps (409 and 1070 in the card run).
 
 [[run]]
 name = "computer_200_card"
@@ -10,6 +10,7 @@ input_shift = 344
 ticks = 1300
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
 frames = [344, 1299]
+frame_max_mean = 0.4
 expect = "match"
 record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --give 2:0x35:1 --give 3:0x26:1"
 
@@ -22,6 +23,7 @@ input_shift = 344
 ticks = 1000
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
 frames = [344, 999]
+frame_max_mean = 0.3
 expect = "match"
 record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200"
 
@@ -34,6 +36,7 @@ input_shift = 344
 ticks = 1000
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
 frames = [344, 999]
+frame_max_mean = 0.3
 expect = "match"
 record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --flag 4:70 --give 2:0x35:1"
 
@@ -46,5 +49,6 @@ input_shift = 344
 ticks = 1000
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc"
 frames = [344, 999]
+frame_max_mean = 0.5
 expect = "match"
 record = "--no-enemies --warp 200:-16200:-1800:2100:2048 --flag 4:6 --flag 4:7 --flag 4:102 --life 200 --give 2:0x35:1 --give 3:0x26:1"

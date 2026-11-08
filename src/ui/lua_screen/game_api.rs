@@ -214,6 +214,30 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_computer()`: what room 200's computer draws this tick: the
+    // `frame` `Wframe_set` drew (`{x0, y0, x1, y1}`, inclusive), whether
+    // the console `drawn`, its glyph `cells` (`{x, y, u, v}` in record
+    // order) and the `cursor` (`{x, y}`), or nil while no computer runs.
+    methods.add_method("re2_computer", |lua, api, ()| {
+        let Some(view) = api
+            .game()
+            .and_then(|game| game.re2_computer.as_ref())
+            .map(crate::game::computer2::Computer::view)
+        else {
+            return Ok(mlua::Value::Nil);
+        };
+        let table = lua.create_table()?;
+        if let Some(frame) = view.frame {
+            table.set("frame", frame)?;
+        }
+        table.set("drawn", view.drawn)?;
+        table.set("cells", view.cells)?;
+        if let Some(cursor) = view.cursor {
+            table.set("cursor", cursor)?;
+        }
+        Ok(mlua::Value::Table(table))
+    });
+
     // `re2_slot(slot)`: the id and count of RE2's `Item_work` slot `slot`;
     // 10 is the personal item.
     methods.add_method("re2_slot", |_lua, api, slot: u8| {

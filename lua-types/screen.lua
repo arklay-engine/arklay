@@ -1038,6 +1038,10 @@ function ScreenApi:re2_box_slot(slot) end
 ---@return Re2Map? map `nil` without a game.
 function ScreenApi:re2_map() end
 
+---What room 200's computer draws this tick (`Computer200`).
+---@return Re2Computer? view `nil` while no computer runs.
+function ScreenApi:re2_computer() end
+
 ---The id and count of RE 2's `Item_work` slot.
 ---@param slot integer `10` is the personal item.
 ---@return integer id
@@ -1207,6 +1211,14 @@ local Re2ItemGet = {}
 ---@field started boolean Whether `St_init01` has started the page.
 ---@field arrows integer The arrows shown pressed this tick: bit 0 up, bit 1 down.
 local Re2Box = {}
+
+---Room 200's computer's view, from [`api:re2_computer`](#ScreenApi.re2_computer).
+---@class Re2Computer
+---@field frame? integer[] `{x0, y0, x1, y1}`: the rectangle `Wframe_set` drew this tick, edges inclusive.
+---@field drawn boolean `Console_trans` and `Sprite_Trans` drew: the black tile, the glyphs and the panel.
+---@field cells integer[][] The non-space glyphs, each `{x, y, u, v}` on the console page, in record order.
+---@field cursor? integer[] `{x, y}`: the cursor's place, when it shows.
+local Re2Computer = {}
 
 ---RE 2's MAP page view, from [`api:re2_map`](#ScreenApi.re2_map).
 ---@class Re2Map

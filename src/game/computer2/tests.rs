@@ -199,7 +199,7 @@ fn computer_with_the_card_unlocks_and_takes_it_on_the_originals_ticks() {
         }
     });
     let at = |t: usize| first(&ticks, |s| s.1 == t as u8) + W0;
-    assert_eq!(ticks[0].0, [Effect::Cut(15)]);
+    assert_eq!(ticks[0].0, [Effect::FadeOff, Effect::Cut(15)]);
     assert_eq!(ticks[1].0, [Effect::Sound(SOUND_OPEN)]);
     assert_eq!(ticks[14].0, [Effect::Sound(SOUND_TYPE)]);
     assert_eq!(at(1), 416);
@@ -326,8 +326,21 @@ fn scenario_b_shows_three_doors_and_key17_starts_at_door_two() {
 #[test]
 fn other_modes_resume_at_once() {
     let mut computer = Computer::new(0x61, strings());
-    assert_eq!(computer.tick(&World::default()), [Effect::Resume]);
+    assert_eq!(
+        computer.tick(&World::default()),
+        [Effect::FadeOff, Effect::Resume]
+    );
     assert!(computer.done());
+}
+
+#[test]
+fn windows_turns_fade_0_off_on_its_first_pass_only() {
+    let mut computer = Computer::new(0xF0, strings());
+    let first = computer.tick(&World::default());
+    assert_eq!(first.first(), Some(&Effect::FadeOff));
+    for _ in 0..40 {
+        assert!(!computer.tick(&World::default()).contains(&Effect::FadeOff));
+    }
 }
 
 #[test]

@@ -8898,6 +8898,10 @@ impl GameState {
                     // delays `Mess_disp` doubles while the computer runs.
                     self.show_re2_global(crate::scd2::host::door_message(DOOR_MESSAGE_USE));
                 }
+                Effect::FadeOff => self
+                    .re2
+                    .screen_fades
+                    .push(crate::scd2::host::FadeWrite::Adjust(-1)),
                 Effect::Resume => {}
             }
         }
