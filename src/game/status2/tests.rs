@@ -16,6 +16,7 @@ fn game(slots: &[(u8, u8)]) -> GameState {
     game.re2.personal_item = [0x2F, 1];
     game.entities[0].health = 200;
     game.open_re2_items();
+    game.init_re2_status();
     game
 }
 
@@ -823,6 +824,8 @@ fn the_shared_blink_steps_each_way() {
         falling: true,
     };
     game.open_re2_items();
+    assert_eq!(game.re2_file.blink.level, 9);
+    game.init_re2_status();
     assert_eq!(game.re2_file.blink, Blink::OPEN);
     game.animate_re2_items(true);
     assert_eq!(game.re2_file.blink.level, 0x35);

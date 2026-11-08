@@ -850,7 +850,13 @@ impl GameState {
             .resize(capacity, super::InventoryItem::default());
         self.re2_items = Some(ItemPage::default());
         self.re2_items_start = None;
-        // `Status` (`0x501BD0`) runs `St_init_disp_cursol0`.
+    }
+
+    /// The status screen's start once its graphics have loaded (`Status`,
+    /// `0x501BD0`, past `St_load_gfx`): `St_init_disp_cursol0` (`0x4FE540`)
+    /// resets the shared blink. The original's recordings show it on the
+    /// open's sixth tick, the frame before the fade in's first.
+    pub fn init_re2_status(&mut self) {
         self.re2_file.blink = Blink::OPEN;
     }
 

@@ -1933,6 +1933,9 @@ const RE2_BOX_START: u8 = 6;
 /// close's first tick it no longer does (`main_menu.lua`'s `OPEN_SHOWN` and
 /// `CLOSE_BLACK`).
 const RE2_STATUS_SHOWN: u8 = 7;
+/// The open's tick on which `Status` (`0x501BD0`) runs its start, once
+/// `St_load_gfx` is done.
+const RE2_STATUS_INIT: u8 = 6;
 /// The close's ticks on which the item box's screen still runs.
 const RE2_BOX_CLOSE_DRAWN: u8 = 7;
 
@@ -3022,6 +3025,9 @@ impl GameSession {
             }
         }
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
+        if self.re2_status_open == Some(RE2_STATUS_INIT) {
+            self.game.init_re2_status();
+        }
         self.re2_status_return = self
             .re2_status_return
             .map(|ticks| ticks + 1)
