@@ -3029,8 +3029,7 @@ impl GameSession {
             self.present_skip.movie_set(frames);
         }
         let now = (self.loaded.id, self.loaded.room.current_cut);
-        let load =
-            self.game.is_re2_room && swap_cbuff_loads(self.tick_cut, now, pending, no_load);
+        let load = self.game.is_re2_room && swap_cbuff_loads(self.tick_cut, now, pending, no_load);
         if load {
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
         }

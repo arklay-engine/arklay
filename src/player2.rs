@@ -6466,7 +6466,7 @@ mod tests {
                 poisoned: false,
                 stopped: false,
                 weapon: self.weapon,
-                necks: Default::default(),
+                necks: [None; NECK_WORKS],
                 targets: &[],
                 neck_targets: &self.neck_targets,
                 enemies: 0,

@@ -1834,15 +1834,15 @@ mod tests {
         assert_eq!(repeated_names(&names), ["pos"]);
     }
 
-    const SCRIPTS: [&str; 11] = [
+    const SCRIPTS: [&str; 12] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
-        include_str!("../../games/re2/enemy/2d/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
         include_str!("../../games/re2/enemy/29/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
+        include_str!("../../games/re2/enemy/2d/enemy.lua"),
         include_str!("../../games/re2/enemy/2f/enemy.lua"),
         include_str!("../../games/re2/lib/ivy.lua"),
         include_str!("../../games/re2/lib/licker.lua"),
