@@ -13,4 +13,6 @@
   <use slot="5" item="0x25" bank="0" bit="27" label="the Eagle Medal into the fountain"/>
   <door slot="2" via="14" label="the passage to 30F"/>
   <door slot="1" via="9" bank="4" bit="29" while="clear" label="down the drained fountain to 310"/>
+  <avoid slot="12" bank="4" bit="28" while="clear"
+         reason="the bottom of the fountain stairs: AOT 0C is reached only down the stairwell (room 0x1C)"/>
 </bot>

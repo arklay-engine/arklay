@@ -2285,21 +2285,56 @@ local function choose(bot)
     -- 4-. The empty-frontier retry of an event door here (forgive_events):
     -- step out through the nearest door to a room already entered, so the
     -- way back is a new entry that lets the room's script decide again.
+    -- A door parked at the origin counts when a live via action opens it
+    -- (305's passage to 30F through AOT 14, its only door to a visited room
+    -- on the entry the fountain drains); the length is the via zone's. The
+    -- room it leads to then takes the bot straight back (p.reenter_back),
+    -- not on to a remote frontier target.
     if plan().reenter == room then
         local best_out, best_out_len = nil, nil
         for _, door in ipairs(bot:doors()) do
             if door.target and door.target ~= room and bot:visited(door.target)
-                and not BotNav.is_origin_zone(door) and not live_locked(bot, door) then
-                local len = BotNav.reach_length(bot, door)
+                and (not BotNav.is_origin_zone(door) or via_action(bot, door))
+                and not live_locked(bot, door) then
+                local len = BotNav.reach_length(bot, via_action(bot, door) or door)
                 if len and (not best_out_len or len < best_out_len) then
                     best_out, best_out_len = door, len
                 end
             end
         end
         if best_out then
+            -- Back at once only for a retry no other way serves: a goal
+            -- that is not a door, or a door to a room not yet visited. A
+            -- door to a visited room is a frontier trip like any other
+            -- (301's lift doors to 302 and 300, both reached from 302).
+            local need = false
+            local entry = (plan().entries or {})[room]
+            for _, m in pairs(plan().marks) do
+                if m.room == room and m.entry == entry and not m.permanent
+                    and m.reason:find("every approach failed", 1, true) then
+                    local d = m.kind == "door" and BotNav.door_by_slot(bot, m.slot)
+                    if not d or (d.target and d.target ~= best_out.target
+                        and not bot:visited(d.target)) then
+                        need = true
+                    end
+                end
+            end
+            plan().reenter_back = need and { room = room, slot = best_out.slot } or nil
             return door_goal(bot, best_out, "step out to re-enter " .. room)
         end
         plan().reenter = nil
+    end
+    local back = plan().reenter_back
+    if back and back.via == room then
+        for _, door in ipairs(bot:doors()) do
+            if door.target == back.room
+                and (not BotNav.is_origin_zone(door) or via_action(bot, door))
+                and not live_locked(bot, door)
+                and BotNav.reach_length(bot, via_action(bot, door) or door) then
+                return door_goal(bot, door, "back to re-enter " .. back.room)
+            end
+        end
+        plan().reenter_back = nil
     end
 
     -- 4. Leave the room: rank every way out by its distance cost (see the
@@ -3197,6 +3232,17 @@ function BotPlanner.enter_room(bot, room)
     p.goal = nil
     p.entries[room.id] = (p.entries[room.id] or 0) + 1
     p.reenter = nil
+    -- A step out to re-enter a room: the next room heads straight back;
+    -- the mark ends on the re-entry or on any other room change.
+    local back = p.reenter_back
+    if back then
+        if not back.via and room.id ~= back.room and p.last_room == back.room
+            and from and from.kind == "door" and from.slot == back.slot then
+            back.via = room.id
+        else
+            p.reenter_back = nil
+        end
+    end
     p.entered_tick = bot:tick()
     p.transfer_wait = nil
     p.stall_room = nil
