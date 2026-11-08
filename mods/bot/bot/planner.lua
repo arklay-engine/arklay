@@ -255,6 +255,50 @@ local function mark_key(kind, room, slot)
     return kind .. ":" .. room .. ":" .. tostring(slot)
 end
 
+-- The <reach> fact of door `slot` in room `room`, or nil (bot:reach_facts()).
+local function reach_fact(bot, room, slot)
+    for _, fact in ipairs(bot:reach_facts()) do
+        if fact.room == room and fact.slot == slot then
+            return fact
+        end
+    end
+    return nil
+end
+
+-- Whether a <reach> fact keeps door `slot` of room `room` out of reach now:
+-- its flag is not in its state, or (entry="same") the bot is not in the
+-- room on the entry the flag got there. False for a door with no fact.
+local function reach_closed(bot, room, slot)
+    local fact = reach_fact(bot, room, slot)
+    if not fact then
+        return false
+    end
+    if bot:flag(fact.bank, fact.bit) ~= fact.set then
+        return true
+    end
+    if fact.same_entry then
+        if room ~= bot:room().id then
+            return true
+        end
+        -- In the state already on entering: an entry after the one it got
+        -- there (20C seen from 20B, not from the pit).
+        return (plan().reach_entry or {})[room .. ":" .. slot] == true
+    end
+    return false
+end
+
+-- Called on every room change: whether each same-entry <reach> fact of
+-- this room is in its state already on entering.
+local function note_reaches(p, bot, room_id)
+    p.reach_entry = p.reach_entry or {}
+    for _, fact in ipairs(bot:reach_facts()) do
+        if fact.room == room_id and fact.same_entry then
+            p.reach_entry[room_id .. ":" .. fact.slot] =
+                bot:flag(fact.bank, fact.bit) == fact.set
+        end
+    end
+end
+
 local function mark(bot, kind, room, slot, reason, permanent)
     local p = plan()
     local key = mark_key(kind, room, slot)
@@ -265,6 +309,10 @@ local function mark(bot, kind, room, slot, reason, permanent)
     m.permanent = permanent or false
     m.entry = (p.entries or {})[room]
     m.kind, m.room, m.slot = kind, room, slot
+    -- A door with a <reach> fact: the mark lifts once the fact's flag
+    -- changes (blocked), not on a puzzle step anywhere (clear_unreachable).
+    local reach = kind == "door" and reach_fact(bot, room, slot)
+    m.reach_state = reach and (bot:flag(reach.bank, reach.bit) == reach.set) or nil
     p.marks[key] = m
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
 end
@@ -321,6 +369,15 @@ local function blocked(bot, kind, room, slot, remote)
     local m = plan().marks[mark_key(kind, room, slot)]
     if not m then
         return false
+    end
+    if m.reach_state ~= nil then
+        -- A door with a <reach> fact, marked with its flag in one state:
+        -- tried again once the flag is in the other.
+        local reach = reach_fact(bot, room, slot)
+        if reach and (bot:flag(reach.bank, reach.bit) == reach.set) ~= m.reach_state then
+            plan().marks[mark_key(kind, room, slot)] = nil
+            return false
+        end
     end
     if m.desk then
         -- A locked drawer: off limits, from this room or any other, until
@@ -414,7 +471,9 @@ end
 -- turned the bridge (sandwich=yes ended on an empty frontier).
 local function clear_unreachable(bot, room, doors)
     for key, m in pairs(plan().marks) do
-        if ((m.room == room or (doors and m.kind == "door"))
+        if m.reach_state ~= nil then
+            -- A door with a <reach> fact: its flag decides (blocked).
+        elseif ((m.room == room or (doors and m.kind == "door"))
                 and m.reason:find("approach", 1, true))
             or (doors and m.kind == "door" and not m.permanent
                 and m.reason:find("timed out", 1, true)) then
@@ -669,6 +728,11 @@ local function door_passable(bot, room_id, door, from)
             and rides_out(bot, room_id, door.slot, from)
     end
     if blocked(bot, "door", room_id, door.slot, true) then
+        return false
+    end
+    -- Nor is a door a <reach> fact keeps out of reach (20C's door to 21A
+    -- from anywhere but the pit).
+    if reach_closed(bot, room_id, door.slot) then
         return false
     end
     -- A door an <avoid> holds shut is no way through either, while its
@@ -1999,6 +2063,7 @@ local function choose(bot)
         if fresh and door.target and door.target ~= room
             and (not BotNav.is_origin_zone(door) or via_action(bot, door))
             and not BotPuzzle.avoided(bot, door.slot)
+            and not reach_closed(bot, room, door.slot)
             and not blocked(bot, "door", room, door.slot) then
             local ok, why, permanent = true, nil, false
             plan().locked[mark_key("door", room, door.slot)] = nil
@@ -2141,6 +2206,7 @@ local function choose(bot)
         return not (goal.x == 0 and goal.z == 0 and not via_fact(bot, goal.room, goal.slot))
             and not blocked(bot, "door", goal.room, goal.slot, true)
             and not avoid_holds(bot, goal.room, goal.slot)
+            and not reach_closed(bot, goal.room, goal.slot)
             and (not goal.locked or key_opens(bot, goal.key))
     end
 
@@ -2888,6 +2954,7 @@ function BotPlanner.enter_room(bot, room)
     p.last_from = p.last_room ~= room.id and p.last_room or nil
     note_story(p, bot, room.id)
     note_revisits(p, bot, room.id)
+    note_reaches(p, bot, room.id)
     p.last_room = room.id
     BotPuzzle.enter_room()
     p.last_done = { room = room.id, tick = bot:tick(), anywhere = true }

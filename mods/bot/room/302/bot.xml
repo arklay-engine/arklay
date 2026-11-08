@@ -19,4 +19,6 @@
   <door slot="0" via="8" bank="0" bit="0x31" while="clear" label="the north elevator up to 300"/>
   <door slot="3" via="10" bank="0" bit="0x2F" while="clear" label="down the ladder to 307"/>
   <answer choice="yes" slot="10" label="climb down the ladder"/>
+  <reach slot="3" bank="0" bit="0x2F" while="clear"
+         label="down the ladder to 307, out of reach until 301's pool is drained"/>
 </bot>

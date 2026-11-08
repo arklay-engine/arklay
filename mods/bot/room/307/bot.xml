@@ -4,4 +4,6 @@
      the bridge, sets common 0x47 and opens door 2 to 30B. -->
 <bot format="2">
   <use slot="4" item="0x1E" bank="1" bit="0x47" label="the hex crank: turn the bridge"/>
+  <reach slot="2" bank="1" bit="0x47" while="set"
+         label="the door to 30B, across the chasm until the hex crank turns the bridge"/>
 </bot>

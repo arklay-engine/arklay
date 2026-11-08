@@ -37,6 +37,11 @@
 //! flag reaches that state, if it last left the room before then: a door
 //! the room's init adds only later (50B's cell door to 512, live only in
 //! the self-destruct), which the bot's map cannot know about from outside.
+//! `<reach slot bank bit while [entry="same"]>` says when door AOT `slot`
+//! can be walked to at all: only while the flag is in that state (and with
+//! `entry="same"`, only on the entry it got there: 20C's door to 21A
+//! stands in the pit Jill drops into). A failed approach to such a door is
+//! retried once the flag changes, not on every puzzle step anywhere.
 //! A format-1 document may not use them.
 //!
 //! Every fact element takes an optional `character="jill"|"chris"`: the fact
@@ -88,6 +93,7 @@ pub struct RoomMeta {
     pub doors: Vec<DoorVia>,
     pub rides: Vec<Ride>,
     pub revisits: Vec<Revisit>,
+    pub reaches: Vec<Reach>,
     pub keep_outs: Vec<KeepOut>,
     pub leaves: Vec<Leave>,
     pub kites: Vec<KiteLoop>,
@@ -174,6 +180,18 @@ pub struct Ride {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Revisit {
     pub gate: Gate,
+    pub label: Option<String>,
+}
+
+/// `<reach slot bank bit while [entry="same"] [label]>`: door AOT `slot`
+/// can be walked to only while the flag is in the `while` state; with
+/// `entry="same"`, only on the room entry the flag reached that state
+/// (`bot:reach_facts()`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reach {
+    pub slot: u8,
+    pub gate: Gate,
+    pub same_entry: bool,
     pub label: Option<String>,
 }
 
@@ -614,6 +632,31 @@ pub fn load_revisits(
     Ok(revisits)
 }
 
+/// One room's `<reach>` fact, with the room it belongs to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomReach {
+    /// The room id as `bot:room().id` spells it (`"20C"`).
+    pub room: String,
+    pub fact: Reach,
+}
+
+/// Every room's `<reach>` facts, by room id then document order
+/// (`bot:reach_facts()`).
+pub fn load_reaches(
+    pack: &Pack,
+    jill: Option<bool>,
+    params: Option<&Params>,
+) -> Result<Vec<RoomReach>> {
+    let mut reaches = Vec::new();
+    for (id, meta) in load_all(pack, jill, params)? {
+        reaches.extend(meta.reaches.into_iter().map(|fact| RoomReach {
+            room: id.clone(),
+            fact,
+        }));
+    }
+    Ok(reaches)
+}
+
 /// One room's `<door>` fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomDoorVia {
@@ -821,6 +864,7 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 | "brew"
                 | "ride"
                 | "revisit"
+                | "reach"
         );
         if fact && format < 2 {
             bail!("{}: <{name}> needs <bot format=\"2\">", at(child));
@@ -924,6 +968,12 @@ pub fn parse_for(text: &str, jill: Option<bool>, params: Option<&Params>) -> Res
                 let fact = parse_revisit(child)?;
                 if keep {
                     meta.revisits.push(fact);
+                }
+            }
+            "reach" => {
+                let fact = parse_reach(child)?;
+                if keep {
+                    meta.reaches.push(fact);
                 }
             }
             "keep_out" => {
@@ -1206,6 +1256,39 @@ fn parse_revisit(node: Node<'_, '_>) -> Result<Revisit> {
     })?;
     Ok(Revisit {
         gate,
+        label: node.attribute("label").map(str::to_string),
+    })
+}
+
+fn parse_reach(node: Node<'_, '_>) -> Result<Reach> {
+    check_attributes(
+        node,
+        &[
+            "slot",
+            "bank",
+            "bit",
+            "while",
+            "entry",
+            "label",
+            "character",
+            "when",
+        ],
+    )?;
+    check_leaf(node)?;
+    let gate = parse_gate(node)?
+        .ok_or_else(|| anyhow::anyhow!("{}: <reach> needs `bank`, `bit` and `while`", at(node)))?;
+    let same_entry = match node.attribute("entry") {
+        None => false,
+        Some("same") => true,
+        Some(other) => bail!(
+            "{}: <reach> `entry` value `{other}` is not `same`",
+            at(node)
+        ),
+    };
+    Ok(Reach {
+        slot: attr(node, "slot")?,
+        gate,
+        same_entry,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -2352,6 +2435,32 @@ mod tests {
         let fromless = r#"<bot format="2"><ride slot="1"/></bot>"#;
         let error = parse(fromless).unwrap_err().to_string();
         assert!(error.contains("needs `from`"), "{error}");
+    }
+
+    #[test]
+    fn reach_takes_a_gate_and_an_optional_same_entry() {
+        let text = r#"<bot format="2">
+            <reach slot="1" bank="1" bit="0x26" while="set" entry="same" label="the pit"/>
+            <reach slot="2" bank="0" bit="0x2F" while="clear"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert_eq!(meta.reaches.len(), 2);
+        assert_eq!(meta.reaches[0].slot, 1);
+        assert_eq!(
+            meta.reaches[0].gate,
+            Gate {
+                flag: (1, 0x26),
+                set: true,
+            }
+        );
+        assert!(meta.reaches[0].same_entry);
+        assert!(!meta.reaches[1].same_entry);
+        assert!(!meta.reaches[1].gate.set);
+        let gateless = r#"<bot format="2"><reach slot="1"/></bot>"#;
+        assert!(parse(gateless).is_err());
+        let entry =
+            r#"<bot format="2"><reach slot="1" bank="1" bit="2" while="set" entry="any"/></bot>"#;
+        assert!(parse(entry).is_err());
     }
 
     #[test]
