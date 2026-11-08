@@ -592,6 +592,22 @@ mod imp {
                     Ok(())
                 },
             );
+            // `set_re2_file(index, file)`: byte `index` of RE2's
+            // `File_tag_bk` (binder `index / 8`, slot `index % 8`), the
+            // oracle's `--file`; file `0xFF` clears it.
+            methods.add_method_mut(
+                "set_re2_file",
+                |_lua, game, (index, file): (usize, u8)| {
+                    let Some(entry) = game.re2.files.get_mut(index) else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "file slot {index} is out of range (0..{})",
+                            crate::scd2::host::FILE_SLOTS
+                        )));
+                    };
+                    *entry = file;
+                    Ok(())
+                },
+            );
 
             methods.add_method_mut("item_box_clear", |_lua, game, ()| {
                 game.item_box =

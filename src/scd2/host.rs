@@ -109,6 +109,9 @@ pub struct Re2State {
     /// `Item_boxwork` (`0x98ED60`): the item box's 64 slots, `[id, count,
     /// mark]`, the mark 3 for a two-slot weapon.
     pub item_box: [[u8; 3]; crate::game::itembox2::BOX_SLOTS],
+    /// `File_tag_bk` (`0x98EE60`): the files held, three binders of eight
+    /// (byte `binder * 8 + slot`), [`NO_FILE`] for none.
+    pub files: [u8; FILE_SLOTS],
     /// The title's `hard_mode` and `censorship_off` as the new game's setup
     /// keeps them in the saved work (`0x98EF2C`, `0x98EF2D`, `FUN_004b73c0`);
     /// a load puts them back (`Title_game_init`).
@@ -347,8 +350,15 @@ impl PartialEq for Characters {
 
 impl Eq for Characters {}
 
+/// `File_tag_bk`'s 24 bytes: three binders of eight files.
+pub const FILE_SLOTS: usize = 24;
+/// A slot of `File_tag_bk` holding no file.
+pub const NO_FILE: u8 = 0xFF;
+
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_MAP + (BANKS - SAVE_BANKS) * 8 * 4;
+const SAVE_LEN: usize = SAVE_LEN_NO_FILES + FILE_SLOTS;
+/// A save from before the files held.
+const SAVE_LEN_NO_FILES: usize = SAVE_LEN_NO_MAP + (BANKS - SAVE_BANKS) * 8 * 4;
 /// A save from before banks 32 to 39 (the map's, `fg_map_c`, `fg_map_i`,
 /// `fg_item_2` and the floors').
 const SAVE_LEN_NO_MAP: usize = SAVE_LEN_NO_CHOICE + 2;
@@ -626,6 +636,7 @@ impl Default for Re2State {
             scenario_b: false,
             personal_item: [0; 2],
             item_box: [[0; 3]; crate::game::itembox2::BOX_SLOTS],
+            files: [NO_FILE; FILE_SLOTS],
             hard_mode: false,
             censorship_off: false,
             bgm: Default::default(),
@@ -685,7 +696,17 @@ impl Re2State {
         for word in self.banks[SAVE_BANKS..].iter().flatten() {
             out.extend_from_slice(&word.to_le_bytes());
         }
+        out.extend_from_slice(&self.files);
         out
+    }
+
+    /// `St_file_set` (`0x5023B0`): put `file` in the first free slot of
+    /// `File_tag_bk`, so a binder fills from slot 0 and the next starts after
+    /// its eight. Returns the slot, or `None` when all 24 are held.
+    pub fn file_set(&mut self, file: u8) -> Option<usize> {
+        let slot = self.files.iter().position(|&held| held == NO_FILE)?;
+        self.files[slot] = file;
+        Some(slot)
     }
 
     /// `Sce_rnd_set`. Extreme Battle's `Rnd` branch isn't ported.
@@ -700,6 +721,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_FILES
             && bytes.len() != SAVE_LEN_NO_MAP
             && bytes.len() != SAVE_LEN_NO_CHOICE
             && bytes.len() != SAVE_LEN_NO_BOX
@@ -752,13 +774,18 @@ impl Re2State {
         self.censorship_off = choice.get(1).is_some_and(|&byte| byte != 0);
         // A save from before them loads with the map's banks clear.
         let mut map = bytes
-            .get(SAVE_LEN_NO_MAP..)
+            .get(SAVE_LEN_NO_MAP..SAVE_LEN_NO_FILES.min(bytes.len()))
             .unwrap_or(&[])
             .as_chunks::<4>()
             .0
             .iter();
         for word in self.banks[SAVE_BANKS..].iter_mut().flatten() {
             *word = map.next().map_or(0, |raw| u32::from_le_bytes(*raw));
+        }
+        // A save from before the files loads with every slot empty.
+        let files = bytes.get(SAVE_LEN_NO_FILES..).unwrap_or(&[]);
+        for (index, file) in self.files.iter_mut().enumerate() {
+            *file = files.get(index).copied().unwrap_or(NO_FILE);
         }
         Some(())
     }
@@ -3933,6 +3960,35 @@ mod tests {
         let mut old = Re2State::default();
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_BOX]).unwrap();
         assert_eq!(old.item_box[0], [0; 3]);
+    }
+
+    #[test]
+    fn files_ride_in_the_save_and_old_saves_load_none() {
+        let mut state = Re2State::default();
+        assert_eq!(state.files, [NO_FILE; FILE_SLOTS]);
+        state.files[0] = 1;
+        state.files[23] = 0x18;
+        let bytes = state.to_save_bytes();
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.files, state.files);
+        // A save from before the files loads holding none.
+        let mut old = Re2State {
+            files: [3; FILE_SLOTS],
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_FILES]).unwrap();
+        assert_eq!(old.files, [NO_FILE; FILE_SLOTS]);
+    }
+
+    #[test]
+    fn file_set_fills_the_first_free_slot() {
+        let mut state = Re2State::default();
+        assert_eq!(state.file_set(4), Some(0));
+        state.files[1] = 9;
+        assert_eq!(state.file_set(5), Some(2));
+        state.files = [0; FILE_SLOTS];
+        assert_eq!(state.file_set(6), None);
     }
 
     #[test]
