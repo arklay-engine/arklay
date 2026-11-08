@@ -2119,6 +2119,9 @@ impl GameHost<'_> {
             return;
         };
         let item_flags = record.item_flags;
+        // Nor does it write `Old`, `Old2` (+0x44..+0x4E), `Push_cnt` (+0x144)
+        // or `At_sce_no`: they outlast a re-set.
+        let kept = *record;
         let mut be_flg = if record.be_flg == 0 {
             (at(7) as i16 as i32 | 1) as u32
         } else {
@@ -2153,6 +2156,7 @@ impl GameHost<'_> {
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
             id: at(1) as u8,
+            floor: (at(5) & 0xFF) as u8,
             item_flags,
             // The format reads `At_h` and `At_d` as byte pairs.
             atd2: crate::objects::ObjectAtd {
@@ -2161,8 +2165,13 @@ impl GameHost<'_> {
                 at_h: (at(19) | at(20) << 8) as u16,
                 at_d: (at(21) | at(22) << 8) as u16,
             },
+            old: kept.old,
+            old2: kept.old2,
+            push_cnt: kept.push_cnt,
+            at_sce_no: kept.at_sce_no,
             ..crate::objects::ObjectRecord::default()
         };
+        record.set_ofs();
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -3164,6 +3173,32 @@ mod tests {
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0);
         assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn obj_model_set_keeps_what_the_original_leaves() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [
+            1, 0, 0, 0, 0, 0x0002, 0, 0x85, 0, 100, -3600, 300, 0, 0, 0, 0, -900, 0, 432, 132, 3,
+            176, 1,
+        ];
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(1).unwrap();
+        assert_eq!(object.floor, 2, "nFloor, from the word's low byte");
+        assert_eq!(object.at, [100, -4500, 300], "Oma_set_ofs");
+        object.old = [1, 2, 3];
+        object.old2 = [4, 5, 6];
+        object.push_cnt = 7;
+        object.at_sce_no = 3;
+        object.be_flg = 0;
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(1).unwrap();
+        assert_eq!(object.be_flg, 0x85);
+        assert_eq!(object.old, [1, 2, 3]);
+        assert_eq!(object.old2, [4, 5, 6]);
+        assert_eq!(object.push_cnt, 7);
+        assert_eq!(object.at_sce_no, 3);
     }
 
     #[test]

@@ -17079,6 +17079,7 @@ fn tick_room_timed(
     if context.game.is_re2_room {
         // `Om_trans`, as the frame draws the objects.
         context.game.om_trans_old();
+        crate::character2::keep_old_boxes(context.game, context.player.pos);
     }
     context.game.apply_stair_state(context.player);
     // A script that changed the camera id this frame (the desk's close-up, a

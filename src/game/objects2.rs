@@ -50,38 +50,40 @@ impl GameState {
     /// step meets a wall record, a character or another object: on the sixth
     /// `fg_status`'s `0x2000` comes up and the step is undone, from the
     /// seventh it stays. A refused step puts the count back to 0.
-    pub fn om_move(&mut self, room: &RoomState, player: &mut PlayerState) {
+    ///
+    /// Returns the first falling box (`Id` 2) a character touched, whose
+    /// `Om_move_box` isn't ported: the first such touch warns.
+    pub fn om_move(&mut self, room: &RoomState, player: &mut PlayerState) -> Option<usize> {
         if self.re2.objects_stopped() {
-            return;
+            return None;
         }
         self.re2.set_pushing(false);
         let keeps_count = matches!(self.re2.player.routine[1], ROUTINE_WALK | ROUTINE_PUSH);
         let width = player_width(self.id.player_flag);
         let ofs_y = -(PLAYER_HEIGHT as i16);
-        let old = self.re2.player.old.unwrap_or(player.pos);
-        let mut pl = CharBox::standing(player.pos, old, ofs_y, width, PLAYER_HEIGHT);
+        let mut pl = CharBox::standing(player.pos, player.pos, ofs_y, width, PLAYER_HEIGHT);
+        if let Some(old) = self.re2.player.old_box {
+            pl.old2 = old.map(|v| v as i16);
+        }
         pl.be_flg = self.re2.player.be_flg;
 
         let mut touched = 0;
         let mut candidate = None;
+        let mut box_touched = None;
         for index in 0..self.objects.records.len() {
             let mut record = self.objects.records[index];
             if record.be_flg & BE_ACTIVE == 0 {
                 continue;
-            }
-            if record.id == ID_BOX && !BOX_WARNED.swap(true, Ordering::Relaxed) {
-                crate::warning!(
-                    "warning: room object {index} is a falling box (Id 2): Om_move_box isn't ported"
-                );
             }
             record.set_ofs();
             record.floor = floor_of_height(record.pos[1]);
             if !keeps_count {
                 record.push_cnt = 0;
             }
-            self.characters_oma(&mut record, Oma::Hold);
+            let mut hit = self.characters_oma(&mut record, Oma::Hold) != 0;
             if record.be_flg & BE_SHOVED == 0 {
                 if oma_ck_oba(&mut pl, &mut record, Oma::Touch) {
+                    hit = true;
                     touched += 1;
                     if self.re2.player.floor == record.floor
                         && oma_ck_front(pl.pos, player.angle, width, width, &record)
@@ -90,7 +92,10 @@ impl GameState {
                     }
                 }
             } else {
-                oma_ck_oba(&mut pl, &mut record, Oma::Push);
+                hit |= oma_ck_oba(&mut pl, &mut record, Oma::Push);
+            }
+            if hit && record.id == ID_BOX {
+                box_touched = box_touched.or(Some(index));
             }
             self.objects.records[index] = record;
         }
@@ -103,13 +108,24 @@ impl GameState {
             }
         }
 
-        for record in &mut self.objects.records {
-            if record.be_flg & BE_ACTIVE != 0 {
-                oma_ck_oba(&mut pl, record, Oma::Hold);
+        for (index, record) in self.objects.records.iter_mut().enumerate() {
+            if record.be_flg & BE_ACTIVE != 0
+                && oma_ck_oba(&mut pl, record, Oma::Hold)
+                && record.id == ID_BOX
+            {
+                box_touched = box_touched.or(Some(index));
             }
         }
         player.pos = pl.pos;
         self.entities[0].pos = player.pos;
+        if let Some(index) = box_touched
+            && !BOX_WARNED.swap(true, Ordering::Relaxed)
+        {
+            crate::warning!(
+                "warning: room object {index} is a falling box (Id 2), and Om_move_box isn't ported"
+            );
+        }
+        box_touched
     }
 
     /// `Om_move`'s count and step for the one object the player walks into.
@@ -167,34 +183,18 @@ impl GameState {
             if character.be_flg & BE_ACTIVE == 0 {
                 continue;
             }
-            let pos = character.body.pos;
-            let old = character.work.old.unwrap_or(pos);
-            let mut chr = match character.zombie.as_ref() {
-                Some(zombie) => {
-                    let atd = zombie.atd;
-                    let lift = i32::from(atd.ofs_y);
-                    CharBox {
-                        be_flg: 0,
-                        pos,
-                        at: atd.at,
-                        old2: [old[0] as i16, (old[1] + lift) as i16, old[2] as i16],
-                        ofs_y: atd.ofs_y,
-                        at_w: atd.at_w,
-                        at_h: atd.at_h,
-                    }
-                }
-                None => {
-                    let height = crate::player2::character_height(character.id);
-                    CharBox::standing(
-                        pos,
-                        old,
-                        -(height as i16),
-                        character.body.radius as u16,
-                        height,
-                    )
-                }
+            let atd = crate::character2::body_atd(character);
+            // Where the draw left its box, else where it is.
+            let old = character.work.old_box.unwrap_or(atd.at);
+            let mut chr = CharBox {
+                be_flg: character.be_flg,
+                pos: character.body.pos,
+                at: atd.at,
+                old2: old.map(|v| v as i16),
+                ofs_y: atd.ofs_y,
+                at_w: atd.at_w,
+                at_h: atd.at_h,
             };
-            chr.be_flg = character.be_flg;
             if oma_ck_oba(&mut chr, record, mode) {
                 touched += 1;
             }
@@ -286,16 +286,17 @@ mod tests {
         let mut player = crate::player::spawn(crate::state::RoomId::default(), &room);
         player.pos = [-22905, -3600, REST];
         player.angle = 1024;
+        crate::character2::keep_old_boxes(&mut game, player.pos);
         (game, room, player)
     }
 
     /// A tick of walking into the object: a step of [`STEP`] toward -z, then
     /// `Om_move`, then `Om_trans`.
     fn walk(game: &mut GameState, room: &RoomState, player: &mut PlayerState) {
-        game.re2.player.old = Some(player.pos);
         player.pos[2] -= STEP;
         game.om_move(room, player);
         game.om_trans_old();
+        crate::character2::keep_old_boxes(game, player.pos);
     }
 
     #[test]
@@ -430,5 +431,106 @@ mod tests {
             "om=0:0,0,0,0,0,0,0,0;1:85,-22900,-3600,-13000,0,7,0,2;2:0,0,0,0,0,0,0,0"
         );
         assert_eq!(game.re2_objects_trace(0), "om=-");
+    }
+
+    /// A body in slot 0 whose `Atd[0]` box sits `box_ofs` from its position,
+    /// as a licker's or an ivy's does.
+    fn offset_body(at: [i32; 3], box_ofs: [i32; 3]) -> crate::scd2::host::Character {
+        let mut body = crate::player::spawn(crate::state::RoomId::default(), &RoomState::default());
+        body.pos = [at[0] - box_ofs[0], at[1] + 1000, at[2] - box_ofs[2]];
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.atd = crate::zombie2::Atd {
+            ofs_x: 672,
+            ofs_y: -1000,
+            at_w: 300,
+            at_h: 1000,
+            w: 300,
+            at,
+        };
+        crate::scd2::host::Character {
+            id: 0x22,
+            model: 0x22,
+            em_set: (0, 0, crate::scd2::host::NO_ENEMY_FLAG),
+            arms: crate::scd2::host::Arms::default(),
+            be_flg: 1,
+            work: crate::player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: Some(zombie),
+        }
+    }
+
+    #[test]
+    fn a_body_is_parted_by_where_its_box_was_drawn() {
+        // The box came in from -z, 100 units this tick; the body's position
+        // is 672 units +z of the box, inside the statue's reach.
+        let (mut game, room, mut player) = hall(&[statue(-13000)]);
+        player.pos[0] += 3000;
+        let ofs = [0, 0, -672];
+        let mut body = offset_body([-22900 + 720, -4600, -13800], ofs);
+        game.re2.characters.0 = vec![Some(Box::new(body.clone()))];
+        crate::character2::keep_old_boxes(&mut game, player.pos);
+        body = *game.re2.characters.0[0].take().unwrap();
+        body.zombie.as_mut().unwrap().atd.at[2] += 100;
+        body.body.pos[2] += 100;
+        game.re2.characters.0[0] = Some(Box::new(body));
+
+        assert_eq!(game.om_move(&room, &mut player), None);
+        let body = game.re2.characters.0[0].as_ref().unwrap();
+        // Out along z, the way the box came in, and not along x, as the
+        // body's own last position would have it.
+        assert_eq!(
+            body.zombie.as_ref().unwrap().atd.at,
+            [-22900 + 720, -4600, -13000 - 432 - 300 - 1]
+        );
+        assert_eq!(body.body.pos[2], -13000 - 432 - 300 - 1 + 672);
+    }
+
+    #[test]
+    fn the_draw_keeps_every_box_in_play_even_a_stopped_partners() {
+        let mut game = GameState::default();
+        let mut stopped = offset_body([500, -1000, 900], [0, 0, 672]);
+        stopped.work.kind = crate::player2::KIND_NOT_MOVED;
+        let mut out = offset_body([0, 0, 0], [0, 0, 0]);
+        out.be_flg = 0;
+        game.re2.characters.0 = vec![Some(Box::new(stopped)), Some(Box::new(out))];
+        crate::character2::keep_old_boxes(&mut game, [100, 0, 200]);
+        let kept = |slot: usize| game.re2.characters.0[slot].as_ref().unwrap().work.old_box;
+        assert_eq!(
+            kept(0),
+            Some([500, -1000, 900]),
+            "the box, not the position"
+        );
+        assert_eq!(kept(1), None, "out of play");
+        assert_eq!(
+            game.re2.player.old_box,
+            Some([100, -i32::from(PLAYER_HEIGHT), 200])
+        );
+    }
+
+    #[test]
+    fn only_a_touched_falling_box_warns() {
+        let mut far = statue(-20000);
+        far.id = ID_BOX;
+        let (mut game, room, mut player) = hall(&[statue(-13000), far]);
+        walk(&mut game, &room, &mut player);
+        let mut near = statue(-13000);
+        near.id = ID_BOX;
+        let (mut game2, room2, mut player2) = hall(&[statue(-20000), near]);
+        assert_eq!(game.om_move(&room, &mut player), None, "nothing touches it");
+        player2.pos[2] -= STEP;
+        assert_eq!(
+            game2.om_move(&room2, &mut player2),
+            Some(1),
+            "the player walks in"
+        );
     }
 }

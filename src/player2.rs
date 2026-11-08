@@ -441,6 +441,9 @@ pub struct Work {
     /// Where the player stood before `Player_move` this tick, for `Old_x2`,
     /// `Old_y2` and `Old_z2`.
     pub old: Option<[i32; 3]>,
+    /// A character's `Old_x2`, `Old_y2` and `Old_z2`: its `Atd[0]` box as
+    /// `Game_loop`'s draw left it last tick, which `Om_move` reads.
+    pub old_box: Option<[i32; 3]>,
     /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
     pub near_death: bool,
     /// `poison_status`: an ivy's spit poisoned the player. The life level
@@ -910,6 +913,7 @@ impl Default for Work {
             at_em_flg: 0,
             atd: None,
             old: None,
+            old_box: None,
             near_death: false,
             poisoned: false,
             poison_timer: 0,
