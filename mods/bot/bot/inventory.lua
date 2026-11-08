@@ -367,6 +367,11 @@ function BotInventory.withdrawals(box_items, ctx, free)
         free = 0
     end
     local heal_taken = false
+    -- One copy of a weapon comes out per visit: the deposit rule boxes a
+    -- second (BotInventory.deposits), and with rope=leave 403's box held
+    -- two knives the loadout wanted, both came out, one went back for the
+    -- full inventory, and the two box goals alternated for 220k ticks.
+    local weapon_taken = {}
     -- The cure first, then the loadout and the rearm, so the heal top-up
     -- does not fill their slots.
     local rows = {}
@@ -391,6 +396,12 @@ function BotInventory.withdrawals(box_items, ctx, free)
         -- A top-up takes the stacks only while the reserve stays free.
         if TOP_UPS[why] and free - #out <= slots_to_leave(why, ctx) then
             why = nil
+        end
+        if why and row.kind == "weapon" then
+            if weapon_taken[row.item] then
+                why = nil
+            end
+            weapon_taken[row.item] = true
         end
         -- One heal stack is enough to stop the "none held" rule.
         if why and not (why == "no heal item held" and heal_taken) then
@@ -853,8 +864,14 @@ function BotInventory.context(bot)
                 -- count as "to withdraw", and the next deposit for a
                 -- pickup or the slot reserve put them straight back. Two
                 -- runs swapped 0x07 in and out of 118's and 403's box
-                -- until max_ticks.
-                if clip == 0 and (held_gun or held_rounds) and (held_rounds or boxed_rounds) then
+                -- until max_ticks. Only with the gun held: the rearm takes
+                -- the gun and its rounds out together, so rounds held
+                -- beside a boxed gun are floor pickups, not its work, and
+                -- (held rounds stopping the rearm) kept for good they
+                -- shut the box on themselves: with vjolt=yes 0x10 and 0x12
+                -- rode beside the boxed launcher, and 409's V-JOLT brew
+                -- found no slot for its last bottle.
+                if clip == 0 and held_gun and (held_rounds or boxed_rounds) then
                     ctx.keep_reserve = ctx.keep_reserve or {}
                     for _, id in ipairs(b.guns) do
                         if bot:has_item(id) then
