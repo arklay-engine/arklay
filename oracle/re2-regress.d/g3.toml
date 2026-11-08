@@ -13,15 +13,41 @@ expect = "match"
 record = "--warp 509:13248:-1800:-16378:3480:5 --flag 1:1 --flag 4:99 --life 200"
 
 # G3 (Em_33) in room 509, scenario B: the player stands in the area that starts the room's scene,
-# where G3 rises and starts the fight (oracle/re2.md, "G3")
+# where G3 rises, roars and fights, knocking the player back with its swipes (oracle/re2.md, "G3")
 [[run]]
 name = "g3_scene_509"
 room = "509"
 character = 0
 sound = false
-ticks = 779
+ticks = 2000
 setup = { pos = [-3670, 0, -14172], angle = 2048, health = 2000, rnd = 6114, camera = 0, flags = [[1, 1], [4, 99]] }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
 expect = "match"
 record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 2000"
+
+# G3 in room 509: the fight goes on for 5000 ticks with the player on 2000 life
+[[run]]
+name = "g3_fight_509"
+room = "509"
+character = 0
+sound = false
+ticks = 5000
+setup = { pos = [-3670, 0, -14172], angle = 2048, health = 2000, rnd = 6114, camera = 0, flags = [[1, 1], [4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 2000"
+
+# G3 in room 509: with 200 life and no input the player falls near death and G3 kills them; the run ends at the game over
+[[run]]
+name = "g3_kill_509"
+room = "509"
+character = 0
+sound = false
+ticks = 2342
+setup = { pos = [-3670, 0, -14172], angle = 2048, health = 200, rnd = 6114, camera = 0, flags = [[1, 1], [4, 99]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
+expect = "match"
+record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 200"
