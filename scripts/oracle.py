@@ -72,6 +72,8 @@ class Tick:
     zombies: str | None = None
     # RE2's `zp` field: the enemies' hidden parts and `Poly_rgb`.
     zombie_parts: str | None = None
+    # RE2's `zd` field: each enemy's `Dest`.
+    zombie_dests: str | None = None
     # RE2's `esp` field: `Esp_`'s live count and taken slots.
     effects: str | None = None
     # RE2's `pneck` field: where the player's head is in the world.
@@ -132,6 +134,7 @@ OPT_IN_FIELDS = {
     "tw",
     "tx",
     "xavol",
+    "zd",
     "zp",
 }
 # A screen's own fields, compared only when named. `gm` (the game mode) is the original's `gi`
@@ -259,6 +262,7 @@ def parse_trace(path: str) -> list[Tick]:
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
                     zombie_parts=fields.get("zp"),
+                    zombie_dests=fields.get("zd"),
                     effects=fields.get("esp"),
                     neck_position=fields.get("pneck"),
                     xa_volume=fields.get("xavol"),
@@ -331,6 +335,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         for row in tick.objects.split(";"):
             slot, _, values = row.partition(":")
             items.append((f"om{slot}", values))
+    if tick.zombie_dests is not None:
+        items.append(("zd", tick.zombie_dests))
     if tick.effects is not None:
         live, _, rows = tick.effects.partition("/")
         rows = [] if rows == "-" else rows.split(";")

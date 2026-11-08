@@ -2646,11 +2646,21 @@ mod tests {
     /// `(life, flags, At_sce_no, draws)`. `Rnd` gives `draws` in turn and 0
     /// after; the room has one enemy, so the life gets its 15.
     fn zombie_init(setup: &str, draws: &[u8]) -> (i64, i64, i64, i64) {
+        let lua = zombie_init_state(setup, draws);
+        let r: Vec<i64> = lua.globals().get("R").unwrap();
+        (r[0], r[1], r[2], r[3])
+    }
+
+    /// [`zombie_init`]'s run, kept for its other globals: `ENEMIES` (the
+    /// room's count, 1 unless the setup says) and `MODEL_TYPE` go in, and
+    /// `SKIN`, `PARTS0_Y` and `ROUTINES` (the four) come out beside `R`.
+    fn zombie_init_state(setup: &str, draws: &[u8]) -> mlua::Lua {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
         let library = include_str!("../../games/re2/lib/zombie.lua");
         lua.globals().set("DRAWS", draws.to_vec()).unwrap();
         lua.load(format!(
             "HARD, ARRANGE, ROOM, KIND, V = false, false, 0x11B, 0, {{}}
+             ENEMIES, MODEL_TYPE, SKIN, PARTS0_Y = 1, 0, 0, 0x1000
              {setup}
              local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, vars = {{}}, flags = 0, life = 0,
                  kind = KIND, drawn = 0 }}
@@ -2668,18 +2678,74 @@ mod tests {
              function e:kind() return w.kind end
              function e:set_kind(v) w.kind = v end
              function e:easy() return false end
-             function e:enemies() return 1 end
+             function e:enemies() return ENEMIES end
              function e:hard_mode() return HARD end
              function e:censorship_off() return ARRANGE end
              function e:room_code() return ROOM end
+             function e:model_type() return MODEL_TYPE end
+             function e:set_skin(v) SKIN = v end
+             function e:set_parts0_y(v) PARTS0_Y = v end
              local zombie = (function() {library} end)()
              zombie.run(e, V)
-             R = {{ w.life, w.flags, w.vars[4], w.drawn }}"
+             R = {{ w.life, w.flags, w.vars[4], w.drawn }}
+             ROUTINES = {{ w.r[0], w.r[1], w.r[2], w.r[3] }}"
         ))
         .exec()
         .unwrap();
+        lua
+    }
+
+    /// Room 207's three 0x1F zombies have `Model_type` 1: `Em10_Init`
+    /// (0x451A80) still draws the three `Rnd` of the skin roll, since
+    /// `Model_type & 0xC0` is clear, and then `& 0x3F` picks skin 1. With
+    /// `Type` 6 the routines are 1,1,0,0, and with `Type` 0 they are 1,0,0,0.
+    #[test]
+    fn a_1f_with_model_type_1_draws_three_for_its_skin_and_wears_skin_1() {
+        let file = include_str!("../../games/re2/enemy/1f/enemy.lua");
+        assert!(file.contains("VARIANT <const> = { skins = true }"));
+        let variant = "V = { skins = true }; MODEL_TYPE = 1; ENEMIES = 4";
+        for (kind, routines) in [(6, [1, 1, 0, 0]), (0, [1, 0, 0, 0])] {
+            let lua = zombie_init_state(
+                &format!("{variant}; KIND = {kind}"),
+                &[0, 0, 0, 0, 0, 3, 7, 9],
+            );
+            let globals = lua.globals();
+            let r: Vec<i64> = globals.get("R").unwrap();
+            assert_eq!(r[3], 8, "five draws and the skin's three");
+            assert_eq!(globals.get::<i64>("SKIN").unwrap(), 1);
+            assert_eq!(globals.get::<Vec<i64>>("ROUTINES").unwrap(), routines);
+        }
+        // `Model_type` 0x40 skips the roll's three draws. The skin isn't
+        // asserted: on this path (`& 0xC0` set, `& 0x3F` zero) the original
+        // takes it from the low bits of the work's pointer (0x4522A6 to
+        // 0x4522F0), which arklay doesn't model.
+        let lua = zombie_init_state("V = { skins = true }; MODEL_TYPE = 0x40", &[]);
         let r: Vec<i64> = lua.globals().get("R").unwrap();
-        (r[0], r[1], r[2], r[3])
+        assert_eq!(r[3], 5);
+    }
+
+    /// Room 207's slot 0 is a 0x13: five draws, as every id, and `Parts0_pos_y`
+    /// 0xE66, so it stands taller.
+    #[test]
+    fn a_13_draws_five_and_stands_taller() {
+        let variant = include_str!("../../games/re2/enemy/13/enemy.lua");
+        assert!(variant.contains("VARIANT <const> = { parts0_y = 0xE66 }"));
+        let lua = zombie_init_state("V = { parts0_y = 0xE66 }; KIND = 6", &[]);
+        let r: Vec<i64> = lua.globals().get("R").unwrap();
+        assert_eq!(r[3], 5);
+        assert_eq!(lua.globals().get::<i64>("PARTS0_Y").unwrap(), 0xE66);
+        assert_eq!(
+            lua.globals().get::<Vec<i64>>("ROUTINES").unwrap(),
+            [1, 1, 0, 0]
+        );
+    }
+
+    /// `Em10_Init` adds 15 to the life only while `BYTE_00989eeb`, the room's
+    /// enemy count, is under 4: room 207's four get none.
+    #[test]
+    fn four_enemies_get_no_life_bonus() {
+        assert_eq!(zombie_init("ENEMIES = 4", &[]).0, 70);
+        assert_eq!(zombie_init("ENEMIES = 3", &[]).0, 85);
     }
 
     #[test]

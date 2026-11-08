@@ -1,0 +1,27 @@
+# Room 207's four scenario A zombies (oracle/re2.md, "Room 207's zombies"): a 0x13 and three 0x1F, whose `Type` has neither 0x1000 (`Root_ck` routes them by the room's two guide areas) nor 0x40. The warp is room 205's door 2 arrival, in cut 1.
+
+[[run]]
+name = "zombies_207_stand"
+room = "207"
+ticks = 1200
+sound = false
+setup_script = "zombies_207.lua"
+input = "none.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,zm2,zm3,zd"
+expect = "match"
+record = "--warp 207:-25640:0:-16590:0:1 --life 200"
+
+[[run]]
+name = "zombies_207_stand_claire"
+room = "207"
+player = 1
+character = 1
+ticks = 1200
+sound = false
+setup_script = "zombies_207.lua"
+input = "none.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,zm2,zm3,zd"
+expect = "match"
+record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 200"

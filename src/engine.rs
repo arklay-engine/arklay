@@ -630,6 +630,7 @@ pub fn run_with_options(
                         re2_partner: None,
                         re2_zombies: None,
                         re2_zombie_parts: None,
+                        re2_zombie_dests: None,
                         re2_effects: None,
                         re2_music: None,
                         re2_die: None,
@@ -7967,6 +7968,10 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2.zombie_parts_trace()),
+            re2_zombie_dests: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.zombie_dest_trace()),
             re2_effects: self
                 .game
                 .is_re2_room

@@ -983,6 +983,33 @@ impl Re2State {
         }
     }
 
+    /// Where each zombie in play is heading: the oracle's `zd` field, the
+    /// slot and `Dest` (`+0x1c4`, `+0x1c6`). `Root_ck` writes it. Neither
+    /// `Sce_em_set` nor `Em10_Init` does: the new work is allocated at
+    /// `Mem_top`, so it starts as whatever last sat at that address.
+    pub fn zombie_dest_trace(&self) -> String {
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                character.zombie.as_ref()?;
+                if character.be_flg & 1 == 0 {
+                    return None;
+                }
+                let [x, z] = character.work.dest;
+                Some(format!("{slot}:{x},{z}"))
+            })
+            .collect();
+        if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        }
+    }
+
     pub fn character_trace(&self, slot: usize) -> Option<[i32; 16]> {
         let character = self.characters.0.get(slot)?.as_deref()?;
         if character.zombie.is_some() {
@@ -3020,6 +3047,56 @@ mod tests {
         exec(&mut game, "sce_em_set", &zombie);
         let targets = crate::character2::targets(&game);
         assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
+    }
+
+    /// Room 207's `init_00` (scenario A): its four zombies, as the RDT's
+    /// `sce_em_set` operands give them (slot, id, `Type`, floor, sound type,
+    /// `Model_type`, dead flag, x, y, z, dir).
+    const ROOM_207: [[i64; 15]; 4] = [
+        [0, 0, 0x13, 6, 0, 0, 44, 0, 71, -25621, 0, -20311, 213, 0, 0],
+        [
+            0, 1, 0x1F, 0, 0, 0, 42, 1, 72, -21898, 0, -12962, 3049, 0, 0,
+        ],
+        [
+            0, 2, 0x1F, 6, 0, 0, 42, 1, 115, -17938, 0, -10646, 1597, 0, 0,
+        ],
+        [
+            0, 3, 0x1F, 6, 0, 0, 42, 1, 116, -25817, 0, -12071, 4491, 0, 0,
+        ],
+    ];
+
+    /// Room 207's sound types are 44 then 42. (42, 44) is bank 0x38 in
+    /// `Sce_se_set`'s table, so the pair is swapped, and slot 0 (type 44,
+    /// `Se_tmp0`'s low byte) plays the bank's second half. `Sce_em_set`
+    /// keeps slot 3's dir as given, past 4095, and counts four enemies.
+    #[test]
+    fn room_207s_zombies_pick_the_swapped_44_42_bank() {
+        let mut game = GameState::default();
+        for zombie in ROOM_207 {
+            exec(&mut game, "sce_em_set", &zombie);
+        }
+        game.re2.sce_se_set();
+        assert_eq!(game.re2.enemy_bank, Some(0x38));
+        assert_eq!(game.re2.enemies, 4);
+        let characters = &game.re2.characters.0;
+        let second_half: Vec<bool> = (0..4)
+            .map(|slot| characters[slot].as_ref().unwrap().be_flg & 0x2000 != 0)
+            .collect();
+        assert_eq!(second_half, [true, false, false, false]);
+        assert_eq!(characters[3].as_ref().unwrap().body.angle, 4491);
+    }
+
+    /// The `zd` field: each zombie's slot and `Dest`, which `Sce_em_set`
+    /// doesn't write.
+    #[test]
+    fn zd_prints_each_zombies_dest() {
+        let mut game = GameState::default();
+        assert_eq!(game.re2.zombie_dest_trace(), "-");
+        for zombie in &ROOM_207[..2] {
+            exec(&mut game, "sce_em_set", zombie);
+        }
+        game.re2.characters.0[0].as_mut().unwrap().work.dest = [100, -200];
+        assert_eq!(game.re2.zombie_dest_trace(), "0:100,-200;1:0,0");
     }
 
     /// Room 204's `main_02` puts the scene's licker off the stage with
