@@ -273,3 +273,23 @@ fn object_models_end_where_the_next_thing_starts() {
     assert_eq!(tim.len(), 0x10);
     assert_eq!(md1.len(), 0x10);
 }
+
+#[test]
+fn object_texture_reads_a_tim_without_a_model() {
+    let mut data = vec![0u8; 0x100];
+    data[2] = 2;
+    let slot = 8 + super::MODELS_SLOT * 4;
+    data[slot..slot + 4].copy_from_slice(&0x60u32.to_le_bytes());
+    // Slot 0 is a TIM with no MD1 (room 200's console page); slot 1 a pair.
+    data[0x60..0x64].copy_from_slice(&0x80u32.to_le_bytes());
+    data[0x68..0x6C].copy_from_slice(&0xB0u32.to_le_bytes());
+    data[0x6C..0x70].copy_from_slice(&0xC0u32.to_le_bytes());
+    assert_eq!(super::object_texture(&data, 0).map(<[u8]>::len), Some(0x30));
+    assert_eq!(super::object_texture(&data, 1).map(<[u8]>::len), Some(0x10));
+    assert_eq!(super::object_texture(&data, 2), None);
+    assert!(
+        super::object_models(&data)
+            .iter()
+            .all(|(slot, ..)| *slot == 1)
+    );
+}

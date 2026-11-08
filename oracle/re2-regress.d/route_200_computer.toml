@@ -8,7 +8,7 @@ setup_script = "route_200_computer.lua"
 input = "route_200_computer.txt"
 voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
-frames = [0, 13800]
+frames = [0, 13899]
 frame_max_mean = 0.8
 expect = "match"
 # the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)

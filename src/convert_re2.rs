@@ -22,6 +22,8 @@
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
+//! | `bio2 1.10.exe`'s computer strings (0x533AD0 and on) | `ui/computer/rc200.txt` |
+//! | `Pl0/Rdt/ROOM2000.RDT` object slot 0's TIM (else `Pl1`'s `ROOM2001.RDT`) | `ui/computer/rc200.tim` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -64,7 +66,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 
 use crate::convert::{finish_pack, parallel_map, read_dir_sorted};
 use crate::format::{self, Dialect};
@@ -589,6 +591,52 @@ pub(crate) fn convert(
     finish_pack(writer, out, jobs, progress, &warnings, &summary, verbose)
 }
 
+/// Room 200's computer console page: object slot 0's TIM in `ROOM2000.RDT`
+/// (`ROOM2001.RDT`'s is the same), which `Sce_model_init` uploads as texture
+/// page 0x11 for `Computer200`'s sprites.
+fn copy_computer_page(
+    rooms: &[Room],
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let page = ["2000", "2001"].iter().find_map(|folder| {
+        let room = rooms.iter().find(|room| room.id.folder() == *folder)?;
+        crate::rdt2::object_texture(&room.bytes, 0)
+    });
+    let Some(page) = page else {
+        warnings.push(format!(
+            "room 200 has no console page; {COMPUTER_PAGE} not written"
+        ));
+        return Ok(());
+    };
+    ensure!(
+        tim_8bpp_size(page) == Some((256, 256)),
+        "room 200's console page isn't an 8 bpp 256 by 256 TIM"
+    );
+    tally.add(writer, "ui", COMPUTER_PAGE, page.to_vec())
+}
+
+/// Room 200's computer console page in the pack.
+const COMPUTER_PAGE: &str = "ui/computer/rc200.tim";
+
+/// The size of an 8 bpp TIM with a CLUT, or `None` for any other TIM.
+fn tim_8bpp_size(tim: &[u8]) -> Option<(u32, u32)> {
+    let word = |at: usize| {
+        tim.get(at..at + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
+    let half = |at: usize| {
+        tim.get(at..at + 2)
+            .map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])))
+    };
+    if word(0)? != 0x10 || word(4)? != (1 | 8) {
+        return None;
+    }
+    let image = 8 + word(8)? as usize;
+    Some((half(image + 8)? * 2, half(image + 10)?))
+}
+
 /// The language file, with the executable's English strings (`exe`) and the
 /// save places of `ddraw.dll`'s archive, the Lua, and the font: RE2's own
 /// `font0.tim` converted, or Classic REbirth's Western sheet without it.
@@ -635,6 +683,7 @@ fn copy_text(
                 .collect(),
         )?;
     }
+    copy_computer_page(rooms, writer, tally, warnings)?;
     for (entry, source) in [
         (
             crate::lua::NEW_GAME_ENTRY,
@@ -651,6 +700,10 @@ fn copy_text(
         (
             "ui/item_box.lua",
             include_str!("../games/re2/ui/item_box.lua"),
+        ),
+        (
+            "ui/computer.lua",
+            include_str!("../games/re2/ui/computer.lua"),
         ),
         ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         (
