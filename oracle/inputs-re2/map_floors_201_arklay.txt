@@ -1,0 +1,27 @@
+# map_floors_201.txt 344 ticks earlier, for arklay's --room 201 (oracle/re2.md, "MAP floors")
+20 start
+24
+56 up
+60
+76 up
+80
+96 left
+100
+116 confirm
+120
+176 up
+180
+216 up
+220
+256 up
+260
+296 down
+300
+336 down
+340
+376 down
+380
+416 cancel
+420
+476 start
+480

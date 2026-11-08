@@ -634,6 +634,7 @@ pub fn run_with_options(
                         re2_xa_volume: None,
                         re2_movie: None,
                         re2_inventory: None,
+                        re2_map_flags: None,
                         re2_item_page: None,
                         re2_item_box: None,
                         re2_doors: None,
@@ -7723,6 +7724,10 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_inventory_trace()),
+            re2_map_flags: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2_map_flags_trace()),
             re2_item_page: self
                 .game
                 .is_re2_room
@@ -15890,13 +15895,9 @@ fn run_re2_init(
     // An init script's `cut_chg` is part of the room's first `Bg_loadPC`.
     game.re2.bg_load = false;
     game.re2.cut_no_load = false;
-    // The load's last step (`0x5023D0`) marks the room visited for the MAP
-    // page. Its other bit, the floor's (`0x98EC00`), only the floor change
-    // reads, which isn't ported.
-    let stage = game.id.stage.saturating_sub(1);
-    let visit = crate::game::status2::map::visited_index(stage, game.id.room);
-    game.re2
-        .set_flag(crate::game::status2::map::VISITED_BANK, visit, 1);
+    // The load's last step (`0x5023D0`) marks the room visited and its floor
+    // stood on, for the MAP page.
+    game.re2_room_set();
     game.re2.vm = Some(Box::new(vm));
 }
 
