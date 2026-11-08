@@ -97,6 +97,50 @@ pub const RE2_BLACK_FRAMES: u32 = 1;
 /// PC version skips `Swap_Cbuff` on those ticks, so the darkening is never
 /// presented and the screen is black from the first of them.
 pub const RE2_FADE_TICKS: u8 = 32;
+/// The frames `Swap_Cbuff` skips after a cut's `Bg_loadPC`.
+pub const RE2_CUT_LOAD_FRAMES: u8 = 2;
+
+/// RE2's `Movie_idx`: the frames still to skip. `Swap_Cbuff`'s `Movie_set`
+/// writes it after a `Bg_loadPC` (2 for a cut, 4 for a room's first load, 8
+/// in room 301), and `WinMain` counts it down instead of drawing and
+/// flipping, so the screen keeps the last presented image.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PresentSkip {
+    left: u8,
+    black: bool,
+}
+
+impl PresentSkip {
+    /// `Movie_set(frames)`: it overwrites the counter, it does not take the
+    /// larger value.
+    pub fn movie_set(&mut self, frames: u8) {
+        self.left = frames;
+    }
+
+    /// [`PresentSkip::movie_set`] for a door's first load: the frames it
+    /// skips show the door's last one, black.
+    pub fn movie_set_black(&mut self, frames: u8) {
+        self.movie_set(frames);
+        self.black = true;
+    }
+
+    /// `WinMain`'s present test for one frame: `false` (and one frame less to
+    /// skip) while the counter is up, else `true`.
+    pub fn present(&mut self) -> bool {
+        if self.left > 0 {
+            self.left -= 1;
+            false
+        } else {
+            self.black = false;
+            true
+        }
+    }
+
+    /// Whether the frames skipped now are a door's black.
+    pub fn black(&self) -> bool {
+        self.black
+    }
+}
 
 /// Which game's door loop the timeline follows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -907,6 +951,51 @@ impl<S: DoorStepper> Transition<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The frames `present` gives, `false` for a skipped one.
+    fn presents(skip: &mut PresentSkip, frames: usize) -> Vec<bool> {
+        (0..frames).map(|_| skip.present()).collect()
+    }
+
+    #[test]
+    fn cut_load_holds_two_frames() {
+        let mut skip = PresentSkip::default();
+        skip.movie_set(RE2_CUT_LOAD_FRAMES);
+        assert_eq!(presents(&mut skip, 3), [false, false, true]);
+    }
+
+    #[test]
+    fn a_b_a_holds_four_frames() {
+        // Leon A's room 102 at 4435 and 4437: 4435 to 4438 skipped.
+        let mut skip = PresentSkip::default();
+        skip.movie_set(2);
+        assert_eq!(presents(&mut skip, 2), [false, false]);
+        skip.movie_set(2);
+        assert_eq!(presents(&mut skip, 3), [false, false, true]);
+    }
+
+    #[test]
+    fn consecutive_changes_hold_three() {
+        // Room 200's opening pan: loads on two ticks in a row.
+        let mut skip = PresentSkip::default();
+        skip.movie_set(2);
+        assert!(!skip.present());
+        skip.movie_set(2);
+        assert_eq!(presents(&mut skip, 3), [false, false, true]);
+    }
+
+    #[test]
+    fn movie_set_overwrites() {
+        let mut skip = PresentSkip::default();
+        skip.movie_set_black(4);
+        assert!(!skip.present());
+        skip.movie_set(2);
+        assert!(skip.black());
+        assert_eq!(presents(&mut skip, 2), [false, false]);
+        assert!(skip.black());
+        assert!(skip.present());
+        assert!(!skip.black());
+    }
 
     #[derive(Debug, Default)]
     struct FakeStepper {

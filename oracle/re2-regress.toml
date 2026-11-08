@@ -946,7 +946,7 @@ setup_script = "route_100_200_fight.lua"
 input = "route_100_200_fight.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
 frames = [0, 9599]
-frame_max_mean = 0.8
+frame_max_mean = 0.75
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
 ignore = [
     [356, "rng"],
@@ -1332,6 +1332,8 @@ setup_script = "route_claire_a_fight.lua"
 input = "route_claire_a_fight.txt"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,zm0,zm1,zm2,zm3,zm4,zm5"
 frames = [0, 9719]
+# Frames 97 and 3212 (about 45.9 and 18.2) are a slow tick of the native recording, which kept the old cut a frame
+# longer than the game's two-frame hold (docs/internals/deviations/re2.md, "The frames of a cut"); arklay shows the new cut there.
 frame_max_mean = 0.8
 ignore = [
     # zombie 1's angle on the first tick (docs/internals/deviations/re2.md, "Zombies")

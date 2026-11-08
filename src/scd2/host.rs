@@ -40,6 +40,16 @@ pub struct Re2State {
     /// `Swap_Cbuff` loads no background, so a cut `Cut_check` switched to
     /// waits there and `scd_var_cut`, the cut on screen, stays.
     pub view_held: bool,
+    /// `BYTE_0098f07b`, the pending `Bg_loadPC`: `Swap_Cbuff` loads the cut's
+    /// view and background at the tick's end and skips two frames
+    /// ([`crate::transition::PresentSkip`]). `cut_chg` (unless its bit 7 is
+    /// set) and `cut_old` raise it even for the cut already on screen;
+    /// `Swap_Cbuff` itself raises it for a zone's change.
+    pub bg_load: bool,
+    /// A `cut_chg` with bit 7 moved the cut this tick: `Cut_chg` sets
+    /// `scd_var_cut` with the live cut and drops the pending load, so
+    /// `Swap_Cbuff` sees no change to load.
+    pub cut_no_load: bool,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
@@ -552,6 +562,8 @@ impl Default for Re2State {
             random: 0x1382_01C3,
             cut_old: 0,
             view_held: false,
+            bg_load: false,
+            cut_no_load: false,
             voice: VoiceLine::default(),
             voice_ticks: Default::default(),
             xa_volume: XA_VOLUME,
@@ -1435,11 +1447,14 @@ impl GameHost<'_> {
     }
 
     /// `cut_chg`: a scripted camera, which stays until a `cut_auto` or
-    /// `cut_old`.
+    /// `cut_old`. `FUN_004e5020` raises the pending load; `Cut_chg` drops
+    /// it again when the operand's bit 7 is set.
     fn change_cut(&mut self, cut: u8) {
         self.game.re2.cut_old = self.game.camera.current_cut as u8;
         self.game.camera.locked = true;
         self.game.set_camera_cut(usize::from(cut & 0x7F));
+        self.game.re2.bg_load = cut & 0x80 == 0;
+        self.game.re2.cut_no_load = cut & 0x80 != 0;
     }
 
     fn character_mut(&mut self, slot: u8) -> Option<&mut Character> {
@@ -1914,6 +1929,8 @@ impl Host for GameHost<'_> {
                 let cut = self.game.re2.cut_old;
                 self.game.camera.locked = false;
                 self.game.set_camera_cut(usize::from(cut));
+                // `Cut_old_0` goes through `FUN_004e5020` too.
+                self.game.re2.bg_load = true;
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
@@ -2455,6 +2472,21 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    #[test]
+    fn cut_chg_raises_the_pending_load_unless_bit_7_is_set() {
+        let mut game = GameState::default();
+        exec(&mut game, "cut_chg", &[0]);
+        assert!(game.re2.bg_load, "the cut already on screen loads again");
+        assert!(!game.re2.cut_no_load);
+        exec(&mut game, "cut_chg", &[0x81]);
+        assert_eq!(game.camera.current_cut, 1);
+        assert!(!game.re2.bg_load, "bit 7 drops the pending load");
+        assert!(game.re2.cut_no_load);
+        game.re2.bg_load = false;
+        exec(&mut game, "cut_old", &[]);
+        assert!(game.re2.bg_load, "`Cut_old_0` loads through `FUN_004e5020`");
     }
 
     #[test]

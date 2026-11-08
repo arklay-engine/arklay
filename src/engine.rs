@@ -2160,25 +2160,17 @@ struct GameSession {
     /// The room the GPU residency was last recorded for; a change retires
     /// the previous room's uploads.
     gpu_room: Option<RoomId>,
-    /// The room and camera as the tick before this one began: what RE2 draws.
-    /// `Bg_loadPC` takes the new view at the end of the tick that changes the
-    /// cut, and the original then shows the frame before the cut for one more
-    /// tick too.
-    drawn_cut: Option<(RoomId, usize)>,
-    /// The room and camera as this tick began, which `drawn_cut` takes next.
+    /// The room and camera as this tick began: [`GameSession::swap_cbuff`]
+    /// sees a zone's cut change against it, and the tick's sounds are
+    /// placed from it.
     tick_cut: Option<(RoomId, usize)>,
-    /// The cut changed on the tick before this one, so this tick's frame is
-    /// still the one from before that change. A change on the tick after
-    /// another holds the same frame a tick longer (room 200's opening pan).
-    cut_held: bool,
-    /// The background's scroll (`sce_scr_move`) in the frame a held cut shows.
-    held_scroll: i16,
-    /// The RE2 frames still to skip after a door: `Swap_Cbuff`'s
-    /// `Movie_set`, which `WinMain` counts down instead of presenting, so the
-    /// door's black stays on screen.
-    load_hold: u8,
-    /// This tick's frame is one `load_hold` skips.
-    load_held: bool,
+    /// RE2's `Movie_idx`, the frames `WinMain` skips after a `Bg_loadPC`:
+    /// two after a cut's load, four (eight in room 301) after a door's. The
+    /// screen keeps the last presented image through them.
+    present_skip: transition::PresentSkip,
+    /// This tick's frame is one `present_skip` skips: nothing is drawn, so
+    /// the framebuffer keeps the last presented frame (a door's, black).
+    present_held: bool,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -2718,12 +2710,9 @@ impl GameSession {
             freeze_room_frame: false,
             gpu_backend: false,
             gpu_room: None,
-            drawn_cut: None,
             tick_cut: None,
-            cut_held: false,
-            held_scroll: 0,
-            load_hold: 0,
-            load_held: false,
+            present_skip: transition::PresentSkip::default(),
+            present_held: false,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -2994,11 +2983,47 @@ impl GameSession {
             .map(|ticks| ticks + 1)
             .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
         let result = self.tick_session(pack, ui, input, action);
+        self.swap_cbuff();
         if start_box {
             self.game.start_re2_box();
         }
         self.animate_re2_status(pack);
         result
+    }
+
+    /// The end of `Psx_main`'s tick: `Swap_Cbuff` loads a cut's view and
+    /// background when one is pending (`BYTE_0098f07b`) and sets two frames
+    /// to skip (`Movie_set(2)`), and `WinMain` then presents the tick's frame
+    /// or counts one skipped frame down. The load is pending after a
+    /// `cut_chg` or `cut_old`, or when the drawn cut moved to the live one
+    /// this tick (`Cut_check`'s zone, unless the player aims). A load inside
+    /// a hold restarts it, so an A-B-A change two ticks apart skips four
+    /// frames in a row.
+    fn swap_cbuff(&mut self) {
+        let re2 = &mut self.game.re2;
+        let pending = std::mem::take(&mut re2.bg_load);
+        let no_load = std::mem::take(&mut re2.cut_no_load);
+        let now = (self.loaded.id, self.loaded.room.current_cut);
+        if self.game.is_re2_room && swap_cbuff_loads(self.tick_cut, now, pending, no_load) {
+            self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
+        }
+        self.present_held = !self.present_skip.present();
+    }
+
+    /// Whether this frame keeps the last presented one: a skipped frame
+    /// ([`GameSession::present_skip`]) of the room, with nothing over it that
+    /// owns the frame instead (a menu, a door, a film, a screen).
+    fn holds_presented_frame(&self) -> bool {
+        self.present_held
+            && !self.present_skip.black()
+            && self.menu.is_none()
+            && self.boot_message.is_none()
+            && self.movie.is_none()
+            && self.death_screen.is_none()
+            && !self.door_on_screen()
+            && self.cutscene_skip.is_none()
+            && self.re2_status_view().is_none()
+            && self.re2_item_get_view().is_none()
     }
 
     /// [`GameSession::tick`]'s work, before RE2's status screen animates.
@@ -3015,19 +3040,7 @@ impl GameSession {
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
-        let cut = Some((self.loaded.id, self.loaded.room.current_cut));
-        let previous = self.tick_cut.filter(|(room, _)| *room == self.loaded.id);
-        self.cut_held = previous.is_some_and(|previous| Some(previous) != cut)
-            && self
-                .drawn_cut
-                .is_some_and(|(room, _)| room == self.loaded.id);
-        if !self.cut_held {
-            self.drawn_cut = previous.or(cut);
-            self.held_scroll = self.game.re2.scroll;
-        }
-        self.tick_cut = cut;
-        self.load_held = self.load_hold > 0;
-        self.load_hold = self.load_hold.saturating_sub(1);
+        self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
         self.buffer_half ^= 1;
         if self
             .cutscene_skip
@@ -3328,11 +3341,8 @@ impl GameSession {
             return;
         }
         let cut_key = (self.loaded.id, self.loaded.room.current_cut);
-        // The band snaps with the picture, on the tick RE2 first draws the cut.
-        if self.game.is_re2_room
-            && self.drawn_cut.is_some_and(|(room, _)| room == cut_key.0)
-            && self.drawn_cut != Some(cut_key)
-        {
+        // The band stays with the picture while RE2 presents nothing.
+        if self.game.is_re2_room && self.present_held && !self.present_skip.black() {
             self.view_prev = self.view;
             return;
         }
@@ -6803,10 +6813,15 @@ impl GameSession {
         self.game.re2.door_stop = session.door.re2.is_some();
         if session.door.re2.is_some() {
             // A room's first `Bg_loadPC` skips four frames, room 301's eight,
-            // from the door's last one.
+            // from the door's last one, which is the first of them: `tick`
+            // counts the rest down. The room's own pending load (an init
+            // script's `cut_chg`) is the same load.
             let id = self.loaded.id;
-            self.load_hold = if (id.stage, id.room) == (3, 1) { 7 } else { 3 };
-            self.load_held = true;
+            let frames = if (id.stage, id.room) == (3, 1) { 8 } else { 4 };
+            self.present_skip.movie_set_black(frames);
+            self.present_held = !self.present_skip.present();
+            self.game.re2.bg_load = false;
+            self.game.re2.cut_no_load = false;
         }
         if session.camera_only {
             finish_transition(
@@ -7570,9 +7585,13 @@ impl GameSession {
     /// by [`GameSession::render`].
     fn use_software(&mut self) {
         // The GPU frames left the framebuffer without the room: a menu open
-        // over it draws the frozen room once more, now in software.
+        // over it draws the frozen room once more, now in software, and so
+        // does a skipped frame.
         if self.gpu_backend && self.menu.is_some() {
             self.freeze_room_frame = true;
+        }
+        if self.gpu_backend {
+            self.present_held = false;
         }
         self.gpu_backend = false;
         self.gpu_scene_visible = false;
@@ -7594,6 +7613,10 @@ impl GameSession {
     /// there, rather than drawing one frame in software.
     fn render_layers(&mut self, pack: &Pack, gpu: &mut GpuRenderer) -> Result<()> {
         self.gpu_backend = true;
+        // A skipped frame keeps the last one's items and scene.
+        if self.holds_presented_frame() && self.framebuffer.records() {
+            return Ok(());
+        }
         self.framebuffer.record();
         if let Some(list) = self.framebuffer.list_mut() {
             list.rewind();
@@ -7611,6 +7634,11 @@ impl GameSession {
     }
 
     fn render_pass(&mut self, pack: &Pack, pass: ScenePass<'_>) -> Result<()> {
+        // `WinMain` neither draws nor flips a skipped frame: the screen keeps
+        // the last presented image, models and overlays included.
+        if self.holds_presented_frame() {
+            return Ok(());
+        }
         // A wider aspect's canvas replaces the 320x240 frame while a screen
         // that asks for one is up; everything else draws in 4:3 space.
         let canvas = self.canvas_width();
@@ -7740,7 +7768,8 @@ impl GameSession {
         // RE2's status screen draws the room under the first frames of its
         // fade, the way the original's suspended game loop still draws it.
         let re2_room = matches!(re2_status, Some(Re2StatusView::Room(_)));
-        if (canvas.is_some() && !re2_room) || (self.load_held && self.menu.is_none()) {
+        let door_black = self.present_held && self.present_skip.black() && self.menu.is_none();
+        if (canvas.is_some() && !re2_room) || door_black {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         } else if re2_item.is_some() && !re2_room {
@@ -7765,21 +7794,6 @@ impl GameSession {
             } else {
                 None
             };
-            // RE2's new view comes in at the frame's swap (`Bg_loadPC`), so the
-            // tick that changes the cut and the one after still draw the old one.
-            // The held frame keeps its scroll too: room 200's pan scrolls back
-            // to the top on the tick it changes cut.
-            let cut = self.loaded.room.current_cut;
-            let scroll = self.game.re2.scroll;
-            if let Some((_, drawn)) = self
-                .drawn_cut
-                .filter(|(room, _)| self.game.is_re2_room && *room == self.loaded.id)
-            {
-                if self.cut_held || drawn != cut {
-                    self.game.re2.scroll = self.held_scroll;
-                }
-                self.loaded.room.current_cut = drawn;
-            }
             let visible = render_frame_on(
                 &mut self.framebuffer,
                 gpu,
@@ -7795,8 +7809,6 @@ impl GameSession {
                 &mut self.effect_pages,
                 &mut self.tween,
             );
-            self.loaded.room.current_cut = cut;
-            self.game.re2.scroll = scroll;
             self.gpu_scene_visible = visible?;
             // The cutscene letterbox bars sit on the scene after the
             // room-entry fade has darkened it: `main_loop` draws the fading
@@ -15577,6 +15589,22 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     apply_screen_border(game, &mut loaded.room);
 }
 
+/// Whether `Swap_Cbuff` runs a cut's `Bg_loadPC` at the end of a tick that
+/// began on `before` and ends drawing `now` (the room and drawn cut): when a
+/// script left the load `pending`, or when the drawn cut moved to the live
+/// one (a zone's change; an aim holds the drawn cut, so there is none) and no
+/// `cut_chg` with bit 7 moved it (`no_load`). A room's first load is the
+/// door's.
+fn swap_cbuff_loads(
+    before: Option<(RoomId, usize)>,
+    now: (RoomId, usize),
+    pending: bool,
+    no_load: bool,
+) -> bool {
+    let zone = before.is_some_and(|(room, cut)| room == now.0 && cut != now.1);
+    pending || (zone && !no_load)
+}
+
 /// An RE2 room's init procedure.
 fn run_re2_init(
     vm: Option<&mut crate::scd2::vm::Vm>,
@@ -15647,6 +15675,9 @@ fn run_re2_init(
     }
     game.re2.clear_tick_flags();
     game.re2.room_loading = false;
+    // An init script's `cut_chg` is part of the room's first `Bg_loadPC`.
+    game.re2.bg_load = false;
+    game.re2.cut_no_load = false;
     // The load's last step (`0x5023D0`) marks the room visited for the MAP
     // page. Its other bit, the floor's (`0x98EC00`), only the floor change
     // reads, which isn't ported.
@@ -22437,6 +22468,23 @@ mod tests {
         game.re2.view_held = false;
         apply_camera(&mut room, &mut game, Some([50, 0, 50]));
         assert_eq!(room.current_cut, 1);
+    }
+
+    #[test]
+    fn swap_cbuff_loads_on_a_cut_change_or_a_pending_load() {
+        let id = RoomId::parse("1020").unwrap();
+        let other = RoomId::parse("1030").unwrap();
+        // A zone's change: the drawn cut moved this tick.
+        assert!(swap_cbuff_loads(Some((id, 4)), (id, 5), false, false));
+        // No change (or an aim that held the drawn cut): no load.
+        assert!(!swap_cbuff_loads(Some((id, 4)), (id, 4), false, false));
+        // `cut_chg` to the cut on screen still loads.
+        assert!(swap_cbuff_loads(Some((id, 4)), (id, 4), true, false));
+        // `cut_chg` with bit 7 moves the cut with no load.
+        assert!(!swap_cbuff_loads(Some((id, 4)), (id, 1), false, true));
+        // A new room's first load is the door's own.
+        assert!(!swap_cbuff_loads(Some((other, 4)), (id, 1), false, false));
+        assert!(!swap_cbuff_loads(None, (id, 1), false, false));
     }
 
     #[test]
