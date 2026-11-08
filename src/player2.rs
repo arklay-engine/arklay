@@ -381,6 +381,10 @@ pub struct Work {
     pub neck: Neck,
     /// The parts whose `Be_flg` `parts_set` cleared, by bit: they aren't drawn.
     pub hidden_parts: u32,
+    /// Each part's `Poly_rgb`, `0x00BBGGRR`: the colour its polygons are
+    /// lit by, `0x80` a channel at full light. `PartsWork_link` (0x4C12B0)
+    /// starts every part at `0x808080`; `parts_set` cases 0 and 1 write it.
+    pub part_rgb: [u32; 32],
     /// Parts placed under their parent other than the skeleton says: the
     /// `Pos` that `Sa_parts_allmv` blends for a morphing part's children.
     pub joint_offsets: Vec<(u8, [i16; 3])>,
@@ -620,16 +624,71 @@ impl Neck {
     }
 }
 
+/// A part's `Poly_rgb` as `PartsWork_link` leaves it: full light.
+pub const DEFAULT_PART_RGB: u32 = 0x0080_8080;
+
 /// `Parts_set`'s case 2 on `work`: `Be_flg`, whose first bit draws the part.
 pub fn set_part_flags(work: &mut Work, part: u8, flags: u16) {
-    if part < 32 {
-        let bit = 1 << part;
-        if flags & 1 == 0 {
-            work.hidden_parts |= bit;
-        } else {
-            work.hidden_parts &= !bit;
-        }
+    parts_set(work, part as i8, 2, flags as i16, false);
+}
+
+/// `Parts_set` (0x4E5F60) on `work`: one field of the part's `PARTS_W`.
+///
+/// - Case 0 writes `Poly_rgb`'s first two bytes (red and green), case 1 its
+///   third (blue). In room 702 (`room_702`) the original writes `0x0505` and
+///   `5` instead, whatever the script says.
+/// - Case 2 writes the low word of `Be_flg`, whose bit 0 has `Joint_trans2`
+///   transform and draw the part. The original writes the whole word, which
+///   also clears the `0x8`, `0x10`, `0x20` and `0x9000` bits; arklay keeps
+///   only bit 0, as [`Work::hidden_parts`].
+/// - Case 3 writes `Be_flg`'s high word, which nothing that draws reads
+///   (`ko_joint_trans2` takes the low word only), so it has no field here.
+/// - Cases 4 to 6 write the part's `Cdir_x/y/z`, which the animated path never
+///   reads (`J_seq2` builds the part's matrix from its `Rot_x/y/z`), so they
+///   have no field either. No room script uses cases 3 to 6.
+///
+/// The part is the operand's signed byte: the original writes out of bounds
+/// for a negative part or one past the work's parts; here a part outside
+/// `0..32` does nothing.
+pub fn parts_set(work: &mut Work, part: i8, case: u8, value: i16, room_702: bool) {
+    let Ok(index) = usize::try_from(part) else {
+        return;
+    };
+    if index >= 32 {
+        return;
     }
+    let rgb = &mut work.part_rgb[index];
+    match case {
+        0 => {
+            let word = if room_702 {
+                0x0505
+            } else {
+                u32::from(value as u16)
+            };
+            *rgb = *rgb & 0x00FF_0000 | word;
+        }
+        1 => {
+            let byte = if room_702 { 5 } else { u32::from(value as u8) };
+            *rgb = *rgb & 0x0000_FFFF | byte << 16;
+        }
+        2 => {
+            let bit = 1 << index;
+            if value & 1 == 0 {
+                work.hidden_parts |= bit;
+            } else {
+                work.hidden_parts &= !bit;
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A part's `Poly_rgb` as a tint on arklay's lit colour: the original
+/// multiplies the vertex light by each byte `>> 8`, so `0x80` is the colour
+/// every part has unless a script changes it, and draws as 255 here.
+pub fn part_tint(rgb: u32) -> [u8; 3] {
+    let channel = |shift: u32| (((rgb >> shift) & 0xFF) * 2).min(255) as u8;
+    [channel(0), channel(8), channel(16)]
 }
 
 /// `Plc_neck` on `work`: what to do with the head from now on.
@@ -817,6 +876,7 @@ impl Default for Work {
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
             lean: 0,
@@ -2554,6 +2614,56 @@ impl Mover<'_, '_> {
                 .find(|(index, _)| usize::from(*index) == part)
                 .map_or(skeleton, |(_, at)| *at),
         )
+    }
+
+    /// `Joint_trans2`'s `Workm`s, in `parts`, from last tick's: the parts
+    /// go in index order, each on its parent's `Workm` (this tick's for a
+    /// parent before it, last tick's for one after it), and a part whose
+    /// `Be_flg` bit 0 is clear (`hidden`) isn't transformed at all, so it
+    /// keeps last tick's matrix and its children compose with that.
+    pub(crate) fn joint_trans2(&self, hidden: u32, parts: &mut Vec<Option<Matrix>>) {
+        let skeleton = &self.tick.skeleton;
+        let count = skeleton.relative.len();
+        parts.resize(count, None);
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let Some(pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
+            return;
+        };
+        let mut parents = vec![None; count];
+        for (parent, children) in skeleton.children.iter().enumerate() {
+            for &child in children {
+                if let Some(slot) = parents.get_mut(usize::from(child)) {
+                    *slot = Some(parent);
+                }
+            }
+        }
+        let root = Matrix {
+            m: self.work.body_rotation(self.player.angle),
+            t: self.player.pos,
+        };
+        for part in 0..count {
+            if part < 32 && hidden & 1 << part != 0 {
+                continue;
+            }
+            let parent = if part == 0 {
+                Some(root)
+            } else {
+                parents[part].and_then(|parent| parts[parent])
+            };
+            let t = if part == 0 {
+                let [x, y, z] = pose.offset;
+                Some([x, self.work.scaled_height(y), z])
+            } else {
+                self.relative(part)
+            };
+            parts[part] = match (parent, t, pose.rotations.get(part)) {
+                (Some(parent), Some(t), Some(rotation)) => Some(parent.comp(&Matrix {
+                    m: rot_matrix(*rotation),
+                    t: t.map(i32::from),
+                })),
+                _ => None,
+            };
+        }
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
@@ -6152,6 +6262,40 @@ mod tests {
     }
 
     #[test]
+    fn part_tint_scales_from_0x80() {
+        assert_eq!(part_tint(0x0080_8080), [255; 3]);
+        assert_eq!(part_tint(0x0070_7070), [224; 3]);
+        assert_eq!(part_tint(0), [0; 3]);
+        assert_eq!(part_tint(0x0000_00FF), [255, 0, 0]);
+        assert_eq!(part_tint(0x0001_207F), [254, 64, 2]);
+    }
+
+    #[test]
+    fn parts_set_writes_a_parts_colour() {
+        let mut work = Work::default();
+        parts_set(&mut work, 3, 0, 0x7070, false);
+        assert_eq!(work.part_rgb[3], 0x0080_7070);
+        parts_set(&mut work, 3, 1, 0x70, false);
+        assert_eq!(work.part_rgb[3], 0x0070_7070);
+        assert!(
+            work.part_rgb
+                .iter()
+                .enumerate()
+                .all(|(n, &rgb)| n == 3 || rgb == DEFAULT_PART_RGB)
+        );
+        parts_set(&mut work, 4, 0, 0x1234, true);
+        parts_set(&mut work, 4, 1, 0x77, true);
+        assert_eq!(work.part_rgb[4], 0x0005_0505);
+        parts_set(&mut work, -1, 0, 0, false);
+        parts_set(&mut work, 40, 2, 0, false);
+        for case in 3..=6 {
+            parts_set(&mut work, 5, case, 0, false);
+        }
+        assert_eq!(work.hidden_parts, 0);
+        assert_eq!(work.part_rgb[5], DEFAULT_PART_RGB);
+    }
+
+    #[test]
     fn parts_set_hides_and_shows_a_part() {
         let mut work = Work::default();
         set_part_flags(&mut work, 11, 0);
@@ -6269,6 +6413,70 @@ mod tests {
             };
             seed_pose(&mut self.work, &mut self.player, &tick);
         }
+
+        /// [`Mover::joint_trans2`] in this setup.
+        fn joint_trans2(&mut self, hidden: u32, parts: &mut Vec<Option<Matrix>>) {
+            let bank = (self.clips.as_slice(), self.keyframes.as_slice());
+            let tick = Tick {
+                room: &self.room,
+                skeleton: &self.skeleton,
+                morphs: &[],
+                banks: Banks {
+                    pld: bank,
+                    weapon: bank,
+                    room: bank,
+                    held: bank,
+                },
+                input: Input::default(),
+                options: Options::default(),
+                id: 0,
+                life: 200,
+                poisoned: false,
+                stopped: false,
+                weapon: self.weapon,
+                necks: Default::default(),
+                targets: &[],
+                neck_targets: &self.neck_targets,
+                enemies: 0,
+            };
+            let mover = Mover {
+                work: &mut self.work,
+                player: &mut self.player,
+                tick: &tick,
+                arrived: None,
+                stairs: None,
+            };
+            mover.joint_trans2(hidden, parts);
+        }
+    }
+
+    #[test]
+    fn a_hidden_part_keeps_last_ticks_matrix() {
+        let mut setup = Setup::new(0);
+        setup.skeleton.relative = vec![[0; 3], [100, 0, 0], [0, 50, 0]];
+        setup.skeleton.children = vec![vec![1], vec![2], vec![]];
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 3];
+        }
+        setup.seed();
+        let start = setup.player.pos;
+        let at = |parts: &[Option<Matrix>], part: usize| parts[part].unwrap().t;
+        let mut parts = Vec::new();
+        setup.joint_trans2(0, &mut parts);
+        assert_eq!(parts.len(), 3);
+        let part1 = at(&parts, 1);
+        assert_eq!(at(&parts, 2), [part1[0], part1[1] + 50, part1[2]]);
+        setup.player.pos[0] += 1000;
+        setup.joint_trans2(1 << 1, &mut parts);
+        assert_eq!(at(&parts, 0)[0], start[0] + 1000, "the root moves");
+        assert_eq!(at(&parts, 1), part1, "the hidden part stays");
+        assert_eq!(
+            at(&parts, 2),
+            [part1[0], part1[1] + 50, part1[2]],
+            "on the stale parent"
+        );
+        setup.joint_trans2(0, &mut parts);
+        assert_eq!(at(&parts, 1)[0], part1[0] + 1000);
     }
 
     #[test]

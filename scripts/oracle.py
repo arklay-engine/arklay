@@ -69,6 +69,8 @@ class Tick:
     splayer: str | None = None
     music: str | None = None
     zombies: str | None = None
+    # RE2's `zp` field: the enemies' hidden parts and `Poly_rgb`.
+    zombie_parts: str | None = None
     # RE2's `pneck` field: where the player's head is in the world.
     neck_position: str | None = None
     # RE2's `xavol` field: `xa_vol`'s level for the voice channel.
@@ -89,7 +91,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
+OPT_IN_FIELDS = {"zp", "pneck", "xavol", "snd", "inv", "ip", "ti", "tlogo", "tfade", "tsel", "ib", "box"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box")
 
@@ -169,6 +171,7 @@ def parse_trace(path: str) -> list[Tick]:
                     splayer=fields.get("es"),
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
+                    zombie_parts=fields.get("zp"),
                     neck_position=fields.get("pneck"),
                     xa_volume=fields.get("xavol"),
                     sound=fields.get("snd"),
@@ -216,6 +219,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         for row in tick.zombies.split(";"):
             slot, _, values = row.partition(":")
             items.append((f"zm{slot}", ",".join(values.split(",")[:14])))
+    if tick.zombie_parts is not None:
+        items.append(("zp", tick.zombie_parts))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:

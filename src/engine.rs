@@ -625,6 +625,7 @@ pub fn run_with_options(
                         re2_character: None,
                         re2_splayer: None,
                         re2_zombies: None,
+                        re2_zombie_parts: None,
                         re2_music: None,
                         re2_die: None,
                         re2_neck: None,
@@ -7505,6 +7506,10 @@ impl GameSession {
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
             re2_zombies: self.game.is_re2_room.then(|| self.game.re2.zombie_trace()),
+            re2_zombie_parts: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.zombie_parts_trace()),
             re2_music: self
                 .game
                 .is_re2_room
@@ -18395,31 +18400,68 @@ fn render_frame_on(
         // The draw pairs mesh object k with joint k, so a joint drawing
         // another mesh moves its matrix to that object's place.
         let meshes = model.mesh.objects.len();
+        // Each part's `Poly_rgb`, by mesh object.
+        let mut part_rgb = character.work.part_rgb;
         if let Some(joint_meshes) = crate::character2::joint_meshes(character, joints.len(), meshes)
         {
             let mut by_mesh = vec![anim::Mat4x3::default(); meshes];
+            let mut rgb_by_mesh = [crate::player2::DEFAULT_PART_RGB; 32];
             let mut hidden = u32::MAX;
             for (joint, &mesh) in joint_meshes.iter().enumerate() {
                 by_mesh[mesh] = joints[joint];
+                if let (Some(slot), Some(&rgb)) = (rgb_by_mesh.get_mut(mesh), part_rgb.get(joint)) {
+                    *slot = rgb;
+                }
                 if hidden_parts & (1 << joint) == 0 {
                     hidden &= !(1 << mesh);
                 }
             }
             joints = by_mesh;
             hidden_parts = hidden;
+            part_rgb = rgb_by_mesh;
         }
-        models.push(model);
-        npc_joints.push(joints);
-        npc_hidden.push(hidden_parts);
-        npc_tints.push(
-            character
-                .zombie
-                .as_ref()
-                .map_or([255; 3], crate::zombie2::Zombie::tint),
-        );
-        npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
-        npc_weapons.push(None);
-        npc_zone_gate.push(true);
+        let tint = character
+            .zombie
+            .as_ref()
+            .map_or([255; 3], crate::zombie2::Zombie::tint);
+        // The parts' colours multiply the light (`ko_joint_trans2`): one draw
+        // for each colour, the others' objects hidden in it.
+        let mut colours: Vec<u32> = Vec::new();
+        for (object, &rgb) in part_rgb.iter().enumerate().take(meshes.min(32)) {
+            if hidden_parts & (1 << object) == 0 && !colours.contains(&rgb) {
+                colours.push(rgb);
+            }
+        }
+        if colours.is_empty() {
+            colours.push(crate::player2::DEFAULT_PART_RGB);
+        }
+        let light = npc_lights
+            .last()
+            .copied()
+            .unwrap_or((character.body.pos, false));
+        for (index, &rgb) in colours.iter().enumerate() {
+            let mut hidden = hidden_parts;
+            if colours.len() > 1 {
+                for (object, &other) in part_rgb.iter().enumerate() {
+                    if other != rgb {
+                        hidden |= 1 << object;
+                    }
+                }
+            }
+            if index > 0 {
+                npc_lights.push(light);
+            }
+            let part = crate::player2::part_tint(rgb);
+            models.push(Arc::clone(&model));
+            npc_joints.push(joints.clone());
+            npc_hidden.push(hidden);
+            npc_tints.push(std::array::from_fn(|channel| {
+                (u16::from(tint[channel]) * u16::from(part[channel]) / 255) as u8
+            }));
+            npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
+            npc_weapons.push(None);
+            npc_zone_gate.push(true);
+        }
     }
 
     // The `--model` viewer's model, stood in front of the current camera.

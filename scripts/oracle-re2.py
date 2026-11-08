@@ -106,6 +106,8 @@ ENTITY_BE_FLG = 0x00
 ENTITY_SPD = 0x144  # x, y, z as i16
 ENTITY_MOTION = 0x14C  # move_no, move_cnt, hokan_flg, mplay_flg
 ENTITY_D_LIFE_U = 0x151
+ENTITY_PARTS_NUM = 0x107  # how many `PARTS_W` `Joint_trans2` visits
+ENTITY_PARTS = 0x198  # `pSin_parts_ptr`: 0xAC bytes a part, `Be_flg` at +0 and `Poly_rgb` at +0x70
 
 # Raw pad bits, the left column of the table `Pad_set` maps them with.
 BUTTONS = {
@@ -581,6 +583,34 @@ def zombie_trace(game: Game) -> str:
     return "zm=" + (";".join(rows) or "-")
 
 
+def zombie_parts_trace(game: Game) -> str:
+    """The parts of each enemy `zombie_trace` lists, when any is hidden or coloured: slot, the mask of parts `0..Parts_num` whose `Be_flg` bit 0 is clear, part 0's `Poly_rgb` and the wrapping sum of every part's."""
+    rows = []
+    count = max(16, min(32, (game.u32(ENEMIES_END) - ENEMIES) // 4))
+    for slot, pointer in enumerate(struct.unpack(f"<{count}I", game.read(ENEMIES, count * 4))):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x23, 0x25, 0x26, 0x2A, 0x2E, 0x2F, 0x30, 0x31, 0x39)):
+            continue
+        number = min(32, game.u8(pointer + ENTITY_PARTS_NUM))
+        parts = game.u32(pointer + ENTITY_PARTS)
+        if parts == 0 or number == 0:
+            continue
+        block = game.read(parts, number * 0xAC)
+        hidden, total, first = 0, 0, 0
+        for part in range(number):
+            flags = block[part * 0xAC]
+            rgb = int.from_bytes(block[part * 0xAC + 0x70 : part * 0xAC + 0x73], "little")
+            hidden |= (flags & 1 == 0) << part
+            total = (total + rgb) & 0xFFFFFFFF
+            if part == 0:
+                first = rgb
+        if hidden == 0 and all(
+            block[part * 0xAC + 0x70 : part * 0xAC + 0x73] == b"\x80\x80\x80" for part in range(number)
+        ):
+            continue
+        rows.append(f"{slot}:{hidden:x},{first:06x},{total:x}")
+    return "zp=" + (";".join(rows) or "-")
+
+
 def inventory_trace(game: Game) -> str:
     """`Item_work`'s eleven slots, `id:count` (the tenth is the lighter's or the lockpick's), then the player's slot count."""
     work = game.read(ITEM_WORK, 11 * 4)
@@ -659,6 +689,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
                 f"{speed[0]},{speed[1]},{speed[2]}"
             )
     fields.append(zombie_trace(game))
+    fields.append(zombie_parts_trace(game))
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
     fields.append(

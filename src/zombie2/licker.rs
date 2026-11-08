@@ -62,6 +62,9 @@ pub struct Licker {
     part2: [i32; 3],
     /// `Workm.t` of part 9, where `Em22_before` starts its drool.
     drool: [i16; 3],
+    /// Every part's `Workm` from the last `Joint_trans2`, which a part the
+    /// script hides keeps.
+    parts: Vec<Option<player2::Matrix>>,
 }
 
 /// `Em22_before`, which `Game_loop` calls before `Joint_trans2`: its drool is
@@ -307,13 +310,16 @@ impl Em22<'_, '_, '_, '_> {
 
     /// What `Joint_trans2` leaves for the next tick.
     fn joint_trans(&mut self) {
-        let t = |em: &Em<'_, '_, '_>, part| em.mover.part_matrix(part).map(|matrix| matrix.t);
+        let hidden = self.em.work().hidden_parts;
+        self.em.mover.joint_trans2(hidden, &mut self.l.parts);
+        let parts = &self.l.parts;
+        let t = |part: usize| parts.get(part).copied().flatten().map(|matrix| matrix.t);
         let pos = self.em.mover.player.pos;
-        self.l.part0 = t(self.em, 0).unwrap_or(pos);
-        self.l.part1 = t(self.em, 1).unwrap_or(pos);
-        self.l.part2 = t(self.em, 2).unwrap_or(pos);
-        self.l.drool = t(self.em, 9).unwrap_or(pos).map(|axis| axis as i16);
-        self.em.work().neck.position = t(self.em, 8);
+        self.l.part0 = t(0).unwrap_or(pos);
+        self.l.part1 = t(1).unwrap_or(pos);
+        self.l.part2 = t(2).unwrap_or(pos);
+        self.l.drool = t(9).unwrap_or(pos).map(|axis| axis as i16);
+        self.em.work().neck.position = t(8);
     }
 }
 

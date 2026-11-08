@@ -356,8 +356,6 @@ const CHARACTER_SIZES: [u16; 28] = [
     500, 350, 500, 350, 86, 250, 86, 350, 450, 350, 450, 350, 0, 0, 0, 250, 450, 350, 450, 350,
     450, 350, 450, 350, 450, 350, 450, 450,
 ];
-/// `parts_set`'s case for a part's `Be_flg`.
-const PARTS_SET_FLAGS: i64 = 2;
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 pub const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
@@ -769,6 +767,62 @@ impl Re2State {
                     motion[6],
                     motion[7],
                     motion[8],
+                ))
+            })
+            .collect();
+        if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        }
+    }
+
+    /// The parts of the zombies in play that are hidden or coloured: the
+    /// oracle's `zp` field. Each is the slot, the mask of the parts of
+    /// `0..Parts_num` that `Be_flg` doesn't draw, part 0's `Poly_rgb`, and the
+    /// wrapping sum of every part's.
+    pub fn zombie_parts_trace(&self) -> String {
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                let zombie = character.zombie.as_ref()?;
+                let count = usize::from(zombie.parts_num);
+                if character.be_flg & 1 == 0 || count == 0 {
+                    return None;
+                }
+                let mask = if count >= 32 {
+                    u32::MAX
+                } else {
+                    (1 << count) - 1
+                };
+                let mut hidden = character.work.hidden_parts & mask;
+                // The licker's tongue is drawn only while it's out
+                // (`tongue_move` sets its `Be_flg`).
+                if zombie
+                    .licker
+                    .as_ref()
+                    .is_some_and(|licker| licker.tongue_weights().is_none())
+                {
+                    hidden |= 1 << crate::zombie2::licker::TONGUE_PART;
+                }
+                let colours = &character.work.part_rgb[..count];
+                if hidden == 0
+                    && colours
+                        .iter()
+                        .all(|&rgb| rgb == crate::player2::DEFAULT_PART_RGB)
+                {
+                    return None;
+                }
+                let sum = colours
+                    .iter()
+                    .fold(0u32, |sum, &rgb| sum.wrapping_add(rgb & 0x00FF_FFFF));
+                Some(format!(
+                    "{slot}:{hidden:x},{:06x},{sum:x}",
+                    colours[0] & 0x00FF_FFFF
                 ))
             })
             .collect();
@@ -2204,12 +2258,21 @@ impl Host for GameHost<'_> {
                     self.game.re2.unmodelled_arrivals.push(flag);
                 }
             }
-            "parts_set" if at(2) == PARTS_SET_FLAGS => {
-                let (part, flags) = (at(1) as u8, at(3) as u16);
+            // `Parts_set` writes the task's work's part: an object's, or no
+            // work's, isn't modelled and does nothing.
+            "parts_set" => {
+                let (part, case, value) = (at(1) as u8 as i8, at(2) as u8, at(3) as i16);
+                let room_702 = (self.game.id.stage, self.game.id.room) == (7, 2);
                 if let Some(character) = self.task_character(task) {
-                    crate::player2::set_part_flags(&mut character.work, part, flags);
+                    crate::player2::parts_set(&mut character.work, part, case, value, room_702);
                 } else if self.work_is_player(task) {
-                    crate::player2::set_part_flags(&mut self.game.re2.player, part, flags);
+                    crate::player2::parts_set(
+                        &mut self.game.re2.player,
+                        part,
+                        case,
+                        value,
+                        room_702,
+                    );
                 }
             }
             "plc_neck" if self.task_character(task).is_some() => {
@@ -2566,6 +2629,60 @@ mod tests {
             .life;
         assert_eq!((zombie.life, zombie.angle), (life, 1240));
         assert!(life >= 0);
+    }
+
+    fn licker_work(game: &GameState) -> &crate::player2::Work {
+        &game.re2.characters.0[0].as_ref().unwrap().work
+    }
+
+    #[test]
+    fn parts_set_writes_a_parts_colour() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("2010").unwrap();
+        spawn_character(&mut game, 0x22, 24);
+        exec(&mut game, "parts_set", &[0, 3, 0, 0x7070]);
+        assert_eq!(
+            licker_work(&game).part_rgb[3],
+            0x0080_7070,
+            "case 0 keeps blue"
+        );
+        exec(&mut game, "parts_set", &[0, 3, 1, 0x70]);
+        let work = licker_work(&game);
+        assert_eq!(work.part_rgb[3], 0x0070_7070);
+        assert!(
+            work.part_rgb
+                .iter()
+                .enumerate()
+                .all(|(part, &rgb)| part == 3 || rgb == crate::player2::DEFAULT_PART_RGB)
+        );
+    }
+
+    #[test]
+    fn parts_set_in_room_702_writes_its_own_colour() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("7020").unwrap();
+        spawn_character(&mut game, 0x22, 24);
+        exec(&mut game, "parts_set", &[0, 1, 0, 0x7070]);
+        exec(&mut game, "parts_set", &[0, 1, 1, 0x70]);
+        assert_eq!(licker_work(&game).part_rgb[1], 0x0005_0505);
+    }
+
+    #[test]
+    fn parts_set_ignores_parts_out_of_range_and_cases_3_to_6() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("2010").unwrap();
+        spawn_character(&mut game, 0x22, 24);
+        let before = licker_work(&game).clone();
+        exec(&mut game, "parts_set", &[0, 0xFF, 2, 0]);
+        exec(&mut game, "parts_set", &[0, 40, 0, 0]);
+        for case in 3..=6 {
+            exec(&mut game, "parts_set", &[0, 2, case, 0]);
+        }
+        let work = licker_work(&game);
+        assert_eq!(work.hidden_parts, before.hidden_parts);
+        assert_eq!(work.part_rgb, before.part_rgb);
+        exec(&mut game, "parts_set", &[0, 2, 2, 0]);
+        assert_eq!(licker_work(&game).hidden_parts, 1 << 2);
     }
 
     #[test]

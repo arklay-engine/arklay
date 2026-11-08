@@ -481,6 +481,9 @@ impl std::ops::DerefMut for Vars {
 pub struct Zombie {
     /// `Em_22`'s state: this isn't a zombie but a licker.
     pub licker: Option<Box<licker::Licker>>,
+    /// `Parts_num`: how many parts it has (a licker's tongue too), once it
+    /// has run.
+    pub parts_num: u8,
     /// `Atd[1]` and up, which the others are pushed out of after `Atd[0]`:
     /// the alligator's.
     pub more_atd: Vec<Atd>,
@@ -924,6 +927,10 @@ pub fn em_zombie(
             + (body.pos[0] - world.player[0]).wrapping_mul(body.pos[0] - world.player[0]),
     );
     let old_pos = body.pos;
+    // A licker's tongue is a part past its skeleton's, which the
+    // original's `Parts_num` counts (23 for 0x22, read from its work).
+    let tongue = usize::from(zombie.licker.is_some());
+    zombie.parts_num = (tick.skeleton.relative.len() + tongue).min(32) as u8;
     let mut em = Em {
         mover: Mover::new(work, body, tick),
         z: zombie,
