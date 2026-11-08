@@ -128,6 +128,9 @@ function BotInventory.keep(row, ctx)
     if ctx.rearm_reserve and ctx.rearm_reserve[item] then
         return "its gun comes back out of the box"
     end
+    if ctx.keep_reserve and ctx.keep_reserve[item] then
+        return "a reserve gun being rearmed"
+    end
     if row.kind == "heal" and row.heals ~= false then
         return "heal"
     end
@@ -845,6 +848,25 @@ function BotInventory.context(bot)
                         ctx.rearm_reserve[boxed_gun] = true
                     end
                 end
+                -- What the rearm has taken out stays out until the gun is
+                -- loaded: once held, the gun and its rounds no longer
+                -- count as "to withdraw", and the next deposit for a
+                -- pickup or the slot reserve put them straight back. Two
+                -- runs swapped 0x07 in and out of 118's and 403's box
+                -- until max_ticks.
+                if clip == 0 and (held_gun or held_rounds) and (held_rounds or boxed_rounds) then
+                    ctx.keep_reserve = ctx.keep_reserve or {}
+                    for _, id in ipairs(b.guns) do
+                        if bot:has_item(id) then
+                            ctx.keep_reserve[id] = true
+                        end
+                    end
+                    for _, ammo in ipairs(b.rounds) do
+                        if bot:item_count(ammo) > 0 then
+                            ctx.keep_reserve[ammo] = true
+                        end
+                    end
+                end
             end
         end
     end
@@ -895,6 +917,11 @@ function BotInventory.context(bot)
                 slots = slots + 1
             end
         end
+        -- And it leaves the slots a key or a <use> item waits for: 502's
+        -- deposit freed one for 504's lab key, the rearm took it back for
+        -- the launcher's rounds, and Barry's branch stalled in the lab.
+        local _, progress = BotInventory.needed_pickups(bot, ctx)
+        slots = slots + (progress or 0)
         if ctx.capacity - ctx.used - (ctx.hold_free or 0) < slots then
             ctx.rearm_reserve = nil
         end

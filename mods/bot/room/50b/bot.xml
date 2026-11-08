@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 50B, the cells. Door 1 to 512, where entering frees Chris (common
-     0x4B), is live only in the self-destruct (common 0x4C, set on entering
-     514 after the Tyrant's death): before then the room has no door 1, so
-     the bot's map has no way to 512 and nothing would bring it back here.
-     The <revisit> does, under chris=save. Under chris=leave the bot keeps
+     0x4B), shows only after the Tyrant's death: on Wesker's branch once
+     scenario 0x37 is set, on Barry's in the self-destruct (common 0x4C,
+     set on entering 514 after the death, which every way back from 513
+     passes). Before then the room has no door 1, so the bot's map has no
+     way to 512 and nothing would bring it back here. The <revisit> facts
+     do, under chris=save. Under chris=leave the bot keeps
      off door 1, so Chris stays locked up for the Barry or Bad ending. -->
 <bot format="2">
+  <revisit bank="0" bit="0x37" while="set" when="chris=save"
+           label="512's cell door opens once the Tyrant is dead"/>
   <revisit bank="1" bit="0x4C" while="set" when="chris=save"
            label="512's cell door opens in the self-destruct"/>
   <avoid slot="1" when="chris=leave" reason="512's cell: Chris stays locked up (chris=leave)"/>
