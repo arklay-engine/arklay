@@ -618,6 +618,7 @@ fn run_zombie(
     loading: bool,
 ) -> Vec<usize> {
     let tick = tick_of(room, game, character, slot, model, None);
+    zombie.parts_num = parts_num(model);
     let player = game.entities[0].pos;
     let scene_target = body_of(game, character.work.dest[1]).unwrap_or(character.body.pos);
     let mut bodies = vec![crate::zombie2::Oba {
@@ -1504,6 +1505,13 @@ fn em_init_move(
     arrived
 }
 
+/// `PartsWork_set`'s `Parts_num`: the model's mesh objects, which can be more
+/// than its skeleton's joints (a zombie's 17 parts on 15 joints, parts 15
+/// and 16 hidden by `Em10_Init`; a licker's 23 with its tongue).
+pub fn parts_num(model: &Emd) -> u8 {
+    model.mesh.objects.len().min(32) as u8
+}
+
 /// The tick a character's `_Spl` sees: its own model's banks, and the room's
 /// animations for its slot.
 pub fn tick_of<'a>(
@@ -1558,6 +1566,37 @@ pub fn tick_of<'a>(
 mod tests {
     use super::*;
     use crate::state::RoomId;
+
+    #[test]
+    fn parts_num_counts_the_meshs_parts_not_the_skeletons_joints() {
+        use crate::model::{Skeleton, Texture8, Tmd, TmdObject};
+        // A zombie's model: 15 joints, 17 parts. `Em10_Init` hides parts 15
+        // and 16, which the original's `Parts_num` (17 in room 204's body)
+        // still counts.
+        let model = Emd {
+            skeleton: Skeleton {
+                relative: vec![[0; 3]; 15],
+                children: vec![Vec::new(); 15],
+            },
+            keyframes: Vec::new(),
+            clips: Vec::new(),
+            damage_clips: Vec::new(),
+            damage_keyframes: Vec::new(),
+            banks: Vec::new(),
+            mesh: Tmd {
+                objects: vec![TmdObject::default(); 17],
+            },
+            texture: Texture8 {
+                width: 0,
+                height: 0,
+                indices: Vec::new(),
+                palettes: Vec::new(),
+                stp: Vec::new(),
+            },
+            morphs: Vec::new(),
+        };
+        assert_eq!(parts_num(&model), 17);
+    }
 
     #[test]
     fn a_character_stops_when_out_of_play_or_told_not_to_move() {

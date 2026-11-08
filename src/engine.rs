@@ -3827,6 +3827,10 @@ impl GameSession {
                 );
             }
             if let Some(stopped) = self.game.re2_item_get_effects_frame() {
+                // `Game_loop`'s draw pass runs each body's `pTbefore_func`
+                // (`Em22_before`'s `Rnd`) before `Joint_trans2` and `Esp_move`,
+                // on these frames as on any.
+                self.game.re2.tick_before();
                 let player = self
                     .game
                     .entities
