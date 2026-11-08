@@ -243,8 +243,16 @@ function BotInventory.soft_deposits(items, ctx, needed)
         end
         return a.row.slot < b.row.slot
     end)
+    -- A gun goes in only for a key or <use> item (ctx.swaps), never for
+    -- the ammunition counted in `needed`: 217's MO disk and a box of
+    -- shells boxed both the acid launcher and the loaded handgun, and the
+    -- bot met 308's hunters with five shells.
+    local gun_room = #out + (ctx.swaps or needed)
+    if gun_room > needed then
+        gun_room = needed
+    end
     for _, gun in ipairs(guns) do
-        if #out >= needed then
+        if #out >= gun_room then
             return out
         end
         out[#out + 1] = gun.row
@@ -292,9 +300,14 @@ local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true,
 -- The free slots a top-up withdrawal must leave.
 -- A top-up leaves the reserve free, or the slots an open <brew> still
 -- needs for its bottles (ctx.brew_slots), whichever is more.
+-- And the slots this visit's soft deposits freed for pickups
+-- (ctx.room_for): 100's swap boxed two guns for two pickups, and the heal
+-- top-up took one of the slots back.
 local function slots_to_leave(_, ctx)
     local brew = ctx and ctx.brew_slots or 0
-    return brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
+    local leave = brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
+    local room = ctx and ctx.room_for or 0
+    return room > leave and room or leave
 end
 
 -- Why the box item `row` ({item, kind}) should come out, or nil.
@@ -866,11 +879,13 @@ function BotInventory.context(bot)
                 -- runs swapped 0x07 in and out of 118's and 403's box
                 -- until max_ticks. Only with the gun held: the rearm takes
                 -- the gun and its rounds out together, so rounds held
-                -- beside a boxed gun are floor pickups, not its work, and
-                -- (held rounds stopping the rearm) kept for good they
-                -- shut the box on themselves: with vjolt=yes 0x10 and 0x12
-                -- rode beside the boxed launcher, and 409's V-JOLT brew
-                -- found no slot for its last bottle.
+                -- beside a boxed gun, or with no gun at all, are floor
+                -- pickups, not its work, and (held rounds stopping the
+                -- rearm) kept for good they shut the box on themselves:
+                -- with vjolt=yes 0x10 and 0x12 rode beside the boxed
+                -- launcher, and 409's V-JOLT brew found no slot for its
+                -- last bottle; with sandwich=yes 100's first deposit kept
+                -- the acid rounds and boxed the next item.
                 if clip == 0 and held_gun and (held_rounds or boxed_rounds) then
                     ctx.keep_reserve = ctx.keep_reserve or {}
                     for _, id in ipairs(b.guns) do
@@ -1077,7 +1092,9 @@ function BotInventory.make_room(bot, ctx, items, skip)
     local deposits = BotInventory.deposits(items, ctx)
     if #deposits == 0 and ctx.full then
         local needed, progress = BotInventory.needed_pickups(bot, ctx, skip)
-        -- A key or <use> item on the frontier is worth a spare gun's slot.
+        -- A key or <use> item on the frontier is worth a spare gun's slot,
+        -- one gun for each of them (ctx.swaps).
+        local swaps = progress
         if progress > 0 then
             ctx.swap = true
         end
@@ -1103,17 +1120,23 @@ function BotInventory.make_room(bot, ctx, items, skip)
                 needed = needed + 1
                 if why ~= "ammunition for a held gun" and not FIRST[why] then
                     ctx.swap = true
+                    swaps = swaps + 1
                 end
                 if why == LOADOUT then
                     ctx.heals_may_go = true
                     -- A required hand weapon swaps out a spare gun.
                     if ctx.required and ctx.required[item] then
                         ctx.swap = true
+                        swaps = swaps + 1
                     end
                 end
             end
         end
+        ctx.swaps = swaps
         deposits = BotInventory.soft_deposits(items, ctx, needed)
+        -- The slots these deposits free are the pickups': the heal
+        -- top-up does not refill them (slots_to_leave).
+        ctx.room_for = #deposits
     end
     return deposits
 end

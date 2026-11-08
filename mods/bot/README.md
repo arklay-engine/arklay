@@ -315,7 +315,10 @@ left 35 shells on full inventories and ran dry). A done
 puzzle step (an `<interact>`, `<use>`, `<deliver>` or `<fetch>`) clears
 the approach marks of its room and the door approach marks of every room:
 301's refilled pool stops 302's waterfall, and the door to 307 beyond it
-had used up its attempts before.
+had used up its attempts before. A door goal that timed out counts as an
+approach failure here: 307's door to 30B ran out its time cycling
+approaches the chasm blocked, and the hex crank's bridge did not bring it
+back.
 
 An item goal that costs a quarter of the maximum health while the planner
 is trying it (`HURT_SHARE`) is dropped and marked `hurt while trying`:
@@ -726,7 +729,10 @@ drives the box screen with pad input only.
   until 30C's stage, where the loadout takes it back out). Only to make room for a key
   or `<use>` item (one on the frontier, or a remembered box item a `<use>`
   fact or a locked door needs back), or for a hand weapon the loadout
-  requires (below), do spare guns go too, fewest rounds
+  requires (below), do spare guns go too, one for each such item (never
+  for the ammunition the same deposit makes room for: 217's MO disk and a
+  box of shells boxed both the acid launcher and the loaded handgun, and
+  the bot met 308's hunters with five shells), fewest rounds
   first, the `staple` gun (the handgun, whose ammunition is the most
   common) after every other, never one the loadout or a `<use>` needs
   (408's guardhouse key found the slots full of the equipped shotgun's
@@ -773,7 +779,8 @@ drives the box screen with pad input only.
   At most the free slots, after the deposits. At a box in this room, also
   every stack of the equipped gun's ammunition while its rounds are under
   twice the reserve floor, and every heal stack, as long as one slot stays
-  free (the top-ups; no trip is made for them).
+  free, or every slot this visit's soft deposits freed for pickups (the
+  top-ups; no trip is made for them).
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
   pending `<fight>` the bot has met (`BotNav.fight_met`: it entered the
   fight's room and fought or held back, or saw the boss there), and its
