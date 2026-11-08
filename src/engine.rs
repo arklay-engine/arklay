@@ -10181,6 +10181,9 @@ struct App {
     /// `--bot-seed`, and how many sessions it has already seeded.
     bot_seed: Option<u32>,
     bot_seed_sessions: u32,
+    /// `--bot-invincible`: every session the bot runs has the INVINCIBLE
+    /// cheat on.
+    bot_invincible: bool,
     /// The optional Lua-driven player bot. While it is active its input
     /// replaces the human one; once it finishes, the normal input returns.
     bot: Option<bot::BotRuntime>,
@@ -10269,6 +10272,7 @@ impl App {
             restart_point: None,
             bot_seed: None,
             bot_seed_sessions: 0,
+            bot_invincible: false,
             bot: None,
             watch: None,
         }
@@ -10762,6 +10766,7 @@ impl App {
         goal_room: Option<&str>,
         seed: Option<u32>,
         params: &[(String, String)],
+        invincible: bool,
     ) -> Result<()> {
         if !matches!(self.mode, Mode::Play(_)) {
             bail!("--bot requires a game session (use `--ui game`)");
@@ -10776,9 +10781,14 @@ impl App {
         }
         self.bot = Some(runtime);
         self.bot_seed = seed;
+        self.bot_invincible = invincible;
+        if invincible {
+            eprintln!("[bot] invincible: the INVINCIBLE cheat is on for the run");
+        }
         // The boot already started the first session; it has not ticked yet.
         if let Mode::Play(session) = &mut self.mode {
             apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, session);
+            session.game.debug.invincible |= self.bot_invincible;
         }
         Ok(())
     }
@@ -10906,6 +10916,7 @@ impl App {
         // reload after a death included (a save does not carry the RNG state).
         if self.bot.is_some() {
             apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, &mut session);
+            session.game.debug.invincible |= self.bot_invincible;
         }
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
@@ -12133,7 +12144,13 @@ fn run_ui_impl(
         app.player_options = player_options;
         app.boot(boot)?;
         app.enable_skips();
-        app.attach_bot(bot.risk, bot.goal_room.as_deref(), bot.seed, &bot.params)?;
+        app.attach_bot(
+            bot.risk,
+            bot.goal_room.as_deref(),
+            bot.seed,
+            &bot.params,
+            bot.invincible,
+        )?;
         // A headless run has no frame to stay responsive for: let one update
         // fast-forward the whole scene instead of a 12 ms burst, so where
         // control returns does not depend on the machine's load. Every later
@@ -12348,7 +12365,13 @@ fn run_ui_impl(
     }
     if bot.enabled {
         app.enable_skips();
-        app.attach_bot(bot.risk, bot.goal_room.as_deref(), bot.seed, &bot.params)?;
+        app.attach_bot(
+            bot.risk,
+            bot.goal_room.as_deref(),
+            bot.seed,
+            &bot.params,
+            bot.invincible,
+        )?;
     }
     let mut owned = None;
     let display = match shared {
@@ -34286,7 +34309,8 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot(bot::DEFAULT_RISK, None, None, &[]).unwrap();
+        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+            .unwrap();
         app.enable_skips();
         let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
         let Mode::Play(session) = &mut app.mode else {
@@ -34323,7 +34347,8 @@ off_0010:
             let mut app = App::new(pack, dir.0.join("saves"), false);
             let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
             app.start_session(session);
-            app.attach_bot(bot::DEFAULT_RISK, None, seed, &[]).unwrap();
+            app.attach_bot(bot::DEFAULT_RISK, None, seed, &[], false)
+                .unwrap();
             let mut states = Vec::new();
             for _ in 0..sessions {
                 let Mode::Play(session) = &app.mode else {

@@ -80,6 +80,10 @@ pub struct BotOptions {
     /// The story parameters picked for this run (`--bot-param NAME=VALUE`),
     /// checked against the pack's `params/<game>.xml` when the bot attaches.
     pub params: Vec<(String, String)>,
+    /// The debug INVINCIBLE cheat for every session of the run
+    /// (`--bot-invincible`): health stays full and the game-over machine
+    /// never runs. The bot is not told; it plays as it would.
+    pub invincible: bool,
 }
 
 /// The game RNG state for the `session`th session of a `--bot-seed` run
@@ -106,6 +110,7 @@ impl Default for BotOptions {
             goal_room: None,
             seed: None,
             params: Vec::new(),
+            invincible: false,
         }
     }
 }

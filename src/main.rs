@@ -231,6 +231,12 @@ struct Cli {
     #[arg(long, value_name = "NAME=VALUE", value_parser = parse_bot_param, requires = "bot")]
     bot_param: Vec<(String, String)>,
 
+    /// Turn on the debug INVINCIBLE cheat for every session of this bot
+    /// run: health stays full and the player never dies. The bot plays as
+    /// it would otherwise; use it to time a route without deaths.
+    #[arg(long, requires = "bot")]
+    bot_invincible: bool,
+
     /// End the bot run when the player enters this room: a three-digit room
     /// id such as `20D` (stage, then room, in hex). Lua reads it as
     /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
@@ -1737,6 +1743,7 @@ fn main() -> Result<()> {
                 goal_room: cli.bot_goal_room.clone(),
                 seed: cli.bot_seed,
                 params: cli.bot_param.clone(),
+                invincible: cli.bot_invincible,
             };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
@@ -2015,6 +2022,22 @@ mod tests {
         assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "x"]).is_err());
         assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "-1"]).is_err());
         assert!(parse(&["arklay", "game.akpak", "--bot-seed", "3"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_invincible_flag_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert!(
+            !parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_invincible
+        );
+        assert!(
+            parse(&["arklay", "game.akpak", "--bot", "--bot-invincible"])
+                .unwrap()
+                .bot_invincible
+        );
+        assert!(parse(&["arklay", "game.akpak", "--bot-invincible"]).is_err());
     }
 
     #[test]
