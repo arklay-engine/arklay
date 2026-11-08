@@ -3456,6 +3456,12 @@ impl GameSession {
         if self.system_menu_open {
             return Ok(());
         }
+        // RE2's pad has one button for the confirm and the shot (raw 0x80,
+        // which `Pad_set` gives both): held fire is a held confirm for the
+        // windows, the menus and the messages too.
+        if self.game.is_re2_room && input.fire {
+            action = true;
+        }
         // The trace's `snd` is this tick's `SsPlay`s, whichever path plays them.
         if self.game.is_re2_room {
             self.re2_sounds.played.clear();

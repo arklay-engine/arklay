@@ -39,7 +39,7 @@ setup_script = "licker_204_fight.lua"
 input = "licker_204_fight.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
-expect = { tick = 919, fields = ["mot", "pneck", "zm1"], note = "fire pressed as the aim starts is also the original's action key: the check of area 6 (the body, event 8) opens message 2 and stops the room for 39 ticks, which arklay doesn't do (#541)" }
+expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 2 --give 0:2:200"
 
 [[run]]
