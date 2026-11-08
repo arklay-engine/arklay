@@ -317,12 +317,18 @@ A failed goal is marked with its reason. It is retried when the inventory
 changes, and an approach failure is also retried on the next entry into the
 room (the bot may stand in another part of it). Remote planning never
 heads back to an item whose approach failed, even after the inventory
-changed. An `<avoid>` item is marked as avoided before the free-slot check,
+changed. A `<use>` goal whose every approach failed remembers the room the
+bot had entered from (`bad_from`): the remote trip back to it, otherwise
+never made, is planned while a route enters its room from another room
+(507's computer, behind the wall from the door to 50C, is reached from
+505), its attempts counting as usual. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
 full` mark on a key or an item a `<use>` fact needs: that waits for the
 inventory to change however often it was tried (401's red book, passed
-three times with every slot used), one on a heal item while the bot is
+three times with every slot used; also an item an open `<use>` takes
+now though none did when it was left: under `vjolt=yes` the red book's use
+waits for the pour), one on a heal item while the bot is
 hurt with no heal held (`BotSurvival.needs_heal`: the mansion's green
 herbs, given up while the inventory was full, when 408's wasps had stung
 it to 1), and one on the ammunition of a gun held or in the box (a run
