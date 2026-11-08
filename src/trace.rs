@@ -537,6 +537,7 @@ mod tests {
                 re2_map_flags: None,
                 re2_item_page: None,
                 re2_item_box: None,
+                re2_file: None,
                 re2_doors: None,
                 re2_scene: None,
                 re2_sounds: None,
