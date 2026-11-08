@@ -2522,6 +2522,18 @@ impl Host for GameHost<'_> {
                     object.rotation = [at(6) as i16, at(7) as i16, at(8) as i16];
                 }
             }
+            // `Super_reset` (`0x4E5E30`): back on the identity matrix with the
+            // rotation from its operands. The original also copies `+0x68`
+            // (the world position `Om_trans` last composed, which `Super_on`
+            // would use) into the position; nothing here composes it, so the
+            // position stays as it was, and the scripts' `pos_set` that
+            // follows places the object.
+            "super_reset" if self.task_object(task).is_some() => {
+                if let Some(object) = self.task_object(task) {
+                    object.set_super_parent(crate::objects::SuperParent::World);
+                    object.rotation = [at(1), at(2), at(3)].map(|v| v as i16);
+                }
+            }
             "dir_set" if self.task_object(task).is_some() => {
                 if let Some(object) = self.task_object(task) {
                     object.rotation = [at(1) as i16, at(2) as i16, at(3) as i16];
@@ -3587,6 +3599,26 @@ mod tests {
         game.objects.record_mut(1).unwrap().pos = [-19000, -3600, -12500];
         game.interact([0, 0, 0], 0, false);
         assert!(on_plate_3(&mut game));
+    }
+
+    #[test]
+    fn super_reset_gives_the_object_back_to_the_world() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+        // Hung on a work's joint (room 702's `main_12`): not drawn.
+        exec(&mut game, "super_set", &[0, 129, 138, 0, 220, 10, 0, 0, 0]);
+        assert!(game.objects.record(4).unwrap().hangs_on_a_character());
+        // `super_reset`, then the script's `pos_set`.
+        exec(&mut game, "super_reset", &[0, 5, 6, 7]);
+        exec(&mut game, "pos_set", &[0, -24650, 0, -22000]);
+        let object = game.objects.record(4).unwrap();
+        assert_eq!(object.super_parent, SuperParent::World);
+        assert!(!object.hangs_on_a_character());
+        assert_eq!(object.rotation, [5, 6, 7]);
+        assert_eq!(object.pos, [-24650, 0, -22000]);
+        assert_eq!(object.parent, 0xFF);
     }
 
     #[test]
