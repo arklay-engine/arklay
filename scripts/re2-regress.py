@@ -10,6 +10,7 @@ recorded once and reused.
   scripts/re2-regress.py --out DIR [NAME...]          run the manifest (or the named runs)
   scripts/re2-regress.py --out DIR --list             list the runs and whether their reference exists
   scripts/re2-regress.py --out DIR record NAME...     record a missing reference (needs wine)
+  scripts/re2-regress.py --self-test                  check the frame windows' judge (check.sh runs it)
 
 Exits non-zero when any run gives an unexpected result. See "The regression
 runner" in oracle/re2.md.
@@ -245,6 +246,35 @@ def frame_errors(ref_dir: Path, ark_dir: Path, first: int, last: int, offset: in
     return errors
 
 
+def judge_windows(windows, errors) -> tuple[list[str], list[str]]:
+    """`frame_windows`: each `[first, last, max_mean]` judged on the frames of
+    its own ticks. Returns the text for each window and the problems."""
+    texts, problems = [], []
+    for first, last, limit in windows:
+        inside = [e for e, tick in errors if first <= tick <= last]
+        if not inside:
+            problems.append(f"no frames in the window {first}-{last}")
+            continue
+        mean = sum(inside) / len(inside)
+        texts.append(f"{first}-{last} {mean:.2f}")
+        if mean > limit:
+            problems.append(f"frame mean {mean:.2f} in {first}-{last} is over {limit}")
+    return texts, problems
+
+
+def self_test() -> int:
+    """The window judge on a synthetic list of frame errors."""
+    errors = [(1.0, 10), (3.0, 11), (0.2, 20), (0.4, 21), (9.0, 30)]
+    texts, problems = judge_windows([[10, 11, 2.0], [20, 21, 0.25], [40, 50, 1.0]], errors)
+    want_texts = ["10-11 2.00", "20-21 0.30"]
+    want_problems = ["frame mean 0.30 in 20-21 is over 0.25", "no frames in the window 40-50"]
+    if texts != want_texts or problems != want_problems:
+        print(f"re2-regress self-test FAILED: {texts} {problems}", file=sys.stderr)
+        return 1
+    print("re2-regress self-test ok")
+    return 0
+
+
 def frame_summary(errors) -> dict:
     if not errors:
         return {"count": 0, "mean": 0.0, "worst": []}
@@ -353,7 +383,8 @@ def run_one(run: dict, ctx: dict) -> dict:
         else:
             first, last = run["frames"]
             boxes = [tuple(box) for box in run.get("boxes", [])]
-            plain = frame_summary(frame_errors(ref_dir / "frames", frames_dir, first, last, offset, []))
+            per_tick = frame_errors(ref_dir / "frames", frames_dir, first, last, offset, [])
+            plain = frame_summary(per_tick)
             if plain["count"] == 0:
                 result["problems"].append("no frames to compare")
             worst = " ".join(f"t{t}:{e:.2f}" for e, t in plain["worst"])
@@ -364,6 +395,10 @@ def run_one(run: dict, ctx: dict) -> dict:
             limit = run.get("frame_max_mean")
             if limit is not None and plain["mean"] > limit:
                 result["problems"].append(f"frame mean {plain['mean']:.2f} is over {limit}")
+            if run.get("frame_windows"):
+                texts, problems = judge_windows(run["frame_windows"], per_tick)
+                text += "; windows " + ", ".join(texts)
+                result["problems"].extend(problems)
         if not ctx["keep"]:
             shutil.rmtree(frames_dir, ignore_errors=True)
     if not ctx["keep"]:
@@ -507,6 +542,8 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="record: print the command and stop")
     parser.add_argument("--force", action="store_true", help="record: replace an existing reference")
     parser.add_argument("--work", default=None, help="record: the Wine prefix dir (default: wine under --out)")
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
     args = parser.parse_args()
 
     names = args.names

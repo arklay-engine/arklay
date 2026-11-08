@@ -880,6 +880,49 @@ local function file_binders(api, d, shown, top)
     end
 end
 
+-- The reader's subs: 0xC moves the screen's parts back, 0xD to 0x12 show
+-- the page.
+local FILE_READ_OUT, FILE_PAGE, FILE_PREV_IN = 0xC, 0xD, 0x12
+
+-- Whether `page` is in the reader's subs from `first` to 0x12.
+local function reading(page, first)
+    return page ~= nil and page.page == PAGE_FILE and page.sub >= first and page.sub <= FILE_PREV_IN
+end
+
+-- File `file`'s chunk `k` (`ui/status/file<nn>_<k>`): 1 the picture, `2 +
+-- page` a page.
+local function file_chunk(api, d, file, k)
+    d.files = d.files or {}
+    local chunks = d.files[file]
+    if chunks == nil then
+        chunks = {}
+        d.files[file] = chunks
+    end
+    if chunks[k] == nil then
+        chunks[k] = api:page(("ui/status/file%02x_%d"):format(file, k)) or false
+    end
+    return chunks[k] or nil
+end
+
+-- A file's page (`St_disp_file`, `St_disp_file2`): the sprites the engine
+-- lists, in paint order, the picture and the page from the file's chunks
+-- and the arrows and the end marker from the sheets.
+local function draw_file_page(api, d, file, sprites)
+    for _, p in ipairs(sprites) do
+        local handle
+        if p.chunk ~= nil then
+            handle = file_chunk(api, d, file, p.chunk)
+        else
+            handle = d.pages[ST + p.sheet]
+        end
+        if handle ~= nil then
+            local c = p.colour
+            local rgb = c ~= 0x80 and { c, c, c } or nil
+            api:page_sprite_scaled(handle, p.u, p.v, p.w, p.h, d.ox + p.x, d.oy + p.y, p.w, p.h, 0, 255, tint(rgb))
+        end
+    end
+end
+
 local function map_art(api, d, number)
     d.maps = d.maps or {}
     local pages = d.maps[number]
@@ -984,6 +1027,13 @@ local function draw_get(api)
     end
     local d = art(api)
     d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
+    -- A file draws its page on the engine's black, with no item screen.
+    if get.phase == "file_fade" or get.phase == "file_read" then
+        if get.file_page ~= nil then
+            draw_file_page(api, d, get.file, get.file_page)
+        end
+        return
+    end
     api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
     pieces(api, d, FRAME_TABS, 0, 0)
     fill(api, d, MESSAGE_BOX[1], MESSAGE_BOX[2], MESSAGE_BOX[3], MESSAGE_BOX[4], MESSAGE_FILL)
@@ -1293,9 +1343,24 @@ function M.draw(api)
     local last = s.last
     local d = art(api)
     d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
-    api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
-    -- The MAP page's backdrop, on each tick its logic runs.
+    -- The page the tick started on: its logic draws this frame.
     local started = last or page
+    -- The reader's background is black from its load (`Bg_set_mode(2, 0)`)
+    -- to sub 0xC's last tick, on the ticks those subs run.
+    if reading(started, FILE_READ_OUT) then
+        api:fill_rect(0, 0, api:width(), api:height(), 0, 0, 0)
+    else
+        api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
+    end
+    -- The reader's subs 0xD to 0x12 draw only the page, on the ticks they
+    -- run; the load tick (sub 0xB's last) draws nothing of the screen.
+    if reading(page, FILE_PAGE) then
+        if reading(started, FILE_PAGE) and page.file_page ~= nil then
+            draw_file_page(api, d, page.file, page.file_page)
+        end
+        return
+    end
+    -- The MAP page's backdrop, on each tick its logic runs.
     if started.page == PAGE_MAP then
         for row = 0, TILE_ROWS - 1 do
             for column = 0, TILE_COLUMNS - 1 do

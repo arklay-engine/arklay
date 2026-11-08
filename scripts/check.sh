@@ -175,6 +175,8 @@ step cargo fmt --check
 step python3 scripts/lua-api-doc.py check
 # Every .akscr opcode page carries the header the opcode indexes read.
 step python3 scripts/opcode-index.py check
+# The regression runner's frame-window judge.
+step python3 scripts/re2-regress.py --self-test
 
 mkdir -p "$clippy_dir"
 (

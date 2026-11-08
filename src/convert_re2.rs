@@ -14,6 +14,7 @@
 //! | `Common/Data/st{0,1,2}_jp.tim`, `itemall.bin`, `itembox.tim` (TIM `k`) | `ui/status/<stem>_<k>.tim` |
 //! | ADT streams in `Common/bin/itemdata.bin` | `ui/status/check_<id:02x>.tim` |
 //! | `Common/file/map<nn>.adt` (TIM `k`) | `ui/status/map<nn>_<k>.tim` |
+//! | `Common/file/file<nn>u.bin` (chunk `k`, an ADT stream holding a TIM) | `ui/status/file<nn>_<k>.tim` |
 //! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
 //! | `Common/Data/type00.adt` | `ui/type00.bmp` |
 //! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
@@ -1557,6 +1558,7 @@ fn copy_status_art(
         warnings,
     )?;
     copy_maps(layout, writer, tally, warnings)?;
+    copy_files(layout, writer, tally, warnings)?;
     if let Some(path) = data_files
         .iter()
         .find(|path| upper_parts(path).is_some_and(|(stem, ext)| stem == "ST_FILE" && ext == "TS"))
@@ -1625,6 +1627,91 @@ fn copy_maps(
         warnings.push("no Common/file/map<nn>.adt; the MAP page has no map".into());
     }
     Ok(())
+}
+
+/// The FILE page's files, `Common/file/file<nn>u.bin` (the English ones;
+/// `d`, `f` and no letter are German, French and Japanese), each chunk
+/// decoded to its TIM as `ui/status/file<nn>_<k>.tim`: chunk 0 is texture
+/// 0x1E, chunk 1 the picture (0x1F) and chunk `2 + page` the page (0x1D), as
+/// `St_menu0_file`'s sub 0xB and `St_init02` load them (`DecompressFilePage`,
+/// `0x43C890`).
+fn copy_files(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let mut found = false;
+    for path in files_in(layout.common(&["file"]))? {
+        let Some(number) = upper_parts(&path).and_then(|(stem, ext)| file_number(&stem, &ext))
+        else {
+            continue;
+        };
+        found = true;
+        let bytes = read(&path)?;
+        let chunks = file_chunks(&bytes).with_context(|| format!("{}", path.display()))?;
+        for (index, chunk) in chunks.into_iter().enumerate() {
+            let decoded =
+                adt::decode(chunk).with_context(|| format!("{} chunk {index}", path.display()))?;
+            let tim = split_tims(&decoded)
+                .with_context(|| format!("{} chunk {index}", path.display()))?
+                .into_iter()
+                .next()
+                .with_context(|| format!("{} chunk {index} holds no TIM", path.display()))?;
+            tally.add(
+                writer,
+                "status",
+                &format!("ui/status/file{number}_{index}.tim"),
+                tim.to_vec(),
+            )?;
+        }
+    }
+    if !found && layout.common.is_some() {
+        warnings.push("no Common/file/file<nn>u.bin; the FILE page shows no pages".into());
+    }
+    Ok(())
+}
+
+/// The file number (two hex digits, lower case) of an English file's upper
+/// case `stem` and `ext`: `FILE<nn>U`, `.BIN`.
+fn file_number(stem: &str, ext: &str) -> Option<String> {
+    let number = stem.strip_prefix("FILE")?.strip_suffix('U')?;
+    (ext == "BIN" && number.len() == 2 && number.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| number.to_ascii_lowercase())
+}
+
+/// The bytes of a file's header: 32 dword offsets, from the end of it.
+const FILE_HEADER: usize = 0x80;
+
+/// A file's chunks: the header's offsets (relative to its end) start with
+/// 0 and end at the first zero after it; the last one is the file's end.
+fn file_chunks(data: &[u8]) -> Result<Vec<&[u8]>> {
+    let header = data
+        .get(..FILE_HEADER)
+        .context("the file's offset table is truncated")?;
+    let mut offsets = vec![0usize];
+    for word in header.as_chunks::<4>().0.iter().skip(1) {
+        let offset = u32::from_le_bytes(*word) as usize;
+        if offset == 0 {
+            break;
+        }
+        offsets.push(offset);
+    }
+    let body = &data[FILE_HEADER..];
+    let mut chunks = Vec::with_capacity(offsets.len());
+    for pair in offsets.windows(2) {
+        let chunk = body.get(pair[0]..pair[1]).with_context(|| {
+            format!(
+                "chunk at {:#x} to {:#x} is out of the file",
+                pair[0], pair[1]
+            )
+        })?;
+        chunks.push(chunk);
+    }
+    if chunks.is_empty() {
+        bail!("the file has no chunk");
+    }
+    Ok(chunks)
 }
 
 /// The title's menu sheets in the 7z archive of `ddraw.dll`.
