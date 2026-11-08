@@ -726,6 +726,10 @@ impl UserData for Api {
         methods.add_method_mut("weapon", |_, e, ()| Ok(e.em().world.weapon));
         methods.add_method_mut("noise", |_, e, ()| Ok(e.em().world.noise));
         methods.add_method_mut("easy", |_, e, ()| Ok(e.em().world.easy));
+        methods.add_method_mut("hard_mode", |_, e, ()| Ok(e.em().world.difficulty.hard));
+        methods.add_method_mut("censorship_off", |_, e, ()| {
+            Ok(e.em().world.difficulty.uncensored)
+        });
         methods.add_method_mut("common_a4", |_, e, ()| Ok(e.em().world.common_a4));
 
         // `Em_Zombie`'s end of the work: `Timer0` to `Timer3`, which keep their
@@ -2420,6 +2424,73 @@ mod tests {
         };
         assert_eq!(chase([0x8C00 - 0x10000, 0]), [1, 0xA]);
         assert_ne!(chase([0, 0x8C00 - 0x10000])[1], 0xA);
+    }
+
+    /// `Em10_Init` under the new game's choice: what it leaves as
+    /// `(life, flags, At_sce_no, draws)`. `Rnd` gives `draws` in turn and 0
+    /// after; the room has one enemy, so the life gets its 15.
+    fn zombie_init(setup: &str, draws: &[u8]) -> (i64, i64, i64, i64) {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.load(format!(
+            "HARD, ARRANGE, ROOM, KIND, V = false, false, 0x11B, 0, {{}}
+             {setup}
+             local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, vars = {{}}, flags = 0, life = 0,
+                 kind = KIND, drawn = 0 }}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:rnd() w.drawn = w.drawn + 1 return DRAWS[w.drawn] or 0 end
+             function e:life() return w.life end
+             function e:set_life(v) w.life = v end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:flags() return w.flags end
+             function e:set_flags(v) w.flags = v end
+             function e:kind() return w.kind end
+             function e:set_kind(v) w.kind = v end
+             function e:easy() return false end
+             function e:enemies() return 1 end
+             function e:hard_mode() return HARD end
+             function e:censorship_off() return ARRANGE end
+             function e:room_code() return ROOM end
+             local zombie = (function() {library} end)()
+             zombie.run(e, V)
+             R = {{ w.life, w.flags, w.vars[4], w.drawn }}"
+        ))
+        .exec()
+        .unwrap();
+        let r: Vec<i64> = lua.globals().get("R").unwrap();
+        (r[0], r[1], r[2], r[3])
+    }
+
+    #[test]
+    fn a_hard_zombie_has_five_times_the_life_and_the_quick_step() {
+        assert_eq!(zombie_init("", &[]), (85, 0, 0x10, 5));
+        assert_eq!(
+            zombie_init("HARD = true", &[0, 0, 0, 0, 0, 3]),
+            (425, 0x8000, 0x23, 6)
+        );
+        assert_eq!(zombie_init("HARD, ROOM = true, 0x610", &[]).0, 255);
+        assert_eq!(zombie_init("HARD, V = true, { life = 0xFA }", &[]).0, 1250);
+        // A crawler halves what HARD gave it, and kind 5 still ends dead.
+        assert_eq!(zombie_init("HARD, KIND = true, 1", &[]).0, 212);
+        assert_eq!(zombie_init("HARD, KIND = true, 5", &[]).0, -1);
+    }
+
+    #[test]
+    fn arrange_mode_gives_one_zombie_in_three_the_quick_step() {
+        // The roll's two draws, shifted 0: 1 isn't a multiple of 3.
+        assert_eq!(
+            zombie_init("ARRANGE = true", &[0, 0, 0, 0, 0, 0, 1]),
+            (85, 0, 0x10, 7)
+        );
+        assert_eq!(
+            zombie_init("ARRANGE = true", &[0, 0, 0, 0, 0, 0, 3, 5]),
+            (85, 0x8000, 0x25, 8)
+        );
     }
 
     #[test]

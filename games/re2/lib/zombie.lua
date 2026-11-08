@@ -48,7 +48,9 @@ local FLAG_HEAD_LEFT <const> = 0x80 -- `FUN_00453510`'s, when the crawler keeps 
 local FLAG_NECK_STILL <const> = 0x200
 local FLAG_GUIDED <const> = 0x400
 local FLAG_BURNING <const> = 0x1000
-local FLAG_SMOKING <const> = 0x8000
+-- The walk's extra step (`FUN_00452ba0`, `FUN_00453240`): id 0x11's, and
+-- `Em10_Init`'s under ARRANGE MODE's roll and under HARD.
+local FLAG_QUICK_STEP <const> = 0x8000
 
 -- `Now_seq`'s bits.
 local SEQ_SOUND <const> = 0x8000000
@@ -1513,8 +1515,20 @@ local function init(e, v)
     e:set_var(AT_OBJ_NO, 0)
     e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x10)
     if v.life then
-        raise_flag(e, FLAG_SMOKING)
+        raise_flag(e, FLAG_QUICK_STEP)
         e:set_life(v.life)
+    end
+    -- ARRANGE MODE: one in three takes the quick step and staggers later.
+    if e:censorship_off() and shifted(e) % 3 == 0 then
+        raise_flag(e, FLAG_QUICK_STEP)
+        e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x20)
+    end
+    -- HARD: five times the life up to stage 4 (rooms 1xx to 4xx), three
+    -- times after, in a 16-bit multiply; and every one takes the quick step.
+    if e:hard_mode() then
+        e:set_life(i16(e:life() * (e:room_code() < 0x500 and 5 or 3)))
+        raise_flag(e, FLAG_QUICK_STEP)
+        e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x20)
     end
     body_box_standing(e)
     raise_be_flg(e, BE_LOW | BE_HIGH)
@@ -1738,10 +1752,10 @@ local function stretch(e)
     return STRETCHES[index & 0x1F]
 end
 
--- A burning zombie's walk runs on: `Type`'s `0x80` or the `0x8000` flag skips every
+-- A burning zombie's walk runs on: `Type`'s `0x80` or `FLAG_QUICK_STEP` skips every
 -- third frame.
 local function burnt_clip(e)
-    local burnt = e:kind() & TYPE_BURNT ~= 0 or has_flag(e, FLAG_SMOKING)
+    local burnt = e:kind() & TYPE_BURNT ~= 0 or has_flag(e, FLAG_QUICK_STEP)
     if burnt and e:move_cnt() % 3 == 2 then
         local seq = e:now_seq()
         if seq & SEQ_SOUND ~= 0 and seq >> 28 < 2 then

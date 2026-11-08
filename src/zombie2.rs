@@ -790,6 +790,9 @@ pub struct World<'a> {
     pub partner: bool,
     /// `fg_system`'s easy bit.
     pub easy: bool,
+    /// `hard_mode` and `censorship_off`, which `Em10_Init` and
+    /// `Pl_life_down` read.
+    pub difficulty: Difficulty,
     /// `BYTE_00989eeb`: how many enemies the room has.
     pub enemies: u8,
     pub stopped: bool,
@@ -1835,11 +1838,15 @@ impl Em<'_, '_, '_> {
             < 0x800
     }
 
-    /// `Pl_life_down`. `hard_mode` and `censorship_off` are the title menu's,
-    /// which leaves them 0.
+    /// `Pl_life_down`, under the new game's `hard_mode` and `censorship_off`.
     fn pl_life_down(&mut self, down: i32, low: bool) -> u8 {
-        let (left, near_death, result) =
-            life_down(*self.world.player_life, down, low, self.world.pl.near_death);
+        let (left, near_death, result) = life_down(
+            *self.world.player_life,
+            down,
+            low,
+            self.world.pl.near_death,
+            self.world.difficulty,
+        );
         *self.world.player_life = left;
         self.world.pl.near_death = near_death;
         if result == 2 {
@@ -2230,13 +2237,38 @@ fn crosses_height(
     !(first & second >= 0 && third & fourth >= 0)
 }
 
-/// `Pl_life_down` with `hard_mode` and `censorship_off` at 0: the life left,
-/// the near-death bit, and 1 for the bite that leaves the player on their last
-/// legs or 2 for the one that kills.
-pub(crate) fn life_down(life: i16, down: i32, low: bool, near_death: bool) -> (i16, bool, u8) {
+/// `Pl_life_down` (0x4DCA40): the life left, the near-death bit, and 1 for
+/// the bite that leaves the player on their last legs or 2 for the one that
+/// kills.
+///
+/// A bite of 40 or less grows by half when the life is over 120, or at any
+/// life under ARRANGE MODE (`censorship_off`). Under HARD, a bite under 60
+/// then grows by a quarter (by half under ARRANGE), both rounded toward 0;
+/// and a player with 50 or more life loses at most what they have, which
+/// leaves them at exactly 0, alive. The debug invincibility
+/// (`FUN_0050aaa0`) and `WORD_0098eb22 == 3`'s scaling aren't modelled.
+pub(crate) fn life_down(
+    life: i16,
+    down: i32,
+    low: bool,
+    near_death: bool,
+    difficulty: Difficulty,
+) -> (i16, bool, u8) {
     let mut down = down;
-    if life > 0x78 && down < 0x29 {
+    if (difficulty.uncensored || life > 0x78) && down <= 0x28 {
         down += down >> 1;
+    }
+    if difficulty.hard {
+        if down < 0x3C {
+            down += if difficulty.uncensored {
+                down / 2
+            } else {
+                down / 4
+            };
+        }
+        if life >= 0x32 && down > i32::from(life) {
+            down = i32::from(life);
+        }
     }
     let left = life.wrapping_sub(down as i16);
     if left >= 0 {
@@ -2363,24 +2395,84 @@ mod tests {
 
     #[test]
     fn a_bite_takes_half_again_from_a_healthy_player() {
-        assert_eq!(life_down(200, 20, false, false), (170, false, 0));
-        assert_eq!(life_down(120, 20, false, false), (100, false, 0));
+        assert_eq!(
+            life_down(200, 20, false, false, Difficulty::default()),
+            (170, false, 0)
+        );
+        assert_eq!(
+            life_down(120, 20, false, false, Difficulty::default()),
+            (100, false, 0)
+        );
     }
 
     #[test]
     fn the_first_lethal_bite_leaves_the_player_at_nothing() {
-        assert_eq!(life_down(10, 20, false, false), (0, true, 1));
+        assert_eq!(
+            life_down(10, 20, false, false, Difficulty::default()),
+            (0, true, 1)
+        );
     }
 
     #[test]
     fn a_bite_kills_once_the_player_is_near_death_or_it_goes_deep() {
-        assert_eq!(life_down(0, 20, false, true), (-20, true, 2));
-        assert_eq!(life_down(10, 30, false, false), (-20, false, 2));
+        assert_eq!(
+            life_down(0, 20, false, true, Difficulty::default()),
+            (-20, true, 2)
+        );
+        assert_eq!(
+            life_down(10, 30, false, false, Difficulty::default()),
+            (-20, false, 2)
+        );
+    }
+
+    const HARD: Difficulty = Difficulty {
+        hard: true,
+        uncensored: false,
+    };
+    const ARRANGE: Difficulty = Difficulty {
+        hard: false,
+        uncensored: true,
+    };
+    const ARRANGE_HARD: Difficulty = Difficulty {
+        hard: true,
+        uncensored: true,
+    };
+
+    #[test]
+    fn hard_mode_adds_a_quarter_to_a_bite_under_60() {
+        assert_eq!(life_down(200, 20, false, false, HARD), (163, false, 0));
+        assert_eq!(life_down(100, 20, false, false, HARD), (75, false, 0));
+        assert_eq!(life_down(100, 59, false, false, HARD), (27, false, 0));
+        assert_eq!(life_down(100, 60, false, false, HARD), (40, false, 0));
+    }
+
+    #[test]
+    fn hard_mode_leaves_a_player_with_50_or_more_alive_at_nothing() {
+        assert_eq!(life_down(60, 100, false, false, HARD), (0, false, 0));
+        assert_eq!(life_down(50, 80, false, false, HARD), (0, false, 0));
+        assert_eq!(life_down(40, 100, false, false, HARD), (-60, false, 2));
+    }
+
+    #[test]
+    fn arrange_mode_adds_half_to_a_bite_of_40_or_less_at_any_life() {
+        assert_eq!(life_down(100, 20, false, false, ARRANGE), (70, false, 0));
+        assert_eq!(life_down(100, 41, false, false, ARRANGE), (59, false, 0));
+        assert_eq!(
+            life_down(100, 20, false, false, ARRANGE_HARD),
+            (55, false, 0)
+        );
+        assert_eq!(
+            life_down(100, 41, false, false, ARRANGE_HARD),
+            (39, false, 0)
+        );
     }
 
     #[test]
     fn a_crawlers_bite_never_kills() {
-        assert_eq!(life_down(0, 30, true, true), (0, true, 1));
+        assert_eq!(
+            life_down(0, 30, true, true, Difficulty::default()),
+            (0, true, 1)
+        );
     }
 
     #[test]

@@ -1082,6 +1082,7 @@ impl Re2State {
             life: **life,
             near_death: self.player.near_death,
             damage_cnt: self.player.damage_cnt,
+            difficulty: self.difficulty(),
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);

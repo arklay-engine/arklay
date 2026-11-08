@@ -624,6 +624,7 @@ fn run_zombie(
         .is_some_and(|other| other.as_deref().is_some_and(|other| other.be_flg & 1 != 0));
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
+    let difficulty = game.re2.difficulty();
     let enemies = game.re2.enemies;
     let noise = game.re2.player.noise;
     let player_floor = game.re2.player.floor;
@@ -723,6 +724,7 @@ fn run_zombie(
         rnd: &mut re2.rnd,
         partner,
         easy,
+        difficulty,
         enemies,
         stopped,
         bodies: &bodies,
