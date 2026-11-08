@@ -112,6 +112,36 @@ fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
     }
 }
 
+/// A character's `Atd[0]`: a zombie's own, as its `Oba_set_ofs` and pushes
+/// left it, else a box of its height and radius on its position.
+pub(crate) fn body_atd(character: &Character) -> crate::zombie2::Atd {
+    if let Some(zombie) = character.zombie.as_ref() {
+        return zombie.atd;
+    }
+    let height = player2::character_height(character.id);
+    let pos = character.body.pos;
+    crate::zombie2::Atd {
+        ofs_x: 0,
+        ofs_y: -(height as i16),
+        at_w: character.body.radius as u16,
+        at_h: height,
+        w: character.body.radius as u16,
+        at: [pos[0], pos[1] - i32::from(height), pos[2]],
+    }
+}
+
+/// `Game_loop`'s draw, for `Om_move`'s next tick: the player and each
+/// character in play, stopped or not, keep their box as `Old_x2`, `Old_y2`
+/// and `Old_z2`.
+pub fn keep_old_boxes(game: &mut GameState, player_pos: [i32; 3]) {
+    game.re2.player.old_box = Some(player_atd(game, player_pos).at);
+    for character in game.re2.characters.0.iter_mut().flatten() {
+        if character.be_flg & 1 != 0 {
+            character.work.old_box = Some(body_atd(character).at);
+        }
+    }
+}
+
 /// What the slots in play show `Oba_ck_hit`, in `player_work`'s order.
 fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
     let in_play = game.re2.characters.0.iter().enumerate();
@@ -119,22 +149,7 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)
         .flat_map(|(slot, other)| {
-            let height = player2::character_height(other.id);
-            let atd = other.zombie.as_ref().map_or_else(
-                || crate::zombie2::Atd {
-                    ofs_x: 0,
-                    ofs_y: -(height as i16),
-                    at_w: other.body.radius as u16,
-                    at_h: height,
-                    w: other.body.radius as u16,
-                    at: [
-                        other.body.pos[0],
-                        other.body.pos[1] - i32::from(height),
-                        other.body.pos[2],
-                    ],
-                },
-                |zombie| zombie.atd,
-            );
+            let atd = body_atd(other);
             // A licker has a second box for its head and, on a wall or
             // ceiling, a third for its back.
             let licker = other.zombie.as_ref().and_then(|z| z.licker.as_ref());
@@ -1559,6 +1574,7 @@ pub fn tick_of<'a>(
         targets: &[],
         neck_targets: &[],
         enemies: 0,
+        pushing: false,
     }
 }
 
@@ -1781,6 +1797,7 @@ mod tests {
             targets: &[],
             neck_targets: &[],
             enemies: 0,
+            pushing: false,
         }
     }
 

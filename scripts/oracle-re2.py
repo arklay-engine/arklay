@@ -780,6 +780,19 @@ def hikidashi_trace(game: Game) -> str:
     return f"hk={kind},{game.u8(HOOK_STATE)},{flags or '-'}"
 
 
+def objects_trace(game: Game) -> str:
+    """Each room object (`pOm`, 0x1F8 a slot, below the RDT's object count): `n:Be_flg,x,y,z,Cdir_y,Push_cnt,At_sce_no,nFloor`, `Be_flg` in hex, joined with `;`."""
+    rdt = game.u32(RDT)
+    count = game.u8(rdt + 2) if rdt else 0
+    rows = []
+    for n in range(min(count, 32)):
+        base = OBJECTS + n * 0x1F8
+        x, y, z = game.i32s(base + 0x38, 3)
+        rows.append(f"{n}:{game.u32(base):x},{x},{y},{z},{game.u16(base + 0x76)},{game.u8(base + 0x144)},"
+                    f"{game.u8(base + 0x0B)},{game.u8(base + 0x106)}")
+    return "om=" + (";".join(rows) or "-")
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -862,6 +875,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
+    fields.append(objects_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

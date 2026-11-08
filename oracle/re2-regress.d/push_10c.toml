@@ -1,0 +1,29 @@
+# Room 10C's statues (`Om_move`, the push; oracle/re2.md, "Pushing"). Leon stands on the hall's +z side of statue 1, facing it; the enemies are off.
+
+[[run]]
+name = "push_statue_10c"
+room = "10C"
+setup_script = "push_statue_10c.lua"
+input = "push_statue_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+frames = [360, 899]
+frame_max_mean = 0.1
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om1,om2"
+expect = "match"
+record = "--no-enemies --warp 10C:-22905:-3600:-11900:1024 --life 200"
+
+[[run]]
+name = "push_statue_10c_angle"
+room = "10C"
+setup_script = "push_statue_10c_angle.lua"
+input = "push_statue_10c_short.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 600
+frames = [360, 599]
+frame_max_mean = 0.1
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om1"
+expect = "match"
+record = "--no-enemies --warp 10C:-22905:-3600:-11900:1100 --life 200"

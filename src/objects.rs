@@ -294,6 +294,23 @@ pub struct ObjectRecord {
     pub item_flags: u8,
     /// RE2's `Atd[0]`, from `Obj_model_set`.
     pub atd2: ObjectAtd,
+    /// RE2's `Id` (`+0x08`) from `Obj_model_set`: 2 for the boxes that fall.
+    pub id: u8,
+    /// RE2's `Atd[0]` `X`, `Y` and `Z`, as `Oma_set_ofs` and the pushes leave
+    /// them.
+    pub at: [i32; 3],
+    /// RE2's `Old_x`, `Old_y` and `Old_z`: the position `Om_trans` copied
+    /// when it last drew the object.
+    pub old: [i16; 3],
+    /// RE2's `Old_x2`, `Old_y2` and `Old_z2`: `at` as `Om_trans` copied it.
+    pub old2: [i16; 3],
+    /// RE2's `Push_cnt` (`+0x144`): the ticks `Om_move` has seen the player
+    /// walk into the object.
+    pub push_cnt: u8,
+    /// RE2's `nFloor` (`+0x106`), which `Om_move` takes from the height.
+    pub floor: u8,
+    /// RE2's `At_sce_no` (`+0x0B`, member 9).
+    pub at_sce_no: u8,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
 }
@@ -326,6 +343,13 @@ impl Default for ObjectRecord {
             draw_lift: 0,
             item_flags: 0,
             atd2: ObjectAtd::default(),
+            id: 0,
+            at: [0; 3],
+            old: [0; 3],
+            old2: [0; 3],
+            push_cnt: 0,
+            floor: 0,
+            at_sce_no: 0,
             tween: TweenScratch::default(),
         }
     }
@@ -342,81 +366,309 @@ pub struct ObjectAtd {
     pub at_d: u16,
 }
 
-/// The player's side of `Oma_ck_oba`: its `Atd[0]`.
+/// A character's side of `Oma_ck_oba`: the player's, the partner's or an
+/// enemy's `Atd[0]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PlayerAtd {
+pub struct CharBox {
+    /// `Be_flg`: with `0x40` nothing holds it.
+    pub be_flg: u32,
+    /// `Pos_x`, `Pos_y` and `Pos_z`.
+    pub pos: [i32; 3],
     /// `X`, `Y` and `Z`.
     pub at: [i32; 3],
     /// `Old_x2`, `Old_y2` and `Old_z2`: where `at` was at the end of the last
     /// frame.
-    pub old: [i16; 3],
+    pub old2: [i16; 3],
     pub ofs_y: i16,
     pub at_w: u16,
     pub at_h: u16,
 }
 
-/// `Oma_ck_oba` with mode 0, as `Om_move` ends: the push of the player out of
-/// an RE2 object, by the axis it came in on. Returns whether they touched.
+impl CharBox {
+    /// A box `ofs_y` above `pos`, which stood at `old` last frame.
+    pub fn standing(pos: [i32; 3], old: [i32; 3], ofs_y: i16, at_w: u16, at_h: u16) -> Self {
+        let lift = i32::from(ofs_y);
+        Self {
+            be_flg: 0,
+            pos,
+            at: [pos[0], pos[1] + lift, pos[2]],
+            old2: [old[0] as i16, (old[1] + lift) as i16, old[2] as i16],
+            ofs_y,
+            at_w,
+            at_h,
+        }
+    }
+}
+
+/// What `Oma_ck_oba`'s third argument asks of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Oma {
+    /// Mode 0: move the character out of the object.
+    Hold,
+    /// Mode 1: move the object out of the character.
+    Push,
+    /// Mode 2: only whether they touch.
+    Touch,
+}
+
+/// Whether `delta` is outside `-reach..=reach`, as the original's unsigned
+/// compare tests it.
+fn outside(delta: i32, reach: i32) -> bool {
+    (reach.wrapping_mul(2) as u32) < delta.wrapping_add(reach) as u32
+}
+
+/// `Oma_ck_oba`: a character against an RE2 object. Returns whether they
+/// touch. [`Oma::Hold`] and [`Oma::Push`] then part them, by height when the
+/// boxes were apart in height last frame, else along the axis the character
+/// came in on, else along the shallower one.
 ///
-/// The height test is strict: a player standing at the object's own height,
-/// with the box only as tall as the player (`At_h` 0), is clear of it.
-pub fn oma_ck_oba(pos: &mut [i32; 3], player: &mut PlayerAtd, obj: &ObjectRecord) -> bool {
-    if obj.be_flg & 2 != 0 {
+/// The height test is strict: a character standing at the object's own
+/// height, with the box only as tall as the character (`At_h` 0), is clear of
+/// it.
+pub fn oma_ck_oba(chr: &mut CharBox, obj: &mut ObjectRecord, mode: Oma) -> bool {
+    if chr.be_flg & 0x40 != 0 || obj.be_flg & 2 != 0 {
         return false;
     }
-    let atd = obj.atd2;
-    let (ofs_x, ofs_z, w, d) = if obj.rotation[1] & 0x400 == 0 {
-        (atd.ofs[0], atd.ofs[2], atd.at_w, atd.at_d)
-    } else {
-        (atd.ofs[2], atd.ofs[0], atd.at_d, atd.at_w)
-    };
-    let at = [
-        obj.pos[0] + i32::from(ofs_x),
-        obj.pos[1] + i32::from(atd.ofs[1]),
-        obj.pos[2] + i32::from(ofs_z),
-    ];
-    let dx = at[0] - player.at[0];
-    let dz = at[2] - player.at[2];
-    let reach_x = i32::from(w) + i32::from(player.at_w);
-    let reach_z = i32::from(player.at_w) + i32::from(d);
-    let outside = |delta: i32, reach: i32| ((reach * 2) as u32) < (delta + reach) as u32;
+    let (w, d) = obj.half_size();
+    let dx = obj.at[0].wrapping_sub(chr.at[0]);
+    let dz = obj.at[2].wrapping_sub(chr.at[2]);
+    let reach_x = i32::from(w) + i32::from(chr.at_w);
+    let reach_z = i32::from(chr.at_w) + i32::from(d);
     if outside(dx, reach_x) || outside(dz, reach_z) {
         return false;
     }
-    let dy = at[1] - player.at[1];
-    let height = i32::from(player.at_h) + i32::from(atd.at_h);
-    let within = |delta: i32| ((delta + height) as u32) < (height * 2) as u32;
+    let dy = obj.at[1].wrapping_sub(chr.at[1]);
+    let height = i32::from(chr.at_h) + i32::from(obj.atd2.at_h);
+    let within = |delta: i32| (delta.wrapping_add(height) as u32) < (height * 2) as u32;
     if !within(dy) {
         return false;
     }
-    // The object's own `Old_y2`, which nothing writes for an object model.
-    if !within(-i32::from(player.old[1])) {
-        let edge = if dy < 0 { height + 1 } else { -height };
-        pos[1] = at[1] - i32::from(player.ofs_y) + edge;
-        player.at[1] = pos[1] + i32::from(player.ofs_y);
+    if mode == Oma::Touch {
         return true;
     }
-    let (axis, reach, back) = if outside(at[0] - i32::from(player.old[0]), reach_x) {
-        (0, reach_x, player.at[0] - i32::from(player.old[0]) >= 0)
-    } else if outside(at[2] - i32::from(player.old[2]), reach_z) {
-        (2, reach_z, player.at[2] - i32::from(player.old[2]) >= 0)
-    } else if (reach_x.wrapping_mul(dz)).unsigned_abs() < (reach_z.wrapping_mul(dx)).unsigned_abs()
-    {
-        (0, reach_x, dx >= 0)
+    if !within(i32::from(obj.old2[1]) - i32::from(chr.old2[1])) {
+        if mode == Oma::Push {
+            let edge = if dy < 0 { -height } else { height };
+            let y = chr.at[1] - i32::from(obj.atd2.ofs[1]) + edge;
+            obj.pos[1] = y;
+            obj.at[1] = y + i32::from(obj.atd2.ofs[1]);
+        } else {
+            let edge = if dy < 0 { height + 1 } else { -height };
+            let y = obj.at[1] - i32::from(chr.ofs_y) + edge;
+            chr.pos[1] = y;
+            chr.at[1] = y + i32::from(chr.ofs_y);
+        }
+        return true;
+    }
+    // Out on the axis the character came in on: `X - Old_x2` says which way
+    // it moved.
+    for (axis, reach) in [(0, reach_x), (2, reach_z)] {
+        let old = i32::from(chr.old2[axis]);
+        if !outside(obj.at[axis].wrapping_sub(old), reach) {
+            continue;
+        }
+        let reach = reach + 1;
+        let moving_up = chr.at[axis] - old >= 0;
+        if mode == Oma::Push {
+            let edge = if moving_up { reach } else { -reach };
+            let delta = chr.at[axis] - obj.at[axis] + edge;
+            obj.at[axis] += delta;
+            obj.pos[axis] += delta;
+        } else {
+            let edge = if moving_up { -reach } else { reach };
+            let delta = obj.at[axis] - chr.at[axis] + edge;
+            chr.at[axis] += delta;
+            chr.pos[axis] += delta;
+        }
+        return true;
+    }
+    // Else the shallower axis, by the side the character is on.
+    let (axis, reach, delta) =
+        if reach_x.wrapping_mul(dz).wrapping_abs() < reach_z.wrapping_mul(dx).wrapping_abs() {
+            (0, reach_x + 1, dx)
+        } else {
+            (2, reach_z + 1, dz)
+        };
+    if mode == Oma::Push {
+        let edge = if delta < 0 { -reach } else { reach };
+        let moved = chr.at[axis] - obj.at[axis] + edge;
+        obj.at[axis] += moved;
+        obj.pos[axis] += moved;
     } else {
-        (2, reach_z, dz >= 0)
-    };
-    let edge = if back { -(reach + 1) } else { reach + 1 };
-    let delta = (at[axis] - player.at[axis]) + edge;
-    player.at[axis] += delta;
-    pos[axis] += delta;
+        let edge = if delta >= 0 { -reach } else { reach };
+        let moved = obj.at[axis] - chr.at[axis] + edge;
+        chr.at[axis] += moved;
+        chr.pos[axis] += moved;
+    }
     true
+}
+
+/// `Oma_ck_om`: the pushed object `obj` against another, `other`. Returns
+/// whether they touch, and moves `obj` out of `other`: up or down when they
+/// were apart in height last frame (`Pos_y` only), else along the shallower
+/// axis (`Pos` and `Atd`).
+pub fn oma_ck_om(other: &ObjectRecord, obj: &mut ObjectRecord) -> bool {
+    if (obj.be_flg | other.be_flg) & 0x40 != 0 || obj.be_flg & other.be_flg & 0x20_0000 != 0 {
+        return false;
+    }
+    let (w1, d1) = other.half_size();
+    let (w2, d2) = obj.half_size();
+    let dx = obj.at[0].wrapping_sub(other.at[0]);
+    let dz = obj.at[2].wrapping_sub(other.at[2]);
+    let reach_x = i32::from(w1) + i32::from(w2);
+    let reach_z = i32::from(d1) + i32::from(d2);
+    if outside(dx, reach_x) || outside(dz, reach_z) {
+        return false;
+    }
+    let dy = obj.at[1].wrapping_sub(other.at[1]);
+    let height = i32::from(other.atd2.at_h) + i32::from(obj.atd2.at_h);
+    if outside(dy, height) {
+        return false;
+    }
+    let other_ofs = i32::from(other.atd2.ofs[1]);
+    let obj_ofs = i32::from(obj.atd2.ofs[1]);
+    let old_dy = i32::from(obj.old[1]) - i32::from(other.old[1]) - other_ofs + obj_ofs;
+    if outside(old_dy, height) {
+        let edge = if dy < 0 { -1 - height } else { height + 1 };
+        obj.pos[1] = other.pos[1] - obj_ofs + other_ofs + edge;
+        return true;
+    }
+    let (axis, reach, delta) =
+        if reach_x.wrapping_mul(dz).wrapping_abs() < reach_z.wrapping_mul(dx).wrapping_abs() {
+            (0, reach_x, dx)
+        } else {
+            (2, reach_z, dz)
+        };
+    let edge = if delta < 0 { -1 - reach } else { reach + 1 };
+    let before = obj.pos[axis];
+    obj.pos[axis] = other.pos[axis] + edge;
+    obj.at[axis] += obj.pos[axis] - before;
+    true
+}
+
+/// `Oma_ck_front`: whether a player at `pos`, heading `angle`, faces the
+/// object squarely enough to push it. `at_w` is the player's `At_w`, `w` its
+/// `Atd[0].W`.
+pub fn oma_ck_front(pos: [i32; 3], angle: u16, at_w: u16, w: u16, obj: &ObjectRecord) -> bool {
+    let reach = (u32::from(at_w) * 0x78 / 100 + 0x80) as u16 as i16;
+    let (ahead_x, ahead_z) = crate::player2::rotate(angle, i32::from(reach), 0);
+    let dx = obj.pos[0].wrapping_sub(pos[0]);
+    let dz = obj.pos[2].wrapping_sub(pos[2]);
+    let (obj_w, obj_d) = obj.half_size();
+    let mut across_x = i32::from(obj_w) - 0x80;
+    let mut across_z = i32::from(obj_d) - 0x80;
+    if outside(dx, across_x) && outside(dz, across_z) {
+        return false;
+    }
+    let (point_x, point_z) = if dz.wrapping_abs() < dx.wrapping_abs() {
+        across_z += i32::from(w);
+        (
+            i32::from((ahead_x as i16).wrapping_add(pos[0] as i16)) - obj.at[0],
+            pos[2] - obj.at[2],
+        )
+    } else {
+        across_x += i32::from(w);
+        (
+            pos[0] - obj.at[0],
+            i32::from((ahead_z as i16).wrapping_add(pos[2] as i16)) - obj.at[2],
+        )
+    };
+    !outside(point_x, across_x) && !outside(point_z, across_z)
+}
+
+/// `Sca_ck_hit_om`'s bit for a wall.
+pub const SCA_HIT_WALL: u16 = 1;
+/// `Sca_ck_hit_om`'s bit for a hole (a record of shape 10).
+pub const SCA_HIT_HOLE: u16 = 4;
+
+/// `Sca_ck_hit_om` with no push: the room's records the object's box
+/// touches, among those with `0x4000` in their id and none of `exclude`, on
+/// the object's floor, in the cell of the box's centre. A box that reaches a
+/// record's low edge touches it, one that reaches its high edge doesn't.
+pub fn sca_ck_hit_om(obj: &ObjectRecord, sca: &crate::state::Sca, exclude: u16) -> u16 {
+    if obj.be_flg & 8 != 0 {
+        return 0;
+    }
+    let (atw_x, atw_z) = obj.atw();
+    let centre = [i32::from(atw_x) + obj.pos[0], i32::from(atw_z) + obj.pos[2]];
+    let cell = crate::sca::area(sca, centre[0], centre[1]);
+    let (w, d) = obj.half_size();
+    let (w, d) = (i32::from(w), i32::from(d));
+    let mut hit = 0;
+    for record in &sca.records {
+        if record.kind & cell == 0 {
+            continue;
+        }
+        let in_x = ((centre[0] + w - i32::from(record.x)) as u32)
+            < u32::from(record.width) + (w * 2) as u32;
+        let in_z = ((centre[1] + d - i32::from(record.z)) as u32)
+            < u32::from(record.depth) + (d * 2) as u32;
+        if !in_x
+            || !in_z
+            || record.id & 0x4000 == 0
+            || exclude & record.id != 0
+            || record.floor & (1u32 << (obj.floor & 31)) == 0
+        {
+            continue;
+        }
+        hit |= if record.shape() == 10 {
+            SCA_HIT_HOLE
+        } else {
+            SCA_HIT_WALL
+        };
+    }
+    hit
+}
+
+/// `nFloor` of a height, as `Om_move` takes it: `Pos_y / -1800`, toward 0.
+pub fn floor_of_height(y: i32) -> u8 {
+    let high = ((i64::from(y) * 0x6E5D_4C3B) >> 32) as i32 - y;
+    ((high >> 10) - (high >> 31)) as u8
 }
 
 impl ObjectRecord {
     /// Whether the active/drawn flag is set.
     pub fn active(&self) -> bool {
         self.flag & OBJECT_FLAG_ACTIVE != 0
+    }
+
+    /// RE2's `Atd[0]` `Atw_x` and `Atw_z`: the box's offset, its x and z
+    /// swapped when the object is turned a quarter (`Cdir_y & 0x400`).
+    pub fn atw(&self) -> (i16, i16) {
+        let ofs = self.atd2.ofs;
+        if self.rotation[1] & 0x400 == 0 {
+            (ofs[0], ofs[2])
+        } else {
+            (ofs[2], ofs[0])
+        }
+    }
+
+    /// RE2's `Atd[0]` `W` and `D`, the box's half-sizes, swapped as
+    /// [`Self::atw`] is.
+    pub fn half_size(&self) -> (u16, u16) {
+        let atd = self.atd2;
+        if self.rotation[1] & 0x400 == 0 {
+            (atd.at_w, atd.at_d)
+        } else {
+            (atd.at_d, atd.at_w)
+        }
+    }
+
+    /// `Oma_set_ofs`: the box on the object's position.
+    pub fn set_ofs(&mut self) {
+        let (atw_x, atw_z) = self.atw();
+        self.at = [
+            self.pos[0] + i32::from(atw_x),
+            self.pos[1] + i32::from(self.atd2.ofs[1]),
+            self.pos[2] + i32::from(atw_z),
+        ];
+    }
+
+    /// `Om_trans`' copies, when it draws the object: `Old` from the position,
+    /// `Old2` from the box.
+    pub fn om_trans_old(&mut self) {
+        self.old = self.pos.map(|v| v as i16);
+        self.old2 = self.at.map(|v| v as i16);
     }
     /// The per-channel RGB multiplier the renderer applies to this object's
     /// shaded triangles.
@@ -443,6 +695,20 @@ pub struct ObjectTable {
     /// The pair the last `obj` bound, the original's `DAT_00bca0d4`
     /// last-model cache that gates the palette fix-ups.
     pub last_asset: Option<u8>,
+    /// What each slot carries into the next room: RE2's `Set_room` and
+    /// `Sce_model_init` clear only `Be_flg` and `Free0`, so `Old`, `Old2`,
+    /// `Push_cnt` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
+    /// room in between doesn't lose them.
+    carried: Vec<Carried>,
+}
+
+/// An object slot's fields that outlast a room load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Carried {
+    old: [i16; 3],
+    old2: [i16; 3],
+    push_cnt: u8,
+    at_sce_no: u8,
 }
 
 impl ObjectTable {
@@ -452,14 +718,33 @@ impl ObjectTable {
             records: vec![ObjectRecord::default(); slot_count],
             built: 0,
             last_asset: None,
+            carried: Vec::new(),
         }
     }
 
     /// Room entry: drop every record and the build counter, then size the
-    /// table to the new room's declared slot count.
+    /// table to the new room's declared slot count. Each slot keeps what the
+    /// original's object work keeps across the load (`Carried`).
     pub fn reset(&mut self, slot_count: usize) {
+        if self.carried.len() < self.records.len() {
+            self.carried.resize(self.records.len(), Carried::default());
+        }
+        for (carried, record) in self.carried.iter_mut().zip(&self.records) {
+            *carried = Carried {
+                old: record.old,
+                old2: record.old2,
+                push_cnt: record.push_cnt,
+                at_sce_no: record.at_sce_no,
+            };
+        }
         self.records.clear();
         self.records.resize(slot_count, ObjectRecord::default());
+        for (record, carried) in self.records.iter_mut().zip(&self.carried) {
+            record.old = carried.old;
+            record.old2 = carried.old2;
+            record.push_cnt = carried.push_cnt;
+            record.at_sce_no = carried.at_sce_no;
+        }
         self.built = 0;
         self.last_asset = None;
     }
@@ -555,6 +840,13 @@ impl ObjectTable {
             draw_lift: 0,
             item_flags: 0,
             atd2: ObjectAtd::default(),
+            id: 0,
+            at: [0; 3],
+            old: [0; 3],
+            old2: [0; 3],
+            push_cnt: 0,
+            floor: 0,
+            at_sce_no: 0,
             tween: TweenScratch::default(),
         };
         self.built = self.built.wrapping_add(1);
@@ -1542,35 +1834,36 @@ mod tests {
         assert_eq!(twinkle(&plain), None);
     }
 
-    fn leon_at(pos: [i32; 3], old: [i32; 3]) -> PlayerAtd {
-        PlayerAtd {
-            at: [pos[0], pos[1] - 0x5FA, pos[2]],
-            old: [old[0] as i16, (old[1] - 0x5FA) as i16, old[2] as i16],
-            ofs_y: -0x5FA,
-            at_w: 450,
-            at_h: 0x5FA,
-        }
+    fn leon_at(pos: [i32; 3], old: [i32; 3]) -> CharBox {
+        CharBox::standing(pos, old, -0x5FA, 450, 0x5FA)
+    }
+
+    /// `obj` with its box placed and drawn once, as `Om_move` and `Om_trans`
+    /// leave it.
+    fn placed(mut obj: ObjectRecord) -> ObjectRecord {
+        obj.set_ofs();
+        obj.om_trans_old();
+        obj
     }
 
     #[test]
     fn an_object_with_no_height_holds_no_one_standing_at_its_own() {
         // Room 605's duct, where Leon drops in: `Oma_ck_oba`'s strict height
         // test leaves him where the floor's SCA put him.
-        let duct = ObjectRecord {
+        let mut duct = placed(ObjectRecord {
             flag: OBJECT_FLAG_ACTIVE,
             pos: [-25030, -2360, -23196],
             be_flg: 1,
             ..ObjectRecord::default()
-        };
-        let mut pos = [-24990, -2360, -23316];
-        let mut atd = leon_at(pos, [-24500, -2360, -24000]);
-        assert!(!oma_ck_oba(&mut pos, &mut atd, &duct));
-        assert_eq!(pos, [-24990, -2360, -23316]);
+        });
+        let mut leon = leon_at([-24990, -2360, -23316], [-24500, -2360, -24000]);
+        assert!(!oma_ck_oba(&mut leon, &mut duct, Oma::Hold));
+        assert_eq!(leon.pos, [-24990, -2360, -23316]);
     }
 
     #[test]
     fn a_player_walking_into_an_object_stops_at_the_side_they_came_from() {
-        let crate_ = ObjectRecord {
+        let crate_ = placed(ObjectRecord {
             flag: OBJECT_FLAG_ACTIVE,
             pos: [1000, 0, 0],
             be_flg: 1,
@@ -1581,14 +1874,14 @@ mod tests {
                 at_d: 500,
             },
             ..ObjectRecord::default()
-        };
+        });
         // From the west: out on x, to the box's edge plus one.
-        let mut pos = [200, 0, 100];
-        let mut atd = leon_at(pos, [0, 0, 100]);
-        assert!(oma_ck_oba(&mut pos, &mut atd, &crate_));
-        assert_eq!(pos, [1000 - 951, 0, 100]);
+        let mut leon = leon_at([200, 0, 100], [0, 0, 100]);
+        assert!(oma_ck_oba(&mut leon, &mut crate_.clone(), Oma::Hold));
+        assert_eq!(leon.pos, [1000 - 951, 0, 100]);
+        assert_eq!(leon.at, [1000 - 951, -0x5FA, 100]);
         // Turned a quarter, its width and depth swap.
-        let turned = ObjectRecord {
+        let turned = placed(ObjectRecord {
             rotation: [0, 0x400, 0],
             atd2: ObjectAtd {
                 at_w: 100,
@@ -1596,19 +1889,177 @@ mod tests {
                 ..crate_.atd2
             },
             ..crate_
-        };
-        let mut pos = [200, 0, 100];
-        let mut atd = leon_at(pos, [0, 0, 100]);
-        assert!(oma_ck_oba(&mut pos, &mut atd, &turned));
-        assert_eq!(pos, [1000 - 951, 0, 100]);
+        });
+        let mut leon = leon_at([200, 0, 100], [0, 0, 100]);
+        assert!(oma_ck_oba(&mut leon, &mut turned.clone(), Oma::Hold));
+        assert_eq!(leon.pos, [1000 - 951, 0, 100]);
         // Flagged 2, it holds no one.
-        let ghost = ObjectRecord {
+        let mut ghost = ObjectRecord {
             be_flg: 3,
             ..crate_
         };
-        let mut pos = [200, 0, 100];
-        let mut atd = leon_at(pos, [0, 0, 100]);
-        assert!(!oma_ck_oba(&mut pos, &mut atd, &ghost));
+        let mut leon = leon_at([200, 0, 100], [0, 0, 100]);
+        assert!(!oma_ck_oba(&mut leon, &mut ghost, Oma::Hold));
+    }
+
+    /// Room 10C's statue 1, on the hall's floor 2.
+    fn statue_10c() -> ObjectRecord {
+        placed(ObjectRecord {
+            flag: OBJECT_FLAG_ACTIVE,
+            pos: [-22900, -3600, -13000],
+            be_flg: 0x85,
+            atd2: ObjectAtd {
+                ofs: [0, -900, 0],
+                at_w: 432,
+                at_h: 900,
+                at_d: 432,
+            },
+            ..ObjectRecord::default()
+        })
+    }
+
+    #[test]
+    fn an_object_on_an_upper_floor_holds_the_player_out_not_on_top() {
+        // The `p10c4` probe: Leon walks east into statue 1 on floor 2. With the
+        // object's `Old_y2` taken as 0 he was put on top of it, at y -5400.
+        let mut statue = statue_10c();
+        let rest = -22900 - 432 - 450 - 1;
+        let mut leon = leon_at([rest + 40, -3600, -13000], [rest, -3600, -13000]);
+        assert!(oma_ck_oba(&mut leon, &mut statue, Oma::Hold));
+        assert_eq!(leon.pos, [rest, -3600, -13000]);
+        assert_eq!(
+            statue.pos,
+            [-22900, -3600, -13000],
+            "mode 0 moves only the player"
+        );
+    }
+
+    #[test]
+    fn a_push_moves_the_object_by_the_players_step_into_it() {
+        // Leon on the +z face, one step of 40 into the box, walking -z.
+        let mut statue = statue_10c();
+        let rest = -13000 + 432 + 450 + 1;
+        let mut leon = leon_at([-22905, -3600, rest - 40], [-22905, -3600, rest]);
+        assert!(oma_ck_oba(&mut leon, &mut statue.clone(), Oma::Touch));
+        assert_eq!(leon.pos[2], rest - 40, "mode 2 moves nothing");
+        assert!(oma_ck_oba(&mut leon, &mut statue, Oma::Push));
+        assert_eq!(statue.pos, [-22900, -3600, -13040]);
+        assert_eq!(statue.at, [-22900, -4500, -13040]);
+        assert_eq!(leon.pos[2], rest - 40);
+        // At rest one unit outside, it touches nothing.
+        let mut leon = leon_at([-22905, -3600, rest], [-22905, -3600, rest]);
+        assert!(!oma_ck_oba(&mut leon, &mut statue_10c(), Oma::Touch));
+    }
+
+    #[test]
+    fn oma_ck_front_needs_the_player_nearly_square() {
+        let statue = statue_10c();
+        let rest = -13000 + 432 + 450 + 1;
+        // Square on the +z face, facing -z (1024).
+        assert!(oma_ck_front([-22905, -3600, rest], 1024, 450, 450, &statue));
+        // 45 degrees off.
+        assert!(!oma_ck_front(
+            [-22905, -3600, rest],
+            1024 + 512,
+            450,
+            450,
+            &statue
+        ));
+        // Facing away.
+        assert!(!oma_ck_front(
+            [-22905, -3600, rest],
+            3072,
+            450,
+            450,
+            &statue
+        ));
+        // At a corner: outside both W - 128 and D - 128 of its centre.
+        assert!(!oma_ck_front(
+            [-22900 + 400, -3600, -13000 + 400],
+            1024,
+            450,
+            450,
+            &statue
+        ));
+    }
+
+    #[test]
+    fn oma_ck_om_moves_the_pushed_object_out_of_the_other() {
+        let other = statue_10c();
+        let mut pushed = placed(ObjectRecord {
+            pos: [-22900, -3600, -13000 + 800],
+            ..statue_10c()
+        });
+        assert!(oma_ck_om(&other, &mut pushed));
+        assert_eq!(pushed.pos, [-22900, -3600, -13000 + 865]);
+        assert_eq!(pushed.at[2], -13000 + 865);
+        let mut apart = placed(ObjectRecord {
+            pos: [-22900, -3600, -13000 + 865],
+            ..statue_10c()
+        });
+        assert!(!oma_ck_om(&other, &mut apart));
+    }
+
+    fn wall(x: i16, z: i16, width: u16, depth: u16, shape: u16) -> crate::state::ScaRect {
+        crate::state::ScaRect {
+            x,
+            z,
+            width,
+            depth,
+            id: 0xFC80 | shape,
+            kind: 0xF,
+            floor: 0x1F,
+        }
+    }
+
+    #[test]
+    fn sca_ck_hit_om_counts_a_records_low_edge_not_its_high_edge() {
+        let mut sca = crate::state::Sca::default();
+        // The east wall of 10C's hall, x -16560 up.
+        sca.records.push(wall(-16560, -19340, 5700, 7340, 0));
+        let mut statue = statue_10c();
+        statue.floor = 2;
+        statue.pos[0] = -16992;
+        assert_eq!(
+            sca_ck_hit_om(&statue, &sca, 0),
+            SCA_HIT_WALL,
+            "touching x -16560"
+        );
+        statue.pos[0] = -16993;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0), 0);
+        // Its high edge, x -10860: the box reaching it doesn't count.
+        statue.pos[0] = -10860 + 432;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0), 0);
+        statue.pos[0] = -10860 + 431;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0), SCA_HIT_WALL);
+        // Another floor, an excluded id, `Be_flg & 8`, a hole.
+        statue.floor = 5;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0), 0);
+        statue.floor = 2;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0x80), 0);
+        assert_eq!(
+            sca_ck_hit_om(
+                &ObjectRecord {
+                    be_flg: 0x8D,
+                    ..statue
+                },
+                &sca,
+                0
+            ),
+            0
+        );
+        sca.records[0].id |= 10;
+        assert_eq!(sca_ck_hit_om(&statue, &sca, 0), SCA_HIT_HOLE);
+    }
+
+    #[test]
+    fn om_move_takes_the_floor_from_the_height() {
+        assert_eq!(floor_of_height(0), 0);
+        assert_eq!(floor_of_height(-1799), 0);
+        assert_eq!(floor_of_height(-1800), 1);
+        assert_eq!(floor_of_height(-3600), 2);
+        assert_eq!(floor_of_height(-5400), 3);
+        assert_eq!(floor_of_height(100), 0);
     }
 
     fn operands(values: &[i64]) -> Vec<Operand> {
@@ -1665,6 +2116,30 @@ mod tests {
                 .iter()
                 .all(|record| *record == ObjectRecord::default())
         );
+    }
+
+    #[test]
+    fn a_room_load_keeps_each_slots_old_boxes_count_and_area() {
+        let mut objects = table(3);
+        let record = &mut objects.records[1];
+        record.pos = [5, 6, 7];
+        record.be_flg = 0x85;
+        record.old = [1, 2, 3];
+        record.old2 = [4, 5, 6];
+        record.push_cnt = 7;
+        record.at_sce_no = 2;
+        // Through a room with one slot, into one with three.
+        objects.reset(1);
+        objects.reset(3);
+        let record = objects.records[1];
+        assert_eq!(record.old, [1, 2, 3]);
+        assert_eq!(record.old2, [4, 5, 6]);
+        assert_eq!(record.push_cnt, 7);
+        assert_eq!(record.at_sce_no, 2);
+        assert_eq!(record.pos, [0, 0, 0], "the rest starts again");
+        assert_eq!(record.be_flg, 0);
+        assert_eq!(objects.records[0], ObjectRecord::default());
+        assert_eq!(table(3).records[1], ObjectRecord::default(), "a new game");
     }
 
     #[test]

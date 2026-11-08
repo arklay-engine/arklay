@@ -428,6 +428,10 @@ const STATUS_ENEMY_FLAGS: u8 = 6;
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x10000000`: the partner is with the player.
 const PARTNER_BIT: u8 = 3;
+/// `fg_status`'s `0x2000`: `Om_move` pushed an object this tick.
+const PUSH_BIT: u8 = 18;
+/// `fg_stop`'s `0x8000000`: the objects don't move.
+const OBJECTS_STOP_BIT: u8 = 4;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
@@ -1352,6 +1356,21 @@ impl Re2State {
         self.set_flag(STATUS_BANK, PARTNER_BIT, u8::from(on));
     }
 
+    /// `fg_status`'s `0x2000`: last tick's `Om_move` pushed an object, which
+    /// `pl_br_01` turns into the push routine.
+    pub fn pushing(&self) -> bool {
+        self.flag(STATUS_BANK, PUSH_BIT)
+    }
+
+    pub fn set_pushing(&mut self, on: bool) {
+        self.set_flag(STATUS_BANK, PUSH_BIT, u8::from(on));
+    }
+
+    /// `fg_stop`'s `0x8000000`, which stops `Om_move`.
+    pub fn objects_stopped(&self) -> bool {
+        self.flag(STOP_BANK, OBJECTS_STOP_BIT)
+    }
+
     pub fn flag(&self, bank: u8, index: u8) -> bool {
         let bit = 0x8000_0000 >> (index & 31);
         if bank == KEY_BANK {
@@ -2109,6 +2128,9 @@ impl GameHost<'_> {
             return;
         };
         let item_flags = record.item_flags;
+        // Nor does it write `Old`, `Old2` (+0x44..+0x4E), `Push_cnt` (+0x144)
+        // or `At_sce_no`: they outlast a re-set.
+        let kept = *record;
         let mut be_flg = if record.be_flg == 0 {
             (at(7) as i16 as i32 | 1) as u32
         } else {
@@ -2123,10 +2145,10 @@ impl GameHost<'_> {
             0xC0 => selector & 0x3F,
             _ => 0xFF,
         };
-        let mut y = at(10) as i32;
-        // `Obj_model_set` and `Om_trans`' own room: a floor of its first four.
+        let mut x = at(9) as i32;
+        // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
         if stage_room == (2, 3) && slot < 4 {
-            y -= 0x28;
+            x -= 0x28;
         }
         *record = crate::objects::ObjectRecord {
             flag: if be_flg & 1 != 0 {
@@ -2136,12 +2158,14 @@ impl GameHost<'_> {
             },
             model: slot as u8,
             parent,
-            pos: [at(9) as i32, y, at(11) as i32],
+            pos: [x, at(10) as i32, at(11) as i32],
             rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
             asset: Some(slot as u8),
             be_flg,
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
+            id: at(1) as u8,
+            floor: (at(5) & 0xFF) as u8,
             item_flags,
             // The format reads `At_h` and `At_d` as byte pairs.
             atd2: crate::objects::ObjectAtd {
@@ -2150,8 +2174,13 @@ impl GameHost<'_> {
                 at_h: (at(19) | at(20) << 8) as u16,
                 at_d: (at(21) | at(22) << 8) as u16,
             },
+            old: kept.old,
+            old2: kept.old2,
+            push_cnt: kept.push_cnt,
+            at_sce_no: kept.at_sce_no,
             ..crate::objects::ObjectRecord::default()
         };
+        record.set_ofs();
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -3153,6 +3182,46 @@ mod tests {
         let object = game.objects.record_mut(4).unwrap();
         assert_eq!(object.be_flg, 0);
         assert_eq!(object.flag, 0);
+    }
+
+    #[test]
+    fn obj_model_set_keeps_what_the_original_leaves() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = [
+            1, 0, 0, 0, 0, 0x0002, 0, 0x85, 0, 100, -3600, 300, 0, 0, 0, 0, -900, 0, 432, 132, 3,
+            176, 1,
+        ];
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(1).unwrap();
+        assert_eq!(object.floor, 2, "nFloor, from the word's low byte");
+        assert_eq!(object.at, [100, -4500, 300], "Oma_set_ofs");
+        object.old = [1, 2, 3];
+        object.old2 = [4, 5, 6];
+        object.push_cnt = 7;
+        object.at_sce_no = 3;
+        object.be_flg = 0;
+        exec(&mut game, "obj_model_set", &call);
+        let object = game.objects.record_mut(1).unwrap();
+        assert_eq!(object.be_flg, 0x85);
+        assert_eq!(object.old, [1, 2, 3]);
+        assert_eq!(object.old2, [4, 5, 6]);
+        assert_eq!(object.push_cnt, 7);
+        assert_eq!(object.at_sce_no, 3);
+    }
+
+    #[test]
+    fn room_303s_first_four_objects_sit_0x28_to_minus_x() {
+        let mut game = GameState::default();
+        game.id.stage = 2;
+        game.id.room = 3;
+        game.objects = crate::objects::ObjectTable::new(5);
+        for slot in [3, 4] {
+            let call = [slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 100, -200, 300];
+            exec(&mut game, "obj_model_set", &call);
+        }
+        assert_eq!(game.objects.record_mut(3).unwrap().pos, [60, -200, 300]);
+        assert_eq!(game.objects.record_mut(4).unwrap().pos, [100, -200, 300]);
     }
 
     #[test]

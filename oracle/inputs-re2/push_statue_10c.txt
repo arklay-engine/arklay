@@ -1,0 +1,8 @@
+# Room 10C's statue 1 (oracle/re2.md, "Pushing"): walk into its +z face and push it toward -z, let go, push again, let go, then run into it.
+0
+350 up
+500
+540 up
+600
+630 up run
+670
