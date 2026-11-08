@@ -1,4 +1,4 @@
-# SPECIAL's extras on the title (oracle/re2.md, "The title"): the confirm on 4TH or TO-FU, the fade to their own title, its logo and its START or EXIT, and SPECIAL's layouts for config.ini's SPECIAL below 15. Boot records, compared from the title's first tick.
+# SPECIAL's extras on the title (oracle/re2.md, "The title"): the confirm on 4TH or TO-FU, the fade to their own title, its logo and its START or EXIT. Boot records, compared from the title's first tick. SPECIAL's layouts for config.ini's SPECIAL below 15 have no run: the original exits before its first tick with SPECIAL at 0x0 to 0x5 (oracle/re2.md).
 
 [[run]]
 name = "special_4th"
@@ -31,67 +31,12 @@ record = ""
 name = "special_tofu"
 ui = "title"
 offset = 189
-ticks = 1350
+# recorded for 1350 ticks; START hands off to the new game on 1310, which arklay doesn't port
+ticks = 1310
 input = "special_tofu.txt"
 input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 1349]
+frames = [189, 1309]
 expect = "match"
 record = ""
-
-[[run]]
-name = "special_s0"
-ui = "title"
-special = 0
-offset = 189
-ticks = 800
-input = "special_layout.txt"
-input_shift = 189
-input_drop_early = true
-fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 799]
-expect = "match"
-record = "--config SPECIAL=0x0"
-
-[[run]]
-name = "special_s1"
-ui = "title"
-special = 1
-offset = 189
-ticks = 800
-input = "special_layout.txt"
-input_shift = 189
-input_drop_early = true
-fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 799]
-expect = "match"
-record = "--config SPECIAL=0x1"
-
-[[run]]
-name = "special_s2"
-ui = "title"
-special = 2
-offset = 189
-ticks = 800
-input = "special_layout.txt"
-input_shift = 189
-input_drop_early = true
-fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 799]
-expect = "match"
-record = "--config SPECIAL=0x2"
-
-[[run]]
-name = "special_s5"
-ui = "title"
-special = 5
-offset = 189
-ticks = 800
-input = "special_layout.txt"
-input_shift = 189
-input_drop_early = true
-fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 799]
-expect = "match"
-record = "--config SPECIAL=0x5"
