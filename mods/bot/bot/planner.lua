@@ -328,6 +328,14 @@ local function mark(bot, kind, room, slot, reason, permanent)
     m.permanent = permanent or false
     m.entry = (p.entries or {})[room]
     m.kind, m.room, m.slot = kind, room, slot
+    -- A goal planned unreachable from where the bot came in: the room it
+    -- was entered from, so a remote trip comes in another way (507's
+    -- computer, behind the wall from the door to 50C, is reached from 505).
+    if room == bot:room().id and p.last_from
+        and reason:find("every approach failed", 1, true) then
+        m.bad_from = m.bad_from or {}
+        m.bad_from[p.last_from] = true
+    end
     -- A door with a <reach> fact: the mark lifts once the fact's flag
     -- changes (blocked), not on a puzzle step anywhere (clear_unreachable).
     local reach = kind == "door" and reach_fact(bot, room, slot)
@@ -430,7 +438,25 @@ end
 -- with the mansion's green herbs given up), or the ammunition of a gun
 -- held or in the box (35 shells were left on full inventories while the
 -- bot ran dry).
+local open_use_cache = { tick = nil, items = {} }
 local function full_mark_needed(bot, item)
+    -- An item an open <use> fact takes now, though it was not one when it
+    -- was left (m.needed is set at the mark): 401's red book, passed three
+    -- times on full inventories while its use on 40A's shelf waited for
+    -- V-JOLT (vjolt=yes), was given up for good, and the run ended with
+    -- Plant 42 never met. Read once per tick.
+    if open_use_cache.tick ~= bot:tick() then
+        local items = {}
+        for _, fact in ipairs(bot:use_facts()) do
+            if BotPuzzle.use_open(bot, fact) then
+                items[fact.item] = true
+            end
+        end
+        open_use_cache.tick, open_use_cache.items = bot:tick(), items
+    end
+    if open_use_cache.items[item] then
+        return true
+    end
     local kind, _, heals = bot:item_kind(item)
     if kind == "heal" then
         return heals == true and BotSurvival.needs_heal(bot)
@@ -1009,8 +1035,9 @@ local function map_route(bot, world, from, to, tree, point)
 end
 
 -- Breadth-first route over the remembered doors: the list of
--- {room, slot, target} steps from `from` to `to`, or nil.
-local function route(bot, world, from, to)
+-- {room, slot, target} steps from `from` to `to`, or nil. With `bad_from`
+-- (a set of room ids), the route never enters `to` from one of them.
+local function route(bot, world, from, to, bad_from)
     if from == to then
         return {}
     end
@@ -1024,6 +1051,7 @@ local function route(bot, world, from, to)
         for _, door in ipairs(room and room.doors or {}) do
             local target = door.target
             if target and prev[target] == nil
+                and not (bad_from and target == to and bad_from[id])
                 and door_passable(bot, id, door, prev[id] and prev[id].room or nil) then
                 prev[target] = { room = id, slot = door.slot, target = target }
                 if target == to then
@@ -1594,6 +1622,14 @@ local function fight_due(bot, fight)
     return true
 end
 
+-- A <use> mark planned unreachable from the side the bot came in by
+-- (m.bad_from): the remote trip comes in another way, when the map has
+-- one (route's `bad_from`). Its attempts still count, so this ends.
+local function side_retry(m)
+    return m ~= nil and m.bad_from ~= nil and not m.permanent and m.attempts < MAX_ATTEMPTS
+        and m.reason:find("every approach failed", 1, true) ~= nil
+end
+
 local function target_goal(bot, world, t)
     if t.kind == "fight" then
         if fight_due(bot, t.fact) then
@@ -1616,7 +1652,9 @@ local function target_goal(bot, world, t)
     end
     if t.kind == "use" then
         if bot:has_item(t.item) and BotPuzzle.use_open(bot, t.fact or t)
-            and not blocked(bot, "use", t.room, t.slot, true) then
+            and ((t.room ~= bot:room().id
+                    and side_retry(plan().marks[mark_key("use", t.room, t.slot)]))
+                or not blocked(bot, "use", t.room, t.slot, true)) then
             return { kind = "use", room = t.room, slot = t.slot }
         end
         return nil
@@ -2531,10 +2569,15 @@ local function choose(bot)
                 end
             end
         else
+            local bad_from = nil
+            if goal and goal.kind == "use" then
+                local m = p.marks[mark_key("use", goal.room, goal.slot)]
+                bad_from = m and m.bad_from
+            end
             steps = goal and goal.room ~= room
                 and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
                     or goal.kind == "fight" or goal.kind == "revisit" or usable(goal))
-                and route(bot, world, room, goal.room)
+                and route(bot, world, room, goal.room, bad_from)
         end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
         if first then
@@ -2695,11 +2738,17 @@ local function choose(bot)
         -- A looping mark is held off only for its LOOP_HOLD (11A's moon
         -- crest, marked looping once on a stair detour, was never carried
         -- back and the run ended on an empty frontier).
+        -- A use planned unreachable from the side the bot came in by is
+        -- tried again from another side, when the map has a way in from
+        -- one (m.bad_from): 507's computer, entered from 50C, is behind a
+        -- wall, and the sandwich and rope=leave routes looped in 505 with
+        -- pass code 02 never entered.
+        local side = side_retry(m)
         if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
-            and (not m or ((m.reason:find("inventory full", 1, true)
+            and (not m or side or ((m.reason:find("inventory full", 1, true)
                     or m.reason:find("looping", 1, true))
                 and not blocked(bot, "use", fact.room, fact.slot, true))) then
-            local steps = route(bot, world, room, fact.room)
+            local steps = route(bot, world, room, fact.room, side and m.bad_from or nil)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
             if first then
                 order = order + 1
