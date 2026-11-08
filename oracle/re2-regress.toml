@@ -251,9 +251,11 @@ setup_script = "weapon_pickup_200.lua"
 input = "weapon_pickup_200.txt"
 input_shift = 344
 ticks = 1300
-fields = "item"
-# no frames: from the warp the original's cut 0 is scrolled about 22 lines up, where arklay's --room start
-# has it at 0 (oracle/re2.md, "Weapons"); the reference keeps them
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,scene"
+# from 350: the original shows the room from 348, where arklay's --room start fades in over its first five
+# frames (docs/internals/deviations/re2.md, "The frames of a cut")
+frames = [350, 1299]
+frame_max_mean = 0.8
 expect = "match"
 record = "--no-enemies --warp 200:-8950:-1800:-700:3072 --flag 4:6 --life 200 --give 0:2:1"
 
@@ -659,10 +661,10 @@ room = "200"
 sound = false
 ticks = 700
 # room 200's entry scene from a warp: it takes the player on the room's first tick, before pl_mv_00 has run
-# (oracle/re2.md, "Ticks and input"); no frames: after the warp the original's cut is scrolled
+# (oracle/re2.md, "Ticks and input"); the reference has no frames
 setup = { pos = [-21700, 0, -3700], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[1, 1]] }
 input = "none.txt"
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,scene"
 expect = "match"
 record = "--warp 200:-21700:0:-3700:1024 --flag 1:1 --life 200"
 
@@ -790,7 +792,7 @@ offset = 0
 ticks = 7400
 setup_script = "route_100_200.lua"
 input = "route_100_200.txt"
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,scene"
 frames = [0, 7399]
 frame_max_mean = 0.8
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)

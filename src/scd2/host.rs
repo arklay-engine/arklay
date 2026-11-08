@@ -383,6 +383,10 @@ pub const STATUS_PLAYER: u8 = 0;
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
 pub const STATUS_SCENE: u8 = 27;
+/// What `Set_room` keeps of `fg_status` on every load (`0x4DE93E`): indices
+/// 0 to 11 and 17. The scene, the voice line, the camera's lock and the
+/// quakes go.
+pub const SET_ROOM_STATUS_KEEP: u32 = 0xFFF0_4000;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
@@ -1178,6 +1182,12 @@ impl Re2State {
             7 => *word ^= bit,
             _ => {}
         }
+    }
+
+    /// `Set_room`'s `fg_status &= 0xFFF04000`, on every room load. Only word
+    /// 0 of the bank is `fg_status`.
+    pub fn enter_room_status(&mut self) {
+        self.banks[usize::from(STATUS_BANK)][0] &= SET_ROOM_STATUS_KEEP;
     }
 }
 
@@ -2573,6 +2583,13 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn set_room_status_keep_drops_the_scene_and_voice_bits() {
+        use super::{SET_ROOM_STATUS_KEEP, STATUS_SCENE, STATUS_VOICE};
+        assert_eq!(SET_ROOM_STATUS_KEEP & (0x8000_0000 >> STATUS_SCENE), 0);
+        assert_eq!(SET_ROOM_STATUS_KEEP & (0x8000_0000 >> STATUS_VOICE), 0);
+    }
+
     use super::*;
 
     fn exec(game: &mut GameState, mnemonic: &str, operands: &[i64]) {
