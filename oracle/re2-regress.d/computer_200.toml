@@ -1,5 +1,5 @@
 # Room 200's computer (game mode 7, Sce_Windows) from a warp into the counter computer's area (oracle/re2.md, "Room 200's computer").
-# The frames are compared but have no frame_max_mean: the console and its frame are not drawn yet (#502).
+# The frames are compared but have no frame_max_mean: the cut's background is drawn alone while the computer runs, but the console and its frame are not drawn yet (#502).
 
 [[run]]
 name = "computer_200_card"

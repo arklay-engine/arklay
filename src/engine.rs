@@ -8186,10 +8186,14 @@ impl GameSession {
             // letterbox bars, so an overlapping fade and bar ramp composite
             // bars-over-fade. The death fade overlays the falling room last,
             // and the menu/message overlays stay above all of it.
-            self.draw_re2_die();
-            self.draw_room_fade();
-            self.draw_screen_intensity_bars();
-            self.draw_death_fade();
+            // Nothing of the play's fades draws while RE 2's computer has
+            // suspended the game task (`Windows` turns the fade off).
+            if self.game.re2_computer.is_none() {
+                self.draw_re2_die();
+                self.draw_room_fade();
+                self.draw_screen_intensity_bars();
+                self.draw_death_fade();
+            }
             // The frozen frame a menu opened over is this far: the next GPU
             // frames draw over it again ([`GameSession::render_layers`]).
             if let Some(list) = self.framebuffer.list_mut() {
@@ -18437,6 +18441,29 @@ fn render_frame_on(
                 .cloned()
         })
         .flatten();
+    // RE 2's game mode 7: the `Windows` task suspends the game task, so
+    // nothing of the room draws (no 3D, `Psp_trans` or `Esp`) and the screen
+    // is the cut's background alone, under the computer's console.
+    if game.re2_computer.is_some() {
+        let scrolled = scrolled_background(cut, game);
+        let background = cut_background(cut, borrowed.as_ref(), &scrolled);
+        let scene = render::GameplayScene {
+            background,
+            origin: display_origin(game, shake),
+            colour: [255; 3],
+            meshes: &[],
+            shadows: &[],
+            ribbon: (&[], 0),
+            camera: &camera,
+            lighting: &lighting,
+            mask_layer: None,
+            effect_layer: None,
+            mirror_from: 0,
+            mirror: None,
+            debug: &[],
+        };
+        return draw_gameplay_scene(framebuffer, gpu, pack, &scene);
+    }
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
         None
     } else {
@@ -19671,16 +19698,8 @@ fn render_frame_on(
         },
         camera: camera.mirrored(game.mirror_axis_x(), i32::from(game.mirror.plane)),
     });
-    // The display origin pans the background; in gameplay it is the frame's
-    // screen-shake offset and the global colour stays white. A screen-border
-    // room (`msf2` bit 2, the caves) runs `ApplyShakeAndRebuildSprites`
-    // instead, which parks the origin at (2, 2) so the inset 316x236
-    // background has the two-pixel shake margin.
-    let display_origin = if game.flag_test(5, game::MSF2_SCREEN_BORDER, false) {
-        [shake[0] + 2, shake[1] + 2]
-    } else {
-        shake
-    };
+    // The global colour stays white in gameplay.
+    let display_origin = display_origin(game, shake);
     let global_colour = [255; 3];
     let render_mode = debug_view::mode();
     let debug_line = if gpu.is_some() {
@@ -19704,15 +19723,9 @@ fn render_frame_on(
         }
         None => Vec::new(),
     };
-    let scrolled = (game.re2.scroll != 0)
-        .then_some(cut.background.as_ref())
-        .flatten()
-        .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll));
+    let scrolled = scrolled_background(cut, game);
     let background = if render_mode.background() {
-        borrowed
-            .as_ref()
-            .or(scrolled.as_ref())
-            .or(cut.background.as_ref())
+        cut_background(cut, borrowed.as_ref(), &scrolled)
     } else if render_mode.collision().is_some() {
         Some(debug_view::collision_backdrop())
     } else {
@@ -19734,18 +19747,7 @@ fn render_frame_on(
         mirror: mirror.as_ref(),
         debug: &debug_triangles,
     };
-    let on_gpu = match gpu {
-        Some(gpu) => {
-            gpu.record_scene(&scene, Some(pack))?;
-            framebuffer.clear();
-            framebuffer.show_scene();
-            true
-        }
-        None => {
-            scene.draw(framebuffer);
-            false
-        }
-    };
+    let on_gpu = draw_gameplay_scene(framebuffer, gpu, pack, &scene)?;
     draw_special_light(framebuffer, game, id, room.current_cut);
     if !on_gpu && !debug_triangles.is_empty() {
         debug_view::draw_software(framebuffer, &debug_triangles, &meshes, &camera);
@@ -19761,6 +19763,58 @@ const DEBUG_FLOOR_Y: i32 = 0;
 /// `tick_room`. Its absence (a parked state, an all-zero mask or a suppressing
 /// room) draws nothing, and the guardhouse control room draws the same rect
 /// twice.
+/// The display origin pans the background; in gameplay it is the frame's
+/// screen-shake offset. A screen-border room (`msf2` bit 2, the caves) runs
+/// `ApplyShakeAndRebuildSprites` instead, which parks the origin at (2, 2) so
+/// the inset 316x236 background has the two-pixel shake margin.
+fn display_origin(game: &game::GameState, shake: [i32; 2]) -> [i32; 2] {
+    if game.flag_test(5, game::MSF2_SCREEN_BORDER, false) {
+        [shake[0] + 2, shake[1] + 2]
+    } else {
+        shake
+    }
+}
+
+/// The cut's background scrolled by RE 2's scroll offset, when one is set.
+fn scrolled_background(cut: &crate::state::Cut, game: &game::GameState) -> Option<Image> {
+    (game.re2.scroll != 0)
+        .then_some(cut.background.as_ref())
+        .flatten()
+        .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll))
+}
+
+/// The background the cut draws: another room's it borrows, else the
+/// scrolled one, else its own.
+fn cut_background<'a>(
+    cut: &'a crate::state::Cut,
+    borrowed: Option<&'a Image>,
+    scrolled: &'a Option<Image>,
+) -> Option<&'a Image> {
+    borrowed.or(scrolled.as_ref()).or(cut.background.as_ref())
+}
+
+/// Draw a gameplay scene: recorded for the GPU, or rasterized in software.
+/// Returns whether it went to the GPU.
+fn draw_gameplay_scene(
+    framebuffer: &mut Framebuffer,
+    gpu: Option<&mut GpuRenderer>,
+    pack: &Pack,
+    scene: &render::GameplayScene<'_>,
+) -> Result<bool> {
+    match gpu {
+        Some(gpu) => {
+            gpu.record_scene(scene, Some(pack))?;
+            framebuffer.clear();
+            framebuffer.show_scene();
+            Ok(true)
+        }
+        None => {
+            scene.draw(framebuffer);
+            Ok(false)
+        }
+    }
+}
+
 fn draw_special_light(
     framebuffer: &mut Framebuffer,
     game: &game::GameState,
@@ -22824,6 +22878,60 @@ mod tests {
             }
         }
         assert_eq!(game.desk.state, 33, "the per-frame desk state machine ran");
+    }
+
+    #[test]
+    fn the_computer_draws_the_background_alone() {
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let rgba = (0..320u32 * 240)
+            .flat_map(|i| [(i % 251) as u8, (i % 239) as u8, (i % 83) as u8, 255])
+            .collect::<Vec<u8>>();
+        let background = Image {
+            width: 320,
+            height: 240,
+            rgba,
+        };
+        let room = RoomState {
+            cuts: vec![crate::state::Cut {
+                background: Some(background.clone()),
+                ..Default::default()
+            }],
+            ..RoomState::default()
+        };
+        let pack = Pack::from_bytes(PackWriter::new().to_bytes().unwrap()).unwrap();
+        let mut game = game::GameState::new(id, &room);
+        let player_state = player::spawn(id, &room);
+        // Something of play draws over the background: the special light.
+        game.state_words[1] = 0x7F00;
+        game.special_light_masks = [0xFF; 3];
+        let draw = |game: &mut game::GameState| {
+            let mut framebuffer = Framebuffer::new();
+            render_frame(
+                &mut framebuffer,
+                &pack,
+                id,
+                &room,
+                &player_state,
+                game,
+                None,
+                &mut enemy::EntityModelCache::default(),
+                &mut MaskCache::default(),
+                &mut ShadowCache::default(),
+                &mut EffectPageCache::default(),
+            );
+            framebuffer.rgba
+        };
+        assert_ne!(draw(&mut game), background.rgba, "play draws over it");
+        game.re2_computer = Some(game::computer2::Computer::new(
+            0xF0,
+            game::computer2::test_strings(),
+        ));
+        assert_eq!(draw(&mut game), background.rgba);
     }
 
     #[test]
