@@ -35,12 +35,23 @@ impl GameState {
             .position(|stack| stack.id == key)
     }
 
-    /// `Sce_Door`'s partner test (`0x4E9472`): Claire with Sherry present,
-    /// and Sherry's `Be_flg & 1` and her `+0x21D & 0x20` (she is waiting
-    /// where Claire left her). arklay does not model Sherry's `+0x21D`, so
-    /// this never blocks a door; its call site keeps the original's order.
+    /// `Sce_Door`'s partner test (`0x4E9472`): Claire (`fg_status`'s top
+    /// bit) with the partner present, and the partner's `Be_flg & 1` and her
+    /// `+0x21D & 0x20`: she is lost, too far behind. The original also wants
+    /// `DAT_0098a0d4` 0, which is not modelled.
     pub(super) fn re2_partner_blocks_door(&self) -> bool {
-        false
+        use crate::scd2::host::{SPLAYER_SLOT, STATUS_BANK, STATUS_PLAYER};
+        if !self.re2.flag(STATUS_BANK, STATUS_PLAYER) || !self.re2.partner_bit() {
+            return false;
+        }
+        self.re2
+            .characters
+            .0
+            .get(SPLAYER_SLOT)
+            .and_then(|character| character.as_deref())
+            .filter(|character| character.be_flg & 1 != 0)
+            .and_then(|character| character.partner.as_deref())
+            .is_some_and(|partner| partner.state & crate::partner2::STATE_LOST != 0)
     }
 
     /// `Key_lost` (`0x4E95F0`), run every play tick while a key turn armed
@@ -273,6 +284,63 @@ mod tests {
                 id: 0x14,
                 quantity: 30
             }
+        );
+    }
+
+    /// Sherry as the partner in `splayer_work`, lost or not, with Claire
+    /// (`claire`) or Leon.
+    fn with_sherry(claire: bool, lost: bool) -> GameState {
+        let mut game = GameState::default();
+        game.re2.set_flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::STATUS_PLAYER,
+            u8::from(claire),
+        );
+        game.re2.set_partner_bit(true);
+        let mut partner = crate::partner2::Partner::placed();
+        if lost {
+            partner.state = crate::partner2::STATE_LOST;
+        }
+        let mut body = crate::player::spawn(
+            crate::state::RoomId::parse("21B1").unwrap(),
+            &Default::default(),
+        );
+        body.pos = [0; 3];
+        let characters = &mut game.re2.characters.0;
+        characters.resize_with(crate::scd2::host::SPLAYER_SLOT + 1, || None);
+        characters[crate::scd2::host::SPLAYER_SLOT] =
+            Some(Box::new(crate::scd2::host::Character {
+                id: 0x45,
+                model: 0x45,
+                em_set: (0, 0, 0xFF),
+                arms: Default::default(),
+                be_flg: 1,
+                work: Default::default(),
+                body,
+                kind: 0x400,
+                kage: None,
+                start: (0, 0),
+                sound_type: 0,
+                distance: 0,
+                area: crate::scd2::host::NO_AREA,
+                with_room: false,
+                held_bank: None,
+                partner: Some(Box::new(partner)),
+                zombie: None,
+            }));
+        game
+    }
+
+    #[test]
+    fn a_lost_sherry_keeps_claires_door_shut() {
+        assert!(with_sherry(true, true).re2_partner_blocks_door());
+        assert!(
+            !with_sherry(true, false).re2_partner_blocks_door(),
+            "she is near"
+        );
+        assert!(
+            !with_sherry(false, true).re2_partner_blocks_door(),
+            "Leon's door opens"
         );
     }
 }

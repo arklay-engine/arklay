@@ -223,8 +223,8 @@ def drop_ignored(rows, skip: set) -> tuple[list, int]:
     return divergent, ignored
 
 
-def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=()) -> dict:
-    """Compare from `offset`, leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
+def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=(), ark_offset: int = 0) -> dict:
+    """Compare from reference tick `offset` (arklay's `ark_offset`), leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
     ref = oracle.parse_trace(str(ref_path))
     ark = oracle.parse_trace(str(ark_path))
     missing = missing_bank_fields(ref, offset, fields)
@@ -233,7 +233,7 @@ def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ign
             "ticks": 0, "matched": 0, "tick": 0, "fields": missing, "ignored": 0,
             "detail": [f"the reference has no {name} (recorded before it existed): record it again or drop the field" for name in missing],
         }
-    result = oracle.compare_pair(ref, ark, offset, 0, 10**9, 0, fields.split(",") if fields else None)
+    result = oracle.compare_pair(ref, ark, offset, ark_offset, 10**9, 0, fields.split(",") if fields else None)
     divergent, ignored = drop_ignored(result["first_divergences"], ignore_pairs(ignore))
     first = divergent[0] if divergent else None
     return {
@@ -427,11 +427,16 @@ def run_one(run: dict, ctx: dict) -> dict:
     else:
         drop_sound_3(ref_trace, ref_f)
         drop_sound_3(ark_trace, ark_f)
-    cmp = compare_traces(ref_f, ark_f, offset, run["fields"], run.get("ignore", []))
+    # `compare_from`: a reference tick past `offset` the comparison starts at, for a run whose
+    # start isn't comparable yet (a scene not ported) but whose rest is.
+    start = run.get("compare_from", offset)
+    cmp = compare_traces(ref_f, ark_f, start, run["fields"], run.get("ignore", []), start - offset)
     ref_f.unlink()
     ark_f.unlink()
     text = trace_text(cmp)
-    if cmp["ticks"] < ticks:
+    if start != offset:
+        text += f" from tick {start}"
+    if cmp["ticks"] < ticks - (start - offset):
         # compare_pair stops at the shorter trace, so a short one would otherwise pass.
         result["problems"].append(f"only {cmp['ticks']} of {ticks} ticks compared (a trace ended early)")
     why = judge_trace(run, cmp)

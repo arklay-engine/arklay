@@ -43,4 +43,4 @@ Illustrative: the instruction's form only.
 
 ## See also
 
-- [`heal_partner`](heal_partner.md): the same for the partner, also not modelled.
+- [`heal_partner`](heal_partner.md): the same for the partner.

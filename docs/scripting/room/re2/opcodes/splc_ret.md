@@ -1,6 +1,6 @@
 # `splc_ret`
 
-By its handler's name, hands the partner back from a scripted motion (not modelled).
+Hands a scene character back as the partner, who follows the player again.
 
 | | |
 | --- | --- |
@@ -8,7 +8,7 @@ By its handler's name, hands the partner back from a scripted motion (not modell
 | Group | Characters, objects and the work |
 | Kind | Instruction |
 | Size | 1 byte |
-| Status | no |
+| Status | yes |
 
 ## Syntax
 
@@ -22,14 +22,18 @@ None.
 
 ## Behaviour
 
-Not modelled: the instruction does nothing, and the log notes
-`RE2 script: splc_ret is not modelled` once per run. Its name is the original handler's, `Splc_ret`: by the pattern of
-`Plc_ret`, the same for the second player, the partner. That has not been
-checked.
+As the original's `Spcl_ret` (`0x4e8c70`), on the task's character (chosen with
+[`work_set`](work_set.md)`(2, 0)`):
 
-To hand back the partner in the port, choose it with
-[`work_set`](work_set.md)`(2, 0)` and use [`plc_ret`](plc_ret.md), which is
-modelled for it.
+- its routine becomes `Spl_Auto`'s (`1, 0, 0, 0`): Sherry follows the player;
+- its head looks at the player (`Neck_flg` 0);
+- its `Type` loses `0x4000` and `0x1000` and takes the partner's `0x400`;
+- its life is the partner's saved life and its maximum life 200;
+- Sherry is no longer lost (her state's `0x2000`);
+- `fg_status`'s partner bit (`0x10000000`, `ck(1, 3, ...)`) goes up.
+
+On a work the port doesn't model, the log notes
+`RE2 script: splc_ret is not modelled` once per run.
 
 ## Example
 
@@ -37,14 +41,15 @@ modelled for it.
 proc main_22
 {
     work_set(2, 0);              // the partner
-    plc_ret();                   // modelled, in place of splc_ret
+    splc_ret();
     evt_end(0);
 }
 ```
 
-Illustrative: the modelled way to do what the name suggests.
+Illustrative: the end of a scene that had taken Sherry with [`splc_sce`](splc_sce.md).
 
 ## See also
 
+- [`splc_sce`](splc_sce.md): its companion.
 - [`plc_ret`](plc_ret.md): ends a scripted motion on the task's work.
-- [`splc_sce`](splc_sce.md): its companion, also not modelled.
+- [`heal_partner`](heal_partner.md): restores the partner's life.
