@@ -695,6 +695,20 @@ pub struct ObjectTable {
     /// The pair the last `obj` bound, the original's `DAT_00bca0d4`
     /// last-model cache that gates the palette fix-ups.
     pub last_asset: Option<u8>,
+    /// What each slot carries into the next room: RE2's `Set_room` and
+    /// `Sce_model_init` clear only `Be_flg` and `Free0`, so `Old`, `Old2`,
+    /// `Push_cnt` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
+    /// room in between doesn't lose them.
+    carried: Vec<Carried>,
+}
+
+/// An object slot's fields that outlast a room load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Carried {
+    old: [i16; 3],
+    old2: [i16; 3],
+    push_cnt: u8,
+    at_sce_no: u8,
 }
 
 impl ObjectTable {
@@ -704,14 +718,33 @@ impl ObjectTable {
             records: vec![ObjectRecord::default(); slot_count],
             built: 0,
             last_asset: None,
+            carried: Vec::new(),
         }
     }
 
     /// Room entry: drop every record and the build counter, then size the
-    /// table to the new room's declared slot count.
+    /// table to the new room's declared slot count. Each slot keeps what the
+    /// original's object work keeps across the load (`Carried`).
     pub fn reset(&mut self, slot_count: usize) {
+        if self.carried.len() < self.records.len() {
+            self.carried.resize(self.records.len(), Carried::default());
+        }
+        for (carried, record) in self.carried.iter_mut().zip(&self.records) {
+            *carried = Carried {
+                old: record.old,
+                old2: record.old2,
+                push_cnt: record.push_cnt,
+                at_sce_no: record.at_sce_no,
+            };
+        }
         self.records.clear();
         self.records.resize(slot_count, ObjectRecord::default());
+        for (record, carried) in self.records.iter_mut().zip(&self.carried) {
+            record.old = carried.old;
+            record.old2 = carried.old2;
+            record.push_cnt = carried.push_cnt;
+            record.at_sce_no = carried.at_sce_no;
+        }
         self.built = 0;
         self.last_asset = None;
     }
@@ -2083,6 +2116,30 @@ mod tests {
                 .iter()
                 .all(|record| *record == ObjectRecord::default())
         );
+    }
+
+    #[test]
+    fn a_room_load_keeps_each_slots_old_boxes_count_and_area() {
+        let mut objects = table(3);
+        let record = &mut objects.records[1];
+        record.pos = [5, 6, 7];
+        record.be_flg = 0x85;
+        record.old = [1, 2, 3];
+        record.old2 = [4, 5, 6];
+        record.push_cnt = 7;
+        record.at_sce_no = 2;
+        // Through a room with one slot, into one with three.
+        objects.reset(1);
+        objects.reset(3);
+        let record = objects.records[1];
+        assert_eq!(record.old, [1, 2, 3]);
+        assert_eq!(record.old2, [4, 5, 6]);
+        assert_eq!(record.push_cnt, 7);
+        assert_eq!(record.at_sce_no, 2);
+        assert_eq!(record.pos, [0, 0, 0], "the rest starts again");
+        assert_eq!(record.be_flg, 0);
+        assert_eq!(objects.records[0], ObjectRecord::default());
+        assert_eq!(table(3).records[1], ObjectRecord::default(), "a new game");
     }
 
     #[test]

@@ -2136,10 +2136,10 @@ impl GameHost<'_> {
             0xC0 => selector & 0x3F,
             _ => 0xFF,
         };
-        let mut y = at(10) as i32;
-        // `Obj_model_set` and `Om_trans`' own room: a floor of its first four.
+        let mut x = at(9) as i32;
+        // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
         if stage_room == (2, 3) && slot < 4 {
-            y -= 0x28;
+            x -= 0x28;
         }
         *record = crate::objects::ObjectRecord {
             flag: if be_flg & 1 != 0 {
@@ -2149,7 +2149,7 @@ impl GameHost<'_> {
             },
             model: slot as u8,
             parent,
-            pos: [at(9) as i32, y, at(11) as i32],
+            pos: [x, at(10) as i32, at(11) as i32],
             rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
             asset: Some(slot as u8),
             be_flg,
@@ -3199,6 +3199,20 @@ mod tests {
         assert_eq!(object.old2, [4, 5, 6]);
         assert_eq!(object.push_cnt, 7);
         assert_eq!(object.at_sce_no, 3);
+    }
+
+    #[test]
+    fn room_303s_first_four_objects_sit_0x28_to_minus_x() {
+        let mut game = GameState::default();
+        game.id.stage = 2;
+        game.id.room = 3;
+        game.objects = crate::objects::ObjectTable::new(5);
+        for slot in [3, 4] {
+            let call = [slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 100, -200, 300];
+            exec(&mut game, "obj_model_set", &call);
+        }
+        assert_eq!(game.objects.record_mut(3).unwrap().pos, [60, -200, 300]);
+        assert_eq!(game.objects.record_mut(4).unwrap().pos, [100, -200, 300]);
     }
 
     #[test]
