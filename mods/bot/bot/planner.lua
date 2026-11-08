@@ -130,6 +130,9 @@ local LOOP_HOLD = 3 * 60 * C.SECOND
 -- How long an empty frontier waits before it ends the run (a won fight's
 -- scene, then the ending, can still be coming).
 local EMPTY_FRONTIER_GRACE = 40 * C.SECOND
+-- Revisits of rooms left before the story flags changed allowed between
+-- two real progress changes (BotPlanner.revisit_room).
+local MAX_REVISITS = 8
 -- A route to the ammunition the equipped gun needs (BotSurvival.ammo_need).
 local AMMO_BONUS = 60 * C.REACH
 -- A route to a frontier item that a <use> fact needs (item_bonus).
@@ -2152,6 +2155,18 @@ local function choose(bot)
     -- The mental map: which doors here the bot can reach from the part of
     -- the room it entered by.
     local mind = plan()
+    -- The arrival point is taken again at the entry's first choice: on the
+    -- room change the player can still stand where it left the last room
+    -- (106's stair to 203 reads 106's landing, (17670, 15739), with the bot
+    -- at (17100, 25300) by 203's door back down). The legs below were then
+    -- never recorded, the map priced 203's far doors from that point as a
+    -- short walk, and every box trip from the hall went up to 203 and
+    -- straight back down until the loop rule marked it looping.
+    if mind.arrival_fix == room and mind.last_from and mind.arrivals[room] then
+        local me = bot:player()
+        mind.arrivals[room][mind.last_from] = { x = me.x, z = me.z }
+    end
+    mind.arrival_fix = nil
     local arrived = mind.last_from and mind.arrivals[room] and mind.arrivals[room][mind.last_from]
     if arrived and bot:distance(arrived.x, arrived.z) <= 2 * C.REACH then
         local legs = {}
@@ -2159,6 +2174,21 @@ local function choose(bot)
             legs[door.slot] = door_len(door.slot)
         end
         mind.legs[room] = mind.legs[room] or {}
+        -- New to the map, or a door here reachable from this arrival then
+        -- and not now (or the other way: 106's stair lands in 203 by the
+        -- far doors or by the one back down): the pursued target's stall
+        -- count restarts (the stall check below), as the door counts before
+        -- were measured on a map that had this room wrong.
+        local old = mind.legs[room][mind.last_from]
+        local changed = old == nil
+        for slot, len in pairs(legs) do
+            if old and (old[slot] == nil or (old[slot] >= UNPLANNED_COST) ~= (len >= UNPLANNED_COST)) then
+                changed = true
+            end
+        end
+        if changed then
+            mind.map_learned = room
+        end
         mind.legs[room][mind.last_from] = legs
     end
     -- The mental map from where the bot stands, built once per choice.
@@ -2359,6 +2389,19 @@ local function choose(bot)
             -- A box was chosen by walking distance: keep the map's route.
             steps = map_route(bot, world, room, goal.room, map(),
                 BotPlanner.action_point(world, goal.room, goal.slot))
+            -- The loop rule's stall check for this room entry (enter_room).
+            if steps and p.stall_room == room then
+                p.stall_room = nil
+                if p.map_learned == room then
+                    t.best, t.stalls = nil, 0
+                end
+                if BotPlanner.pursue(t, #steps) then
+                    mark_loop(bot, t.kind, t.room, t.slot, string.format(
+                        "%d entries without a shorter route", t.stalls))
+                    p.target = nil
+                    t, goal, steps = nil, nil, nil
+                end
+            end
         else
             steps = goal and goal.room ~= room
                 and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
@@ -2370,7 +2413,9 @@ local function choose(bot)
             return leave({ cost = door_len(first.slot), door = first,
                 why = string.format("pursuing %s, %d door(s)", t.label, #steps) })
         end
-        bot:log("target dropped: " .. t.label)
+        if t then
+            bot:log("target dropped: " .. t.label)
+        end
         p.target = nil
     end
 
@@ -2838,10 +2883,28 @@ end
 -- 301 and 302) bring back states already seen, and with barry_early=chemical
 -- the bot circled 300, 301 and 302 on them until the run timed out.
 -- Returns whether a revisit target was set.
+-- At most MAX_REVISITS revisits run between two real progress changes
+-- (progress_sig): on the richard=leave run, scenario flags that 301's and
+-- 302's scripts kept setting and clearing gave every room of stage 2 a new
+-- signature again and again, and the revisits walked the mansion from tick
+-- 173k until the run timed out with the real blocker (the square crank,
+-- boxed at 403 behind a box trip marked looping) never named.
 function BotPlanner.revisit_room(bot)
     local p = plan()
     local room = bot:room().id
     local world = bot:world()
+    local progress = progress_sig(bot, world)
+    if not p.revisit_run or p.revisit_run.sig ~= progress then
+        p.revisit_run = { sig = progress, n = 0 }
+    end
+    if p.revisit_run.n >= MAX_REVISITS then
+        if not p.revisit_run.logged then
+            p.revisit_run.logged = true
+            bot:log(string.format("frontier empty; %d revisits without progress, no more",
+                p.revisit_run.n))
+        end
+        return false
+    end
     local sig = story_sig(bot)
     local seen = p.story_seen or {}
     local function seen_in(id)
@@ -2864,6 +2927,7 @@ function BotPlanner.revisit_room(bot)
         return false
     end
     p.revisited[best .. "|" .. sig] = true
+    p.revisit_run.n = p.revisit_run.n + 1
     local label = string.format("room %s again (story flags changed since it was left)", best)
     p.target = { kind = "revisit", room = best, slot = "revisit", label = label,
         best = #best_steps, stalls = 0 }
@@ -2945,11 +3009,14 @@ function BotPlanner.enter_room(bot, room)
     p.reenter = nil
     p.entered_tick = bot:tick()
     p.transfer_wait = nil
+    p.stall_room = nil
+    p.map_learned = nil
     -- The mental map: where the bot arrives in this room from the last one.
     if p.last_room and p.last_room ~= room.id then
         local me = bot:player()
         p.arrivals[room.id] = p.arrivals[room.id] or {}
         p.arrivals[room.id][p.last_room] = { x = me.x, z = me.z }
+        p.arrival_fix = room.id
     end
     p.last_from = p.last_room ~= room.id and p.last_room or nil
     note_story(p, bot, room.id)
@@ -2994,18 +3061,20 @@ function BotPlanner.enter_room(bot, room)
     if t then
         local world = bot:world()
         local goal = target_goal(bot, world, t)
-        -- Measured on the route the pursuit walks: a box or a typewriter
-        -- by the map's walking distance (choose). The fewest doors there
-        -- marked every box looping on the richard=leave run, the way over
-        -- the 2F corridors taking more doors than the shortest door count:
-        -- the square crank stayed boxed and the run timed out.
-        local steps
+        -- Measured on the route the pursuit walks. A box or a typewriter
+        -- goes by the map's walking distance, measured in choose
+        -- (p.stall_room) with the room's planned exit lengths: built here,
+        -- before the approaches are planned, the first leg is a straight
+        -- line from the doorway, and on the richard=leave run that picked
+        -- other exits than the pursuit walked, so trips to box 118 and 403
+        -- that lost a door at every room (17, 16, ... 13) still stalled
+        -- three times and were marked looping. (Fewest doors marked every
+        -- box looping, the way over the 2F corridors taking more doors.)
         if goal and (t.kind == "box" or t.kind == "save") then
-            steps = map_route(bot, world, room.id, goal.room, nil,
-                BotPlanner.action_point(world, goal.room, goal.slot))
-        else
-            steps = goal and route(bot, world, room.id, goal.room)
+            p.stall_room = room.id
+            return
         end
+        local steps = goal and route(bot, world, room.id, goal.room)
         if steps and BotPlanner.pursue(t, #steps) then
             mark_loop(bot, t.kind, t.room, t.slot, string.format(
                 "%d entries without a shorter route", t.stalls))
@@ -3153,14 +3222,16 @@ function BotPlanner.step(bot)
             end
         end
         if not p.goal then
-            local loops = 0
-            for _, m in pairs(p.marks) do
+            local loops = {}
+            for key, m in pairs(p.marks) do
                 if m.reason:find("looping", 1, true) and blocked(bot, m.kind, m.room, m.slot, true) then
-                    loops = loops + 1
+                    loops[#loops + 1] = key
                 end
             end
-            BotPlanner.finish(bot, loops > 0 and string.format(
-                "frontier empty: nothing reachable is left but %d goal(s) marked looping", loops)
+            table.sort(loops)
+            BotPlanner.finish(bot, #loops > 0 and string.format(
+                "frontier empty: nothing reachable is left but %d goal(s) marked looping: %s",
+                #loops, table.concat(loops, ", "))
                 or "frontier empty: nothing reachable is left")
             return
         end
