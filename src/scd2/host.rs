@@ -1150,6 +1150,21 @@ impl Re2State {
     /// `Esp_move`: its draws come from the game's stream, and its sounds join the rest.
     ///
     /// `player` is the player's place and life, for what an effect hits.
+    /// [`Self::tick_effects`] under `fg_stop`'s `0x10000000` or not,
+    /// whatever the bank holds now: a get-item window's frame
+    /// ([`crate::game::GameState::re2_item_get_effects_frame`]).
+    pub fn tick_effects_as(
+        &mut self,
+        stopped: bool,
+        sca: Option<&crate::state::Sca>,
+        player: Option<([i32; 3], &mut i16)>,
+    ) {
+        let held = self.flag(STOP_BANK, STOP_EFFECTS);
+        self.set_flag(STOP_BANK, STOP_EFFECTS, u8::from(stopped));
+        self.tick_effects(sca, player);
+        self.set_flag(STOP_BANK, STOP_EFFECTS, u8::from(held));
+    }
+
     pub fn tick_effects(
         &mut self,
         sca: Option<&crate::state::Sca>,
@@ -4001,6 +4016,44 @@ mod tests {
         // `0x502027` on the close's eighth tick.
         assert_eq!(cuts, [0, 0, 0, 0, 0, 0, 0, 0, 3, 3]);
         assert_eq!(game.re2_item_get_cut(3), 3);
+    }
+
+    #[test]
+    fn the_get_item_windows_game_frames_move_the_effects() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        let mut frames = Vec::new();
+        while game.re2_item_get.is_some() {
+            frames.push(game.re2_item_get_effects_frame());
+            assert_eq!(
+                frames.last().unwrap().is_some(),
+                game.re2_item_get_stopped_frame(),
+                "the effects run on the window's game frames, and only there"
+            );
+            game.tick_re2_item_get();
+            game.message.active = false;
+        }
+        // The opening fade's three frames are under `0xFF000000`: only the
+        // kinds that carry on through a stop move. The close's last frame is
+        // under `0xEF000000`, without `0x10000000`, so every effect moves.
+        let shown: Vec<_> = frames.iter().flatten().copied().collect();
+        assert_eq!(shown, [true, true, true, false]);
+        assert_eq!(frames.first(), Some(&Some(true)));
+        assert_eq!(frames.last(), Some(&Some(false)));
+
+        // The pass takes the frame's stop and leaves the bank as it was
+        // (`Esp_move`'s kinds under a stop are `esp2`'s own tests).
+        for held in [0, 1] {
+            let mut state = Re2State::default();
+            state.set_flag(STOP_BANK, STOP_EFFECTS, held);
+            state.tick_effects_as(held == 0, None, None);
+            assert_eq!(state.flag(STOP_BANK, STOP_EFFECTS), held == 1);
+        }
     }
 
     #[test]

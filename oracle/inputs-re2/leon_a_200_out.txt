@@ -1,0 +1,41 @@
+# room 200 after the Blue Card Key: from the computer back round the upper floor, take the counter's 30 handgun rounds, run down the east ramp and west along the ground floor to door 1, into 201 (oracle/re2.md, "Leon A past the card")
+350 left
+376
+380 up run
+395
+398 right
+412
+414 up run
+426
+428 left
+441
+444 up run
+460
+462 left
+476
+478 up
+487
+490 action
+494
+726 action
+730
+926 action
+930
+940 right
+952
+955 up run
+979
+982 right
+997
+998 up run
+1064
+1067 right
+1080
+1083 up run
+1176
+1180 left
+1184
+1186 up run
+1200
+1204 action
+1208

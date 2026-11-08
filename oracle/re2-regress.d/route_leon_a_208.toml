@@ -1,0 +1,33 @@
+# Leon A's route past the Blue Card Key, from room 200's computer to the darkroom (208), room by room from warps
+# (oracle/re2.md, "Leon A past the card").
+
+# Room 200 after the card: the walk back from the computer, the counter's 30 rounds, the east ramp and door 1.
+# No frames: a warp into 200 starts on a scrolled cut in the original (weapon_pickup_200).
+[[run]]
+name = "leon_a_200_out"
+room = "200"
+setup_script = "leon_a_200_out.lua"
+input = "leon_a_200_out.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd"
+expect = "match"
+ignore = [[1204, "rng"], [1204, "rseed"]]
+record = "--no-enemies --warp 200:-14936:-1800:1202:1992:6 --flag 4:6 --flag 4:7 --flag 4:102 --flag 4:70 --life 200 --give 0:2:13 --give 2:0x14:9"
+
+# Room 201 from 200's door, with the licker behind the window: cut 4 starts its scene as Leon walks to door 1.
+[[run]]
+name = "leon_a_201"
+room = "201"
+setup_script = "leon_a_201.lua"
+input = "leon_a_201.txt"
+input_shift = 344
+# to tick 593: the door arrives in 204 on 503, and the room's own entry and body are Part 2's (leon_a_204_entry)
+ticks = 594
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zp"
+frames = [380, 502]
+frame_max_mean = 0.35
+expect = "match"
+# the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+ignore = [[468, "rng"], [468, "rseed"]]
+record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"
