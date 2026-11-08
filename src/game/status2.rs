@@ -30,7 +30,11 @@ use super::GameState;
 use crate::scd2::host::item_max;
 
 pub mod binders;
+pub mod files;
 pub mod map;
+
+use crate::scd2::host::NO_FILE;
+use files::{Blink, ST_MV};
 
 /// `Item_work`'s eleventh slot: the personal item.
 pub const PERSONAL_SLOT: u8 = 10;
@@ -48,16 +52,41 @@ pub const MAP_IN: u8 = 1;
 pub const MAP_OUT: u8 = 2;
 pub const MAP_SHOWN: u8 = 3;
 pub const MAP_FLOOR: u8 = 4;
-/// The FILE page's subs (`0x4FA178`) as far as the binders go: 0 loads them
-/// and starts 1, the slide in; 2 slides out, 3 waits on the binders, and 4
-/// and 5 turn them left and right. Subs 6 to 18 open a binder and read its
-/// files, which no route state reaches (`docs/internals/deviations/re2.md`).
+/// The FILE page's subs (`0x4FA178`): 0 loads the binders and starts 1, the
+/// slide in; 2 slides out, 3 waits on the binders, and 4 and 5 turn them
+/// left and right. 6 opens the binder in front (the zoom), 8 spins it out
+/// to 10, its list of files, and 9 spins it back to 7, which closes it.
+/// 0xB moves the screen's parts out and loads a file, 0xC moves them back;
+/// 0xD shows a page, 0xE lights the end marker, and 0xF and 0x10 slide to
+/// the next page, 0x11 and 0x12 to the one before.
 pub const FILE_LOAD: u8 = 0;
 pub const FILE_IN: u8 = 1;
 pub const FILE_OUT: u8 = 2;
 pub const FILE_SHOWN: u8 = 3;
 pub const FILE_LEFT: u8 = 4;
 pub const FILE_RIGHT: u8 = 5;
+pub const FILE_OPEN: u8 = 6;
+pub const FILE_CLOSE: u8 = 7;
+pub const FILE_SPIN_OUT: u8 = 8;
+pub const FILE_SPIN_BACK: u8 = 9;
+pub const FILE_LIST: u8 = 10;
+pub const FILE_READ_IN: u8 = 0xB;
+pub const FILE_READ_OUT: u8 = 0xC;
+pub const FILE_PAGE: u8 = 0xD;
+pub const FILE_END: u8 = 0xE;
+pub const FILE_NEXT_OUT: u8 = 0xF;
+pub const FILE_NEXT_IN: u8 = 0x10;
+pub const FILE_PREV_OUT: u8 = 0x11;
+pub const FILE_PREV_IN: u8 = 0x12;
+/// Sub 0xB's steps out before its load tick, and 0xC's back.
+pub const FILE_READ_STEPS: u8 = 14;
+/// The page's x at rest (`St_init_disp_file`), where the next page comes
+/// in from (sub 0xF's end) and the page before (sub 0x11's end).
+const PAGE_X: i16 = 0x19;
+const PAGE_X_NEXT: i16 = 0x138;
+const PAGE_X_PREV: i16 = -262;
+/// The binders' spin a draw in subs 8 and 9 (`0x500560`).
+const SPIN_STEP: i16 = 0x26;
 /// The binders on FILE's carousel (`0x691F71` wraps 0 to 2).
 pub const BINDERS: u8 = 3;
 
@@ -109,14 +138,16 @@ pub struct Input {
 
 /// The sounds the page plays: `Snd_se_on`'s core-bank cues `0x4040000`,
 /// `0x4050000`, `0x4060000` and `0x4070000` (`0x4ED950`), which play at the
-/// slot's own volume, unpanned; MAP's `0x4090000` once the map has slid in,
-/// and FILE's `0x40A0000` for a turn of the binders.
+/// slot's own volume, unpanned; FILE's `0x4080000` for a file's page, MAP's
+/// `0x4090000` once the map has slid in, and FILE's `0x40A0000` for a turn
+/// of the binders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {
     Cursor,
     Cancel,
     Decide,
     Buzzer,
+    Page,
     Map,
     Turn,
 }
@@ -129,6 +160,7 @@ impl Sound {
             Self::Cancel => 5,
             Self::Decide => 6,
             Self::Buzzer => 7,
+            Self::Page => 8,
             Self::Map => 9,
             Self::Turn => 10,
         };
@@ -213,8 +245,6 @@ pub struct ItemPage {
     pub command_cursor: u8,
     /// COMBN's result id (`0x691F86`).
     pub result: u8,
-    /// FILE's binder (`0x691F71`), 0 to 2.
-    pub binder: u8,
     /// USE's heal, applied once the panel is done.
     pub amount: i16,
     pub panel: Panel,
@@ -235,7 +265,6 @@ impl Default for ItemPage {
             // `0x4FF060` puts it on the top entry when the menu opens.
             command_cursor: 0,
             result: 0,
-            binder: 0,
             amount: 0,
             panel: Panel::default(),
         }
@@ -438,14 +467,21 @@ fn heal(item: u8) -> Option<(Option<u8>, u8)> {
 /// change floors only on a floor with others above or below it
 /// (`0x53DA28`, `0x53DA40`) whose map the player holds, which no route
 /// room has: the route's floor, the city's map 0, has none. START does
-/// nothing on this page (`0x691F76` is 0).
-fn re2_map(page: &mut ItemPage, input: Input, out: &mut Outcome) {
+/// nothing on this page (`0x691F76` is 0). Sub 3 steps the marker's blink
+/// first, and sub 4 resets it.
+fn re2_map(page: &mut ItemPage, blink: &mut Blink, input: Input, out: &mut Outcome) {
+    if page.sub == MAP_SHOWN {
+        blink.step_map();
+    }
     match page.sub {
         MAP_LOAD => {
             page.sub = MAP_IN;
             page.command = 0;
         }
-        MAP_FLOOR => page.sub = MAP_SHOWN,
+        MAP_FLOOR => {
+            *blink = Blink::RESET;
+            page.sub = MAP_SHOWN;
+        }
         MAP_IN | MAP_OUT => {
             let count = page.command;
             page.command += 1;
@@ -468,17 +504,25 @@ fn re2_map(page: &mut ItemPage, input: Input, out: &mut Outcome) {
     }
 }
 
-/// One tick of the FILE page (`0x4F95B0`), as far as the binders go. Sub 0
-/// loads the binders' model (`common\\data\\st_file.ts`) and runs sub 1's
-/// first tick; sub 1 slides them in for 12 ticks more and shows them (sub
-/// 3). There left and right (the keys with their repeat) turn the carousel
-/// for 13 ticks (subs 4 and 5) with cue 10, after which the next binder is
-/// in front and a key still held turns it again in the same tick. The
-/// decide key opens the binder in front only when it holds a file
-/// (`0x98EE60`), which nothing on the route gives; otherwise it does
-/// nothing. The cancel key plays the cancel cue and slides the binders out
-/// (sub 2) for 13 ticks, back to the tab bar. START does nothing here.
-fn re2_file(page: &mut ItemPage, input: Input, out: &mut Outcome) {
+/// One tick of the FILE page (`0x4F95B0`; its count is
+/// [`ItemPage::command`], `0x691F63`). Sub 0 loads the binders' model
+/// (`common\\data\\st_file.ts`), puts binder 0 in front with its first file
+/// selected, and runs sub 1's first tick; sub 1 slides them in for 12 ticks
+/// more and shows them (sub 3). There left and right (the keys with their
+/// repeat) turn the carousel for 13 ticks (subs 4 and 5) with cue 10, after
+/// which the next binder is in front and a key still held turns it again in
+/// the same tick. The decide key opens the binder in front when it holds a
+/// file in its first slot; the cancel key plays the cancel cue and slides
+/// the binders out (sub 2) for 13 ticks, back to the tab bar. START does
+/// nothing here. The binder's opening, its list and the reader are
+/// [`reader`].
+fn re2_file(
+    page: &mut ItemPage,
+    work: &mut files::FileWork,
+    held: &[u8; crate::scd2::host::FILE_SLOTS],
+    input: Input,
+    out: &mut Outcome,
+) {
     let turn = |page: &mut ItemPage, out: &mut Outcome| {
         if input.left {
             out.sounds.push(Sound::Turn);
@@ -489,9 +533,22 @@ fn re2_file(page: &mut ItemPage, input: Input, out: &mut Outcome) {
             page.sub = FILE_RIGHT;
         }
     };
+    // Whether the tick ends with `ST_Om_trans` (`0x500470`), the binders'
+    // draw: every sub to 0xC but 0xB's load tick.
+    let mut binders_drawn = true;
     match page.sub {
         FILE_LOAD | FILE_IN | FILE_OUT => {
             if page.sub == FILE_LOAD {
+                // Decomp lines 107 to 124: binder 0 in front, its first
+                // slot, the zoom and the turn at rest.
+                work.binder = 0;
+                work.slot = 0;
+                if held[0] == NO_FILE {
+                    files::move_file_tag(held, 0, &mut work.slot, false);
+                }
+                work.zoom = 0;
+                work.spin = 0;
+                work.turn = binders::REST as i16;
                 page.sub = FILE_IN;
                 page.command = 0;
             }
@@ -509,9 +566,13 @@ fn re2_file(page: &mut ItemPage, input: Input, out: &mut Outcome) {
         }
         FILE_SHOWN => {
             turn(page, out);
-            // No binder holds a file: the decide key falls through to the
-            // cancel key's test.
-            if input.cancel {
+            // Decomp lines 155 to 181: the decide key on a binder whose
+            // first slot is empty falls through to the cancel key's test.
+            if input.confirm && files::file_at(held, work.binder, 0) != NO_FILE {
+                work.page = 0;
+                page.sub = FILE_OPEN;
+                out.sounds.push(Sound::Decide);
+            } else if input.cancel {
                 out.sounds.push(Sound::Cancel);
                 page.sub = FILE_OUT;
             }
@@ -520,18 +581,234 @@ fn re2_file(page: &mut ItemPage, input: Input, out: &mut Outcome) {
             let count = page.command;
             page.command += 1;
             if count > 11 {
-                page.binder = if page.sub == FILE_LEFT {
-                    (page.binder + BINDERS - 1) % BINDERS
+                work.binder = if page.sub == FILE_LEFT {
+                    (work.binder + BINDERS - 1) % BINDERS
                 } else {
-                    (page.binder + 1) % BINDERS
+                    (work.binder + 1) % BINDERS
                 };
+                // An empty binder keeps the slot (`move_file_tag` finds
+                // nothing); one with a file starts on its first.
+                if files::file_at(held, work.binder, 0) == NO_FILE {
+                    files::move_file_tag(held, work.binder, &mut work.slot, false);
+                } else {
+                    work.slot = 0;
+                }
                 page.sub = FILE_SHOWN;
                 page.command = 0;
                 page.step = 0;
                 turn(page, out);
             }
         }
-        _ => {}
+        _ => binders_drawn = reader(page, work, held, input, out),
+    }
+    work.turn = binders::turn(page.sub, page.command) as i16;
+    if binders_drawn {
+        // `0x500560` reads the sub the tick's switch left.
+        match page.sub {
+            FILE_SPIN_OUT => work.spin = work.spin.wrapping_add(SPIN_STEP),
+            FILE_SPIN_BACK => work.spin = work.spin.wrapping_sub(SPIN_STEP),
+            _ => {}
+        }
+        // `ST_Om_trans` builds the view from the eye as it was, then moves
+        // the eye by the zoom.
+        work.view_zoom = work.eye_zoom;
+        work.eye_zoom = work.zoom;
+    }
+}
+
+/// FILE's subs 6 to 0x12 (decomp lines 239 to 486): a binder's opening, its
+/// list of files and the file reader. Returns whether the tick draws the
+/// binders.
+fn reader(
+    page: &mut ItemPage,
+    work: &mut files::FileWork,
+    held: &[u8; crate::scd2::host::FILE_SLOTS],
+    input: Input,
+    out: &mut Outcome,
+) -> bool {
+    let file = files::file_at(held, work.binder, work.slot);
+    match page.sub {
+        FILE_OPEN | FILE_CLOSE => {
+            // 11 ticks of zoom, then a 12th that changes sub.
+            if page.command < 11 {
+                page.command += 1;
+                let count = i16::from(page.command);
+                work.zoom += if page.sub == FILE_OPEN {
+                    count * 4 + 0x14
+                } else {
+                    (-5 - count) * 4
+                };
+            } else {
+                page.sub = if page.sub == FILE_OPEN {
+                    FILE_SPIN_OUT
+                } else {
+                    FILE_SHOWN
+                };
+                page.command = 0;
+            }
+            true
+        }
+        FILE_SPIN_OUT | FILE_SPIN_BACK => {
+            let count = page.command;
+            page.command += 1;
+            if count > 10 {
+                page.command = 0;
+                page.sub = if page.sub == FILE_SPIN_OUT {
+                    FILE_LIST
+                } else {
+                    FILE_CLOSE
+                };
+            }
+            true
+        }
+        FILE_LIST => {
+            // Up, then down, both in one tick when both are held.
+            let before = work.slot;
+            if input.up {
+                files::move_file_tag(held, work.binder, &mut work.slot, true);
+            }
+            if input.down {
+                files::move_file_tag(held, work.binder, &mut work.slot, false);
+            }
+            if work.slot != before {
+                out.sounds.push(Sound::Cursor);
+            }
+            let file = files::file_at(held, work.binder, work.slot);
+            if input.confirm && file != NO_FILE {
+                // `St_init_disp_file` (`0x500140`) puts the page at rest.
+                work.page = 0;
+                work.x = PAGE_X;
+                page.sub = FILE_READ_IN;
+                out.sounds.push(Sound::Decide);
+            } else if input.cancel {
+                page.sub = FILE_SPIN_BACK;
+                out.sounds.push(Sound::Cancel);
+            }
+            true
+        }
+        FILE_READ_IN => {
+            if page.command < FILE_READ_STEPS {
+                page.command += 1;
+                true
+            } else {
+                // The load tick: the file's three first chunks, the next
+                // page sliding in from the right, the background black.
+                work.x = PAGE_X_NEXT;
+                page.sub = FILE_NEXT_IN;
+                page.command = 0;
+                out.sounds.push(Sound::Page);
+                false
+            }
+        }
+        FILE_READ_OUT => {
+            read_out_step(page);
+            true
+        }
+        FILE_PAGE => {
+            work.blink.step_reader();
+            if input.cancel {
+                page.sub = FILE_READ_OUT;
+                out.sounds.push(Sound::Cancel);
+                read_out_step(page);
+                return true;
+            }
+            let back = |page: &mut ItemPage, work: &mut files::FileWork| {
+                if input.left && work.page > 0 {
+                    work.page -= 1;
+                    page.sub = FILE_PREV_OUT;
+                    true
+                } else {
+                    false
+                }
+            };
+            if input.right {
+                if files::pages_last(file) <= u16::from(work.page) {
+                    page.sub = FILE_END;
+                    out.sounds.push(Sound::Cursor);
+                    if back(page, work) {
+                        out.sounds.push(Sound::Page);
+                    }
+                } else {
+                    work.page += 1;
+                    page.sub = FILE_NEXT_OUT;
+                    out.sounds.push(Sound::Page);
+                }
+            } else if back(page, work) {
+                out.sounds.push(Sound::Page);
+            }
+            false
+        }
+        FILE_END => {
+            if input.confirm || input.cancel {
+                page.sub = FILE_READ_OUT;
+                out.sounds.push(Sound::Decide);
+                read_out_step(page);
+                return true;
+            }
+            if input.left {
+                page.sub = FILE_PAGE;
+                work.blink = Blink::RESET;
+            }
+            false
+        }
+        FILE_NEXT_OUT | FILE_NEXT_IN => {
+            if page.command < 11 {
+                page.command += 1;
+                let n = usize::from(page.command);
+                let step = if page.sub == FILE_NEXT_OUT {
+                    ST_MV[n]
+                } else {
+                    ST_MV[11 - n]
+                };
+                work.x -= i16::from(step);
+            } else {
+                // The next page's chunk loads as the old one leaves.
+                if page.sub == FILE_NEXT_OUT {
+                    work.x = PAGE_X_NEXT;
+                    page.sub = FILE_NEXT_IN;
+                } else {
+                    page.sub = FILE_PAGE;
+                }
+                page.command = 0;
+                work.blink = Blink::RESET;
+            }
+            false
+        }
+        FILE_PREV_OUT | FILE_PREV_IN => {
+            if page.command > 10 {
+                if page.sub == FILE_PREV_OUT {
+                    work.x = PAGE_X_PREV;
+                    page.sub = FILE_PREV_IN;
+                } else {
+                    page.sub = FILE_PAGE;
+                }
+                page.command = 0;
+                work.blink = Blink::RESET;
+            } else {
+                page.command += 1;
+                let n = usize::from(page.command);
+                let step = if page.sub == FILE_PREV_OUT {
+                    ST_MV[n]
+                } else {
+                    ST_MV[11 - n]
+                };
+                work.x += i16::from(step);
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Sub 0xC's tick (decomp lines 368 to 384): the screen's parts move back,
+/// and after 14 the list is back (sub 10) with the status screen's
+/// background.
+fn read_out_step(page: &mut ItemPage) {
+    let count = page.command;
+    page.command += 1;
+    if count > FILE_READ_STEPS - 2 {
+        page.sub = FILE_LIST;
+        page.command = 0;
     }
 }
 
@@ -572,6 +849,15 @@ impl GameState {
         self.inventory
             .resize(capacity, super::InventoryItem::default());
         self.re2_items = Some(ItemPage::default());
+        self.re2_items_start = None;
+    }
+
+    /// The status screen's start once its graphics have loaded (`Status`,
+    /// `0x501BD0`, past `St_load_gfx`): `St_init_disp_cursol0` (`0x4FE540`)
+    /// resets the shared blink. The original's recordings show it on the
+    /// open's sixth tick, the frame before the fade in's first.
+    pub fn init_re2_status(&mut self) {
+        self.re2_file.blink = Blink::OPEN;
     }
 
     /// Close the item page: the inventory compacts again.
@@ -625,10 +911,17 @@ impl GameState {
     pub fn tick_re2_items(&mut self, input: Input) -> Option<Outcome> {
         let mut page = self.re2_items?;
         let mut out = Outcome::default();
+        self.re2_items_start = Some(page.page);
         match page.page {
             PAGE_TABS => self.re2_tabs(&mut page, input, &mut out),
-            PAGE_MAP => re2_map(&mut page, input, &mut out),
-            PAGE_FILE => re2_file(&mut page, input, &mut out),
+            PAGE_MAP => re2_map(&mut page, &mut self.re2_file.blink, input, &mut out),
+            PAGE_FILE => re2_file(
+                &mut page,
+                &mut self.re2_file,
+                &self.re2.files,
+                input,
+                &mut out,
+            ),
             _ => self.re2_item_page(&mut page, input, &mut out),
         }
         page.panel.tick();
@@ -639,6 +932,28 @@ impl GameState {
         self.re2_items_trace = page.trace();
         self.re2_items = Some(page);
         Some(out)
+    }
+
+    /// The item cursor's pulse on a frame the status screen draws (`shown`):
+    /// `St_disp_cursol0` (`0x4FE5F0`) runs at the end of each tick of the
+    /// item page (the page the tick started on) and on each frame of the
+    /// screen's fade in (`St_init00`), stepping the blink by 3 while the
+    /// grid is up and holding it at 0x3C under the menu and its commands.
+    /// The other pages leave it as it is.
+    pub fn animate_re2_items(&mut self, shown: bool) {
+        let start = self.re2_items_start.take();
+        let Some(page) = self.re2_items else {
+            return;
+        };
+        if !shown || start.unwrap_or(page.page) != PAGE_ITEMS {
+            return;
+        }
+        let blink = &mut self.re2_file.blink;
+        if page.sub == SUB_GRID {
+            blink.step_cursor();
+        } else {
+            blink.level = Blink::HELD;
+        }
     }
 
     /// The tab bar (`0x4F8050`): FILE, MAP, ITEMS and EXIT, its cursor held

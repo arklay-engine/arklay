@@ -1,0 +1,11 @@
+[[run]]
+name = "status_file_reader"
+# the FILE page's reader (St_menu0_file subs 6 to 0x12) with files 1 and 3 in binder 0: open the binder, move its list, read file 1 to its end marker and back, read file 3 and close it, reopen the binder, turn to an empty one (oracle/re2.md, "Status screen"). The frames are reported, not judged, until the reader's draw is ported.
+setup_script = "status_file_reader.lua"
+input = "status_file_reader.txt"
+input_shift = 344
+ticks = 1900
+fields = "file"
+frames = [360, 1899]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --file 0:1 --file 1:3"

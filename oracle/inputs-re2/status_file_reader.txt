@@ -1,0 +1,67 @@
+# room 102 with files 1 and 3 in binder 0: FILE, open the binder, move its list, read file 1's six pages to the end marker and back a page, cancel, read file 3's three pages and close it from the end marker, close and reopen the binder, turn to an empty binder and back, then close the screen (oracle/re2.md, "Status screen")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 left
+464
+480 confirm
+484
+520 confirm
+524
+580 up
+584
+620 down
+624
+660 confirm
+664
+780 right
+784
+820 right
+824
+860 right
+864
+900 right
+904
+940 right
+944
+980 right
+984
+1020 left
+1024
+1060 left
+1064
+1120 cancel
+1124
+1160 down
+1164
+1200 confirm
+1204
+1260 right
+1264
+1300 right
+1304
+1340 right
+1344
+1380 confirm
+1384
+1420 cancel
+1424
+1480 confirm
+1484
+1540 cancel
+1544
+1600 right
+1604
+1640 confirm
+1644
+1680 left
+1684
+1720 cancel
+1724
+1780 start
+1784

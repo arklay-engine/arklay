@@ -639,6 +639,7 @@ pub fn run_with_options(
                         re2_inventory: None,
                         re2_map_flags: None,
                         re2_item_page: None,
+                        re2_file: None,
                         re2_item_box: None,
                         re2_doors: None,
                         re2_scene: None,
@@ -1931,6 +1932,13 @@ const RE2_STATUS_UNCUT_TICK: u8 = 8;
 /// The open's tick on which the item box's page starts (`St_init01`'s step
 /// 0, after its loads).
 const RE2_BOX_START: u8 = 6;
+/// The open's first tick the status screen draws (the fade in's), and the
+/// close's first tick it no longer does (`main_menu.lua`'s `OPEN_SHOWN` and
+/// `CLOSE_BLACK`).
+const RE2_STATUS_SHOWN: u8 = 7;
+/// The open's tick on which `Status` (`0x501BD0`) runs its start, once
+/// `St_load_gfx` is done.
+const RE2_STATUS_INIT: u8 = 6;
 /// The close's ticks on which the item box's screen still runs.
 const RE2_BOX_CLOSE_DRAWN: u8 = 7;
 
@@ -3022,6 +3030,9 @@ impl GameSession {
             }
         }
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
+        if self.re2_status_open == Some(RE2_STATUS_INIT) {
+            self.game.init_re2_status();
+        }
         self.re2_status_return = self
             .re2_status_return
             .map(|ticks| ticks + 1)
@@ -4912,6 +4923,10 @@ impl GameSession {
             return;
         };
         let close = self.re2_status_close;
+        // The screen's frames from the fade in's first (`St_init00`) until
+        // the fade out reaches black (the script's `shown()`).
+        let shown = open >= RE2_STATUS_SHOWN && close.is_none_or(|ticks| ticks < RE2_STATUS_SHOWN);
+        self.game.animate_re2_items(shown);
         let Self {
             menu,
             save_dir,
@@ -7856,6 +7871,10 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_items_trace.clone()),
+            re2_file: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2_file.trace(&self.game.re2.files)),
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
             re2_doors: self
                 .game
