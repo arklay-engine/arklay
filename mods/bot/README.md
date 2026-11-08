@@ -801,6 +801,12 @@ drives the box screen with pad input only.
   Medal, the way to the lab) was lost. A remote trip to such an item
   outranks carrying a held `<use>` item to its zone: 217's MO disk lost
   the freed slot to the battery's errand and never fit again.
+  These counts, and the `<use>` set pickup_fits reads from
+  `BotInventory.context`, are read once per tick, inventory, box memory and
+  marks generation (`plan().marks_gen`, bumped whenever a mark is added,
+  removed or changes what it holds): pickup_fits asks for every frontier
+  item, and rebuilding them per candidate ran the planner out of its
+  instruction budget.
 - Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
   written whenever the box screen is up) when a `<use>` fact or an open
   `<brew>`'s recipe (`BotMix.needs`: its bottle and chemicals) needs it, a
