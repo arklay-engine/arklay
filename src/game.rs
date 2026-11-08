@@ -6547,7 +6547,8 @@ impl GameState {
     /// room (`Game_loop`'s modes 1 and 2 until the fade is done): the
     /// scheduler is off (`fg_stop & 0x2000000`), so the areas the player is
     /// in record their hit and raise `fg_use` again for the status's USE,
-    /// but start nothing. The press pass is off too (`fg_status & 0x200000`).
+    /// and only `Sce_Event` gates itself off. The press pass is off too
+    /// (`fg_status & 0x200000`).
     pub fn re2_stopped_area_pass(&mut self, pos: [i32; 3], angle: u16) {
         self.re2.areas_stopped = true;
         self.interact(pos, angle, false);
@@ -6682,7 +6683,10 @@ impl GameState {
             let Some(room_action) = self.room_actions[slot] else {
                 continue;
             };
-            if room_action.handler == 0 {
+            // RE 2's kind-0 areas (`Sce_Auto`, handler 0) are still probed:
+            // `Sce_at_check` records them in `At_sce_no` before their handler
+            // (`Nothing`, `0x4E9440`) does nothing.
+            if room_action.handler == 0 && !re2 {
                 continue;
             }
             let flags = room_action.flags;
@@ -6726,6 +6730,9 @@ impl GameState {
                 && (flags & 0x80 == 0 || room_action.sce != crate::scd2::host::SCE_AUTO)
             {
                 self.re2.player.at_sce = slot as u8;
+            }
+            if room_action.handler == 0 {
+                continue;
             }
             if flags & 0x40 != 0 {
                 self.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)] = hit;
@@ -8617,12 +8624,10 @@ impl GameState {
     /// returns. Water (kind 7) sets the player's `Water`.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
-        let acts_stopped = [
-            crate::scd2::host::SCE_FLAG_CHANGE,
-            crate::scd2::host::SCE_WATER,
-            crate::scd2::host::SCE_DAMAGE,
-        ];
-        if self.re2.areas_stopped && !acts_stopped.contains(&action.sce) {
+        // Of the handlers, only `Sce_Event` (`0x4E9800`) tests the
+        // scheduler's stop (`fg_stop & 0x2000000`); `Sce_Door`'s own guard
+        // (`0x98A0D4`) isn't modelled, and the rest test nothing.
+        if self.re2.areas_stopped && action.sce == crate::scd2::host::SCE_EVENT {
             return;
         }
         if action.sce == crate::scd2::host::SCE_WINDOWS {

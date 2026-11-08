@@ -3129,6 +3129,7 @@ impl GameSession {
             self.begin_re2_box_open(pack);
         }
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
+        self.game.re2.var_cut = u8::try_from(self.loaded.room.current_cut).ok();
         self.game.re2.films = self.films;
         self.buffer_half ^= 1;
         if self
@@ -14523,10 +14524,13 @@ fn play_re2_sounds(
     let mut played = std::mem::take(&mut sounds.played);
     // `forced` is a level `Snd_se_on` sets itself: the trace logs it, and the
     // sound plays at full volume, whatever the bank's table says.
-    let script_cuts = &room.cuts;
+    // `Snd_se_3D` places a sound from `scd_var_cut` as it is when the sound
+    // starts: a script's `cut_chg` moves it for every sound after it.
+    let re2 = &game.re2;
     let mut play = |id: SoundId, pos: [i32; 3], forced: Option<(u8, i32)>, placed: Option<u8>| {
-        let cut = placed
-            .and_then(|placed| script_cuts.get(usize::from(placed)))
+        let cut = re2
+            .placement_cut(placed)
+            .and_then(|placed| room.cuts.get(usize::from(placed)))
             .unwrap_or(cut);
         let tone_volume = match forced {
             Some((volume, _)) => volume,
@@ -16283,6 +16287,8 @@ fn run_re2_init(
     game.re2.sce_rnd_set();
     // And clears the last room's script work before them (`Sce_work_clr`).
     game.re2.sce_work_clr();
+    // `scd_var_cut` is the new room's entry cut by now.
+    game.re2.var_cut = u8::try_from(game.camera.current_cut).ok();
     let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
@@ -16342,7 +16348,6 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
         vm.exec_event(usize::from(task), usize::from(event));
     }
-    context.game.re2.script_cut = None;
     {
         let mut host = crate::scd2::host::GameHost {
             game: &mut *context.game,
