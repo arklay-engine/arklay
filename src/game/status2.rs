@@ -862,6 +862,8 @@ impl GameState {
     /// open's sixth tick, the frame before the fade in's first.
     pub fn init_re2_status(&mut self) {
         self.re2_file.blink = Blink::OPEN;
+        // `Pad_rep_set(0xF01C, 0x60A)`, in `Status`'s start.
+        self.pad_repeat.set(super::pad_repeat::STATUS_SETTING);
     }
 
     /// Close the item page: the inventory compacts again.

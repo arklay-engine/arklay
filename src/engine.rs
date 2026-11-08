@@ -642,6 +642,7 @@ pub fn run_with_options(
                         re2_map_flags: None,
                         re2_item_page: None,
                         re2_file: None,
+                        re2_pad_repeat: None,
                         re2_item_box: None,
                         re2_doors: None,
                         re2_scene: None,
@@ -3052,6 +3053,20 @@ impl GameSession {
             if (2..=3).contains(ticks) && self.game.re2_box.is_some() {
                 self.game.tick_re2_box_entrance();
             }
+        }
+        if self.game.is_re2_room {
+            // `Pad_set`, before `Game_loop` and `Status`: the raw pad is
+            // never blanked, and a key's level already holds on its press
+            // tick.
+            use game::pad_repeat as pad;
+            let held = |down: bool, bit: u16| if down { bit } else { 0 };
+            self.game.pad_repeat.step(
+                held(input.up, pad::UP)
+                    | held(input.right, pad::RIGHT)
+                    | held(input.down, pad::DOWN)
+                    | held(input.left, pad::LEFT)
+                    | held(input.aim, pad::AIM),
+            );
         }
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
         if self.re2_status_open == Some(RE2_STATUS_INIT) {
@@ -8060,6 +8075,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_file.trace(&self.game.re2.files)),
+            re2_pad_repeat: self.game.is_re2_room.then(|| self.game.pad_repeat.trace()),
             re2_item_box: self.game.is_re2_room.then(|| self.game.re2_box_trace()),
             re2_doors: self
                 .game

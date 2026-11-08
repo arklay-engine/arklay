@@ -885,6 +885,19 @@ def file_trace(game: Game) -> str:
     return f"fl={work}/{game.read(FILE_TAG_BK, 24).hex()}"
 
 
+PAD_REPEAT_COUNT = 0x533938  # `Pad_set`'s repeat counter (BYTE_00533938)
+PAD_REPEAT_MASK = 0x98F074  # `Pad_rep_set`'s mask (DWORD_0098f074)
+PAD_REPEAT_DELAYS = 0x98F078  # and its two delays (WORD_0098f078: the first, then the period)
+
+
+def pad_repeat_trace(game: Game) -> str:
+    """`Pad_set`'s repeat state: the flag (`fg_system`'s bit 31), the counter, the mask and the delays."""
+    return (
+        f"prep={game.u32(FG_SYSTEM) >> 31},{game.u8(PAD_REPEAT_COUNT)},"
+        f"{game.u16(PAD_REPEAT_MASK)},{game.u16(PAD_REPEAT_DELAYS)}"
+    )
+
+
 def item_box_trace(game: Game) -> str:
     """The item box (`Item_box_entrance` and `St_main01`): the lid's state, speed, step and turn, the screen's routine, sub, count, cursor and repeat gate, the box's top row and its scroll, the cursor lines' pulse; then the inventory's two-slot marks and the box's filled slots."""
     lid = game.i16(OBJECTS + game.u8(ITEM_BOX_OBJECT) * 0x1F8 + 0x78)
@@ -1042,6 +1055,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         + ",".join(str(game.u8(address)) for address in ITEM_PAGE)
     )
     fields.append(file_trace(game))
+    fields.append(pad_repeat_trace(game))
     fields.append(item_box_trace(game))
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
     # Slot 2's back routine (`Sce_Save_backfunc` 0x4E9930 or `Item_box_entrance` 0x4E9A20), its state and the save place.
