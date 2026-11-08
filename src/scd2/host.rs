@@ -4111,9 +4111,25 @@ mod tests {
         ];
         let mut host = GameHost { game: &mut game };
         host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        // Ten live objects, to see which one a take clears.
+        game.objects.records = vec![
+            crate::objects::ObjectRecord {
+                flag: 1,
+                be_flg: 0x11,
+                ..Default::default()
+            };
+            10
+        ];
         let action = game.room_actions[8].unwrap();
         game.fire_re2_area(action);
         game
+    }
+
+    /// The objects whose `Be_flg` a take has cleared.
+    fn cleared_objects(game: &GameState) -> Vec<usize> {
+        (0..10)
+            .filter(|&n| game.objects.record(n).unwrap().be_flg == 0)
+            .collect()
     }
 
     /// Run the file window's ticks until it is in `phase`.
@@ -4193,12 +4209,26 @@ mod tests {
         let cues = file_it(&mut game);
         assert!(cues.contains(&Sound::Cancel));
         assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 94));
+        assert_eq!(cleared_objects(&game), [2], "only the area's object goes");
+        assert_eq!(game.objects.record(2).unwrap().flag, 0);
+        assert_eq!(game.objects.record(3).unwrap().flag, 1);
         assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
         assert!(game.inventory.is_empty());
         // The window closed as the item path's does, and a second press
         // finds nothing.
         assert!(game.re2.door_key_stop);
         assert!(game.re2_item_get.is_none());
+    }
+
+    #[test]
+    fn a_file_whose_object_is_0xff_clears_no_object() {
+        // `St_get_file` sub 6: `if (object != 0xff) pOm[object * 0x7e] = 0`.
+        let mut game = press_item_area(0x71, 25, 0xFF);
+        file_it(&mut game);
+        assert_eq!(game.re2.files[0], 9);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 25));
+        assert_eq!(cleared_objects(&game), Vec::<usize>::new());
+        assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
     }
 
     #[test]

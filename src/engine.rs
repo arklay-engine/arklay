@@ -1996,7 +1996,15 @@ fn re2_status_return_alpha(ticks: u8) -> Option<u8> {
 /// it) and, while it closes, its ticks in the close: it opens and closes
 /// as the status screen does (its routines 0 and 1 run the same fades), the
 /// close from the tick sub 0 plays its cancel cue.
-fn re2_item_get_view(opened: u8, closing: Option<u8>) -> Re2StatusView {
+///
+/// A file's window (`file`) draws no item screen at all: `St_init02`'s file
+/// case sets `0x691F79`, which `St_main02` tests before drawing the screen
+/// behind, so its open fade and its close (routine 0, `St_fade_out_set`, and
+/// 1) have only black to fade.
+fn re2_item_get_view(opened: u8, closing: Option<u8>, file: bool) -> Re2StatusView {
+    if file {
+        return Re2StatusView::Black;
+    }
     match closing {
         Some(ticks) => re2_status_close_view(ticks),
         None => re2_status_open_view(opened),
@@ -5061,15 +5069,14 @@ impl GameSession {
         }
         let get = self.game.re2_item_get?;
         // A file's pages aren't drawn yet (the reader's draw waits for
-        // #518): the black behind them, with no item screen (`0x691F79`).
-        if matches!(
-            get.phase,
-            game::Re2ItemGetPhase::FileFade | game::Re2ItemGetPhase::FileRead
-        ) {
-            return Some(Re2StatusView::Black);
-        }
+        // #518): the black behind them, with no item screen (`0x691F79`),
+        // through its close too.
         let closing = (get.phase == game::Re2ItemGetPhase::Close).then_some(get.ticks);
-        Some(re2_item_get_view(self.re2_item_ticks, closing))
+        Some(re2_item_get_view(
+            self.re2_item_ticks,
+            closing,
+            get.file.is_some(),
+        ))
     }
 
     /// `Cut_no` for the trace: the get-item window's, and the status
@@ -36283,7 +36290,7 @@ end
         // 368 to 370 and the screen in from 371 to 374, though the question
         // shows at 371.
         let open: Vec<_> = (1..=11)
-            .map(|ticks| re2_item_get_view(ticks, None))
+            .map(|ticks| re2_item_get_view(ticks, None, false))
             .collect();
         assert_eq!(
             open,
@@ -36301,11 +36308,11 @@ end
                 Screen(None),
             ]
         );
-        assert_eq!(re2_item_get_view(u8::MAX, None), Screen(None));
+        assert_eq!(re2_item_get_view(u8::MAX, None, false), Screen(None));
         // The cancel cue at 801 (0): the screen fades out from 803 and is
         // black from 808 until the room comes back at 811.
         let close: Vec<_> = (0..=9)
-            .map(|ticks| re2_item_get_view(u8::MAX, Some(ticks)))
+            .map(|ticks| re2_item_get_view(u8::MAX, Some(ticks), false))
             .collect();
         assert_eq!(
             close,
@@ -36322,6 +36329,17 @@ end
                 Black,
             ]
         );
+    }
+
+    #[test]
+    fn a_files_window_draws_black_through_its_close() {
+        use Re2StatusView::Black;
+        // `0x691F79` is set, so `St_main02` draws no item screen behind the
+        // routines 0 and 1 fade (`file_pickup_206`'s frames).
+        for ticks in 0..=9 {
+            assert_eq!(re2_item_get_view(u8::MAX, Some(ticks), true), Black);
+        }
+        assert_eq!(re2_item_get_view(u8::MAX, None, true), Black);
     }
 
     #[test]
