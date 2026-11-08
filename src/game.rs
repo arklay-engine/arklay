@@ -3315,6 +3315,17 @@ pub struct GameState {
     /// `Dest`, so the original's new work starts with whatever its memory
     /// held, which arklay doesn't model; each entry is used once.
     pub re2_enemy_dest: Vec<(u16, usize, [i16; 2])>,
+    /// A setup script's `Spd_x`, `Spd_y` and `Spd_z` for the next zombie a
+    /// room's `sce_em_set` puts in a slot (`set_re2_enemy_speed`), as
+    /// `re2_enemy_dest` gives `Dest`: `Sce_em_set` leaves the speeds as the
+    /// work's memory held them. Each entry is used once.
+    pub re2_enemy_speed: Vec<(u16, usize, [i16; 3])>,
+    /// A setup script's script variables for the next zombie a room's
+    /// `sce_em_set` puts in a slot (`set_re2_enemy_var`), as
+    /// `(room, slot, index, value)`: a script keeps in its variables some of
+    /// the work's bytes that `Sce_em_set` leaves as its memory held them
+    /// (`Em_27`'s history of `Cdir_y`). Each entry is used once.
+    pub re2_enemy_vars: Vec<(u16, usize, usize, i32)>,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3802,6 +3813,8 @@ impl Default for GameState {
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
+            re2_enemy_speed: Vec::new(),
+            re2_enemy_vars: Vec::new(),
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,

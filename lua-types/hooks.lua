@@ -387,6 +387,23 @@ function HookApi:set_re2_no_enemies(keep) end
 ---@param z integer
 function HookApi:set_re2_enemy_dest(pair, x, z) end
 
+---The speeds (`Spd_x`, `Spd_y`, `Spd_z`) the next zombie a room's
+---`sce_em_set` places in a slot starts with, which the original takes from
+---whatever its new work's memory held.
+---@param pair string `"ROOM:SLOT"`, the room in three hex digits.
+---@param x integer
+---@param y integer
+---@param z integer
+function HookApi:set_re2_enemy_speed(pair, x, y, z) end
+
+---A script variable of the next zombie a room's `sce_em_set` places in a
+---slot, for a work byte the script keeps in a variable and the original
+---leaves as the work's memory held it (`Em_27`'s history of `Cdir_y`).
+---@param pair string `"ROOM:SLOT"`, the room in three hex digits.
+---@param index integer The variable.
+---@param value integer
+function HookApi:set_re2_enemy_var(pair, index, value) end
+
 -- # Screens and logging
 
 ---Run `entry` as the save/load screen instead of the ported original.

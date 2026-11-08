@@ -1843,12 +1843,13 @@ mod tests {
         assert_eq!(repeated_names(&names), ["pos"]);
     }
 
-    const SCRIPTS: [&str; 12] = [
+    const SCRIPTS: [&str; 13] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
+        include_str!("../../games/re2/enemy/27/enemy.lua"),
         include_str!("../../games/re2/enemy/29/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2d/enemy.lua"),
@@ -2813,6 +2814,335 @@ mod tests {
         assert_eq!(young.get("died"), 0);
         let young = run_young(0x2002, &[], 2, setup);
         assert_eq!((young.get("died"), young.get("be")), (1, 0));
+    }
+
+    /// `SPIDER_STUB`'s work with what `enemy/27/enemy.lua` needs on top:
+    /// `Goto00` and `Goto00_ck` as the engine's (toward `TARGET`, or toward
+    /// `DEST_TARGET` for `Dest`), `Add_speedXYZ` along x, the clip's fields,
+    /// and `TIMERS`, `SPEED` and `PL_DC` to start from.
+    const EMBRYO_STUB: &str = "
+        w.timers = TIMERS or { [0] = 0, 0, 0, 0 }
+        w.spd = SPEED or w.spd
+        w.move_no, w.move_cnt, w.hokan, w.xz, w.hidden, w.shadow = 0, 0, 0, 0, 0, -1
+        w.rot_by = -1
+        function e:clip(n, c, h)
+            w.clips[#w.clips + 1] = n
+            w.move_no, w.move_cnt, w.hokan, w.frame = n, c, h, 0
+        end
+        function e:move_no() return w.move_no end
+        function e:set_move_no(v) w.move_no = v end
+        function e:set_hokan(v) w.hokan = v end
+        function e:set_kind(v) w.kind = v end
+        function e:set_hidden_parts(v) w.hidden = v end
+        function e:set_shadow(v) w.shadow = v end
+        function e:dest() return 7, 7 end
+        function e:goto_ck(x, z, rate)
+            local to = (x == 7 and z == 7) and (DEST_TARGET or target) or target
+            return turn_within(w.angle, to, rate)
+        end
+        function e:goto_point(x, z, rate) w.angle = goto_angle(w.angle, target, rate) end
+        function e:add_speed_xz() w.xz = w.xz + 1 end
+        function e:add_speed_xyz()
+            w.pos = { w.pos[1] + w.spd[1], w.pos[2] + w.spd[2], w.pos[3] }
+        end
+        function e:rot_apply(ax, ay, az, x, y, z) w.rot_by = ay; return x, y, z end
+        function e:pl_damage_cnt() return PL_DC or 0 end
+        function e:effect() w.blown = w.blown + 1 end
+        function e:kill() w.be = 0; w.r = { [0] = 0, 0, 0, 0 }; w.died = 1 end
+        for _, name in ipairs({ 'set_damage_cnt', 'set_damage_no', 'set_atd', 'spd' }) do
+            e[name] = function() end
+        end
+    ";
+
+    /// What `run_embryo` leaves, by name.
+    fn run_embryo(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Spider {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        lua.load(setup).exec().unwrap();
+        // Each tick is a call of its own, with its own budget, as in the game.
+        lua.globals()
+            .set(
+                "refill",
+                lua.create_function(move |_, ()| {
+                    budget.begin();
+                    Ok(())
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let script = include_str!("../../games/re2/enemy/27/enemy.lua");
+        lua.globals().set("DRAWS", draws.to_vec()).unwrap();
+        lua.globals().set("KIND", kind).unwrap();
+        lua.globals()
+            .set(
+                "goto_angle",
+                lua.create_function(|_, (angle, to, rate): (u16, u16, i32)| {
+                    Ok(goto(angle, to, rate))
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        lua.globals()
+            .set(
+                "turn_within",
+                lua.create_function(|_, (angle, to, rate): (u16, u16, i32)| {
+                    Ok(turn_within(angle, to, rate))
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        lua.load(format!(
+            "{SPIDER_STUB}
+             {EMBRYO_STUB}
+             {script}
+             for _ = 1, {ticks} do refill(); update(e) end
+             return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], r3 = w.r[3], life = w.life,
+                 be = w.be, kind = w.kind, angle = w.angle, spd = w.spd[1], spd_y = w.spd[2],
+                 timer0 = w.timers[0], timer1 = w.timers[1], timer2 = w.timers[2],
+                 timer3 = w.timers[3], drawn = drawn, h0 = w.vars[0] or 0,
+                 h5 = w.vars[5] or 0, rgb = w.vars[6] or 0, pos_x = w.pos[1],
+                 pos_y = w.pos[2], effects = w.bloods, squash_effects = w.blown,
+                 died = w.died, move_no = w.move_no, move_cnt = w.move_cnt,
+                 hokan = w.hokan, frame = w.frame, clips = #w.clips, xz = w.xz,
+                 hidden = w.hidden, shadow = w.shadow, rot_by = w.rot_by }}"
+        ))
+        .eval::<mlua::Table>()
+        .map(|table| {
+            let fields = "r0 r1 r2 r3 life be kind angle spd spd_y timer0 timer1 timer2 \
+                timer3 drawn h0 h5 rgb pos_x pos_y effects squash_effects died move_no \
+                move_cnt hokan frame clips xz hidden shadow rot_by"
+                .split_whitespace()
+                .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
+                .collect();
+            Spider(fields, Vec::new())
+        })
+        .unwrap()
+    }
+
+    fn routines(embryo: &Spider) -> (i64, i64, i64, i64) {
+        (
+            embryo.get("r0"),
+            embryo.get("r1"),
+            embryo.get("r2"),
+            embryo.get("r3"),
+        )
+    }
+
+    /// `FUN_004742e0`: a free embryo (`Type` 3) draws its life twice and
+    /// crawls; the room's template (`Type` 0) draws once, hides and does
+    /// nothing after.
+    #[test]
+    fn an_embryos_init() {
+        let embryo = run_embryo(3, &[1, 0], 1, "");
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!((embryo.get("life"), embryo.get("kind")), (2, 0x2003));
+        assert_eq!(embryo.get("be") & 0x440_0002, 0x440_0002);
+        assert_eq!((embryo.get("spd"), embryo.get("drawn")), (0x50, 2));
+        assert_eq!((embryo.get("shadow"), embryo.get("rgb")), (400, 0x80_8080));
+        let template = run_embryo(0, &[1], 1, "");
+        assert_eq!(routines(&template), (1, 0, 0, 0));
+        assert_eq!((template.get("life"), template.get("kind")), (2, 0x6000));
+        assert_eq!(template.get("be") & 0x400_0000, 0);
+        assert_eq!((template.get("hidden"), template.get("shadow")), (0x3FF, 0));
+        assert_eq!(template.get("drawn"), 1);
+        // The next tick does nothing, not even `Joint_move`.
+        let template = run_embryo(0, &[1], 2, "");
+        assert_eq!((template.get("drawn"), template.get("frame")), (1, 1));
+        assert_eq!(routines(&template), (1, 0, 0, 0));
+    }
+
+    /// The crawl's first tick: `Timer0`, `Timer2`'s refill and `Rnd & 3`,
+    /// the speed's steps, the turn by `Timer1`, and a step along the facing
+    /// of six ticks before, not the body's.
+    #[test]
+    fn the_crawl_starts_and_steps() {
+        let embryo = run_embryo(3, &[0, 0, 5, 3, 1], 2, "VARS = { [1] = 0x400 }");
+        assert_eq!(embryo.get("drawn"), 5);
+        assert_eq!(embryo.get("timer0"), 0x19 - 1);
+        assert_eq!((embryo.get("timer2"), embryo.get("timer3")), (13, 6));
+        // 0x50 - 10, then 13 * 3 as `Timer3` < `Timer2`.
+        assert_eq!(embryo.get("spd"), 0x50 - 10 + 39);
+        assert_eq!(embryo.get("rot_by"), 0x400);
+        assert_eq!(embryo.get("pos_x"), 0x50 - 10 + 39);
+        // `Dest` is behind it (0x800), on the left: `Timer1` -4 and -8 more.
+        assert_eq!(embryo.get("timer1"), 0xFFF4);
+        assert_eq!(embryo.get("angle"), 0xFFF4);
+    }
+
+    /// `Timer1` grows by 4 a tick toward `Dest`, and by 12 the other way
+    /// while above -0x40 (the original's comparisons, both against -0x40).
+    #[test]
+    fn the_crawl_turns_by_timer1() {
+        let embryo = run_embryo(3, &[1; 16], 4, "DEST_TARGET = 0x400");
+        assert_eq!(
+            (embryo.get("timer1"), embryo.get("angle")),
+            (12, 4 + 8 + 12)
+        );
+        let embryo = run_embryo(3, &[1; 16], 3, "DEST_TARGET = 0xC00");
+        assert_eq!(embryo.get("timer1"), 0x1_0000 - 24);
+        assert_eq!(embryo.get("angle"), 0x1_0000 - 36);
+    }
+
+    /// After each tick the newest of the history is `Cdir_y` and the oldest
+    /// is the facing five ticks before.
+    #[test]
+    fn the_history_shifts() {
+        // `Timer1` -12, -24, -36, -48, -60, -64: the angles after ticks 2 to 7
+        // are -12, -36, -72, -120, -180 and -244.
+        let embryo = run_embryo(3, &[1; 32], 7, "DEST_TARGET = 0xC00");
+        assert_eq!(embryo.get("angle"), 0x1_0000 - 244);
+        assert_eq!(embryo.get("h5"), embryo.get("angle"));
+        assert_eq!(embryo.get("h0"), 0x1_0000 - 12);
+        // Tick 7 stepped along tick 1's facing.
+        assert_eq!(embryo.get("rot_by"), 0);
+    }
+
+    /// As `Timer0` runs out, an odd draw slides (5), and another odd one
+    /// rests (7) instead; an even one keeps crawling. `Timer0` refills.
+    #[test]
+    fn the_crawl_leaves_for_5_or_7() {
+        let setup = "ROUTINES = { [0] = 1, 1, 1, 0 }; TIMERS = { [0] = 1, 0, 5, 2 }";
+        let embryo = run_embryo(0x2003, &[1, 1, 1, 5], 1, setup);
+        assert_eq!(routines(&embryo), (1, 7, 0, 0));
+        assert_eq!((embryo.get("timer0"), embryo.get("drawn")), (0x19, 4));
+        let embryo = run_embryo(0x2003, &[1, 1, 0, 5], 1, setup);
+        assert_eq!(routines(&embryo), (1, 5, 0, 0));
+        let embryo = run_embryo(0x2003, &[1, 0, 5], 1, setup);
+        assert_eq!(routines(&embryo), (1, 1, 1, 0));
+        assert_eq!((embryo.get("timer0"), embryo.get("drawn")), (0x19, 3));
+    }
+
+    /// `FUN_00474690`: within 3000 and facing the player within 0x80, the
+    /// jump starts on the same tick.
+    #[test]
+    fn the_pre_jumps_when_faced_and_near() {
+        let embryo = run_embryo(3, &[0; 8], 2, "DIST = 2999; TARGET = 0");
+        assert_eq!(routines(&embryo), (1, 2, 1, 0));
+        assert_eq!((embryo.get("spd"), embryo.get("spd_y")), (0x50 + 200, -180));
+        assert_eq!((embryo.get("move_no"), embryo.get("hokan")), (2, 3));
+        assert_eq!(embryo.get("drawn"), 2);
+        let embryo = run_embryo(3, &[0; 8], 2, "DIST = 3000; TARGET = 0");
+        assert_eq!(embryo.get("r1"), 1);
+        let embryo = run_embryo(3, &[0; 8], 2, "DIST = 2999; TARGET = 0x100");
+        assert_eq!(embryo.get("r1"), 1);
+    }
+
+    /// The jump rises at -180 less 15 a tick more each tick, takes clip 3
+    /// once falling, and lands on `Ground` into the crawl or, on an odd
+    /// draw, the rest; within 700 of a player who isn't being hurt it
+    /// latches on (4).
+    #[test]
+    fn the_jump_lands_or_latches() {
+        let setup = "ROUTINES = { [0] = 1, 2, 0, 0 }";
+        let embryo = run_embryo(0x2003, &[0], 5, setup);
+        assert_eq!(embryo.get("move_no"), 2);
+        let embryo = run_embryo(0x2003, &[0], 6, setup);
+        assert_eq!((embryo.get("move_no"), embryo.get("hokan")), (3, 7));
+        let embryo = run_embryo(0x2003, &[0], 10, setup);
+        assert_eq!((embryo.get("r1"), embryo.get("pos_y")), (2, 0));
+        let embryo = run_embryo(0x2003, &[0], 11, setup);
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!((embryo.get("pos_y"), embryo.get("spd")), (0, 200 - 0x96));
+        let embryo = run_embryo(0x2003, &[1], 11, setup);
+        assert_eq!(routines(&embryo), (1, 7, 0, 0));
+        let embryo = run_embryo(0x2003, &[0], 1, &format!("{setup}; DIST = 699"));
+        assert_eq!(routines(&embryo), (1, 4, 0, 0));
+        let embryo = run_embryo(0x2003, &[0], 1, &format!("{setup}; DIST = 699; PL_DC = 1"));
+        assert_eq!(routines(&embryo), (1, 2, 1, 0));
+    }
+
+    /// A player stepping within 400 squashes a crawling, sliding or resting
+    /// embryo: three effects and clip 9 from four draws.
+    #[test]
+    fn a_tread_in_crawl_slide_and_rest() {
+        for state in [1, 5, 7] {
+            let setup = format!(
+                "ROUTINES = {{ [0] = 1, {state}, 1, 0 }}; SPEED = {{ 50, 0, 0 }}; \
+                 DIST = 399; NOISE = 2"
+            );
+            let embryo = run_embryo(0x2003, &[1, 2, 3, 0x0D], 1, &setup);
+            assert_eq!(routines(&embryo), (3, 1, 1, 0), "state {state}");
+            assert_eq!((embryo.get("spd"), embryo.get("effects")), (0, 3));
+            assert_eq!((embryo.get("move_no"), embryo.get("move_cnt")), (9, 5));
+            assert_eq!(embryo.get("drawn"), 4);
+        }
+        for quiet in ["DIST = 399; NOISE = 1", "DIST = 400; NOISE = 2"] {
+            let setup = format!("ROUTINES = {{ [0] = 1, 7, 1, 0 }}; {quiet}");
+            let embryo = run_embryo(0x2003, &[0; 8], 1, &setup);
+            assert_eq!(embryo.get("r0"), 1, "{quiet}");
+        }
+    }
+
+    /// The slide (5) slows by `2 * Timer0` to a stop, waits, then either
+    /// crawls again or turns away speeding up to 100; the rest (7) slows by
+    /// `5 * Timer0`, waits, and a near player starts clip 0xD at once.
+    #[test]
+    fn the_slide_and_the_rest() {
+        let setup = "ROUTINES = { [0] = 1, 5, 0, 0 }; SPEED = { 10, 0, 0 }";
+        let embryo = run_embryo(0x2003, &[0, 1], 4, setup);
+        assert_eq!((embryo.get("r2"), embryo.get("timer0")), (2, 0x1E));
+        assert_eq!((embryo.get("spd"), embryo.get("xz")), (-2, 4));
+        let embryo = run_embryo(0x2003, &[0, 1], 4 + 31, setup);
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        let embryo = run_embryo(0x2003, &[0, 0, 0x10], 4 + 31, setup);
+        assert_eq!(routines(&embryo), (1, 5, 3, 0));
+        let embryo = run_embryo(0x2003, &[0, 0, 0x10], 4 + 31 + 10, setup);
+        assert_eq!((embryo.get("r1"), embryo.get("spd")), (5, 98));
+        assert_eq!(embryo.get("timer1"), 0x10 + 0x1E);
+        let embryo = run_embryo(0x2003, &[0, 0, 0x10], 4 + 31 + 11, setup);
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!(embryo.get("spd"), 100);
+
+        let setup = "ROUTINES = { [0] = 1, 7, 0, 0 }; SPEED = { 10, 0, 0 }";
+        let embryo = run_embryo(0x2003, &[0], 3, setup);
+        assert_eq!((embryo.get("r2"), embryo.get("timer0")), (2, 0x3C));
+        let embryo = run_embryo(0x2003, &[0], 3 + 60, setup);
+        assert_eq!(embryo.get("r1"), 7);
+        let embryo = run_embryo(0x2003, &[0], 3 + 61, setup);
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!(embryo.get("spd"), 0x50);
+        let near = format!("{setup}; DIST = 2499; CLIP_LEN = 3");
+        let embryo = run_embryo(0x2003, &[0], 4, &near);
+        assert_eq!((embryo.get("r2"), embryo.get("move_no")), (3, 0xD));
+        let embryo = run_embryo(0x2003, &[0], 6, &near);
+        assert_eq!(embryo.get("r2"), 3);
+        let embryo = run_embryo(0x2003, &[0], 7, &near);
+        assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!(embryo.get("spd"), 100);
+    }
+
+    /// A trodden embryo: two ticks to a stop, 103 of the squash, the fade's
+    /// 111 with the parts at `0x808080`, then `Kill_enemy_work`.
+    #[test]
+    fn a_trodden_embryo_squashes_and_goes() {
+        let setup = "ROUTINES = { [0] = 3, 1, 1, 0 }; TIMERS = { [0] = 0, 0, 0, 5 }; \
+            VARS = { [6] = 0x808080 }";
+        let embryo = run_embryo(0x2003, &[0], 1, setup);
+        assert_eq!((embryo.get("r2"), embryo.get("spd")), (1, 0));
+        let embryo = run_embryo(0x2003, &[0], 2, setup);
+        assert_eq!((embryo.get("r2"), embryo.get("drawn")), (2, 1));
+        let embryo = run_embryo(0x2003, &[0], 104, setup);
+        assert_eq!(embryo.get("r2"), 2);
+        let embryo = run_embryo(0x2003, &[0], 105, setup);
+        assert_eq!(embryo.get("r2"), 3);
+        assert_eq!(embryo.get("rgb"), 0x20_8020);
+        // `Timer0` 0x1E and 0x3C step the clip on.
+        assert_eq!((embryo.get("move_no"), embryo.get("hokan")), (2, 7));
+        let embryo = run_embryo(0x2003, &[0], 106, setup);
+        assert_eq!(routines(&embryo), (7, 0, 0, 0));
+        let embryo = run_embryo(0x2003, &[0], 216, setup);
+        assert_eq!((embryo.get("r1"), embryo.get("died")), (2, 0));
+        assert_eq!(embryo.get("life"), -1);
+        let embryo = run_embryo(0x2003, &[0], 217, setup);
+        assert_eq!((embryo.get("died"), embryo.get("be")), (1, 0));
+        // With `Timer3` 0 (a body that never crawled) the squash draws three
+        // more every 32 ticks for an effect.
+        let embryo = run_embryo(
+            0x2003,
+            &[0; 16],
+            105,
+            "ROUTINES = { [0] = 3, 1, 1, 0 }; VARS = { [6] = 0x808080 }",
+        );
+        assert_eq!((embryo.get("squash_effects"), embryo.get("drawn")), (3, 10));
     }
 
     /// A stand-in for the work, enough for `enemy/23/enemy.lua`'s init, wait,

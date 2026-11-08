@@ -411,6 +411,12 @@ pub(crate) const YOUNG_WATER: usize = 5;
 pub(crate) const YOUNG_GROUND: usize = 30;
 /// The cockroaches, `Em_29`, whose script is `enemy/29/enemy.lua`.
 pub const ROACH_ID: u8 = 0x29;
+/// The G embryos, `Em_27`, whose script is `enemy/27/enemy.lua`.
+pub const EMBRYO_ID: u8 = 0x27;
+/// `Em_27`'s `Sca_ck_em` mask.
+const EMBRYO_MASK: u16 = 0x400;
+/// `Ground`, which `Game_loop`'s pass after the moves finds under it.
+pub(crate) const EMBRYO_GROUND: usize = 30;
 /// The ivy, `Em_2E`, whose script is `enemy/2e/enemy.lua`.
 pub const IVY_ID: u8 = 0x2E;
 /// The vines, `Em_2F` (`enemy/2f/enemy.lua`): the ivy's, which it grows from a
@@ -1156,6 +1162,31 @@ impl Em<'_, '_, '_> {
         self.work().neck.position = last.or(head);
     }
 
+    /// `Em_27`: `Root_ck` toward the player before the stop test, then the
+    /// script (the routine, the history of `Cdir_y` and `Em_seq_sound`), and,
+    /// unless the script took the work out of play, `Oba_set_ofs` (it has no
+    /// `Oba_ck_em`) and `Sca_ck_em` with `0x400`. `nFloor` stays as
+    /// `Sce_em_set` left it.
+    fn run_embryo(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.z.vars[EMBRYO_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
+        self.z.parts = self.mover.posed_parts();
+        self.script();
+        if *self.be_flg != 0 {
+            self.oba_set_ofs();
+            self.sca_ck_masked(EMBRYO_MASK);
+        }
+    }
+
     /// `Em_23`, which leaves the rest to its script. It doesn't run
     /// `Sca_ck_em` or `Oba_ck_em`: its boxes push the others instead
     /// (`Oba_ck_hit` of each work against it), which isn't ported yet.
@@ -1392,6 +1423,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == EM2D_ID {
             self.run_em2d();
+            return;
+        }
+        if self.mover.tick.id == EMBRYO_ID {
+            self.run_embryo();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

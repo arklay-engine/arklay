@@ -585,10 +585,10 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 
 
 def zombie_trace(game: Game) -> str:
-    """The zombies, lickers, Mr. X, the plants, the spiders, the cockroaches, the alligator, room 205's bodies (`Em_2D`), G1, G2 and G3 in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    """The zombies, lickers, Mr. X, the plants, the spiders, the cockroaches, the G embryos, the alligator, room 205's bodies (`Em_2D`), G1, G2 and G3 in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     for slot, pointer in enumerate(enemy_slots(game)):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x23, 0x24, 0x25, 0x26, 0x29, 0x2A, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x39)):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) <= 0x22 or game.u8(pointer + ENTITY_ID) in (0x23, 0x24, 0x25, 0x26, 0x27, 0x29, 0x2A, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x39)):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)
