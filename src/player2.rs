@@ -3509,12 +3509,17 @@ impl Mover<'_, '_> {
         })
     }
 
+    /// `pl_mv_04` (`0x4DAE70`): the turn on the spot. Its footfalls are a
+    /// step's noise (`0x989EEE |= 2`), which a listening licker hears.
     fn pl_mv_rotate(&mut self) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&ROTATE_CLIPS));
             self.work.spd = [0; 3];
         }
         self.joint_move();
+        if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+            self.work.noise |= 2;
+        }
         self.footstep(0);
     }
 
@@ -7076,6 +7081,24 @@ mod tests {
             angle: 0x800,
             ..neck_target(2, 0, 0.0, distance)
         }
+    }
+
+    #[test]
+    fn a_turns_footfall_is_a_steps_noise() {
+        let mut setup = Setup::new(10);
+        (setup.clips, setup.keyframes) = bank(10, 40, 10);
+        for clip in &mut setup.clips {
+            for frame in &mut clip.frames {
+                frame.flags = FRAME_FOOTSTEP;
+            }
+        }
+        let left = Input {
+            left: true,
+            ..Input::default()
+        };
+        setup.tick(left, 200);
+        assert_eq!(setup.work.routine[1], MOVE_ROTATE);
+        assert_ne!(setup.work.noise & 2, 0, "a footfall's noise");
     }
 
     #[test]
