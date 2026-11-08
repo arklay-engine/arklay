@@ -83,7 +83,10 @@ impl GameState {
         // `fg_status & 0x8000`: the get-item window, the status screen or
         // the box is due or up. (`Sce_Item`'s crouch raises it only when
         // the crouch ends, and no press reaches the areas mid-crouch.)
-        if self.re2_item_get.is_some() || self.re2_box.is_some() || self.re2_box_entrance.active {
+        if self.re2_item_get.is_some()
+            || self.re2_box.is_some()
+            || self.re2_back == super::save2::BackRoutine::ItemBox
+        {
             return;
         }
         // `fg_status & 0x40`: a message holds the game.
@@ -407,7 +410,7 @@ mod tests {
     fn the_gates_hold_the_drawer() {
         let gates: [fn(&mut GameState); 5] = [
             |game| game.message.active = true,
-            |game| game.re2_box_entrance.active = true,
+            |game| game.re2_back = crate::game::save2::BackRoutine::ItemBox,
             |game| game.re2.player.damage_cnt = 0x80,
             |game| game.re2_hikidashi.active = true,
             |game| game.camera.current_cut = 1,
