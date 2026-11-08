@@ -16473,15 +16473,15 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
     // blanked for a closed controls latch, and the message gate is open here.
-    if pad.action_pressed {
+    // RE2 checks after the move instead, from `fg_status`'s 0x200000
+    // (`Sce_at`, [`crate::player2::Work::check`]).
+    if pad.action_pressed && !context.game.is_re2_room {
         context.game.player_action_press(context.player);
         // `check_action_object` follows the climb scan in the same dispatch,
         // still from the frame-start position, and only while no locked or
         // weapon behaviour owns the frame-1 dispatch.
         if context.player.locked == player::LockedAction::None
             && context.player.weapon.behavior == 0
-            && (!context.game.is_re2_room
-                || crate::player2::takes_check_key(&context.game.re2.player))
         {
             context
                 .game
@@ -17142,8 +17142,12 @@ fn tick_room_timed(
     // are not part of this pass: the press edge fired them through
     // `check_action_object` at the top of the player's dispatch.
     {
+        // `Sce_at`: RE2's action areas answer the check a `pl_br_*` asked for
+        // this tick, from where the move left the player.
+        let check = context.game.is_re2_room
+            && std::mem::take(&mut context.game.re2.player.check);
         let mut host = game::ScdGameHost::new(context.game);
-        host.interact(context.player.pos, context.player.angle, false);
+        host.interact(context.player.pos, context.player.angle, check);
     }
     // Slot 2's back routine. `Item_box_entrance`, the routine `Sce_Itembox`
     // set: the lid swings, and when it stops the box's screen opens on the

@@ -6537,7 +6537,17 @@ impl GameState {
         // `Sce_at` clears the player's `Water` before its walk; a water area
         // (`Sce_Water`) sets it again.
         self.re2.player.water = 0;
-        self.probe_actions(pos, angle, 1, pos, action_press);
+        if self.is_re2_room {
+            // `Sce_at`: the action areas first, the first that answers
+            // (`Sce_at_check(pPl, 1, 0x10)`), then every other area
+            // (`Sce_at_check(pPl, 1, 0)`).
+            if action_press {
+                self.probe_actions(pos, angle, 0, pos, true);
+            }
+            self.probe_actions(pos, angle, 1, pos, false);
+        } else {
+            self.probe_actions(pos, angle, 1, pos, action_press);
+        }
         if self.is_re2_room {
             self.probe_enemy_areas();
         }
@@ -18999,6 +19009,37 @@ mod tests {
         }
         state.probe_actions([0, 0, 0], 0, 1, [0, 0, 0], false);
         assert!(!state.re2.flag(5, 8));
+    }
+
+    /// `Sce_at` (0x4EA0D0): with `fg_status`'s 0x200000 up, the first action
+    /// area that holds the player answers (`Sce_at_check(pPl, 1, 0x10)`
+    /// returns on it); every other area answers each tick, check or not.
+    #[test]
+    fn re2s_check_answers_the_first_action_area_and_every_other_one() {
+        let mut state = game();
+        state.is_re2_room = true;
+        let area = |slot: u8, flags: u8, bit: u8| RoomAction {
+            slot,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_FLAG_CHANGE,
+            handler: 1,
+            flags,
+            params: [5, 0, bit, 0, 1, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        };
+        // Two action areas (`sat` 0x10, at the body) and one that isn't.
+        state.room_actions[2] = Some(area(2, 0xC1, 8));
+        state.room_actions[3] = Some(area(3, 0xC1, 9));
+        state.room_actions[4] = Some(area(4, 0x41, 10));
+        state.interact([0, 0, 0], 0, false);
+        assert!(!state.re2.flag(5, 8) && !state.re2.flag(5, 9));
+        assert!(state.re2.flag(5, 10));
+        state.interact([0, 0, 0], 0, true);
+        assert!(state.re2.flag(5, 8), "the first action area");
+        assert!(!state.re2.flag(5, 9), "only the first");
     }
 
     #[test]

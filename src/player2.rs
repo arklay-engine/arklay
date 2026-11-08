@@ -415,6 +415,11 @@ pub struct Work {
     /// Last tick's `Key`, and `Key_trg`: what this tick's added to it.
     last_key: u16,
     key_trg: u16,
+    /// `fg_status`'s `0x200000`: a `pl_br_*` saw the action key go down with
+    /// no stairs or climb to take it, so this tick's `Sce_at` checks the
+    /// action areas (`Sce_at_check(pPl, 1, 0x10)`). `Psx_main` clears it at
+    /// the frame's end.
+    pub check: bool,
     /// `Be_flg`'s bits that `Oba_ck_hit` reads.
     pub be_flg: u32,
     /// `DAT_0098a0a4`: the slot of the enemy that has hold of the player.
@@ -902,6 +907,7 @@ impl Default for Work {
             aimed_again: false,
             last_key: 0,
             key_trg: 0,
+            check: false,
             be_flg: 1,
             held_by: None,
             held_kill: false,
@@ -1332,6 +1338,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     let key = key_word(&tick.input);
     work.key_trg = key & !work.last_key;
     work.last_key = key;
+    work.check = false;
     if tick.stopped {
         // The head isn't placed on a stopped tick, so it doesn't follow what
         // moves the body either (a door's new position, for one).
@@ -1470,19 +1477,6 @@ pub fn player_held(
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.latch_parts();
-}
-
-/// Whether this tick's `pl_br_*` can take the check key: only `pl_br_00` to
-/// `pl_br_04` and `pl_br_09` (past its fourth step) raise `fg_status`'s
-/// `0x200000`, for `Sce_at`'s press pass. A player held, hurt or aiming
-/// presses nothing.
-pub fn takes_check_key(work: &Work) -> bool {
-    work.routine[0] == MODE_MOVE
-        && match work.routine[1] {
-            MOVE_IDLE..=MOVE_ROTATE => true,
-            MOVE_JUMP_DOWN => work.routine[3] > 4,
-            _ => false,
-        }
 }
 
 /// Whether [`player_held`] runs the player, not [`player_move`].
@@ -1659,15 +1653,28 @@ impl Mover<'_, '_> {
     }
 
     /// The action key at stairs, whether or not `Sca_hit_stairs` takes it.
+    /// Held or new, it tries the stairs and then a climb; new and taken by
+    /// neither, it asks for this tick's check ([`Work::check`]).
     fn stairs_branch(&mut self, key: u16) -> bool {
         if key & KEY_ACTION == 0 {
             return false;
         }
-        let Some(stairs) = self.stairs else {
-            return self.updown_ck();
-        };
-        self.sca_hit_stairs(stairs);
-        true
+        if let Some(stairs) = self.stairs {
+            self.sca_hit_stairs(stairs);
+            return true;
+        }
+        if self.updown_ck() {
+            return true;
+        }
+        self.raise_check();
+        false
+    }
+
+    /// `fg_status |= 0x200000` on `Key_trg`'s action bit.
+    fn raise_check(&mut self) {
+        if self.work.key_trg & KEY_ACTION != 0 {
+            self.work.check = true;
+        }
     }
 
     /// `Oma_pl_updown_ck`, without the object models: a box to climb in front
@@ -1739,6 +1746,14 @@ impl Mover<'_, '_> {
         }
         if key & KEY_TURN != 0 {
             self.set_routine(MOVE_ROTATE);
+        }
+        // `pl_br_09` asks for the check first and then tries the stairs, with
+        // no climb.
+        if self.work.key_trg & KEY_ACTION != 0 {
+            self.work.check = true;
+            if let Some(stairs) = self.stairs {
+                self.sca_hit_stairs(stairs);
+            }
         }
         self.aim_branch(key);
     }
@@ -2257,6 +2272,8 @@ impl Mover<'_, '_> {
             return;
         }
         self.turn(key, &BACK_TURN);
+        // `pl_br_03` doesn't try the stairs or a climb.
+        self.raise_check();
         self.aim_branch(key);
     }
 
@@ -6244,6 +6261,53 @@ mod tests {
         assert_eq!(setup.work.neck.target, None, "else its own");
     }
 
+    /// `pl_br_00` (0x4D9D60): the button going down, with no stairs and no
+    /// climb to take it, raises `fg_status`'s 0x200000 for `Sce_at`; held,
+    /// it doesn't, and the aim (`pl_mv05`) never does.
+    #[test]
+    fn a_new_press_while_standing_asks_for_the_check() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 1, 0];
+        let fire = Input {
+            fire: true,
+            ..Input::default()
+        };
+        setup.tick(fire, 200);
+        assert!(setup.work.check);
+        setup.tick(fire, 200);
+        assert!(!setup.work.check, "held");
+        setup.tick(Input::default(), 200);
+        assert!(!setup.work.check);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 0];
+        setup.tick(fire, 200);
+        assert!(!setup.work.check, "aiming");
+    }
+
+    /// `pl_br_03` (0x4DA6C0) asks for the check while backing up, and
+    /// `pl_br_09` (0x4DB930) once the landing has run four frames.
+    #[test]
+    fn backing_up_and_landing_ask_for_the_check_too() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_BACKWARD, 1, 0];
+        let input = Input {
+            down: true,
+            fire: true,
+            ..Input::default()
+        };
+        setup.tick(input, 200);
+        assert!(setup.work.check);
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 0, 5];
+        setup.tick(
+            Input {
+                fire: true,
+                ..Input::default()
+            },
+            200,
+        );
+        assert!(setup.work.check);
+    }
+
     #[test]
     fn the_neck_turns_to_plc_necks_aim_and_back() {
         let mut setup = Setup::new(0);
@@ -7678,34 +7742,49 @@ mod tests {
     fn the_action_key_raises_the_shot_bit_too() {
         // `Pad_set`'s row 0 gives raw `0x80` the shot, the action and the
         // confirm, so `Gacha_ch`'s mask sees an action press.
-        let input = Input {
-            action_pressed: true,
-            ..Input::default()
-        };
-        let key = key_word(&input);
-        assert_eq!(
-            key & (KEY_FIRE | KEY_ACTION | KEY_CONFIRM),
-            KEY_FIRE | KEY_ACTION | KEY_CONFIRM
-        );
-        assert_ne!(key & 0x34F, 0);
+        // The fire key is the same button, so it raises the action bit that
+        // `pl_br_*` checks with.
+        for input in [
+            Input {
+                action_pressed: true,
+                ..Input::default()
+            },
+            Input {
+                fire: true,
+                ..Input::default()
+            },
+        ] {
+            let key = key_word(&input);
+            assert_eq!(
+                key & (KEY_FIRE | KEY_ACTION | KEY_CONFIRM),
+                KEY_FIRE | KEY_ACTION | KEY_CONFIRM
+            );
+            assert_ne!(key & 0x34F, 0);
+        }
     }
 
+    /// Only `pl_br_00` to `pl_br_04`, and `pl_br_09` past its fourth step,
+    /// raise `fg_status`'s `0x200000`: aiming or hurt, a press checks
+    /// nothing. (A held player runs [`player_held`], with no `pl_br_*`.)
     #[test]
     fn only_the_pads_branches_take_the_check_key() {
-        let at = |routine: [u8; 4]| {
-            takes_check_key(&Work {
-                routine,
-                ..Work::default()
-            })
+        let fire = Input {
+            fire: true,
+            ..Input::default()
         };
-        assert!(at([MODE_MOVE, MOVE_IDLE, 0, 0]));
-        assert!(at([MODE_MOVE, MOVE_ROTATE, 0, 0]));
-        assert!(!at([MODE_MOVE, MOVE_AIM, 0, 0]));
-        assert!(!at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 4]));
-        assert!(at([MODE_MOVE, MOVE_JUMP_DOWN, 0, 5]));
-        // A zombie's grab: `pl_br_*` doesn't run, so a press opens no door.
-        assert!(!at([MODE_HELD, 1, 0, 0]));
-        assert!(!at([MODE_DAMAGE, 0, 0, 0]));
+        for (routine, checks) in [
+            ([MODE_MOVE, MOVE_IDLE, 1, 0], true),
+            ([MODE_MOVE, MOVE_ROTATE, 1, 0], true),
+            ([MODE_MOVE, MOVE_AIM, 1, 0], false),
+            ([MODE_MOVE, MOVE_JUMP_DOWN, 0, 4], false),
+            ([MODE_MOVE, MOVE_JUMP_DOWN, 0, 5], true),
+            ([MODE_DAMAGE, 0, 0, 0], false),
+        ] {
+            let mut setup = Setup::new(0);
+            setup.work.routine = routine;
+            setup.tick(fire, 200);
+            assert_eq!(setup.work.check, checks, "{routine:?}");
+        }
     }
 
     #[test]
