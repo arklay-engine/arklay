@@ -1067,6 +1067,11 @@ impl UserData for Api {
             Ok(i32::from(em.world.rnd.draw()) % count)
         });
         methods.add_method_mut("area_count", |_, e, ()| Ok(e.em().world.guides.len()));
+        // `Guide_check` at a point: the last guide area holding it, or 0xff.
+        methods.add_method_mut("guide_at", |_, e, (x, z): (i32, i32)| {
+            let guides = e.em().world.guides;
+            Ok(super::guide_check(guides, x as i16, z as i16).unwrap_or(0xFF))
+        });
         // `Goto00_ck`: 0 once within `rate`, or the way to turn.
         // `Hit_ck_point4` of the body's place on the current cut's view
         // (`DWORD_00988630`); true when the cut has none.

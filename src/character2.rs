@@ -220,12 +220,20 @@ pub fn player_held(
         .get(slot)
         .and_then(|character| character.as_deref())
         .map_or(0, crate::zombie2::plant_aim);
+    let holder_move_cnt = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .map_or(0, |character| character.work.move_cnt);
     let re2 = &mut game.re2;
     let mut held = player2::Held {
         holder,
         holder_angle,
         holder_aim,
         holder_id,
+        holder_move_cnt,
         draw_buffer: re2.draw_buffer,
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,

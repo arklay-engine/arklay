@@ -1463,6 +1463,8 @@ pub struct Held<'a> {
     pub holder_aim: u16,
     /// Its id, whose table says what becomes of the player.
     pub holder_id: u8,
+    /// Its `Move_cnt`, which G3's kill starts the player's clip from.
+    pub holder_move_cnt: u8,
     /// `DWORD_009888d8`'s low byte, which some of the frames wait on.
     pub draw_buffer: u8,
     pub rnd: &'a mut crate::zombie2::Rnd,
@@ -3938,6 +3940,14 @@ impl Mover<'_, '_> {
             self.em30_killed(held);
             return;
         }
+        if held.holder_id == crate::zombie2::G3_ID {
+            if self.work.routine[0] == MODE_HELD_DIE {
+                self.em33_killed(held);
+            } else {
+                self.em33_held();
+            }
+            return;
+        }
         if held.holder_id == crate::zombie2::G2_ID {
             if self.work.routine[0] == MODE_HELD_DIE {
                 self.em31_killed(held);
@@ -4702,6 +4712,72 @@ impl Mover<'_, '_> {
         let [x, _, z] = held.holder;
         let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
         self.player.angle = goto(self.player.angle, target, 0x100);
+    }
+
+    /// `0x49a790`, `em_damage_table[0x33]`'s `Routine_1` 0 and 1: knocked
+    /// back by G3's swipe on the player's own clip 3 or 4 (`+0x108` and
+    /// `+0x17c`, the model's bank, not G3's), sliding at 600 and slowing by
+    /// 90 a tick, toward `0x800` for `Routine_1` 0 and 0 for 1 (`Add_speedXZ`
+    /// adds the turn to `Cdir_y`, so `Timer0` is the heading). Its
+    /// `Routine_1` 2 and 3 (`0x49a890`) aren't ported.
+    fn em33_held(&mut self) {
+        let side = self.work.routine[1];
+        if side > 1 {
+            return;
+        }
+        match self.work.routine[2] {
+            0 => {
+                self.work.neck.flags |= 1;
+                self.work.spd[1] = 0;
+                self.work.spd[2] = 0;
+                self.work.routine[2] = 1;
+                self.work.bank = Bank::Pld;
+                self.held_clip(3 + side, 0xF);
+                self.work.timers[0] = if side == 0 { 0x800 } else { 0 };
+                self.work.spd[0] = 600;
+                self.work
+                    .sounds
+                    .push(0x400_0001 | (u32::from(side & 1) + 1) << 16);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.work.bank = Bank::Pld;
+        if self.joint_move_late(0x100) {
+            self.work.neck.flags &= !1;
+            self.work.damage_cnt &= 0x7F;
+            self.work.routine = [MODE_MOVE, 0, 0, 0];
+            self.work.bank = Bank::Weapon;
+        }
+        let (dx, dz) = rotate(self.work.timers[0], i32::from(self.work.spd[0]), 0);
+        self.player.pos[0] += dx;
+        self.player.pos[2] += dz;
+        self.work.spd[0] = (self.work.spd[0] - 0x5A).max(0);
+    }
+
+    /// `FUN_0049a980`, `em_die_table[0x33]`: killed in G3's grip, on its
+    /// clip 6 from its own frame less one, from `Null_pos_set` turned half
+    /// round, with a life of -1. Its blood at part 8 and the parts its frame
+    /// 0x10000 hides aren't ported.
+    fn em33_killed(&mut self, held: &mut Held<'_>) {
+        match self.work.routine[1] {
+            0 => {
+                self.work.routine[1] = 1;
+                self.work.neck.flags |= 1;
+                *held.life = -1;
+                self.work.bank = Bank::Held;
+                let (cnt, carry) = held.holder_move_cnt.overflowing_add(0xFF);
+                self.work.move_no = 6;
+                self.work.move_cnt = cnt;
+                self.work.hokan = 0xE + u8::from(carry);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.work.bank = Bank::Held;
+        self.null_pos_set(0x800);
+        let ended = self.joint_move_late(0x100);
+        self.work.routine[1] += u8::from(ended);
     }
 
     /// `FUN_00496180`, `em_die_table[0x31]`'s `Routine_1` 0: killed in G2's
@@ -6557,6 +6633,7 @@ mod tests {
                 holder_angle: 0,
                 holder_aim: 0,
                 holder_id: 0x10,
+                holder_move_cnt: 0,
                 draw_buffer: 0,
                 rnd: &mut rnd,
                 life,
@@ -6640,6 +6717,7 @@ mod tests {
             holder_angle: 0,
             holder_aim: 0,
             holder_id: crate::zombie2::CROW_ID,
+            holder_move_cnt: 0,
             draw_buffer: 0,
             rnd: &mut rnd,
             life: &mut life,

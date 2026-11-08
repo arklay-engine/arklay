@@ -1296,6 +1296,12 @@ function Re2EnemyApi:rnd_area() end
 ---@return integer count
 function Re2EnemyApi:area_count() end
 
+---`Guide_check` at a point: the last guide area holding it, or 0xff when none does.
+---@param x integer
+---@param z integer
+---@return integer area
+function Re2EnemyApi:guide_at(x, z) end
+
 ---Whether the room has guide areas.
 ---@return boolean has
 function Re2EnemyApi:has_guides() end

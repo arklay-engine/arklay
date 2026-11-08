@@ -382,6 +382,8 @@ pub const G2_ID: u8 = 0x31;
 /// G3, William Birkin's third form, `Em_33`, whose script is
 /// `enemy/33/enemy.lua`.
 pub const G3_ID: u8 = 0x33;
+/// G3's script field for `+0x225`, which `Em_33` keeps.
+const G3_STUCK: usize = 19;
 /// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
 /// point of `+0x21b`.
 const G1_FLAGS: usize = 3;
@@ -1195,6 +1197,16 @@ impl Em<'_, '_, '_> {
         self.z.last_routine = self.work().routine;
         self.oba_ck_em();
         self.sca_ck_em();
+        // `+0x225` counts the ticks it has been held against a wall, which
+        // routine 2 turns away from at 20.
+        let [x, _, z] = self.mover.player.pos;
+        let [old_x, old_z] = self.mover.player.collision_mirror;
+        let stuck = &mut self.z.vars[G3_STUCK];
+        if (x - old_x).abs() < 12 && (z - old_z).abs() < 12 && self.z.sca_info & 1 != 0 {
+            *stuck = (*stuck + 1) & 0xFF;
+        } else {
+            *stuck = 0;
+        }
         self.z.parts = self.mover.posed_parts();
     }
 
