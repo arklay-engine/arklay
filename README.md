@@ -168,6 +168,19 @@ cargo run -- re1.akpak --ui game --room 101 \
   --setup-script oracle/saves/pause_chris_101.lua \
   --save-out out/savedat1.dat
 
+# Drive the engine from a Lua script: boot a room, hold buttons, tick, and
+# print or capture what happens (docs/scripting/lua/script.md). Without
+# --headless a window shows every tick
+cat > walk.lua <<'LUA'
+load_game_pack("re1.akpak")
+load_room("10A")
+hold("forward")
+tick(30)
+print(json({ pos = { game:player_pos() }, health = game:health() }))
+capture("walk.png")
+LUA
+cargo run -- script --headless walk.lua
+
 # Headless capture (no display)
 cargo run -- re1.akpak --room 100 --player 0 --capture cut0.bmp
 # An RE2 room (letter stages A-G name rooms too, e.g. --room G01), in a debug

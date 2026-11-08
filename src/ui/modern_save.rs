@@ -144,7 +144,7 @@ impl ModernSaveScreen {
                 self.result = Some(ScreenResult::Done(ScreenAction::Resume));
             }
             // The list stays up, so the player can pick another file.
-            Err(err) => eprintln!("warning: could not save: {err:#}"),
+            Err(err) => crate::warning!("warning: could not save: {err:#}"),
         }
     }
 }

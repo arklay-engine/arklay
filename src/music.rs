@@ -116,10 +116,10 @@ pub fn load(pack: &Pack, options: player::Options) -> MusicTables {
             Ok(()) => match scratch.music.validate() {
                 Ok(()) => return scratch.music,
                 Err(err) => {
-                    eprintln!("[lua] {MUSIC_ENTRY}: {err}; using the built-in music tables")
+                    crate::warning!("[lua] {MUSIC_ENTRY}: {err}; using the built-in music tables")
                 }
             },
-            Err(err) => eprintln!("[lua] {err}; using the built-in music tables"),
+            Err(err) => crate::warning!("[lua] {err}; using the built-in music tables"),
         }
     }
     load_builtin(options)
@@ -137,13 +137,13 @@ pub fn load_builtin(options: player::Options) -> MusicTables {
     let mut scratch = GameState::default();
     scratch.player_options = options;
     if let Err(err) = crate::lua::run_chunk(&mut scratch, source.as_bytes(), MUSIC_ENTRY, 0) {
-        eprintln!("[lua] built-in {MUSIC_ENTRY}: {err}");
+        crate::warning!("[lua] built-in {MUSIC_ENTRY}: {err}");
         return MusicTables::default();
     }
     match scratch.music.validate() {
         Ok(()) => scratch.music,
         Err(err) => {
-            eprintln!("[lua] built-in {MUSIC_ENTRY}: {err}");
+            crate::warning!("[lua] built-in {MUSIC_ENTRY}: {err}");
             MusicTables::default()
         }
     }

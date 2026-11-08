@@ -547,7 +547,7 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
         let strings = match pack.read(&entry).and_then(|data| room_strings(&data)) {
             Ok(strings) => strings,
             Err(error) => {
-                eprintln!("warning: {entry}: {error:#}");
+                crate::warning!("warning: {entry}: {error:#}");
                 continue;
             }
         };
@@ -560,7 +560,7 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
                 None => String::new(),
                 Some(Ok(variant)) => format!("{variant}_"),
                 Some(Err(error)) => {
-                    eprintln!("warning: {entry}: {error:#}");
+                    crate::warning!("warning: {entry}: {error:#}");
                     continue;
                 }
             };
@@ -578,7 +578,7 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
             .map(|(key, value)| (key.clone(), value.as_str()));
         match crate::language::Language::from_values(values, &format!("room strings for {tag}")) {
             Ok(language) => layers.push((tag.clone(), language)),
-            Err(error) => eprintln!("warning: {error:#}"),
+            Err(error) => crate::warning!("warning: {error:#}"),
         }
     }
     layers

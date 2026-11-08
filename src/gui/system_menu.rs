@@ -460,10 +460,10 @@ impl SystemMenu {
                 "quit" => requests.push(MenuRequest::Quit),
                 "key_config" | "pad_config" => {
                     if let Err(err) = self.open_key_config(name == "pad_config") {
-                        eprintln!("warning: key configuration: {err:#}");
+                        crate::warning!("warning: key configuration: {err:#}");
                     }
                 }
-                other => eprintln!("warning: menu: unknown action {other:?}"),
+                other => crate::warning!("warning: menu: unknown action {other:?}"),
             },
             UiOutput::Changed { path, value } => {
                 let id = path

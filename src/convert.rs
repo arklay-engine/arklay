@@ -1057,7 +1057,7 @@ pub(crate) fn finish_pack(
 
     // The bar is gone now, so the warnings and the final status read cleanly.
     for warning in warnings {
-        eprintln!("warning: {warning}");
+        crate::warning!("warning: {warning}");
     }
 
     // The report is buffered and written once the pack has landed, so a
@@ -1170,7 +1170,7 @@ fn copy_music(
             .copied()
             .collect::<Vec<_>>()
             .join(", ");
-        eprintln!(
+        crate::warning!(
             "warning: missing {} music track(s): {shown}{}",
             missing.len(),
             if missing.len() > 4 { ", ..." } else { "" }
@@ -2781,7 +2781,7 @@ fn copy_font(
     let japanese = japanese.and_then(|path| match japanese_bmp(path) {
         Ok(bmp) => Some(bmp),
         Err(err) => {
-            eprintln!("warning: Japanese font sheet not packed: {err:#}");
+            crate::warning!("warning: Japanese font sheet not packed: {err:#}");
             None
         }
     });

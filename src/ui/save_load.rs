@@ -107,12 +107,12 @@ pub fn open_load_screen(
     if let Some(entry) = entry {
         match LuaScreen::open_load(entry, cx) {
             Ok(screen) => return Ok(Box::new(screen)),
-            Err(err) => eprintln!("warning: lua save screen {entry} unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: lua save screen {entry} unavailable: {err:#}"),
         }
     } else if modern(cx) {
         match ModernSaveScreen::open_load(cx) {
             Ok(screen) => return Ok(Box::new(screen)),
-            Err(err) => eprintln!("warning: modern load screen unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: modern load screen unavailable: {err:#}"),
         }
     }
     Ok(Box::new(LuaScreen::open_load(SAVE_LOAD_ENTRY, cx)?))
@@ -130,12 +130,12 @@ pub fn open_save_screen(
     if let Some(entry) = entry {
         match LuaScreen::open_save(entry, cx, file.clone(), ink_ribbon) {
             Ok(screen) => return Ok(Box::new(screen)),
-            Err(err) => eprintln!("warning: lua save screen {entry} unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: lua save screen {entry} unavailable: {err:#}"),
         }
     } else if modern(cx) {
         match ModernSaveScreen::open_save(cx, file.clone(), ink_ribbon) {
             Ok(screen) => return Ok(Box::new(screen)),
-            Err(err) => eprintln!("warning: modern save screen unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: modern save screen unavailable: {err:#}"),
         }
     }
     Ok(Box::new(LuaScreen::open_save(

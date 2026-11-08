@@ -163,7 +163,7 @@ mod imp {
                 let bytes = match pack.read(path) {
                     Ok(bytes) => bytes,
                     Err(err) => {
-                        eprintln!("[lua] cannot read hook {path}: {err:#}");
+                        crate::warning!("[lua] cannot read hook {path}: {err:#}");
                         continue;
                     }
                 };
@@ -174,7 +174,7 @@ mod imp {
                 )?;
                 budget.begin();
                 if let Err(err) = lua.load(&*bytes).set_name(path.clone()).exec() {
-                    eprintln!("[lua] failed to run {path}: {err}");
+                    crate::warning!("[lua] failed to run {path}: {err}");
                 }
             }
 
@@ -242,7 +242,7 @@ mod imp {
                 return;
             };
             if let Err(err) = self.call::<Value>(&function, game, Value::Nil) {
-                eprintln!("[lua] on_init disabled: {err}");
+                crate::warning!("[lua] on_init disabled: {err}");
                 self.hooks.borrow_mut().init = None;
             }
         }
@@ -254,7 +254,7 @@ mod imp {
                 return;
             };
             if let Err(err) = self.call::<Value>(&function, game, Value::Nil) {
-                eprintln!("[lua] on_room_load disabled: {err}");
+                crate::warning!("[lua] on_room_load disabled: {err}");
                 self.hooks.borrow_mut().room_load = None;
             }
         }
@@ -265,7 +265,7 @@ mod imp {
                 return;
             };
             if let Err(err) = self.call::<Value>(&function, game, tick) {
-                eprintln!("[lua] on_tick disabled: {err}");
+                crate::warning!("[lua] on_tick disabled: {err}");
                 self.hooks.borrow_mut().tick = None;
             }
         }
@@ -280,7 +280,7 @@ mod imp {
                 Ok(Some(value)) => Some(value.clamp(0, i64::from(u16::MAX)) as u16),
                 Ok(None) => None,
                 Err(err) => {
-                    eprintln!("[lua] on_message disabled: {err}");
+                    crate::warning!("[lua] on_message disabled: {err}");
                     self.hooks.borrow_mut().message = None;
                     None
                 }
@@ -400,6 +400,53 @@ mod imp {
             // `--authentic`, the original's item rules.
             methods.add_method("authentic", |_lua, game, ()| {
                 Ok(game.player_options.authentic)
+            });
+
+            // The read-only player and room getters below are what a driver
+            // script (`arklay script`) inspects between ticks; hooks may use
+            // them too.
+
+            // `player_pos()`: the player entity's `x, y, z`.
+            methods.add_method("player_pos", |_lua, game, ()| {
+                let [x, y, z] = game.entities[0].pos;
+                Ok((x, y, z))
+            });
+
+            // `player_angle()`: the player's facing, `0..4096` per turn.
+            methods.add_method("player_angle", |_lua, game, ()| {
+                Ok(game.entities[0].angle & 0x0FFF)
+            });
+
+            methods.add_method("health", |_lua, game, ()| Ok(game.entities[0].health));
+
+            methods.add_method("max_health", |_lua, game, ()| Ok(game.max_health));
+
+            // `character()`: 0 Chris/Leon, 1 Jill/Claire.
+            methods.add_method("character", |_lua, game, ()| Ok(game.id.player_flag));
+
+            // `stage()`: the room id's stage number.
+            methods.add_method("stage", |_lua, game, ()| Ok(game.id.stage));
+
+            // `camera()`: the selected camera cut.
+            methods.add_method("camera", |_lua, game, ()| Ok(game.camera.current_cut));
+
+            // `frame()`: the session's completed fixed-tick count.
+            methods.add_method("frame", |_lua, game, ()| Ok(game.frame));
+
+            // `is_re2()`: whether the room runs on the RE 2 engine.
+            methods.add_method("is_re2", |_lua, game, ()| Ok(game.is_re2_room));
+
+            // `inventory()`: the held stacks in slot order, as
+            // `{ {id = ..., quantity = ...}, ... }`.
+            methods.add_method("inventory", |lua, game, ()| {
+                let items = lua.create_table()?;
+                for (index, stack) in game.inventory.iter().enumerate() {
+                    let item = lua.create_table()?;
+                    item.set("id", stack.id)?;
+                    item.set("quantity", stack.quantity)?;
+                    items.set(index + 1, item)?;
+                }
+                Ok(items)
             });
 
             methods.add_method("flag_get", |_lua, game, (bank, bit): (u8, u8)| {
@@ -930,16 +977,16 @@ pub fn seed_new_game_inventory(
         match pack.read(NEW_GAME_ENTRY) {
             Ok(bytes) => match imp::run_chunk(game, &bytes, NEW_GAME_ENTRY, character) {
                 Ok(()) => return,
-                Err(err) => eprintln!("[lua] {err}; using the shipped start items"),
+                Err(err) => crate::warning!("[lua] {err}; using the shipped start items"),
             },
-            Err(err) => eprintln!("[lua] cannot read {NEW_GAME_ENTRY}: {err:#}"),
+            Err(err) => crate::warning!("[lua] cannot read {NEW_GAME_ENTRY}: {err:#}"),
         }
         game.inventory.clear();
         game.rebuild_slots();
         game.rebecca_inventory = partner;
     }
     if let Err(err) = imp::run_chunk(game, builtin, NEW_GAME_ENTRY, character) {
-        eprintln!("[lua] built-in {NEW_GAME_ENTRY}: {err}");
+        crate::warning!("[lua] built-in {NEW_GAME_ENTRY}: {err}");
     }
 }
 
@@ -967,13 +1014,13 @@ pub fn seed_initial_state(
                 match imp::run_chunk(game, &bytes, crate::music::INITIAL_STATE_ENTRY, character) {
                     Ok(()) => return,
                     Err(err) => {
-                        eprintln!("[lua] {err}; using the shipped new-game state");
+                        crate::warning!("[lua] {err}; using the shipped new-game state");
                         *game = before.clone();
                     }
                 }
             }
             Err(err) => {
-                eprintln!(
+                crate::warning!(
                     "[lua] cannot read {}: {err:#}",
                     crate::music::INITIAL_STATE_ENTRY
                 );
@@ -982,7 +1029,7 @@ pub fn seed_initial_state(
         }
     }
     if let Err(err) = imp::run_chunk(game, builtin, crate::music::INITIAL_STATE_ENTRY, character) {
-        eprintln!(
+        crate::warning!(
             "[lua] built-in {}: {err}",
             crate::music::INITIAL_STATE_ENTRY
         );
@@ -1078,7 +1125,7 @@ pub fn registered_save_screen(pack: &crate::pack::Pack) -> Option<String> {
         Ok(Some(vm)) => vm,
         Ok(None) => return None,
         Err(err) => {
-            eprintln!("warning: Lua hooks unavailable: {err:#}");
+            crate::warning!("warning: Lua hooks unavailable: {err:#}");
             return None;
         }
     };

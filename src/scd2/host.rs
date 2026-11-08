@@ -1538,7 +1538,7 @@ impl GameHost<'_> {
         params: [u8; 8],
     ) {
         if slot >= ROOM_ACTION_SLOTS {
-            eprintln!("warning: RE2 area {slot} is past the action slots");
+            crate::warning!("warning: RE2 area {slot} is past the action slots");
             return;
         }
         self.game.re2.gates[slot] = ActionGate::new(quad, floor, parent);
@@ -1957,7 +1957,7 @@ impl GameHost<'_> {
         let at = |index: usize| ops.get(index).copied().unwrap_or(0);
         let slot = at(0) as usize;
         if slot >= ROOM_ACTION_SLOTS {
-            eprintln!("warning: RE2 door area {slot} is past the action slots");
+            crate::warning!("warning: RE2 door area {slot} is past the action slots");
             return;
         }
         let sat = at(2) as u8;

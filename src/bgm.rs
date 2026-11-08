@@ -200,7 +200,7 @@ impl BgmCache {
             return None;
         }
         let Ok(Some(asset)) = pack.read_asset(&stem, AssetClass::Audio) else {
-            eprintln!("warning: missing BGM track {stem}.wav");
+            crate::warning!("warning: missing BGM track {stem}.wav");
             self.missing.insert(stem);
             return None;
         };
@@ -210,7 +210,7 @@ impl BgmCache {
                 Some(wav)
             }
             Err(err) => {
-                eprintln!("warning: invalid BGM track {}: {err:#}", asset.path());
+                crate::warning!("warning: invalid BGM track {}: {err:#}", asset.path());
                 self.missing.insert(stem);
                 None
             }

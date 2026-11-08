@@ -1,0 +1,1233 @@
+//! `arklay script`: a Lua program that drives the engine step by step.
+//!
+//! The script is the program's `main`. Nothing runs until it asks:
+//! `load_game_pack` opens a pack, a boot call (`load_room`, `new_game`,
+//! `load_save`) starts a session, `hold`/`press` set the pad and `tick`
+//! advances the game, while `game` reads and writes the live state between
+//! ticks with the same methods the mod hooks get (`lua-types/hooks.lua`).
+//! It is the automation seam for agents and tests: new automation goes into
+//! this API rather than into more command-line flags.
+//!
+//! A tick is one app update, the unit `--ticks` counts: a fixed 30 Hz tick in
+//! a room. The run is deterministic: the user's `arklay.toml` and mods are
+//! ignored, the run options are the oracle runs' unless the script passes
+//! them, no audio device opens and no film plays. With a window (the default)
+//! every tick is presented at the game's own pace; the window's keyboard and
+//! pads are ignored, so the frames are the ones a `--headless` run draws.
+//!
+//! Errors are strict. A Lua error, a failed boot or (unless the script calls
+//! `strict(false)`) an engine warning raised while the script drives the game
+//! fails the run with exit status 1.
+
+use std::cell::{Cell, RefCell};
+use std::io::Write as _;
+use std::rc::Rc;
+use std::time::{Duration, Instant};
+
+use mlua::{
+    AnyUserData, Function, HookTriggers, Lua, LuaOptions, MetaMethod, MultiValue, ObjectLike,
+    StdLib, Table, UserData, UserDataMethods, Value, Variadic, VmState,
+};
+
+use super::*;
+
+/// The allocation ceiling of a driver script's Lua state.
+const MEMORY_LIMIT: usize = 256 * 1024 * 1024;
+/// Lua instructions between two timeout checks.
+const HOOK_INTERVAL: u32 = 10_000;
+/// Base-library globals removed before the script runs: the filesystem
+/// loaders, `load` and the collector control.
+const REMOVED_GLOBALS: [&str; 4] = ["dofile", "loadfile", "load", "collectgarbage"];
+/// The deepest table nesting `json` encodes.
+const JSON_DEPTH: usize = 64;
+/// The most values one `json` call encodes: shared subtables could otherwise
+/// make an acyclic value exponentially large, in Rust where the timeout
+/// hook never runs.
+const JSON_VALUES: usize = 1_000_000;
+/// Engine methods `game` may call before the first tick without counting as
+/// an edit of the booted state: the read-only getters of
+/// `impl UserData for GameState` in `src/lua.rs`.
+const READ_ONLY: [&str; 14] = [
+    "room",
+    "authentic",
+    "flag_get",
+    "item_count",
+    "player_pos",
+    "player_angle",
+    "health",
+    "max_health",
+    "character",
+    "stage",
+    "camera",
+    "frame",
+    "is_re2",
+    "inventory",
+];
+
+/// One `arklay script` run.
+#[derive(Debug, Clone)]
+pub struct ScriptOptions {
+    /// The chunk name errors report: the script's path, or `stdin`.
+    pub name: String,
+    /// The script's source.
+    pub source: Vec<u8>,
+    /// The arguments after the script, the script's `arg[1..]`.
+    pub args: Vec<String>,
+    /// Run without a window.
+    pub headless: bool,
+    /// Fail the run once it has taken this long.
+    pub timeout: Option<Duration>,
+}
+
+/// Run a driver script and return its exit status: `0` when it finishes,
+/// or the status it passed to `exit`. A Lua error, a failed engine call or a
+/// strict warning is returned as an error, which the CLI reports with
+/// status 1.
+pub fn run_script(options: ScriptOptions) -> Result<i32> {
+    // A trace compares against the 4:3 reference, as the oracle runs do.
+    video::set_aspect(video::Aspect::STANDARD);
+    let stop = Rc::new(Stop {
+        exit: Cell::new(None),
+        timed_out: Cell::new(false),
+        // A timeout too long to reach is no timeout.
+        deadline: options
+            .timeout
+            .and_then(|timeout| Instant::now().checked_add(timeout)),
+        timeout: options.timeout.unwrap_or_default(),
+    });
+    let driver = Rc::new(RefCell::new(Driver::new(
+        options.headless,
+        Rc::clone(&stop),
+    )));
+    let lua = new_state(&stop)?;
+    lua.set_app_data(Rc::clone(&driver));
+    install(&lua, &driver, &options).map_err(|err| anyhow::anyhow!("{err}"))?;
+    let result = lua
+        .load(&options.source[..])
+        .set_name(format!("@{}", options.name))
+        .exec();
+    let finished = driver.borrow_mut().finish();
+    if let Some(code) = stop.exit.get() {
+        finished?;
+        return Ok(code);
+    }
+    // A `pcall` may have caught the timeout; the run still fails.
+    if stop.timed_out.get() {
+        bail!("{}", stop.timeout_message());
+    }
+    result.map_err(|err| anyhow::anyhow!("{}", describe(&err)))?;
+    finished?;
+    Ok(0)
+}
+
+/// Why the run must stop: `exit` was called or the deadline passed. Both
+/// are final: once set, every Lua instruction fails, so no `pcall` keeps the
+/// script running.
+struct Stop {
+    exit: Cell<Option<i32>>,
+    timed_out: Cell<bool>,
+    deadline: Option<Instant>,
+    timeout: Duration,
+}
+
+impl Stop {
+    fn timeout_message(&self) -> String {
+        format!(
+            "the script timed out after {} s (--timeout)",
+            self.timeout.as_secs_f64()
+        )
+    }
+
+    /// The error a stopped run raises, or `None` while it may go on. Passing
+    /// the deadline stops the run.
+    fn error(&self) -> Option<mlua::Error> {
+        if self.exit.get().is_some() {
+            return Some(mlua::Error::RuntimeError("exit".into()));
+        }
+        if !self.timed_out.get()
+            && let Some(deadline) = self.deadline
+            && Instant::now() >= deadline
+        {
+            self.timed_out.set(true);
+        }
+        self.timed_out
+            .get()
+            .then(|| mlua::Error::RuntimeError(self.timeout_message()))
+    }
+}
+
+/// Make every instruction from now on fail with the stop's error.
+fn halt(lua: &Lua, stop: &Rc<Stop>) {
+    let stop = Rc::clone(stop);
+    lua.set_hook(
+        HookTriggers::new().every_nth_instruction(1),
+        move |_lua, _debug| match stop.error() {
+            Some(err) => Err(err),
+            None => Ok(VmState::Continue),
+        },
+    );
+}
+
+/// The script's Lua state: base, `string`, `table`, `math` and `utf8`, the
+/// loaders removed, the allocation ceiling and the timeout hook installed.
+fn new_state(stop: &Rc<Stop>) -> Result<Lua> {
+    let lua = Lua::new_with(
+        StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::UTF8,
+        LuaOptions::default(),
+    )
+    .map_err(|err| anyhow::anyhow!("failed to create the Lua state: {err}"))?;
+    let globals = lua.globals();
+    for name in REMOVED_GLOBALS {
+        globals
+            .set(name, Value::Nil)
+            .map_err(|err| anyhow::anyhow!("failed to remove the Lua global {name}: {err}"))?;
+    }
+    lua.set_memory_limit(MEMORY_LIMIT)
+        .map_err(|err| anyhow::anyhow!("failed to set the Lua memory limit: {err}"))?;
+    if stop.deadline.is_some() {
+        let check = Rc::clone(stop);
+        lua.set_hook(
+            HookTriggers::new().every_nth_instruction(HOOK_INTERVAL),
+            move |lua, _debug| match check.error() {
+                Some(err) => {
+                    // From the deadline on, fail every instruction: a
+                    // `pcall` around the loop cannot outlast it.
+                    halt(lua, &check);
+                    Err(err)
+                }
+                None => Ok(VmState::Continue),
+            },
+        );
+    }
+    Ok(lua)
+}
+
+/// An error's message for the CLI, without mlua's nested callback framing.
+fn describe(err: &mlua::Error) -> String {
+    match err {
+        mlua::Error::CallbackError { traceback, cause } => {
+            format!("{}\n{traceback}", describe(cause))
+        }
+        mlua::Error::WithContext { context, cause } => format!("{context}: {}", describe(cause)),
+        mlua::Error::RuntimeError(message) => message.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// An engine error as a Lua error.
+fn engine_error(err: anyhow::Error) -> mlua::Error {
+    mlua::Error::RuntimeError(format!("{err:#}"))
+}
+
+/// A save directory the run owns, removed when it ends: a script that saves
+/// in game never touches the player's own saves.
+struct ScratchSaves(PathBuf);
+
+impl ScratchSaves {
+    fn create() -> Result<Self> {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "arklay-script-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("failed to create {}", path.display()))?;
+        Ok(Self(path))
+    }
+}
+
+impl Drop for ScratchSaves {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The trace a script is recording (`trace_start`).
+struct ScriptTrace {
+    writer: trace::TraceWriter,
+    /// Trace the frames of a door transition and the death screen too, as a
+    /// `--trace` run with `--input` does.
+    all_frames: bool,
+}
+
+/// The live view of a windowed run.
+struct Window {
+    display: Display,
+    event: SDL_Event,
+    /// The window's own input latch: drained every frame and ignored.
+    input: InputState,
+    /// When the next frame is due.
+    next: Instant,
+}
+
+/// The engine state a script drives.
+struct Driver {
+    headless: bool,
+    stop: Rc<Stop>,
+    /// Fail on engine warnings (`strict(false)` turns it off).
+    strict: bool,
+    /// The warning count already checked.
+    warnings: u64,
+    app: Option<App>,
+    /// The scratch save directory the open pack's app uses, if it is ours.
+    saves: Option<ScratchSaves>,
+    /// The scripted pad latch.
+    input: InputState,
+    /// The keys held until released (`hold`/`release`/`pad`).
+    held: u64,
+    /// The keys held for the next tick only (`press`).
+    pressed: u64,
+    /// The booted session has not ticked yet: what its state was before
+    /// the script's `game` edits, so the first tick (or a `save_game` or
+    /// `capture`) reruns what they invalidate once, as `--setup-script` does.
+    baseline: Option<AuthorBaseline>,
+    /// A `game` call other than a getter ran since the boot.
+    edited: bool,
+    /// Arm the session-flow boot before the first tick, as the `--ui game`
+    /// trace run does.
+    arm: bool,
+    /// The last tick drew the frame `capture` writes.
+    drawn: bool,
+    trace: Option<ScriptTrace>,
+    window: Option<Window>,
+}
+
+impl Driver {
+    fn new(headless: bool, stop: Rc<Stop>) -> Self {
+        Self {
+            headless,
+            stop,
+            strict: true,
+            warnings: crate::logging::warnings_since(0).0,
+            app: None,
+            saves: None,
+            input: InputState::default(),
+            held: 0,
+            pressed: 0,
+            baseline: None,
+            edited: false,
+            arm: false,
+            drawn: false,
+            trace: None,
+            window: None,
+        }
+    }
+
+    /// The open pack's app.
+    fn app(&mut self) -> mlua::Result<&mut App> {
+        self.app.as_mut().ok_or_else(|| {
+            mlua::Error::RuntimeError("no game pack is open: call load_game_pack first".into())
+        })
+    }
+
+    /// The running game session.
+    fn session(&mut self) -> mlua::Result<&mut GameSession> {
+        match &mut self.app()?.mode {
+            Mode::Play(session) => Ok(session),
+            _ => Err(mlua::Error::RuntimeError(
+                "no game session is running: call load_room, new_game or load_save first".into(),
+            )),
+        }
+    }
+
+    /// Fail the call when the run must stop (`exit`, the timeout).
+    fn check_running(&self) -> mlua::Result<()> {
+        self.stop.error().map_or(Ok(()), Err)
+    }
+
+    /// Fail the call when the engine printed a warning since the last check
+    /// and the run is strict.
+    fn check_warnings(&mut self) -> mlua::Result<()> {
+        let seen = self.warnings;
+        let (count, first) = crate::logging::warnings_since(seen);
+        self.warnings = count;
+        if count > seen && self.strict {
+            let more = match count - seen {
+                1 => String::new(),
+                raised => format!(" ({} more on stderr)", raised - 1),
+            };
+            return Err(mlua::Error::RuntimeError(format!(
+                "engine warning (call strict(false) to allow warnings): {}{more}",
+                first.as_deref().unwrap_or("").trim()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Drain the window's events between ticks, so it stays responsive;
+    /// closing it fails the run.
+    fn pump(&mut self) -> mlua::Result<()> {
+        let Some(window) = self.window.as_mut() else {
+            return Ok(());
+        };
+        let mut keys = PortKeys::default();
+        if poll_events(
+            &mut window.event,
+            &mut window.input,
+            &mut keys,
+            Some(&mut window.display),
+        ) {
+            return Err(mlua::Error::RuntimeError("the window was closed".into()));
+        }
+        Ok(())
+    }
+
+    /// Rerun what the script's `game` edits since the boot invalidate, once,
+    /// before the session first ticks or is saved or captured.
+    fn settle_authoring(&mut self) -> mlua::Result<()> {
+        let Some(baseline) = self.baseline.take() else {
+            return Ok(());
+        };
+        if std::mem::take(&mut self.edited) {
+            self.session()?.finish_authoring(baseline, true);
+        }
+        Ok(())
+    }
+
+    /// Open the live view if this run has a window and it is not open yet.
+    fn open_window(&mut self, title: &str) -> Result<()> {
+        if self.headless || self.window.is_some() {
+            return Ok(());
+        }
+        // The default window, not the user's: a script ignores the config.
+        // The software backend presents exactly the frame a headless run
+        // draws (and the trace hashes).
+        let graphics = Graphics {
+            renderer: video::RendererKind::Software,
+            ..Graphics::default()
+        };
+        let mut display = Display::new(title, false, graphics).map_err(|err| {
+            anyhow::anyhow!("cannot open a window ({err:#}); pass --headless to run without one")
+        })?;
+        display.persist = false;
+        self.window = Some(Window {
+            display,
+            event: SDL_Event::default(),
+            input: InputState::default(),
+            next: Instant::now(),
+        });
+        Ok(())
+    }
+
+    /// Start a booted session: drop what the last one left behind.
+    fn start(&mut self, session: Box<GameSession>, arm: bool) -> mlua::Result<()> {
+        let baseline = session.author_baseline();
+        let app = self.app()?;
+        app.start_session(session);
+        app.pending_movie = None;
+        self.baseline = Some(baseline);
+        self.edited = false;
+        self.arm = arm;
+        self.drawn = false;
+        self.input = InputState::default();
+        Ok(())
+    }
+
+    /// Advance one app update with the scripted pad.
+    fn tick(&mut self) -> mlua::Result<()> {
+        self.check_running()?;
+        if matches!(self.app()?.mode, Mode::Boot) {
+            return Err(mlua::Error::RuntimeError(
+                "nothing is booted: call load_room, new_game or load_save first".into(),
+            ));
+        }
+        self.settle_authoring()?;
+        let word = self.held | self.pressed;
+        self.pressed = 0;
+        let arm = std::mem::take(&mut self.arm);
+        let Some(app) = self.app.as_mut() else {
+            unreachable!("checked above");
+        };
+        if arm && let Mode::Play(session) = &mut app.mode {
+            session.arm_new_game_boot();
+        }
+        let was_play = matches!(app.mode, Mode::Play(_));
+        let in_transition =
+            matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
+        let screen_before =
+            matches!(&app.mode, Mode::Play(session) if session.death_screen.is_some());
+        let tick = self.input.tick_scripted(word);
+        if let AppFlow::Quit = app
+            .update(tick.ui, tick.player, tick.action)
+            .map_err(engine_error)?
+        {
+            return Err(mlua::Error::RuntimeError("the game quit".into()));
+        }
+        // Films never play: the frames stay deterministic and audio-free, as
+        // on the `--trace` path.
+        if let Mode::Play(session) = &mut app.mode {
+            session.movie = None;
+        }
+        app.pending_movie = None;
+        app.draw();
+        self.drawn = true;
+        if let Some(trace) = self.trace.as_mut()
+            && let Mode::Play(session) = &app.mode
+            && was_play
+            && ((!in_transition && !screen_before) || trace.all_frames)
+        {
+            trace
+                .writer
+                .write_tick(&session.trace_tick(&app.framebuffer))
+                .map_err(engine_error)?;
+        }
+        if let Some(window) = self.window.as_mut() {
+            window
+                .display
+                .present_frame(app.frame(), None, None)
+                .map_err(engine_error)?;
+            window.display.show().map_err(engine_error)?;
+            window.next += Duration::from_secs_f64(app.tick_interval() / 1000.0);
+            let now = Instant::now();
+            if window.next > now {
+                std::thread::sleep(window.next - now);
+            } else {
+                window.next = now;
+            }
+        }
+        app.post_present();
+        self.pump()?;
+        self.check_warnings()
+    }
+
+    /// Flush the trace and close the window at the end of the run.
+    fn finish(&mut self) -> Result<()> {
+        if let Some(mut trace) = self.trace.take() {
+            trace.writer.flush()?;
+        }
+        self.window = None;
+        self.app = None;
+        self.saves = None;
+        Ok(())
+    }
+}
+
+/// The driver behind a callback.
+type Shared = Rc<RefCell<Driver>>;
+
+/// Borrow the driver for one engine call.
+fn with<R>(driver: &Shared, call: impl FnOnce(&mut Driver) -> mlua::Result<R>) -> mlua::Result<R> {
+    let mut driver = driver.try_borrow_mut().map_err(|_| {
+        mlua::Error::RuntimeError("the engine is busy: a script call re-entered it".into())
+    })?;
+    driver.check_running()?;
+    driver.pump()?;
+    let result = call(&mut driver);
+    // Check the warnings whatever the result, so one the failed call raised
+    // is not blamed on the next.
+    let warned = driver.check_warnings();
+    let value = result?;
+    warned?;
+    Ok(value)
+}
+
+/// An options table whose unknown keys are an error, so a misspelt option
+/// fails instead of being ignored.
+struct Options<'a> {
+    function: &'a str,
+    table: Option<Table>,
+    known: Vec<&'static str>,
+}
+
+impl<'a> Options<'a> {
+    fn new(function: &'a str, table: Option<Table>) -> Self {
+        Self {
+            function,
+            table,
+            known: Vec::new(),
+        }
+    }
+
+    fn get<T: mlua::FromLua>(&mut self, key: &'static str) -> mlua::Result<Option<T>> {
+        self.known.push(key);
+        match &self.table {
+            Some(table) => table.get::<Option<T>>(key).map_err(|err| {
+                mlua::Error::RuntimeError(format!("{}: option `{key}`: {err}", self.function))
+            }),
+            None => Ok(None),
+        }
+    }
+
+    fn finish(self) -> mlua::Result<()> {
+        let Some(table) = self.table else {
+            return Ok(());
+        };
+        for pair in table.pairs::<Value, Value>() {
+            let (key, _) = pair?;
+            let name = match &key {
+                Value::String(name) => name.to_string_lossy(),
+                other => format!("{other:?}"),
+            };
+            if !self.known.contains(&name.as_str()) {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "{}: unknown option `{name}` (expected one of: {})",
+                    self.function,
+                    self.known.join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Open `path` with only the `mods` layers the script names: no mod
+/// discovery and no config selection.
+fn open_pack(path: &Path, mods: &[PathBuf], language: Option<&str>) -> Result<Pack> {
+    let mut pack = if mods.is_empty() {
+        Pack::open(path)?
+    } else {
+        let layers: Vec<ModLayer<'_>> = mods
+            .iter()
+            .map(|path| ModLayer {
+                path,
+                explicit: true,
+            })
+            .collect();
+        let pack = Pack::open_layered_with(path, &layers, &LayerOptions::default())?;
+        for warning in pack.warnings() {
+            crate::warning!("warning: {warning}");
+        }
+        pack
+    };
+    pack.set_language(language);
+    Ok(pack)
+}
+
+/// The key bit a button name maps to: the `--input` names plus `forward`
+/// and `backward` for the tank controls' up and down.
+fn button_bit(name: &str) -> mlua::Result<u64> {
+    let bit = match name {
+        "forward" => Some(KEY_UP),
+        "backward" | "back" => Some(KEY_DOWN),
+        _ => script_button_bit(name),
+    };
+    bit.ok_or_else(|| mlua::Error::RuntimeError(format!("unknown button `{name}`")))
+}
+
+/// The bits of every named button.
+fn buttons(names: &[String]) -> mlua::Result<u64> {
+    names
+        .iter()
+        .try_fold(0, |word, name| Ok(word | button_bit(name)?))
+}
+
+/// The parsed room id of `room` for `player`, optionally on its second visit.
+fn room_id(room: &str, player: u8, mansion2: bool) -> mlua::Result<RoomId> {
+    let id = RoomId::from_room_and_player(room, player).map_err(engine_error)?;
+    if mansion2 && !id.is_mansion() {
+        return Err(mlua::Error::RuntimeError(format!(
+            "mansion2 needs a mansion room (stage 1 or 2), not {room}"
+        )));
+    }
+    Ok(id.with_visit(mansion2))
+}
+
+/// The name `mode()` reports for the app's screen.
+fn mode_name(mode: &Mode) -> &'static str {
+    match mode {
+        Mode::Boot => "none",
+        Mode::Title(_) => "title",
+        Mode::Select(_) => "select",
+        Mode::Load(_) => "load",
+        Mode::Play(_) => "play",
+        Mode::Movie(_) => "movie",
+        Mode::Ending(_) => "ending",
+        Mode::Epilogue(_) => "epilogue",
+        Mode::Save(_) => "save",
+    }
+}
+
+/// Encode a Lua value as JSON. A table with only the keys `1..n` is an
+/// array, any other table an object with sorted keys; an empty table is
+/// `[]`, the empty list a getter such as `inventory()` returns.
+fn to_json(value: &Value) -> mlua::Result<serde_json::Value> {
+    JsonEncoder {
+        path: Vec::new(),
+        values: 0,
+    }
+    .encode(value)
+}
+
+/// [`to_json`]'s state: the tables being encoded (a cycle repeats one) and
+/// the number of values encoded so far.
+struct JsonEncoder {
+    path: Vec<*const std::ffi::c_void>,
+    values: usize,
+}
+
+impl JsonEncoder {
+    fn encode(&mut self, value: &Value) -> mlua::Result<serde_json::Value> {
+        use serde_json::Value as Json;
+        let fail = |message: String| Err(mlua::Error::RuntimeError(format!("json: {message}")));
+        self.values += 1;
+        if self.values > JSON_VALUES {
+            return fail(format!("the value holds more than {JSON_VALUES} values"));
+        }
+        let table = match value {
+            Value::Nil => return Ok(Json::Null),
+            Value::Boolean(value) => return Ok(Json::Bool(*value)),
+            Value::Integer(value) => return Ok(Json::from(*value)),
+            Value::Number(value) => {
+                return Ok(serde_json::Number::from_f64(*value).map_or(Json::Null, Json::Number));
+            }
+            Value::String(value) => return Ok(Json::String(value.to_string_lossy())),
+            Value::Table(table) => table,
+            other => return fail(format!("a {} has no JSON form", other.type_name())),
+        };
+        let pointer = table.to_pointer();
+        if self.path.contains(&pointer) {
+            return fail("the table contains itself".into());
+        }
+        if self.path.len() >= JSON_DEPTH {
+            return fail(format!("tables nest more than {JSON_DEPTH} deep"));
+        }
+        self.path.push(pointer);
+        let length = table.raw_len();
+        let mut count = 0;
+        for pair in table.pairs::<Value, Value>() {
+            pair?;
+            count += 1;
+        }
+        let json = if count == length {
+            let mut items = Vec::with_capacity(length);
+            for index in 1..=length {
+                items.push(self.encode(&table.raw_get::<Value>(index)?)?);
+            }
+            Json::Array(items)
+        } else {
+            let mut object = serde_json::Map::new();
+            for pair in table.pairs::<Value, Value>() {
+                let (key, item) = pair?;
+                let key = match key {
+                    Value::String(key) => key.to_string_lossy(),
+                    Value::Integer(key) => key.to_string(),
+                    Value::Number(key) => key.to_string(),
+                    Value::Boolean(key) => key.to_string(),
+                    other => {
+                        return fail(format!("a {} cannot be an object key", other.type_name()));
+                    }
+                };
+                object.insert(key, self.encode(&item)?);
+            }
+            Json::Object(object)
+        };
+        self.path.pop();
+        Ok(json)
+    }
+}
+
+/// Write the presented frame to `path`: PNG, or BMP for a `.bmp` path.
+fn write_capture(app: &App, path: &Path) -> Result<()> {
+    let image = presented_image(app.frame());
+    let bmp = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("bmp"));
+    if bmp {
+        return capture_bmp(&image, path);
+    }
+    let png = crate::screenshot::Image::new(image.width, image.height, image.rgba)?.encode_png()?;
+    crate::atomic::write(path, &png)
+}
+
+/// The `game` global: forwards each method call to the running session's
+/// game state, the userdata the mod hooks get as `api`. Indexing it with any
+/// name gives a forwarding function, so `game.anything` is never nil; an
+/// unknown method fails when called.
+struct GameProxy;
+
+impl UserData for GameProxy {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_function(
+            MetaMethod::Index,
+            |lua, (_proxy, key): (AnyUserData, String)| {
+                lua.create_function(move |lua, mut args: MultiValue| {
+                    // `game:method(...)` passes the proxy itself first; a
+                    // `game.method(...)` call would shift every argument.
+                    match args.pop_front() {
+                        Some(Value::UserData(this)) if this.is::<GameProxy>() => {}
+                        _ => {
+                            return Err(mlua::Error::RuntimeError(format!(
+                                "call game methods with a colon: game:{key}(...)"
+                            )));
+                        }
+                    }
+                    let driver = lua
+                        .app_data_ref::<Shared>()
+                        .map(|driver| Rc::clone(&driver))
+                        .ok_or_else(|| mlua::Error::RuntimeError("no script driver".into()))?;
+                    with(&driver, |driver| {
+                        if driver.baseline.is_some() && !READ_ONLY.contains(&key.as_str()) {
+                            driver.edited = true;
+                        }
+                        let session = driver.session()?;
+                        let result = call_game(lua, &mut session.game, &key, args)?;
+                        // The live player follows a position or angle the
+                        // call wrote.
+                        session.game.sync_player(&mut session.player);
+                        Ok(result)
+                    })
+                })
+            },
+        );
+        methods.add_meta_function(MetaMethod::ToString, |_lua, _proxy: AnyUserData| Ok("game"));
+    }
+}
+
+/// Call the game-state method `key` on `game` with `args`.
+fn call_game(
+    lua: &Lua,
+    game: &mut game::GameState,
+    key: &str,
+    mut args: MultiValue,
+) -> mlua::Result<MultiValue> {
+    lua.scope(|scope| {
+        let api = scope.create_userdata_ref_mut(game)?;
+        let Value::Function(method) = api.get::<Value>(key)? else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "game has no method `{key}`"
+            )));
+        };
+        args.push_front(Value::UserData(api));
+        method.call::<MultiValue>(args)
+    })
+}
+
+/// Register the script API's globals.
+fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<()> {
+    let globals = lua.globals();
+
+    let arg = lua.create_table()?;
+    arg.set(0, options.name.as_str())?;
+    for (index, value) in options.args.iter().enumerate() {
+        arg.set(index + 1, value.as_str())?;
+    }
+    globals.set("arg", arg)?;
+
+    globals.set(
+        "print",
+        lua.create_function(|lua, values: Variadic<Value>| {
+            let tostring: Function = lua.globals().get("tostring")?;
+            let mut line = String::new();
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    line.push('\t');
+                }
+                line.push_str(
+                    &tostring
+                        .call::<mlua::String>(value.clone())?
+                        .to_string_lossy(),
+                );
+            }
+            let mut out = std::io::stdout().lock();
+            writeln!(out, "{line}").map_err(mlua::Error::external)?;
+            Ok(())
+        })?,
+    )?;
+
+    globals.set(
+        "json",
+        lua.create_function(|_lua, value: Value| {
+            serde_json::to_string(&to_json(&value)?).map_err(mlua::Error::external)
+        })?,
+    )?;
+
+    let stop = Rc::clone(&driver.borrow().stop);
+    globals.set(
+        "exit",
+        lua.create_function(move |lua, code: Option<i64>| -> mlua::Result<()> {
+            let code = code.unwrap_or(0);
+            let Ok(code) = u8::try_from(code) else {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "exit: the status must be 0..=255, not {code}"
+                )));
+            };
+            if stop.exit.get().is_none() {
+                stop.exit.set(Some(i32::from(code)));
+            }
+            halt(lua, &stop);
+            Err(mlua::Error::RuntimeError("exit".into()))
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "strict",
+        lua.create_function(move |_lua, on: Option<bool>| {
+            with(&shared, |driver| {
+                driver.strict = on.unwrap_or(true);
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "load_game_pack",
+        lua.create_function(move |_lua, (path, table): (String, Option<Table>)| {
+            with(&shared, |driver| {
+                let mut options = Options::new("load_game_pack", table);
+                let mods: Vec<String> = options.get("mods")?.unwrap_or_default();
+                let language: Option<String> = options.get("language")?;
+                let save_dir: Option<String> = options.get("save_dir")?;
+                let quick_turn: Option<bool> = options.get("quick_turn")?;
+                let tactical_reload: Option<bool> = options.get("tactical_reload")?;
+                let authentic: Option<bool> = options.get("authentic")?;
+                let auto_aim: Option<bool> = options.get("auto_aim")?;
+                let blood: Option<bool> = options.get("blood")?;
+                let difficulty: Option<String> = options.get("difficulty")?;
+                let arrange: Option<bool> = options.get("arrange")?;
+                options.finish()?;
+                let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
+                    "normal" => (false, false),
+                    "easy" => (true, false),
+                    "hard" => (false, true),
+                    other => {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "load_game_pack: difficulty `{other}` is not normal, easy or hard"
+                        )));
+                    }
+                };
+                let mods: Vec<PathBuf> = mods.into_iter().map(PathBuf::from).collect();
+                let pack = open_pack(Path::new(&path), &mods, language.as_deref())
+                    .map_err(engine_error)?;
+                let (saves, save_dir) = match save_dir {
+                    Some(dir) => (None, PathBuf::from(dir)),
+                    None => {
+                        let saves = ScratchSaves::create().map_err(engine_error)?;
+                        let dir = saves.0.clone();
+                        (Some(saves), dir)
+                    }
+                };
+                driver
+                    .open_window(&window_title(pack.manifest()))
+                    .map_err(engine_error)?;
+                let mut app = App::new(pack, save_dir, false);
+                app.player_options = player::Options {
+                    quick_turn: quick_turn.unwrap_or(false),
+                    tactical_reload: tactical_reload.unwrap_or(false),
+                    no_auto_aim: !auto_aim.unwrap_or(true),
+                    no_blood: !blood.unwrap_or(true),
+                    // A script never writes an autosave.
+                    no_autosave: true,
+                    authentic: authentic.unwrap_or(false),
+                    new_game: crate::ui::NewGameChoice {
+                        easy,
+                        hard_mode,
+                        censorship_off: arrange.unwrap_or(false),
+                    },
+                    ..player::Options::default()
+                };
+                driver.app = Some(app);
+                driver.saves = saves;
+                driver.baseline = None;
+                driver.edited = false;
+                driver.arm = false;
+                driver.drawn = false;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "load_room",
+        lua.create_function(move |_lua, (room, table): (String, Option<Table>)| {
+            with(&shared, |driver| {
+                let mut options = Options::new("load_room", table);
+                let player: Option<u8> = options.get("player")?;
+                let mansion2: Option<bool> = options.get("mansion2")?;
+                options.finish()?;
+                let id = room_id(&room, player.unwrap_or(0), mansion2.unwrap_or(false))?;
+                let app = driver.app()?;
+                let session =
+                    GameSession::from_room_with(&app.pack, id, &app.save_dir, app.player_options)
+                        .map_err(engine_error)?;
+                driver.start(session, false)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "new_game",
+        lua.create_function(move |_lua, table: Option<Table>| {
+            with(&shared, |driver| {
+                let mut options = Options::new("new_game", table);
+                let character: Option<u8> = options.get("character")?;
+                let room: Option<String> = options.get("room")?;
+                let player: Option<u8> = options.get("player")?;
+                let mansion2: Option<bool> = options.get("mansion2")?;
+                options.finish()?;
+                let character = character.unwrap_or(0);
+                let app = driver.app()?;
+                let session = match room {
+                    Some(room) => {
+                        let id = room_id(
+                            &room,
+                            player.unwrap_or(character & 1),
+                            mansion2.unwrap_or(false),
+                        )?;
+                        GameSession::new_in_room_with(
+                            &app.pack,
+                            id,
+                            character,
+                            &app.save_dir,
+                            app.player_options,
+                        )
+                    }
+                    None => GameSession::new_with(
+                        &app.pack,
+                        character,
+                        &app.save_dir,
+                        app.player_options,
+                    ),
+                }
+                .map_err(engine_error)?;
+                driver.start(session, true)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "load_save",
+        lua.create_function(move |_lua, path: String| {
+            with(&shared, |driver| {
+                let app = driver.app()?;
+                let file = save::load_file(Path::new(&path)).map_err(engine_error)?;
+                let session = GameSession::from_save_with(
+                    &app.pack,
+                    &file,
+                    &app.save_dir,
+                    app.player_options,
+                )
+                .map_err(engine_error)?;
+                driver.start(session, true)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "hold",
+        lua.create_function(move |_lua, names: Variadic<String>| {
+            with(&shared, |driver| {
+                driver.held |= buttons(&names)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "release",
+        lua.create_function(move |_lua, names: Variadic<String>| {
+            with(&shared, |driver| {
+                if names.is_empty() {
+                    driver.held = 0;
+                } else {
+                    driver.held &= !buttons(&names)?;
+                }
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "press",
+        lua.create_function(move |_lua, names: Variadic<String>| {
+            with(&shared, |driver| {
+                driver.pressed |= buttons(&names)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "pad",
+        lua.create_function(move |_lua, word: Option<u64>| {
+            with(&shared, |driver| {
+                let previous = driver.held;
+                if let Some(word) = word {
+                    driver.held = word;
+                }
+                Ok(previous)
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "tick",
+        lua.create_function(move |_lua, count: Option<u32>| {
+            with(&shared, |driver| {
+                for _ in 0..count.unwrap_or(1) {
+                    driver.tick()?;
+                }
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "tick_until",
+        lua.create_function(move |_lua, (until, max): (Function, u32)| {
+            for ticks in 0..=max {
+                if until.call::<bool>(())? {
+                    return Ok(ticks);
+                }
+                if ticks < max {
+                    with(&shared, Driver::tick)?;
+                }
+            }
+            Err(mlua::Error::RuntimeError(format!(
+                "tick_until: the condition did not hold within {max} ticks"
+            )))
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "mode",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                Ok(driver
+                    .app
+                    .as_ref()
+                    .map_or("none", |app| mode_name(&app.mode)))
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "capture",
+        lua.create_function(move |_lua, path: String| {
+            with(&shared, |driver| {
+                if matches!(driver.app()?.mode, Mode::Boot) {
+                    return Err(mlua::Error::RuntimeError(
+                        "capture: nothing is booted".into(),
+                    ));
+                }
+                driver.settle_authoring()?;
+                let drawn = driver.drawn;
+                let app = driver.app()?;
+                if !drawn {
+                    app.draw();
+                }
+                write_capture(app, Path::new(&path)).map_err(engine_error)?;
+                driver.drawn = true;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "save_game",
+        lua.create_function(move |_lua, path: String| {
+            with(&shared, |driver| {
+                driver.settle_authoring()?;
+                driver
+                    .session()?
+                    .write_save(Path::new(&path))
+                    .map_err(engine_error)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "trace_start",
+        lua.create_function(move |_lua, (path, table): (String, Option<Table>)| {
+            with(&shared, |driver| {
+                let mut options = Options::new("trace_start", table);
+                let all_frames: Option<bool> = options.get("all_frames")?;
+                options.finish()?;
+                if let Some(mut trace) = driver.trace.take() {
+                    trace.writer.flush().map_err(engine_error)?;
+                }
+                let writer = trace::TraceWriter::create(Path::new(&path)).map_err(engine_error)?;
+                driver.trace = Some(ScriptTrace {
+                    writer,
+                    all_frames: all_frames.unwrap_or(false),
+                });
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "trace_stop",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                if let Some(mut trace) = driver.trace.take() {
+                    trace.writer.flush().map_err(engine_error)?;
+                }
+                Ok(())
+            })
+        })?,
+    )?;
+
+    globals.set("game", lua.create_userdata(GameProxy)?)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn eval_json(source: &str) -> String {
+        let lua = Lua::new();
+        let value: Value = lua.load(source).eval().unwrap();
+        serde_json::to_string(&to_json(&value).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn json_encodes_arrays_objects_and_scalars() {
+        assert_eq!(eval_json("{1, 2, 3}"), "[1,2,3]");
+        assert_eq!(eval_json("{b = 1, a = 'x'}"), r#"{"a":"x","b":1}"#);
+        assert_eq!(eval_json("{}"), "[]");
+        assert_eq!(
+            eval_json("{[1] = true, [3] = false}"),
+            r#"{"1":true,"3":false}"#
+        );
+        assert_eq!(eval_json("1.5"), "1.5");
+        assert_eq!(eval_json("0/0"), "null");
+        assert_eq!(eval_json("'a\"b'"), r#""a\"b""#);
+    }
+
+    #[test]
+    fn json_stops_on_a_value_that_shares_its_subtables() {
+        let lua = Lua::new();
+        let value: Value = lua
+            .load("local t = {} for _ = 1, 60 do t = {t, t} end return t")
+            .eval()
+            .unwrap();
+        assert!(to_json(&value).is_err());
+    }
+
+    #[test]
+    fn json_rejects_a_cycle() {
+        let lua = Lua::new();
+        let value: Value = lua.load("local t = {} t.t = t return t").eval().unwrap();
+        assert!(to_json(&value).is_err());
+    }
+
+    #[test]
+    fn button_names_cover_the_input_names_and_the_tank_aliases() {
+        assert_eq!(button_bit("forward").unwrap(), KEY_UP);
+        assert_eq!(button_bit("action").unwrap(), KEY_CONFIRM);
+        assert!(button_bit("jump").is_err());
+    }
+}

@@ -3072,7 +3072,7 @@ pub fn run() -> Result<()> {
     let (config, warnings) = Config::load_default();
     for warning in warnings {
         logging::write(&format!("warning: {warning}"));
-        eprintln!("warning: {warning}");
+        crate::warning!("warning: {warning}");
     }
     let capture = env::var_os("ARKLAY_LAUNCHER_CAPTURE").map(PathBuf::from);
     let mut graphics = config.graphics;

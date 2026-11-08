@@ -226,7 +226,7 @@ impl EntityModelCache {
                     Some(model)
                 }
                 Err(err) => {
-                    eprintln!("warning: invalid enemy model {re2}: {err:#}");
+                    crate::warning!("warning: invalid enemy model {re2}: {err:#}");
                     self.missing.insert(key);
                     None
                 }
@@ -249,11 +249,11 @@ impl EntityModelCache {
                     return Some(model);
                 }
                 Err(err) => {
-                    eprintln!("warning: invalid enemy model {path}: {err:#}");
+                    crate::warning!("warning: invalid enemy model {path}: {err:#}");
                 }
             }
         }
-        eprintln!("warning: no model available for entity {id:#04x} (tried {candidates:?})");
+        crate::warning!("warning: no model available for entity {id:#04x} (tried {candidates:?})");
         self.missing.insert(key);
         None
     }
@@ -287,7 +287,7 @@ impl EntityModelCache {
                 Some(tmd)
             }
             Err(err) => {
-                eprintln!("warning: missing held-weapon mesh {path}: {err:#}");
+                crate::warning!("warning: missing held-weapon mesh {path}: {err:#}");
                 self.weapon_missing.insert(key);
                 None
             }

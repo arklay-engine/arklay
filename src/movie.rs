@@ -414,7 +414,7 @@ impl MovieSession {
         let Some(shadowed) = asset.shadowed()? else {
             return Err(err);
         };
-        eprintln!("warning: {err:#}; playing {} instead", shadowed.path());
+        crate::warning!("warning: {err:#}; playing {} instead", shadowed.path());
         let path = shadowed.path().to_owned();
         Self::from_bytes(shadowed.data(), id, character)
             .with_context(|| format!("failed to open film {path}"))
@@ -815,7 +815,7 @@ impl MovieSession {
             let last = self.kept_frames - 1;
             if last > self.presented {
                 if let Err(err) = self.present_kept(last) {
-                    eprintln!("warning: film frame {last} failed to decode: {err:#}");
+                    crate::warning!("warning: film frame {last} failed to decode: {err:#}");
                 } else {
                     self.ensure_audio_through(last + self.audio_lead);
                 }
@@ -827,7 +827,7 @@ impl MovieSession {
             return MovieTick::Waiting;
         }
         if let Err(err) = self.present_kept(due) {
-            eprintln!("warning: film frame {due} failed to decode: {err:#}");
+            crate::warning!("warning: film frame {due} failed to decode: {err:#}");
             self.finished = true;
             return MovieTick::Finished;
         }

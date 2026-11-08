@@ -43,7 +43,7 @@ pub fn spawn_segments(game: &mut GameState, slot: usize) -> Vec<usize> {
         .take(SEGMENT_COUNT)
         .collect();
     if free.len() < SEGMENT_COUNT {
-        eprintln!("[yawn] no room for {SEGMENT_COUNT} body segments (slot {slot})");
+        crate::warning!("[yawn] no room for {SEGMENT_COUNT} body segments (slot {slot})");
         return Vec::new();
     }
 

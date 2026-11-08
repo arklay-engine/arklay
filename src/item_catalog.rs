@@ -442,7 +442,7 @@ impl ItemCatalog {
                 }
                 Err(error) => {
                     if warn {
-                        eprintln!("warning: invalid {path}: {error:#}");
+                        crate::warning!("warning: invalid {path}: {error:#}");
                     }
                     items.remove(&item);
                 }
@@ -477,7 +477,7 @@ fn read_pack(pack: &Pack) -> Vec<(String, String)> {
             continue;
         }
         let Ok(data) = pack.read(path) else {
-            eprintln!("warning: failed to read {path}");
+            crate::warning!("warning: failed to read {path}");
             continue;
         };
         match String::from_utf8(data.to_vec()) {
@@ -513,7 +513,7 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, Language)> {
     for (tag, values) in by_tag {
         match Language::from_values(values, &format!("item strings for {tag}")) {
             Ok(language) => layers.push((tag, language)),
-            Err(error) => eprintln!("warning: {error:#}"),
+            Err(error) => crate::warning!("warning: {error:#}"),
         }
     }
     layers

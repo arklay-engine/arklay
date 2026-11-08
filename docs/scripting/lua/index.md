@@ -14,6 +14,7 @@ file, network or clock access. A script reaches other pack files only with
 | [Enemy scripts](enemy.md) | RE 1's per-tick `update(e)` for every enemy and character | `enemy/<id>/enemy.lua` |
 | [Interactive screens](interactive.md) | RE 1's screens over the live room, such as the lab computer: a per-tick `display(api, s)` | `interactive/<screen>.lua` |
 | [RE 2 enemy scripts](re2-enemy.md) | RE 2's per-tick `update(e)` | `enemy/<id>/enemy.lua` |
+| [Driver scripts](script.md) | a program `arklay script FILE` runs, outside any pack, that boots the game and drives it tick by tick: for tests and automation. Its sandbox also has `math` and `utf8` | |
 
 The pages are generated from the LuaLS definition files the engine ships,
 which an editor can use for completion and linting:

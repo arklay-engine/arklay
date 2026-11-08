@@ -28,6 +28,7 @@
     - [Enemy scripts](scripting/lua/enemy.md)
     - [Interactive screens](scripting/lua/interactive.md)
     - [RE 2 enemy scripts](scripting/lua/re2-enemy.md)
+    - [Driver scripts](scripting/lua/script.md)
   - [Room scripts](scripting/room/index.md)
     - [RE 1](scripting/room/re1/index.md)
       - [RE 1 opcodes](scripting/room/re1/opcodes/index.md)

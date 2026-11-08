@@ -137,7 +137,7 @@ impl VideoStream {
                 Ok(false) => {}
                 Err(err) => {
                     if !std::mem::replace(&mut self.warned, true) {
-                        eprintln!("warning: film picture {index} failed to decode: {err:#}");
+                        crate::warning!("warning: film picture {index} failed to decode: {err:#}");
                     }
                     return Next::Repeat;
                 }
@@ -175,7 +175,7 @@ impl AudioStream {
         let frames: Vec<_> = mp2::frames(&data).collect();
         let rate = i64::from(frames.first()?.1.sample_rate);
         let offset_ticks = if offset_ticks.abs() > MAX_AUDIO_OFFSET {
-            eprintln!(
+            crate::warning!(
                 "warning: film audio starts {:.1} s from the video; playing it unshifted",
                 offset_ticks as f64 / PTS_RATE as f64
             );
@@ -211,7 +211,7 @@ impl AudioStream {
         self.scratch.clear();
         if let Err(err) = self.decoder.decode(&self.data[offset..], &mut self.scratch) {
             if !std::mem::replace(&mut self.warned, true) {
-                eprintln!("warning: film audio frame failed to decode: {err:#}");
+                crate::warning!("warning: film audio frame failed to decode: {err:#}");
             }
             // Silence keeps the rest of the track in sync.
             self.scratch.clear();

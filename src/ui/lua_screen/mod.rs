@@ -138,7 +138,7 @@ impl Host {
     fn note_missing_font(&mut self) {
         if !self.missing_font_logged {
             self.missing_font_logged = true;
-            eprintln!("[lua] the pack carries no font; screen text is not drawn");
+            crate::warning!("[lua] the pack carries no font; screen text is not drawn");
         }
     }
 
@@ -350,7 +350,7 @@ impl LuaScreen {
     ) {
         let Self { host, vm, entry } = self;
         if let Err(err) = vm.call_hook(name, host, cx, game, value) {
-            eprintln!("[lua] screen {entry} {name} failed: {err}");
+            crate::warning!("[lua] screen {entry} {name} failed: {err}");
             host.failed = true;
         }
     }
@@ -374,7 +374,7 @@ impl LuaScreen {
     ) -> ScreenResult {
         let Self { host, vm, entry } = self;
         if let Err(err) = vm.call_update(host, cx, game, input) {
-            eprintln!("[lua] screen {entry} update failed: {err}");
+            crate::warning!("[lua] screen {entry} update failed: {err}");
             host.failed = true;
         }
         self.host.ticks = self.host.ticks.saturating_add(1);
@@ -404,7 +404,7 @@ impl LuaScreen {
             // `api:clip` lasts for this draw only.
             let clip = framebuffer.clip_rect();
             if let Err(err) = vm.call_draw(host, cx, framebuffer, actors) {
-                eprintln!("[lua] screen {entry} draw failed: {err}");
+                crate::warning!("[lua] screen {entry} draw failed: {err}");
                 host.failed = true;
             }
             framebuffer.set_clip_rect(clip);
