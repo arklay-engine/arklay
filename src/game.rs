@@ -6717,6 +6717,16 @@ impl GameState {
                 };
                 self.re2.vars[var] = slot as u16;
             }
+            // `At_sce_no` (member 9) is the player's own: its press pass
+            // (`check_action_object`, mask 0) records an area of a kind but
+            // `Sce_Auto`, its passive pass (mask 1) every area it is in, the
+            // last one winning. The objects' pass (mask 4) leaves it.
+            if re2
+                && mask != 4
+                && (flags & 0x80 == 0 || room_action.sce != crate::scd2::host::SCE_AUTO)
+            {
+                self.re2.player.at_sce = slot as u8;
+            }
             if flags & 0x40 != 0 {
                 self.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)] = hit;
             } else {

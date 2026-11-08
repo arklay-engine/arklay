@@ -105,6 +105,7 @@ class Tick:
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
 OPT_IN_FIELDS = {
+    "atsce",
     "box",
     "fgcom",
     "fgkey",
@@ -140,6 +141,7 @@ OPT_IN_FIELDS = {
 # first value (`game_mode`); arklay's `gm` follows only the typewriter's path, so only typewriter
 # runs name it.
 SCREEN_FIELDS = (
+    "atsce",
     "box",
     "fgcom",
     "fguse",

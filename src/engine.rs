@@ -16294,6 +16294,7 @@ fn run_re2_init(
     }
     // The load's pass ends as every pass does.
     game.re2.sce_work_clr();
+    game.re2.sce_work_clr_at();
     game.re2.room_loading = false;
     // An init script's `cut_chg` is part of the room's first `Bg_loadPC`.
     game.re2.bg_load = false;

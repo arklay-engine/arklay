@@ -1126,8 +1126,9 @@ impl Re2State {
         }
     }
 
-    /// The oracle's `fguse` (`fg_use`'s four words as their bytes) and `scv`
-    /// (variables 0 to 3), what `Sce_work_clr` resets.
+    /// The oracle's `fguse` (`fg_use`'s four words as their bytes), `scv`
+    /// (variables 0 to 3) and `atsce` (the player's `At_sce_no`), what
+    /// `Sce_work_clr` and `Sce_work_clr_at` reset.
     pub fn script_work_trace(&self) -> String {
         let fg_use: String = self.banks[usize::from(FG_USE_BANK)][..4]
             .iter()
@@ -1139,7 +1140,7 @@ impl Re2State {
             .map(|var| format!("{var:04x}"))
             .collect::<Vec<_>>()
             .join(",");
-        format!("fguse={fg_use} scv={vars}")
+        format!("fguse={fg_use} scv={vars} atsce={:02x}", self.player.at_sce)
     }
 
     /// `Sce_work_clr` (`0x4E3DA0`), at the end of every `Sce_scheduler_main`
@@ -1162,9 +1163,11 @@ impl Re2State {
     }
 
     /// `Sce_work_clr_at` (`0x4E3DE0`), after [`Self::sce_work_clr`] at the
-    /// end of `Sce_scheduler_main`'s pass: every enemy in play forgets its
-    /// area, so a script sees only the one the last `Sce_at` found it in.
+    /// end of `Sce_scheduler_main`'s pass: the player and every enemy in play
+    /// forget their area, so a script sees only the one the last `Sce_at`
+    /// found them in.
     pub fn sce_work_clr_at(&mut self) {
+        self.player.at_sce = NO_AREA;
         for character in self.characters.0.iter_mut().flatten() {
             if character.be_flg & 1 != 0 {
                 character.area = NO_AREA;
@@ -2056,6 +2059,7 @@ impl GameHost<'_> {
         }
         match member {
             MEMBER_ANGLE => Some(i32::from(self.game.entities[0].angle & 0x0FFF)),
+            MEMBER_AREA => Some(i32::from(self.game.re2.player.at_sce)),
             // `Type`'s low bits are the weapon in hand, which the engine keeps
             // with the inventory.
             MEMBER_TYPE => Some(i32::from(
@@ -3810,6 +3814,29 @@ mod tests {
         assert!(!game.re2.areas_stopped);
         game.interact(STATUE_POS, STATUE_ANGLE, false);
         assert_eq!(game.re2.pending_events, [(0, 3)], "play's pass starts it");
+    }
+
+    #[test]
+    fn the_players_member_9_is_the_last_area_its_probe_was_in() {
+        let mut game = statue_200();
+        // Area 10, the statue's press-only event (`sat` 49), in the same box.
+        let press = [10, 5, 49, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 0, 7, 0, 0];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &press);
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        let area = |game: &mut GameState| GameHost { game }.member(0, MEMBER_AREA);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        // The press pass stops at the statue's event, then the passive pass
+        // runs every area the probe is in and the last one wins.
+        game.check_action_object(STATUE_POS, STATUE_ANGLE);
+        assert_eq!(area(&mut game), Some(10));
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert_eq!(area(&mut game), Some(13));
+        game.re2.sce_work_clr_at();
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        // Out of every area, nothing records one.
+        game.interact([0, 0, 10000], STATUE_ANGLE, false);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        assert!(game.re2.script_work_trace().ends_with(" atsce=ff"));
     }
 
     #[test]
