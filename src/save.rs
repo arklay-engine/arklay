@@ -318,7 +318,7 @@ impl SaveFile {
             state.is_re2_room = true;
             state.max_health = crate::game::RE2_MAX_HEALTH;
             if state.re2.load_save_bytes(re2).is_none() {
-                eprintln!("warning: the save's RE2 state has the wrong size; ignoring it");
+                crate::warning!("warning: the save's RE2 state has the wrong size; ignoring it");
             }
         }
         state
@@ -615,7 +615,7 @@ impl AutosaveWriter {
             .spawn(move || {
                 for (dir, file) in receiver {
                     if let Err(err) = write_autosave(&dir, &file) {
-                        eprintln!("warning: autosave failed: {err:#}");
+                        crate::warning!("warning: autosave failed: {err:#}");
                     }
                 }
             });
@@ -625,9 +625,9 @@ impl AutosaveWriter {
                 self.worker = Some((sender, handle));
             }
             Err(err) => {
-                eprintln!("warning: autosave thread unavailable ({err}); writing inline");
+                crate::warning!("warning: autosave thread unavailable ({err}); writing inline");
                 if let Err(err) = write_autosave(&job.0, &job.1) {
-                    eprintln!("warning: autosave failed: {err:#}");
+                    crate::warning!("warning: autosave failed: {err:#}");
                 }
             }
         }

@@ -227,7 +227,7 @@ impl DebugMenu {
     /// Open the main list with every tool seeded from the live state.
     pub fn open(pack: &Pack, current: RoomId, game: &GameState) -> Self {
         let ui = Ui::new(Library::builtin())
-            .map_err(|err| eprintln!("warning: debug menu: {err:#}"))
+            .map_err(|err| crate::warning!("warning: debug menu: {err:#}"))
             .ok();
         let mut menu = Self {
             tool: None,
@@ -246,7 +246,7 @@ impl DebugMenu {
             cursors: Default::default(),
             view: View {
                 fonts: Fonts::new()
-                    .map_err(|err| eprintln!("warning: debug menu fonts: {err:#}"))
+                    .map_err(|err| crate::warning!("warning: debug menu fonts: {err:#}"))
                     .ok(),
                 canvas: Canvas::new(1, 1),
                 hits: Vec::new(),
@@ -258,7 +258,7 @@ impl DebugMenu {
         if let Some(ui) = &mut menu.ui
             && let Err(err) = ui.open("debug")
         {
-            eprintln!("warning: debug menu: {err:#}");
+            crate::warning!("warning: debug menu: {err:#}");
         }
         menu
     }
@@ -278,7 +278,7 @@ impl DebugMenu {
             if ui.is_empty() {
                 match ui.open("debug") {
                     Ok(()) => ui.set_focus_index(self.main_cursor),
-                    Err(err) => eprintln!("warning: debug menu: {err:#}"),
+                    Err(err) => crate::warning!("warning: debug menu: {err:#}"),
                 }
             }
             ui.invalidate();
@@ -748,7 +748,7 @@ impl DebugMenu {
                         self.ending = id;
                         result = Some(DebugMenuEvent::ClearGame(id));
                     }
-                    other => eprintln!("warning: debug menu: unknown action {other:?}"),
+                    other => crate::warning!("warning: debug menu: unknown action {other:?}"),
                 },
                 UiOutput::Changed { path, value } => {
                     apply_change(&path, value.as_int().unwrap_or(0), game);

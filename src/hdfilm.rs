@@ -339,7 +339,7 @@ fn new_decoder() -> Result<Decoder> {
 fn warn_once(warned: &mut bool, unit: usize, err: &anyhow::Error) {
     if !*warned {
         *warned = true;
-        eprintln!("warning: film access unit {unit} failed to decode: {err:#}");
+        crate::warning!("warning: film access unit {unit} failed to decode: {err:#}");
     }
 }
 
@@ -410,7 +410,7 @@ impl AudioStream {
             Err(err) => {
                 if !self.warned {
                     self.warned = true;
-                    eprintln!("warning: film audio packet failed to decode: {err}");
+                    crate::warning!("warning: film audio packet failed to decode: {err}");
                 }
                 // Silence keeps the rest of the track in sync.
                 self.stereo.resize(AAC_FRAME * 2, 0.0);

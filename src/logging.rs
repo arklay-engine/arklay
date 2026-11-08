@@ -84,6 +84,55 @@ fn append(path: &Path, message: &str) {
     let _ = writeln!(file, "{message}");
 }
 
+/// How many engine warnings [`warning!`](crate::warning) has printed.
+static WARNINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// The most recent warnings, each with its number (counting from 1).
+static RECENT: Mutex<std::collections::VecDeque<(u64, String)>> =
+    Mutex::new(std::collections::VecDeque::new());
+/// How many warnings [`RECENT`] keeps.
+const RECENT_WARNINGS: usize = 32;
+
+/// Print an engine warning to stderr and count it.
+///
+/// Takes the same arguments as `eprintln!` and prints the same line. The
+/// count is what a strict `arklay script` run checks after each engine call:
+/// a warning raised while the script drives the game fails the script
+/// instead of scrolling past (see [`warnings_since`]).
+#[macro_export]
+macro_rules! warning {
+    ($($arg:tt)*) => {
+        $crate::logging::note_warning(::std::format!($($arg)*))
+    };
+}
+
+/// [`warning!`](crate::warning)'s body: print `message` and count it.
+pub fn note_warning(message: String) {
+    eprintln!("{message}");
+    if let Ok(mut recent) = RECENT.lock() {
+        let number = WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        if recent.len() == RECENT_WARNINGS {
+            recent.pop_front();
+        }
+        recent.push_back((number, message));
+    } else {
+        WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// The number of warnings printed so far, and the text of the first one
+/// after the `seen`th if it is still remembered.
+pub fn warnings_since(seen: u64) -> (u64, Option<String>) {
+    let recent = RECENT.lock();
+    let count = WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
+    let first = recent.ok().and_then(|recent| {
+        recent
+            .iter()
+            .find(|(number, _)| *number > seen)
+            .map(|(_, message)| message.clone())
+    });
+    (count, first)
+}
+
 /// Seconds since the Unix epoch, for the session header.
 fn unix_time() -> u64 {
     std::time::SystemTime::now()

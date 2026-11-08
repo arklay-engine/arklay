@@ -109,7 +109,7 @@ pub fn spawn(game: &mut GameState, parent: usize, count: u8) -> Option<u16> {
     let spawn_count = requested.min(free).min(CLONE_CAP);
     if spawn_count < requested && !game.web_cap_logged {
         game.web_cap_logged = true;
-        eprintln!("[web] clone arena full: spawning {spawn_count} of {requested} threads");
+        crate::warning!("[web] clone arena full: spawning {spawn_count} of {requested} threads");
     }
     if spawn_count == 0 {
         return None;

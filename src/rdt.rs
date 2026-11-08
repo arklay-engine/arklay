@@ -154,7 +154,7 @@ fn parse_room_anim(data: &[u8], pointers: &[u32; POINTER_COUNT]) -> Option<crate
     match crate::emd::parse_room_anim(data, header, base, bound) {
         Ok(anim) => Some(anim),
         Err(error) => {
-            eprintln!("warning: invalid room player animation pair: {error:#}");
+            crate::warning!("warning: invalid room player animation pair: {error:#}");
             None
         }
     }

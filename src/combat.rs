@@ -477,7 +477,7 @@ impl CombatTables {
             Ok(data) => match Self::parse(&data) {
                 Ok(tables) => tables,
                 Err(err) => {
-                    eprintln!(
+                    crate::warning!(
                         "warning: invalid {COMBAT_ENTRY}: {err:#}; using the built-in combat tables"
                     );
                     Self::default()

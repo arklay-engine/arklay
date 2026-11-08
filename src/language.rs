@@ -418,7 +418,7 @@ impl Catalog {
             for copy in pack.read_stack(path) {
                 match std::str::from_utf8(&copy) {
                     Ok(source) => sources.push((path.to_string(), source.to_string())),
-                    Err(_) => eprintln!("warning: language file {path} is not UTF-8"),
+                    Err(_) => crate::warning!("warning: language file {path} is not UTF-8"),
                 }
             }
         }
@@ -510,13 +510,15 @@ fn parse_sources<'a>(
     sources.filter_map(|(entry, source)| {
         let tag = entry_tag(entry)?;
         if !valid_tag(&tag) {
-            eprintln!("warning: ignoring language entry {entry}: `{tag}` is not a language tag");
+            crate::warning!(
+                "warning: ignoring language entry {entry}: `{tag}` is not a language tag"
+            );
             return None;
         }
         match Language::parse(source) {
             Ok(language) => Some((tag, language)),
             Err(error) => {
-                eprintln!("warning: invalid language file {entry}: {error:#}");
+                crate::warning!("warning: invalid language file {entry}: {error:#}");
                 None
             }
         }

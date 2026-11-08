@@ -164,7 +164,7 @@ impl Bank {
                 continue;
             };
             if let Err(error) = bank.add(data, is_core) {
-                eprintln!("warning: invalid effect data: {error:#}");
+                crate::warning!("warning: invalid effect data: {error:#}");
             }
         }
         bank
@@ -230,7 +230,7 @@ impl Bank {
     fn add_sheet(&mut self, sheet: Sheet, tim: &[u8]) {
         match crate::tim::decode_4bpp(tim) {
             Ok(texture) => self.sheets.push((sheet, texture)),
-            Err(error) => eprintln!("warning: invalid effect texture: {error:#}"),
+            Err(error) => crate::warning!("warning: invalid effect texture: {error:#}"),
         }
     }
 

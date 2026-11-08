@@ -36,6 +36,9 @@
 
 mod debug_hud;
 mod debug_view;
+mod script;
+
+pub use script::{ScriptOptions, run_script};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -872,7 +875,7 @@ pub fn open_game_pack(path: &Path, options: &ModOptions, language: Option<&str>)
     let mut pack = Pack::open_layered_with(path, &layers, &options.layers)?;
     pack.set_language(language);
     for warning in pack.warnings() {
-        eprintln!("warning: {warning}");
+        crate::warning!("warning: {warning}");
     }
     Ok(pack)
 }
@@ -882,7 +885,7 @@ fn load_lua(pack: &Pack) -> Option<lua::LuaVm> {
     match lua::LuaVm::load(pack) {
         Ok(vm) => vm,
         Err(err) => {
-            eprintln!("warning: Lua hooks unavailable: {err:#}");
+            crate::warning!("warning: Lua hooks unavailable: {err:#}");
             None
         }
     }
@@ -1126,6 +1129,9 @@ pub(crate) struct Display {
     /// The window options F8 and Alt+Enter change; `None` for a capture,
     /// whose window is always the fixed 960x720 one.
     graphics: Option<Graphics>,
+    /// Whether a window change (F8, Alt+Enter, a display move) is saved to
+    /// `arklay.toml`; a driver script's window never touches the config.
+    persist: bool,
 }
 
 impl Display {
@@ -1182,12 +1188,14 @@ impl Display {
             match unsafe { GpuRenderer::new(window.0, graphics.render_scale, graphics.msaa) } {
                 Ok(mut gpu) => {
                     if !gpu.set_vsync(graphics.vsync) {
-                        eprintln!("warning: vsync setting not applied; using the default mode");
+                        crate::warning!(
+                            "warning: vsync setting not applied; using the default mode"
+                        );
                     }
                     Some(gpu)
                 }
                 Err(err) => {
-                    eprintln!("warning: GPU renderer unavailable ({err:#}); using software");
+                    crate::warning!("warning: GPU renderer unavailable ({err:#}); using software");
                     None
                 }
             }
@@ -1208,6 +1216,7 @@ impl Display {
             _window: window,
             _sdl: sdl,
             graphics: (!capture).then_some(graphics),
+            persist: !capture,
         })
     }
 
@@ -1310,12 +1319,12 @@ impl Display {
     /// Persist the window options to `arklay.toml`; a failure is reported and
     /// the change still applies for this run.
     pub(crate) fn save_window(&self) {
-        let Some(graphics) = &self.graphics else {
+        let Some(graphics) = self.graphics.as_ref().filter(|_| self.persist) else {
             return;
         };
         let path = crate::config::Config::default_path();
         if let Err(err) = crate::config::Config::save_window(&path, graphics) {
-            eprintln!("warning: window settings not saved: {err:#}");
+            crate::warning!("warning: window settings not saved: {err:#}");
         }
     }
 
@@ -1345,7 +1354,7 @@ impl Display {
         self.save_window();
         let path = crate::config::Config::default_path();
         if let Err(err) = crate::config::Config::save_aspect(&path, aspect) {
-            eprintln!("warning: aspect ratio not saved: {err:#}");
+            crate::warning!("warning: aspect ratio not saved: {err:#}");
         }
     }
 
@@ -1357,7 +1366,7 @@ impl Display {
         graphics.frame_rate = rate;
         let path = crate::config::Config::default_path();
         if let Err(err) = crate::config::Config::save_frame_rate(&path, rate) {
-            eprintln!("warning: frame rate not saved: {err:#}");
+            crate::warning!("warning: frame rate not saved: {err:#}");
         }
     }
 
@@ -1415,12 +1424,16 @@ impl Display {
                 {
                     Ok(mut gpu) => {
                         if !gpu.set_vsync(graphics.vsync) {
-                            eprintln!("warning: vsync setting not applied; using the default mode");
+                            crate::warning!(
+                                "warning: vsync setting not applied; using the default mode"
+                            );
                         }
                         Backend::Gpu(Box::new(gpu))
                     }
                     Err(err) => {
-                        eprintln!("warning: GPU renderer unavailable ({err:#}); using software");
+                        crate::warning!(
+                            "warning: GPU renderer unavailable ({err:#}); using software"
+                        );
                         Self::software_backend(self.window, graphics.vsync)?
                     }
                 }
@@ -1563,7 +1576,7 @@ impl Display {
 
     /// Replace a failed GPU backend with the software one.
     fn fall_back_to_software(&mut self, err: &anyhow::Error) -> Result<()> {
-        eprintln!("warning: GPU renderer failed ({err:#}); using software");
+        crate::warning!("warning: GPU renderer failed ({err:#}); using software");
         // The device must let go of the window before an SDL renderer can
         // claim it.
         if let Backend::Gpu(gpu) = &mut self.backend {
@@ -2367,6 +2380,13 @@ enum RoomBgmHandoff {
 /// it stays down; it must be released and pressed again. While an attract
 /// reel owns the pad the reference reads its recorded demo word instead of
 /// the live pad, so `attract` suppresses the live press entirely.
+/// The state [`GameSession::finish_authoring`] compares an edit against.
+#[derive(Clone, Copy)]
+struct AuthorBaseline {
+    banks: [[u32; 8]; crate::scd2::host::BANKS],
+    rnd: crate::zombie2::Rnd,
+}
+
 fn door_skip_pressed(ui: &UiInput, input: &player::Input, attract: bool) -> bool {
     !attract && (input.action_pressed || input.run_pressed || ui.cancel)
 }
@@ -2876,8 +2896,8 @@ impl GameSession {
             crate::convert::costume_entry(self.loaded.id.player_flag, self.game.costume_variant);
         match pack.read(&entry).map(|bytes| emd::parse(&bytes)) {
             Ok(Ok(model)) => assets.emd = model,
-            Ok(Err(err)) => eprintln!("warning: invalid costume model {entry}: {err:#}"),
-            Err(err) => eprintln!("warning: missing costume model {entry}: {err:#}"),
+            Ok(Err(err)) => crate::warning!("warning: invalid costume model {entry}: {err:#}"),
+            Err(err) => crate::warning!("warning: missing costume model {entry}: {err:#}"),
         }
     }
 
@@ -4014,7 +4034,7 @@ impl GameSession {
             }
         } else if let Some(id) = self.game.take_fmv_request() {
             if let Err(err) = self.start_movie(pack, id, self.game.id.player_flag) {
-                eprintln!("warning: film id {id} unavailable: {err:#}");
+                crate::warning!("warning: film id {id} unavailable: {err:#}");
             }
         } else if self.game.itembox.menu_open && self.itembox_open_delay == 0 {
             // The lid settled: arm the menu handshake; the opening frame is
@@ -4233,7 +4253,7 @@ impl GameSession {
             self.re2_die_sheet = pack
                 .read(crate::die2::text_entry(player))
                 .and_then(|data| crate::die2::text_sheet(&data))
-                .inspect_err(|error| eprintln!("warning: no game over text: {error:#}"))
+                .inspect_err(|error| crate::warning!("warning: no game over text: {error:#}"))
                 .ok();
         }
         if out.cry
@@ -4335,7 +4355,7 @@ impl GameSession {
         match screen {
             Ok(screen) => self.death_screen = Some(Box::new(screen)),
             Err(err) => {
-                eprintln!("warning: DIED screen unavailable: {err:#}");
+                crate::warning!("warning: DIED screen unavailable: {err:#}");
                 self.finish_death();
                 return;
             }
@@ -4492,7 +4512,7 @@ impl GameSession {
             anyhow::Ok(())
         });
         if let Err(err) = opened {
-            eprintln!("warning: pause menu unavailable: {err:#}");
+            crate::warning!("warning: pause menu unavailable: {err:#}");
             return;
         }
         self.game.message_menu = true;
@@ -4622,7 +4642,7 @@ impl GameSession {
             anyhow::Ok(())
         });
         if let Err(err) = opened {
-            eprintln!("warning: item box unavailable: {err:#}");
+            crate::warning!("warning: item box unavailable: {err:#}");
             return;
         }
         self.game.message_menu = true;
@@ -4703,7 +4723,7 @@ impl GameSession {
             game,
         ) {
             Ok(screen) => *re2_item_screen = Some(Box::new(screen)),
-            Err(err) => eprintln!("warning: get-item window's art unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: get-item window's art unavailable: {err:#}"),
         }
     }
 
@@ -5122,7 +5142,7 @@ impl GameSession {
                 }
                 self.return_title = Some(Box::new(screen));
             }
-            Err(err) => eprintln!("warning: return-to-title prompt unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: return-to-title prompt unavailable: {err:#}"),
         }
         self.play_ui_cue_names(pack, cues);
     }
@@ -5165,7 +5185,7 @@ impl GameSession {
         if wanted == target || crate::room::exists(pack, wanted) {
             wanted
         } else {
-            eprintln!(
+            crate::warning!(
                 "warning: {} has no variant for the pending character; it stays pending",
                 target.room3()
             );
@@ -5228,7 +5248,7 @@ impl GameSession {
                 self.load_from_system_menu = true;
             }
             Err(err) => {
-                eprintln!("warning: load screen unavailable: {err:#}");
+                crate::warning!("warning: load screen unavailable: {err:#}");
                 self.system_menu_requested = true;
             }
         }
@@ -5316,7 +5336,7 @@ impl GameSession {
                 if let Err(err) = self.debug_jump(pack, target)
                     && self.debug_failed.insert(target.rdt_number())
                 {
-                    eprintln!(
+                    crate::warning!(
                         "warning: debug room {} unavailable: {err:#}",
                         target.room3()
                     );
@@ -5393,7 +5413,7 @@ impl GameSession {
         match screen {
             Ok(screen) => self.examine = Some(Box::new(screen)),
             Err(err) => {
-                eprintln!("warning: item viewer unavailable: {err:#}");
+                crate::warning!("warning: item viewer unavailable: {err:#}");
                 self.menu_signal(pack, "view_closed", ());
             }
         }
@@ -5520,7 +5540,7 @@ impl GameSession {
                     )
                 };
                 let screen = screen
-                    .map_err(|err| eprintln!("warning: item viewer unavailable: {err:#}"))
+                    .map_err(|err| crate::warning!("warning: item viewer unavailable: {err:#}"))
                     .ok()
                     .map(Box::new);
                 (screen, None, PickupPhase::Intro)
@@ -5545,7 +5565,7 @@ impl GameSession {
                     )
                 };
                 let reader = reader
-                    .map_err(|err| eprintln!("warning: FILE reader unavailable: {err:#}"))
+                    .map_err(|err| crate::warning!("warning: FILE reader unavailable: {err:#}"))
                     .ok()
                     .map(Box::new);
                 (None, reader, PickupPhase::Reader)
@@ -5853,7 +5873,7 @@ impl GameSession {
         let cues = cx.cues.into_inner();
         match screen {
             Ok(screen) => self.save_screen = Some(screen),
-            Err(err) => eprintln!("warning: save screen unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: save screen unavailable: {err:#}"),
         }
         self.play_ui_cue_names(pack, cues);
     }
@@ -5872,9 +5892,27 @@ impl GameSession {
     /// authored state. This is the CLI's oracle seam, not a mod-facing hook:
     /// the path comes from `--setup-script`, never from the sandbox.
     fn run_setup_script(&mut self, script: Option<&Path>) -> Result<()> {
-        let flags = self.game.re2.banks;
-        let rnd = self.game.re2.rnd;
+        let baseline = self.author_baseline();
         run_setup_chunk(self.lua.as_ref(), &mut self.game, script)?;
+        self.finish_authoring(baseline, script.is_some());
+        Ok(())
+    }
+
+    /// What [`GameSession::finish_authoring`] compares an edit against: the
+    /// RE 2 flags and random stream as the boot left them.
+    fn author_baseline(&self) -> AuthorBaseline {
+        AuthorBaseline {
+            banks: self.game.re2.banks,
+            rnd: self.game.re2.rnd,
+        }
+    }
+
+    /// After the freshly booted state was edited (the `--setup-script` chunk,
+    /// or a driver script's `game` calls before its first tick), rerun what
+    /// the edit invalidates since `baseline`; `mirror` also moves the live
+    /// player to the authored state.
+    fn finish_authoring(&mut self, baseline: AuthorBaseline, mirror: bool) {
+        let AuthorBaseline { banks: flags, rnd } = baseline;
         // A room's scripts read the flags and the stream as they start.
         if self.game.re2.banks != flags || self.game.re2.rnd != rnd {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
@@ -5896,7 +5934,7 @@ impl GameSession {
             );
             self.game.re2.pending_player = placed;
         }
-        if script.is_some() {
+        if mirror {
             self.game.sync_player(&mut self.player);
             let life = self
                 .game
@@ -5908,7 +5946,6 @@ impl GameSession {
                 self.place_re2_start_neck();
             }
         }
-        Ok(())
     }
 
     /// A room started on its own has no last room to keep the player's head
@@ -6522,7 +6559,7 @@ impl GameSession {
         };
         match screen {
             Ok(screen) => self.item_box = Some(Box::new(screen)),
-            Err(err) => eprintln!("warning: item box unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: item box unavailable: {err:#}"),
         }
     }
 
@@ -6538,7 +6575,7 @@ impl GameSession {
         };
         match screen {
             Ok(screen) => self.file = Some(Box::new(screen)),
-            Err(err) => eprintln!("warning: FILE tab unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: FILE tab unavailable: {err:#}"),
         }
     }
 
@@ -6555,7 +6592,7 @@ impl GameSession {
         };
         match screen {
             Ok(screen) => self.map = Some(Box::new(screen)),
-            Err(err) => eprintln!("warning: map tab unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: map tab unavailable: {err:#}"),
         }
     }
 
@@ -7576,7 +7613,7 @@ impl GameSession {
             static WARNED: std::sync::atomic::AtomicBool =
                 std::sync::atomic::AtomicBool::new(false);
             if !WARNED.swap(true, Ordering::Relaxed) {
-                eprintln!("warning: a software frame was asked for under the GPU backend");
+                crate::warning!("warning: a software frame was asked for under the GPU backend");
             }
             return;
         }
@@ -8242,7 +8279,7 @@ impl GameSession {
         if self.music.is_none() {
             self.music = Mixer::open();
             if self.music.is_none() {
-                eprintln!("warning: no audio device; continuing without sound");
+                crate::warning!("warning: no audio device; continuing without sound");
             }
         }
         self.sound_device |= self.music.is_some();
@@ -9037,7 +9074,7 @@ impl App {
                     self.queue_movie(session, None);
                     return Ok(AppFlow::Continue);
                 }
-                Err(err) => eprintln!("warning: film id {id} unavailable: {err:#}"),
+                Err(err) => crate::warning!("warning: film id {id} unavailable: {err:#}"),
             }
         }
         self.chain_active = false;
@@ -9372,7 +9409,7 @@ impl App {
             self.opening_played = true;
             match self.open_movie(TITLE_OPENING_ID, 0) {
                 Ok(session) => self.queue_movie(session, Some(ScreenAction::Title)),
-                Err(err) => eprintln!("warning: opening film unavailable: {err:#}"),
+                Err(err) => crate::warning!("warning: opening film unavailable: {err:#}"),
             }
         }
         Ok(())
@@ -9417,7 +9454,7 @@ impl App {
         let screen = match screen {
             Ok(screen) => screen,
             Err(err) => {
-                eprintln!("warning: load screen unavailable: {err:#}");
+                crate::warning!("warning: load screen unavailable: {err:#}");
                 return self.open_title();
             }
         };
@@ -9748,7 +9785,7 @@ impl App {
         let file = match build_next_cycle_save(&self.pack, &flow, self.player_options) {
             Ok(file) => file,
             Err(err) => {
-                eprintln!("warning: could not build the next-cycle save: {err:#}");
+                crate::warning!("warning: could not build the next-cycle save: {err:#}");
                 self.ending = None;
                 return self.open_title();
             }
@@ -9760,7 +9797,7 @@ impl App {
         let screen = match screen {
             Ok(screen) => screen,
             Err(err) => {
-                eprintln!("warning: save screen unavailable: {err:#}");
+                crate::warning!("warning: save screen unavailable: {err:#}");
                 self.ending = None;
                 return self.open_title();
             }
@@ -9880,7 +9917,7 @@ impl App {
                             Some(ScreenAction::NewGame { character, choice }),
                         ),
                         Err(err) => {
-                            eprintln!("warning: intro film unavailable: {err:#}");
+                            crate::warning!("warning: intro film unavailable: {err:#}");
                             self.prologue_pending = false;
                             self.start_new_game(character, choice)?;
                         }
@@ -9912,7 +9949,7 @@ impl App {
                             self.start_session(session);
                         }
                         Err(err) => {
-                            eprintln!("warning: attract demo unavailable: {err:#}");
+                            crate::warning!("warning: attract demo unavailable: {err:#}");
                             self.open_title()?;
                         }
                     },
@@ -10062,10 +10099,13 @@ impl App {
             if let Err(err) = outcome {
                 match &request {
                     LoadRequest::Slot(slot) => {
-                        eprintln!("warning: save slot {slot} unavailable: {err:#}")
+                        crate::warning!("warning: save slot {slot} unavailable: {err:#}")
                     }
                     LoadRequest::File(path) => {
-                        eprintln!("warning: save file {} unavailable: {err:#}", path.display())
+                        crate::warning!(
+                            "warning: save file {} unavailable: {err:#}",
+                            path.display()
+                        )
                     }
                 }
             }
@@ -11251,7 +11291,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
                     hud.notify("screenshot", format!("Screenshot saved: {name}"));
                 }
                 Err(err) => {
-                    eprintln!("warning: screenshot failed: {err:#}");
+                    crate::warning!("warning: screenshot failed: {err:#}");
                     hud.notify("screenshot", "Screenshot failed");
                 }
             }
@@ -11278,7 +11318,7 @@ fn drive_system_menu(
     if app.take_system_menu_request() {
         match gui::SystemMenu::new(menu_settings(app, display)) {
             Ok(menu) => app.open_system_menu(menu),
-            Err(err) => eprintln!("warning: in-game menu unavailable: {err:#}"),
+            Err(err) => crate::warning!("warning: in-game menu unavailable: {err:#}"),
         }
         return Ok(());
     }
@@ -11319,7 +11359,7 @@ fn drive_system_menu(
             gui::MenuRequest::Resume => app.close_system_menu(),
             gui::MenuRequest::Restart => {
                 if let Err(err) = app.restart() {
-                    eprintln!("warning: restart failed: {err:#}");
+                    crate::warning!("warning: restart failed: {err:#}");
                 }
             }
             gui::MenuRequest::LoadGame => {
@@ -11675,13 +11715,13 @@ fn apply_menu_settings(
             graphics.render_scale = wanted.render_scale;
             graphics.msaa = wanted.msaa;
             if let Err(err) = display.rebuild_renderer(graphics) {
-                eprintln!("warning: renderer not changed: {err:#}");
+                crate::warning!("warning: renderer not changed: {err:#}");
             }
         }
         if wanted.vsync != old.vsync
             && let Err(err) = display.set_vsync(wanted.vsync)
         {
-            eprintln!("warning: vsync not applied: {err:#}");
+            crate::warning!("warning: vsync not applied: {err:#}");
         }
         if (wanted.fullscreen, wanted.window_width, wanted.window_height)
             != (old.fullscreen, old.window_width, old.window_height)
@@ -11726,7 +11766,7 @@ fn apply_menu_settings(
     if settings.custom_pad != before.custom_pad {
         let path = crate::config::Config::default_path();
         if let Err(err) = crate::config::Config::save_custom_pad(&path, &settings.custom_pad) {
-            eprintln!("warning: custom controller layout not saved: {err:#}");
+            crate::warning!("warning: custom controller layout not saved: {err:#}");
         }
     }
     if let Mode::Play(session) = &mut app.mode {
@@ -11745,7 +11785,7 @@ fn apply_menu_settings(
         saved_language.as_deref(),
         saved_game,
     ) {
-        eprintln!("warning: options not saved: {err:#}");
+        crate::warning!("warning: options not saved: {err:#}");
     }
     if let Some(menu) = app.system_menu.as_mut() {
         menu.set_settings(gui::Settings {
@@ -12349,14 +12389,14 @@ fn load_door_animation(pack: &Pack, record: &game::Door, entry_camera: u8) -> Do
     let bytes = match pack.read(&path) {
         Ok(bytes) => bytes,
         Err(err) => {
-            eprintln!("warning: missing door animation {path}: {err}");
+            crate::warning!("warning: missing door animation {path}: {err}");
             return DoorAnimation::missing();
         }
     };
     let dor = match door::parse(&bytes) {
         Ok(dor) => dor,
         Err(err) => {
-            eprintln!("warning: invalid door animation {path}: {err:#}");
+            crate::warning!("warning: invalid door animation {path}: {err:#}");
             return DoorAnimation::missing();
         }
     };
@@ -12380,14 +12420,14 @@ fn load_re2_door_animation(pack: &Pack, record: &game::Door) -> DoorAnimation {
     let bytes = match pack.read(&path) {
         Ok(bytes) => bytes,
         Err(err) => {
-            eprintln!("warning: missing door animation {path}: {err}");
+            crate::warning!("warning: missing door animation {path}: {err}");
             return DoorAnimation::missing();
         }
     };
     let do2 = match door2::parse(&bytes) {
         Ok(do2) => do2,
         Err(err) => {
-            eprintln!("warning: invalid door animation {path}: {err:#}");
+            crate::warning!("warning: invalid door animation {path}: {err:#}");
             return DoorAnimation::missing();
         }
     };
@@ -14479,7 +14519,7 @@ impl Gamepads {
     pub(crate) fn init(&mut self) {
         if !self.initialized {
             if !unsafe { SDL_InitSubSystem(SDL_INIT_GAMEPAD) } {
-                eprintln!("warning: gamepads unavailable: {}", sdl_error());
+                crate::warning!("warning: gamepads unavailable: {}", sdl_error());
                 return;
             }
             self.initialized = true;
@@ -14489,7 +14529,7 @@ impl Gamepads {
             && let Ok(path) = std::ffi::CString::new(db.as_os_str().as_encoded_bytes())
             && unsafe { SDL_AddGamepadMappingsFromFile(path.as_ptr()) } < 0
         {
-            eprintln!("warning: failed to read {}: {}", db.display(), sdl_error());
+            crate::warning!("warning: failed to read {}: {}", db.display(), sdl_error());
         }
         self.refresh();
     }
@@ -14515,7 +14555,7 @@ impl Gamepads {
         }
         let pad = unsafe { SDL_OpenGamepad(which) };
         if pad.is_null() {
-            eprintln!("warning: failed to open gamepad: {}", sdl_error());
+            crate::warning!("warning: failed to open gamepad: {}", sdl_error());
         } else {
             self.open.push((which, pad));
         }
@@ -14588,12 +14628,12 @@ impl SfxCache {
         let asset = match pack.read_asset(&stem, AssetClass::Audio) {
             Ok(Some(asset)) => asset,
             Ok(None) => {
-                eprintln!("warning: missing sound effect {stem}.wav");
+                crate::warning!("warning: missing sound effect {stem}.wav");
                 self.missing.insert(stem);
                 return None;
             }
             Err(err) => {
-                eprintln!("warning: unreadable sound effect {stem}: {err:#}");
+                crate::warning!("warning: unreadable sound effect {stem}: {err:#}");
                 self.missing.insert(stem);
                 return None;
             }
@@ -14604,7 +14644,7 @@ impl SfxCache {
                 Some(wav)
             }
             Err(err) => {
-                eprintln!("warning: invalid sound effect {}: {err:#}", asset.path());
+                crate::warning!("warning: invalid sound effect {}: {err:#}", asset.path());
                 self.missing.insert(stem);
                 None
             }
@@ -14717,12 +14757,12 @@ impl VoiceCache {
         let asset = match pack.read_asset(&key, AssetClass::Audio) {
             Ok(Some(asset)) => asset,
             Ok(None) => {
-                eprintln!("warning: missing voice line {path}");
+                crate::warning!("warning: missing voice line {path}");
                 self.missing.insert(key);
                 return None;
             }
             Err(err) => {
-                eprintln!("warning: unreadable voice line {path}: {err:#}");
+                crate::warning!("warning: unreadable voice line {path}: {err:#}");
                 self.missing.insert(key);
                 return None;
             }
@@ -14733,7 +14773,7 @@ impl VoiceCache {
                 Some(wav)
             }
             Err(err) => {
-                eprintln!("warning: invalid voice line {}: {err:#}", asset.path());
+                crate::warning!("warning: invalid voice line {}: {err:#}", asset.path());
                 self.missing.insert(key);
                 None
             }
@@ -14906,7 +14946,7 @@ impl MaskCache {
                             self.pages.insert(camera, image);
                         }
                         Err(err) => {
-                            eprintln!("warning: invalid room mask {}: {err:#}", asset.path());
+                            crate::warning!("warning: invalid room mask {}: {err:#}", asset.path());
                             self.missing.insert(camera);
                         }
                     }
@@ -14945,7 +14985,7 @@ impl ShadowCache {
                 }) {
                     Ok(image) => self.page = Some(image),
                     Err(err) => {
-                        eprintln!("warning: invalid {}: {err:#}", asset.path());
+                        crate::warning!("warning: invalid {}: {err:#}", asset.path());
                     }
                 }
             }
@@ -15029,7 +15069,7 @@ impl EffectPageCache {
                 .ok()
                 .and_then(|data| crate::interactive::decode_page(&data));
             if page.is_none() {
-                eprintln!("warning: missing interactive screen page {entry}");
+                crate::warning!("warning: missing interactive screen page {entry}");
             }
             self.interactive.insert(entry.clone(), page);
         }
@@ -15091,10 +15131,12 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
         match pack.read_asset(&stem, AssetClass::Image) {
             Ok(Some(asset)) => match assets::decode_page(&asset, assets::Geometry::Shipped) {
                 Ok(art) => pages.base[page] = Some(art.to_rgba()),
-                Err(err) => eprintln!("warning: invalid effect page {}: {err:#}", asset.path()),
+                Err(err) => {
+                    crate::warning!("warning: invalid effect page {}: {err:#}", asset.path())
+                }
             },
             Ok(None) => {}
-            Err(err) => eprintln!("warning: unreadable effect page {stem}: {err:#}"),
+            Err(err) => crate::warning!("warning: unreadable effect page {stem}: {err:#}"),
         }
     }
 
@@ -15474,7 +15516,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     let dialect = loaded.dialect;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
-        eprintln!("warning: {}: {warning}", crate::room::entry(pack, id));
+        crate::warning!("warning: {}: {warning}", crate::room::entry(pack, id));
     }
     if room.cuts.is_empty() {
         bail!("room {} has no camera cuts", id.room3());
@@ -15487,7 +15529,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
             // (room 7071, the 17th camera of the 17-camera rooms); the room
             // still loads and those cameras draw black.
             if dialect == crate::format::Dialect::Re2 {
-                eprintln!("warning: no background for cut {} ({stem})", cut.index);
+                crate::warning!("warning: no background for cut {} ({stem})", cut.index);
                 continue;
             }
             bail!("missing background for cut {}", cut.index);
@@ -15554,7 +15596,7 @@ fn new_game_state(
     if pack.contains(effects::room::CORE_ESP_ENTRY) || pack.contains(effects::room::CORE_ETM_ENTRY)
     {
         for warning in &weapon.warnings {
-            eprintln!("warning: {warning}");
+            crate::warning!("warning: {warning}");
         }
     }
     game.set_weapon_effects(weapon);
@@ -16965,7 +17007,7 @@ impl InputState {
     fn apply_bindings_change(&mut self, bindings: controls::Bindings) {
         let path = crate::config::Config::default_path();
         if let Err(err) = crate::config::Config::save_bindings(&path, &bindings) {
-            eprintln!("warning: bindings not saved: {err:#}");
+            crate::warning!("warning: bindings not saved: {err:#}");
         }
         self.set_bindings(bindings);
     }
@@ -19652,7 +19694,7 @@ fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8) -> Option<Player
             re2_weapon: Some(weapon),
         }),
         Err(err) => {
-            eprintln!("warning: invalid RE2 player {character}: {err:#}");
+            crate::warning!("warning: invalid RE2 player {character}: {err:#}");
             None
         }
     }
@@ -19666,24 +19708,24 @@ fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
     let emd_path = crate::convert::skin_entry(character, 0);
     let emw_path = crate::weapons::weapon_emw_entry(character, 0);
     let emd_bytes = pack.read(&emd_path).map_err(|err| {
-        eprintln!("warning: missing player model {emd_path}: {err:#}");
+        crate::warning!("warning: missing player model {emd_path}: {err:#}");
     });
     let emw_bytes = pack.read(&emw_path).map_err(|err| {
-        eprintln!("warning: missing player clips {emw_path}: {err:#}");
+        crate::warning!("warning: missing player clips {emw_path}: {err:#}");
     });
     let emd_bytes = emd_bytes.ok()?;
     let emw_bytes = emw_bytes.ok()?;
     let emd = match emd::parse(&emd_bytes) {
         Ok(model) => model,
         Err(err) => {
-            eprintln!("warning: invalid player model {emd_path}: {err:#}");
+            crate::warning!("warning: invalid player model {emd_path}: {err:#}");
             return None;
         }
     };
     let emw = match emd::parse_emw(&emw_bytes) {
         Ok(model) => model,
         Err(err) => {
-            eprintln!("warning: invalid player clips {emw_path}: {err:#}");
+            crate::warning!("warning: invalid player clips {emw_path}: {err:#}");
             return None;
         }
     };
@@ -19710,10 +19752,10 @@ fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
                         parsed.push((bytes.as_ref().to_vec(), item));
                         weapons.insert(item, model);
                     }
-                    Err(err) => eprintln!("warning: invalid weapon clips {entry}: {err:#}"),
+                    Err(err) => crate::warning!("warning: invalid weapon clips {entry}: {err:#}"),
                 }
             }
-            Err(err) => eprintln!("warning: missing weapon clips {entry}: {err:#}"),
+            Err(err) => crate::warning!("warning: missing weapon clips {entry}: {err:#}"),
         }
     }
     Some(PlayerAssets {
@@ -19738,12 +19780,12 @@ fn load_room_music(pack: &Pack, id: RoomId) -> Option<audio::Wav> {
         Ok(bytes) => match audio::parse_wav(&bytes) {
             Ok(wav) => Some(wav),
             Err(err) => {
-                eprintln!("warning: invalid music track {path}: {err:#}");
+                crate::warning!("warning: invalid music track {path}: {err:#}");
                 None
             }
         },
         Err(err) => {
-            eprintln!("warning: missing music track {path}: {err:#}");
+            crate::warning!("warning: missing music track {path}: {err:#}");
             None
         }
     }
@@ -24824,7 +24866,7 @@ mod tests {
         };
         let dir = TempDir::new();
         let Some(font_pack) = font_pack(&path, &dir) else {
-            eprintln!("warning: neither the pack nor ARKLAY_RE1_ROOT carries FONT.TIM");
+            crate::warning!("warning: neither the pack nor ARKLAY_RE1_ROOT carries FONT.TIM");
             return;
         };
         let pack = Pack::open(&font_pack).unwrap();
@@ -24856,7 +24898,7 @@ mod tests {
         };
         let dir = TempDir::new();
         let Some(font_pack) = font_pack(&path, &dir) else {
-            eprintln!("warning: neither the pack nor ARKLAY_RE1_ROOT carries FONT.TIM");
+            crate::warning!("warning: neither the pack nor ARKLAY_RE1_ROOT carries FONT.TIM");
             return;
         };
         let first_path = dir.0.join("font_a.bmp");

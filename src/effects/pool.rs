@@ -505,7 +505,7 @@ fn spawn(
         .or_else(|| weapon_effects.sprite(effect_type));
     let Some(sprite) = sprite else {
         if effect_missing_logged.insert(effect_type) {
-            eprintln!(
+            crate::warning!(
                 "warning: effect sprite {effect_type} is not declared by this room; effect skipped"
             );
         }

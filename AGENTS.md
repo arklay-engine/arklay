@@ -62,6 +62,36 @@ to go to the compiler (#266). Follow these rules:
   edit that keeps the line count. That is no reason to avoid the edit, but
   batch related edits before rebuilding instead of rebuilding after each one.
 
+## Automating arklay: driver scripts
+
+To run the engine for a task (check a room, reproduce a bug, measure
+something, capture a frame), write a Lua driver script and run it with
+`arklay script --headless FILE` (or `-` to read it from stdin). The script
+opens a pack, boots a session, holds buttons, ticks and reads or writes the
+game state; the API is `lua-types/script.lua`
+(`docs/scripting/lua/script.md`).
+
+```sh
+target/test-release/arklay script --headless - <<'LUA'
+load_game_pack("re1.akpak")
+load_room("10A")
+hold("forward")
+tick(30)
+print(json({ room = game:room(), pos = { game:player_pos() } }))
+LUA
+```
+
+- **Always pass `--headless`.** Without it the run opens a window and fails
+  where none can open.
+- **Do not add command-line flags for automation.** When a script needs
+  something the API lacks, add it to the script API (`src/engine/script.rs`)
+  or, for game state, to the hook API (`impl UserData for GameState` in
+  `src/lua.rs`, which `game` forwards to), and document it in the matching
+  `lua-types/*.lua`.
+- Only `print` writes to stdout; parse `print(json(...))`. A non-zero exit
+  status is a real failure: a Lua error, a failed engine call, or an engine
+  warning (`strict(false)` lets warnings through).
+
 ## The check tiers
 
 `scripts/check.sh` has tiers. Run the session tier once, before pushing. Do

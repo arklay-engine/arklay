@@ -984,7 +984,7 @@ impl Ui {
                     top.pending = Some((uid, owner, action.to_string()));
                     self.outputs.push(UiOutput::Sound(Sound::Decide));
                 }
-                Err(err) => eprintln!("warning: ui: {err:#}"),
+                Err(err) => crate::warning!("warning: ui: {err:#}"),
             }
             return;
         }
@@ -1013,7 +1013,7 @@ impl Ui {
                         self.outputs.push(UiOutput::Opened(target.to_string()));
                         self.outputs.push(UiOutput::Sound(Sound::Decide));
                     }
-                    Err(err) => eprintln!("warning: ui: {err:#}"),
+                    Err(err) => crate::warning!("warning: ui: {err:#}"),
                 }
             }
             "reset" => {
@@ -1532,7 +1532,7 @@ fn rebuild_template(tree: &mut Tree, id: NodeId, builder: &Builder<'_>) {
             for el in template.iter() {
                 match builder.build(tree, el, Some(id)) {
                     Ok(child) => tree[child].scope = Some(scope(index, item)),
-                    Err(err) => eprintln!("warning: ui template: {err:#}"),
+                    Err(err) => crate::warning!("warning: ui template: {err:#}"),
                 }
             }
         }

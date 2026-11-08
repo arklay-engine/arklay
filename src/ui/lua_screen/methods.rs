@@ -318,7 +318,7 @@ impl UserData for Api<'_> {
         // ---- actions -------------------------------------------------
         methods.add_method("sound", |_lua, api, name: String| {
             let Some(cue) = cue_of(&name) else {
-                eprintln!("[lua] screen: unknown sound `{name}`");
+                crate::warning!("[lua] screen: unknown sound `{name}`");
                 return Ok(());
             };
             api.cx.play_cue(cue);

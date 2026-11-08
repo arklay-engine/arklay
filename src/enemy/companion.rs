@@ -229,7 +229,7 @@ pub fn plant42_spawn(game: &mut GameState, slot: usize, flags: u8) -> Option<(u1
         .filter_map(|(index, companion)| companion.is_none().then_some(index))
         .collect();
     if free.len() < 2 {
-        eprintln!("[companion] arena full: Plant 42 body/roots not spawned");
+        crate::warning!("[companion] arena full: Plant 42 body/roots not spawned");
         return None;
     }
     let parent = game.entities[slot];

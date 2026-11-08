@@ -76,7 +76,7 @@ pub fn load(pack: &Pack) -> FlagNames {
     if let Ok(bytes) = pack.read(ENTRY) {
         match run(&bytes) {
             Ok(names) => return names,
-            Err(err) => eprintln!("[lua] {err}; using the built-in flag names"),
+            Err(err) => crate::warning!("[lua] {err}; using the built-in flag names"),
         }
     }
     load_builtin()
@@ -91,7 +91,7 @@ pub fn load_builtin() -> FlagNames {
         return FlagNames::default();
     };
     run(source.as_bytes()).unwrap_or_else(|err| {
-        eprintln!("[lua] built-in {err}");
+        crate::warning!("[lua] built-in {err}");
         FlagNames::default()
     })
 }

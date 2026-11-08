@@ -118,6 +118,48 @@ function HookApi:room() end
 ---@return boolean
 function HookApi:authentic() end
 
+---The room id's stage number.
+---@return integer
+function HookApi:stage() end
+
+---The player character: `0` Chris (RE 2: Leon), `1` Jill (RE 2: Claire).
+---@return integer
+function HookApi:character() end
+
+---The player's position.
+---@return integer x
+---@return integer y
+---@return integer z
+function HookApi:player_pos() end
+
+---The player's facing, `0..4096` per full turn.
+---@return integer
+function HookApi:player_angle() end
+
+---The player's health.
+---@return integer
+function HookApi:health() end
+
+---The player's maximum health.
+---@return integer
+function HookApi:max_health() end
+
+---The selected camera cut.
+---@return integer
+function HookApi:camera() end
+
+---The session's completed fixed-tick count.
+---@return integer
+function HookApi:frame() end
+
+---Whether the current room runs on the RE 2 engine.
+---@return boolean
+function HookApi:is_re2() end
+
+---The held item stacks in slot order.
+---@return { id: integer, quantity: integer }[]
+function HookApi:inventory() end
+
 ---Whether a flag bit is set.
 ---@param bank integer
 ---@param bit integer

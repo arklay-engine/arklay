@@ -51,7 +51,7 @@ pub(super) struct DebugHud {
 impl DebugHud {
     pub(super) fn new(family: gui::FontFamily) -> Self {
         let overlay = gui::Overlay::new(family)
-            .inspect_err(|err| eprintln!("warning: debug HUD unavailable: {err:#}"))
+            .inspect_err(|err| crate::warning!("warning: debug HUD unavailable: {err:#}"))
             .ok();
         Self {
             overlay,

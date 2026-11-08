@@ -161,7 +161,7 @@ pub fn save_in_background(image: Image) -> String {
     let name = file_name(time);
     std::thread::spawn(move || match save_to(&dir(), &image, time) {
         Ok(path) => eprintln!("screenshot saved to {}", path.display()),
-        Err(err) => eprintln!("warning: screenshot not saved: {err:#}"),
+        Err(err) => crate::warning!("warning: screenshot not saved: {err:#}"),
     });
     name
 }

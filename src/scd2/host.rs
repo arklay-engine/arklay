@@ -7,7 +7,7 @@ use crate::game::{Door, GameState, ROOM_ACTION_SLOTS, RoomAction, RoomActionKind
 use crate::state::Zone;
 
 /// The flag banks `ck` and `set` index (`Flg_addr`).
-const BANKS: usize = 32;
+pub(crate) const BANKS: usize = 32;
 
 /// RE2's script state, which has no RE1 counterpart.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1442,7 +1442,7 @@ impl GameHost<'_> {
         params: [u8; 8],
     ) {
         if slot >= ROOM_ACTION_SLOTS {
-            eprintln!("warning: RE2 area {slot} is past the action slots");
+            crate::warning!("warning: RE2 area {slot} is past the action slots");
             return;
         }
         self.game.re2.gates[slot] = ActionGate::new(quad, floor, parent);
@@ -1860,7 +1860,7 @@ impl GameHost<'_> {
         let at = |index: usize| ops.get(index).copied().unwrap_or(0);
         let slot = at(0) as usize;
         if slot >= ROOM_ACTION_SLOTS {
-            eprintln!("warning: RE2 door area {slot} is past the action slots");
+            crate::warning!("warning: RE2 door area {slot} is past the action slots");
             return;
         }
         let sat = at(2) as u8;

@@ -570,7 +570,38 @@ enum Command {
         strict: bool,
     },
 
-    /// Script tools
+    /// Run a Lua script that drives the engine: boot a pack and a room,
+    /// press buttons, tick and print or capture what happens
+    ///
+    /// The script is the program: `load_game_pack`, `load_room`, `hold`,
+    /// `tick`, `game:player_pos()`, `print(json(...))` and the rest of the
+    /// API in `lua-types/script.lua`. It runs deterministically: the user's
+    /// config and mods are ignored. Only `print` writes to stdout; engine
+    /// messages go to stderr. A Lua error, a failed engine call or an engine
+    /// warning (unless the script calls `strict(false)`) exits with status 1.
+    Script {
+        /// The script file, or `-` to read it from stdin
+        #[arg(value_name = "FILE")]
+        script: PathBuf,
+
+        /// Arguments for the script, its `arg[1]`, `arg[2]`, ...
+        #[arg(
+            value_name = "ARGS",
+            trailing_var_arg = true,
+            allow_hyphen_values = true
+        )]
+        args: Vec<String>,
+
+        /// Run without a window (the default shows every tick live)
+        #[arg(long)]
+        headless: bool,
+
+        /// Fail the run after this many seconds
+        #[arg(long, value_name = "SECONDS")]
+        timeout: Option<f64>,
+    },
+
+    /// SCD room-script tools
     Scd {
         #[command(subcommand)]
         action: ScdAction,
@@ -627,7 +658,48 @@ const LUA_TYPES: &[(&str, &str)] = &[
         include_str!("../lua-types/interactive.lua"),
     ),
     ("re2-enemy.lua", include_str!("../lua-types/re2-enemy.lua")),
+    ("script.lua", include_str!("../lua-types/script.lua")),
 ];
+
+/// `arklay script`: read the script, run it, and exit with its status.
+fn run_script(
+    script: &Path,
+    args: Vec<String>,
+    headless: bool,
+    timeout: Option<f64>,
+) -> Result<()> {
+    use std::io::{Read as _, Write as _};
+    let (name, source) = if script == Path::new("-") {
+        let mut source = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut source)
+            .context("failed to read the script from stdin")?;
+        ("stdin".to_string(), source)
+    } else {
+        let source =
+            fs::read(script).with_context(|| format!("failed to read {}", script.display()))?;
+        (script.display().to_string(), source)
+    };
+    let timeout = match timeout {
+        Some(seconds) => match std::time::Duration::try_from_secs_f64(seconds) {
+            Ok(timeout) if !timeout.is_zero() => Some(timeout),
+            _ => bail!("--timeout must be a positive number of seconds, not {seconds}"),
+        },
+        None => None,
+    };
+    let code = arklay::engine::run_script(arklay::engine::ScriptOptions {
+        name,
+        source,
+        args,
+        headless,
+        timeout,
+    })?;
+    let _ = std::io::stdout().flush();
+    if code != 0 {
+        std::process::exit(code);
+    }
+    Ok(())
+}
 
 #[derive(Subcommand, Debug)]
 enum PackAction {
@@ -1332,6 +1404,12 @@ fn main() -> Result<()> {
         }) => hash_file(&file, class.as_deref(), border),
         Some(Command::List { pack, mods }) => list_pack(&pack, &mods),
         Some(Command::Verify { pack, mods, strict }) => verify_pack(&pack, &mods, strict),
+        Some(Command::Script {
+            script,
+            args,
+            headless,
+            timeout,
+        }) => run_script(&script, args, headless, timeout),
         Some(Command::Scd { action }) => match action {
             ScdAction::Export { rdt, out, list } => export_scd(&rdt, &out, list),
             ScdAction::Build {

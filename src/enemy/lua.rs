@@ -196,7 +196,7 @@ mod imp {
             match result {
                 Ok(()) => true,
                 Err(err) => {
-                    eprintln!("[enemy] {id:02x} update disabled: {err}");
+                    crate::warning!("[enemy] {id:02x} update disabled: {err}");
                     self.failed.insert(id);
                     self.scripts.remove(&id);
                     false
@@ -227,7 +227,7 @@ mod imp {
             match result {
                 Ok(()) => true,
                 Err(err) => {
-                    eprintln!("[enemy] {id:02x} update disabled: {err}");
+                    crate::warning!("[enemy] {id:02x} update disabled: {err}");
                     self.failed.insert(id);
                     self.scripts.remove(&id);
                     false
@@ -271,7 +271,7 @@ mod imp {
                     true
                 }
                 Err(err) => {
-                    eprintln!("[interactive] {entry} disabled: {err}");
+                    crate::warning!("[interactive] {entry} disabled: {err}");
                     self.screens.remove(entry);
                     self.screens_parked.insert(entry.to_string());
                     false
@@ -295,7 +295,7 @@ mod imp {
                 budget::MAX_LUA_CHUNK,
                 &format!("screen script {entry}"),
             ) {
-                eprintln!("[interactive] {err:#}");
+                crate::warning!("[interactive] {err:#}");
                 return None;
             }
             if !self.ensure_vm() {
@@ -311,7 +311,7 @@ mod imp {
             ) {
                 Ok(env) => env,
                 Err(err) => {
-                    eprintln!(
+                    crate::warning!(
                         "[interactive] failed to create the environment for {entry}: {err:#}"
                     );
                     return None;
@@ -324,11 +324,11 @@ mod imp {
                 .set_environment(env.clone())
                 .exec()
             {
-                eprintln!("[interactive] failed to load {entry}: {err:#}");
+                crate::warning!("[interactive] failed to load {entry}: {err:#}");
                 return None;
             }
             let Ok(Value::Function(display)) = env.get::<Value>("display") else {
-                eprintln!("[interactive] {entry} defines no display function");
+                crate::warning!("[interactive] {entry} defines no display function");
                 return None;
             };
             self.screens_parked.remove(entry);
@@ -358,7 +358,7 @@ mod imp {
                 budget::MAX_LUA_CHUNK,
                 &format!("enemy script {path}"),
             ) {
-                eprintln!("[enemy] {err:#}");
+                crate::warning!("[enemy] {err:#}");
                 self.failed.insert(id);
                 return None;
             }
@@ -376,7 +376,7 @@ mod imp {
             ) {
                 Ok(env) => env,
                 Err(err) => {
-                    eprintln!("[enemy] failed to create the environment for {path}: {err:#}");
+                    crate::warning!("[enemy] failed to create the environment for {path}: {err:#}");
                     self.failed.insert(id);
                     return None;
                 }
@@ -389,14 +389,14 @@ mod imp {
                 .set_environment(env.clone())
                 .exec()
             {
-                eprintln!("[enemy] failed to load {path}: {err:#}");
+                crate::warning!("[enemy] failed to load {path}: {err:#}");
                 self.failed.insert(id);
                 return None;
             }
             let update = match env.get::<Value>("update") {
                 Ok(Value::Function(function)) => function,
                 _ => {
-                    eprintln!("[enemy] {path} defines no update function");
+                    crate::warning!("[enemy] {path} defines no update function");
                     self.failed.insert(id);
                     return None;
                 }
@@ -405,7 +405,9 @@ mod imp {
                 Ok(sounds) => {
                     self.sounds.insert(id, sounds);
                 }
-                Err(err) => eprintln!("[enemy] {path} has an invalid sounds declaration: {err}"),
+                Err(err) => {
+                    crate::warning!("[enemy] {path} has an invalid sounds declaration: {err}")
+                }
             }
             self.scripts.insert(id, update.clone());
             Some(update)
@@ -462,7 +464,7 @@ mod imp {
             let (lua, budget) = match new_sandboxed_state() {
                 Ok(state) => state,
                 Err(err) => {
-                    eprintln!("[enemy] failed to create the Lua state: {err:#}");
+                    crate::warning!("[enemy] failed to create the Lua state: {err:#}");
                     return false;
                 }
             };

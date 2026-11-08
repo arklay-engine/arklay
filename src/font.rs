@@ -66,7 +66,7 @@ pub fn read_def(pack: &Pack, id: u8) -> Option<FontDef> {
     match parsed {
         Ok(def) => Some(def),
         Err(err) => {
-            eprintln!("warning: invalid {entry}: {err:#}");
+            crate::warning!("warning: invalid {entry}: {err:#}");
             None
         }
     }
@@ -119,7 +119,7 @@ fn load_with(pack: &Pack, id: u8, def: FontDef) -> Option<Font> {
             Some(font)
         }
         Err(err) => {
-            eprintln!("warning: invalid {}: {err:#}", asset.path());
+            crate::warning!("warning: invalid {}: {err:#}", asset.path());
             None
         }
     }

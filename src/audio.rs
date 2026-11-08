@@ -403,7 +403,7 @@ fn mono_or_warn(wav: &Wav) -> Option<Vec<i16>> {
     match to_mono(wav) {
         Ok(mono) => Some(mono),
         Err(error) => {
-            eprintln!("[audio] dropping WAV: {error:#}");
+            crate::warning!("[audio] dropping WAV: {error:#}");
             None
         }
     }
@@ -415,7 +415,7 @@ fn stereo_or_warn(wav: &Wav) -> Option<Vec<i16>> {
     match to_stereo(wav) {
         Ok(stereo) => Some(stereo),
         Err(error) => {
-            eprintln!("[audio] dropping WAV: {error:#}");
+            crate::warning!("[audio] dropping WAV: {error:#}");
             None
         }
     }

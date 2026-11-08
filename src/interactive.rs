@@ -958,7 +958,7 @@ impl UserData for ScreenApi {
                     .ok()
                     .and_then(|data| tim_words(&data));
                 let Some(words) = words else {
-                    eprintln!("[interactive] no TIM texture {entry}: slot {slot} left empty");
+                    crate::warning!("[interactive] no TIM texture {entry}: slot {slot} left empty");
                     api.game_mut().interactive.textures.remove(&(slot as u8));
                     return Ok(false);
                 };

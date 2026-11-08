@@ -78,7 +78,7 @@ pub(super) fn call(ui: &mut Ui, uid: u64, event: &str, arg: Value) -> bool {
     match result {
         Ok(handled) => handled,
         Err(err) => {
-            eprintln!("[ui] script for {name} failed: {err}");
+            crate::warning!("[ui] script for {name} failed: {err}");
             if let Some(s) = ui.index_of(uid) {
                 ui.screens.truncate(s);
                 ui.outputs.push(UiOutput::Closed(name));
