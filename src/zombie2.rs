@@ -384,6 +384,11 @@ pub const G2_ID: u8 = 0x31;
 pub const G3_ID: u8 = 0x33;
 /// G3's script field for `+0x225`, which `Em_33` keeps.
 const G3_STUCK: usize = 19;
+/// G3's script field for its frame's grip (`pNow_seq`'s bits 20 to 23),
+/// which the player's knock-back reads.
+const G3_GRIP: usize = 31;
+/// `BYTE_0052a817`: the part each grip holds the player at.
+const G3_GRIP_PARTS: [usize; 5] = [0, 9, 6, 0x15, 0xF];
 /// G1's script fields that `Em_30`'s `Root_ck` reads: `+0x21c`, and the
 /// point of `+0x21b`.
 const G1_FLAGS: usize = 3;
@@ -559,6 +564,9 @@ pub struct Zombie {
     charred: u8,
     /// `pEnemy_ptr`: the slot of the ivy a vine grew from.
     pub parent: Option<u8>,
+    /// Where G3's frame grips a knocked-back player (`0x49a890`): the part
+    /// its frame names, as the last draw left it, x and z.
+    grip: Option<[i32; 2]>,
     /// The parts' `Workm` that the ivy's `FUN_004886f0` left, for its vines.
     pub(crate) parts: Vec<Option<player2::Matrix>>,
     /// The parts' own rotations on that pose (`+0x68`).
@@ -687,6 +695,23 @@ pub fn spawned(slot: u8, floor: u8, model_type: u8) -> Zombie {
 }
 
 impl Zombie {
+    /// G3's grip on a knocked-back player (`0x49a890`): where the part its
+    /// frame names was drawn, x and z.
+    pub(crate) fn g3_grip(&self) -> Option<[i32; 2]> {
+        self.grip
+    }
+
+    /// The grip from the parts as the last draw left them, on this tick's
+    /// frame.
+    fn g3_grip_from_drawn(&self) -> Option<[i32; 2]> {
+        let part = *G3_GRIP_PARTS.get(usize::try_from(self.vars[G3_GRIP]).ok()?)?;
+        if part == 0 {
+            return None;
+        }
+        let matrix = self.parts.get(part).copied().flatten()?;
+        Some([matrix.t[0], matrix.t[2]])
+    }
+
     /// What `FUN_00453510` and `FUN_0045a880` check of a zombie before they throw
     /// it back: alive, standing, not thrown already. `Type`'s `0x2000` is a
     /// zombie on the floor.
@@ -1224,6 +1249,9 @@ impl Em<'_, '_, '_> {
             self.z.damage_cnt -= 1;
         }
         self.old_pos = self.mover.player.pos;
+        // The parts' `Workm` as the last draw left them: after the player's
+        // push, which runs after the enemies.
+        self.z.parts = self.mover.posed_parts();
         self.script();
         self.z.last_routine = self.work().routine;
         self.oba_ck_em();
@@ -1238,7 +1266,7 @@ impl Em<'_, '_, '_> {
         } else {
             *stuck = 0;
         }
-        self.z.parts = self.mover.posed_parts();
+        self.z.grip = self.z.g3_grip_from_drawn();
     }
 
     /// `Em_2D`: `Root_ck` even while the room is stopped, then the script and

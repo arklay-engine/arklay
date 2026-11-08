@@ -1485,6 +1485,8 @@ pub struct Held<'a> {
     pub holder_id: u8,
     /// Its `Move_cnt`, which G3's kill starts the player's clip from.
     pub holder_move_cnt: u8,
+    /// Where G3's frame grips a knocked-back player, x and z.
+    pub holder_grip: Option<[i32; 2]>,
     /// `DWORD_009888d8`'s low byte, which some of the frames wait on.
     pub draw_buffer: u8,
     pub rnd: &'a mut crate::zombie2::Rnd,
@@ -3970,7 +3972,7 @@ impl Mover<'_, '_> {
             if self.work.routine[0] == MODE_HELD_DIE {
                 self.em33_killed(held);
             } else {
-                self.em33_held();
+                self.em33_held(held);
             }
             return;
         }
@@ -4744,11 +4746,12 @@ impl Mover<'_, '_> {
     /// back by G3's swipe on the player's own clip 3 or 4 (`+0x108` and
     /// `+0x17c`, the model's bank, not G3's), sliding at 600 and slowing by
     /// 90 a tick, toward `0x800` for `Routine_1` 0 and 0 for 1 (`Add_speedXZ`
-    /// adds the turn to `Cdir_y`, so `Timer0` is the heading). Its
-    /// `Routine_1` 2 and 3 (`0x49a890`) aren't ported.
-    fn em33_held(&mut self) {
+    /// adds the turn to `Cdir_y`, so `Timer0` is the heading). `Routine_1`
+    /// 2 and 3 are [`Self::em33_gripped`].
+    fn em33_held(&mut self, held: &mut Held<'_>) {
         let side = self.work.routine[1];
         if side > 1 {
+            self.em33_gripped(held);
             return;
         }
         match self.work.routine[2] {
@@ -4779,6 +4782,38 @@ impl Mover<'_, '_> {
         self.player.pos[0] += dx;
         self.player.pos[2] += dz;
         self.work.spd[0] = (self.work.spd[0] - 0x5A).max(0);
+    }
+
+    /// `0x49a890`, `em_damage_table[0x33]`'s `Routine_1` 2 and 3: struck by
+    /// G3's second swipes, on the player's own clip 3 or 4, held where G3's
+    /// frame grips them (the part `BYTE_0052a817` names, as it was drawn).
+    fn em33_gripped(&mut self, held: &mut Held<'_>) {
+        match self.work.routine[2] {
+            0 => {
+                self.work.routine[2] = 1;
+                self.work.neck.flags |= 1;
+                self.work.bank = Bank::Pld;
+                self.held_clip(self.work.routine[1] + 1, 0xF);
+                self.joint_move_late(0x100);
+                let side = u32::from(self.work.timers[0].wrapping_add(1));
+                self.work.sounds.push(0x400_0001 | side << 16);
+            }
+            1 => {
+                self.work.bank = Bank::Pld;
+                if self.joint_move_late(0x100) {
+                    self.work.neck.flags &= !1;
+                    self.work.damage_cnt &= 0x7F;
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.bank = Bank::Weapon;
+                    return;
+                }
+            }
+            _ => return,
+        }
+        if let Some([x, z]) = held.holder_grip {
+            self.player.pos[0] = x;
+            self.player.pos[2] = z;
+        }
     }
 
     /// `FUN_0049a980`, `em_die_table[0x33]`: killed in G3's grip, on its
@@ -6660,6 +6695,7 @@ mod tests {
                 holder_aim: 0,
                 holder_id: 0x10,
                 holder_move_cnt: 0,
+                holder_grip: None,
                 draw_buffer: 0,
                 rnd: &mut rnd,
                 life,
@@ -6744,6 +6780,7 @@ mod tests {
             holder_aim: 0,
             holder_id: crate::zombie2::CROW_ID,
             holder_move_cnt: 0,
+            holder_grip: None,
             draw_buffer: 0,
             rnd: &mut rnd,
             life: &mut life,

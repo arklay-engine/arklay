@@ -1,0 +1,283 @@
+# room 509 in scenario B: once G3's fight starts the player turns to it and shoots it with the shotgun every 30 ticks, with Leon's other weapons (oracle/re2.md)
+780 right
+793
+795 aim
+825 aim fire
+830 aim
+855 aim fire
+860 aim
+885 aim fire
+890 aim
+915 aim fire
+920 aim
+945 aim fire
+950 aim
+975 aim fire
+980 aim
+1005 aim fire
+1010 aim
+1035 aim fire
+1040 aim
+1065 aim fire
+1070 aim
+1095 aim fire
+1100 aim
+1125 aim fire
+1130 aim
+1155 aim fire
+1160 aim
+1185 aim fire
+1190 aim
+1215 aim fire
+1220 aim
+1245 aim fire
+1250 aim
+1275 aim fire
+1280 aim
+1305 aim fire
+1310 aim
+1335 aim fire
+1340 aim
+1365 aim fire
+1370 aim
+1395 aim fire
+1400 aim
+1425 aim fire
+1430 aim
+1455 aim fire
+1460 aim
+1485 aim fire
+1490 aim
+1515 aim fire
+1520 aim
+1545 aim fire
+1550 aim
+1575 aim fire
+1580 aim
+1605 aim fire
+1610 aim
+1635 aim fire
+1640 aim
+1665 aim fire
+1670 aim
+1695 aim fire
+1700 aim
+1725 aim fire
+1730 aim
+1755 aim fire
+1760 aim
+1785 aim fire
+1790 aim
+1815 aim fire
+1820 aim
+1845 aim fire
+1850 aim
+1875 aim fire
+1880 aim
+1905 aim fire
+1910 aim
+1935 aim fire
+1940 aim
+1965 aim fire
+1970 aim
+1995 aim fire
+2000 aim
+2025 aim fire
+2030 aim
+2055 aim fire
+2060 aim
+2085 aim fire
+2090 aim
+2115 aim fire
+2120 aim
+2145 aim fire
+2150 aim
+2175 aim fire
+2180 aim
+2205 aim fire
+2210 aim
+2235 aim fire
+2240 aim
+2265 aim fire
+2270 aim
+2295 aim fire
+2300 aim
+2325 aim fire
+2330 aim
+2355 aim fire
+2360 aim
+2385 aim fire
+2390 aim
+2415 aim fire
+2420 aim
+2445 aim fire
+2450 aim
+2475 aim fire
+2480 aim
+2505 aim fire
+2510 aim
+2535 aim fire
+2540 aim
+2565 aim fire
+2570 aim
+2595 aim fire
+2600 aim
+2625 aim fire
+2630 aim
+2655 aim fire
+2660 aim
+2685 aim fire
+2690 aim
+2715 aim fire
+2720 aim
+2745 aim fire
+2750 aim
+2775 aim fire
+2780 aim
+2805 aim fire
+2810 aim
+2835 aim fire
+2840 aim
+2865 aim fire
+2870 aim
+2895 aim fire
+2900 aim
+2925 aim fire
+2930 aim
+2955 aim fire
+2960 aim
+2985 aim fire
+2990 aim
+3015 aim fire
+3020 aim
+3045 aim fire
+3050 aim
+3075 aim fire
+3080 aim
+3105 aim fire
+3110 aim
+3135 aim fire
+3140 aim
+3165 aim fire
+3170 aim
+3195 aim fire
+3200 aim
+3225 aim fire
+3230 aim
+3255 aim fire
+3260 aim
+3285 aim fire
+3290 aim
+3315 aim fire
+3320 aim
+3345 aim fire
+3350 aim
+3375 aim fire
+3380 aim
+3405 aim fire
+3410 aim
+3435 aim fire
+3440 aim
+3465 aim fire
+3470 aim
+3495 aim fire
+3500 aim
+3525 aim fire
+3530 aim
+3555 aim fire
+3560 aim
+3585 aim fire
+3590 aim
+3615 aim fire
+3620 aim
+3645 aim fire
+3650 aim
+3675 aim fire
+3680 aim
+3705 aim fire
+3710 aim
+3735 aim fire
+3740 aim
+3765 aim fire
+3770 aim
+3795 aim fire
+3800 aim
+3825 aim fire
+3830 aim
+3855 aim fire
+3860 aim
+3885 aim fire
+3890 aim
+3915 aim fire
+3920 aim
+3945 aim fire
+3950 aim
+3975 aim fire
+3980 aim
+4005 aim fire
+4010 aim
+4035 aim fire
+4040 aim
+4065 aim fire
+4070 aim
+4095 aim fire
+4100 aim
+4125 aim fire
+4130 aim
+4155 aim fire
+4160 aim
+4185 aim fire
+4190 aim
+4215 aim fire
+4220 aim
+4245 aim fire
+4250 aim
+4275 aim fire
+4280 aim
+4305 aim fire
+4310 aim
+4335 aim fire
+4340 aim
+4365 aim fire
+4370 aim
+4395 aim fire
+4400 aim
+4425 aim fire
+4430 aim
+4455 aim fire
+4460 aim
+4485 aim fire
+4490 aim
+4515 aim fire
+4520 aim
+4545 aim fire
+4550 aim
+4575 aim fire
+4580 aim
+4605 aim fire
+4610 aim
+4635 aim fire
+4640 aim
+4665 aim fire
+4670 aim
+4695 aim fire
+4700 aim
+4725 aim fire
+4730 aim
+4755 aim fire
+4760 aim
+4785 aim fire
+4790 aim
+4815 aim fire
+4820 aim
+4845 aim fire
+4850 aim
+4875 aim fire
+4880 aim
+4905 aim fire
+4910 aim
+4935 aim fire
+4940 aim
+4965 aim fire
+4970 aim
+5000
