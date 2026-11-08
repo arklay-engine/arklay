@@ -610,7 +610,18 @@ impl RoomSource {
             room: id.room,
             player_flag: id.player_flag,
             omodel_slot_count,
-            re2_object_count: 0,
+            // The converted room keeps no RDT header: its byte 2, the
+            // object count, is the last object model's slot plus one.
+            re2_object_count: if self.dialect == Dialect::Re2 {
+                object_models
+                    .iter()
+                    .map(|model| model.pair_index + 1)
+                    .max()
+                    .unwrap_or(0)
+                    .min(usize::from(RE2_OBJECT_SLOTS)) as u8
+            } else {
+                0
+            },
             item_count,
             cuts,
             current_cut: 0,

@@ -1,0 +1,25 @@
+# Room 201's drawer (`Sce_Hikidashi`, area kind 13; oracle/re2.md, "The drawer"). The player stands south of the desk, facing it; the enemies are off, which also keeps the room's licker scene out.
+
+[[run]]
+name = "hikidashi_locked_201"
+room = "201"
+setup_script = "hikidashi_201.lua"
+input = "hikidashi_locked_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 700
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,hk,snd"
+expect = "match"
+record = "--no-enemies --warp 201:-25400:0:-18450:3072 --life 200"
+
+[[run]]
+name = "hikidashi_unlock_201"
+room = "201"
+setup_script = "hikidashi_key_201.lua"
+input = "hikidashi_unlock_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,hk,snd"
+expect = "match"
+record = "--no-enemies --warp 201:-25400:0:-18450:3072 --life 200 --give 2:0x1F:1"

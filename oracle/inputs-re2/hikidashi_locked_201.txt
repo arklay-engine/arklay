@@ -1,0 +1,10 @@
+# Room 201's drawer (oracle/re2.md, "The drawer"): press at the locked desk with no key, close "The desk is locked.", press again and close it again.
+0
+420 action
+423
+540 confirm
+543
+600 action
+603
+660 confirm
+663
