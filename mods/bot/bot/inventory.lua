@@ -303,6 +303,17 @@ local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true,
 -- And the slots this visit's soft deposits freed for pickups
 -- (ctx.room_for): 100's swap boxed two guns for two pickups, and the heal
 -- top-up took one of the slots back.
+-- Holds `n` slots for pickups past this box open, the inventory then at
+-- `used` slots (BotInventory.context): until pickups fill them or the bot
+-- leaves the room (BotInventory.enter_room).
+function BotInventory.note_room_for(n, used)
+    state().room_for = { n = n, used = used }
+end
+
+function BotInventory.enter_room()
+    state().room_for = nil
+end
+
 local function slots_to_leave(_, ctx)
     local brew = ctx and ctx.brew_slots or 0
     local leave = brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
@@ -920,9 +931,27 @@ function BotInventory.context(bot)
     ctx.used = used_slots(menu.items or {})
     ctx.full = ctx.used >= ctx.capacity
     ctx.heal_top_up = true
+    -- The slots an earlier box open of this stay in the room freed with
+    -- soft deposits (BotInventory.note_room_for) stay the pickups' until
+    -- they are filled or the bot leaves: with rope=leave 403's swap boxed
+    -- the handgun and three heals for 401's red book, and the next open
+    -- took the handgun (the rearm) and two heals (the top-up) straight
+    -- back; the two visits repeated on every trip, the box kept the heals
+    -- and the bot met 201's hunters with none.
+    local held = state().room_for
+    if held and not ctx.room_for then
+        local filled = ctx.used - held.used
+        local left = held.n - (filled > 0 and filled or 0)
+        if left > 0 then
+            ctx.room_for = left
+        else
+            state().room_for = nil
+        end
+    end
     -- The rearm takes slots (the gun, and its ammunition when boxed): it
     -- waits while a key or <use> pickup needs the free ones (else the swap
-    -- boxes the gun again: 100's shotgun went in and out for 250k ticks).
+    -- boxes the gun again: 100's shotgun went in and out for 250k ticks),
+    -- or while the soft deposits' slots are held (ctx.room_for).
     if ctx.rearm then
         local box = BotInventory.remembered(bot)
         local slots = 0
@@ -933,7 +962,11 @@ function BotInventory.context(bot)
         end
         local after = ctx.capacity - ctx.used - slots
         local _, progress = BotInventory.needed_pickups(bot, ctx)
-        if progress > 0 and after < progress then
+        local need = progress
+        if (ctx.room_for or 0) > need then
+            need = ctx.room_for
+        end
+        if need > 0 and after < need then
             ctx.rearm = nil
         end
     end
@@ -953,7 +986,11 @@ function BotInventory.context(bot)
         -- deposit freed one for 504's lab key, the rearm took it back for
         -- the launcher's rounds, and Barry's branch stalled in the lab.
         local _, progress = BotInventory.needed_pickups(bot, ctx)
-        slots = slots + (progress or 0)
+        local hold = progress or 0
+        if (ctx.room_for or 0) > hold then
+            hold = ctx.room_for
+        end
+        slots = slots + hold
         if ctx.capacity - ctx.used - (ctx.hold_free or 0) < slots then
             ctx.rearm_reserve = nil
         end
@@ -1356,8 +1393,12 @@ local function plan_visit(bot, menu, view)
             free = free + 1
         end
     end
+    local queued = #ops
     for _, row in ipairs(BotInventory.withdrawals(view.items, ctx, free)) do
         ops[#ops + 1] = { kind = "withdraw", item = row.item }
+    end
+    if queued > 0 and (ctx.room_for or 0) > 0 then
+        BotInventory.note_room_for(ctx.room_for, ctx.used - queued + (#ops - queued))
     end
     local parts = {}
     for _, op in ipairs(ops) do
