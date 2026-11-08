@@ -23,6 +23,9 @@ local PLD <const> = 0
 local WEAPON <const> = 1
 local ROOM <const> = 2
 
+-- The bowgun, `Routine_1` of a bolt's hit.
+local BOW <const> = 0xC
+
 -- `Type`'s bits.
 local TYPE_BURNT <const> = 0x80
 local TYPE_ON_FLOOR <const> = 0x2000
@@ -574,6 +577,29 @@ local function become_crawler(e)
     e:set_kind(0x2001)
 end
 
+-- `Em10Dm05`'s legs: torn off, and sometimes the hips with them.
+local function dm05_torn(e)
+    local legs = e:rnd() & 1
+    e:set_timer(3, legs)
+    if legs ~= 0 then
+        e:hide_part(3)
+        e:hide_part(4)
+        e:sound(2)
+        if e:rnd() & 1 ~= 0 then
+            blood(e, 0, 6000, 0, 5, 0, 0, 0)
+            effect(e, 8, 0, 0x1000, rnd_dir(e), 5, 0, 0, 0)
+            blood(e, 0, 6000, 0, 6, 0, 0, 0)
+            e:hide_part(5)
+            e:hide_part(6)
+            e:hide_part(7)
+        end
+    end
+    blood(e, 0, 5000, 0, 3, 0, 0, 0)
+    blood(e, 0, 6000, e:rnd() << 2, 3, 0, 400, 0)
+    blood(e, 0, 4000, rnd_dir(e), 3, 0, 800, 0)
+    effect(e, 8, 0, 0x1000, rnd_dir(e), 3, 0, 0, 0)
+end
+
 -- `Em10Dm05`: blown off its legs, or just down. It carries on crawling.
 local function dm05(e)
     local routine = e:routine(2)
@@ -582,25 +608,10 @@ local function dm05(e)
         speed_at_random(e, WEAPON, 7)
         e:set_routine(2, 1)
         hold_damage(e)
-        local legs = e:rnd() & 1
-        e:set_timer(3, legs)
-        if legs ~= 0 then
-            e:hide_part(3)
-            e:hide_part(4)
-            e:sound(2)
-            if e:rnd() & 1 ~= 0 then
-                blood(e, 0, 6000, 0, 5, 0, 0, 0)
-                effect(e, 8, 0, 0x1000, rnd_dir(e), 5, 0, 0, 0)
-                blood(e, 0, 6000, 0, 6, 0, 0, 0)
-                e:hide_part(5)
-                e:hide_part(6)
-                e:hide_part(7)
-            end
+        -- The bowgun's bolt tears nothing off, and leaves `Timer3`.
+        if e:routine(1) ~= BOW then
+            dm05_torn(e)
         end
-        blood(e, 0, 5000, 0, 3, 0, 0, 0)
-        blood(e, 0, 6000, e:rnd() << 2, 3, 0, 400, 0)
-        blood(e, 0, 4000, rnd_dir(e), 3, 0, 800, 0)
-        effect(e, 8, 0, 0x1000, rnd_dir(e), 3, 0, 0, 0)
         if voice_free(e) then
             moan(e, 0xC)
         end
@@ -717,8 +728,8 @@ local function blasted(e)
     return (weapon == 9 or weapon == 0x11) and e:kind() & TYPE_BURNT == 0
 end
 
--- `FUN_00459780`: thrown down where it stands, sliding away from the shot.
--- `Routine_1` of 0xC, the bowgun's, isn't ported.
+-- `FUN_00459780`: thrown down where it stands, sliding away from the shot. A bolt
+-- (`Routine_1` of 0xC) bleeds only from the part it's in.
 local function die_thrown(e)
     local routine = e:routine(2)
     if routine == 0 then
@@ -727,8 +738,15 @@ local function die_thrown(e)
         local dir = i16(e:direction_to_player())
         e:set_timer(0, dir)
         local count = (e:rnd() & 3) + 1
-        blood(e, 0, 0x1FA0, dir, 0, 0, -300, 0)
-        blood(e, 0, 0x17D0, dir, 0, 0, -100, 0)
+        if e:routine(1) == BOW then
+            local part = e:bolt()
+            e:set_timer(2, part)
+            blood(e, 0, 0x17D0, dir, part, 0, 0, 0)
+            count = 0
+        else
+            blood(e, 0, 0x1FA0, dir, 0, 0, -300, 0)
+            blood(e, 0, 0x17D0, dir, 0, 0, -100, 0)
+        end
         for _ = 1, count do
             local x = (0x80 - e:rnd()) * 2
             local y = (0x1C - e:rnd()) * 2
@@ -758,7 +776,11 @@ local function die_thrown(e)
     end
     local count = e:move_cnt()
     local start = e:timer(2) * 10
-    if start + 4 <= count and count <= start + 0x10 and count & 1 ~= 0 then
+    if e:routine(1) ~= BOW
+        and start + 4 <= count
+        and count <= start + 0x10
+        and count & 1 ~= 0
+    then
         local dir = rnd_dir(e)
         local size = e:rnd() * 8 + 0xFD0
         local x, y, z = head_point(e, 0, 500)
@@ -863,6 +885,47 @@ local function dm02(e)
     end
 end
 
+-- `Em10Dm04`: a bolt that didn't go into a leg (part 3 or 6, which is `Em10Dm05`'s)
+-- pushes it back along the bolt's way, slowing, then it walks again. Its states 2 to 5,
+-- which tip the root over, have no way in from here and aren't ported, nor is part 0's
+-- `Be_flg` bit 0x40 it clears.
+local function dm04(e)
+    local routine = e:routine(2)
+    if routine == 0 then
+        local part, yaw = e:bolt()
+        e:set_timer(2, part)
+        if part == 3 or part == 6 then
+            e:set_damage_no(3)
+            return
+        end
+        e:set_timer(0, yaw)
+        e:set_routine(2, 1)
+        e:clip(e:var(WALK), 0, 0xF)
+        if voice_free(e) then
+            moan_either(e, 0xD, 0xC)
+        end
+        e:set_speed(300, 0, 0)
+        e:set_timer(1, 0)
+        e:set_timer(3, 0x32)
+        local dir = e:direction_to_player()
+        blood(e, 0, e:rnd() * 8 + 6000, dir, part, 0, 0, 0)
+    elseif routine == 6 then
+        e:routines(1, e:rnd() & 1 ~= 0 and 2 or 1, 0, 0)
+        return
+    elseif routine ~= 1 then
+        return
+    end
+    local speed = e:speed_x()
+    local x, z = e:rotate(e:timer(0), speed, 0)
+    e:joint(0x100)
+    e:set_speed_x(speed - i16(e:timer(1)))
+    e:add_pos(x, 0, z)
+    e:set_timer(1, e:timer(1) + i8(e:timer(3)))
+    if i16(e:speed_x()) < 0 then
+        e:set_routine(2, 6)
+    end
+end
+
 -- `Em10_Damage`, by `DWORD_00526ed4`. The other weapons' branches, which light and
 -- freeze it, aren't ported.
 local function em10_damage(e)
@@ -908,6 +971,15 @@ local function em10_damage(e)
         lose_arm(e)
     end
     local no = e:damage_no()
+    if weapon == BOW then
+        -- Its row has no call for 2, 5 and 8.
+        if no % 3 == 0 then
+            dm05(e)
+        elseif no % 3 == 1 then
+            dm04(e)
+        end
+        return
+    end
     local blast = weapon == 7 or weapon == 8
     if blast and (no == 0 or no == 3 or no == 6) then
         dm05(e)

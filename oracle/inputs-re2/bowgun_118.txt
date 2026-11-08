@@ -1,0 +1,51 @@
+# room 118 as Claire: EQUIP the bowgun from slot 2 as play begins, wait out the zombie's hold, aim at the zombies and fire every 40 ticks (oracle/re2.md)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+644 aim
+680 aim fire
+684 aim
+720 aim fire
+724 aim
+760 aim fire
+764 aim
+800 aim fire
+804 aim
+840 aim fire
+844 aim
+880 aim fire
+884 aim
+920 aim fire
+924 aim
+960 aim fire
+964 aim
+1000 aim fire
+1004 aim
+1040 aim fire
+1044 aim
+1080 aim fire
+1084 aim
+1120 aim fire
+1124 aim
+1160 aim fire
+1164 aim
+1200 aim fire
+1204 aim
+1240 aim fire
+1244 aim
+1280 aim fire
+1284 aim
+1320 aim fire
+1324 aim
+1360 aim fire
+1364 aim
+1440

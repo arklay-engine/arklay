@@ -15980,6 +15980,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let re2 = &mut context.game.re2;
     re2.player.water_draws(&mut re2.rnd);
     if !tick.stopped {
+        crate::character2::pl_bow(context.game, context.room.sca.as_ref());
         crate::character2::mag_down(context.game, context.player);
     }
     crate::character2::oba_ck_em2(context.game, context.player, old);

@@ -267,6 +267,11 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("damage_no", |_, e, ()| Ok(e.em().z.damage_no));
+        // `pDamage_work`'s `+0x99` and `+0x9a` when the last hit was a bolt.
+        methods.add_method_mut("bolt", |_, e, ()| {
+            let z = &e.em().z;
+            Ok((z.bolt_part, z.bolt_yaw))
+        });
         methods.add_method_mut("set_damage_no", |_, e, value: i64| {
             e.em().z.damage_no = value as u8;
             Ok(())

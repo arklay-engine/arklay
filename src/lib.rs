@@ -10,6 +10,7 @@ pub mod avi;
 pub mod bgm;
 pub mod bgm2;
 pub mod bmp;
+pub mod bow2;
 pub mod budget;
 pub mod build_info;
 pub mod catalog;

@@ -268,6 +268,77 @@ pub fn mag_down(game: &mut GameState, player: &mut crate::player::PlayerState) {
 /// `Snd_se_on(0x10e0001)`.
 const MAGAZINE_SOUND: u16 = 0xE;
 
+/// `pl_bow`, `Player_move`'s call after `Rot_neck` while the bowgun is held:
+/// its bolts fly, and what they hit takes it at once. Any other weapon puts
+/// the bolts away, for `Plw_init_tbl` to set up again.
+pub fn pl_bow(game: &mut GameState, sca: Option<&crate::state::Sca>) {
+    if game.equipped_weapon_id != crate::bow2::BOW {
+        game.re2.player.quiver = None;
+        return;
+    }
+    let water = water_areas(game);
+    let re2 = &mut game.re2;
+    let mut bodies: Vec<_> = targets_of(re2)
+        .into_iter()
+        .map(|target| {
+            let zombie = re2.characters.0[target.slot]
+                .as_deref()
+                .and_then(|character| character.zombie.as_ref());
+            let parts = crate::bow2::aim_parts(target.id).map(|part| {
+                let matrix = zombie.and_then(|zombie| zombie.drawn.get(usize::from(part)));
+                matrix.copied().flatten().map(|matrix| (part, matrix))
+            });
+            crate::bow2::Body { target, parts }
+        })
+        .collect();
+    let quiver = re2.player.quiver.get_or_insert_with(Default::default);
+    let mut world = crate::bow2::World {
+        bodies: &mut bodies,
+        sca,
+        water: &water,
+        rnd: &mut re2.rnd,
+        calls: Vec::new(),
+    };
+    crate::bow2::pl_bow(quiver, &mut world);
+    for call in world.calls {
+        match call {
+            crate::bow2::Call::Effect(call) => {
+                re2.effects
+                    .call(call.kind, call.row, call.size, call.dir, call.at, false);
+            }
+            crate::bow2::Call::Sound(id, pos) => {
+                if let Some(id) = crate::se2::SoundId::decode(id) {
+                    re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
+                }
+            }
+            crate::bow2::Call::Blast(blast) => {
+                let slot = match blast {
+                    crate::weapon2::BlastEffect::Tested(slot) => slot,
+                    crate::weapon2::BlastEffect::Hit(hit) => hit.slot,
+                };
+                if let Some(character) = re2.characters.0.get_mut(slot).and_then(Option::as_mut)
+                    && let Some(mut zombie) = character.zombie.take()
+                {
+                    crate::zombie2::take_blast(character, &mut zombie, &blast);
+                    character.zombie = Some(zombie);
+                }
+            }
+            crate::bow2::Call::Stuck { slot, part, yaw } => {
+                if let Some(zombie) = re2
+                    .characters
+                    .0
+                    .get_mut(slot)
+                    .and_then(Option::as_mut)
+                    .and_then(|character| character.zombie.as_mut())
+                {
+                    zombie.bolt_part = part;
+                    zombie.bolt_yaw = yaw;
+                }
+            }
+        }
+    }
+}
+
 /// What the player's routine sees of the slots, in `enemy_work`'s order.
 pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
     targets_of(&game.re2)

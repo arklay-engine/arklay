@@ -1,0 +1,14 @@
+[[run]]
+name = "bowgun_118"
+room = "118"
+character = 1
+player = 1
+sound = false
+ticks = 1800
+# run_119's start as Claire with the bowgun (#491): EQUIP the bowgun, aim at the zombies and fire every 40 ticks
+setup_script = "bowgun_118.lua"
+input = "bowgun_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,zm0,zm1,zm2,zm3,zm4,zm5"
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xC:60"

@@ -8868,7 +8868,9 @@ impl GameState {
         if std::mem::take(&mut self.re2.player.fired)
             && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
         {
-            slot.quantity = slot.quantity.saturating_sub(1);
+            // `FUN_004d58c0`: the bowgun's shot takes three.
+            let taken = if weapon == crate::bow2::BOW { 3 } else { 1 };
+            slot.quantity = slot.quantity.saturating_sub(taken);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
