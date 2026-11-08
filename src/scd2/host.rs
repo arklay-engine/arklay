@@ -1693,7 +1693,20 @@ impl GameHost<'_> {
             if let Some(index) = given.iter().position(|&(r, s, _)| (r, s) == (room, slot)) {
                 work.dest = given.remove(index).2;
             }
+            let given = &mut self.game.re2_enemy_speed;
+            if let Some(index) = given.iter().position(|&(r, s, _)| (r, s) == (room, slot)) {
+                work.spd = given.remove(index).2;
+            }
         }
+        let room = u16::from(self.game.id.stage) << 8 | u16::from(self.game.id.room);
+        let mut vars = Vec::new();
+        self.game.re2_enemy_vars.retain(|&(r, s, index, value)| {
+            let ours = zombie && (r, s) == (room, slot);
+            if ours {
+                vars.push((index, value));
+            }
+            !ours
+        });
         let characters = &mut self.game.re2.characters.0;
         characters.resize_with(CHARACTER_SLOTS, || None);
         characters[slot] = Some(Box::new(Character {
@@ -1717,6 +1730,9 @@ impl GameHost<'_> {
                 zombie.dead_flag = dead;
                 if licker {
                     zombie.licker = Some(Box::default());
+                }
+                for (index, value) in vars {
+                    zombie.set_var(index, value);
                 }
                 zombie
             }),
@@ -2732,6 +2748,24 @@ mod tests {
         assert_eq!(game.re2_enemy_dest, [(0x118, 2, [5, 6])], "used once");
         exec(&mut game, "sce_em_set", &zombie);
         assert_eq!(dest(&game), [0, 0], "the room's next load starts it at 0");
+    }
+
+    #[test]
+    fn a_setup_scripts_speed_and_vars_start_the_next_zombie_in_its_slot_and_room() {
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("3030").unwrap();
+        game.re2_enemy_speed = vec![(0x303, 3, [0, 8491, 9547]), (0x309, 3, [1, 2, 3])];
+        game.re2_enemy_vars = vec![(0x303, 3, 1, 3335), (0x303, 3, 2, 264), (0x303, 2, 1, 7)];
+        let embryo = [
+            0, 3, 0x27, 3, 0, 3, 20, 0, 130, -23237, -5400, -23988, 1509, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &embryo);
+        let character = game.re2.characters.0[3].as_ref().unwrap();
+        assert_eq!(character.work.spd, [0, 8491, 9547]);
+        let vars = character.zombie.as_ref().unwrap().vars();
+        assert_eq!(vars[1..3], [3335, 264]);
+        assert_eq!(game.re2_enemy_speed, [(0x309, 3, [1, 2, 3])], "used once");
+        assert_eq!(game.re2_enemy_vars, [(0x303, 2, 1, 7)], "only the slot's");
     }
 
     /// Room 205's slot 0: an `Em_2D` with `zombie` data, which `main_00`

@@ -442,7 +442,10 @@ local function squash(e)
     local _, y = e:pos()
     if y < ground then
         y = y + 100
-        e:set_pos_y(math.min(y, ground))
+        if y > ground then
+            y = ground
+        end
+        e:set_pos_y(y)
     end
 end
 

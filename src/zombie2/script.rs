@@ -1839,12 +1839,13 @@ mod tests {
         assert_eq!(repeated_names(&names), ["pos"]);
     }
 
-    const SCRIPTS: [&str; 12] = [
+    const SCRIPTS: [&str; 13] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
+        include_str!("../../games/re2/enemy/27/enemy.lua"),
         include_str!("../../games/re2/enemy/29/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2d/enemy.lua"),
@@ -2901,7 +2902,10 @@ mod tests {
     #[test]
     fn the_crawl_turns_by_timer1() {
         let embryo = run_embryo(3, &[1; 16], 4, "DEST_TARGET = 0x400");
-        assert_eq!((embryo.get("timer1"), embryo.get("angle")), (12, 4 + 8 + 12));
+        assert_eq!(
+            (embryo.get("timer1"), embryo.get("angle")),
+            (12, 4 + 8 + 12)
+        );
         let embryo = run_embryo(3, &[1; 16], 3, "DEST_TARGET = 0xC00");
         assert_eq!(embryo.get("timer1"), 0x1_0000 - 24);
         assert_eq!(embryo.get("angle"), 0x1_0000 - 36);

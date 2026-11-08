@@ -778,6 +778,49 @@ mod imp {
                 },
             );
 
+            // `set_re2_enemy_speed("ROOM:SLOT", x, y, z)`: the speeds the next
+            // zombie placed in that slot of that room starts with, which the
+            // original takes from whatever its new work's memory held.
+            methods.add_method_mut(
+                "set_re2_enemy_speed",
+                |_lua, game, (pair, x, y, z): (String, i16, i16, i16)| {
+                    let parsed = pair.split_once(':').and_then(|(room, slot)| {
+                        Some((
+                            u16::from_str_radix(room, 16).ok()?,
+                            slot.parse::<usize>().ok()?,
+                        ))
+                    });
+                    let Some((room, slot)) = parsed else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "set_re2_enemy_speed: {pair:?} is not ROOM:SLOT"
+                        )));
+                    };
+                    game.re2_enemy_speed.push((room, slot, [x, y, z]));
+                    Ok(())
+                },
+            );
+
+            // `set_re2_enemy_var("ROOM:SLOT", index, value)`: a script variable
+            // of the next zombie placed in that slot of that room.
+            methods.add_method_mut(
+                "set_re2_enemy_var",
+                |_lua, game, (pair, index, value): (String, usize, i32)| {
+                    let parsed = pair.split_once(':').and_then(|(room, slot)| {
+                        Some((
+                            u16::from_str_radix(room, 16).ok()?,
+                            slot.parse::<usize>().ok()?,
+                        ))
+                    });
+                    let Some((room, slot)) = parsed else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "set_re2_enemy_var: {pair:?} is not ROOM:SLOT"
+                        )));
+                    };
+                    game.re2_enemy_vars.push((room, slot, index, value));
+                    Ok(())
+                },
+            );
+
             // `set_re2_sce_rnd(value)`: the same for `Sce_rnd_set`'s state.
             methods.add_method_mut("set_re2_sce_rnd", |_lua, game, value: u32| {
                 game.re2.random = value;
