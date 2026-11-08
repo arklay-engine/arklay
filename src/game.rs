@@ -1115,6 +1115,12 @@ pub enum TypewriterFlow {
     Prompt { ink_ribbon: bool },
 }
 
+/// `Sce_at_check`'s caller masks of an area's `sat`: an enemy's, an object's
+/// and the partner's.
+const ENEMY_AREA_MASK: u8 = 2;
+const OBJECT_AREA_MASK: u8 = 4;
+const PARTNER_AREA_MASK: u8 = 8;
+
 /// One entry of the room action table.
 ///
 /// `params` is opaque per kind:
@@ -6540,6 +6546,8 @@ impl GameState {
         self.probe_actions(pos, angle, 1, pos, action_press);
         if self.is_re2_room {
             self.probe_enemy_areas();
+            self.probe_object_areas();
+            self.probe_character_areas(crate::scd2::host::SPLAYER_SLOT, PARTNER_AREA_MASK);
         }
     }
 
@@ -6577,6 +6585,51 @@ impl GameState {
         gate.shifted(zone, [x as i16, z as i16])
     }
 
+    /// `Sce_at_check`'s object pass (mask 4), after the enemies' and before
+    /// the partner's: each object in play is tested at its own position, on
+    /// its own `nFloor`. An area it is in goes in its `At_sce_no` (member 9)
+    /// and the script's body-area variable, and the area's handler runs, so a
+    /// statue on a plate starts the plate's event. Every object area in the
+    /// game tests the body (`0x40` without `0x20`). `Sce_Water` would set the
+    /// object's own `Water`, which isn't modelled.
+    fn probe_object_areas(&mut self) {
+        for index in 0..self.objects.records.len() {
+            let record = self.objects.records[index];
+            if record.be_flg & 1 == 0 {
+                continue;
+            }
+            let (dx, dz) = crate::player::reach_offset_re2(record.rotation[1] as u16);
+            let reach = [record.pos[0] + dx, record.pos[1], record.pos[2] + dz];
+            for slot in 0..ROOM_ACTION_SLOTS {
+                let Some(room_action) = self.room_actions[slot] else {
+                    continue;
+                };
+                let flags = room_action.flags;
+                if room_action.handler == 0 || flags & 0x80 != 0 || flags & OBJECT_AREA_MASK == 0 {
+                    continue;
+                }
+                let probe = if flags & 0x40 != 0 { record.pos } else { reach };
+                let (gate, zone) = self.re2_area_gate(slot, room_action.zone);
+                if !gate.contains(zone, probe[0], probe[2], record.floor) {
+                    continue;
+                }
+                let var = if flags & 0x40 != 0 {
+                    crate::scd2::host::VAR_BODY_AREA
+                } else {
+                    crate::scd2::host::VAR_FORWARD_AREA
+                };
+                self.re2.vars[var] = slot as u16;
+                self.objects.records[index].at_sce_no = slot as u8;
+                if room_action.sce != crate::scd2::host::SCE_WATER {
+                    self.fire_re2_area(room_action);
+                }
+                if self.transition.is_some() {
+                    return;
+                }
+            }
+        }
+    }
+
     /// `Sce_at_check`'s enemy pass (mask 2), which the original runs after the
     /// player's on each enemy in play. An area the enemy is in, at its body or
     /// at the point ahead of it, goes in its `+0xB` (script member 9), which
@@ -6585,45 +6638,52 @@ impl GameState {
     /// the route; the other kinds' handlers aren't run for an enemy.
     fn probe_enemy_areas(&mut self) {
         for slot in 0..self.re2.characters.0.len() {
-            let Some(character) = self.re2.characters.0[slot].as_deref() else {
+            if slot != crate::scd2::host::SPLAYER_SLOT {
+                self.probe_character_areas(slot, ENEMY_AREA_MASK);
+            }
+        }
+    }
+
+    /// `Sce_at_check` for the character in `slot`, with the areas of `mask`:
+    /// 2 for an enemy, 8 for the partner, whose pass comes after the objects'.
+    fn probe_character_areas(&mut self, slot: usize, mask: u8) {
+        let Some(character) = self.re2.characters.0.get(slot).and_then(|c| c.as_deref()) else {
+            return;
+        };
+        if character.be_flg & 1 == 0 {
+            return;
+        }
+        let pos = character.body.pos;
+        let floor = character
+            .zombie
+            .as_ref()
+            .map_or_else(|| crate::sca::floor_of(pos[1]), |zombie| zombie.floor);
+        let (dx, dz) = crate::player::reach_offset_re2(character.body.angle);
+        let reach = [pos[0] + dx, pos[1], pos[2] + dz];
+        let mut found = None;
+        for (index, room_action) in self.room_actions.iter().enumerate() {
+            let Some(room_action) = room_action else {
                 continue;
             };
-            if character.be_flg & 1 == 0 {
+            let flags = room_action.flags;
+            if room_action.handler == 0 || flags & 0x80 != 0 || flags & mask == 0 {
                 continue;
             }
-            let pos = character.body.pos;
-            let floor = character
-                .zombie
-                .as_ref()
-                .map_or_else(|| crate::sca::floor_of(pos[1]), |zombie| zombie.floor);
-            let (dx, dz) = crate::player::reach_offset_re2(character.body.angle);
-            let reach = [pos[0] + dx, pos[1], pos[2] + dz];
-            let mut found = None;
-            for (index, room_action) in self.room_actions.iter().enumerate() {
-                let Some(room_action) = room_action else {
-                    continue;
+            let probe = if flags & 0x40 != 0 { pos } else { reach };
+            let (gate, zone) = self.re2_area_gate(index, room_action.zone);
+            if gate.contains(zone, probe[0], probe[2], floor) {
+                found = Some(index);
+                let var = if flags & 0x40 != 0 {
+                    crate::scd2::host::VAR_BODY_AREA
+                } else {
+                    crate::scd2::host::VAR_FORWARD_AREA
                 };
-                let flags = room_action.flags;
-                if room_action.handler == 0 || flags & 0x80 != 0 || flags & 2 == 0 {
-                    continue;
-                }
-                let probe = if flags & 0x40 != 0 { pos } else { reach };
-                let (gate, zone) = self.re2_area_gate(index, room_action.zone);
-                if gate.contains(zone, probe[0], probe[2], floor) {
-                    found = Some(index);
-                    let var = if flags & 0x40 != 0 {
-                        crate::scd2::host::VAR_BODY_AREA
-                    } else {
-                        crate::scd2::host::VAR_FORWARD_AREA
-                    };
-                    self.re2.vars[var] = index as u16;
-                }
+                self.re2.vars[var] = index as u16;
             }
-            if let (Some(index), Some(character)) =
-                (found, self.re2.characters.0[slot].as_deref_mut())
-            {
-                character.area = index as u8;
-            }
+        }
+        if let (Some(index), Some(character)) = (found, self.re2.characters.0[slot].as_deref_mut())
+        {
+            character.area = index as u8;
         }
     }
 
@@ -8020,8 +8080,12 @@ impl GameState {
             // `update_player_position` clears the passed entity's zone bit at
             // the top of the pass; here the passed entity is the object record,
             // not the player.
-            self.objects.records[index].zone_flags &= !0x20;
-            self.probe_actions(player.pos, player.angle, 4, record.pos, false);
+            // An RE2 room's objects run theirs in `Sce_at`'s order
+            // ([`GameState::interact`]).
+            if !self.is_re2_room {
+                self.objects.records[index].zone_flags &= !0x20;
+                self.probe_actions(player.pos, player.angle, 4, record.pos, false);
+            }
         }
 
         // The enemy loops of the original are no-ops here: no enemy slot is

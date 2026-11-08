@@ -16308,6 +16308,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     // And every object in play (`At_sce_no`, member 9).
     for record in &mut context.game.objects.records {
         if record.be_flg & 1 != 0 {
+            record.at_obj_no = crate::scd2::host::NO_AREA;
             record.at_sce_no = crate::scd2::host::NO_AREA;
         }
     }

@@ -1,0 +1,42 @@
+# Room 10C's statue 2 onto the west plate, with statue 1 already on the east one (oracle/re2.md, "Room 10C's statues"): (a) push it from its -z side toward +z, clear of the pedestal; walk round to its +x side and (b) push it west until the wall stops it; walk round to its +z side and (c) push it south onto the plate, which locks it and runs the jewel scene; then back off, run to the pedestal's +z face, press for the Red Jewel, take it and close.
+0
+350 up
+428
+500 down
+504
+508 right
+521
+524 up
+537
+541 left
+554
+557 up
+572
+576 left
+589
+592 up
+830
+838 right
+851
+852 up
+888
+892 left
+914
+916 up
+996
+1100 down
+1105
+1110 left
+1124
+1127 up run
+1150
+1154 right
+1167
+1170 up
+1182
+1186 action
+1190
+1460 action
+1464
+1660 action
+1664

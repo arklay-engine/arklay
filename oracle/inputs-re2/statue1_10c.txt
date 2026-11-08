@@ -1,0 +1,30 @@
+# Room 10C's statue 1 onto the east plate (oracle/re2.md, "Room 10C's statues"): (a) push it from its +z side toward -z, clear of the pedestal; walk round to its -x side and (b) push it east until the wall stops it; walk round to its -z side and (c) push it north onto the plate, which locks it.
+0
+350 up
+424
+500 down
+504
+508 right
+521
+524 up
+538
+542 left
+555
+558 up
+574
+578 left
+591
+596 up
+850
+854 right
+867
+870 up
+878
+882 left
+895
+898 up
+909
+913 left
+926
+930 up
+1030

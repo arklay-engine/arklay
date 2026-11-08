@@ -27,3 +27,47 @@ frame_max_mean = 0.1
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om1"
 expect = "match"
 record = "--no-enemies --warp 10C:-22905:-3600:-11900:1100 --life 200"
+
+[[run]]
+name = "statue1_10c"
+room = "10C"
+setup_script = "push_statue_10c.lua"
+input = "statue1_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1100
+frames = [360, 1099]
+frame_max_mean = 0.1
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om1,om2,msg"
+expect = "match"
+record = "--no-enemies --warp 10C:-22905:-3600:-11900:1024 --life 200"
+
+[[run]]
+name = "statue2_10c"
+room = "10C"
+setup_script = "statue2_10c.lua"
+input = "statue2_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1760
+frames = [360, 1759]
+# The jewel's question and item view (ticks 1194 to 1665) are about 0.74 a frame, as in the item runs; the rest is 0.01.
+frame_max_mean = 0.35
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om0,om1,om2,msg,inv"
+expect = "match"
+record = "--no-enemies --warp 10C:-20100:-3600:-13900:3072 --flag 4:38 --life 200"
+
+[[run]]
+name = "statues_10c"
+room = "10C"
+setup_script = "statues_10c.lua"
+input = "statues_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2620
+frames = [360, 2619]
+# The jewel's question and item view are about 0.74 a frame, as in the item runs; the rest is 0.01.
+frame_max_mean = 0.25
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,fgcom,om0,om1,om2,msg,inv"
+expect = "match"
+record = "--no-enemies --warp 10C:-21300:-3600:-10500:2048 --life 200"
