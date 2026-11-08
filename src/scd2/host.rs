@@ -583,6 +583,9 @@ pub const SCE_WATER: u8 = 7;
 pub const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
 pub const SCE_DAMAGE: u8 = 11;
+/// `Sce_Windows` (`0x4EA0B0`): game mode 7, the computer
+/// ([`crate::game::computer2`]).
+pub const SCE_WINDOWS: u8 = 14;
 
 impl Default for Re2State {
     fn default() -> Self {
@@ -719,6 +722,11 @@ impl Re2State {
         {
             *word = words.next()?;
         }
+        // A save from before bank 31 was `fg_key` kept a script's `set 31:n`
+        // apart from the locks: merge it into them.
+        let old_keys = std::mem::take(&mut self.banks[usize::from(KEY_BANK)]);
+        self.door_locks[0] |= old_keys[0];
+        self.door_locks[1] |= old_keys[1];
         let rest = &bytes[(SAVE_BANKS * 8 + 2) * 4..];
         let (vars, rest) = rest.split_at(512);
         for (var, raw) in self.vars.iter_mut().zip(vars.as_chunks::<2>().0) {
@@ -1202,17 +1210,25 @@ impl Re2State {
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
+        let bit = 0x8000_0000 >> (index & 31);
+        if bank == KEY_BANK {
+            return self.door_locks[key_word(index)] & bit != 0;
+        }
         let Some(words) = self.banks.get(usize::from(bank)) else {
             return false;
         };
-        words[usize::from(index >> 5) & 7] & (0x8000_0000 >> (index & 31)) != 0
+        words[usize::from(index >> 5) & 7] & bit != 0
     }
 
     pub fn set_flag(&mut self, bank: u8, index: u8, op: u8) {
-        let Some(words) = self.banks.get_mut(usize::from(bank)) else {
-            return;
+        let word = if bank == KEY_BANK {
+            &mut self.door_locks[key_word(index)]
+        } else {
+            let Some(words) = self.banks.get_mut(usize::from(bank)) else {
+                return;
+            };
+            &mut words[usize::from(index >> 5) & 7]
         };
-        let word = &mut words[usize::from(index >> 5) & 7];
         let bit = 0x8000_0000 >> (index & 31);
         match op {
             0 => *word &= !bit,
@@ -1227,6 +1243,23 @@ impl Re2State {
     pub fn enter_room_status(&mut self) {
         self.banks[usize::from(STATUS_BANK)][0] &= SET_ROOM_STATUS_KEEP;
     }
+}
+
+/// `Flg_addr[31]` is `fg_key` (`0x98ED2C`): the doors' lock bits, the
+/// words [`Re2State::door_locks`] holds, so a script's `ck 31:n` and `set
+/// 31:n` read and raise the bits a door's lock byte names.
+pub const KEY_BANK: u8 = 31;
+
+/// The `door_locks` word of `fg_key` bit `index`. The original's two words
+/// are followed by `Item_work`, which an index of 64 or more would reach; no
+/// script does, so such an index is logged and wraps onto the two words.
+fn key_word(index: u8) -> usize {
+    if index >= 64 {
+        crate::logging::write(&format!(
+            "warning: fg_key bit {index} is past the lock words"
+        ));
+    }
+    usize::from(index >> 5) & 1
 }
 
 /// The gate on one interaction area, on top of its [`RoomAction`] box.
@@ -3933,6 +3966,83 @@ mod tests {
         let mut old = Re2State::default();
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_BOX]).unwrap();
         assert_eq!(old.item_box[0], [0; 3]);
+    }
+
+    /// Room 200's area 8 is `Sce_Windows` (kind 14), whose box nothing
+    /// reaches: event 6's `aot_on 8` asks for game mode 7 with its first byte
+    /// plus its third shifted by 4, mode 0 and cut 15, and nothing else.
+    #[test]
+    fn aot_on_of_sce_windows_requests_game_mode_7() {
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "aot_set",
+            &[8, 14, 49, 1, 0, 0, 0, 1, 1, 0, 0, 15, 0, 0, 0],
+        );
+        let flags = game.re2.banks;
+        exec(&mut game, "aot_on", &[8]);
+        assert_eq!(game.re2_computer_request, Some(0xF0));
+        assert!(game.re2_computer.is_none() && !game.message.active);
+        assert_eq!(game.re2.banks, flags);
+    }
+
+    /// The computer with the Blue Card Key, driven through the game with
+    /// confirm held and the card's question answered yes: the card leaves
+    /// its slot and the herb after it moves up, 4:70 is raised, and the cut
+    /// comes back to the counter's when it exits.
+    #[test]
+    fn the_computer_takes_the_card_and_releases_the_doors() {
+        use crate::game::InventoryItem;
+        let mut game = GameState::default();
+        game.inventory = [(2, 18), (1, 1), (0x35, 1), (0x26, 1)]
+            .map(|(id, quantity)| InventoryItem { id, quantity })
+            .to_vec();
+        game.equipped_weapon_id = 2;
+        game.set_camera_cut(0);
+        game.re2_computer = Some(crate::game::computer2::Computer::new(
+            0xF0,
+            crate::game::computer2::test_strings(),
+        ));
+        let mut cuts = Vec::new();
+        for _ in 0..2000 {
+            if game.re2_computer.is_none() {
+                break;
+            }
+            cuts.extend(game.tick_re2_computer(true));
+            // The question closes with its default, yes.
+            game.message.active = false;
+        }
+        assert!(game.re2_computer.is_none());
+        let ids: Vec<u8> = game.inventory.iter().map(|stack| stack.id).collect();
+        assert_eq!(ids, [2, 1, 0x26]);
+        assert_eq!(game.equipped_weapon_id, 2);
+        assert!(game.re2.flag(4, 70));
+        assert_eq!(cuts, [15, 9, 2, 15, 0]);
+        assert_eq!(game.camera.current_cut, 0);
+    }
+
+    /// Bank 31 is `fg_key` (`Flg_addr[31] = 0x98ED2C`), the doors' lock bits:
+    /// room 200's `set 31:17` is the bit room 20A's door 0 (lock `0x91`)
+    /// unlocks, and a door unlocked from 20A's side is the bit room 200 checks.
+    #[test]
+    fn bank_31_is_the_door_lock_bits() {
+        let mut state = Re2State::default();
+        state.set_flag(KEY_BANK, 17, 1);
+        assert_eq!(state.door_locks, [0x4000, 0]);
+        assert_eq!(state.banks[usize::from(KEY_BANK)], [0; 8]);
+        state.door_locks[1] |= 0x8000_0000;
+        assert!(state.flag(KEY_BANK, 32) && state.flag(KEY_BANK, 17));
+        state.set_flag(KEY_BANK, 17, 0);
+        assert_eq!(state.door_locks, [0, 0x8000_0000]);
+
+        // An old save's bank 31 bits merge into the locks.
+        let mut old = Re2State::default();
+        old.banks[usize::from(KEY_BANK)][0] = 0x4000;
+        old.door_locks[0] = 0x1;
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&old.to_save_bytes()).unwrap();
+        assert_eq!(loaded.door_locks[0], 0x4001);
+        assert_eq!(loaded.banks[usize::from(KEY_BANK)], [0; 8]);
     }
 
     #[test]

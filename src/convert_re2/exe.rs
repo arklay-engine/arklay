@@ -50,6 +50,17 @@ const FIRST_SYSTEM: &[u8] = &[
     0x33, 0x45, 0x48, 0x48, 0x00, 0x55, 0x4B, 0x51, 0x00, 0x50, 0x3D, 0x47, 0x41,
 ];
 
+/// Room 200's computer's strings (`Computer200`, `0x4D1170`): ASCII with
+/// `Cprint`'s control codes, each ending at a NUL. In the order of
+/// [`crate::game::computer2::Strings`]: the title, `RELEASED`, `LOCKED`, the
+/// card's line, the newline, `Checking up ID CARD` and the `OK!`.
+const COMPUTER: [usize; 7] = [
+    0x53_3AD0, 0x53_3AAC, 0x53_3A88, 0x53_3A58, 0x53_3A54, 0x53_3A28, 0x53_3A04,
+];
+
+/// The computer's title, which tells [`COMPUTER`] points at its strings.
+const COMPUTER_TITLE: &[u8] = b"DOOR LOCK SERVICE]";
+
 /// The executable's English strings, each the raw bytes of one entry with its
 /// terminator.
 pub(super) struct ExeText {
@@ -59,6 +70,8 @@ pub(super) struct ExeText {
     pub system: Vec<Vec<u8>>,
     /// Door messages by id.
     pub door: Vec<Vec<u8>>,
+    /// Room 200's computer's strings, without their NULs ([`COMPUTER`]).
+    pub computer: Vec<Vec<u8>>,
 }
 
 impl ExeText {
@@ -68,7 +81,12 @@ impl ExeText {
             names: strings(exe, &NAMES, 0xF7).context("the item names")?,
             system: strings(exe, &SYSTEM, 0xFE).context("the system messages")?,
             door: strings(exe, &DOOR, 0xFE).context("the door messages")?,
+            computer: computer_strings(exe).context("the computer's strings")?,
         };
+        ensure!(
+            text.computer[0].starts_with(COMPUTER_TITLE),
+            "the computer's strings do not start with its title"
+        );
         ensure!(
             text.system[0].starts_with(FIRST_SYSTEM),
             "the system messages do not start with the pick-up question"
@@ -80,6 +98,32 @@ impl ExeText {
         );
         Ok(text)
     }
+}
+
+/// [`COMPUTER`]'s strings, each up to its NUL. They are printable ASCII, so
+/// they can go one a line.
+fn computer_strings(exe: &[u8]) -> Result<Vec<Vec<u8>>> {
+    COMPUTER
+        .iter()
+        .map(|&address| {
+            let start = address
+                .checked_sub(IMAGE_BASE)
+                .filter(|&at| at < exe.len())
+                .context("a string is outside the executable")?;
+            let tail = &exe[start..];
+            let len = tail
+                .iter()
+                .position(|&byte| byte == 0)
+                .filter(|&len| len < 0x100)
+                .context("a string has no end")?;
+            let string = tail[..len].to_vec();
+            ensure!(
+                string.iter().all(|byte| (0x20..0x7F).contains(byte)),
+                "a string at {address:#x} isn't printable ASCII"
+            );
+            Ok(string)
+        })
+        .collect()
 }
 
 /// The strings of `table` in `exe`, each up to and including its `end` byte

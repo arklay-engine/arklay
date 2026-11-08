@@ -108,6 +108,9 @@ pub struct TraceTick<'a> {
     /// RE2's game mode (`Game`), the oracle's `gm` (`gi`'s first value).
     /// arklay follows it only on the typewriter's path.
     pub re2_game_mode: Option<u8>,
+    /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
+    /// bytes) and the computer's state (`pc`, `-` without one).
+    pub re2_computer: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -308,6 +311,9 @@ impl TraceWriter {
         if let Some(mode) = tick.re2_game_mode {
             write!(self.out, " gm={mode}")?;
         }
+        if let Some(fields) = &tick.re2_computer {
+            write!(self.out, " {fields}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -432,6 +438,7 @@ mod tests {
             re2_scene: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_computer: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -492,6 +499,7 @@ mod tests {
                 re2_scene: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_computer: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -548,6 +556,7 @@ mod tests {
                 re2_scene: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_computer: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -601,6 +610,7 @@ mod tests {
             re2_scene: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_computer: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -659,6 +669,7 @@ mod tests {
             re2_scene: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_computer: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };

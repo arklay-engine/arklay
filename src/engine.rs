@@ -644,6 +644,7 @@ pub fn run_with_options(
                         re2_scene: None,
                         re2_typewriter: None,
                         re2_game_mode: None,
+                        re2_computer: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -2401,6 +2402,8 @@ enum RoomBgmHandoff {
 #[derive(Clone, Copy)]
 struct AuthorBaseline {
     banks: [[u32; 8]; crate::scd2::host::BANKS],
+    /// `fg_key`, which bank 31's flags are.
+    door_locks: [u32; 2],
     rnd: crate::zombie2::Rnd,
 }
 
@@ -3088,6 +3091,12 @@ impl GameSession {
     ) -> Result<()> {
         self.game.countdown_hud = None;
         self.game.apply_re2_no_enemies();
+        if self.game.re2_computer_request.is_some() {
+            // `Game_loop` takes START only while `Game` is 0, and
+            // `Sce_Windows` made it 7 in the script pass of the tick a START
+            // was taken on.
+            self.menu_request = None;
+        }
         self.finish_menu_request(pack);
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
@@ -3712,6 +3721,63 @@ impl GameSession {
             ui = UiInput::default();
             input = player::Input::default();
             action = false;
+        }
+
+        // RE2's game mode 7 (`Game_loop` case 7, `0x4BF810`): the `Windows`
+        // task suspends the room's task, so nothing of the room runs until
+        // `Computer_exit` signals it; messages (`Mess_disp`) still run after
+        // the tasks, in `Psx_main`.
+        if let Some(request) = self.game.re2_computer_request.take() {
+            match re2_computer_strings(pack) {
+                Some(strings) => {
+                    self.game.re2_computer = Some(game::computer2::Computer::new(request, strings));
+                }
+                None => eprintln!(
+                    "warning: the pack has no {}; the computer resumes at once",
+                    game::computer2::TEXT_ENTRY
+                ),
+            }
+        }
+        if self.game.re2_computer.is_some() {
+            if !action {
+                self.swallow_action = false;
+            }
+            let was_active = self.game.message.active;
+            // The confirm `Computer200` reads is the held one (`Key`).
+            if let Some(cut) = self.game.tick_re2_computer(input.action_held) {
+                // `Bg_loadPC` loads the cut in this tick's `Swap_Cbuff`.
+                let cut = usize::from(cut);
+                if cut < self.loaded.room.cuts.len() {
+                    self.loaded.room.current_cut = cut;
+                    self.game.reproject_effects(&self.loaded.room);
+                }
+            }
+            self.game.update_message(
+                MessageInput {
+                    action,
+                    left: input.left,
+                    right: input.right,
+                    cancel: input.run || ui.cancel,
+                },
+                &self.loaded.room,
+                &self.text,
+            );
+            self.play_re2_choice_cue(pack);
+            let cut = self.sound_cut();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+                cut,
+            );
+            if was_active && !self.game.message.active && action {
+                self.swallow_action = true;
+            }
+            return Ok(());
         }
 
         // RE2's get-item window owns the tick while it is open: the room,
@@ -6082,6 +6148,7 @@ impl GameSession {
     fn author_baseline(&self) -> AuthorBaseline {
         AuthorBaseline {
             banks: self.game.re2.banks,
+            door_locks: self.game.re2.door_locks,
             rnd: self.game.re2.rnd,
         }
     }
@@ -6091,9 +6158,14 @@ impl GameSession {
     /// the edit invalidates since `baseline`; `mirror` also moves the live
     /// player to the authored state.
     fn finish_authoring(&mut self, baseline: AuthorBaseline, mirror: bool) {
-        let AuthorBaseline { banks: flags, rnd } = baseline;
+        let AuthorBaseline {
+            banks,
+            door_locks,
+            rnd,
+        } = baseline;
+        let flags = (banks, door_locks);
         // A room's scripts read the flags and the stream as they start.
-        if self.game.re2.banks != flags || self.game.re2.rnd != rnd {
+        if (self.game.re2.banks, self.game.re2.door_locks) != flags || self.game.re2.rnd != rnd {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
             // The first pass's areas were armed by the flags as they stood.
             if self.loaded.re2_vm.is_some() {
@@ -7796,6 +7868,14 @@ impl GameSession {
                 .then(|| self.game.re2_typewriter_trace()),
             // The typewriter's game modes are RE1's hand-off for now.
             re2_game_mode: self.game.is_re2_room.then_some(0),
+            re2_computer: self.game.is_re2_room.then(|| {
+                let common: String = self.game.re2.banks[4]
+                    .iter()
+                    .flat_map(|word| word.to_le_bytes())
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                format!("fgcom={common} pc={}", self.game.re2_computer_trace())
+            }),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -14227,11 +14307,16 @@ fn play_re2_sounds(
         return;
     };
     let mut played = std::mem::take(&mut sounds.played);
-    let mut play = |id: SoundId, pos: [i32; 3]| {
-        let Some(tone_volume) = sounds.banks.volume(id.kind, id.slot) else {
-            return;
+    // `forced` is a level `Snd_se_on` sets itself: the trace logs it, and the
+    // sound plays at full volume, whatever the bank's table says.
+    let mut play = |id: SoundId, pos: [i32; 3], forced: Option<(u8, i32)>| {
+        let tone_volume = match forced {
+            Some((volume, _)) => volume,
+            None => sounds.banks.volume(id.kind, id.slot)?,
         };
-        let (volume, pan) = if id.positional {
+        let (volume, pan) = if let Some(level) = forced {
+            level
+        } else if id.positional {
             let (mut volume, pan) = se2::place(cut.pos, cut.look_at, pos);
             let ear = [pos[0], pos[1] - 0x5DC, pos[2]];
             if id.muffled
@@ -14257,21 +14342,40 @@ fn play_re2_sounds(
             (tone_volume, 0)
         };
         played.push((id.kind.index() as u8, id.slot, volume, pan));
+        let logged = Some((volume, pan));
         let Some(mixer) = music.as_mut() else {
-            return;
+            return logged;
         };
         let Some(wav) = sounds.wav(cache, pack, id.kind, id.slot) else {
-            return;
+            return logged;
         };
+        let gain = if forced.is_some() { 0x7f } else { volume };
         mixer.play_sfx_on_bank(
             sfx_bank_key(id.kind.index() as u8, id.slot),
             wav,
-            se2::volume_gain(volume),
+            se2::volume_gain(gain),
             sfx::pan_from_raw(pan * 0x17),
         );
+        logged
     };
+    let room_200 = (game.id.stage, game.id.room) == (2, 0);
     for request in requests {
-        play(request.id, request.pos);
+        let logged = play(request.id, request.pos, None);
+        if room_200 && request.id.kind == Kind::Room && request.id.slot == 0x12 {
+            // `Snd_se_on`'s case for room 200 (`0x4EDC77`): slot 0x13 starts
+            // with 0x12 at full volume from the centre, the computer's door
+            // shots. `SsPlay` logs the level 0x12 left.
+            if let Some(level) = logged {
+                play(
+                    SoundId {
+                        slot: 0x13,
+                        ..request.id
+                    },
+                    request.pos,
+                    Some(level),
+                );
+            }
+        }
     }
     // `Snd_se_walk` reads the player's `Floor`, which the stairs step at their
     // start rather than with the height.
@@ -14280,6 +14384,7 @@ fn play_re2_sounds(
         play(
             se2::footstep_sound(&room.footstep_zones, &footstep, floor),
             footstep.pos,
+            None,
         );
     }
     for sound in weapon {
@@ -14289,12 +14394,28 @@ fn play_re2_sounds(
             positional: true,
             muffled: true,
         };
-        play(id, sound.pos);
+        play(id, sound.pos, None);
     }
     for request in effects {
-        play(request.id, request.pos);
+        play(request.id, request.pos, None);
     }
     sounds.played = played;
+}
+
+/// Room 200's computer's strings, from [`game::computer2::TEXT_ENTRY`].
+fn re2_computer_strings(pack: &Pack) -> Option<game::computer2::Strings> {
+    let bytes = pack.read(game::computer2::TEXT_ENTRY).ok()?;
+    let mut lines = bytes.split(|&b| b == b'\n').map(<[u8]>::to_vec);
+    let mut next = || lines.next().filter(|line| !line.is_empty());
+    Some(game::computer2::Strings {
+        title: next()?,
+        released: next()?,
+        locked: next()?,
+        card: next()?,
+        newline: next()?,
+        checking: next()?,
+        ok: next()?,
+    })
 }
 
 /// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`.
