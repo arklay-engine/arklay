@@ -264,6 +264,12 @@ function HookApi:item_box_clear() end
 ---@param mark? integer `3` for a two-slot weapon; defaults to `0`.
 function HookApi:set_re2_box_slot(slot, id, count, mark) end
 
+---Put a file in one of RE 2's 24 file slots (`File_tag_bk`: three
+---binders of eight).
+---@param index integer `0..24`.
+---@param file integer The file's number; `0xFF` empties the slot.
+function HookApi:set_re2_file(index, file) end
+
 -- # Player
 
 ---Set the player's health and its BioCard copy.
