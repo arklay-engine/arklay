@@ -682,6 +682,21 @@ def map_flags_trace(game: Game) -> str:
     if game.u8(STATUS_PAGE) == 4:
         page = f"{game.u8(MAP_FLOOR)},{game.u8(MAP_BLINK)},{game.u8(MAP_BLINK + 1)}"
     return f"mapfg={flags} map={page}"
+HOOK = 0x98E790  # `pG + 0x82B0`: the per-tick hook Sce_Door's `Key_lost` and Sce_Hikidashi's `Hikidashi_entrance` share
+HOOK_STATE = 0x98E541  # the hook's state byte
+HOOK_HIKIDASHI = 0x4E9EA0
+HOOK_KEY_LOST = 0x4E95F0
+RDT = 0x98861C  # the room's RDT; its byte +2 is the room's object count
+
+
+def hikidashi_trace(game: Game) -> str:
+    """The drawer (`Sce_Hikidashi`): the hook (0 none, 1 `Hikidashi_entrance`, 2 `Key_lost`, 9 another), its state byte, then each room object's `Be_flg & 0x11` in hex."""
+    hook = game.u32(HOOK)
+    kind = {0: 0, HOOK_HIKIDASHI: 1, HOOK_KEY_LOST: 2}.get(hook, 9)
+    rdt = game.u32(RDT)
+    count = game.u8(rdt + 2) if rdt else 0
+    flags = "/".join(f"{game.u32(OBJECTS + n * 0x1F8) & 0x11:x}" for n in range(min(count, 32)))
+    return f"hk={kind},{game.u8(HOOK_STATE)},{flags or '-'}"
 
 
 def trace_line(game: Game, tick: int, pad: int) -> str:
@@ -760,6 +775,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     )
     fields.append(item_box_trace(game))
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
+    fields.append(hikidashi_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

@@ -101,7 +101,7 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg"}
+OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "hk"}
 # A screen's own fields, compared only when named.
 SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg")
 

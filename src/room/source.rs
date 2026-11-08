@@ -610,6 +610,7 @@ impl RoomSource {
             room: id.room,
             player_flag: id.player_flag,
             omodel_slot_count,
+            re2_object_count: 0,
             item_count,
             cuts,
             current_cut: 0,

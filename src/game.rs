@@ -1432,6 +1432,7 @@ pub struct ScaVolume {
 
 pub mod door2;
 mod entity;
+pub mod hikidashi2;
 pub mod item_get2;
 pub mod itembox2;
 pub mod status2;
@@ -3258,6 +3259,8 @@ pub struct GameState {
     pub re2_status_start: bool,
     /// RE2's item box lid (`Item_box_entrance`).
     pub re2_box_entrance: itembox2::Entrance,
+    /// RE2's drawer hook (`Hikidashi_entrance`).
+    pub re2_hikidashi: hikidashi2::Hikidashi,
     /// RE2's item box page while its screen is up.
     pub re2_box: Option<itembox2::BoxPage>,
     /// The box page's bytes as the trace shows them; they stay after the
@@ -3753,6 +3756,7 @@ impl Default for GameState {
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
             re2_box_entrance: itembox2::Entrance::default(),
+            re2_hikidashi: hikidashi2::Hikidashi::default(),
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
@@ -8552,6 +8556,10 @@ impl GameState {
             self.re2.set_flag(word(0) as u8, word(1) as u8, op);
             return;
         }
+        if action.sce == crate::scd2::host::SCE_HIKIDASHI {
+            self.sce_hikidashi(action);
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_WATER {
             // `Sce_Water`: the area's first word is the water's level.
             self.re2.player.water = i16::from_le_bytes([action.params[0], action.params[1]]);
@@ -8935,7 +8943,7 @@ impl GameState {
     /// `Mess_set(0, 0x100, n, 0xFF000000)`: `Mess_disp`'s first pass raises
     /// the stop word at the end of the request's tick, after the moves, and
     /// the dismissal puts `fg_stop` back.
-    fn show_re2_door_message(&mut self, id: u8) {
+    pub(crate) fn show_re2_door_message(&mut self, id: u8) {
         self.message.set_re2_timing(true, false);
         let shown = self.message.menu_choice_id() & 0x80 == 0;
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);

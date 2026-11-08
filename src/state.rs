@@ -647,6 +647,9 @@ pub struct RoomState {
     /// Declared omodel pair count from header byte `0x02`; also the number of
     /// runtime object records the room's init script may build.
     pub omodel_slot_count: u8,
+    /// An RE2 room's object count, its header byte `0x02` (`rdt + 2`);
+    /// [`RoomState::omodel_slot_count`] is the 32 slots there.
+    pub re2_object_count: u8,
     /// Declared item-model pair count from header byte `0x03`.
     pub item_count: u8,
     pub cuts: Vec<Cut>,
