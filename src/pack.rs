@@ -2857,7 +2857,10 @@ mod tests {
                 "{path}"
             );
         }
-        assert_eq!(*streamed.read("movie/00.mp4").unwrap(), b"film".repeat(2000));
+        assert_eq!(
+            *streamed.read("movie/00.mp4").unwrap(),
+            b"film".repeat(2000)
+        );
         assert_eq!(*streamed.read("a.bin").unwrap(), [1, 2, 3]);
 
         // Renaming a new image over the path leaves the open pack reading the
