@@ -1094,16 +1094,20 @@ fn classify_movie(stem: &str, extension: &str) -> Class {
 /// `DATA/`: UI art, item atlases, demos and effects.
 fn classify_data(name: &str, stem: &str, extension: &str) -> Class {
     for &(entry, file, kind) in convert::UI_ASSETS {
-        let file = file.to_ascii_lowercase();
-        if file == name {
-            return converted(entry, Convert::Ui(kind));
-        }
-        // A PNG/WebP/BMP named after a UI file replaces it at its stem.
-        let entry_stem = crate::assets::stem(entry);
-        if matches!(extension, "png" | "webp" | "bmp")
-            && file.rsplit_once('.').map(|(file_stem, _)| file_stem) == Some(stem)
-        {
-            return raw(format!("{entry_stem}.{extension}"));
+        // A Western install's `FONTUS.TIM` stands in for `FONT.TIM`, as in
+        // the game conversion; `Plan::insert_keyed` lets `FONT.TIM` win.
+        for file in std::iter::once(file).chain(convert::ui_fallback(file)) {
+            let file = file.to_ascii_lowercase();
+            if file == name {
+                return converted(entry, Convert::Ui(kind));
+            }
+            // A PNG/WebP/BMP named after a UI file replaces it at its stem.
+            let entry_stem = crate::assets::stem(entry);
+            if matches!(extension, "png" | "webp" | "bmp")
+                && file.rsplit_once('.').map(|(file_stem, _)| file_stem) == Some(stem)
+            {
+                return raw(format!("{entry_stem}.{extension}"));
+            }
         }
     }
     for &(entry, file, rows) in convert::ITEM_ASSETS {
@@ -1205,8 +1209,24 @@ impl Plan {
         files: &[InputFile],
         warnings: &mut Vec<String>,
     ) {
+        // A fallback name (`FONTUS.TIM` for `FONT.TIM`) yields to the
+        // file it stands in for instead of clashing with it.
+        let fallback = |file: usize| {
+            let name = files[file].path.rsplit('/').next().unwrap_or_default();
+            convert::UI_ASSETS.iter().any(|&(_, primary, _)| {
+                convert::ui_fallback(primary).is_some_and(|alt| alt.eq_ignore_ascii_case(name))
+            })
+        };
         match self.targets.get(&key) {
             Some(existing) if existing.priority > planned.priority => {}
+            Some(existing)
+                if existing.priority == planned.priority
+                    && fallback(existing.file) != fallback(planned.file) =>
+            {
+                if fallback(existing.file) {
+                    self.targets.insert(key, planned);
+                }
+            }
             Some(existing) if existing.priority == planned.priority => warnings.push(format!(
                 "{} and {} both map to {key}; keeping the first",
                 files[existing.file].path, files[planned.file].path
@@ -1786,6 +1806,7 @@ mod tests {
             "mod_biorand/sound/CHAIN1.wav",
             "mod_biorand/data/statface.tim",
             "mod_biorand/data/title.pix",
+            "mod_biorand/data/fontus.tim",
             "mod_biorand/type.png",
             "mod_biorand/init.xml",
             "mod_biorand/bgm_tbl.xml",
@@ -1851,6 +1872,7 @@ mod tests {
             "ui/statface.tim"
         );
         assert_eq!(one(&map, "mod_biorand/data/title.pix"), "ui/title.bmp");
+        assert_eq!(one(&map, "mod_biorand/data/fontus.tim"), "ui/font.tim");
         assert_eq!(one(&map, "mod_biorand/type.png"), "ui/type00.png");
         assert_eq!(
             one(&map, "mod_biorand/init.xml"),
@@ -2074,6 +2096,30 @@ mod tests {
                 "room/6060/room.rdt"
             ]
         );
+    }
+
+    #[test]
+    fn font_tim_wins_over_its_fontus_fallback_in_either_order() {
+        let files: Vec<InputFile> = ["data/fontus.tim", "data/FONT.TIM"]
+            .into_iter()
+            .map(|path| InputFile {
+                path: path.to_string(),
+                handle: Handle::Zip(0),
+            })
+            .collect();
+        for order in [[0, 1], [1, 0]] {
+            let mut plan = Plan::default();
+            let mut warnings = Vec::new();
+            for file in order {
+                let target = Target {
+                    entry: "ui/font.tim".to_string(),
+                    convert: Convert::Raw,
+                };
+                plan.insert(target, 0, file, &files, &mut warnings);
+            }
+            assert!(warnings.is_empty(), "{warnings:?}");
+            assert_eq!(plan.targets["ui/font.tim"].file, 1, "order {order:?}");
+        }
     }
 
     #[test]

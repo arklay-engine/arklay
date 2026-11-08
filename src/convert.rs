@@ -1961,6 +1961,16 @@ pub(crate) const ITEM_ASSETS: &[(&str, &str, usize)] = &[
     (items::MEDAL_ENTRY, "MEDAL.PIX", items::MEDAL_ROWS),
 ];
 
+/// The file a UI asset falls back to when the install lacks its own. The
+/// Japanese PC build ships the game font as `FONT.TIM`, the Western ones as
+/// `FONTUS.TIM` (`GameInit.cpp` loads one or the other); both sheets carry
+/// the same 8x8 ASCII rows that `PrintText8x8` draws (the lab computer's
+/// masked `*`), on the same CLUT row.
+pub(crate) fn ui_fallback(file: &str) -> Option<&'static str> {
+    file.eq_ignore_ascii_case("FONT.TIM")
+        .then_some("FONTUS.TIM")
+}
+
 /// Resolve the optional `DATA` inputs and aggregate missing-file warnings.
 fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
     let Some(dir) = data else {
@@ -1981,13 +1991,19 @@ fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
 
     let mut missing_ui = Vec::new();
     for (entry, file, kind) in UI_ASSETS {
-        match index.get(&file.to_ascii_lowercase()) {
+        let source = index
+            .get(&file.to_ascii_lowercase())
+            .or_else(|| ui_fallback(file).and_then(|alt| index.get(&alt.to_ascii_lowercase())));
+        match source {
             Some(source) => plan.ui.push(UiAsset {
                 entry,
                 source: source.clone(),
                 kind: *kind,
             }),
-            None => missing_ui.push(*file),
+            None => missing_ui.push(match ui_fallback(file) {
+                Some(alt) => format!("{file} (or {alt})"),
+                None => file.to_string(),
+            }),
         }
     }
 
@@ -5898,6 +5914,29 @@ mod tests {
         let image = bmp::decode(&bmp_bytes).unwrap();
         assert_eq!((image.width, image.height), (1, 1));
         assert_eq!(image.rgba, [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn a_western_install_packs_fontus_as_the_game_font() {
+        let root = TempDir::new("data-font");
+        let data = root.path.join("install/DATA");
+        fs::create_dir_all(&data).unwrap();
+        fs::write(data.join("fontus.tim"), b"fontus").unwrap();
+        let plan = resolve_data_assets(Some(&data)).unwrap();
+        let font = plan.ui.iter().find(|asset| asset.entry == "ui/font.tim");
+        assert_eq!(
+            font.map(|asset| asset.source.clone()),
+            Some(data.join("fontus.tim"))
+        );
+
+        // The Japanese sheet wins when the install has it.
+        fs::write(data.join("FONT.TIM"), b"font").unwrap();
+        let plan = resolve_data_assets(Some(&data)).unwrap();
+        let font = plan.ui.iter().find(|asset| asset.entry == "ui/font.tim");
+        assert_eq!(
+            font.map(|asset| asset.source.clone()),
+            Some(data.join("FONT.TIM"))
+        );
     }
 
     #[test]
