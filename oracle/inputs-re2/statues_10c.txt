@@ -1,0 +1,84 @@
+# Room 10C's whole statue puzzle for the route (oracle/re2.md, "Room 10C's statues"): from the hall's +z side walk to statue 1's +z face and run statue1_10c's three pushes; back off, run west to the pedestal's east face and turn to statue 2's -z face; then statue2_10c's three pushes, the jewel scene and the Red Jewel.
+0
+350 up
+371
+376 left
+390
+393 up
+411
+440 up
+522
+598 down
+602
+606 right
+619
+622 up
+636
+640 left
+653
+656 up
+672
+676 left
+689
+694 up
+948
+952 right
+965
+968 up
+976
+980 left
+993
+996 up
+1007
+1011 left
+1024
+1028 up
+1128
+1132 down
+1137
+1142 left
+1156
+1159 up run
+1176
+1180 right
+1194
+1197 up
+1275
+1347 down
+1351
+1355 right
+1368
+1371 up
+1384
+1388 left
+1401
+1404 up
+1419
+1423 left
+1436
+1439 up
+1677
+1685 right
+1698
+1699 up
+1735
+1739 left
+1761
+1763 up
+1843
+1947 down
+1952
+1957 left
+1971
+1974 up run
+1997
+2001 right
+2014
+2017 up
+2029
+2033 action
+2037
+2307 action
+2311
+2507 action
+2511

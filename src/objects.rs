@@ -309,8 +309,17 @@ pub struct ObjectRecord {
     pub push_cnt: u8,
     /// RE2's `nFloor` (`+0x106`), which `Om_move` takes from the height.
     pub floor: u8,
-    /// RE2's `At_sce_no` (`+0x0B`, member 9).
+    /// RE2's `At_sce_no` (`+0x0B`, member 9): the area `Sce_at`'s object
+    /// pass last found the object in, `0xFF` once the scripts' pass after it
+    /// has ended.
     pub at_sce_no: u8,
+    /// RE2's `At_obj_no` (`+0x0A`, member 8).
+    pub at_obj_no: u8,
+    /// RE2's `Routine_0` to `Routine_3` (members 2 to 5).
+    pub routine: [u8; 4],
+    /// RE2's `Type` (`+0x10E`, member 7), the low byte of `Obj_model_set`'s
+    /// sixth word.
+    pub kind: u16,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
 }
@@ -350,6 +359,9 @@ impl Default for ObjectRecord {
             push_cnt: 0,
             floor: 0,
             at_sce_no: 0,
+            at_obj_no: 0,
+            routine: [0; 4],
+            kind: 0,
             tween: TweenScratch::default(),
         }
     }
@@ -697,7 +709,7 @@ pub struct ObjectTable {
     pub last_asset: Option<u8>,
     /// What each slot carries into the next room: RE2's `Set_room` and
     /// `Sce_model_init` clear only `Be_flg` and `Free0`, so `Old`, `Old2`,
-    /// `Push_cnt` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
+    /// `Push_cnt`, `At_obj_no` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
     /// room in between doesn't lose them.
     carried: Vec<Carried>,
 }
@@ -709,6 +721,7 @@ struct Carried {
     old2: [i16; 3],
     push_cnt: u8,
     at_sce_no: u8,
+    at_obj_no: u8,
 }
 
 impl ObjectTable {
@@ -735,6 +748,7 @@ impl ObjectTable {
                 old2: record.old2,
                 push_cnt: record.push_cnt,
                 at_sce_no: record.at_sce_no,
+                at_obj_no: record.at_obj_no,
             };
         }
         self.records.clear();
@@ -744,6 +758,7 @@ impl ObjectTable {
             record.old2 = carried.old2;
             record.push_cnt = carried.push_cnt;
             record.at_sce_no = carried.at_sce_no;
+            record.at_obj_no = carried.at_obj_no;
         }
         self.built = 0;
         self.last_asset = None;
@@ -847,6 +862,9 @@ impl ObjectTable {
             push_cnt: 0,
             floor: 0,
             at_sce_no: 0,
+            at_obj_no: 0,
+            routine: [0; 4],
+            kind: 0,
             tween: TweenScratch::default(),
         };
         self.built = self.built.wrapping_add(1);

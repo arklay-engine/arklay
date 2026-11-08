@@ -2160,8 +2160,9 @@ impl GameHost<'_> {
             return;
         };
         let item_flags = record.item_flags;
-        // Nor does it write `Old`, `Old2` (+0x44..+0x4E), `Push_cnt` (+0x144)
-        // or `At_sce_no`: they outlast a re-set.
+        // Nor does it write `Old`, `Old2` (+0x44..+0x4E), `Push_cnt` (+0x144),
+        // `At_obj_no` or `At_sce_no`: they outlast a re-set. `Om_init` clears
+        // the routines.
         let kept = *record;
         let mut be_flg = if record.be_flg == 0 {
             (at(7) as i16 as i32 | 1) as u32
@@ -2197,7 +2198,9 @@ impl GameHost<'_> {
             attr,
             draw_lift: if at(1) == 2 { 900 } else { 0 },
             id: at(1) as u8,
+            // `Obj_model_set`'s bytes 6 and 8: the floor and `Type`.
             floor: (at(5) & 0xFF) as u8,
+            kind: (at(6) & 0xFF) as u16,
             item_flags,
             // The format reads `At_h` and `At_d` as byte pairs.
             atd2: crate::objects::ObjectAtd {
@@ -2210,6 +2213,7 @@ impl GameHost<'_> {
             old2: kept.old2,
             push_cnt: kept.push_cnt,
             at_sce_no: kept.at_sce_no,
+            at_obj_no: kept.at_obj_no,
             ..crate::objects::ObjectRecord::default()
         };
         record.set_ofs();
@@ -2797,6 +2801,14 @@ fn object_member(object: &crate::objects::ObjectRecord, member: u8) -> Option<i3
     match member {
         0 => Some(i32::from(object.be_flg as u16)),
         1 => Some(i32::from((object.be_flg >> 16) as u16)),
+        2..=5 => Some(i32::from(object.routine[usize::from(member) - 2])),
+        MEMBER_ID => Some(i32::from(object.id)),
+        MEMBER_TYPE => Some(i32::from(object.kind)),
+        8 => Some(i32::from(object.at_obj_no)),
+        MEMBER_AREA => Some(i32::from(object.at_sce_no)),
+        // `Attribute`, an int of which `Obj_model_set` writes the low word.
+        10 => Some(i32::from(object.attr as i16)),
+        0x11 => Some(i32::from(object.floor)),
         0x0B..=0x0D => Some(object.pos[usize::from(member) - 0x0B]),
         0x0E..=0x10 => Some(i32::from(object.rotation[usize::from(member) - 0x0E])),
         _ => None,
@@ -2808,6 +2820,13 @@ fn set_object_member(object: &mut crate::objects::ObjectRecord, member: u8, valu
     match member {
         0 => object.be_flg = object.be_flg & 0xFFFF_0000 | u32::from(value as u16),
         1 => object.be_flg = object.be_flg & 0xFFFF | u32::from(value as u16) << 16,
+        2..=5 => object.routine[usize::from(member) - 2] = value as u8,
+        MEMBER_ID => object.id = value as u8,
+        MEMBER_TYPE => object.kind = value as u16,
+        8 => object.at_obj_no = value as u8,
+        MEMBER_AREA => object.at_sce_no = value as u8,
+        10 => object.attr = value as u16,
+        0x11 => object.floor = value as u8,
         0x0B..=0x0D => object.pos[usize::from(member) - 0x0B] = value,
         0x0E..=0x10 => object.rotation[usize::from(member) - 0x0E] = value as i16,
         _ => return,
@@ -3304,6 +3323,67 @@ mod tests {
         }
         assert_eq!(game.objects.record_mut(3).unwrap().pos, [60, -200, 300]);
         assert_eq!(game.objects.record_mut(4).unwrap().pos, [100, -200, 300]);
+    }
+
+    /// Room 10C's east plate: area 3, objects only (`sat` 0x44), on floor 2,
+    /// with a statue placed by `obj_model_set` at `pos` on `floor`.
+    fn plate_hall(pos: [i64; 3], floor: i64) -> GameState {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.objects = crate::objects::ObjectTable::new(3);
+        let statue = [
+            1, 0, 0, 0, 0, floor, 0, 0x85, 0, pos[0], pos[1], pos[2], 0, 0, 0, 0, -900, 0, 432,
+            132, 3, 176, 1,
+        ];
+        exec(&mut game, "obj_model_set", &statue);
+        let plate = [
+            3,
+            i64::from(SCE_WATER),
+            0x44,
+            2,
+            0,
+            -17250,
+            -12700,
+            600,
+            400,
+        ];
+        exec(&mut game, "aot_set", &plate);
+        game.objects.record_mut(1).unwrap().at_sce_no = NO_AREA;
+        game
+    }
+
+    /// `member_cmp(0, 9, 0, 3)` on object 1.
+    fn on_plate_3(game: &mut GameState) -> bool {
+        exec(game, "work_set", &[WK_OBJECT, 1]);
+        let op = crate::scd2::opcode::by_mnemonic("member_cmp").unwrap();
+        GameHost { game }.exec(0, op, &[0, 9, 0, 3]) != Step::False
+    }
+
+    #[test]
+    fn the_object_pass_uses_the_objects_floor() {
+        // The player stands on floor 0, far from the plate.
+        let mut game = plate_hall([-17000, -3600, -12500], 2);
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, 3);
+        assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
+
+        // A statue on floor 0 at the same place misses a floor-2 plate, with
+        // the player on floor 2.
+        let mut game = plate_hall([-17000, -3600, -12500], 0);
+        game.interact([-20000, -3600, -10000], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, NO_AREA);
+    }
+
+    #[test]
+    fn member_9_of_an_object_is_its_last_area() {
+        let mut game = plate_hall([-17000, -3600, -12500], 2);
+        assert!(!on_plate_3(&mut game));
+        game.interact([0, 0, 0], 0, false);
+        assert!(on_plate_3(&mut game));
+        // Off the plate, it keeps the area until another hit.
+        game.objects.record_mut(1).unwrap().pos = [-19000, -3600, -12500];
+        game.interact([0, 0, 0], 0, false);
+        assert!(on_plate_3(&mut game));
     }
 
     #[test]
