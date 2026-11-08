@@ -88,10 +88,10 @@ pub fn tick(
             // modelled, so the zone is the one at the step's height.
             for step in character.body.take_footsteps() {
                 let floor = crate::sca::floor_of(step.pos[1]);
-                game.re2.sounds.push(crate::scd2::host::SoundRequest {
-                    id: crate::se2::footstep_sound(&room.footstep_zones, &step, floor),
-                    pos: step.pos,
-                });
+                game.re2.sounds.push(crate::scd2::host::SoundRequest::new(
+                    crate::se2::footstep_sound(&room.footstep_zones, &step, floor),
+                    step.pos,
+                ));
             }
             spl_sca_ck_em(room, &mut character);
         }
@@ -349,7 +349,8 @@ pub fn pl_bow(game: &mut GameState, sca: Option<&crate::state::Sca>) {
             }
             crate::bow2::Call::Sound(id, pos) => {
                 if let Some(id) = crate::se2::SoundId::decode(id) {
-                    re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
+                    re2.sounds
+                        .push(crate::scd2::host::SoundRequest::new(id, pos));
                 }
             }
             crate::bow2::Call::Blast(blast) => {
@@ -467,7 +468,7 @@ pub fn take_hit(game: &mut GameState) {
         if let Some(id) = crate::se2::SoundId::decode(sound) {
             game.re2
                 .sounds
-                .push(crate::scd2::host::SoundRequest { id, pos });
+                .push(crate::scd2::host::SoundRequest::new(id, pos));
         }
     }
     for call in std::mem::take(&mut game.re2.player.effects) {
@@ -899,7 +900,8 @@ fn run_zombie(
     // Each pans from where the body was at its call, before the tick's pushes.
     for (sound, pos) in zombie.sounds.drain(..) {
         if let Some(id) = enemy_sound(sound) {
-            re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
+            re2.sounds
+                .push(crate::scd2::host::SoundRequest::new(id, pos));
         }
     }
     let mine = character.body.angle;
@@ -915,7 +917,7 @@ fn run_zombie(
         {
             game.re2
                 .sounds
-                .push(crate::scd2::host::SoundRequest { id, pos });
+                .push(crate::scd2::host::SoundRequest::new(id, pos));
         }
     }
     run_now

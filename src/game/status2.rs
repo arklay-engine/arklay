@@ -1102,7 +1102,8 @@ impl GameState {
                         self.re2.player.poison_timer = 0;
                     }
                     page.goto(4);
-                } else if self.re2.flag(0, item) {
+                } else if self.re2.flag(crate::scd2::host::FG_USE_BANK, item) {
+                    // `Flg_ck(&fg_use, item)`: an area under the player wants it.
                     page.goto(3);
                 } else {
                     self.show_re2_global(MESSAGE_NOT_NOW);
@@ -1118,7 +1119,9 @@ impl GameState {
             }
             3 => {
                 // A key item the room wants: the screen closes, and the
-                // scripts read the used item (`0x98EAE8`).
+                // scripts read the used item (`scd_var_used_item`) on their
+                // next pass. The item stays: the room's event takes it.
+                self.re2.vars[crate::scd2::host::VAR_USED_ITEM] = u16::from(item);
                 self.record_used_item(item);
                 page.page = 0;
             }

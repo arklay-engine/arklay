@@ -66,6 +66,18 @@ pub struct Re2State {
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
     /// the kind and the damage. The tick applies them to the player.
     pub pending_damage: Vec<([i16; 4], u8, i16)>,
+    /// `fg_stop & 0x2000000` while `Sce_at` runs: the status screen's open
+    /// stops the scheduler. Of the area handlers only `Sce_Event` tests it,
+    /// so an event area starts nothing and every other kind acts as it
+    /// would (`Sce_Door` has a guard of its own, `0x98A0D4`, which isn't
+    /// modelled).
+    pub areas_stopped: bool,
+    /// `scd_var_cut`, the cut `Snd_se_3D` places every positional sound
+    /// from: the tick's cut when it starts, the new room's entry cut at a
+    /// load, and moved at once by a script's `cut_chg` or `cut_old`
+    /// (`FUN_004e5020`). The player's cut check doesn't move it: `Swap_Cbuff`
+    /// brings it up at the frame's end. `None` falls back to the tick's cut.
+    pub var_cut: Option<u8>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
@@ -223,6 +235,18 @@ impl FadeWrite {
 pub struct SoundRequest {
     pub id: crate::se2::SoundId,
     pub pos: [i32; 3],
+    /// The cut `Snd_se_3D` placed it from (`scd_var_cut`), for a script's
+    /// `se_on`, which a later `cut_chg` or `cut_old` in the same pass
+    /// mustn't move. `None` is placed from the live cut when the tick's
+    /// sounds play ([`Re2State::placement_cut`]): every other sound starts
+    /// after the scripts, as in `Game_loop`.
+    pub cut: Option<u8>,
+}
+
+impl SoundRequest {
+    pub fn new(id: crate::se2::SoundId, pos: [i32; 3]) -> Self {
+        Self { id, pos, cut: None }
+    }
 }
 
 /// `pos_set` and `dir_set` on the player.
@@ -459,6 +483,10 @@ const SPLAYER_OPERAND: i64 = 255;
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
+/// `fg_use` (`0x989ED8`): the key items the areas under the player want. A
+/// USE area (`Sce_Flg_chg`) raises the item's bit while the player's probe is
+/// in it, and `Sce_work_clr` clears the bank's first four words each pass.
+pub const FG_USE_BANK: u8 = 10;
 /// The ink ribbon's item id.
 pub const ITEM_INK_RIBBON: u8 = 0x1E;
 
@@ -616,6 +644,8 @@ pub fn door_locked_message(key: u8) -> u8 {
 /// The script variables the engine owns (`scd_var_*`).
 pub const VAR_FORWARD_AREA: usize = 0;
 pub const VAR_BODY_AREA: usize = 1;
+/// `scd_var_used_item` (`0x98EAE8`): the key item USE gave, for one pass.
+pub const VAR_USED_ITEM: usize = 2;
 const VAR_STAGE: u8 = 24;
 const VAR_ROOM: u8 = 25;
 const VAR_CUT: u8 = 26;
@@ -625,7 +655,7 @@ pub const SCE_AUTO: u8 = 0;
 const SCE_DOOR: u8 = 1;
 const SCE_ITEM: u8 = 2;
 const SCE_MESSAGE: u8 = 4;
-const SCE_EVENT: u8 = 5;
+pub const SCE_EVENT: u8 = 5;
 /// `Sce_Flg_chg`'s area (`0x4E9830`): sets or clears a flag while the probe
 /// is inside it.
 pub const SCE_FLAG_CHANGE: u8 = 6;
@@ -664,6 +694,8 @@ impl Default for Re2State {
             xa_volume: XA_VOLUME,
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
+            areas_stopped: false,
+            var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             door_settling: false,
@@ -1146,19 +1178,55 @@ impl Re2State {
         }
     }
 
-    pub fn clear_tick_flags(&mut self) {
+    /// The oracle's `fguse` (`fg_use`'s four words as their bytes), `scv`
+    /// (variables 0 to 3) and `atsce` (the player's `At_sce_no`), what
+    /// `Sce_work_clr` and `Sce_work_clr_at` reset.
+    pub fn script_work_trace(&self) -> String {
+        let fg_use: String = self.banks[usize::from(FG_USE_BANK)][..4]
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let vars = self.vars[..4]
+            .iter()
+            .map(|var| format!("{var:04x}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("fguse={fg_use} scv={vars} atsce={:02x}", self.player.at_sce)
+    }
+
+    /// The cut a sound is placed from: the one a script's `se_on` saw, or
+    /// else the live `scd_var_cut` ([`Self::var_cut`]). `None` is the tick's
+    /// cut.
+    pub fn placement_cut(&self, placed: Option<u8>) -> Option<u8> {
+        placed.or(self.var_cut)
+    }
+
+    /// `Sce_work_clr` (`0x4E3DA0`), at the end of every `Sce_scheduler_main`
+    /// pass and before a room's init scripts: variables 0 to 3 go back to
+    /// `0xFFFF`, and `fg_tick` and `fg_use`'s four words to 0, so a USE's
+    /// item, an area's key item and the areas the player was in last one
+    /// pass. `Mizu_div_ctr`, which it
+    /// also zeroes, isn't modelled (`mizu_div_set` is a no-op).
+    pub fn sce_work_clr(&mut self) {
+        self.vars[..4].fill(0xFFFF);
         if let Some(words) = self.banks.get_mut(usize::from(ROOM_BANK)) {
             words[1] = 0;
+        }
+        if let Some(words) = self.banks.get_mut(usize::from(FG_USE_BANK)) {
+            words[..4].fill(0);
         }
         for flag in std::mem::take(&mut self.unmodelled_arrivals) {
             self.raise_room_flag(flag);
         }
     }
 
-    /// `Sce_work_clr_at`, at the end of `Sce_scheduler_main`'s pass: every
-    /// enemy in play forgets its area, so a script sees only the one the last
-    /// `Sce_at` found it in.
-    pub fn clear_enemy_areas(&mut self) {
+    /// `Sce_work_clr_at` (`0x4E3DE0`), after [`Self::sce_work_clr`] at the
+    /// end of `Sce_scheduler_main`'s pass: the player and every enemy in play
+    /// forget their area, so a script sees only the one the last `Sce_at`
+    /// found them in.
+    pub fn sce_work_clr_at(&mut self) {
+        self.player.at_sce = NO_AREA;
         for character in self.characters.0.iter_mut().flatten() {
             if character.be_flg & 1 != 0 {
                 character.area = NO_AREA;
@@ -1285,7 +1353,7 @@ impl Re2State {
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
                 let pos = pos.map(i32::from);
-                self.effect_sounds.push(SoundRequest { id, pos });
+                self.effect_sounds.push(SoundRequest::new(id, pos));
             }
         }
     }
@@ -1837,6 +1905,9 @@ impl GameHost<'_> {
     /// `cut_old`. `FUN_004e5020` raises the pending load; `Cut_chg` drops
     /// it again when the operand's bit 7 is set.
     fn change_cut(&mut self, cut: u8) {
+        // `FUN_004e5020` sets `scd_var_cut` at once, so every sound the
+        // tick plays after it is placed from the new cut.
+        self.game.re2.var_cut = Some(cut & 0x7F);
         self.game.re2.cut_old = self.game.camera.current_cut as u8;
         self.game.camera.locked = true;
         self.game.set_camera_cut(usize::from(cut & 0x7F));
@@ -2024,6 +2095,7 @@ impl GameHost<'_> {
         self.game.re2.sounds.push(SoundRequest {
             id,
             pos: std::array::from_fn(|axis| origin[axis] + offset[axis]),
+            cut: self.game.re2.var_cut,
         });
     }
 
@@ -2050,6 +2122,7 @@ impl GameHost<'_> {
         }
         match member {
             MEMBER_ANGLE => Some(i32::from(self.game.entities[0].angle & 0x0FFF)),
+            MEMBER_AREA => Some(i32::from(self.game.re2.player.at_sce)),
             // `Type`'s low bits are the weapon in hand, which the engine keeps
             // with the inventory.
             MEMBER_TYPE => Some(i32::from(
@@ -2349,6 +2422,7 @@ impl Host for GameHost<'_> {
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
                 let cut = self.game.re2.cut_old;
+                self.game.re2.var_cut = Some(cut);
                 self.game.camera.locked = false;
                 self.game.set_camera_cut(usize::from(cut));
                 // `Cut_old_0` goes through `FUN_004e5020` too.
@@ -2922,10 +2996,10 @@ mod tests {
     fn movie_on_with_the_films_off_leaves_0x200_down_and_asks_for_two_held_frames() {
         let mut game = GameState::default();
         game.re2.set_flag(0, FG_SYSTEM_8000, 1);
-        game.re2.sounds.push(SoundRequest {
-            id: crate::se2::SoundId::decode(0x0200_0001).unwrap(),
-            pos: [0; 3],
-        });
+        game.re2.sounds.push(SoundRequest::new(
+            crate::se2::SoundId::decode(0x0200_0001).unwrap(),
+            [0; 3],
+        ));
         exec(&mut game, "movie_on", &[10]);
         assert!(!game.re2.flag(0, FG_SYSTEM_MOVIE));
         assert!(!game.re2.flag(0, FG_SYSTEM_8000));
@@ -2982,6 +3056,39 @@ mod tests {
             &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
         );
         exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    /// Room 206's event 2: `cut_chg(11)` then `se_on(2, 267, 1, ...)`. The
+    /// sound is placed from cut 11, which `Cut_chg` made `scd_var_cut`.
+    #[test]
+    fn a_sound_after_a_scripts_cut_change_is_placed_from_the_new_cut() {
+        let mut game = GameState::default();
+        exec(&mut game, "se_on", &[2, 267, 1, 0, 0, 0]);
+        exec(&mut game, "cut_chg", &[11]);
+        exec(&mut game, "se_on", &[2, 267, 1, 0, 0, 0]);
+        let cuts: Vec<_> = game.re2.sounds.iter().map(|sound| sound.cut).collect();
+        assert_eq!(cuts, [None, Some(11)]);
+    }
+
+    /// `Snd_se_3D` places every sound from `scd_var_cut`, whoever plays it:
+    /// an enemy's or a footstep after the scripts' `cut_chg` is placed from
+    /// the new cut, and a script's `se_on` before it from the tick's.
+    #[test]
+    fn every_sound_after_a_scripts_cut_change_is_placed_from_the_new_cut() {
+        let mut game = GameState::default();
+        game.re2.var_cut = Some(3);
+        exec(&mut game, "se_on", &[2, 267, 1, 0, 0, 0]);
+        exec(&mut game, "cut_chg", &[11]);
+        let id = game.re2.sounds[0].id;
+        game.re2.sounds.push(SoundRequest::new(id, [0; 3]));
+        let cuts: Vec<_> = game
+            .re2
+            .sounds
+            .iter()
+            .map(|sound| game.re2.placement_cut(sound.cut))
+            .collect();
+        assert_eq!(cuts, [Some(3), Some(11)], "the script's, then the enemy's");
+        assert_eq!(game.re2.placement_cut(None), Some(11), "a footstep");
     }
 
     #[test]
@@ -3670,7 +3777,7 @@ mod tests {
         // One that isn't modelled is there as soon as it's told to go.
         exec(&mut game, "plc_dest", &[0, 4, 33, 0, 0]);
         assert!(!game.re2.flag(ROOM_BANK, 33));
-        game.re2.clear_tick_flags();
+        game.re2.sce_work_clr();
         assert!(game.re2.flag(ROOM_BANK, 33));
     }
 
@@ -3679,7 +3786,7 @@ mod tests {
         let mut state = Re2State::default();
         state.set_flag(ROOM_BANK, 0, 1);
         state.raise_room_flag(33);
-        state.clear_tick_flags();
+        state.sce_work_clr();
         assert!(!state.flag(ROOM_BANK, 33));
         assert!(state.flag(ROOM_BANK, 0));
     }
@@ -3863,14 +3970,154 @@ mod tests {
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
         assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
-        game.re2.clear_enemy_areas();
+        game.re2.sce_work_clr_at();
         assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
-        game.re2.clear_enemy_areas();
+        game.re2.sce_work_clr_at();
         game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+    }
+
+    #[test]
+    fn sce_work_clr_clears_the_pass_s_script_work() {
+        let mut state = Re2State::default();
+        state.banks[usize::from(FG_USE_BANK)][..5].fill(0xFFFF_FFFF);
+        state.banks[usize::from(ROOM_BANK)][1] = 0xFFFF_FFFF;
+        state.vars[..5].fill(7);
+        state.sce_work_clr();
+        assert_eq!(state.banks[usize::from(FG_USE_BANK)][..4], [0; 4]);
+        assert_eq!(state.banks[usize::from(FG_USE_BANK)][4], 0xFFFF_FFFF);
+        assert_eq!(state.banks[usize::from(ROOM_BANK)][1], 0);
+        assert_eq!(state.vars[..4], [0xFFFF; 4]);
+        assert_eq!(state.vars[4], 7);
+    }
+
+    /// Room 200's statue: the Unicorn Medal's USE area (13, kind 6, `sat`
+    /// 33, data `10, 71, 1`) and, for the gate, a passive event area (3) in
+    /// the same box, with the player where `statue_200` stands.
+    fn statue_200() -> GameState {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let aot_set = crate::scd2::opcode::lookup(0x2C).unwrap();
+        let mut host = GameHost { game: &mut game };
+        let use_area = [
+            13, 6, 33, 0, 0, -15948, -9485, 4460, 2310, 10, 0, 71, 0, 1, 0,
+        ];
+        host.exec(0, aot_set, &use_area);
+        let event = [3, 5, 33, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 0, 3, 0, 0];
+        host.exec(0, aot_set, &event);
+        game
+    }
+
+    const STATUE_POS: [i32; 3] = [-13700, 0, -9900];
+    const STATUE_ANGLE: u16 = 3072;
+    const MEDAL: u8 = 71;
+
+    #[test]
+    fn the_status_open_s_area_pass_raises_fg_use_and_starts_nothing() {
+        let mut game = statue_200();
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert!(game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(game.re2.pending_events, [(0, 3)]);
+        // START's tick: the scheduler's pass ends in `Sce_work_clr`, and no
+        // `Sce_at` follows it.
+        game.re2.pending_events.clear();
+        game.re2.sce_work_clr();
+        assert!(!game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(
+            game.re2.vars[VAR_FORWARD_AREA], 0xFFFF,
+            "no area until a hit"
+        );
+        // The open's room ticks: `Sce_at` with the scheduler off.
+        game.re2_stopped_area_pass(STATUE_POS, STATUE_ANGLE);
+        assert!(game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(game.re2.vars[VAR_FORWARD_AREA], 13, "the last hit");
+        assert!(
+            game.re2.pending_events.is_empty(),
+            "`Sce_Event` gates itself"
+        );
+        assert!(!game.re2.areas_stopped);
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert_eq!(game.re2.pending_events, [(0, 3)], "play's pass starts it");
+    }
+
+    /// Only `Sce_Event` tests the scheduler's stop: a `Sce_Windows` area
+    /// under the player acts on the status open's room ticks as in play.
+    #[test]
+    fn the_status_open_s_area_pass_gates_only_the_events() {
+        let mut game = statue_200();
+        let windows = [
+            14, 14, 33, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 15, 0, 0, 0,
+        ];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &windows);
+        game.re2_stopped_area_pass(STATUE_POS, STATUE_ANGLE);
+        assert!(game.re2.pending_events.is_empty());
+        assert!(game.re2_computer_request.is_some(), "`Sce_Windows` acts");
+    }
+
+    /// The passive pass records a kind-0 area (`Sce_Auto`) in `At_sce_no`
+    /// too: `Sce_at_check` writes it before `Nothing` runs.
+    #[test]
+    fn the_passive_pass_records_a_kind_0_area_in_member_9() {
+        let mut game = statue_200();
+        let auto = [15, 0, 33, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 0, 0, 0, 0];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &auto);
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert_eq!(game.re2.player.at_sce, 15);
+        assert_eq!(
+            game.re2.vars[VAR_FORWARD_AREA], 13,
+            "`Nothing` keeps the variables"
+        );
+    }
+
+    #[test]
+    fn the_players_member_9_is_the_last_area_its_probe_was_in() {
+        let mut game = statue_200();
+        // Area 10, the statue's press-only event (`sat` 49), in the same box.
+        let press = [10, 5, 49, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 0, 7, 0, 0];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &press);
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        let area = |game: &mut GameState| GameHost { game }.member(0, MEMBER_AREA);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        // The press pass stops at the statue's event, then the passive pass
+        // runs every area the probe is in and the last one wins.
+        game.check_action_object(STATUE_POS, STATUE_ANGLE);
+        assert_eq!(area(&mut game), Some(10));
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert_eq!(area(&mut game), Some(13));
+        game.re2.sce_work_clr_at();
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        // Out of every area, nothing records one.
+        game.interact([0, 0, 10000], STATUE_ANGLE, false);
+        assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+        assert!(game.re2.script_work_trace().ends_with(" atsce=ff"));
+    }
+
+    #[test]
+    fn the_used_item_lasts_the_first_pass_after_the_close() {
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc main_00\n{\n    do\n    {\n        evt_next();\n        \
+             if (cmp(0, 2, 0, 71))\n        {\n            set(4, 72, 1);\n        }\n    }\n    \
+             while (ck(4, 73, 0));\n    evt_end(0);\n}\n",
+        )
+        .unwrap();
+        let mut game = statue_200();
+        let mut vm = crate::scd2::vm::Vm::new(&scripts);
+        vm.start_main();
+        let mut pass = |game: &mut GameState| {
+            vm.tick(&mut GameHost { game: &mut *game });
+            game.re2.sce_work_clr();
+            game.re2.flag(4, 72)
+        };
+        assert!(!pass(&mut game));
+        // USE's step 3, while the status is up and the scheduler off.
+        game.re2.vars[VAR_USED_ITEM] = u16::from(MEDAL);
+        assert!(pass(&mut game), "the first pass after the close reads it");
+        assert_eq!(game.re2.vars[VAR_USED_ITEM], 0xFFFF);
+        game.re2.set_flag(4, 72, 0);
+        assert!(!pass(&mut game), "and only that pass");
     }
 
     /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives
@@ -4627,7 +4874,7 @@ mod tests {
         );
         let flags = game.re2.banks;
         exec(&mut game, "aot_on", &[8]);
-        assert_eq!(game.re2_computer_request, Some(0xF0));
+        assert!(game.re2_computer_request.is_some(), "`Sce_Windows` acts");
         assert!(game.re2_computer.is_none() && !game.message.active);
         assert_eq!(game.re2.banks, flags);
     }

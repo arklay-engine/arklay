@@ -1,0 +1,25 @@
+# USE of a key item at its area (#553; oracle/re2.md, "Using a key item"): the area raises fg_use, the status's USE reads it and gives the item to variable 2, and the room's script starts its event on the first pass after the close.
+
+[[run]]
+name = "statue_200"
+room = "200"
+setup_script = "statue_200.lua"
+input = "statue_200.txt"
+input_shift = 344
+ticks = 944
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,msg,fguse,scv,atsce"
+expect = "match"
+record = "--warp 200:-13700:0:-9900:3072:11 --flag 4:6 --flag 4:7 --flag 4:70 --flag 4:102 --life 200 --give 0:2:13 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x47:1"
+
+[[run]]
+name = "lighter_206"
+room = "206"
+setup_script = "lighter_206.lua"
+input = "lighter_206.txt"
+input_shift = 344
+ticks = 1044
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,msg,fguse,scv,atsce"
+frames = [344, 1043]
+frame_max_mean = 0.5
+expect = "match"
+record = "--warp 206:-22050:0:-25600:1024:0 --life 200 --give 0:2:13 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x2F:1"

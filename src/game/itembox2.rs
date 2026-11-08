@@ -341,7 +341,7 @@ impl GameState {
         if let Some(id) = crate::se2::SoundId::decode(id) {
             self.re2
                 .sounds
-                .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
+                .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
         }
     }
 

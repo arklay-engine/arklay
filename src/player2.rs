@@ -326,6 +326,9 @@ pub struct Work {
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
     /// previous tick's.
     pub water: i16,
+    /// `At_sce_no` (`+0xB`, script member 9): the last area `Sce_at_check`
+    /// found the player in, `0xFF` once `Sce_work_clr_at` has cleared it.
+    pub at_sce: u8,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
     /// `Cdir_x` and `Cdir_z`, which only the giant spider on a wall or the
@@ -927,6 +930,7 @@ impl Default for Work {
             effects: Vec::new(),
             water_draws: Vec::new(),
             water: 0,
+            at_sce: crate::scd2::host::NO_AREA,
             d_life_u: 0,
             spd: [0; 3],
             spd_base: [0; 3],

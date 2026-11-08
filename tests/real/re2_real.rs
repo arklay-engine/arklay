@@ -1311,7 +1311,7 @@ fn no_event_holds_the_player_for_good() {
                 game.dpad_pressed = 1;
                 game.dpad_held = 1;
                 vm.tick(&mut GameHost { game: &mut game });
-                game.re2.clear_tick_flags();
+                game.re2.sce_work_clr();
                 game.message.active = false;
                 game.re2.set_flag(1, arklay::scd2::host::STATUS_VOICE, 0);
                 arklay::character2::tick(&mut game, &loaded.state, pack, &mut npc_models, None);
