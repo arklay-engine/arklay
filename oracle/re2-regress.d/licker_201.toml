@@ -6,7 +6,7 @@ ticks = 1000
 setup = { pos = [-25500, 0, -21500], angle = 1024, health = 200, rnd = 6114, camera = 2 }
 input = "licker_201.txt"
 input_shift = 344
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zp"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zp,fgstat"
 frames = [380, 999]
 frame_max_mean = 0.35
 expect = "match"
@@ -21,7 +21,7 @@ ticks = 1000
 setup = { pos = [-25500, 0, -21500], angle = 1024, health = 200, rnd = 6114, camera = 2 }
 input = "licker_201.txt"
 input_shift = 344
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zp"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zp,fgstat"
 frames = [380, 999]
 frame_max_mean = 0.35
 expect = "match"

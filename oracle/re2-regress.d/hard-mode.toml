@@ -10,7 +10,7 @@ arrange = true
 setup_script = "item_102.lua"
 input = "item_take_102_arklay.txt"
 ticks = 1000
-fields = "item"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0"
 
@@ -21,7 +21,7 @@ difficulty = "hard"
 setup_script = "item_102.lua"
 input = "item_take_102_arklay.txt"
 ticks = 1000
-fields = "item"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0"
 
@@ -34,7 +34,7 @@ arrange = true
 setup_script = "item_merge_wrap_102.lua"
 input = "item_take_102_arklay.txt"
 ticks = 1000
-fields = "item"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 2:0x14:240"
 
@@ -48,6 +48,6 @@ setup_script = "weapon_pickup_200_hard.lua"
 input = "weapon_pickup_200.txt"
 input_shift = 344
 ticks = 1300
-fields = "item"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 expect = "match"
 record = "--no-enemies --warp 200:-8950:-1800:-700:3072 --flag 4:6 --life 200 --give 0:2:1"

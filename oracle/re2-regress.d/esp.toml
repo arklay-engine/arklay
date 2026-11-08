@@ -13,7 +13,7 @@ sound = false
 ticks = 1998
 setup_script = "new_game.lua"
 input = "street_shoot.txt"
-fields = "rng,p.x,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
+fields = "rng,p.x,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5,fgroom,fgstat"
 # slot 1's angle on the first tick (oracle/re2.md, street_shoot)
 ignore = [[0, "zm1"]]
 expect = "match"
@@ -40,7 +40,7 @@ sound = false
 ticks = 1998
 setup_script = "new_game.lua"
 input = "street_shoot.txt"
-fields = "espn,espk"
+fields = "espn,espk,fgroom,fgstat"
 expect = "match"
 record = ""
 
@@ -53,7 +53,7 @@ ticks = 1400
 setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flags = [[1, 6]], camera = 0 }
 input = "water_walk.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,fgstat"
 expect = "match"
 record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
 
@@ -78,7 +78,7 @@ ticks = 1400
 setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flags = [[1, 6]], camera = 0 }
 input = "water_walk.txt"
 input_shift = 344
-fields = "espn,espk"
+fields = "espn,espk,fgstat"
 expect = "match"
 record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
 
@@ -91,7 +91,7 @@ ticks = 1400
 setup_script = "spider_shots_302.lua"
 input = "spider_shots.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,fgstat"
 expect = "match"
 record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
@@ -116,7 +116,7 @@ ticks = 1400
 setup_script = "spider_shots_302.lua"
 input = "spider_shots.txt"
 input_shift = 344
-fields = "espn,espk"
+fields = "espn,espk,fgstat"
 expect = "match"
 record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
@@ -129,7 +129,7 @@ ticks = 1800
 setup_script = "licker24_605.lua"
 input = "licker24_fight.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,fgstat"
 expect = "match"
 record = "--warp 605:-24500:0:-24000:0 --give 0:2:200 --give 1:0x14:60 --equip 2 --life 200"
 

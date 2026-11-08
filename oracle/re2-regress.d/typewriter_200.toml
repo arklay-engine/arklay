@@ -6,7 +6,7 @@ setup_script = "typewriter_200.lua"
 input = "typewriter_200_no_ribbon.txt"
 input_shift = 344
 ticks = 700
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat"
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200"
 
@@ -18,6 +18,6 @@ setup_script = "typewriter_200_ribbon.lua"
 input = "typewriter_200_no.txt"
 input_shift = 344
 ticks = 840
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm"
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat"
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

@@ -110,7 +110,11 @@ OPT_IN_FIELDS = {
     "atsce",
     "box",
     "fgcom",
+    "fgitem",
     "fgkey",
+    "fgroom",
+    "fgscn",
+    "fgstat",
     "fguse",
     "fl",
     "gm",
@@ -147,6 +151,9 @@ SCREEN_FIELDS = (
     "atsce",
     "box",
     "fgcom",
+    "fgitem",
+    "fgroom",
+    "fgscn",
     "fguse",
     "fl",
     "gm",
@@ -204,6 +211,19 @@ def message_state(fields: dict[str, str]) -> str | None:
     if "gi" not in fields:
         return None
     return fields["gi"].split(",")[5]
+
+
+# `fg_status`'s bits arklay keeps outside its bank, which `fgstat` leaves out: 0x40 (a message or a hit
+# holds the game), 0x80 (`pl_mv_05`'s 0xc0), 0x100 (the camera's lock, `camera.locked`), 0x8000 (the
+# get-item window, the status screen or the box) and 0x100000 (`Swap_Cbuff`'s load).
+FGSTAT_COMPARED = 0xFFEF7E3F
+
+
+def status_flags(fields: dict[str, str]) -> str | None:
+    """RE2's `fgstat` through `FGSTAT_COMPARED`, on both sides."""
+    if "fgstat" not in fields:
+        return None
+    return f"{int(fields['fgstat'], 16) & FGSTAT_COMPARED:08x}"
 
 
 def scene(fields: dict[str, str]) -> str | None:
@@ -280,7 +300,10 @@ def parse_trace(path: str) -> list[Tick]:
                     door_locks=fields.get("fgkey"),
                     scene=scene(fields),
                     objects=fields.get("om"),
-                    screen={key: fields[key] for key in SCREEN_FIELDS if key in fields},
+                    screen={
+                        **{key: fields[key] for key in SCREEN_FIELDS if key in fields},
+                        **({"fgstat": status_flags(fields)} if "fgstat" in fields else {}),
+                    },
                 )
             )
     return ticks

@@ -6,7 +6,7 @@ setup_script = "film_204.lua"
 input = "film_204.txt"
 input_shift = 344
 ticks = 1000
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,snd,movie"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,snd,movie,fgroom,fgstat"
 frames = [360, 999]
 # the frames of the scene's cut_chg 7 (395, 396) are the old cut redrawn where the original holds the frame before it
 frame_max_mean = 0.4

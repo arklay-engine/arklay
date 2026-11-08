@@ -178,12 +178,39 @@ def voice_ticks(trace: Path) -> list[int]:
     return held
 
 
+# The flag-bank fields a reference recorded before they existed lacks (`fgitem` is newer than the rest).
+# A run that names one of them against such a reference would compare `absent` with arklay's value on
+# every tick; the runner says why instead. Only these keys are checked: others (`em`, `hk`) are
+# legitimately absent from some ticks.
+BANK_FIELDS = ("fgitem", "fgroom", "fgscn", "fgstat")
+
+
+def missing_bank_fields(ref: list, offset: int, fields: str) -> list[str]:
+    """The bank fields `fields` names that the reference carries on no compared tick."""
+    named = [name for name in fields.split(",") if name in BANK_FIELDS] if fields else []
+    present = set()
+    for tick in ref[offset:]:
+        present.update(key for key, _ in oracle.tick_fields(tick))
+    return [name for name in named if name not in present]
+
+
 def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=()) -> dict:
     """Compare from `offset`, leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
     ref = oracle.parse_trace(str(ref_path))
     ark = oracle.parse_trace(str(ark_path))
+    missing = missing_bank_fields(ref, offset, fields)
+    if missing:
+        return {
+            "ticks": 0, "matched": 0, "tick": 0, "fields": missing, "ignored": 0,
+            "detail": [f"the reference has no {name} (recorded before it existed): record it again or drop the field" for name in missing],
+        }
     result = oracle.compare_pair(ref, ark, offset, 0, 10**9, 0, fields.split(",") if fields else None)
-    skip = {(tick, field) for tick, field in ignore}
+    # An entry is [tick, field], or [first, last, field] for a run of ticks.
+    skip = {
+        (tick, entry[-1])
+        for entry in ignore
+        for tick in range(entry[0], entry[-2] + 1)
+    }
     divergent = []
     for row in result["first_divergences"]:
         kept = [d for d in row["differences"] if (row["ref_t"], d[0]) not in skip]

@@ -10,7 +10,7 @@ setup_script = "leon_a_200_out.lua"
 input = "leon_a_200_out.txt"
 input_shift = 344
 ticks = 1300
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,fgscn,fgstat"
 expect = "match"
 ignore = [[1204, "rng"], [1204, "rseed"]]
 record = "--no-enemies --warp 200:-14936:-1800:1202:1992:6 --flag 4:6 --flag 4:7 --flag 4:102 --flag 4:70 --life 200 --give 0:2:13 --give 2:0x14:9"
@@ -24,7 +24,7 @@ input = "leon_a_201.txt"
 input_shift = 344
 # to tick 593: the door arrives in 204 on 503, and the room's own entry and body are Part 2's (leon_a_204_entry)
 ticks = 594
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zp"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zp,fgscn,fgstat"
 frames = [380, 502]
 frame_max_mean = 0.35
 expect = "match"

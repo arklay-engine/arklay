@@ -8,7 +8,7 @@ setup_script = "leon_a_204_entry.lua"
 input = "leon_a_204_entry.txt"
 input_shift = 344
 ticks = 1700
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp,fgroom,fgstat"
 frames = [380, 1699]
 # 0.83 measured (0.98 before #551 drew the body's messages, a room's, where Mess_set puts them), 0.61 with the
 # message box blanked; the door's frames (model 9) are about 1.3

@@ -42,6 +42,17 @@ pub fn frame_hash(framebuffer: &Framebuffer) -> u32 {
     hash
 }
 
+/// An eight-word flag bank as the original's recorder writes it: memory's
+/// bytes in hex, each word low byte first, so index `i` of the bank is bit
+/// `0x80 >> (i & 7)` of byte `4 * (i >> 5) + 3 - ((i & 31) >> 3)`.
+fn bank_bytes(words: &[u32; 8]) -> String {
+    words
+        .iter()
+        .flat_map(|word| word.to_le_bytes())
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 /// One tick's state for [`TraceWriter::write_tick`].
 pub struct TraceTick<'a> {
     /// The live room identity.
@@ -112,6 +123,10 @@ pub struct TraceTick<'a> {
     /// RE2: whether a scene is up, `fg_status & 0x10` (the bars' bit), the
     /// trace's `scene` field.
     pub re2_scene: Option<bool>,
+    /// RE2: the flag banks (`Re2State::banks`), for `fgstat` (bank 1's first
+    /// word), `fgscn` (bank 3), `fgroom` (bank 5's first word) and `fgitem`
+    /// (bank 8), in the original's recorder's format.
+    pub re2_banks: Option<&'a [[u32; 8]; crate::scd2::host::BANKS]>,
     /// RE2's back routine slot 2, its state and the save place, the
     /// oracle's `tw` field ([`crate::game::GameState::re2_typewriter_trace`]).
     pub re2_typewriter: Option<String>,
@@ -333,6 +348,16 @@ impl TraceWriter {
         if let Some(scene) = tick.re2_scene {
             write!(self.out, " scene={}", u8::from(scene))?;
         }
+        if let Some(banks) = tick.re2_banks {
+            write!(
+                self.out,
+                " fgstat={:08x} fgscn={} fgroom={:08x} fgitem={}",
+                banks[1][0],
+                bank_bytes(&banks[3]),
+                banks[5][0],
+                bank_bytes(&banks[8])
+            )?;
+        }
         if let Some(fields) = &tick.re2_typewriter {
             write!(self.out, " {fields}")?;
         }
@@ -476,6 +501,7 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
@@ -543,6 +569,7 @@ mod tests {
                 re2_item_box: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_computer: None,
@@ -606,6 +633,7 @@ mod tests {
                 re2_file: None,
                 re2_doors: None,
                 re2_scene: None,
+                re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_computer: None,
@@ -666,6 +694,7 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
@@ -696,6 +725,13 @@ mod tests {
         let game = GameState::default();
         let path = temp_path("pneck");
         let mut writer = TraceWriter::create(&path).unwrap();
+        let mut banks = [[0u32; 8]; crate::scd2::host::BANKS];
+        banks[1][0] = 0x8000_0010;
+        banks[3][3] = 0x0800_0000; // 3:100
+        banks[3][4] = 0x8000_0000; // 3:128
+        banks[5][0] = 0x0200_2000; // 5:6 and 5:18
+        banks[5][1] = 1; // `fg_tick`, which isn't traced
+        banks[8][4] = 0x0004_0000; // 8:141
         let mut tick = TraceTick {
             room: RoomId {
                 stage: 1,
@@ -731,6 +767,7 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
@@ -745,6 +782,8 @@ mod tests {
         writer.write_tick(&tick).unwrap();
         tick.re2_scene = Some(true);
         writer.write_tick(&tick).unwrap();
+        tick.re2_banks = Some(&banks);
+        writer.write_tick(&tick).unwrap();
         writer.flush().unwrap();
 
         let text = std::fs::read_to_string(&path).unwrap();
@@ -754,6 +793,21 @@ mod tests {
         assert!(lines[2].ends_with(" neck=0,8,0,0,0 pneck=-9500,-2514,-20302 snd=-"));
         assert!(!lines[2].contains("scene="));
         assert!(lines[3].ends_with(" pneck=-9500,-2514,-20302 scene=1 snd=-"));
+        // An RE1 tick (no banks) writes none of the four.
+        for field in [" fgstat=", " fgscn=", " fgroom=", " fgitem="] {
+            assert!(!lines[3].contains(field), "{field}");
+        }
+        // The banks as the original's recorder writes them: one-word banks
+        // as a number, eight-word banks as memory's bytes, low byte first.
+        let zeros = |n: usize| "00".repeat(n);
+        let scn = format!(
+            "{}00000008{}",
+            zeros(12),
+            "00000080".to_owned() + &zeros(12)
+        );
+        let item = format!("{}00000400{}", zeros(16), zeros(12));
+        let expected = format!(" fgstat=80000010 fgscn={scn} fgroom=02002000 fgitem={item}");
+        assert!(lines[4].contains(&expected), "{}", lines[4]);
     }
 
     #[test]
@@ -796,6 +850,7 @@ mod tests {
             re2_item_box: Some("ib=1 box=-".to_string()),
             re2_doors: Some((0x81, [0, 0])),
             re2_scene: None,
+            re2_banks: None,
             re2_typewriter: Some("tw=4e9930,1,1".to_string()),
             re2_game_mode: Some(0),
             re2_computer: None,
@@ -857,6 +912,7 @@ mod tests {
             re2_item_box: None,
             re2_doors: None,
             re2_scene: None,
+            re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
             re2_computer: None,
