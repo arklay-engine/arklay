@@ -63,6 +63,9 @@ pub struct TraceTick<'a> {
     pub re2_character: Option<[i32; 16]>,
     /// RE2's `splayer_work`: the `es` field's values.
     pub re2_splayer: Option<[i32; 16]>,
+    /// RE2's partner's own words: the `spl` field
+    /// ([`crate::scd2::host::Re2State::partner_trace`]).
+    pub re2_partner: Option<String>,
     /// The zombies in play, as the oracle's `zm` field writes them.
     pub re2_zombies: Option<String>,
     /// Their hidden and coloured parts, as the oracle's `zp` field writes them.
@@ -267,6 +270,9 @@ impl TraceWriter {
             let values = character.map(|value| value.to_string()).join(",");
             write!(self.out, " es={values}")?;
         }
+        if let Some(partner) = &tick.re2_partner {
+            write!(self.out, " spl={partner}")?;
+        }
         if let Some(zombies) = &tick.re2_zombies {
             write!(self.out, " zm={zombies}")?;
         }
@@ -434,6 +440,7 @@ mod tests {
             re2_player: None,
             re2_character: None,
             re2_splayer: None,
+            re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_effects: None,
@@ -497,6 +504,7 @@ mod tests {
                 re2_player: Some(([1, 0], [0; 9])),
                 re2_character: None,
                 re2_splayer: None,
+                re2_partner: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_effects: None,
@@ -556,6 +564,7 @@ mod tests {
                 re2_player: Some(([1, 0], [0; 9])),
                 re2_character: None,
                 re2_splayer: None,
+                re2_partner: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_effects: effects,
@@ -612,6 +621,7 @@ mod tests {
             re2_player: None,
             re2_character: None,
             re2_splayer: None,
+            re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_effects: None,
@@ -673,6 +683,7 @@ mod tests {
             re2_player: None,
             re2_character: None,
             re2_splayer: None,
+            re2_partner: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_effects: None,
@@ -763,6 +774,59 @@ mod tests {
         assert!(
             lines[1]
                 .ends_with(" ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 snd=-")
+        );
+    }
+
+    #[test]
+    fn the_partner_field_is_written_as_spl() {
+        let game = GameState::default();
+        let path = temp_path("spl");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        let tick = TraceTick {
+            room: RoomId {
+                stage: 2,
+                room: 0x1B,
+                player_flag: 1,
+                mansion2: false,
+            },
+            rng: 0,
+            rseed: 0,
+            fade_counter: 0,
+            fade_state: -1,
+            cam: 0,
+            player_flags: 0,
+            entities: &*game.entities,
+            re2_player: None,
+            re2_character: None,
+            re2_splayer: Some([69, 0, 0, 0, 0, 1, 0, 0, 0, 2, 1, 6, 0, 0, 0, 0]),
+            re2_partner: Some("400,1,2,0,3".to_string()),
+            re2_zombies: Some("-".to_string()),
+            re2_zombie_parts: None,
+            re2_effects: None,
+            re2_music: None,
+            re2_die: None,
+            re2_neck: None,
+            re2_neck_position: None,
+            re2_xa_volume: None,
+            re2_movie: None,
+            re2_inventory: None,
+            re2_map_flags: None,
+            re2_item_page: None,
+            re2_item_box: None,
+            re2_doors: None,
+            re2_scene: None,
+            re2_sounds: None,
+            frame_hash: 0,
+        };
+        writer.write_tick(&tick).unwrap();
+        writer.flush().unwrap();
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let line = text.lines().nth(1).unwrap();
+        assert!(
+            line.contains(" es=69,0,0,0,0,1,0,0,0,2,1,6,0,0,0,0 spl=400,1,2,0,3 zm=-"),
+            "{line}"
         );
     }
 }

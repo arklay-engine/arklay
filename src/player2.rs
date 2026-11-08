@@ -5081,7 +5081,7 @@ impl Mover<'_, '_> {
     }
 
     /// `Snd_se_walk` on a frame marked as a footfall.
-    fn footstep(&mut self, sound_type: u8) {
+    pub(crate) fn footstep(&mut self, sound_type: u8) {
         if self.work.now_seq & FRAME_FOOTSTEP != 0 {
             let water = self.work.water != 0;
             self.player
@@ -5722,9 +5722,32 @@ pub fn plc_motion(work: &mut Work, routine: u8, clip: u8, flags: u8) {
     work.sce_free = [0; 2];
 }
 
+/// `Spl_Init`'s `Atd[0]` heights in units of 18 (`At_h`, and `-Ofs_y`), by id
+/// from 0x40: the tables it builds on its stack (`0x4ef3c6` to `0x4ef7cf`).
+pub const CHARACTER_HEIGHTS: [u8; 28] = [
+    85, 75, 85, 75, 86, 45, 86, 75, 85, 75, 85, 75, 0, 75, 0, 45, 85, 75, 85, 75, 85, 75, 85, 75,
+    85, 75, 85, 85,
+];
+
+/// `Atd[0]`'s `At_h` of character `id`: 810 for Sherry, 0x5FA for most.
+pub fn character_height(id: u8) -> u16 {
+    id.checked_sub(0x40)
+        .and_then(|index| CHARACTER_HEIGHTS.get(usize::from(index)))
+        .map_or(0x5FA, |&height| u16::from(height) * 18)
+}
+
 /// `Spl_Init`: a script's character, whose first pose is the first frame of
-/// its model's first clip, and which then waits for the script.
-pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind: u16) {
+/// its model's first clip, and which then waits for the script. The partner
+/// (`partner`, `Type`'s `0x400` with `fg_status`'s partner bit) keeps
+/// `Spl_Auto`'s routine, and `Spl_in45` has her look at the player before the
+/// head turns.
+pub fn spl_init(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    kind: u16,
+    partner: bool,
+) {
     work.routine = if kind & SPL_AUTO == 0 {
         [MODE_SCENARIO, 6, 0, 0]
     } else {
@@ -5735,6 +5758,10 @@ pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind
     work.move_cnt = 0;
     work.hokan = 0;
     work.neck.flags = 0x92;
+    if partner {
+        work.neck.flags = 0;
+        work.neck.target = Some(0);
+    }
     work.parts0_y = tick
         .id
         .checked_sub(0x40)
@@ -5750,6 +5777,24 @@ pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind
     mover.joint_move_late(SPL_INIT_STEP);
     // `_Spl` turns the head after whichever routine ran.
     mover.rot_neck();
+}
+
+/// `_Spl`'s routine for the partner, `Spl_Auto`, then its `Rot_neck`.
+pub(crate) fn spl_auto(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    run: impl FnOnce(&mut Mover<'_, '_>),
+) {
+    let mut mover = Mover::new(work, player, tick);
+    run(&mut mover);
+    mover.rot_neck();
+    mover.work.neck.body = Some(mover.player.pos);
+}
+
+/// Whether `_Spl`'s routine is `Spl_Auto`'s.
+pub fn in_auto(work: &Work) -> bool {
+    work.routine[0] == MODE_MOVE
 }
 
 /// `Workm` of a work's part, as the last tick left it.

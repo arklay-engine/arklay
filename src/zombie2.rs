@@ -1329,64 +1329,24 @@ impl Em<'_, '_, '_> {
     /// a guide area. 0 finds no way, 1 has its target in this area and 2 is a
     /// tick without a look. The player's sight is still checked.
     fn root_ck_to(&mut self, point: [i16; 2], area: Option<u8>) -> u8 {
-        if self.z.sight_turn & 0x7F == 0 {
-            self.z.sight_turn |= 7;
-        }
-        self.z.sight_turn = self.z.sight_turn.wrapping_sub(1);
-        if self.z.sight_turn & 0x80 == 0 {
-            self.z.status &= !STATUS_IN_SIGHT;
-            let from = self.mover.work.neck.position;
-            let to = self.world.player_neck;
-            if let (Some(from), Some(to)) = (from, to)
-                && !sca_ck_line(self.world.sca, from, to, 0x2000)
-            {
-                self.z.status |= STATUS_IN_SIGHT;
-            }
-        }
         let kind = self.kind();
-        if kind & TYPE_STRAIGHT != 0 {
-            self.work().dest = point;
-            return 2;
-        }
-        if kind & TYPE_HELD != 0 || self.z.sight_turn & 0x80 != 0 {
-            return 2;
-        }
+        let world = RootWorld {
+            guides: self.world.guides,
+            sca: self.world.sca,
+            player_neck: self.world.player_neck,
+        };
         let body = self.mover.player.pos;
-        let here = guide_check(self.world.guides, body[0] as i16, body[2] as i16);
-        let middle = area
-            .and_then(|area| self.world.guides.get(usize::from(area)))
-            .map(|guide| {
-                [
-                    ((i32::from(guide.x1) + i32::from(guide.x0)) >> 1) as i16,
-                    ((i32::from(guide.z1) + i32::from(guide.z0)) >> 1) as i16,
-                ]
-            });
-        let (there, target) = match area {
-            Some(area) => (Some(area), middle.unwrap_or(point)),
-            None => (guide_check(self.world.guides, point[0], point[1]), point),
+        let neck = self.mover.work.neck.position;
+        let mut state = RootCk {
+            cnt: self.z.sight_turn,
+            status: self.z.status,
+            dest: self.mover.work.dest,
         };
-        let (Some(here), Some(there)) = (here, there) else {
-            if area.is_none() {
-                return 0;
-            }
-            // Off the guides, heading for an area: `kara_rootck2` searches
-            // from a row past the table, finds no route and writes what its
-            // stack holds. The dog keeps its way here instead.
-            return if self.z.sight_turn == 0 { 1 } else { 2 };
-        };
-        if here == there {
-            self.work().dest = target;
-            return 1;
-        }
-        if self.z.sight_turn == 0 {
-            if let Some(dest) =
-                kara_rootck2(self.world.guides, here, there, [body[0], body[2]], target)
-            {
-                self.work().dest = dest;
-            }
-            return 1;
-        }
-        2
+        let found = root_ck(&mut state, kind, &world, body, neck, point, area);
+        self.z.sight_turn = state.cnt;
+        self.z.status = state.status;
+        self.mover.work.dest = state.dest;
+        found
     }
 
     fn run(&mut self) {
@@ -1749,49 +1709,8 @@ impl Em<'_, '_, '_> {
 
     /// `Root_ck`, toward the player.
     fn root_ck(&mut self) {
-        if self.z.sight_turn & 0x7F == 0 {
-            self.z.sight_turn |= 7;
-        }
-        self.z.sight_turn = self.z.sight_turn.wrapping_sub(1);
-        if self.z.sight_turn & 0x80 == 0 {
-            self.z.status &= !STATUS_IN_SIGHT;
-            let from = self.mover.work.neck.position;
-            let to = self.world.player_neck;
-            if let (Some(from), Some(to)) = (from, to)
-                && !sca_ck_line(self.world.sca, from, to, 0x2000)
-            {
-                self.z.status |= STATUS_IN_SIGHT;
-            }
-        }
-        let [target_x, _, target_z] = self.world.player;
-        let kind = self.kind();
-        if kind & TYPE_STRAIGHT != 0 {
-            self.work().dest = [target_x as i16, target_z as i16];
-            return;
-        }
-        if kind & TYPE_HELD != 0 || self.z.sight_turn & 0x80 != 0 {
-            return;
-        }
-        let body = self.mover.player.pos;
-        let (Some(here), Some(there)) = (
-            guide_check(self.world.guides, body[0] as i16, body[2] as i16),
-            guide_check(self.world.guides, target_x as i16, target_z as i16),
-        ) else {
-            return;
-        };
-        if here == there {
-            self.work().dest = [target_x as i16, target_z as i16];
-        } else if self.z.sight_turn == 0
-            && let Some(dest) = kara_rootck2(
-                self.world.guides,
-                here,
-                there,
-                [body[0], body[2]],
-                [target_x as i16, target_z as i16],
-            )
-        {
-            self.work().dest = dest;
-        }
+        let [x, _, z] = self.world.player;
+        self.root_ck_to([x as i16, z as i16], None);
     }
 
     fn joint(&mut self, bank: Bank, late: u16) -> bool {
@@ -1974,12 +1893,99 @@ impl Em<'_, '_, '_> {
     }
 }
 
+/// `Root_ck`'s words on a work: its turn (`+0x150`), which counts 6 down to
+/// 0, `Status_flg` (its sight bit) and `Dest`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct RootCk {
+    pub cnt: u8,
+    pub status: u16,
+    pub dest: [i16; 2],
+}
+
+/// What `Root_ck` reads of the room and the player.
+pub(crate) struct RootWorld<'a> {
+    pub guides: &'a [Guide],
+    pub sca: &'a [ScaRect],
+    pub player_neck: Option<[i32; 3]>,
+}
+
+/// `Root_ck` (`0x4df320`) for a body at `body` with its head at `neck` and
+/// `Type` `kind`, toward `point`, or with `area` the middle of that guide
+/// area: every tick whose turn's top bit is clear it looks for the player
+/// (`Status_flg`'s `0x800`); `Type`'s `0x1000` heads straight for the point;
+/// otherwise in the point's area `Dest` is the point, and from another area
+/// `kara_rootck2` finds the way on the turn's 0. 0 finds no way, 1 has its
+/// target in this area and 2 is a tick without a look. The zombies and the
+/// partner (`Spl_Root_ck_sys`) share it.
+pub(crate) fn root_ck(
+    state: &mut RootCk,
+    kind: u16,
+    world: &RootWorld<'_>,
+    body: [i32; 3],
+    neck: Option<[i32; 3]>,
+    point: [i16; 2],
+    area: Option<u8>,
+) -> u8 {
+    if state.cnt & 0x7F == 0 {
+        state.cnt |= 7;
+    }
+    state.cnt = state.cnt.wrapping_sub(1);
+    if state.cnt & 0x80 == 0 {
+        state.status &= !STATUS_IN_SIGHT;
+        if let (Some(from), Some(to)) = (neck, world.player_neck)
+            && !sca_ck_line(world.sca, from, to, 0x2000)
+        {
+            state.status |= STATUS_IN_SIGHT;
+        }
+    }
+    if kind & TYPE_STRAIGHT != 0 {
+        state.dest = point;
+        return 2;
+    }
+    if kind & TYPE_HELD != 0 || state.cnt & 0x80 != 0 {
+        return 2;
+    }
+    let here = guide_check(world.guides, body[0] as i16, body[2] as i16);
+    let middle = area
+        .and_then(|area| world.guides.get(usize::from(area)))
+        .map(|guide| {
+            [
+                ((i32::from(guide.x1) + i32::from(guide.x0)) >> 1) as i16,
+                ((i32::from(guide.z1) + i32::from(guide.z0)) >> 1) as i16,
+            ]
+        });
+    let (there, target) = match area {
+        Some(area) => (Some(area), middle.unwrap_or(point)),
+        None => (guide_check(world.guides, point[0], point[1]), point),
+    };
+    let (Some(here), Some(there)) = (here, there) else {
+        if area.is_none() {
+            return 0;
+        }
+        // Off the guides, heading for an area: `kara_rootck2` searches
+        // from a row past the table, finds no route and writes what its
+        // stack holds. The dog keeps its way here instead.
+        return if state.cnt == 0 { 1 } else { 2 };
+    };
+    if here == there {
+        state.dest = target;
+        return 1;
+    }
+    if state.cnt == 0 {
+        if let Some(dest) = kara_rootck2(world.guides, here, there, [body[0], body[2]], target) {
+            state.dest = dest;
+        }
+        return 1;
+    }
+    2
+}
+
 /// `Sca_ck_em`'s mask for a zombie.
 pub const MASK: u16 = 0x400;
 
 /// `Goto00_ck` and `Goto01_ck`: 0 once `angle` is within `rate` of `target`, or
 /// the way to turn.
-fn turn_within(angle: u16, target: u16, rate: i32) -> i32 {
+pub(crate) fn turn_within(angle: u16, target: u16, rate: i32) -> i32 {
     let error = (i32::from(target.wrapping_sub(angle)) + rate) & 0xFFF;
     if error < rate * 2 {
         0
@@ -2524,6 +2530,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
+            partner: None,
             zombie: None,
         };
         let mut zombie = Zombie {

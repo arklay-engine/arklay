@@ -1,0 +1,38 @@
+# Claire A in room 21B with Sherry as the partner: stand, walk, stop, run away, run back at her, walk into a wall, then a slow random walk (oracle/re2.md)
+344
+444 up
+524
+644 left
+708 up run
+828
+858 left
+922 up run
+982
+1012 right
+1044 up
+1300
+1330 up
+1371 up right
+1426 right
+1471 left
+1536
+1602
+1628
+1676 left
+1741 up
+1756 up left
+1808 up right
+1827 up
+1892 left
+1921 up
+1963 up right
+2017
+2034 up left
+2083
+2142 up
+2198 up left
+2214 up
+2276 up
+2298 up
+2342 up
+2392 up left
