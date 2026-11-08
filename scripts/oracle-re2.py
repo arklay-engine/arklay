@@ -632,6 +632,8 @@ def inventory_trace(game: Game) -> str:
 ITEM_BOX_WORK = 0x98ED60  # `Item_boxwork`: 64 slots of id, count and the two-slot weapon's half
 ITEM_BOX_ENTRANCE = 0x98E542  # `Item_box_entrance`'s state; its object at 0x98E533
 ITEM_BOX_OBJECT = 0x98E533
+BACK_ROUTINE = 0x98E794  # slot 2 of the back routines (`pG+0x82B4`), which `Game_loop` runs after `Sce_at`
+SAVE_PLACE = 0x98E9A7  # the save place `Sce_Save` copies from its area
 ITEM_BOX_LID = 0x689C90  # the lid's speed and its step (`0x689C98`)
 OBJECTS = 0x98A61C  # `pOm`: 0x1F8 bytes an object, the lid's turn at +0x78
 ITEM_BOX_PAGE = [0x691F61, 0x691F62, 0x691F63, 0x691F6C, 0x691F76, 0x691F84]
@@ -745,6 +747,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     )
     fields.append(item_box_trace(game))
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
+    # Slot 2's back routine (`Sce_Save_backfunc` 0x4E9930 or `Item_box_entrance` 0x4E9A20), its state and the save place.
+    fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

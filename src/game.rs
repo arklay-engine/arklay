@@ -1434,6 +1434,7 @@ pub mod door2;
 mod entity;
 pub mod item_get2;
 pub mod itembox2;
+pub mod save2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
@@ -3256,8 +3257,18 @@ pub struct GameState {
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
-    /// RE2's item box lid (`Item_box_entrance`).
+    /// RE2's item box lid (`Item_box_entrance`), whose state byte and saved
+    /// `fg_stop` the typewriter's back routine shares.
     pub re2_box_entrance: itembox2::Entrance,
+    /// RE2's back routine slot 2 (`0x98E794`): the item box's lid or the
+    /// typewriter's prompt.
+    pub re2_back: save2::BackRoutine,
+    /// RE2's save place (`0x98E9A7`), which `Sce_Save` copies from its area.
+    /// Like the original's global it stays across rooms.
+    pub re2_save_place: u8,
+    /// The typewriter's prompt was answered Yes this tick (game mode 1,
+    /// `fg_system | 0x40000`): the engine hands the room to the save screen.
+    pub re2_save_requested: bool,
     /// RE2's item box page while its screen is up.
     pub re2_box: Option<itembox2::BoxPage>,
     /// The box page's bytes as the trace shows them; they stay after the
@@ -3753,6 +3764,9 @@ impl Default for GameState {
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_status_start: false,
             re2_box_entrance: itembox2::Entrance::default(),
+            re2_back: save2::BackRoutine::None,
+            re2_save_place: 0,
+            re2_save_requested: false,
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
@@ -8587,7 +8601,11 @@ impl GameState {
                 self.open_re2_box_entrance(action.params[0]);
                 self.record_interaction(slot, action.kind, None);
             }
-            RoomActionKind::Typewriter => self.record_interaction(slot, action.kind, None),
+            RoomActionKind::Typewriter => {
+                // `Sce_Save`: the area's first parameter is the save place.
+                self.sce_save(action.params[0]);
+                self.record_interaction(slot, action.kind, None);
+            }
             _ => {}
         }
     }

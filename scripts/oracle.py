@@ -101,9 +101,11 @@ class Tick:
 
 PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
-OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg"}
-# A screen's own fields, compared only when named.
-SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg")
+OPT_IN_FIELDS = {"zp", "pneck", "xavol", "movie", "snd", "inv", "ip", "msg", "fgkey", "scene", "ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "tw", "gm"}
+# A screen's own fields, compared only when named. `gm` (the game mode) is the original's `gi`
+# first value (`game_mode`); arklay's `gm` follows only the typewriter's path, so only typewriter
+# runs name it.
+SCREEN_FIELDS = ("ti", "tlogo", "tfade", "tsel", "ib", "box", "mapfg", "tw", "gm")
 
 
 def normalize_room(stage: str, room: str) -> str:
@@ -157,6 +159,12 @@ def scene(fields: dict[str, str]) -> str | None:
     return str((int(fields["fgstat"], 16) >> 4) & 1)
 
 
+def game_mode(fields: dict[str, str]) -> None:
+    """The original's `gi` first value as arklay's `gm` (its game mode)."""
+    if "gi" in fields:
+        fields.setdefault("gm", fields["gi"].split(",")[0])
+
+
 def parse_trace(path: str) -> list[Tick]:
     ticks: list[Tick] = []
     with open(path, "r", encoding="utf-8") as handle:
@@ -183,6 +191,7 @@ def parse_trace(path: str) -> list[Tick]:
                     player_values = dict(zip(PLAYER_FIELDS, values))
                 else:
                     fields[key] = value
+            game_mode(fields)
             stage, _, room = fields["room"].partition(":")
             ticks.append(
                 Tick(

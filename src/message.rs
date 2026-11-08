@@ -478,6 +478,12 @@ impl MessageWindow {
         self.re2_cues = cues;
     }
 
+    /// [`Self::set_re2_timing`]'s choice: whether the window keeps RE2's
+    /// timing, whether a yes/no always cues, and whether the delays shift.
+    pub fn re2_timing_flags(&self) -> (bool, bool, bool) {
+        (self.re2_timing, self.re2_cues, self.re2_shift)
+    }
+
     /// Whether the delays are doubled: the pause menu's in RE1, and an RE2
     /// message's while `0x98F07A` is clear (`Mess_disp`'s shift).
     fn shifted(&self) -> bool {
