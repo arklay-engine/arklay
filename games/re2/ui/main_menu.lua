@@ -868,21 +868,39 @@ local function file_slide(page, last)
     return 0, nil
 end
 
--- FILE's three binders (`0x500470`): 3D models from `st_file.ts`, which
--- the engine projects as the original does, in the panel whose top is
--- `top`. `shown` is the page whose binders these are.
+-- FILE's three binders (`0x500470`) and their labels: 3D models from
+-- `st_file.ts`, which the engine projects as the original does, in the
+-- panel whose top is `top`. `shown` is the page whose binders these are.
 local function file_binders(api, d, shown, top)
     if d.binders == nil then
         d.binders = api:re2_binders_model() or false
     end
     if d.binders then
-        api:draw_re2_binders(d.binders, shown.binder, shown.sub, shown.command, top)
+        api:draw_re2_binders(d.binders, shown, top)
     end
 end
 
--- The reader's subs: 0xC moves the screen's parts back, 0xD to 0x12 show
--- the page.
-local FILE_READ_OUT, FILE_PAGE, FILE_PREV_IN = 0xC, 0xD, 0x12
+-- The reader's subs: 10 lists the binder's files, 0xB moves the screen's
+-- parts out and 0xC back, 0xD to 0x12 show the page.
+local FILE_LIST, FILE_READ_IN, FILE_READ_OUT, FILE_PAGE, FILE_PREV_IN = 10, 0xB, 0xC, 0xD, 0x12
+-- The panel's fall a step of the reader's slide (`0x691FAE`).
+local FILE_FALL = 22
+-- The list's name of the file in the binder's slot (`St_disp_name`).
+local FILE_NAME_X, FILE_NAME_Y, FILE_NAMES = 16, 203, 0x68
+
+-- How far a file's opening has moved the screen's parts out, 0 to 14, on
+-- the moves MAP's slide makes, and the panel down by `FILE_FALL` a step:
+-- sub 0xB's count, and 0xC's 14 less its count (it steps before the draw).
+local function reader_slide(page)
+    if page.page ~= PAGE_FILE then
+        return 0
+    elseif page.sub == FILE_READ_IN then
+        return page.command
+    elseif page.sub == FILE_READ_OUT then
+        return MAP_TICKS - page.command
+    end
+    return 0
+end
 
 -- Whether `page` is in the reader's subs from `first` to 0x12.
 local function reading(page, first)
@@ -1368,7 +1386,7 @@ function M.draw(api)
             end
         end
     end
-    local k = map_slide(page)
+    local k = map_slide(page) + reader_slide(page)
     local T, B, L, R = SLIDE_TABS * k, SLIDE_BOX * k, SLIDE_LEFT * k, SLIDE_RIGHT * k
     local closing = s.close ~= nil and s.close >= 1
     local on_items = page.page == PAGE_ITEMS
@@ -1391,6 +1409,9 @@ function M.draw(api)
         bx, by = check_box(page)
     end
     local file_dy, file_top = file_slide(page, last)
+    if file_top ~= nil then
+        file_top = file_top + FILE_FALL * reader_slide(page)
+    end
     by = by + B + file_dy
     -- The binders are in the 3D list, which draws under every sprite: the
     -- message box covers them as it comes back up.
@@ -1477,6 +1498,13 @@ function M.draw(api)
         if item ~= 0 then
             api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item) or "")
         end
+    end
+
+    -- The list's name, on the ticks sub 10 runs (its decide and cancel
+    -- ticks too).
+    if started.page == PAGE_FILE and started.sub == FILE_LIST and page.page == PAGE_FILE
+        and page.file ~= nil and page.file ~= 0xFF then
+        api:glyphs(d.ox + FILE_NAME_X, d.oy + FILE_NAME_Y, api:item_name_bytes(FILE_NAMES + page.file) or "")
     end
 
     -- The shown map, on the ticks its logic leaves it shown.

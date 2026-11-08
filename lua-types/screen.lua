@@ -851,13 +851,11 @@ function ScreenApi:draw_ivm(model, spec) end
 ---@return boolean drew `false` when the engine has no such actor.
 function ScreenApi:draw_actor(name, camera) end
 
----*Draw only.* Draw RE 2's three FILE binders as the original does.
+---*Draw only.* Draw RE 2's three FILE binders and their labels as the original does: the zoom's eye, the pull, the stack, the spin and a file's drop.
 ---@param model integer The handle from [`api:re2_binders_model`](#ScreenApi.re2_binders_model).
----@param front integer The binder in front.
----@param sub integer FILE's sub-state.
----@param command integer FILE's command tick count.
----@param top integer The panel's top row.
-function ScreenApi:draw_re2_binders(model, front, sub, command, top) end
+---@param page Re2Items The page whose binders these are: its `binder`, `slot`, `sub`, `command`, `zoom`, `view_zoom`, `spin` and `files`.
+---@param top integer The panel's top row, which the projection follows.
+function ScreenApi:draw_re2_binders(model, page, top) end
 
 -- # Reading the game
 
@@ -1185,6 +1183,15 @@ local ScreenLightSource = {}
 ---@field result integer COMBN's result id.
 ---@field follow boolean
 ---@field binder integer FILE's binder, 0 to 2.
+---@field slot integer FILE's slot in the binder, 0 to 7.
+---@field page_index integer The page of the file being read.
+---@field zoom integer The binders' zoom.
+---@field view_zoom integer The zoom the binders' last view was built with (the eye lags the zoom by a tick).
+---@field spin integer The binders' spin about y, from their rest.
+---@field file_x integer The page's x.
+---@field files integer[] The 24 files held (`File_tag_bk`), 0xFF for none.
+---@field blink integer The screen's shared blink level.
+---@field blink_falling boolean The blink's way.
 ---@field panel_mode integer The condition panel: 0 idle, 1 a heal, 2 a cure, 3 both.
 ---@field panel_sweep integer
 ---@field panel_cure integer
