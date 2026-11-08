@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 500, the lab's first room. Door 1 is the lift up to 310: nothing in
-     the lab needs anything from before it, so the bot never goes back. -->
+<!-- 500, the lab's first room. Door 1 is the lift up to 310. The lab needs
+     three MO disks (509, 507 and 510's computers): 503's, 30F's and 217's.
+     Once 217's is taken (item flag bank 7 0x4D clears; flags are global, so
+     the gate reads from here) nothing in the lab needs anything from before
+     it, and the bot never goes back. While that disk still lies in the
+     library the lift stays open: a disk left behind on a full inventory
+     lost 510's lamp, and the run looped in the lab. -->
 <bot format="2">
-  <avoid slot="1" reason="the lift back up to 310: the lab needs nothing from before it"/>
+  <avoid slot="1" bank="7" bit="0x4D" while="clear" reason="the lift back up to 310: once 217's MO disk is taken the lab needs nothing from before it"/>
 </bot>

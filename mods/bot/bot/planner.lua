@@ -343,11 +343,63 @@ function BotPlanner.steps_needing_room(bot, any_sig)
     local n = 0
     local sig = inventory_sig(bot)
     for _, m in pairs(plan().marks) do
-        if m.kind == "interact" and m.needed and (any_sig or m.sig == sig)
+        local done = m.done_flag ~= nil
+            and bot:flag(m.done_flag.bank, m.done_flag.bit) ~= m.done_flag.clear
+        if m.kind == "interact" and m.needed and (any_sig or m.sig == sig) and not done
             and m.reason:find("inventory full", 1, true) then
             n = n + 1
         end
     end
+    return n
+end
+
+-- Needed items left behind on a full inventory (an `inventory full` item
+-- mark set needed: a key or a <use> item) that are still in their room and
+-- still wanted: fewer held and boxed than the open <use> facts that take
+-- them (one for a key with none). Each holds a free slot like a step does
+-- (pickup_fits, ctx.hold_free): 217's MO disk lost the slot a box visit
+-- freed for it to every nearer pickup, and the lab had two disks of three.
+-- Read once per tick and inventory: pickup_fits asks for every frontier
+-- item, and bot:world() builds the whole world table.
+local needed_cache = { tick = nil, sig = nil, n = 0 }
+function BotPlanner.needed_items_left(bot)
+    local sig = inventory_sig(bot)
+    if needed_cache.tick == bot:tick() and needed_cache.sig == sig then
+        return needed_cache.n
+    end
+    local present = {}
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" then
+            present[mark_key("item", goal.room, goal.slot)] = true
+        end
+    end
+    local marked = {}
+    for key, m in pairs(plan().marks) do
+        if m.kind == "item" and m.needed and m.item and present[key]
+            and m.reason:find("inventory full", 1, true) then
+            marked[m.item] = (marked[m.item] or 0) + 1
+        end
+    end
+    local n = 0
+    for item, count in pairs(marked) do
+        local open = 0
+        for _, use in ipairs(bot:use_facts()) do
+            if use.item == item and BotPuzzle.use_open(bot, use) then
+                open = open + 1
+            end
+        end
+        if open < 1 then
+            open = 1
+        end
+        local want = open - bot:item_count(item) - BotInventory.boxed_count(bot, item)
+        if want > count then
+            want = count
+        end
+        if want > 0 then
+            n = n + want
+        end
+    end
+    needed_cache.tick, needed_cache.sig, needed_cache.n = bot:tick(), sig, n
     return n
 end
 
@@ -1581,7 +1633,7 @@ local function pickup_fits(bot, item, full)
         -- A puzzle step held for a free slot keeps it: an item that no key,
         -- <use> or step needs leaves it (30E's herbs took the slot a box
         -- visit freed for 306's Doom Book, again and again).
-        local held = BotPlanner.steps_needing_room(bot, true)
+        local held = BotPlanner.steps_needing_room(bot, true) + BotPlanner.needed_items_left(bot)
         if held == 0 or kind == "key" or kind == "file" or (merge and bot:has_item(item)) then
             return true
         end
@@ -1787,6 +1839,17 @@ function BotPlanner.preferred_here(bot, item)
     return false
 end
 
+-- A puzzle step that needs a free slot to finish: a <push reveals> (the
+-- item it uncovers) or an <interact> that hands over an item (a bank 7
+-- item flag, done once clear: 219's battery shelf). An <interact reveals>
+-- needs none: the press turns its items into pickups the frontier takes
+-- (119's study switch).
+local function holds_slot(fact)
+    return (fact.kind == "push" and fact.reveals ~= nil)
+        or (fact.kind == "press" and fact.bank == C.ITEM_BANK and fact.done_clear == true
+            and fact.reveals == nil)
+end
+
 -- Pick the next goal, or nil plus the reason nothing is left.
 local function choose(bot)
     local room = bot:room().id
@@ -1827,12 +1890,15 @@ local function choose(bot)
             if not blocked(bot, "interact", room, fact.slot) then
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
             end
-        elseif fact.kind == "push" and fact.reveals and inventory_full(bot) then
+        elseif holds_slot(fact) and inventory_full(bot) then
             -- So does a push puzzle that reveals an item: 306's box went
             -- into the book's probe with no slot for the book, and on the
             -- next entry the box stood back against the wall with the slab
             -- already cranked out, which no push gets past. The room's
             -- <use> steps wait with it (the crank comes after the push).
+            -- And an <interact> that hands over an item (a bank 7 flag
+            -- done once clear): 219's shelf was pressed from every side on
+            -- a full inventory, each press refused (message 194).
             held_full = true
             if not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
                 mark(bot, "interact", room, BotPuzzle.step_key(fact),
@@ -1840,10 +1906,15 @@ local function choose(bot)
                 -- Never given up for a full inventory, like a key: 306's
                 -- Doom Book was lost after three passes with every slot
                 -- used, and with it the Wolf Medal and the way to the lab.
-                plan().marks[mark_key("interact", room, BotPuzzle.step_key(fact))].needed = true
+                local m = plan().marks[mark_key("interact", room, BotPuzzle.step_key(fact))]
+                m.needed = true
+                -- Its done flag, so the hold ends once the step is done
+                -- however it got done (steps_needing_room).
+                m.done_flag = fact.bank and { bank = fact.bank, bit = fact.bit,
+                    clear = fact.done_clear == true } or nil
             end
         elseif not blocked(bot, "interact", room, BotPuzzle.step_key(fact)) then
-            if fact.kind == "push" and fact.reveals then
+            if holds_slot(fact) then
                 -- The slot is free now: the step no longer holds one.
                 local key = mark_key("interact", room, BotPuzzle.step_key(fact))
                 local m = plan().marks[key]
@@ -2526,9 +2597,16 @@ local function choose(bot)
                                     use_label = use_label or use.label
                                 end
                             end
-                            if open > bot:item_count(goal.item) then
-                                bonus = ITEM_BONUS + USE_BONUS
+                            -- Held and boxed copies count (30F's disk sat
+                            -- in 30E's box). The trip outranks carrying a
+                            -- held <use> item: the slot a deposit freed
+                            -- went to nearer pickups and the battery's
+                            -- errand, and the disk never fit again.
+                            if open > bot:item_count(goal.item)
+                                + BotInventory.boxed_count(bot, goal.item) then
+                                bonus = ITEM_BONUS + USE_BONUS + HELD_USE_BONUS
                                 tag = "for " .. (use_label or "a use")
+                                left.needed = true
                             end
                         end
                         heal_target = heals and goal.item_kind == "heal" or nil

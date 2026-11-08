@@ -601,6 +601,10 @@ function BotInventory.context(bot)
     end
     ctx.hold_free = BotPlanner and BotPlanner.steps_needing_room
         and BotPlanner.steps_needing_room(bot, true) or 0
+    -- So does a needed item left behind on a full inventory (217's disk).
+    if BotPlanner and BotPlanner.needed_items_left then
+        ctx.hold_free = ctx.hold_free + BotPlanner.needed_items_left(bot)
+    end
     -- So are a <brew>'s bottles and chemicals while it is open here: the
     -- room's bottles then count as needed pickups, so the box makes room
     -- for them all in one trip.
@@ -1033,6 +1037,17 @@ function BotInventory.remembered(bot)
         out[tonumber(hex, 16)] = true
     end
     return out
+end
+
+-- How many rows of the remembered box hold `item` (a disk boxed at 30E).
+function BotInventory.boxed_count(bot, item)
+    local n = 0
+    for hex in string.gmatch(bot:memory().box_items or "", "%x+") do
+        if tonumber(hex, 16) == item then
+            n = n + 1
+        end
+    end
+    return n
 end
 
 -- The <holds> items an open <use> fact needs that are off the frontier:
