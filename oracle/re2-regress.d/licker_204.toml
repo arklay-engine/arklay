@@ -1,0 +1,57 @@
+# Room 204's scripted licker (oracle/re2.md, "Room 204's licker"): area 7 starts the window scene (`main_09`), whose `pos_set` and `member_set(23, 1)` drop the licker (`Routine_1` 0x10) and send it to 0x0E and the fight. Flag 4:85 keeps the warp's place (`main_06` moves a first entry to the door).
+
+[[run]]
+name = "licker_204_scene"
+room = "204"
+ticks = 1800
+sound = false
+setup_script = "licker_204_scene.lua"
+input = "licker_204_scene.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
+# the dead player's head on two ticks of its fall, a unit or two behind the body (docs/internals/deviations/re2.md, "What a climbing licker doesn't do")
+ignore = [[1587, "pneck"], [1588, "pneck"]]
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
+
+[[run]]
+name = "licker_204_scene_claire"
+room = "204"
+player = 1
+character = 1
+ticks = 1800
+sound = false
+setup_script = "licker_204_scene.lua"
+input = "licker_204_scene.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
+# as in licker_204_scene
+ignore = [[1605, "pneck"], [1606, "pneck"], [1611, "pneck"], [1612, "pneck"]]
+expect = "match"
+record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
+
+[[run]]
+name = "licker_204_fight"
+room = "204"
+ticks = 2400
+sound = false
+setup_script = "licker_204_fight.lua"
+input = "licker_204_fight.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
+expect = { tick = 919, fields = ["mot", "pneck", "zm1"], note = "fire pressed as the aim starts is also the original's action key: the check of area 6 (the body, event 8) opens message 2 and stops the room for 39 ticks, which arklay doesn't do (#541)" }
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 2 --give 0:2:200"
+
+[[run]]
+name = "licker_204_fight_claire"
+room = "204"
+player = 1
+character = 1
+ticks = 2400
+sound = false
+setup_script = "licker_204_fight_claire.lua"
+input = "licker_204_fight.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
+expect = { tick = 1962, fields = ["p.x", "p.z", "pneck", "zm1"], note = "the licker lets go of the ceiling (Routine_1 0x0B) and lands beside Claire: arklay pushes the two apart by about 570 and the original doesn't (docs/internals/deviations/re2.md, \"What a climbing licker doesn't do\")" }
+record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"

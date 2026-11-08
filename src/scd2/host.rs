@@ -2768,6 +2768,41 @@ mod tests {
         assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
     }
 
+    /// Room 204's `main_02` puts the scene's licker off the stage with
+    /// `Type` 0x4510, and `main_09`, on the tick after its `movie_on`, moves
+    /// it over the window and gives it the word (`Pos_set` writes only the
+    /// place; member 23 is `Sce_free0`).
+    #[test]
+    fn room_204s_scene_moves_the_offstage_licker_and_gives_it_the_word() {
+        let mut game = GameState::default();
+        let licker = [
+            0, 1, 0x22, 16, 69, 0, 14, 0, 61, 32000, -5700, 32000, 1024, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        let character = game.re2.characters.0[1].as_ref().unwrap();
+        assert_eq!(character.work.kind, 0x4510);
+        let angle = character.body.angle;
+        exec(&mut game, "work_set", &[WK_ENEMY, 1]);
+        exec(&mut game, "pos_set", &[0, -14869, -5700, -3479]);
+        exec(&mut game, "member_set", &[23, 1]);
+        let character = game.re2.characters.0[1].as_ref().unwrap();
+        assert_eq!(character.body.pos, [-14869, -5700, -3479]);
+        assert_eq!(character.work.sce_free[0], 1);
+        assert_eq!(character.body.angle, angle);
+    }
+
+    /// `main_02`'s other branch, once 4:86 is set: a plain ceiling licker.
+    #[test]
+    fn room_204s_revisit_licker_is_a_plain_ceiling_licker() {
+        let mut game = GameState::default();
+        let licker = [
+            0, 1, 0x22, 18, 5, 0, 14, 0, 61, -16169, -5400, -6579, 1024, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        let character = game.re2.characters.0[1].as_ref().unwrap();
+        assert_eq!(character.work.kind, 0x0512);
+    }
+
     /// Room 40B's `init_00` sets 24 cockroaches (id 0x29) at the top of its
     /// pipe: each keeps its slot as an enemy with a script, and each is a
     /// head the player can turn to.

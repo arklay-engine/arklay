@@ -1,0 +1,3 @@
+# room 204: walk up the corridor into area 7; the window scene, the licker's scripted drop, and its fight with a player who stands still (oracle/re2.md, "Room 204's licker")
+360 up
+420

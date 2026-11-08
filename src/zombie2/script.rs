@@ -1900,6 +1900,221 @@ mod tests {
         }
     }
 
+    /// A stand-in for the licker's work, enough for `lib/licker.lua`'s init,
+    /// the scripted drop (`Routine_1` 0x10) and `listen` (0x0E); any other
+    /// call does nothing. A clip ends on its `CLIP_LEN`th step, `Rnd` gives
+    /// `RND`, `Direction_ck` gives `DIR`, `Super_vector` doesn't turn, and
+    /// `SEES` has the player touch it. `tick()` runs one `update`.
+    const LICKER_STUB: &str = "
+        w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, be = 0, kind = KIND,
+            pos = { 32000, -5700, 32000 }, spd = { 0, 0, 0 }, angle = 1024,
+            move_no = -1, move_cnt = 0, frame = 0, flags = 0, sce = 0, life = 0,
+            supers = {}, init_supers = 0, spxz = 0, clips = {}, atd = 0 }
+        local e = setmetatable({}, { __index = function() return function() end end })
+        function e:routine(i) return w.r[i] end
+        function e:set_routine(i, v) w.r[i] = v end
+        function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
+        function e:go(one) w.r = { [0] = 1, one, 0, 0 } end
+        function e:step(ended) if ended then w.r[2] = w.r[2] + 1 end end
+        function e:var(i) return w.vars[i] or 0 end
+        function e:set_var(i, v) w.vars[i] = v end
+        function e:be_flg() return w.be end
+        function e:set_be_flg(v) w.be = v end
+        function e:kind() return w.kind end
+        function e:set_kind(v) w.kind = v end
+        function e:flags() return w.flags end
+        function e:set_flags(v) w.flags = v end
+        function e:sce_free() return w.sce end
+        function e:set_sce_free(_, v) w.sce = v end
+        function e:easy() return false end
+        function e:common_a4() return false end
+        function e:rnd() return RND end
+        function e:set_life(v) w.life = v end
+        function e:move_no() return w.move_no end
+        function e:set_move_no(v) w.move_no = v end
+        function e:set_move_cnt(v) w.move_cnt = v end
+        function e:clip(n, c) w.move_no = n; w.move_cnt = c; w.frame = 0; w.clips[#w.clips + 1] = n end
+        function e:joint()
+            w.frame = w.frame + 1
+            w.move_cnt = w.move_cnt + 1
+            return w.frame >= CLIP_LEN
+        end
+        function e:add_speed_xz() w.spxz = w.spxz + 1 end
+        function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+        function e:set_speed(x, y, z) w.spd = { x, y, z } end
+        function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
+        function e:add_pos(x, y, z) w.pos = { w.pos[1] + x, w.pos[2] + y, w.pos[3] + z } end
+        function e:set_pos_y(y) w.pos[2] = y end
+        function e:angle() return w.angle end
+        function e:set_angle(v) w.angle = v end
+        function e:super_add(x, y, z) w.supers[#w.supers + 1] = { x, y, z } end
+        function e:super_rotate(_, x, y, z) return x, y, z end
+        function e:direction() return DIR end
+        function e:init_super() w.init_supers = w.init_supers + 1 end
+        function e:set_atd() w.atd = w.atd + 1 end
+        function e:weapon() return 2 end
+        function e:player_life() return 200 end
+        function e:touching() return SEES end
+        function e:noise() return 0 end
+        function e:distance() return 20000 end
+        function e:pl_routine() return 0 end
+        function tick() LICKER.run(e, VARIANT) end
+    ";
+
+    /// Runs `body` against [`LICKER_STUB`] with room 204's scene licker
+    /// (`Type` 0x4510, `KIND`), after `setup`.
+    fn run_licker(setup: &str, body: &str) {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        budget.begin();
+        let licker: mlua::Table = lua
+            .load(include_str!("../../games/re2/lib/licker.lua"))
+            .eval()
+            .unwrap();
+        lua.globals().set("LICKER", licker).unwrap();
+        let script = include_str!("../../games/re2/enemy/22/enemy.lua");
+        lua.load(format!(
+            "local function require() return {{ run = function(e, v) VARIANT = v end }} end
+             {script}
+             update(nil)
+             KIND = 0x4510 RND = 2 CLIP_LEN = 1000 DIR = 0x350 SEES = false
+             {setup}
+             {LICKER_STUB}"
+        ))
+        .exec()
+        .unwrap();
+        budget.begin();
+        lua.load(body).exec().unwrap();
+    }
+
+    /// `Em22_Init` (0x464B50): a scripted `Type` takes `BYTE_00527c80`, so
+    /// 0x4510 starts in `Routine_1` 0x10, turned onto the ceiling (surface 5),
+    /// with its life drawn from `Em22_Life`.
+    #[test]
+    fn a_scripted_ceiling_licker_starts_in_0x10() {
+        run_licker(
+            "",
+            "tick()
+             assert(w.r[0] == 1 and w.r[1] == 0x10 and w.r[2] == 0 and w.r[3] == 0)
+             assert(#w.supers == 1 and w.supers[1][1] == 0x800 and w.supers[1][2] == 0x800
+                 and w.supers[1][3] == 0)
+             assert(w.life == VARIANT.life[2], w.life)",
+        );
+    }
+
+    /// 0x10's `Routine_2` 0 (0x466B00): clip 3 by `Mot_play2_spxz` on the
+    /// ceiling until `Sce_free0`, with the script's bit kept.
+    #[test]
+    fn it_waits_on_the_ceiling_until_sce_free0() {
+        run_licker(
+            "",
+            "for _ = 1, 21 do tick() end
+             assert(w.r[1] == 0x10 and w.r[2] == 0)
+             assert(w.move_no == 3 and w.spxz == 20)
+             assert(w.kind == 0x4510)
+             assert(w.pos[2] == -5700)",
+        );
+    }
+
+    /// The first `member_set(23, 1)` lets it go: `Type` loses 0x4000,
+    /// `Sce_free0` is cleared and `Spd_y` starts at 0; the next tick it falls
+    /// by 0x48 on clip 0x12 (0x466B45).
+    #[test]
+    fn the_first_word_lets_it_go() {
+        run_licker(
+            "",
+            "tick() tick()
+             w.sce = 1
+             tick()
+             assert(w.r[2] == 1 and w.kind == 0x0510 and w.sce == 0 and w.spd[2] == 0)
+             tick()
+             assert(w.spd[2] == 0x48 and w.pos[2] == -5700 + 0x48 and w.move_no == 0x12)",
+        );
+    }
+
+    /// Clip 0x12's end moves it to `Routine_2` 2 (0x466B67): up by 0xA8C,
+    /// turned to `(Direction_ck + 0x100) & 0xC00`, `Em_init_super`, clip
+    /// 0x13, and on through state 3's fall to the landing (0x466BE3), all in
+    /// one tick: from -3108 after eight falls to 240 and state 4.
+    #[test]
+    fn it_turns_over_and_lands_in_one_tick() {
+        run_licker(
+            "CLIP_LEN = 8",
+            "tick() w.sce = 1 tick()
+             for _ = 1, 8 do tick() end
+             assert(w.r[2] == 2 and w.pos[2] == -3108, w.pos[2])
+             local supers = w.init_supers
+             tick()
+             assert(w.pos[2] == 240, w.pos[2])
+             assert(w.angle == (0x350 + 0x100) & 0xC00)
+             assert(w.init_supers == supers + 1)
+             assert(w.clips[#w.clips] == 0x13)
+             assert(w.vars[5] == 3 and w.be & 8 == 0 and w.move_no == 0 and w.r[2] == 4)",
+        );
+    }
+
+    /// State 4 (0x466C55) holds it on the floor through clip 0x13; state 5
+    /// (0x466C75) stands up on clip 3 with `FLAG_UP` and gun area 4, and
+    /// waits there for the second word.
+    #[test]
+    fn it_stands_at_0_until_clip_0x13_ends_then_waits_for_the_second_word() {
+        run_licker(
+            "CLIP_LEN = 8",
+            "tick() w.sce = 1 tick()
+             for _ = 1, 9 do tick() end
+             assert(w.r[2] == 4)
+             for _ = 1, 7 do tick() assert(w.pos[2] == 0 and w.r[2] == 4) end
+             tick()
+             assert(w.r[2] == 5)
+             for _ = 1, 10 do tick() end
+             assert(w.r[1] == 0x10 and w.r[2] == 5)
+             assert(w.flags & 2 ~= 0 and w.vars[5] == 4)",
+        );
+    }
+
+    /// The second word, in state 5, writes 0x0E01 over the routines and
+    /// leaves `Sce_free0` set.
+    #[test]
+    fn the_second_word_sends_it_to_listen_and_keeps_sce_free0() {
+        run_licker(
+            "CLIP_LEN = 8",
+            "tick() w.sce = 1 tick()
+             for _ = 1, 18 do tick() end
+             assert(w.r[2] == 5)
+             w.sce = 1
+             tick()
+             assert(w.r[0] == 1 and w.r[1] == 0xE and w.r[2] == 0 and w.r[3] == 0)
+             assert(w.sce == 1)",
+        );
+    }
+
+    /// `Routine_1` 0x0E (0x464130) counts `Routine_3` every tick and, past
+    /// 10, hands over to 0x0F when it spots the player; if it doesn't, the
+    /// second clip's end goes to 4, and the shared count (0x4641BF) still
+    /// runs after it.
+    #[test]
+    fn listen_hands_over_to_decide_after_eleven_ticks_when_it_spots() {
+        let listen = "w.r = { [0] = 1, 0xE, 0, 0 }";
+        run_licker(
+            "SEES = true",
+            &format!(
+                "tick() {listen}
+                 for i = 1, 10 do tick() assert(w.r[1] == 0xE and w.r[3] == i) end
+                 tick()
+                 assert(w.r[1] == 0xF and w.r[2] == 0 and w.r[3] == 0)"
+            ),
+        );
+        run_licker(
+            "CLIP_LEN = 3",
+            &format!(
+                "tick() {listen}
+                 for _ = 1, 5 do tick() end
+                 assert(w.r[1] == 0xE and w.r[2] == 2)
+                 tick()
+                 assert(w.r[1] == 4 and w.r[2] == 0 and w.r[3] == 1)"
+            ),
+        );
+    }
+
     /// A stand-in for the work, enough for `enemy/25/enemy.lua`'s init and
     /// floor states: `Rnd` gives `DRAWS` in turn. By default the player is
     /// far away, half a turn round, and no clip ends; `DIST`, `TARGET`,
