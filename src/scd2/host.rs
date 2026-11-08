@@ -66,6 +66,11 @@ pub struct Re2State {
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
     /// the kind and the damage. The tick applies them to the player.
     pub pending_damage: Vec<([i16; 4], u8, i16)>,
+    /// `fg_stop & 0x2000000` while `Sce_at` runs: the status screen's open
+    /// stops the scheduler, so `Sce_Event`, `Sce_Door` and the other
+    /// handlers that start something gate themselves off, and only an area's
+    /// record, a flag change, water or damage acts.
+    pub areas_stopped: bool,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
@@ -666,6 +671,7 @@ impl Default for Re2State {
             xa_volume: XA_VOLUME,
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
+            areas_stopped: false,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             door_settling: false,
@@ -1120,19 +1126,46 @@ impl Re2State {
         }
     }
 
-    pub fn clear_tick_flags(&mut self) {
+    /// The oracle's `fguse` (`fg_use`'s four words as their bytes) and `scv`
+    /// (variables 0 to 3), what `Sce_work_clr` resets.
+    pub fn script_work_trace(&self) -> String {
+        let fg_use: String = self.banks[usize::from(FG_USE_BANK)][..4]
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let vars = self.vars[..4]
+            .iter()
+            .map(|var| format!("{var:04x}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("fguse={fg_use} scv={vars}")
+    }
+
+    /// `Sce_work_clr` (`0x4E3DA0`), at the end of every `Sce_scheduler_main`
+    /// pass and before a room's init scripts: variables 2 and 3 go back to
+    /// `0xFFFF`, and `fg_tick` and `fg_use`'s four words to 0, so a USE's
+    /// item and an area's key item last one pass. `Mizu_div_ctr`, which it
+    /// also zeroes, isn't modelled (`mizu_div_set` is a no-op).
+    pub fn sce_work_clr(&mut self) {
+        for var in [VAR_USED_ITEM, 3] {
+            self.vars[var] = 0xFFFF;
+        }
         if let Some(words) = self.banks.get_mut(usize::from(ROOM_BANK)) {
             words[1] = 0;
+        }
+        if let Some(words) = self.banks.get_mut(usize::from(FG_USE_BANK)) {
+            words[..4].fill(0);
         }
         for flag in std::mem::take(&mut self.unmodelled_arrivals) {
             self.raise_room_flag(flag);
         }
     }
 
-    /// `Sce_work_clr_at`, at the end of `Sce_scheduler_main`'s pass: every
-    /// enemy in play forgets its area, so a script sees only the one the last
-    /// `Sce_at` found it in.
-    pub fn clear_enemy_areas(&mut self) {
+    /// `Sce_work_clr_at` (`0x4E3DE0`), after [`Self::sce_work_clr`] at the
+    /// end of `Sce_scheduler_main`'s pass: every enemy in play forgets its
+    /// area, so a script sees only the one the last `Sce_at` found it in.
+    pub fn sce_work_clr_at(&mut self) {
         for character in self.characters.0.iter_mut().flatten() {
             if character.be_flg & 1 != 0 {
                 character.area = NO_AREA;
@@ -3514,7 +3547,7 @@ mod tests {
         // One that isn't modelled is there as soon as it's told to go.
         exec(&mut game, "plc_dest", &[0, 4, 33, 0, 0]);
         assert!(!game.re2.flag(ROOM_BANK, 33));
-        game.re2.clear_tick_flags();
+        game.re2.sce_work_clr();
         assert!(game.re2.flag(ROOM_BANK, 33));
     }
 
@@ -3523,7 +3556,7 @@ mod tests {
         let mut state = Re2State::default();
         state.set_flag(ROOM_BANK, 0, 1);
         state.raise_room_flag(33);
-        state.clear_tick_flags();
+        state.sce_work_clr();
         assert!(!state.flag(ROOM_BANK, 33));
         assert!(state.flag(ROOM_BANK, 0));
     }
@@ -3707,14 +3740,98 @@ mod tests {
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
         assert_eq!(game.re2.vars[VAR_BODY_AREA], 3);
-        game.re2.clear_enemy_areas();
+        game.re2.sce_work_clr_at();
         assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(3));
-        game.re2.clear_enemy_areas();
+        game.re2.sce_work_clr_at();
         game.re2.characters.0[1].as_mut().unwrap().body.pos = [-10000, -5400, -23367];
         game.interact([0, 0, 0], 0, false);
         assert_eq!(area(&mut game), Some(i32::from(NO_AREA)));
+    }
+
+    #[test]
+    fn sce_work_clr_clears_the_pass_s_script_work() {
+        let mut state = Re2State::default();
+        state.banks[usize::from(FG_USE_BANK)][..5].fill(0xFFFF_FFFF);
+        state.banks[usize::from(ROOM_BANK)][1] = 0xFFFF_FFFF;
+        state.vars[..5].fill(7);
+        state.sce_work_clr();
+        assert_eq!(state.banks[usize::from(FG_USE_BANK)][..4], [0; 4]);
+        assert_eq!(state.banks[usize::from(FG_USE_BANK)][4], 0xFFFF_FFFF);
+        assert_eq!(state.banks[usize::from(ROOM_BANK)][1], 0);
+        assert_eq!(state.vars[2..4], [0xFFFF; 2]);
+        assert_eq!(state.vars[4], 7);
+    }
+
+    /// Room 200's statue: the Unicorn Medal's USE area (13, kind 6, `sat`
+    /// 33, data `10, 71, 1`) and, for the gate, a passive event area (3) in
+    /// the same box, with the player where `statue_200` stands.
+    fn statue_200() -> GameState {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let aot_set = crate::scd2::opcode::lookup(0x2C).unwrap();
+        let mut host = GameHost { game: &mut game };
+        let use_area = [
+            13, 6, 33, 0, 0, -15948, -9485, 4460, 2310, 10, 0, 71, 0, 1, 0,
+        ];
+        host.exec(0, aot_set, &use_area);
+        let event = [3, 5, 33, 0, 0, -15948, -9485, 4460, 2310, 0, 0, 0, 3, 0, 0];
+        host.exec(0, aot_set, &event);
+        game
+    }
+
+    const STATUE_POS: [i32; 3] = [-13700, 0, -9900];
+    const STATUE_ANGLE: u16 = 3072;
+    const MEDAL: u8 = 71;
+
+    #[test]
+    fn the_status_open_s_area_pass_raises_fg_use_and_starts_nothing() {
+        let mut game = statue_200();
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert!(game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(game.re2.pending_events, [(0, 3)]);
+        // START's tick: the scheduler's pass ends in `Sce_work_clr`, and no
+        // `Sce_at` follows it.
+        game.re2.pending_events.clear();
+        game.re2.sce_work_clr();
+        assert!(!game.re2.flag(FG_USE_BANK, MEDAL));
+        // The open's room ticks: `Sce_at` with the scheduler off.
+        game.re2_stopped_area_pass(STATUE_POS, STATUE_ANGLE);
+        assert!(game.re2.flag(FG_USE_BANK, MEDAL));
+        assert_eq!(game.re2.vars[VAR_FORWARD_AREA], 13, "the last hit");
+        assert!(
+            game.re2.pending_events.is_empty(),
+            "`Sce_Event` gates itself"
+        );
+        assert!(!game.re2.areas_stopped);
+        game.interact(STATUE_POS, STATUE_ANGLE, false);
+        assert_eq!(game.re2.pending_events, [(0, 3)], "play's pass starts it");
+    }
+
+    #[test]
+    fn the_used_item_lasts_the_first_pass_after_the_close() {
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc main_00\n{\n    do\n    {\n        evt_next();\n        \
+             if (cmp(0, 2, 0, 71))\n        {\n            set(4, 72, 1);\n        }\n    }\n    \
+             while (ck(4, 73, 0));\n    evt_end(0);\n}\n",
+        )
+        .unwrap();
+        let mut game = statue_200();
+        let mut vm = crate::scd2::vm::Vm::new(&scripts);
+        vm.start_main();
+        let mut pass = |game: &mut GameState| {
+            vm.tick(&mut GameHost { game: &mut *game });
+            game.re2.sce_work_clr();
+            game.re2.flag(4, 72)
+        };
+        assert!(!pass(&mut game));
+        // USE's step 3, while the status is up and the scheduler off.
+        game.re2.vars[VAR_USED_ITEM] = u16::from(MEDAL);
+        assert!(pass(&mut game), "the first pass after the close reads it");
+        assert_eq!(game.re2.vars[VAR_USED_ITEM], 0xFFFF);
+        game.re2.set_flag(4, 72, 0);
+        assert!(!pass(&mut game), "and only that pass");
     }
 
     /// Room 302's water area (`aot_set 2, 7, 79, 0, ...`): `Sce_Water` gives

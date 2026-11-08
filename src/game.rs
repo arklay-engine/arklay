@@ -6543,6 +6543,17 @@ impl GameState {
         }
     }
 
+    /// `Sce_at` on the ticks of the status screen's open that still show the
+    /// room (`Game_loop`'s modes 1 and 2 until the fade is done): the
+    /// scheduler is off (`fg_stop & 0x2000000`), so the areas the player is
+    /// in record their hit and raise `fg_use` again for the status's USE,
+    /// but start nothing. The press pass is off too (`fg_status & 0x200000`).
+    pub fn re2_stopped_area_pass(&mut self, pos: [i32; 3], angle: u16) {
+        self.re2.areas_stopped = true;
+        self.interact(pos, angle, false);
+        self.re2.areas_stopped = false;
+    }
+
     /// An RE2 area's gate and box where `Sce_at_check` tests them: moved by
     /// the `x` and `z` of the work or object its `Super` byte names
     /// (`0x4E9227`). A work index past the slots that hold one moves nothing.
@@ -8596,6 +8607,14 @@ impl GameState {
     /// returns. Water (kind 7) sets the player's `Water`.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
+        let acts_stopped = [
+            crate::scd2::host::SCE_FLAG_CHANGE,
+            crate::scd2::host::SCE_WATER,
+            crate::scd2::host::SCE_DAMAGE,
+        ];
+        if self.re2.areas_stopped && !acts_stopped.contains(&action.sce) {
+            return;
+        }
         if action.sce == crate::scd2::host::SCE_WINDOWS {
             // `Sce_Windows`: game mode 7 from the next tick, with its first
             // byte plus its third shifted by 4 (room 200: mode 0, cut 15).

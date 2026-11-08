@@ -124,6 +124,9 @@ pub struct TraceTick<'a> {
     /// RE2: each room object's `Be_flg`, position, `Cdir_y`, `Push_cnt`,
     /// `At_sce_no` and `nFloor`, the oracle's `om`.
     pub re2_objects: Option<String>,
+    /// RE2: the script work `Sce_work_clr` resets, as the oracle's `fguse`
+    /// (`fg_use`'s four words as their bytes) and `scv` (variables 0 to 3).
+    pub re2_script_work: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -339,6 +342,9 @@ impl TraceWriter {
         if let Some(fields) = &tick.re2_objects {
             write!(self.out, " {fields}")?;
         }
+        if let Some(fields) = &tick.re2_script_work {
+            write!(self.out, " {fields}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -468,6 +474,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -533,6 +540,7 @@ mod tests {
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
+                re2_script_work: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -594,6 +602,7 @@ mod tests {
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
+                re2_script_work: None,
                 re2_sounds: None,
                 frame_hash: 0,
             };
@@ -652,6 +661,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0,
         };
@@ -715,6 +725,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_script_work: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };
@@ -778,6 +789,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_script_work: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
         };
@@ -837,6 +849,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0,
         };

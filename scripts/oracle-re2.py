@@ -71,6 +71,8 @@ FG_STOP = 0x00989ED4
 FG_SCENARIO = 0x0098EB2C
 FG_COMMON = 0x0098EB4C
 FG_ROOM = 0x0098EB6C
+FG_USE = 0x00989ED8  # `fg_use`: the key items the areas under the player want, four words
+SCD_VARIABLES = 0x0098EAE4  # `scd_variables`: the scripts' variables, 0 the forward area, 1 the body area, 2 the used item
 STAGE = 0x0098EB14
 ROOM = 0x0098EB16
 CUT = 0x0098EB18
@@ -1028,6 +1030,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
     fields.append(objects_trace(game))
+    fields.append(f"fguse={game.read(FG_USE, 16).hex()}")
+    fields.append("scv=" + ",".join(f"{game.u16(SCD_VARIABLES + 2 * n):04x}" for n in range(4)))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:

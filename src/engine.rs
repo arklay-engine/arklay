@@ -649,6 +649,7 @@ pub fn run_with_options(
                         re2_computer: None,
                         re2_hikidashi: None,
                         re2_objects: None,
+                        re2_script_work: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -3123,6 +3124,7 @@ impl GameSession {
             self.menu_request = None;
         }
         self.finish_menu_request(pack);
+        self.re2_status_open_areas();
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
@@ -4922,6 +4924,35 @@ impl GameSession {
         self.arm_menu_open_fade();
         if self.game.is_re2_room {
             self.re2_status_open = Some(1);
+        }
+    }
+
+    /// `Game_loop`'s modes 1 and 2 of START's open, on the ticks before the
+    /// fade is done (the ones that still show the room): the scheduler is
+    /// off, but `def_4BFB36` still runs `Sce_at`, so the key item an area
+    /// wants is in `fg_use` again when the status's USE looks.
+    fn re2_status_open_areas(&mut self) {
+        if !self.game.is_re2_room
+            || self.game.re2_box.is_some()
+            || !matches!(
+                self.re2_status_open.map(re2_status_open_view),
+                Some(Re2StatusView::Room(_))
+            )
+            || self.game.entities[0].health < 0
+        {
+            return;
+        }
+        self.game
+            .re2_stopped_area_pass(self.player.pos, self.player.angle);
+        for (zone, kind, damage) in std::mem::take(&mut self.game.re2.pending_damage) {
+            crate::player2::sce_damage(
+                &mut self.game.re2.player,
+                &mut self.player,
+                zone,
+                kind,
+                damage,
+                &mut self.game.entities[0].health,
+            );
         }
     }
 
@@ -8021,6 +8052,10 @@ impl GameSession {
                 self.game
                     .re2_objects_trace(self.loaded.room.re2_object_count.into())
             }),
+            re2_script_work: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.script_work_trace()),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -16240,6 +16275,8 @@ fn run_re2_init(
     game.re2.load_pass = true;
     // `Sce_scheduler_set` rolls `Sce_rnd` before the room's first scripts.
     game.re2.sce_rnd_set();
+    // And clears the last room's script work before them (`Sce_work_clr`).
+    game.re2.sce_work_clr();
     let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
@@ -16255,7 +16292,8 @@ fn run_re2_init(
             game.re2.effects.call(5, row, 0x2800, 0, at, false);
         }
     }
-    game.re2.clear_tick_flags();
+    // The load's pass ends as every pass does.
+    game.re2.sce_work_clr();
     game.re2.room_loading = false;
     // An init script's `cut_chg` is part of the room's first `Bg_loadPC`.
     game.re2.bg_load = false;
@@ -16303,8 +16341,10 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         };
         vm.tick(&mut host);
     }
-    context.game.re2.clear_tick_flags();
-    context.game.re2.clear_enemy_areas();
+    // `Sce_scheduler_main` ends every pass in `Sce_work_clr` and
+    // `Sce_work_clr_at`, a script door's pass included.
+    context.game.re2.sce_work_clr();
+    context.game.re2.sce_work_clr_at();
     // And every object in play (`At_sce_no`, member 9).
     for record in &mut context.game.objects.records {
         if record.be_flg & 1 != 0 {
@@ -36483,6 +36523,22 @@ end
         }
         assert!(!game.scene_bars());
         assert_eq!(game.re2.scroll, 0);
+    }
+
+    #[test]
+    fn a_rooms_load_clears_the_script_work_before_its_init() {
+        // `Sce_scheduler_set` runs `Sce_work_clr` before the init scripts.
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { copy(16, 2); evt_end(0); }\nproc main_00 { evt_end(0); }",
+        )
+        .unwrap();
+        let mut vm = crate::scd2::vm::Vm::new(&scripts);
+        let mut game = game::GameState::default();
+        game.re2.vars[2] = 5;
+        game.re2.set_flag(10, 71, 1);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        assert_eq!(game.re2.vars[16], 0xFFFF);
+        assert!(!game.re2.flag(10, 71));
     }
 
     #[test]
