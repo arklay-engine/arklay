@@ -1,4 +1,4 @@
-# A file taken in a room goes into the file list (St_get_file, oracle/re2.md, "Picking up a file"). The player stands at the file's area, facing it; the enemies are off. The frames are reported, not judged, until the file page's draw is ported.
+# A file taken in a room goes into the file list (St_get_file, oracle/re2.md, "Picking up a file"). The player stands at the file's area, facing it; the enemies are off. The frames are judged at each run's measured mean plus 0.1: the room, the picture's fade, the page (`St_disp_file2`) and the black under message 10. `file_pickup_115`'s frames end before the medal's get-item window (its routine 1 at 797).
 
 [[run]]
 name = "file_pickup_201"
@@ -10,6 +10,7 @@ input_drop_early = true
 ticks = 800
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
 frames = [360, 799]
+frame_max_mean = 0.41
 expect = "match"
 record = "--no-enemies --warp 201:-19000:0:-24850:1024 --life 200 --file 0:0"
 
@@ -23,6 +24,7 @@ input_drop_early = true
 ticks = 700
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
 frames = [360, 699]
+frame_max_mean = 0.36
 expect = "match"
 record = "--no-enemies --warp 206:-17200:0:-9100:3072 --life 200"
 
@@ -36,6 +38,7 @@ input_drop_early = true
 ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
 frames = [360, 899]
+frame_max_mean = 0.35
 expect = "match"
 record = "--no-enemies --warp 208:-19000:0:-19400:0 --life 200"
 
@@ -48,6 +51,7 @@ input_shift = 344
 input_drop_early = true
 ticks = 1000
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk"
-frames = [360, 999]
+frames = [360, 789]
+frame_max_mean = 0.31
 expect = "match"
 record = "--no-enemies --warp 115:-20000:0:-18100:3072 --life 200"

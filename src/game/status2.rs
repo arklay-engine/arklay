@@ -695,6 +695,7 @@ fn reader(
                 // The load tick: the file's three first chunks, the next
                 // page sliding in from the right, the background black.
                 work.x = PAGE_X_NEXT;
+                work.shown_page = work.page;
                 page.sub = FILE_NEXT_IN;
                 page.command = 0;
                 out.sounds.push(Sound::Page);
@@ -766,6 +767,7 @@ fn reader(
                 // The next page's chunk loads as the old one leaves.
                 if page.sub == FILE_NEXT_OUT {
                     work.x = PAGE_X_NEXT;
+                    work.shown_page = work.page;
                     page.sub = FILE_NEXT_IN;
                 } else {
                     page.sub = FILE_PAGE;
@@ -779,6 +781,7 @@ fn reader(
             if page.command > 10 {
                 if page.sub == FILE_PREV_OUT {
                     work.x = PAGE_X_PREV;
+                    work.shown_page = work.page;
                     page.sub = FILE_PREV_IN;
                 } else {
                     page.sub = FILE_PAGE;

@@ -11,6 +11,33 @@ use crate::item_catalog::ItemKind;
 
 use super::Api;
 
+/// A file page's sprites (`files::page_draw`) as a sequence of tables:
+/// `chunk` (of the file) or `sheet` (from texture 0x12), `u`, `v`, `w`, `h`,
+/// `x`, `y` and `colour`.
+fn page_sprites(
+    lua: &mlua::Lua,
+    sprites: &[crate::game::status2::files::PageSprite],
+) -> mlua::Result<mlua::Table> {
+    use crate::game::status2::files::PageTexture;
+    let list = lua.create_table()?;
+    for (index, sprite) in sprites.iter().enumerate() {
+        let entry = lua.create_table()?;
+        match sprite.texture {
+            PageTexture::Chunk(chunk) => entry.set("chunk", chunk)?,
+            PageTexture::Sheet(sheet) => entry.set("sheet", sheet)?,
+        }
+        entry.set("u", sprite.u)?;
+        entry.set("v", sprite.v)?;
+        entry.set("w", sprite.w)?;
+        entry.set("h", sprite.h)?;
+        entry.set("x", sprite.x)?;
+        entry.set("y", sprite.y)?;
+        entry.set("colour", sprite.colour)?;
+        list.set(index + 1, entry)?;
+    }
+    Ok(list)
+}
+
 pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     // ---- queries -------------------------------------------------------
     // `player_health()`: the player's health, maximum health and status
@@ -63,8 +90,9 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     // `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`, whether
     // the player is `poisoned`, the screen's shared `blink` and
     // `blink_falling`, FILE's `binder`, `slot`, `page_index`, `zoom`,
-    // `view_zoom`, `spin`, `file_x` and the 24 `files` held, 0xFF for
-    // none), or nil when it isn't up. The engine runs it; the script only
+    // `view_zoom`, `spin`, `file_x`, the `shown_page`, the 24 `files` held,
+    // 0xFF for none, the `file` in the binder's slot and, in the reader's
+    // subs 0xD to 0x12, the `file_page`'s sprites), or nil when it isn't up. The engine runs it; the script only
     // draws it.
     methods.add_method("re2_items", |lua, api, ()| {
         let Some((page, poisoned, work, held)) = api.game().and_then(|game| {
@@ -103,27 +131,68 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("view_zoom", work.view_zoom)?;
         table.set("spin", work.spin)?;
         table.set("file_x", work.x)?;
+        table.set("shown_page", work.shown_page)?;
         table.set("files", lua.create_sequence_from(held)?)?;
+        let file = crate::game::status2::files::file_at(&held, work.binder, work.slot);
+        table.set("file", file)?;
+        if page.page == crate::game::status2::PAGE_FILE
+            && (crate::game::status2::FILE_PAGE..=crate::game::status2::FILE_PREV_IN)
+                .contains(&page.sub)
+        {
+            let sprites = crate::game::status2::files::page_draw(
+                &work,
+                file,
+                crate::game::status2::files::PageLit::reader(page.sub),
+            );
+            table.set("file_page", page_sprites(lua, &sprites)?)?;
+        }
         Ok(mlua::Value::Table(table))
     });
 
     // `re2_item_get()`: RE2's get-item window while it is up: its `item`
     // and, on the ticks it flies to its slot, the picture's `fly` (`x`, `y`,
-    // `w`, `h`, from the window's origin) and whether the player is
-    // `poisoned`; nil when it isn't up.
+    // `w`, `h`, from the window's origin), whether the player is
+    // `poisoned`, its `phase`, and for a file `St_get_file`'s `sub`, the
+    // `file` and, while the page draws, the `file_page`'s sprites; nil when
+    // it isn't up.
     methods.add_method("re2_item_get", |lua, api, ()| {
-        let Some((get, fly, poisoned)) = api.game().and_then(|game| {
+        let Some((get, fly, poisoned, file, file_page)) = api.game().and_then(|game| {
             Some((
                 game.re2_item_get?,
                 game.re2_item_get_fly(),
                 game.re2.player.poisoned,
+                game.re2_item_get_file(),
+                game.re2_item_get_page(),
             ))
         }) else {
             return Ok(mlua::Value::Nil);
         };
+        use crate::game::Re2ItemGetPhase as Phase;
         let table = lua.create_table()?;
         table.set("item", get.action.params[0])?;
         table.set("poisoned", poisoned)?;
+        table.set(
+            "phase",
+            match get.phase {
+                Phase::Open => "open",
+                Phase::Ask => "ask",
+                Phase::Fly => "fly",
+                Phase::Refuse => "refuse",
+                Phase::Shown => "shown",
+                Phase::Close => "close",
+                Phase::FileFade => "file_fade",
+                Phase::FileRead => "file_read",
+            },
+        )?;
+        if let Some(page) = get.file {
+            table.set("sub", page.sub())?;
+        }
+        if let Some(file) = file {
+            table.set("file", file)?;
+        }
+        if let Some(sprites) = file_page {
+            table.set("file_page", page_sprites(lua, &sprites)?)?;
+        }
         if let Some(fly) = fly {
             let entry = lua.create_table()?;
             entry.set("x", fly.x)?;

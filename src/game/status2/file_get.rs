@@ -45,6 +45,9 @@ pub enum Step {
 pub struct FileGet {
     sub: u8,
     count: u8,
+    /// The sub the last tick started in: `St_disp_file2` draws the page on
+    /// every tick but one that starts in sub 6.
+    ran: u8,
 }
 
 /// `St_init02`'s file case (steps 1, 2 and 4): the first free byte of
@@ -69,10 +72,12 @@ pub fn open(work: &mut FileWork, files: &mut [u8; FILE_SLOTS], file: u8) -> File
     work.binder = (slot / 8) as u8;
     work.slot = (slot % 8) as i8;
     work.page = 0;
+    work.shown_page = 0;
     work.x = PAGE_X_NEXT;
     FileGet {
         sub: NEXT_IN,
         count: 0,
+        ran: NEXT_IN,
     }
 }
 
@@ -88,6 +93,21 @@ impl FileGet {
         self.sub == CLOSE
     }
 
+    /// The page's draw this tick (`St_disp_file2`, `0x4FDAC0`, which every
+    /// path of `St_get_file` ends in), by the sub the tick left: none on a
+    /// tick that started in sub 6, which returns first, so the tick that
+    /// enters sub 6 still draws the page.
+    pub fn page_draw(
+        &self,
+        work: &FileWork,
+        held: &[u8; FILE_SLOTS],
+    ) -> Option<Vec<files::PageSprite>> {
+        (self.ran != CLOSE).then(|| {
+            let file = files::file_at(held, work.binder, work.slot);
+            files::page_draw(work, file, files::PageLit::pickup(self.sub))
+        })
+    }
+
     /// One tick of `St_get_file`. `held` is `File_tag_bk`, `message_open`
     /// whether message 10 is still up (`fg_message` bit 7).
     pub fn tick(
@@ -99,6 +119,7 @@ impl FileGet {
         sounds: &mut Vec<Sound>,
     ) -> Step {
         let file = files::file_at(held, work.binder, work.slot);
+        self.ran = self.sub;
         match self.sub {
             PAGE => {
                 // MAP's marker bounds, not the reader's.
@@ -160,6 +181,7 @@ impl FileGet {
                     // The next page's chunk loads as the old one leaves.
                     if self.sub == NEXT_OUT {
                         work.x = PAGE_X_NEXT;
+                        work.shown_page = work.page;
                         self.sub = NEXT_IN;
                     } else {
                         self.sub = PAGE;
@@ -182,6 +204,7 @@ impl FileGet {
                 } else {
                     if self.sub == PREV_OUT {
                         work.x = PAGE_X_PREV;
+                        work.shown_page = work.page;
                         self.sub = PREV_IN;
                     } else {
                         self.sub = PAGE;
@@ -416,5 +439,77 @@ mod tests {
             get.tick(&mut work, &files, Input::default(), false, &mut sounds),
             Step::Done
         );
+    }
+
+    #[test]
+    fn a_turn_shows_the_old_page_until_its_slide_out_ends() {
+        let (mut get, mut work, files) = reading();
+        assert_eq!(work.shown_page, 0);
+        tick(&mut get, &mut work, &files, RIGHT);
+        assert_eq!((work.page, work.shown_page), (1, 0));
+        for _ in 0..11 {
+            tick(&mut get, &mut work, &files, Input::default());
+            assert_eq!(work.shown_page, 0);
+        }
+        tick(&mut get, &mut work, &files, Input::default());
+        assert_eq!((get.sub(), work.shown_page), (NEXT_IN, 1));
+        settle(&mut get, &mut work, &files);
+        tick(&mut get, &mut work, &files, LEFT);
+        assert_eq!((work.page, work.shown_page), (0, 1));
+        for _ in 0..12 {
+            tick(&mut get, &mut work, &files, Input::default());
+        }
+        assert_eq!((get.sub(), work.shown_page), (PREV_IN, 0));
+    }
+
+    fn textures(sprites: &[files::PageSprite]) -> Vec<files::PageTexture> {
+        sprites.iter().map(|sprite| sprite.texture).collect()
+    }
+
+    #[test]
+    fn the_pick_up_draws_its_page_until_a_tick_starts_in_sub_6() {
+        use files::PageTexture::{Chunk, Sheet};
+        let (mut get, mut work, files) = reading();
+        // Sub 0 on page 0: the right arrow, no left arrow.
+        let sprites = get.page_draw(&work, &files).unwrap();
+        assert_eq!(
+            textures(&sprites),
+            [Chunk(1), Chunk(2), Sheet(files::SHEET_ARROWS)]
+        );
+        // The last page in sub 0: the marker, dim; in sub 1, lit.
+        work.page = 2;
+        work.shown_page = 2;
+        let sprites = get.page_draw(&work, &files).unwrap();
+        assert_eq!(sprites[2].texture, Sheet(files::SHEET_MARKER));
+        assert_eq!(sprites[2].colour, 0x30);
+        assert_eq!(sprites[3].x, 12);
+        tick(&mut get, &mut work, &files, RIGHT);
+        assert_eq!(get.sub(), END);
+        let sprites = get.page_draw(&work, &files).unwrap();
+        assert_eq!(
+            textures(&sprites),
+            [Chunk(1), Chunk(4), Sheet(files::SHEET_MARKER)]
+        );
+        assert_eq!(sprites[2].colour, 0x80);
+        // The decide that enters sub 6 still draws the page, with no marker.
+        tick(&mut get, &mut work, &files, DECIDE);
+        assert!(get.closing());
+        let sprites = get.page_draw(&work, &files).unwrap();
+        assert_eq!(textures(&sprites), [Chunk(1), Chunk(4)]);
+        // The next tick starts in sub 6 and draws nothing.
+        let mut sounds = Vec::new();
+        get.tick(&mut work, &files, Input::default(), true, &mut sounds);
+        assert_eq!(get.page_draw(&work, &files), None);
+    }
+
+    #[test]
+    fn the_pick_ups_page_waits_off_screen_while_it_fades_in() {
+        let mut files = empty();
+        let mut work = FileWork::default();
+        open(&mut work, &mut files, 3);
+        let file = files::file_at(&files, work.binder, work.slot);
+        let sprites = files::page_draw(&work, file, files::PageLit::reader(0));
+        assert_eq!(sprites.len(), 2);
+        assert_eq!((sprites[1].x, sprites[1].y), (312, 30));
     }
 }

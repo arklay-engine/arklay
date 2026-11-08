@@ -9008,6 +9008,37 @@ impl GameState {
         (get.phase == Re2ItemGetPhase::Fly && get.ticks < item_get2::FLY_TICKS).then_some(get.fly)
     }
 
+    /// The file page a file's get-item window draws this tick, while it is
+    /// in its file phases: `St_init02`'s fade draws the page through
+    /// `St_disp_file` with the window's sub 0, so with no arrows, and
+    /// `St_get_file` through `St_disp_file2`.
+    pub fn re2_item_get_page(&self) -> Option<Vec<status2::files::PageSprite>> {
+        let get = self.re2_item_get?;
+        let page = get.file?;
+        match get.phase {
+            Re2ItemGetPhase::FileFade => {
+                let file = self.re2_item_get_file()?;
+                Some(status2::files::page_draw(
+                    &self.re2_file,
+                    file,
+                    status2::files::PageLit::reader(0),
+                ))
+            }
+            Re2ItemGetPhase::FileRead => page.page_draw(&self.re2_file, &self.re2.files),
+            _ => None,
+        }
+    }
+
+    /// The file a file's get-item window shows.
+    pub fn re2_item_get_file(&self) -> Option<u8> {
+        self.re2_item_get?.file?;
+        Some(status2::files::file_at(
+            &self.re2.files,
+            self.re2_file.binder,
+            self.re2_file.slot,
+        ))
+    }
+
     /// The slot the picture flies to: the stack it joins, or the first free
     /// slot (`0x502620`).
     fn re2_item_get_fly_slot(&self, slot: Option<crate::scd2::host::ItemGetSlot>) -> usize {

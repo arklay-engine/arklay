@@ -626,3 +626,35 @@ fn status_sheets_split_into_their_tims() {
     assert_eq!(tims, vec![first.as_slice(), second.as_slice()]);
     assert!(split_tims(&sheet[..sheet.len() - 1]).is_err());
 }
+
+#[test]
+fn file_pages_take_only_the_english_files() {
+    assert_eq!(file_number("FILE01U", "BIN").as_deref(), Some("01"));
+    assert_eq!(file_number("FILE0AU", "BIN").as_deref(), Some("0a"));
+    for (stem, ext) in [
+        ("FILE01", "BIN"),
+        ("FILE01D", "BIN"),
+        ("FILE01F", "BIN"),
+        ("FILE01U", "ADT"),
+        ("FILE1U", "BIN"),
+        ("MAP01", "ADT"),
+    ] {
+        assert_eq!(file_number(stem, ext), None, "{stem}.{ext}");
+    }
+}
+
+#[test]
+fn file_chunks_follow_the_offset_table() {
+    // Three chunks of 3, 2 and 4 bytes: offsets 0, 3, 5 and the end, 9.
+    let mut data = vec![0u8; 0x80];
+    for (index, offset) in [0u32, 3, 5, 9].into_iter().enumerate() {
+        data[index * 4..index * 4 + 4].copy_from_slice(&offset.to_le_bytes());
+    }
+    data.extend([1, 1, 1, 2, 2, 3, 3, 3, 3]);
+    let chunks = file_chunks(&data).unwrap();
+    assert_eq!(chunks, [&[1u8, 1, 1][..], &[2, 2], &[3, 3, 3, 3]]);
+    // An offset past the end is an error, as is a short header.
+    data.truncate(0x80 + 8);
+    assert!(file_chunks(&data).is_err());
+    assert!(file_chunks(&[0; 0x10]).is_err());
+}

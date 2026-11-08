@@ -1955,6 +1955,9 @@ enum Re2StatusView {
     Black,
     /// The status screen, darkened by the fade's alpha.
     Screen(Option<u8>),
+    /// A file's page on black (the get-item window's file phases), darkened
+    /// by the open's alpha: no item screen behind it.
+    File(Option<u8>),
 }
 
 /// RE2's status screen's open, by tick since START (1 the tick it opens,
@@ -2000,11 +2003,16 @@ fn re2_status_return_alpha(ticks: u8) -> Option<u8> {
 ///
 /// A file's window (`file`) draws no item screen at all: `St_init02`'s file
 /// case sets `0x691F79`, which `St_main02` tests before drawing the screen
-/// behind, so its open fade and its close (routine 0, `St_fade_out_set`, and
-/// 1) have only black to fade.
+/// behind, so its close (routine 0, `St_fade_out_set`, and 1) has only black
+/// to fade. Its open draws the file's page over black (`St_init02`'s sub 3,
+/// then `St_get_file`) through the screen's fade in, so the picture fades in
+/// on the status screen's ticks.
 fn re2_item_get_view(opened: u8, closing: Option<u8>, file: bool) -> Re2StatusView {
     if file {
-        return Re2StatusView::Black;
+        return match (closing, re2_status_open_view(opened)) {
+            (None, Re2StatusView::Screen(alpha)) => Re2StatusView::File(alpha),
+            _ => Re2StatusView::Black,
+        };
     }
     match closing {
         Some(ticks) => re2_status_close_view(ticks),
@@ -5142,9 +5150,8 @@ impl GameSession {
             return None;
         }
         let get = self.game.re2_item_get?;
-        // A file's pages aren't drawn yet (the reader's draw waits for
-        // #518): the black behind them, with no item screen (`0x691F79`),
-        // through its close too.
+        // A file's page draws on black, with no item screen (`0x691F79`),
+        // and its close fades only black.
         let closing = (get.phase == game::Re2ItemGetPhase::Close).then_some(get.ticks);
         Some(re2_item_get_view(
             self.re2_item_ticks,
@@ -8237,7 +8244,7 @@ impl GameSession {
         let re2_item = self.re2_item_get_view();
         let re2_status = self.re2_status_view().or(re2_item);
         let fade_hides_room = match re2_status {
-            Some(view) => view == Re2StatusView::Black,
+            Some(view) => matches!(view, Re2StatusView::Black | Re2StatusView::File(_)),
             None => {
                 self.menu.is_some()
                     && self.menu_fade_hides()
@@ -8401,7 +8408,10 @@ impl GameSession {
             }
         }
         // RE2's get-item window's art, under its message.
-        if matches!(re2_item, Some(Re2StatusView::Screen(_))) {
+        if matches!(
+            re2_item,
+            Some(Re2StatusView::Screen(_) | Re2StatusView::File(_))
+        ) {
             let Self {
                 re2_item_screen,
                 save_dir,
@@ -8590,7 +8600,10 @@ impl GameSession {
         if let Some(view) = re2_status {
             // RE2's status screen fades on its own ticks, not RE 1's.
             self.menu_fade_draw = None;
-            if let Re2StatusView::Room(Some(alpha)) | Re2StatusView::Screen(Some(alpha)) = view {
+            if let Re2StatusView::Room(Some(alpha))
+            | Re2StatusView::Screen(Some(alpha))
+            | Re2StatusView::File(Some(alpha)) = view
+            {
                 self.framebuffer
                     .fade_to_color(crate::transition::FadeColor::Black, alpha);
             }
@@ -36458,13 +36471,34 @@ end
 
     #[test]
     fn a_files_window_draws_black_through_its_close() {
-        use Re2StatusView::Black;
+        use Re2StatusView::{Black, File};
         // `0x691F79` is set, so `St_main02` draws no item screen behind the
         // routines 0 and 1 fade (`file_pickup_206`'s frames).
         for ticks in 0..=9 {
             assert_eq!(re2_item_get_view(u8::MAX, Some(ticks), true), Black);
         }
-        assert_eq!(re2_item_get_view(u8::MAX, None, true), Black);
+        assert_eq!(re2_item_get_view(u8::MAX, None, true), File(None));
+    }
+
+    #[test]
+    fn a_files_picture_fades_in_on_the_screens_ticks() {
+        use Re2StatusView::{Black, File};
+        // `file_pickup_201`'s frames 356 to 361 (the window's ticks 6 to 11):
+        // black, then the picture at 0.37, 0.56, 0.75 and 0.94 of its level.
+        let open: Vec<_> = (6..=11)
+            .map(|ticks| re2_item_get_view(ticks, None, true))
+            .collect();
+        assert_eq!(
+            open,
+            [
+                Black,
+                File(Some(160)),
+                File(Some(112)),
+                File(Some(64)),
+                File(Some(16)),
+                File(None),
+            ]
+        );
     }
 
     #[test]

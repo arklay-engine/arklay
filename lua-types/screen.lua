@@ -1190,13 +1190,33 @@ local ScreenLightSource = {}
 ---@field panel_cure integer
 ---@field panel_done boolean
 ---@field poisoned boolean Whether the player is poisoned.
+---@field file integer The file in FILE's binder and slot, 0xFF for none.
+---@field shown_page integer The page whose picture the reader's page texture holds: a turn changes it on its slide out's last tick.
+---@field file_page? Re2FilePageSprite[] In the reader's subs 0xD to 0x12: the page's sprites in paint order, by the sub the tick left.
 local Re2Items = {}
+
+---One sprite of a file page's draw, at 320 x 240.
+---@class Re2FilePageSprite
+---@field chunk? integer The file's chunk (`ui/status/file<nn>_<k>`): 1 the picture, `2 + page` a page.
+---@field sheet? integer The status sheet (`st<n>_jp_<k>`), counted from texture 0x12.
+---@field u integer
+---@field v integer
+---@field w integer
+---@field h integer
+---@field x integer
+---@field y integer
+---@field colour integer `0x80` draws the texels as they are; less dims them by `colour / 0x80`.
+local Re2FilePageSprite = {}
 
 ---RE 2's get-item window, from [`api:re2_item_get`](#ScreenApi.re2_item_get).
 ---@class Re2ItemGet
 ---@field item integer
 ---@field poisoned boolean
 ---@field fly? { x: integer, y: integer, w: integer, h: integer } On the ticks the picture flies to its slot: its rectangle, from the window's origin.
+---@field phase "open"|"ask"|"fly"|"refuse"|"shown"|"close"|"file_fade"|"file_read"
+---@field sub? integer A file's `St_get_file` sub, once it is filed.
+---@field file? integer A file's number, once it is filed.
+---@field file_page? Re2FilePageSprite[] In a file's phases, on the ticks the page draws: its sprites in paint order.
 local Re2ItemGet = {}
 
 ---RE 2's item box page, from [`api:re2_box`](#ScreenApi.re2_box).
