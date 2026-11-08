@@ -2260,7 +2260,11 @@ pub(crate) fn life_down(
     }
     if difficulty.hard {
         if down < 0x3C {
-            down += if difficulty.uncensored { down / 2 } else { down / 4 };
+            down += if difficulty.uncensored {
+                down / 2
+            } else {
+                down / 4
+            };
         }
         if life >= 0x32 && down > i32::from(life) {
             down = i32::from(life);
@@ -2391,24 +2395,48 @@ mod tests {
 
     #[test]
     fn a_bite_takes_half_again_from_a_healthy_player() {
-        assert_eq!(life_down(200, 20, false, false, Difficulty::default()), (170, false, 0));
-        assert_eq!(life_down(120, 20, false, false, Difficulty::default()), (100, false, 0));
+        assert_eq!(
+            life_down(200, 20, false, false, Difficulty::default()),
+            (170, false, 0)
+        );
+        assert_eq!(
+            life_down(120, 20, false, false, Difficulty::default()),
+            (100, false, 0)
+        );
     }
 
     #[test]
     fn the_first_lethal_bite_leaves_the_player_at_nothing() {
-        assert_eq!(life_down(10, 20, false, false, Difficulty::default()), (0, true, 1));
+        assert_eq!(
+            life_down(10, 20, false, false, Difficulty::default()),
+            (0, true, 1)
+        );
     }
 
     #[test]
     fn a_bite_kills_once_the_player_is_near_death_or_it_goes_deep() {
-        assert_eq!(life_down(0, 20, false, true, Difficulty::default()), (-20, true, 2));
-        assert_eq!(life_down(10, 30, false, false, Difficulty::default()), (-20, false, 2));
+        assert_eq!(
+            life_down(0, 20, false, true, Difficulty::default()),
+            (-20, true, 2)
+        );
+        assert_eq!(
+            life_down(10, 30, false, false, Difficulty::default()),
+            (-20, false, 2)
+        );
     }
 
-    const HARD: Difficulty = Difficulty { hard: true, uncensored: false };
-    const ARRANGE: Difficulty = Difficulty { hard: false, uncensored: true };
-    const ARRANGE_HARD: Difficulty = Difficulty { hard: true, uncensored: true };
+    const HARD: Difficulty = Difficulty {
+        hard: true,
+        uncensored: false,
+    };
+    const ARRANGE: Difficulty = Difficulty {
+        hard: false,
+        uncensored: true,
+    };
+    const ARRANGE_HARD: Difficulty = Difficulty {
+        hard: true,
+        uncensored: true,
+    };
 
     #[test]
     fn hard_mode_adds_a_quarter_to_a_bite_under_60() {
@@ -2429,13 +2457,22 @@ mod tests {
     fn arrange_mode_adds_half_to_a_bite_of_40_or_less_at_any_life() {
         assert_eq!(life_down(100, 20, false, false, ARRANGE), (70, false, 0));
         assert_eq!(life_down(100, 41, false, false, ARRANGE), (59, false, 0));
-        assert_eq!(life_down(100, 20, false, false, ARRANGE_HARD), (55, false, 0));
-        assert_eq!(life_down(100, 41, false, false, ARRANGE_HARD), (39, false, 0));
+        assert_eq!(
+            life_down(100, 20, false, false, ARRANGE_HARD),
+            (55, false, 0)
+        );
+        assert_eq!(
+            life_down(100, 41, false, false, ARRANGE_HARD),
+            (39, false, 0)
+        );
     }
 
     #[test]
     fn a_crawlers_bite_never_kills() {
-        assert_eq!(life_down(0, 30, true, true, Difficulty::default()), (0, true, 1));
+        assert_eq!(
+            life_down(0, 30, true, true, Difficulty::default()),
+            (0, true, 1)
+        );
     }
 
     #[test]

@@ -2383,7 +2383,10 @@ mod tests {
     fn a_hit_in_hard_mode_takes_a_quarter_more() {
         let mut target = Target {
             life: 100,
-            difficulty: crate::zombie2::Difficulty { hard: true, uncensored: false },
+            difficulty: crate::zombie2::Difficulty {
+                hard: true,
+                uncensored: false,
+            },
             ..player_at(0)
         };
         assert!(target.hit([0, 0, 0], 800, 20));

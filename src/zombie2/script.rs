@@ -2469,7 +2469,10 @@ mod tests {
     #[test]
     fn a_hard_zombie_has_five_times_the_life_and_the_quick_step() {
         assert_eq!(zombie_init("", &[]), (85, 0, 0x10, 5));
-        assert_eq!(zombie_init("HARD = true", &[0, 0, 0, 0, 0, 3]), (425, 0x8000, 0x23, 6));
+        assert_eq!(
+            zombie_init("HARD = true", &[0, 0, 0, 0, 0, 3]),
+            (425, 0x8000, 0x23, 6)
+        );
         assert_eq!(zombie_init("HARD, ROOM = true, 0x610", &[]).0, 255);
         assert_eq!(zombie_init("HARD, V = true, { life = 0xFA }", &[]).0, 1250);
         // A crawler halves what HARD gave it, and kind 5 still ends dead.
@@ -2480,7 +2483,10 @@ mod tests {
     #[test]
     fn arrange_mode_gives_one_zombie_in_three_the_quick_step() {
         // The roll's two draws, shifted 0: 1 isn't a multiple of 3.
-        assert_eq!(zombie_init("ARRANGE = true", &[0, 0, 0, 0, 0, 0, 1]), (85, 0, 0x10, 7));
+        assert_eq!(
+            zombie_init("ARRANGE = true", &[0, 0, 0, 0, 0, 0, 1]),
+            (85, 0, 0x10, 7)
+        );
         assert_eq!(
             zombie_init("ARRANGE = true", &[0, 0, 0, 0, 0, 0, 3, 5]),
             (85, 0x8000, 0x25, 8)

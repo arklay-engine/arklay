@@ -1506,7 +1506,9 @@ pub(crate) struct Mover<'a, 'b> {
 }
 
 /// `Pad_set`'s word, whose bits are each a column of the table it maps the
-/// pad with.
+/// pad with. The table's row 0 (`0x5338D8`) gives the one button for the
+/// action, the shot and the confirm (raw `0x80`) all three bits, so a press
+/// of the action key also raises `KEY_FIRE`, which `Gacha_ch` counts.
 pub fn key_word(input: &Input) -> u16 {
     let bit = |set: bool, value: u16| if set { value } else { 0 };
     let action = input.action_held || input.action_pressed;
@@ -1515,10 +1517,8 @@ pub fn key_word(input: &Input) -> u16 {
         | bit(input.down, KEY_BACKWARD | KEY_TILT_DOWN)
         | bit(input.left, KEY_LEFT | KEY_SIDE_LEFT)
         | bit(input.run, KEY_RUN | KEY_CANCEL)
-        | bit(action || input.fire, KEY_CONFIRM)
+        | bit(action || input.fire, KEY_CONFIRM | KEY_FIRE | KEY_ACTION)
         | bit(input.aim, KEY_AIM)
-        | bit(input.fire, KEY_FIRE)
-        | bit(action, KEY_ACTION)
 }
 
 impl<'a, 'b> Mover<'a, 'b> {
@@ -7392,8 +7392,29 @@ mod tests {
     }
 
     #[test]
+    fn the_action_key_raises_the_shot_bit_too() {
+        // `Pad_set`'s row 0 gives raw `0x80` the shot, the action and the
+        // confirm, so `Gacha_ch`'s mask sees an action press.
+        let input = Input {
+            action_pressed: true,
+            ..Input::default()
+        };
+        let key = key_word(&input);
+        assert_eq!(
+            key & (KEY_FIRE | KEY_ACTION | KEY_CONFIRM),
+            KEY_FIRE | KEY_ACTION | KEY_CONFIRM
+        );
+        assert_ne!(key & 0x34F, 0);
+    }
+
+    #[test]
     fn only_the_pads_branches_take_the_check_key() {
-        let at = |routine: [u8; 4]| takes_check_key(&Work { routine, ..Work::default() });
+        let at = |routine: [u8; 4]| {
+            takes_check_key(&Work {
+                routine,
+                ..Work::default()
+            })
+        };
         assert!(at([MODE_MOVE, MOVE_IDLE, 0, 0]));
         assert!(at([MODE_MOVE, MOVE_ROTATE, 0, 0]));
         assert!(!at([MODE_MOVE, MOVE_AIM, 0, 0]));

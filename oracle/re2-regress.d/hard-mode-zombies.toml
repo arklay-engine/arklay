@@ -32,7 +32,8 @@ name = "run_119_hard"
 difficulty = "hard"
 room = "118"
 sound = false
-ticks = 3000
+# recorded for 3000 ticks; the player dies in a zombie's hands and the game over's title is on screen from 2018
+ticks = 2018
 input = "run_119.txt"
 input_shift = 344
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,zm0,zm1,zm2,zm3,zm4,zm5"
