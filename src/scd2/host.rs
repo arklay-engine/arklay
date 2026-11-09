@@ -2286,6 +2286,8 @@ impl GameHost<'_> {
         };
         record.set_super_parent(parent);
         record.set_ofs();
+        let player = (self.game.entities[0].pos, self.game.entities[0].angle);
+        self.game.compose_object_world(slot, player);
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -2522,15 +2524,14 @@ impl Host for GameHost<'_> {
                     object.rotation = [at(6) as i16, at(7) as i16, at(8) as i16];
                 }
             }
-            // `Super_reset` (`0x4E5E30`): back on the identity matrix with the
-            // rotation from its operands. The original also copies `+0x68`
-            // (the world position `Om_trans` last composed, which `Super_on`
-            // would use) into the position; nothing here composes it, so the
-            // position stays as it was, and the scripts' `pos_set` that
-            // follows places the object.
+            // `Super_reset` (`0x4E5E30`): back on the identity matrix, at the
+            // world position `Obj_model_set` or `Om_trans` last composed
+            // (`+0x68..+0x70`), with the rotation from its operands. Five of
+            // the scripts move the object on from there with `add_speed`.
             "super_reset" if self.task_object(task).is_some() => {
                 if let Some(object) = self.task_object(task) {
                     object.set_super_parent(crate::objects::SuperParent::World);
+                    object.pos = object.world.t;
                     object.rotation = [at(1), at(2), at(3)].map(|v| v as i16);
                 }
             }
@@ -3601,24 +3602,76 @@ mod tests {
         assert!(on_plate_3(&mut game));
     }
 
+    /// Room 205's `main_00` hangs object 3 on object 2 (`obj_model_set`
+    /// selector 0xC2, 1000 below it), and `main_07` gives it back to the
+    /// world with `super_reset` and lets it fall with `add_speed`, with no
+    /// `pos_set` between: the fall starts where the object was drawn.
     #[test]
-    fn super_reset_gives_the_object_back_to_the_world() {
+    fn super_reset_leaves_the_object_where_it_was_drawn() {
         use crate::objects::SuperParent;
         let mut game = GameState::default();
-        game.objects = crate::objects::ObjectTable::new(5);
-        exec(&mut game, "work_set", &[WK_OBJECT, 4]);
-        // Hung on a work's joint (room 702's `main_12`): not drawn.
-        exec(&mut game, "super_set", &[0, 129, 138, 0, 220, 10, 0, 0, 0]);
-        assert!(game.objects.record(4).unwrap().hangs_on_a_character());
-        // `super_reset`, then the script's `pos_set`.
-        exec(&mut game, "super_reset", &[0, 5, 6, 7]);
-        exec(&mut game, "pos_set", &[0, -24650, 0, -22000]);
-        let object = game.objects.record(4).unwrap();
+        game.objects = crate::objects::ObjectTable::new(8);
+        let parent = [
+            2, 0, 0, 0, 0, 0, 0, 10, 16, -17300, -3400, -7000, 1024, -256, 1024, 0, 0, 0, 0, 0, 0,
+            0, 0,
+        ];
+        let child = [
+            3, 0, 0, 0, 0, 49664, 0, 10, 16, 0, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        exec(&mut game, "obj_model_set", &parent);
+        exec(&mut game, "obj_model_set", &child);
+        game.om_trans_old(([0; 3], 0));
+        let drawn = crate::objects::world_matrix(&game.objects, 3, [0; 3], 0).t;
+        assert_eq!(game.objects.record(3).unwrap().world.t, drawn);
+        assert_ne!(drawn, [0, 1000, 0]);
+
+        exec(&mut game, "work_set", &[WK_OBJECT, 3]);
+        exec(&mut game, "super_reset", &[0, 1024, -256, 1024]);
+        exec(&mut game, "speed_set", &[1, 50]);
+        exec(&mut game, "add_speed", &[]);
+        let object = game.objects.record(3).unwrap();
         assert_eq!(object.super_parent, SuperParent::World);
-        assert!(!object.hangs_on_a_character());
-        assert_eq!(object.rotation, [5, 6, 7]);
-        assert_eq!(object.pos, [-24650, 0, -22000]);
         assert_eq!(object.parent, 0xFF);
+        assert_eq!(object.rotation, [1024, -256, 1024]);
+        assert_eq!(object.pos, [drawn[0], drawn[1] + 50, drawn[2]]);
+    }
+
+    /// Hung on the player's joint with `super_set` (mode 0x40, joint 0x8A),
+    /// an object is drawn on that joint's matrix, and `super_reset` puts it
+    /// down there; an `Id` 2 box keeps `Om_trans`' 900 lift.
+    #[test]
+    fn super_reset_takes_the_position_om_trans_composed_on_a_joint() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let mut joints = vec![crate::anim::Mat4x3::default(); 15];
+        joints[10] = crate::anim::entity_matrix([1000, -900, 2000], 1024);
+        game.joint_worlds[0] = joints;
+        for (id, lift) in [(0, 0), (2, 900)] {
+            let call = [
+                4, id, 0, 0, 0, 0, 0, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
+            // A second `obj_model_set` on a slot in play clears it.
+            game.objects.record_mut(4).unwrap().be_flg = 0;
+            exec(&mut game, "obj_model_set", &call);
+            exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+            exec(&mut game, "super_set", &[0, 64, 138, 0, 600, -50, 0, 0, 0]);
+            // Before a frame is drawn, it is where `Obj_model_set` put it.
+            exec(&mut game, "super_reset", &[0, 0, 0, 0]);
+            assert_eq!(game.objects.record(4).unwrap().pos, [0, 0, 0]);
+            exec(&mut game, "super_set", &[0, 64, 138, 0, 600, -50, 0, 0, 0]);
+            game.om_trans_old(([0; 3], 0));
+            exec(&mut game, "super_reset", &[0, 5, 6, 7]);
+            let local = crate::anim::Mat4x3 {
+                r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+                t: [0, 600, -50],
+            };
+            let mut expected = crate::anim::compose(&game.joint_worlds[0][10], &local).t;
+            expected[1] -= lift;
+            let object = game.objects.record(4).unwrap();
+            assert_eq!(object.pos, expected, "id {id}");
+            assert!(!object.hangs_on_a_character());
+            assert_eq!(object.rotation, [5, 6, 7]);
+        }
     }
 
     #[test]

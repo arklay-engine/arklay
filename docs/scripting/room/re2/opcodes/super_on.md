@@ -51,4 +51,4 @@ Illustrative: the instruction's form only; the operands are placeholders.
 
 ## See also
 
-- [`super_set`](super_set.md), [`super_reset`](super_reset.md): its companions, also not modelled.
+- [`super_set`](super_set.md), [`super_reset`](super_reset.md): its companions, which are modelled.

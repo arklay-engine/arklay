@@ -17365,7 +17365,9 @@ fn tick_room_timed(
     context.game.tick_objects(context.room, context.player);
     if context.game.is_re2_room {
         // `Om_trans`, as the frame draws the objects.
-        context.game.om_trans_old();
+        context
+            .game
+            .om_trans_old((context.player.pos, context.player.angle));
         crate::character2::keep_old_boxes(context.game, context.player.pos);
     }
     context.game.apply_stair_state(context.player);

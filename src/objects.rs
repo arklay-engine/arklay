@@ -378,6 +378,11 @@ pub struct ObjectRecord {
     /// RE2's `+0x80`, from `Super_set`: what `pos` and `rotation` are offsets
     /// on.
     pub super_parent: SuperParent,
+    /// RE2's world matrix (`+0x54`, its translation `+0x68..+0x70`): the
+    /// parent's matrix composed with the object's own, which `Obj_model_set`
+    /// writes and `Om_trans` writes again each frame it draws the object.
+    /// `Super_reset` takes the position from it.
+    pub world: Mat4x3,
 }
 
 impl Default for ObjectRecord {
@@ -420,6 +425,7 @@ impl Default for ObjectRecord {
             kind: 0,
             tween: TweenScratch::default(),
             super_parent: SuperParent::World,
+            world: Mat4x3::default(),
         }
     }
 }
@@ -938,6 +944,7 @@ impl ObjectTable {
             kind: 0,
             tween: TweenScratch::default(),
             super_parent: SuperParent::World,
+            world: Mat4x3::default(),
         };
         self.built = self.built.wrapping_add(1);
         self.last_asset = Some(slot as u8);
