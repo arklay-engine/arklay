@@ -1,0 +1,179 @@
+# room 207 from room 205's door 2, as leon_a_205 leaves Leon (60 life, 3 rounds in the handgun, 54 spare): reload from the status screen, shoot the four zombies one at a time (slot 3 from the north, slot 0 from the south, slot 2 from the east twice, and slot 1 down the corridor) with no grab, then run east to door 2 and room 208's load (oracle/re2.md, "Leon A past the card")
+# START, down to the rounds, COMBINE onto the handgun (18 in, 39 left), cancel, cancel, START
+352 start
+356
+388 down
+392
+408 confirm
+412
+428 down
+432
+448 down
+452
+468 confirm
+472
+488 up
+492
+508 confirm
+512
+588 confirm
+592
+600 cancel
+604
+616 cancel
+620
+636 start
+640
+# turn north and step up: slot 3 is the one in sight
+652 left
+674 up
+690
+# four hits kill slot 3 (55)
+692 aim
+700 aim fire
+703 aim
+712 aim fire
+715 aim
+724 aim fire
+727 aim
+736 aim fire
+739 aim
+748 aim fire
+751 aim
+760 aim fire
+763 aim
+772 aim fire
+775 aim
+784 aim fire
+787 aim
+798
+# step back south, where slot 0 is in sight: four hits put it down at 1 life
+800 down
+812
+814 aim
+822 aim fire
+825 aim
+834 aim fire
+837 aim
+846 aim fire
+849 aim
+858 aim fire
+861 aim
+870 aim fire
+873 aim
+882 aim fire
+885 aim
+894 aim fire
+897 aim
+906 aim fire
+909 aim
+915
+# slot 2 from the east: five hits put it down at 39
+940 aim
+948 aim fire
+951 aim
+960 aim fire
+963 aim
+972 aim fire
+975 aim
+984 aim fire
+987 aim
+996 aim fire
+999 aim
+1008 aim fire
+1011 aim
+1020 aim fire
+1023 aim
+1032 aim fire
+1035 aim
+1044 aim fire
+1047 aim
+1056 aim fire
+1059 aim
+1060
+# slot 0 gets up: one hit
+1210 aim
+1218 aim fire
+1221 aim
+1230 aim fire
+1233 aim
+1234
+# slot 2 gets up: four hits, the last as it falls, which keeps it down
+1246 aim
+1254 aim fire
+1257 aim
+1266 aim fire
+1269 aim
+1278 aim fire
+1281 aim
+1290 aim fire
+1293 aim
+1302 aim fire
+1305 aim
+1314 aim fire
+1317 aim
+1326 aim fire
+1329 aim
+1338 aim fire
+1341 aim
+1342
+# fire on empty: the reload takes 18 of the 39
+1344 aim
+1352 aim fire
+1355 aim
+1364 aim fire
+1367 aim
+1395
+# turn north and walk to the corridor's west end, where slot 1 sees Leon and comes
+1407 left
+1414
+1415 up
+1445
+# four hits put slot 1 down at 2; the fifth misses it on the floor
+1447 aim
+1455 aim fire
+1458 aim
+1467 aim fire
+1470 aim
+1479 aim fire
+1482 aim
+1491 aim fire
+1494 aim
+1503 aim fire
+1506 aim
+1515 aim fire
+1518 aim
+1527 aim fire
+1530 aim
+1539 aim fire
+1542 aim
+1551 aim fire
+1554 aim
+1563 aim fire
+1566 aim
+1567
+# slot 1 gets up: two hits kill it
+1680 aim
+1688 aim fire
+1691 aim
+1700 aim fire
+1703 aim
+1712 aim fire
+1715 aim
+1724 aim fire
+1727 aim
+1736 aim fire
+1739 aim
+1748 aim fire
+1751 aim
+1760
+# turn east, run along the corridor to door 2, turn south and open it: room 208 loads on 2006
+1880 right
+1887
+1888 up run
+1945
+1947 right
+1969
+1971 action
+1973
+2099

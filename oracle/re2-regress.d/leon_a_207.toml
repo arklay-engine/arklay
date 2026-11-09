@@ -1,0 +1,21 @@
+# Leon A past the card, room 207 (oracle/re2.md, "Leon A past the card"): from room 205's door 2, as leon_a_205 leaves
+# Leon (60 life, 3 rounds in the handgun, 54 spare), the reload from the status screen, the four zombies shot one at a
+# time with no grab, and the run east to door 2 and room 208's load.
+[[run]]
+name = "leon_a_207"
+room = "207"
+setup_script = "leon_a_207.lua"
+input = "leon_a_207.txt"
+input_shift = 344
+ticks = 2100
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,zm0,zm1,zm2,zm3,zd,fgstat"
+# from the room's return after the status screen; the window judged ends at the door's press. 0.95 measured: the
+# zombies close to cut 1's camera, their shading and their blood's place (docs/internals/deviations/re2.md, "Zombies")
+frames = [650, 2099]
+frame_windows = [[650, 1971, 1.05]]
+expect = "match"
+# the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 355
+ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"],
+  # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+  [1971, "rng"], [1971, "rseed"]]
+record = "--warp 207:-25640:0:-16590:0:1 --life 60 --give 0:2:3 --give 2:0x14:54"
