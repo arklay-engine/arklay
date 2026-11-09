@@ -109,11 +109,12 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # screen and the item box are drawn from the original's art. Leon A's route from
 # the new game to the main hall, and on through Marvin's room 202 and back to the
 # computer in room 200, matches the original tick for tick, zombies included, and
-# so does Claire A's route to the main hall, apart from the differences in
-# docs/internals/deviations/re2.md. Zombies, lickers, dogs, crows, Mr. X, the
-# plants, the spiders, the cockroaches, room 205's bodies and the alligator are
-# ported; the G forms are part way (G1 and G2 are done, G3 is fighting but not yet
-# dying) and the G embryo and adult are to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
+# so does Claire A's route, as far as the Blue Card Key's use at that computer,
+# apart from the differences in docs/internals/deviations/re2.md. Zombies,
+# lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
+# room 205's bodies and the alligator are ported; the G forms are part way (G1,
+# G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)
+# and the G adult is to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and docs/internals/deviations/re2.md);
 # --game re2 skips detection
 cargo run -- convert-game /path/to/re2
