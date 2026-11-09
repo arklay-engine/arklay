@@ -10,7 +10,8 @@ recorded once and reused.
   scripts/re2-regress.py --out DIR [NAME...]          run the manifest (or the named runs)
   scripts/re2-regress.py --out DIR --list             list the runs and whether their reference exists
   scripts/re2-regress.py --out DIR record NAME...     record a missing reference (needs wine)
-  scripts/re2-regress.py --self-test                  check the frame windows' judge (check.sh runs it)
+  scripts/re2-regress.py --self-test                  check the frame windows' judge, compare_from and the ignore list, and
+                                                      the frame streaming against the post-hoc comparison (check.sh runs it)
 
 Exits non-zero when any run gives an unexpected result. See "The regression
 runner" in oracle/re2.md.
@@ -23,12 +24,17 @@ import concurrent.futures
 import datetime
 import hashlib
 import importlib.util
+import multiprocessing
 import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 import tomllib
 from pathlib import Path
 
@@ -272,23 +278,41 @@ def judge_trace(run: dict, cmp: dict) -> str | None:
 # ---------------------------------------------------------------- frames
 
 
-def frame_errors(ref_dir: Path, ark_dir: Path, first: int, last: int, offset: int, boxes) -> list[tuple[float, int]]:
-    """Mean error per tick: the original's 640x480 frame cropped to the game area and boxed down to 320x240, against arklay's."""
+def frame_error(ref_png: Path, ark_bmp: Path, boxes_variants) -> list[float] | None:
+    """Mean error of one tick: the original's 640x480 frame cropped to the game area and boxed down to 320x240, against arklay's.
+
+    One error per entry of `boxes_variants`, each a list of rectangles blanked on both sides first (`[]` for the plain error).
+    None when the reference has no frame for this tick. Both the streaming and the post-hoc comparisons use this."""
     from PIL import Image, ImageChops, ImageDraw, ImageStat
 
-    errors = []
+    if not ref_png.exists():
+        return None
+    ref0 = Image.open(ref_png).convert("RGB").crop((3, 29, 643, 509)).resize((320, 240), Image.BOX)
+    ark0 = Image.open(ark_bmp).convert("RGB")
+    result = []
+    for boxes in boxes_variants:
+        ref, ark = ref0, ark0
+        if boxes:
+            ref, ark = ref0.copy(), ark0.copy()
+            for image in (ref, ark):
+                draw = ImageDraw.Draw(image)
+                for x0, y0, x1, y1 in boxes:
+                    draw.rectangle((x0, y0, x1 - 1, y1 - 1), fill=(0, 0, 0))
+        result.append(sum(ImageStat.Stat(ImageChops.difference(ref, ark)).mean) / 3)
+    return result
+
+
+def frame_errors(ref_dir: Path, ark_dir: Path, first: int, last: int, offset: int, variants) -> list[list[tuple[float, int]]]:
+    """Per variant of `frame_error`, the (error, tick) of each tick in first..last that both sides have a frame for."""
+    errors = [[] for _ in variants]
     for tick in range(first, last + 1):
-        ref_png = ref_dir / f"t{tick:06d}.png"
         ark_bmp = ark_dir / f"f{tick - offset:05d}.bmp"
-        if not (ref_png.exists() and ark_bmp.exists()):
+        if not ark_bmp.exists():
             continue
-        ref = Image.open(ref_png).convert("RGB").crop((3, 29, 643, 509)).resize((320, 240), Image.BOX)
-        ark = Image.open(ark_bmp).convert("RGB")
-        for image in (ref, ark):
-            draw = ImageDraw.Draw(image)
-            for x0, y0, x1, y1 in boxes:
-                draw.rectangle((x0, y0, x1 - 1, y1 - 1), fill=(0, 0, 0))
-        errors.append((sum(ImageStat.Stat(ImageChops.difference(ref, ark)).mean) / 3, tick))
+        values = frame_error(ref_dir / f"t{tick:06d}.png", ark_bmp, variants)
+        if values is not None:
+            for out, value in zip(errors, values):
+                out.append((value, tick))
     return errors
 
 
@@ -356,6 +380,171 @@ def self_test() -> int:
     return 0
 
 
+FRAME_RE = re.compile(r"f(\d{5})\.bmp")
+# Back-pressure for the streamed frames: once more than BACKLOG_HIGH frames wait unread, arklay is paused (SIGSTOP)
+# until the comparers bring the backlog down to BACKLOG_LOW. A frame is 230 KB, so a run holds a few tens of MB.
+BACKLOG_HIGH, BACKLOG_LOW = 48, 16
+# The frames a streamed run keeps after comparing them, for a failed run's out/<name>.frames: the newest RETAIN_FRAMES
+# and the three worst.
+RETAIN_FRAMES = 32
+FRAME_BYTES = 320 * 240 * 3 + 54
+# Set on Ctrl-C, SIGTERM or SIGHUP: every run kills its arklay and stops.
+STOP = threading.Event()
+LIVE: set = set()  # the arklay processes running now
+LIVE_LOCK = threading.Lock()
+
+
+class Interrupted(Exception):
+    pass
+
+
+def set_paused(proc, paused: bool) -> None:
+    """Pause or resume arklay, where the platform can (not on Windows: there the backlog is on the disk, as before)."""
+    if hasattr(signal, "SIGSTOP"):
+        try:
+            proc.send_signal(signal.SIGSTOP if paused else signal.SIGCONT)
+        except ProcessLookupError:
+            pass
+
+
+def stream_frames(proc, ref_dir: Path, ark_dir: Path, first: int, last: int, offset: int, variants, ticks: int,
+                  comparers=None, workers: int = 1, high: int = BACKLOG_HIGH, low: int = BACKLOG_LOW,
+                  retain: int = RETAIN_FRAMES, poll: float = 0.005) -> dict:
+    """Like `frame_errors`, but while `proc` (a Popen) runs: each frame is compared as soon as arklay has written it.
+
+    arklay writes a frame to a temporary name and renames it, so a frame that is listed is complete. A frame in
+    first..last is compared by `comparers` (a process pool, at most `2 * workers` at once; else in this thread, one a pass);
+    frames outside it are only counted. A compared frame is deleted once `retain` newer ones are, unless it is one
+    of the three worst. When more than `high` frames are waiting, arklay is paused until `low` are.
+
+    Returns `errors`, what `frame_errors` would give on the whole folder after the run; `outside`, the frames this run
+    can't have written (an index of `ticks` or more, or one seen again after it was deleted), which a clean folder
+    never has; and `peak`, the largest backlog seen."""
+    pending = {}  # index -> future
+    results = {}  # tick -> errors per variant
+    done = set()  # the indexes taken
+    kept = set()  # taken and still on disk
+    worst = []  # (plain error, index), the three worst
+    outside = []
+    paused, peak, newest = False, 0, -1
+    try:
+        while True:
+            if STOP.is_set():
+                raise Interrupted()
+            exited = proc.poll() is not None  # read before listing: once it has exited, every frame is listed
+            found = sorted(int(m.group(1)) for e in os.scandir(ark_dir) if (m := FRAME_RE.fullmatch(e.name)))
+            queue = []  # in the window, not taken yet: the backlog
+            for index in found:
+                if index in kept:
+                    continue
+                if index in pending:
+                    queue.append(index)
+                    continue
+                if index in done or index >= ticks:
+                    outside.append(index)
+                    (ark_dir / f"f{index:05d}.bmp").unlink()
+                elif first <= index + offset <= last:
+                    queue.append(index)
+                else:
+                    done.add(index)
+                    kept.add(index)
+                    newest = max(newest, index)
+            peak = max(peak, len(queue))
+            if exited and not queue:
+                break
+            if not exited and not paused and len(queue) > high:
+                set_paused(proc, True)
+                paused = True
+            elif paused and len(queue) <= low:
+                set_paused(proc, False)
+                paused = False
+            room = 2 * workers - len(pending) if comparers else 1  # inline, one per pass, so the pause keeps up
+            for index in [i for i in queue if i not in pending][: max(0, room)]:
+                tick = index + offset
+                ref, path = ref_dir / f"t{tick:06d}.png", ark_dir / f"f{index:05d}.bmp"
+                pending[index] = comparers.submit(frame_error, ref, path, variants) if comparers else frame_error(ref, path, variants)
+            for index in [i for i, f in pending.items() if comparers is None or f.done()]:
+                future = pending.pop(index)
+                values = future if comparers is None else future.result()
+                done.add(index)
+                kept.add(index)
+                newest = max(newest, index)
+                if values is not None:
+                    results[index + offset] = values
+                    worst = sorted(worst + [(values[0], index)], reverse=True)[:3]
+            spare = {i for _, i in worst}
+            for index in [i for i in kept if i <= newest - retain and i not in spare]:
+                kept.discard(index)
+                (ark_dir / f"f{index:05d}.bmp").unlink(missing_ok=True)
+            time.sleep(poll)
+    finally:
+        if paused:
+            set_paused(proc, False)
+        for future in pending.values():
+            if comparers is not None:
+                future.cancel()
+    errors = [[] for _ in variants]
+    for tick in sorted(results):
+        for out, value in zip(errors, results[tick]):
+            out.append((value, tick))
+    return {"errors": errors, "outside": outside, "peak": peak}
+
+
+def prepare_capture(frames_dir: Path) -> None:
+    """An empty capture folder: frames left by an earlier run (a `--keep` run, a dead runner) must not be compared."""
+    shutil.rmtree(frames_dir, ignore_errors=True)
+    frames_dir.mkdir(parents=True)
+
+
+def runner_alive(pid: int) -> bool:
+    try:
+        return b"re2-regress" in Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+
+
+def sweep_capture_roots() -> None:
+    """Remove the RAM folders of runners that are gone (SIGKILL, an OOM kill), and kill arklays still writing into them."""
+    shm = Path("/dev/shm")
+    if not sys.platform.startswith("linux") or not shm.is_dir():
+        return
+    for root in shm.glob("arklay-regress-*"):
+        try:
+            pid = int(root.name.rsplit("-", 1)[1])
+        except ValueError:
+            continue
+        if pid != os.getpid() and runner_alive(pid):
+            continue
+        marker = (str(root) + os.sep).encode()
+        for proc_dir in Path("/proc").iterdir():
+            if proc_dir.name.isdigit():
+                try:
+                    if marker in (proc_dir / "cmdline").read_bytes():
+                        os.kill(int(proc_dir.name), signal.SIGKILL)
+                except (OSError, ProcessLookupError):
+                    pass
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def capture_root(out: Path, keep: bool, jobs: int) -> Path:
+    """Where this process's capture folders go: /dev/shm (RAM) on Linux when frames aren't kept and it has room for
+    every job's bounded backlog, else the out folder."""
+    shm = Path("/dev/shm")
+    if keep or not sys.platform.startswith("linux") or not os.access(shm, os.W_OK):
+        return out
+    stat = os.statvfs(shm)
+    need = jobs * (BACKLOG_HIGH + RETAIN_FRAMES + 16) * FRAME_BYTES + (64 << 20)
+    if stat.f_bavail * stat.f_frsize < need:
+        print(f"re2-regress: /dev/shm has under {need >> 20} MB free; the frames go to {out}", flush=True)
+        return out
+    return shm / f"arklay-regress-{os.getpid()}"
+
+
+def compare_workers(jobs: int) -> int:
+    """The frame comparers' processes, shared by every job: about half the cores, at most four."""
+    return max(1, min(4, (os.cpu_count() or 2) // 2))
+
+
 def frame_summary(errors) -> dict:
     if not errors:
         return {"count": 0, "mean": 0.0, "worst": []}
@@ -409,7 +598,8 @@ def run_one(run: dict, ctx: dict) -> dict:
 
     want_frames = bool(run.get("frames")) and (ref_dir / "frames").is_dir()
     ark_trace = out / f"{name}.ark.trace"
-    frames_dir = out / f"{name}.frames"
+    frames_dir = ctx["capture_root"] / f"{name}.frames"
+    stream = want_frames and not ctx["keep"]  # compare frames as arklay writes them, and delete each
     # `room = "new"` starts arklay's new game, as the original's record does, with no `--room`.
     start = [] if run["room"] == "new" else ["--room", str(run["room"]), "--player", str(run.get("player", 0))]
     if screen != "game":
@@ -434,13 +624,76 @@ def run_one(run: dict, ctx: dict) -> dict:
                 voice = out / f"{name}.voice.txt"
                 voice.write_text("".join(f"{held}\n" for held in voice_ticks(ref_trace)))
                 command += ["--voice-ticks", str(voice)]
+    try:
+        return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
+                          ref_dir, ref_trace, ark_trace)
+    finally:
+        if stream:
+            keep_failed_frames(result, frames_dir, out / f"{name}.frames")
+
+
+def keep_failed_frames(result: dict, frames_dir: Path, dest: Path) -> None:
+    """After a streamed run: a failed run's frames that are left (the newest and the worst) go to out/<name>.frames
+    for debugging; otherwise the capture folder is removed."""
+    if result["problems"] and not STOP.is_set() and frames_dir.is_dir() and any(frames_dir.iterdir()):
+        if frames_dir != dest:
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.move(frames_dir, dest)
+        count = sum(1 for _ in dest.glob("f*.bmp"))
+        result["notes"].append(f"kept {count} frames, the newest and the worst, in {dest} (--keep keeps every frame)")
+    else:
+        shutil.rmtree(frames_dir, ignore_errors=True)
+
+
+def wait_for(proc) -> None:
+    """Wait for arklay, stopping early on Ctrl-C, SIGTERM or SIGHUP."""
+    while True:
+        try:
+            proc.wait(timeout=0.1)
+            return
+        except subprocess.TimeoutExpired:
+            if STOP.is_set():
+                raise Interrupted() from None
+
+
+def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from, ref_dir,
+               ref_trace, ark_trace) -> dict:
+    """The rest of `run_one`: play arklay (capturing frames), then compare the trace and the frames."""
+    name = run["name"]
+    out: Path = ctx["out"]
+    first, last = run.get("frames", (0, -1))
+    boxes = [tuple(box) for box in run.get("boxes", [])]
+    variants = [[], boxes] if boxes else [[]]
+    streamed = None
     if want_frames:
-        frames_dir.mkdir(parents=True, exist_ok=True)
+        prepare_capture(frames_dir)
         command += ["--capture-every", "1", "--capture-dir", str(frames_dir)]
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
-    (out / f"{name}.log").write_text(proc.stdout + proc.stderr)
+    # The output goes to files, not pipes, so that polling for frames can't leave arklay blocked on a full pipe.
+    with tempfile.TemporaryFile("w+") as stdout, tempfile.TemporaryFile("w+") as stderr:
+        if STOP.is_set():
+            raise Interrupted()
+        proc = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr, text=True)
+        with LIVE_LOCK:
+            LIVE.add(proc)
+        try:
+            if stream:
+                streamed = stream_frames(proc, ref_dir / "frames", frames_dir, first, last, offset, variants, ticks,
+                                         ctx["comparers"], ctx["workers"])
+            else:
+                wait_for(proc)
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            raise
+        finally:
+            with LIVE_LOCK:
+                LIVE.discard(proc)
+        stdout.seek(0)
+        stderr.seek(0)
+        out_text, err_text = stdout.read(), stderr.read()
+    (out / f"{name}.log").write_text(out_text + err_text)
     if proc.returncode:
-        result["text"] = f"arklay exited {proc.returncode}: {proc.stderr.strip()[-200:]}"
+        result["text"] = f"arklay exited {proc.returncode}: {err_text.strip()[-200:]}"
         result["problems"].append("arklay failed")
         return result
 
@@ -473,16 +726,19 @@ def run_one(run: dict, ctx: dict) -> dict:
         if not want_frames:
             text += "; frames: no reference frames"
         else:
-            first, last = run["frames"]
-            boxes = [tuple(box) for box in run.get("boxes", [])]
-            per_tick = frame_errors(ref_dir / "frames", frames_dir, first, last, offset, [])
+            if streamed is None:
+                streamed = {"errors": frame_errors(ref_dir / "frames", frames_dir, first, last, offset, variants), "outside": []}
+            if streamed["outside"]:
+                result["problems"].append(f"{len(streamed['outside'])} frames this run didn't write (from f{min(streamed['outside']):05d})")
+            streamed = streamed["errors"]
+            per_tick = streamed[0]  # (error, tick) for every compared tick of first..last, plain; what frame_windows is judged on
             plain = frame_summary(per_tick)
             if plain["count"] == 0:
                 result["problems"].append("no frames to compare")
             worst = " ".join(f"t{t}:{e:.2f}" for e, t in plain["worst"])
             text += f"; frames {plain['count']} mean {plain['mean']:.2f} worst {worst}"
             if boxes:
-                boxed = frame_summary(frame_errors(ref_dir / "frames", frames_dir, first, last, offset, boxes))
+                boxed = frame_summary(streamed[1])
                 text += f" (box blanked {boxed['mean']:.2f})"
             limit = run.get("frame_max_mean")
             if limit is not None and plain["mean"] > limit:
@@ -491,8 +747,6 @@ def run_one(run: dict, ctx: dict) -> dict:
                 texts, problems = judge_windows(run["frame_windows"], per_tick)
                 text += "; windows " + ", ".join(texts)
                 result["problems"].extend(problems)
-        if not ctx["keep"]:
-            shutil.rmtree(frames_dir, ignore_errors=True)
     if not ctx["keep"]:
         ark_trace.unlink(missing_ok=True)
     result["text"] = text
@@ -618,7 +872,116 @@ def record_run(run: dict, args, refs: Path) -> int:
 # ---------------------------------------------------------------- main
 
 
+def self_test_streaming() -> int:
+    """Streaming against post-hoc comparison on a fake capture folder that a helper fills frame by frame, as arklay
+    does (a temporary name, then a rename), pausing while it is told to: frames outside the window, a missing
+    reference frame, boxes, a stale folder, back-pressure, and arklay exiting early or writing nothing."""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("re2-regress self-test FAILED: the frame streaming check needs Pillow (pip install Pillow)", file=sys.stderr)
+        return 1
+
+    def write_frame(directory: Path, index: int, shade: int = 3):
+        temp = directory / f".f{index:05d}.bmp.tmp"
+        Image.new("RGB", (320, 240), (index * shade % 256, 60, 20)).save(temp, format="BMP")
+        os.replace(temp, directory / f"f{index:05d}.bmp")
+
+    class FakeArklay:
+        """What stream_frames needs of a Popen: poll, and SIGSTOP/SIGCONT."""
+
+        def __init__(self, directory: Path, count: int):
+            self.running = threading.Event()
+            self.running.set()
+            self.thread = threading.Thread(target=self.fill, args=(directory, count))
+            self.thread.start()
+
+        def fill(self, directory, count):
+            for index in range(count):
+                self.running.wait()
+                write_frame(directory, index)
+                time.sleep(0.001)
+
+        def poll(self):
+            return None if self.thread.is_alive() else 0
+
+        def send_signal(self, signum):
+            (self.running.clear if signum == getattr(signal, "SIGSTOP", None) else self.running.set)()
+
+    def check(what, ok):
+        if not ok:
+            raise AssertionError(what)
+
+    tmp = Path(tempfile.mkdtemp(prefix="re2-regress-selftest-"))
+    comparers = concurrent.futures.ProcessPoolExecutor(2, mp_context=multiprocessing.get_context("spawn"))
+    list(comparers.map(time.sleep, (0.2, 0.2)))  # start the workers, which the first pass would otherwise wait for
+    try:
+        ref_dir, offset, ticks = tmp / "ref", 5, 40
+        ref_dir.mkdir()
+        for tick in range(offset, offset + ticks):
+            if tick != offset + 7:  # a missing reference frame
+                Image.new("RGB", (1024, 768), (tick * 5 % 256, 40, 90)).save(ref_dir / f"t{tick:06d}.png")
+        variants = [[], [(0, 0, 100, 100)]]
+        first, last = offset + 4, offset + 30  # frames 0..3 and 31.. are outside the window
+        high, retain = 6, 4
+        # a whole run, one that stopped early (inside the window), and one that wrote nothing; each in a folder an
+        # earlier run left frames in, with other pictures and indexes past this run's end
+        for count in (40, 12, 0):
+            post, live = tmp / f"post{count}", tmp / f"live{count}"
+            post.mkdir()
+            live.mkdir()
+            for index in range(count):
+                write_frame(post, index)
+            want = frame_errors(ref_dir, post, first, last, offset, variants)
+            for index in (*range(0, 30, 2), 45, 99):
+                write_frame(live, index, shade=7)
+            prepare_capture(live)
+            for pool in (comparers, None):
+                fake = FakeArklay(live, count)
+                got = stream_frames(fake, ref_dir, live, first, last, offset, variants, ticks, pool, 2, high, 2, retain, 0.001)
+                fake.thread.join()
+                check(f"{count} frames: the streamed errors differ from the post-hoc ones", got["errors"] == want)
+                check(f"{count} frames: stale frames reported {got['outside']}", got["outside"] == [])
+                # (inline, one comparison outlasts several of the helper's frames, so only the pool's pace is checked)
+                check(f"{count} frames: the backlog reached {got['peak']}, over {high} + 2", pool is None or got["peak"] <= high + 2)
+                worst = {t - offset for _, t in sorted(want[0], reverse=True)[:3]}
+                left = {int(m.group(1)) for e in live.iterdir() if (m := FRAME_RE.fullmatch(e.name))}
+                check(f"{count} frames: left {sorted(left)}", left == set(range(max(0, count - retain), count)) | worst)
+                check(f"{count} frames: {len(want[0])} compared", len(want[0]) == {40: 26, 12: 7, 0: 0}[count])
+                prepare_capture(live)
+        # the guard: frames this run can't have written (past its last tick) fail it, even in a folder not emptied
+        for index in (3, 50, 77):
+            write_frame(live, index)
+        fake = FakeArklay(live, 0)
+        got = stream_frames(fake, ref_dir, live, first, last, offset, variants, ticks, None, 1, high, 2, retain, 0.001)
+        fake.thread.join()
+        check(f"stale frames reported {got['outside']}", got["outside"] == [50, 77])
+    except AssertionError as error:
+        print(f"re2-regress self-test FAILED: frame streaming: {error}", file=sys.stderr)
+        return 1
+    finally:
+        comparers.shutdown(cancel_futures=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("re2-regress streaming self-test ok")
+    return 0
+
+
+def on_signal(signum, frame):
+    """SIGTERM and SIGHUP stop the runner as Ctrl-C does."""
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
+def stop_runs() -> None:
+    """Make every run stop now: each kills its arklay and returns."""
+    STOP.set()
+    with LIVE_LOCK:
+        for proc in list(LIVE):
+            proc.kill()
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test() or self_test_streaming()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("names", nargs="*", help="`record` first to record, then run names (default: every run)")
     parser.add_argument("--out", required=True, help="output directory (not under /tmp)")
@@ -628,14 +991,12 @@ def main() -> int:
     parser.add_argument("--refs", default=None, help=f"references dir (else ARKLAY_RE2_REFS, else {DEFAULT_REFS})")
     parser.add_argument("--manifest", default=str(MANIFEST))
     parser.add_argument("--jobs", type=int, default=3)
-    parser.add_argument("--keep", action="store_true", help="keep arklay's frames and traces")
+    parser.add_argument("--keep", action="store_true", help="keep arklay's frames and traces (in --out; else frames go to /dev/shm where there is one)")
     parser.add_argument("--list", action="store_true", help="list the runs and whether their reference exists")
     parser.add_argument("--skip-missing", action="store_true", help="a missing reference is not a failure")
     parser.add_argument("--dry-run", action="store_true", help="record: print the command and stop")
     parser.add_argument("--force", action="store_true", help="record: replace an existing reference")
     parser.add_argument("--work", default=None, help="record: the Wine prefix dir (default: wine under --out)")
-    if sys.argv[1:] == ["--self-test"]:
-        return self_test()
     args = parser.parse_args()
 
     names = args.names
@@ -667,17 +1028,36 @@ def main() -> int:
     args.arklay = Path(args.arklay).expanduser()
     if not args.arklay.exists():
         raise SystemExit(f"re2-regress: {args.arklay} does not exist (cargo build --profile test-release)")
-    ctx = {"out": out, "refs": refs, "arklay": args.arklay.resolve(), "keep": args.keep}
+    for signum in (signal.SIGTERM, getattr(signal, "SIGHUP", None)):
+        if signum is not None:
+            signal.signal(signum, on_signal)
+    sweep_capture_roots()
+    jobs = max(1, args.jobs)
+    ctx = {"out": out, "refs": refs, "arklay": args.arklay.resolve(), "keep": args.keep, "comparers": None,
+           "capture_root": capture_root(out, args.keep, jobs), "workers": compare_workers(jobs)}
     ctx["pack"] = ensure_pack(args, out).resolve()
 
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max(1, args.jobs)) as pool:
+    pool = concurrent.futures.ThreadPoolExecutor(jobs)
+    try:
+        if not args.keep and any(run.get("frames") for run in runs):
+            ctx["comparers"] = concurrent.futures.ProcessPoolExecutor(
+                ctx["workers"], mp_context=multiprocessing.get_context("spawn"))
         for result in pool.map(lambda run: run_one(run, ctx), runs):
             status = "ok" if not result["problems"] else "UNEXPECTED: " + "; ".join(result["problems"])
             print(f"{result['name']:24} {result['text']}  [{status}]", flush=True)
             for note in result["notes"]:
                 print(f"    {note}")
             results.append(result)
+    except BaseException:
+        stop_runs()
+        raise
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+        if ctx["comparers"]:
+            ctx["comparers"].shutdown(cancel_futures=True)
+        if ctx["capture_root"] != out:
+            shutil.rmtree(ctx["capture_root"], ignore_errors=True)
 
     bad = [r for r in results if r["problems"] and not (args.skip_missing and r.get("missing"))]
     print(f"\n{len(results) - len(bad)} of {len(results)} runs as expected" + (f"; unexpected: {', '.join(r['name'] for r in bad)}" if bad else ""))
@@ -685,4 +1065,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt as stop:
+        print(f"re2-regress: stopped ({stop or 'Ctrl-C'}); arklay killed and the capture folder removed", file=sys.stderr)
+        sys.exit(130)
