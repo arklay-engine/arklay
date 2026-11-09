@@ -2803,6 +2803,9 @@ impl Host for GameHost<'_> {
             }
             "plc_ret" if self.work_is_player(task) => {
                 crate::player2::plc_ret(&mut self.game.re2.player);
+                // `Plc_ret` clears the player's `Type` high nibble too (its
+                // Id is under 0x10), `KIND_NOT_MOVED` among it.
+                self.game.re2.player.kind = plc_ret_kind(0, self.game.re2.player.kind);
             }
             "plc_stop" if self.work_is_player(task) => {
                 crate::player2::plc_stop_player(&mut self.game.re2.player);
@@ -4996,6 +4999,17 @@ mod tests {
         exec(&mut game, "plc_ret", &[]);
         let sherry = splayer(&game);
         assert_eq!((sherry.kind, sherry.work.kind & 0x5000), (0, 0));
+    }
+
+    /// `Plc_ret` on the player clears `Type`'s high nibble, so a scene that
+    /// froze the player with `KIND_NOT_MOVED` hands it back to the pad.
+    #[test]
+    fn plc_ret_on_the_player_clears_its_type_high_nibble() {
+        let mut game = GameState::default();
+        game.re2.player.kind = crate::player2::KIND_NOT_MOVED | 0x0C00;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "plc_ret", &[]);
+        assert_eq!(game.re2.player.kind, 0x0C00);
     }
 
     #[test]

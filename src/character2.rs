@@ -1341,6 +1341,11 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             character.kind,
             partner,
         );
+        // `Spl_in41` and `Spl_in45` (from `Spl_Init`'s table) send the
+        // partner to `Spl_Auto` whatever 0x4000 chose.
+        if matches!(character.id, 0x41 | 0x45 | 0x4F) && game.re2.partner_bit() {
+            character.work.routine = [1, 0, 0, 0];
+        }
         if character.id == MARVIN {
             spl_in4a(character);
         }
@@ -1849,9 +1854,10 @@ mod tests {
     }
 
     /// `Spl_Init` drops the partner's 0x1000 and sends anyone with 0x4000 to
-    /// `Spl_Scenario`, the partner too.
+    /// `Spl_Scenario`, but `Spl_in45` sends the partner Sherry to `Spl_Auto`
+    /// even with 0x4000.
     #[test]
-    fn spl_init_drops_the_partners_0x1000_and_0x4000_wins() {
+    fn spl_init_drops_the_partners_0x1000_and_spl_in45_keeps_her_on_auto() {
         let mut game = GameState::default();
         let mut character = sherry(0x1400);
         let tick = spl_tick(&RoomState::default(), &Default::default());
@@ -1860,7 +1866,8 @@ mod tests {
         assert_eq!(character.work.routine[0], 1);
         let mut character = sherry(0x4400);
         spl(&mut game, &mut character, &tick);
-        assert_eq!(character.work.routine[..2], [4, 6]);
+        assert_eq!(character.work.routine[..2], [1, 0]);
+        assert!(game.re2.partner_bit());
     }
 
     #[test]
