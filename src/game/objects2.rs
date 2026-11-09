@@ -8,10 +8,11 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::GameState;
+use crate::anim::Mat4x3;
 use crate::character2::{PLAYER_HEIGHT, player_width};
 use crate::objects::{
-    CharBox, ObjectRecord, Oma, SCA_HIT_WALL, floor_of_height, oma_ck_front, oma_ck_oba, oma_ck_om,
-    sca_ck_hit_om,
+    CharBox, ObjectRecord, Oma, SCA_HIT_WALL, SuperParent, floor_of_height, oma_ck_front,
+    oma_ck_oba, oma_ck_om, sca_ck_hit_om,
 };
 use crate::player::PlayerState;
 use crate::state::RoomState;
@@ -28,6 +29,11 @@ const BE_SHOVED: u32 = 0x200;
 const BE_HIDDEN: u32 = 0x8_0000;
 /// `Id` of the boxes that fall (`Om_move_box`).
 const ID_BOX: u8 = 2;
+/// `GsIdMatrix`.
+const IDENTITY: Mat4x3 = Mat4x3 {
+    r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+    t: [0, 0, 0],
+};
 /// `Routine_1`s that keep `Push_cnt`: the walk and the push.
 const ROUTINE_WALK: u8 = 1;
 const ROUTINE_PUSH: u8 = 10;
@@ -206,12 +212,76 @@ impl GameState {
         touched
     }
 
-    /// `Om_trans`' copies as it draws: each drawn object's `Old` and `Old2`.
-    pub fn om_trans_old(&mut self) {
-        for record in &mut self.objects.records {
+    /// `Om_trans` as it draws, object by object in slot order: the world
+    /// matrix (`+0x54`, composed with the parent's), then the copies `Old`
+    /// and `Old2`. An `Id` 2 box's world y is lifted 900 after the compose.
+    /// An object's parent of a later slot gives last frame's matrix, as in
+    /// the original. `player` is the player's position and angle.
+    pub fn om_trans_old(&mut self, player: ([i32; 3], u16)) {
+        for index in 0..self.objects.records.len() {
+            let record = self.objects.records[index];
             if record.be_flg & BE_ACTIVE != 0 && record.be_flg & BE_HIDDEN == 0 {
+                self.compose_object_world(index, player);
+                let record = &mut self.objects.records[index];
+                if record.id == ID_BOX {
+                    record.world.t[1] -= 900;
+                }
                 record.om_trans_old();
             }
+        }
+    }
+
+    /// `CompM(+0x80, local, +0x54)`, as `Obj_model_set` and `Om_trans` do
+    /// it: object `index`'s world matrix from its parent's and its own
+    /// rotation and position.
+    pub fn compose_object_world(&mut self, index: usize, player: ([i32; 3], u16)) {
+        let Some(record) = self.objects.records.get(index).copied() else {
+            return;
+        };
+        let parent = self.super_matrix(record.super_parent, player);
+        let local = crate::anim::Mat4x3 {
+            r: crate::objects::rotation(&record),
+            t: record.pos,
+        };
+        self.objects.records[index].world = crate::anim::compose(&parent, &local);
+    }
+
+    /// The matrix an object's `+0x80` points at. The identity, the player's
+    /// own matrix, the player's joint (the pose the last frame drew) and
+    /// another object's world matrix are the original's. For the second
+    /// player's or an enemy's work the character's own matrix is used, joint
+    /// or not: the port doesn't keep their joints between frames.
+    fn super_matrix(&self, parent: SuperParent, (pos, angle): ([i32; 3], u16)) -> Mat4x3 {
+        let player = crate::anim::entity_matrix(pos, angle);
+        let character = |work: u8| {
+            let slot = match work {
+                0 => return player,
+                1 => crate::scd2::host::SPLAYER_SLOT,
+                n => usize::from(n - 2),
+            };
+            self.re2
+                .characters
+                .0
+                .get(slot)
+                .and_then(|character| character.as_deref())
+                .map_or(IDENTITY, |character| {
+                    crate::anim::entity_matrix(character.body.pos, character.body.angle)
+                })
+        };
+        match parent {
+            SuperParent::World => IDENTITY,
+            SuperParent::Player | SuperParent::Work(0) => player,
+            SuperParent::PlayerJoint(joint) | SuperParent::WorkJoint(0, joint) => self.joint_worlds
+                [0]
+            .get(usize::from(joint))
+            .copied()
+            .unwrap_or(player),
+            SuperParent::Work(work) | SuperParent::WorkJoint(work, _) => character(work),
+            SuperParent::Object(n) => self
+                .objects
+                .records
+                .get(usize::from(n))
+                .map_or(IDENTITY, |record| record.world),
         }
     }
 
@@ -295,7 +365,7 @@ mod tests {
     fn walk(game: &mut GameState, room: &RoomState, player: &mut PlayerState) {
         player.pos[2] -= STEP;
         game.om_move(room, player);
-        game.om_trans_old();
+        game.om_trans_old((player.pos, player.angle));
         crate::character2::keep_old_boxes(game, player.pos);
     }
 

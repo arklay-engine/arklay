@@ -1,0 +1,45 @@
+# Room 115's scene with Claire (oracle/re2.md, "Room 115's scene"). The player stands at the desk facing it, with the diary's and the medal's flags up so that the press goes straight to the scene; Claire is the room's own, so the enemies stay on. Voice lines are timed from the reference (`voice_from_ref`).
+
+[[run]]
+name = "scene_115"
+room = "115"
+setup = { pos = [-20000, 0, -18100], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[8, 20], [8, 104]] }
+input = "scene_115.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 1880
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
+frames = [360, 1879]
+expect = "match"
+record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"
+
+[[run]]
+name = "scene_115_exit"
+room = "115"
+setup = { pos = [-20000, 0, -18100], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[8, 20], [8, 104]] }
+# after the scene: Leon turns north and walks to camera 1 (main_05 puts Claire at the window's side off screen), then back to camera 2, which starts event 6: her walk, her turn to the window and clip 22
+input = "scene_115_exit.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 2100
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
+frames = [360, 2099]
+expect = "match"
+record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"
+
+[[run]]
+name = "scene_115_line"
+room = "115"
+setup = { pos = [-20000, 0, -18100], angle = 3072, health = 200, rnd = 6114, camera = 0, flags = [[8, 20], [8, 104]] }
+# after the scene: Leon walks west into the desk's second area and presses it: event 8, xa 29 (an eighth line) with message 9
+input = "scene_115_line.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 2000
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
+frames = [360, 1999]
+expect = "match"
+record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"

@@ -2246,11 +2246,7 @@ impl GameHost<'_> {
             be_flg &= !1;
         }
         let selector = (at(5) as u16 >> 8) as u8;
-        let parent = match selector & 0xC0 {
-            0x40 => 0xFE,
-            0xC0 => selector & 0x3F,
-            _ => 0xFF,
-        };
+        let parent = crate::objects::SuperParent::decode(selector, 0);
         let mut x = at(9) as i32;
         // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
         if stage_room == (2, 3) && slot < 4 {
@@ -2263,7 +2259,6 @@ impl GameHost<'_> {
                 0
             },
             model: slot as u8,
-            parent,
             pos: [x, at(10) as i32, at(11) as i32],
             rotation: [at(12) as i16, at(13) as i16, at(14) as i16],
             asset: Some(slot as u8),
@@ -2289,7 +2284,10 @@ impl GameHost<'_> {
             at_obj_no: kept.at_obj_no,
             ..crate::objects::ObjectRecord::default()
         };
+        record.set_super_parent(parent);
         record.set_ofs();
+        let player = (self.game.entities[0].pos, self.game.entities[0].angle);
+        self.game.compose_object_world(slot, player);
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -2513,6 +2511,28 @@ impl Host for GameHost<'_> {
             "pos_set" if self.task_object(task).is_some() => {
                 if let Some(object) = self.task_object(task) {
                     object.pos = [at(1) as i32, at(2) as i32, at(3) as i32];
+                }
+            }
+            // `Super_set` (`0x4E59E0`): the object hangs on a parent, and its
+            // position and rotation become offsets on it. `Om_trans` draws it
+            // there (not drawn yet).
+            "super_set" if self.task_object(task).is_some() => {
+                let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
+                if let Some(object) = self.task_object(task) {
+                    object.set_super_parent(parent);
+                    object.pos = [at(3), at(4), at(5)].map(|v| i32::from(v as i16));
+                    object.rotation = [at(6) as i16, at(7) as i16, at(8) as i16];
+                }
+            }
+            // `Super_reset` (`0x4E5E30`): back on the identity matrix, at the
+            // world position `Obj_model_set` or `Om_trans` last composed
+            // (`+0x68..+0x70`), with the rotation from its operands. Five of
+            // the scripts move the object on from there with `add_speed`.
+            "super_reset" if self.task_object(task).is_some() => {
+                if let Some(object) = self.task_object(task) {
+                    object.set_super_parent(crate::objects::SuperParent::World);
+                    object.pos = object.world.t;
+                    object.rotation = [at(1), at(2), at(3)].map(|v| v as i16);
                 }
             }
             "dir_set" if self.task_object(task).is_some() => {
@@ -3125,6 +3145,62 @@ mod tests {
     }
 
     #[test]
+    fn super_set_writes_the_parent_and_the_offsets() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects.records = vec![crate::objects::ObjectRecord::default(); 10];
+        exec(&mut game, "work_set", &[WK_OBJECT, 9]);
+        let parent = |game: &GameState| game.objects.record(9).unwrap().super_parent;
+        // Room 115's `main_1B`: the player's joint 1.
+        exec(
+            &mut game,
+            "super_set",
+            &[0, 64, 129, 161, 293, 349, 1024, -2752, 0],
+        );
+        let object = game.objects.record(9).unwrap();
+        assert_eq!(object.super_parent, SuperParent::PlayerJoint(1));
+        assert_eq!(object.pos, [161, 293, 349]);
+        assert_eq!(object.rotation, [1024, -2752, 0]);
+        // No joint: the player's own matrix.
+        exec(&mut game, "super_set", &[0, 64, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(parent(&game), SuperParent::Player);
+        // `main_18`'s second: enemy slot 0 (work 2), joint 14.
+        exec(
+            &mut game,
+            "super_set",
+            &[0, 130, 142, -1, 365, -40, 832, -2048, 60],
+        );
+        assert_eq!(parent(&game), SuperParent::WorkJoint(2, 14));
+        assert_eq!(game.objects.record(9).unwrap().pos, [-1, 365, -40]);
+        exec(&mut game, "super_set", &[0, 128, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(parent(&game), SuperParent::Work(0));
+        exec(&mut game, "super_set", &[0, 0xC3, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(parent(&game), SuperParent::Object(3));
+        exec(&mut game, "super_set", &[0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(parent(&game), SuperParent::World);
+    }
+
+    #[test]
+    fn a_set_item_flag_drops_the_area_and_hides_the_object() {
+        // Room 115's diary and medal with 8:20 and 8:104 up (`Item_aot_set`):
+        // the area is inert, the object hidden, and `aot_on` does nothing.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.objects.records = vec![crate::objects::ObjectRecord::default(); 10];
+        game.re2.set_flag(ITEM_BANK, 104, 1);
+        let ops = [2, 2, 49, 0, 0, -100, -100, 200, 200, 0x47, 1, 104, 3, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        assert_eq!(game.room_actions[2].unwrap().sce, SCE_AUTO);
+        let object = game.objects.record(3).unwrap();
+        assert_eq!((object.be_flg, object.flag), (0x8000_0000, 0));
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x47).unwrap(), &[2]);
+        assert!(game.re2_item_get.is_none());
+        assert!(!game.message.active);
+    }
+
+    #[test]
     fn cut_chg_raises_the_pending_load_unless_bit_7_is_set() {
         let mut game = GameState::default();
         exec(&mut game, "cut_chg", &[0]);
@@ -3524,6 +3600,136 @@ mod tests {
         game.objects.record_mut(1).unwrap().pos = [-19000, -3600, -12500];
         game.interact([0, 0, 0], 0, false);
         assert!(on_plate_3(&mut game));
+    }
+
+    /// Room 205's `main_00` hangs object 3 on object 2 (`obj_model_set`
+    /// selector 0xC2, 1000 below it), and `main_07` gives it back to the
+    /// world with `super_reset` and lets it fall with `add_speed`, with no
+    /// `pos_set` between: the fall starts where the object was drawn.
+    #[test]
+    fn super_reset_leaves_the_object_where_it_was_drawn() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(8);
+        let parent = [
+            2, 0, 0, 0, 0, 0, 0, 10, 16, -17300, -3400, -7000, 1024, -256, 1024, 0, 0, 0, 0, 0, 0,
+            0, 0,
+        ];
+        let child = [
+            3, 0, 0, 0, 0, 49664, 0, 10, 16, 0, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        exec(&mut game, "obj_model_set", &parent);
+        exec(&mut game, "obj_model_set", &child);
+        game.om_trans_old(([0; 3], 0));
+        let drawn = crate::objects::world_matrix(&game.objects, 3, [0; 3], 0).t;
+        assert_eq!(game.objects.record(3).unwrap().world.t, drawn);
+        assert_ne!(drawn, [0, 1000, 0]);
+
+        exec(&mut game, "work_set", &[WK_OBJECT, 3]);
+        exec(&mut game, "super_reset", &[0, 1024, -256, 1024]);
+        exec(&mut game, "speed_set", &[1, 50]);
+        exec(&mut game, "add_speed", &[]);
+        let object = game.objects.record(3).unwrap();
+        assert_eq!(object.super_parent, SuperParent::World);
+        assert_eq!(object.parent, 0xFF);
+        assert_eq!(object.rotation, [1024, -256, 1024]);
+        assert_eq!(object.pos, [drawn[0], drawn[1] + 50, drawn[2]]);
+    }
+
+    /// Hung on the player's joint with `super_set` (mode 0x40, joint 0x8A),
+    /// an object is drawn on that joint's matrix, and `super_reset` puts it
+    /// down there; an `Id` 2 box keeps `Om_trans`' 900 lift.
+    #[test]
+    fn super_reset_takes_the_position_om_trans_composed_on_a_joint() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let mut joints = vec![crate::anim::Mat4x3::default(); 15];
+        joints[10] = crate::anim::entity_matrix([1000, -900, 2000], 1024);
+        game.joint_worlds[0] = joints;
+        for (id, lift) in [(0, 0), (2, 900)] {
+            let call = [
+                4, id, 0, 0, 0, 0, 0, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
+            // A second `obj_model_set` on a slot in play clears it.
+            game.objects.record_mut(4).unwrap().be_flg = 0;
+            exec(&mut game, "obj_model_set", &call);
+            exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+            exec(&mut game, "super_set", &[0, 64, 138, 0, 600, -50, 0, 0, 0]);
+            // Before a frame is drawn, it is where `Obj_model_set` put it.
+            exec(&mut game, "super_reset", &[0, 0, 0, 0]);
+            assert_eq!(game.objects.record(4).unwrap().pos, [0, 0, 0]);
+            exec(&mut game, "super_set", &[0, 64, 138, 0, 600, -50, 0, 0, 0]);
+            game.om_trans_old(([0; 3], 0));
+            exec(&mut game, "super_reset", &[0, 5, 6, 7]);
+            let local = crate::anim::Mat4x3 {
+                r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+                t: [0, 600, -50],
+            };
+            let mut expected = crate::anim::compose(&game.joint_worlds[0][10], &local).t;
+            expected[1] -= lift;
+            let object = game.objects.record(4).unwrap();
+            assert_eq!(object.pos, expected, "id {id}");
+            assert!(!object.hangs_on_a_character());
+            assert_eq!(object.rotation, [5, 6, 7]);
+        }
+    }
+
+    #[test]
+    fn obj_model_set_and_super_set_write_the_one_parent() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(5);
+        let call = |selector: i64| {
+            [
+                4,
+                2,
+                0,
+                0,
+                0,
+                selector << 8,
+                0,
+                0x10,
+                0,
+                100,
+                -200,
+                300,
+                1,
+                2,
+                3,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]
+        };
+        // `Obj_model_set` switches on `selector & 0xC0` too: 0x80 | n is
+        // work n (0 the player, 1 the second player, 2 + n an enemy slot).
+        for (selector, parent, draw) in [
+            (0x00, SuperParent::World, 0xFF),
+            (0x40, SuperParent::Player, 0xFE),
+            (0x82, SuperParent::Work(2), 0xFF),
+            (0xC3, SuperParent::Object(3), 3),
+        ] {
+            game.objects.record_mut(4).unwrap().be_flg = 0;
+            exec(&mut game, "obj_model_set", &call(selector));
+            let object = game.objects.record(4).unwrap();
+            assert_eq!(object.super_parent, parent, "{selector:#x}");
+            assert_eq!(object.parent, draw, "{selector:#x}");
+        }
+        // `Super_set` writes the same pointer, and the selector with it.
+        exec(&mut game, "work_set", &[WK_OBJECT, 4]);
+        exec(&mut game, "super_set", &[0, 130, 142, 0, 220, 10, 0, 0, 0]);
+        let object = game.objects.record(4).unwrap();
+        assert_eq!(object.super_parent, SuperParent::WorkJoint(2, 14));
+        assert_eq!(object.parent, 0xFF);
+        assert!(object.hangs_on_a_character());
+        assert_eq!(object.pos, [0, 220, 10]);
+        exec(&mut game, "super_set", &[0, 0, 0, 5, 6, 7, 0, 0, 0]);
+        let object = game.objects.record(4).unwrap();
+        assert!(!object.hangs_on_a_character());
+        assert_eq!(object.parent, 0xFF);
     }
 
     #[test]

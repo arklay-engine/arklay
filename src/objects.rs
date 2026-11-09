@@ -229,6 +229,59 @@ pub struct TweenScratch {
     pub selector: u16,
 }
 
+/// What `Super_set` (`0x4E59E0`) hangs an object on (the object's `+0x80`):
+/// its position and rotation are then offsets on that matrix. `Om_trans`
+/// draws it there every frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SuperParent {
+    /// Mode 0: the identity, the world.
+    #[default]
+    World,
+    /// Mode 0x40 without a joint (bit 7 of the joint byte clear): the
+    /// player's own matrix (`0x989F14`).
+    Player,
+    /// Mode 0x40 with a joint: the player's joint.
+    PlayerJoint(u8),
+    /// Mode 0x80 | n without a joint: work `n` (0 the player, 1 the second
+    /// player, 2 + n enemy slot n), its matrix (`work + 0x24`).
+    Work(u8),
+    /// Mode 0x80 | n with a joint: work `n`'s joint.
+    WorkJoint(u8, u8),
+    /// Mode 0xC0 | n: object n's world matrix.
+    Object(u8),
+}
+
+impl SuperParent {
+    /// Decode `Super_set`'s mode byte and joint byte, and `Obj_model_set`'s
+    /// parent selector (a mode byte with no joint): both switch on
+    /// `mode & 0xC0` and write the one pointer at `+0x80`.
+    pub fn decode(mode: u8, joint: u8) -> Self {
+        let joint_index = (joint & 0x80 != 0).then_some(joint & 0x7F);
+        match mode & 0xC0 {
+            0 => Self::World,
+            0x40 => joint_index.map_or(Self::Player, Self::PlayerJoint),
+            0x80 => {
+                let work = mode & 0x3F;
+                joint_index.map_or(Self::Work(work), |j| Self::WorkJoint(work, j))
+            }
+            _ => Self::Object(mode & 0x3F),
+        }
+    }
+
+    /// The parent selector [`ObjectRecord::parent`] and [`world_matrix`]
+    /// read, for the parents they compose: the world, the player's own
+    /// matrix and another object. A joint and a work's matrix aren't
+    /// modelled.
+    fn selector(self) -> Option<u8> {
+        match self {
+            Self::World => Some(0xFF),
+            Self::Player => Some(0xFE),
+            Self::Object(n) => Some(n),
+            _ => None,
+        }
+    }
+}
+
 /// One runtime object record. The original reuses a 0xA4-byte `Entity` head
 /// for these; the port keeps a named struct with only the fields the opcodes
 /// and the collision helpers address.
@@ -322,6 +375,14 @@ pub struct ObjectRecord {
     pub kind: u16,
     /// The event VM's tween scratch the movement handlers mutate.
     pub tween: TweenScratch,
+    /// RE2's `+0x80`, from `Super_set`: what `pos` and `rotation` are offsets
+    /// on.
+    pub super_parent: SuperParent,
+    /// RE2's world matrix (`+0x54`, its translation `+0x68..+0x70`): the
+    /// parent's matrix composed with the object's own, which `Obj_model_set`
+    /// writes and `Om_trans` writes again each frame it draws the object.
+    /// `Super_reset` takes the position from it.
+    pub world: Mat4x3,
 }
 
 impl Default for ObjectRecord {
@@ -363,6 +424,8 @@ impl Default for ObjectRecord {
             routine: [0; 4],
             kind: 0,
             tween: TweenScratch::default(),
+            super_parent: SuperParent::World,
+            world: Mat4x3::default(),
         }
     }
 }
@@ -639,6 +702,20 @@ pub fn floor_of_height(y: i32) -> u8 {
 }
 
 impl ObjectRecord {
+    /// Write the one parent pointer (`+0x80`) that `Obj_model_set` and
+    /// `Super_set` both set, and the selector the draw composes by.
+    pub fn set_super_parent(&mut self, parent: SuperParent) {
+        self.super_parent = parent;
+        self.parent = parent.selector().unwrap_or(0xFF);
+    }
+
+    /// Whether the object hangs on a joint or a character's matrix, which
+    /// the draw doesn't compose yet: `pos` is then an offset on that
+    /// matrix, not a place in the room, so the object isn't drawn.
+    pub fn hangs_on_a_character(&self) -> bool {
+        self.super_parent.selector().is_none()
+    }
+
     /// Whether the active/drawn flag is set.
     pub fn active(&self) -> bool {
         self.flag & OBJECT_FLAG_ACTIVE != 0
@@ -866,6 +943,8 @@ impl ObjectTable {
             routine: [0; 4],
             kind: 0,
             tween: TweenScratch::default(),
+            super_parent: SuperParent::World,
+            world: Mat4x3::default(),
         };
         self.built = self.built.wrapping_add(1);
         self.last_asset = Some(slot as u8);
