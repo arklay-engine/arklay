@@ -989,10 +989,19 @@ fn work_binder(game: &GameState) -> u8 {
 fn a_held_left_in_sub_3_moves_only_on_flag_ticks() {
     use crate::game::pad_repeat as pad;
     let mut game = file_game(&[1, 3]);
-    // Park the carousel in sub 3 with the key held from before: only the
-    // flag ticks turn it.
-    game.pad_repeat.step(0);
-    let (_, input) = held_tick(&mut game, pad::LEFT);
+    // Left goes down on a tick the page doesn't see, so the carousel sits
+    // in sub 3 with the key held and the flag down: the raw pad alone must
+    // not turn it.
+    game.pad_repeat.step(pad::LEFT);
+    for t in 1..11 {
+        let (_, input) = held_tick(&mut game, pad::LEFT);
+        assert!(!input.left, "tick {t}");
+        assert_eq!(input.held, pad::LEFT);
+        assert_eq!(page(&game).sub, FILE_SHOWN, "tick {t}: no flag, no turn");
+    }
+    // The counter ran out: the flag's tick turns the binders.
+    let (sounds, input) = held_tick(&mut game, pad::LEFT);
     assert!(input.left);
     assert_eq!(page(&game).sub, FILE_LEFT);
+    assert_eq!(sounds, vec![Sound::Turn]);
 }

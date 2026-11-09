@@ -1945,6 +1945,16 @@ const RE2_STATUS_SHOWN: u8 = 7;
 /// The open's tick on which `Status` (`0x501BD0`) runs its start, once
 /// `St_load_gfx` is done.
 const RE2_STATUS_INIT: u8 = 6;
+/// What a menu's message window reads of this tick's pad.
+fn menu_message_input(ui: UiInput, input: &player::Input, action: bool) -> MessageInput {
+    MessageInput {
+        action,
+        left: input.left,
+        right: input.right,
+        cancel: input.run || ui.cancel,
+    }
+}
+
 /// The tick (counted from START's, 1) the item page starts reading the pad,
 /// under the screen's fade in.
 const RE2_STATUS_PAGE_TICK: u8 = 7;
@@ -3057,20 +3067,7 @@ impl GameSession {
                 self.game.tick_re2_box_entrance();
             }
         }
-        if self.game.is_re2_room {
-            // `Pad_set`, before `Game_loop` and `Status`: the raw pad is
-            // never blanked, and a key's level already holds on its press
-            // tick.
-            use game::pad_repeat as pad;
-            let held = |down: bool, bit: u16| if down { bit } else { 0 };
-            self.game.pad_repeat.step(
-                held(input.up, pad::UP)
-                    | held(input.right, pad::RIGHT)
-                    | held(input.down, pad::DOWN)
-                    | held(input.left, pad::LEFT)
-                    | held(input.aim, pad::AIM),
-            );
-        }
+        self.step_re2_pad_repeat(&input);
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
         if self.re2_status_open == Some(RE2_STATUS_INIT) {
             self.game.init_re2_status();
@@ -3086,6 +3083,24 @@ impl GameSession {
         }
         self.animate_re2_status(pack);
         result
+    }
+
+    /// `Pad_set`, at the top of `Psx_main`, before `Game_loop`, `Status`
+    /// and a door's task: every frame, doors included. The raw pad is never
+    /// blanked, and a key's level already holds on its press tick.
+    fn step_re2_pad_repeat(&mut self, input: &player::Input) {
+        if !self.game.is_re2_room {
+            return;
+        }
+        use game::pad_repeat as pad;
+        let held = |down: bool, bit: u16| if down { bit } else { 0 };
+        self.game.pad_repeat.step(
+            held(input.up, pad::UP)
+                | held(input.right, pad::RIGHT)
+                | held(input.down, pad::DOWN)
+                | held(input.left, pad::LEFT)
+                | held(input.aim, pad::AIM),
+        );
     }
 
     /// The end of `Psx_main`'s tick: `Swap_Cbuff` loads a cut's view and
@@ -3758,7 +3773,9 @@ impl GameSession {
             if counts {
                 self.game.advance_play_timer();
             }
-            self.tick_re2_items_in_fade(pack, ui);
+            if self.tick_re2_status_in_fade(pack, ui, input, action) {
+                return Ok(());
+            }
             self.tick_menu_fade();
             return Ok(());
         }
@@ -3769,10 +3786,13 @@ impl GameSession {
                 return Ok(());
             }
             // The frame after the open fade finishes is the original's state-0
-            // -> state-1 transition: no health-bar tick and no input yet.
+            // -> state-1 transition: no health-bar tick and no input yet. RE
+            // 2's status page has no such frame: it runs on every tick.
             if self.menu_open_delay {
                 self.menu_open_delay = false;
-                return Ok(());
+                if !self.re2_status_page_runs() {
+                    return Ok(());
+                }
             }
             self.tick_menu(pack, ui, input, action);
             return Ok(());
@@ -6558,12 +6578,7 @@ impl GameSession {
             self.begin_menu_close(pack);
             return;
         }
-        let message_input = MessageInput {
-            action,
-            left: input.left,
-            right: input.right,
-            cancel: input.run || ui.cancel,
-        };
+        let message_input = menu_message_input(ui, &input, action);
         if self.game.re2_box.is_some() {
             self.tick_re2_box(pack, ui, message_input);
             return;
@@ -6758,28 +6773,47 @@ impl GameSession {
         self.apply_menu_event(pack, event);
     }
 
-    /// The status screen's item page while the screen is still fading in:
-    /// `Status` has run its start by the open's sixth tick, and the page
-    /// reads the pad from the next, under the fade (a key held through START
-    /// moves the cursor on the first flag after it).
-    fn tick_re2_items_in_fade(&mut self, pack: &Pack, ui: UiInput) {
-        if !self.game.is_re2_room
-            || self.re2_status_close.is_some()
-            || self.game.re2_box.is_some()
-            || self.game.re2_items.is_none()
-            || self
+    /// Whether RE 2's status screen runs its item page this tick: `Status`
+    /// ran its start on the open's sixth tick, and from the next on it calls
+    /// the page (`St_tbl`, `St_main00`) every tick until its task ends,
+    /// whatever the fades are doing.
+    fn re2_status_page_runs(&self) -> bool {
+        self.game.is_re2_room
+            && self.game.re2_box.is_none()
+            && self.game.re2_items.is_some()
+            && self
                 .re2_status_open
-                .is_none_or(|ticks| ticks < RE2_STATUS_PAGE_TICK)
-        {
-            return;
+                .is_some_and(|ticks| ticks >= RE2_STATUS_PAGE_TICK)
+    }
+
+    /// RE 2's status screen while the menu fade that opens it still runs:
+    /// the page ticks as it does once the fade is done, its description,
+    /// message and close included (a key held through START moves the
+    /// cursor on the first flag after it). A close ends the menu fade, since
+    /// the screen fades itself out; returns whether it did.
+    fn tick_re2_status_in_fade(
+        &mut self,
+        pack: &Pack,
+        ui: UiInput,
+        input: player::Input,
+        action: bool,
+    ) -> bool {
+        if !self.re2_status_page_runs() {
+            return false;
         }
-        let input = self.status_input(ui);
-        if let Some(outcome) = self.game.tick_re2_items(input) {
-            self.play_re2_status_sounds(pack, &outcome.sounds);
-            if outcome.close {
-                self.re2_status_close = Some(0);
-            }
+        if self.re2_status_close.is_some() {
+            self.tick_re2_status_close();
+        } else {
+            self.tick_re2_items(pack, ui, menu_message_input(ui, &input, action));
         }
+        if self.menu.is_some() && self.re2_status_close.is_none() {
+            return false;
+        }
+        self.menu_fade = transition::Fade::inactive();
+        self.menu_fade_phase = MenuFadePhase::None;
+        self.menu_fade_draw = None;
+        self.menu_open_delay = false;
+        true
     }
 
     /// What the status pages read of this tick's pad: the four directions
@@ -10659,6 +10693,8 @@ impl App {
                     // until the task finishes, and the first tick after it runs
                     // in the destination. Input stays gated exactly the same.
                     let skip = session.transition_skip(&ui, &input);
+                    // `Psx_main` runs `Pad_set` on the door's frames too.
+                    session.step_re2_pad_repeat(&input);
                     session.tick_transition(pack, skip);
                 } else {
                     session.tick(pack, ui, input, action)?;
@@ -22884,6 +22920,93 @@ mod tests {
             "the cancel resumes the game sounds"
         );
         assert!(!session.return_title_requested, "no return was requested");
+    }
+
+    /// An RE 2 START open in the debug pack: the session as the open's
+    /// first tick left it, under the menu fade that opens the screen.
+    fn re2_status_open_session(pack: &Pack, room: RoomId) -> Box<GameSession> {
+        let mut session = GameSession::from_room(pack, room, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.begin_menu_open(pack);
+        assert!(session.menu.is_some() && session.game.re2_items.is_some());
+        assert_eq!(session.re2_status_open, Some(1));
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::Out);
+        session
+    }
+
+    /// `Status` (0x501BD0) calls its page (`St_tbl`, `St_main00`) on every
+    /// tick once its start has run, whatever the fades are doing: right and
+    /// left pressed in turn (each a new press, so `Pad_set`'s flag is up on
+    /// every tick) move the item cursor on every tick from the open's
+    /// seventh, through the menu fade, its last tick and the one after it.
+    #[test]
+    fn re2_status_page_ticks_on_every_tick_through_the_open_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        let mut fade_ticks = 0;
+        let mut after_fade = 0;
+        for open in 2..=40u8 {
+            let right = open % 2 == 1;
+            let input = player::Input {
+                right,
+                left: !right,
+                ..player::Input::default()
+            };
+            let fading = session.menu_fade_phase != MenuFadePhase::None;
+            session
+                .tick(&pack, UiInput::default(), input, false)
+                .unwrap();
+            assert_eq!(session.re2_status_open, Some(open));
+            let cursor = session.game.re2_items.unwrap().cursor;
+            if open < RE2_STATUS_PAGE_TICK {
+                assert_eq!(cursor, 0, "open tick {open}: the page waits for its start");
+                continue;
+            }
+            assert_eq!(cursor, u8::from(right), "open tick {open}: the page ran");
+            if fading {
+                fade_ticks += 1;
+            } else {
+                after_fade += 1;
+            }
+        }
+        assert!(fade_ticks > 2, "the page ran under the fade ({fade_ticks})");
+        assert!(after_fade > 2, "and after it ({after_fade})");
+    }
+
+    /// START on the item page under the menu fade closes the screen at once:
+    /// the close's ticks start on the next tick and the room is back after
+    /// them, as when the fade is done, and the menu fade gives way to the
+    /// screen's own.
+    #[test]
+    fn re2_status_close_during_the_open_fade_runs_at_once() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        for open in 2..=RE2_STATUS_PAGE_TICK {
+            let ui = UiInput {
+                start: open == RE2_STATUS_PAGE_TICK,
+                any: open == RE2_STATUS_PAGE_TICK,
+                ..UiInput::default()
+            };
+            session
+                .tick(&pack, ui, player::Input::default(), false)
+                .unwrap();
+        }
+        assert_eq!(session.re2_status_close, Some(0), "START closes the page");
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::None);
+        for close in 1..RE2_STATUS_CLOSE_TICKS {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert_eq!(session.re2_status_close, Some(close));
+            assert!(session.menu.is_some());
+        }
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.menu.is_none(), "the close ended");
+        assert!(session.game.re2_items.is_none());
     }
 
     /// `Psx_main` (0x4C3C70) runs `Pad_set` on the status screen's frames

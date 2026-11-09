@@ -12,8 +12,8 @@ pub const LEFT: u16 = 0x8000;
 /// The aim key.
 pub const AIM: u16 = 0x0008;
 
-/// The setting the title leaves for play (`Title`, `0x5035B0`): the up,
-/// right, down and left keys, a first delay of 10 and a period of 2.
+/// The setting the title leaves for play (`Title`, `0x5035B0`): the up and
+/// down keys only, a first delay of 10 and a period of 2.
 pub const TITLE_SETTING: (u16, u16) = (0x5000, 0x020A);
 /// The setting each `Status` start gives (`0x501BD0`): all four directions
 /// and the aim key's neighbours, a first delay of 10 and a period of 6. The
