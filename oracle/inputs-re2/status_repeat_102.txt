@@ -1,0 +1,32 @@
+# room 102 with six items (oracle/re2.md, "Key repeat"): up held through START and the screen's open, the grid with right and down held, the command list with down held, the tab bar with right held, then up held in play again
+0
+344 up
+380 up start
+384 up
+400
+420 right
+460
+470 down
+490
+500 left
+503
+510 up
+513
+530 confirm
+533
+540 down
+560
+580 cancel
+583
+600 up
+603
+610 up
+613
+620 up
+623
+640 right
+670
+700 start
+704
+740 up
+770

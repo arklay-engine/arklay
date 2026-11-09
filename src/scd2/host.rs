@@ -3092,6 +3092,39 @@ mod tests {
     }
 
     #[test]
+    fn each_status_start_sets_the_status_screens_repeat() {
+        use crate::game::pad_repeat::{STATUS_SETTING, TITLE_SETTING};
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        assert_eq!(
+            (game.pad_repeat.mask, game.pad_repeat.delays),
+            TITLE_SETTING
+        );
+        // The status screen and the item box (`init_re2_status`).
+        game.init_re2_status();
+        assert_eq!(
+            (game.pad_repeat.mask, game.pad_repeat.delays),
+            STATUS_SETTING
+        );
+        // A get-item window, on its sixth tick, for an item or a file.
+        game.pad_repeat.set(TITLE_SETTING);
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        for _ in 0..5 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            assert_eq!(game.pad_repeat.mask, TITLE_SETTING.0);
+        }
+        game.tick_re2_item_get(crate::game::status2::Input::default());
+        assert_eq!(
+            (game.pad_repeat.mask, game.pad_repeat.delays),
+            STATUS_SETTING
+        );
+    }
+
+    #[test]
     fn cut_chg_raises_the_pending_load_unless_bit_7_is_set() {
         let mut game = GameState::default();
         exec(&mut game, "cut_chg", &[0]);

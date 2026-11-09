@@ -1,0 +1,18 @@
+# room 201's item box with the holds (oracle/re2.md, "Key repeat"): open it, hold down and up, right in the inventory column, up onto EXIT, then down and up held together; never the aim key
+0
+420 action
+423
+480 down
+510
+540 up
+570
+600 right
+630
+660 up
+690
+720 down up
+750
+790 cancel
+793
+830 up
+860

@@ -1457,6 +1457,7 @@ pub mod hikidashi2;
 pub mod item_get2;
 pub mod itembox2;
 pub mod objects2;
+pub mod pad_repeat;
 pub mod save2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
@@ -3285,6 +3286,8 @@ pub struct GameState {
     /// The FILE page's work bytes and the screen's shared blink, which
     /// persist across the screen's openings as the original's do.
     pub re2_file: status2::files::FileWork,
+    /// RE2's `Pad_set` repeat counter (the trace's `prep`).
+    pub pad_repeat: pad_repeat::PadRepeat,
     /// The page the item page's last tick started on, until the screen's
     /// draw state steps ([`GameState::animate_re2_items`]).
     pub re2_items_start: Option<u8>,
@@ -3816,6 +3819,7 @@ impl Default for GameState {
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_file: status2::files::FileWork::default(),
+            pad_repeat: pad_repeat::PadRepeat::default(),
             re2_items_start: None,
             re2_status_start: false,
             re2_box_entrance: itembox2::Entrance::default(),
@@ -8891,6 +8895,11 @@ impl GameState {
         let mut cues = Vec::new();
         get.ticks = get.ticks.saturating_add(1);
         let item = get.action.params[0];
+        if get.phase == Re2ItemGetPhase::Open && get.ticks == ITEM_GET_CUT_TICK {
+            // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
+            // 0x60A)`, for every pick-up.
+            self.pad_repeat.set(pad_repeat::STATUS_SETTING);
+        }
         let next = |phase| (phase, 0);
         let (phase, ticks) = match get.phase {
             // `Status`'s init, on the sixth tick for both paths: the blink

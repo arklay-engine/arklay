@@ -1,0 +1,53 @@
+# The status screen's key repeat (`Pad_set`'s repeat counter, `Pad_rep_set(0xF01C, 0x60A)` at each `Status` start; oracle/re2.md, "Key repeat"). `prep` is the counter's trace: the flag, the count, the mask and the delays.
+
+[[run]]
+name = "status_repeat_102"
+room = "102"
+setup_script = "status_repeat_102.lua"
+input = "status_repeat_102.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 820
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,ip,inv,snd,prep"
+frames = [360, 819]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --give 2:0x26:1 --give 3:0x27:1 --give 4:0x14:30 --give 5:0x28:1"
+
+[[run]]
+name = "status_repeat_file"
+room = "102"
+setup_script = "status_repeat_file.lua"
+input = "status_repeat_file.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1300
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,ip,inv,snd,prep,fl"
+frames = [360, 1299]
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --file 0:1 --file 1:3 --file 8:4"
+
+[[run]]
+name = "box_repeat_201"
+room = "201"
+setup_script = "box_repeat_201.lua"
+input = "box_repeat_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1000
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,box,snd,prep"
+frames = [360, 999]
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 0:0x14:15 --box 1:0x0E:7:3 --box 2:0x26:1"
+
+[[run]]
+name = "file_pickup_repeat_201"
+room = "201"
+setup_script = "file_pickup_repeat_201.lua"
+input = "file_pickup_repeat_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,prep"
+frames = [360, 899]
+expect = "match"
+record = "--no-enemies --warp 201:-19000:0:-24850:1024 --life 200 --file 0:0"

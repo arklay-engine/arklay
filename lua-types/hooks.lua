@@ -270,6 +270,10 @@ function HookApi:set_re2_box_slot(slot, id, count, mark) end
 ---@param file integer The file's number; `0xFF` empties the slot.
 function HookApi:set_re2_file(index, file) end
 
+---Sets RE 2's key-repeat counter (`Pad_set`'s, `0x533938`). A recording's start leaves it at some phase of the title's repeat (8 at the oracle's tick 343); the repeat's setting isn't changed.
+---@param count integer
+function HookApi:set_re2_pad_repeat(count) end
+
 -- # Player
 
 ---Set the player's health and its BioCard copy.

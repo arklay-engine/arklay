@@ -263,6 +263,7 @@ mod tests {
         confirm: false,
         cancel: false,
         start: false,
+        held: 0,
     };
     const LEFT: Input = Input {
         left: true,
