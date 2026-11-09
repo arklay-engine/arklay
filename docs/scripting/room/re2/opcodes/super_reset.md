@@ -36,11 +36,12 @@ before the script runs). An `Id` 2 box's is 900 higher than its position,
 the lift `Om_trans` gives it.
 
 So the object stays where it was seen, and a script can move it on from
-there: room 205's falls (`main_07`, `main_09`, `main_0A`) and room 702's
-(`main_0D`) run `add_speed` from that position with no
-[`pos_set`](pos_set.md) between. Arklay keeps the world matrix as the
-original does (see [`super_set`](super_set.md) for the parents whose matrix
-it can't compose exactly).
+there: room 205's falls (`main_07`, `main_09`, `main_0A`) run `add_speed`
+from that position with no [`pos_set`](pos_set.md) between. Arklay keeps the
+world matrix as the original does, except on a second player's or an enemy's
+joint (see [`super_set`](super_set.md)): room 702's prop, hung on the second
+player's joint 10, starts its fall (`main_0D`) from that character's matrix
+rather than the hand, so the fall's loop and what waits on it end early.
 
 On a work that isn't an object, nothing happens, and the log notes
 `RE2 script: super_reset is not modelled` once per run.
