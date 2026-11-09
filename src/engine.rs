@@ -646,6 +646,7 @@ pub fn run_with_options(
                         re2_item_box: None,
                         re2_doors: None,
                         re2_scene: None,
+                        re2_banks: None,
                         re2_typewriter: None,
                         re2_game_mode: None,
                         re2_computer: None,
@@ -8146,6 +8147,7 @@ impl GameSession {
                 .is_re2_room
                 .then(|| (self.game.message.message_state(), self.game.re2.door_locks)),
             re2_scene: self.game.is_re2_room.then(|| self.game.scene_bars()),
+            re2_banks: self.game.is_re2_room.then_some(&self.game.re2.banks),
             re2_typewriter: self
                 .game
                 .is_re2_room
@@ -31526,6 +31528,26 @@ off_0010:
         let mut session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
         session.game.is_re2_room = true;
         (dir, pack, session)
+    }
+
+    #[test]
+    fn the_re2_trace_tick_carries_the_flag_banks() {
+        let (_dir, _pack, mut session) = re2_film_session(&[]);
+        let framebuffer = Framebuffer::new();
+        session.game.re2.set_flag(3, 100, 1);
+        session.game.re2.set_flag(5, 6, 1);
+        session.game.re2.set_flag(8, 141, 1);
+        session
+            .game
+            .re2
+            .set_flag(1, crate::scd2::host::STATUS_SCENE, 1);
+        let banks = session.trace_tick(&framebuffer).re2_banks.unwrap();
+        assert!(std::ptr::eq(banks, &session.game.re2.banks));
+        assert_eq!(banks[3][3], 0x0800_0000);
+        assert_eq!(banks[5][0], 0x0200_0000);
+        assert_eq!(banks[8][4], 0x0004_0000);
+        session.game.is_re2_room = false;
+        assert!(session.trace_tick(&framebuffer).re2_banks.is_none());
     }
 
     #[test]

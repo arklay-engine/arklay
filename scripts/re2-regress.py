@@ -74,6 +74,7 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
         run.setdefault("ref", run["name"])
         fields = run.get("fields", "")
         run["fields"] = fieldsets.get(fields, fields)
+        ignore_pairs(run.get("ignore", []))
         runs.append(run)
     names = [run["name"] for run in runs]
     if len(set(names)) != len(names):
@@ -178,17 +179,62 @@ def voice_ticks(trace: Path) -> list[int]:
     return held
 
 
+# The flag-bank fields a reference recorded before they existed lacks (`fgitem` is newer than the rest).
+# A run that names one of them against such a reference would compare `absent` with arklay's value on
+# every tick; the runner says why instead. Only these keys are checked: others (`em`, `hk`) are
+# legitimately absent from some ticks.
+BANK_FIELDS = ("fgitem", "fgroom", "fgscn", "fgstat")
+
+
+def missing_bank_fields(ref: list, offset: int, fields: str) -> list[str]:
+    """The bank fields `fields` names that the reference carries on no compared tick."""
+    named = [name for name in fields.split(",") if name in BANK_FIELDS] if fields else []
+    present = set()
+    for tick in ref[offset:]:
+        present.update(key for key, _ in oracle.tick_fields(tick))
+    return [name for name in named if name not in present]
+
+
+def ignore_pairs(ignore) -> set:
+    """The (reference tick, field) pairs a run's `ignore` list names. An entry is [tick, field], or
+    [first, last, field] for a run of ticks; a range that ends before it starts is a manifest error."""
+    pairs = set()
+    for entry in ignore:
+        if len(entry) not in (2, 3):
+            raise SystemExit(f"re2-regress: ignore entry {entry} is not [tick, field] or [first, last, field]")
+        first, last = entry[0], entry[-2]
+        if last < first:
+            raise SystemExit(f"re2-regress: ignore entry {entry} ends before it starts")
+        pairs.update((tick, entry[-1]) for tick in range(first, last + 1))
+    return pairs
+
+
+def drop_ignored(rows, skip: set) -> tuple[list, int]:
+    """The differing ticks left once the ignored pairs are dropped, and how many ticks had an ignored
+    field that actually differed (a tick in an ignored range that matched is not counted)."""
+    divergent = []
+    ignored = 0
+    for row in rows:
+        kept = [d for d in row["differences"] if (row["ref_t"], d[0]) not in skip]
+        if len(kept) < len(row["differences"]):
+            ignored += 1
+        if kept:
+            divergent.append((row["ref_t"], kept))
+    return divergent, ignored
+
+
 def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ignore=()) -> dict:
     """Compare from `offset`, leaving out the (reference tick, field) pairs the manifest says differ for a known reason."""
     ref = oracle.parse_trace(str(ref_path))
     ark = oracle.parse_trace(str(ark_path))
+    missing = missing_bank_fields(ref, offset, fields)
+    if missing:
+        return {
+            "ticks": 0, "matched": 0, "tick": 0, "fields": missing, "ignored": 0,
+            "detail": [f"the reference has no {name} (recorded before it existed): record it again or drop the field" for name in missing],
+        }
     result = oracle.compare_pair(ref, ark, offset, 0, 10**9, 0, fields.split(",") if fields else None)
-    skip = {(tick, field) for tick, field in ignore}
-    divergent = []
-    for row in result["first_divergences"]:
-        kept = [d for d in row["differences"] if (row["ref_t"], d[0]) not in skip]
-        if kept:
-            divergent.append((row["ref_t"], kept))
+    divergent, ignored = drop_ignored(result["first_divergences"], ignore_pairs(ignore))
     first = divergent[0] if divergent else None
     return {
         "ticks": result["length"],
@@ -196,7 +242,7 @@ def compare_traces(ref_path: Path, ark_path: Path, offset: int, fields: str, ign
         "tick": first[0] if first else None,
         "fields": [d[0] for d in first[1]] if first else [],
         "detail": [f"{k}: ref={a} ark={b}" for k, a, b in first[1][:3]] if first else [],
-        "ignored": len(skip),
+        "ignored": ignored,
     }
 
 
@@ -271,6 +317,22 @@ def self_test() -> int:
     if texts != want_texts or problems != want_problems:
         print(f"re2-regress self-test FAILED: {texts} {problems}", file=sys.stderr)
         return 1
+    # The ignore list: only ticks whose ignored field differed count, and a backwards range is refused.
+    rows = [
+        {"ref_t": 5, "differences": [("fgroom", "1", "2")]},
+        {"ref_t": 6, "differences": [("fgroom", "1", "2"), ("inv", "a", "b")]},
+        {"ref_t": 9, "differences": [("fl", "0", "1")]},
+    ]
+    divergent, ignored = drop_ignored(rows, ignore_pairs([[0, 100, "fgroom"], [9, "inv"]]))
+    if ignored != 2 or divergent != [(6, [("inv", "a", "b")]), (9, [("fl", "0", "1")])]:
+        print(f"re2-regress self-test FAILED: ignore gave {divergent} {ignored}", file=sys.stderr)
+        return 1
+    try:
+        ignore_pairs([[20, 10, "fgroom"]])
+        print("re2-regress self-test FAILED: a backwards ignore range was accepted", file=sys.stderr)
+        return 1
+    except SystemExit:
+        pass
     print("re2-regress self-test ok")
     return 0
 

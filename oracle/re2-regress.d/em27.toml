@@ -10,7 +10,7 @@ sound = false
 ticks = 1400
 # Leon A, in from room 304's door; the player stands while the embryos crawl, slide and rest, until embryo 3 jumps at the player and latches on
 input = "none.txt"
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm1,zm2,zm3"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm1,zm2,zm3,fgscn"
 expect = { tick = 738, fields = ["rng", "zm3"], note = "embryo 3 takes the latch (Routine_1 4, 0x475280) on 737, which isn't ported, so its first step on 738 differs (docs/internals/deviations/re2.md, \"The G embryo\")" }
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
 
@@ -23,7 +23,7 @@ sound = false
 ticks = 400
 # Leon A, in from room 30B's door: embryo 3 faces the player within 3000 and jumps on its first move
 input = "none.txt"
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm1,zm2,zm3"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm1,zm2,zm3,fgscn,fgstat"
 expect = "match"
 record = "--warp 303:-24700:-5400:-25832:3808:0 --flag 4:55 --flag 4:57 --life 200 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
 

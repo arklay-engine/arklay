@@ -74,6 +74,8 @@ FG_ROOM = 0x0098EB6C
 FG_USE = 0x00989ED8  # `fg_use`: the key items the areas under the player want, four words
 PL_AT_SCE = 0x00989EFB  # the player's `At_sce_no` (`+0xB`, script member 9): the last area `Sce_at_check` found it in
 SCD_VARIABLES = 0x0098EAE4  # `scd_variables`: the scripts' variables, 0 the forward area, 1 the body area, 2 the used item
+FG_ITEM = 0x0098EBB4  # bank 8, `fg_item`: the pick-ups taken in rooms 1xx-4xx (`scd_var_stage` 0-3; `St_get_item`, `St_get_file`)
+FG_ITEM_2 = 0x0098EBD4  # bank 34, `fg_item_2`: rooms 5xx-7xx (`scd_var_stage` 4 up), 44 bytes to bank 35's 0x98EC00
 STAGE = 0x0098EB14
 ROOM = 0x0098EB16
 CUT = 0x0098EB18
@@ -1011,6 +1013,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgscn={game.read(FG_SCENARIO, 32).hex()}")
     fields.append(f"fgcom={game.read(FG_COMMON, 32).hex()}")
     fields.append(f"fgroom={game.u32(FG_ROOM):08x}")
+    fields.append(f"fgitem={game.read(FG_ITEM, 32).hex()}")
+    fields.append(f"fgitem2={game.read(FG_ITEM_2, 44).hex()}")
     for name, table in (("em", ENEMIES), ("es", SPLAYER)):
         work = game.u32(table)
         if work != 0 and game.u8(work + ENTITY_ID) >= 0x40:

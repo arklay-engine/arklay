@@ -9,7 +9,7 @@ ticks = 1400
 # the load: the ten bodies' inits and the freeze, with the player standing at the door
 setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
 input = "none.txt"
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
 expect = "match"
 record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
 
@@ -22,7 +22,7 @@ ticks = 1500
 setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
 input = "em2d_watch_205.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
 expect = "match"
 record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
 
@@ -37,6 +37,6 @@ ticks = 1500
 setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
 input = "em2d_watch_205.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
 expect = "match"
 record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
