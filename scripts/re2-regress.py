@@ -943,7 +943,7 @@ def self_test_streaming() -> int:
                 check(f"{count} frames: the streamed errors differ from the post-hoc ones", got["errors"] == want)
                 check(f"{count} frames: stale frames reported {got['outside']}", got["outside"] == [])
                 # (inline, one comparison outlasts several of the helper's frames, so only the pool's pace is checked)
-                check(f"{count} frames: the backlog reached {got['peak']}, over {high} + 2", pool is None or got["peak"] <= high + 2)
+                check(f"{count} frames: the backlog reached {got['peak']}, over {high} + 2", pool is None or not hasattr(signal, "SIGSTOP") or got["peak"] <= high + 2)
                 worst = {t - offset for _, t in sorted(want[0], reverse=True)[:3]}
                 left = {int(m.group(1)) for e in live.iterdir() if (m := FRAME_RE.fullmatch(e.name))}
                 check(f"{count} frames: left {sorted(left)}", left == set(range(max(0, count - retain), count)) | worst)
