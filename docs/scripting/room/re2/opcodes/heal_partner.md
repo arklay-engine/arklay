@@ -1,6 +1,6 @@
 # `heal_partner`
 
-By its name, heals the partner (not modelled).
+Heals the partner: 200 of 200, and the poison goes.
 
 | | |
 | --- | --- |
@@ -8,7 +8,7 @@ By its name, heals the partner (not modelled).
 | Group | Items and the player's state |
 | Kind | Instruction |
 | Size | 1 byte |
-| Status | no |
+| Status | yes |
 
 ## Syntax
 
@@ -22,11 +22,10 @@ None.
 
 ## Behaviour
 
-Not modelled: the instruction does nothing, and the log notes
-`RE2 script: heal_partner is not modelled` once per run.
-
-By its name, it restores the health of the partner (`splayer_work`); that
-has not been checked against the original's handler.
+As the original's `Sce_heal_partner` (`0x4e8d70`): the partner's poison is
+cleared, her saved life (what a save keeps, and what [`splc_ret`](splc_ret.md)
+gives her) becomes 200, and the partner in play, if there is one, has a life
+and a maximum life of 200. It works on the partner whatever the task's work is.
 
 ## Example
 
@@ -42,4 +41,4 @@ Illustrative: the instruction's form only.
 
 ## See also
 
-- [`sce_heal`](sce_heal.md): the same for the player, also not modelled.
+- [`sce_heal`](sce_heal.md): the same for the player, not modelled.

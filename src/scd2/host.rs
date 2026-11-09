@@ -406,7 +406,9 @@ pub const FILE_SLOTS: usize = 24;
 pub const NO_FILE: u8 = 0xFF;
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_FILES + FILE_SLOTS;
+const SAVE_LEN: usize = SAVE_LEN_NO_PARTNER + 3;
+/// A save from before the partner's life and poison.
+const SAVE_LEN_NO_PARTNER: usize = SAVE_LEN_NO_FILES + FILE_SLOTS;
 /// A save from before the files held.
 const SAVE_LEN_NO_FILES: usize = SAVE_LEN_NO_MAP + (BANKS - SAVE_BANKS) * 8 * 4;
 /// A save from before banks 32 to 39 (the map's, `fg_map_c`, `fg_map_i`,
@@ -460,6 +462,50 @@ const PARTNER_BIT: u8 = 3;
 const PUSH_BIT: u8 = 18;
 /// `fg_stop`'s `0x8000000`: the objects don't move.
 const OBJECTS_STOP_BIT: u8 = 4;
+/// The partner's life and `Max_life`: `saved_splayer_health` at a new game,
+/// and what `Spl_in45`, `Spcl_ret` and `Sce_heal_partner` give her.
+pub const PARTNER_LIFE: i16 = 200;
+
+/// `Plc_ret`'s `Type`: a player's high byte keeps only its low nibble, and
+/// everyone loses `0x4000` and `0x1000` (`& 0xAF`), so a scene character goes
+/// to `Spl_Auto` as a partner would.
+fn plc_ret_kind(id: u8, kind: u16) -> u16 {
+    let kind = if id < 0x10 { kind & 0x0FFF } else { kind };
+    kind & 0xAFFF
+}
+
+/// `Splc_sce` (opcode 0x71, `0x4e8d00`) on the task's work, whose partner
+/// bit the caller clears: back to the scripts (`Spl_Scenario`, standing),
+/// looking ahead, a scene character's `Type` and no life.
+fn splc_sce(character: &mut Character) {
+    character.work.routine = [4, 6, 0, 0];
+    character.work.neck.target = None;
+    character.work.neck.flags = 0x92;
+    character.kind = (character.kind & !0x400) | 0x5000;
+    if let Some(partner) = character.partner.as_deref_mut() {
+        partner.life = -1;
+        partner.max_life = -1;
+    }
+}
+
+/// `Spcl_ret` (opcode 0x70, arklay's `splc_ret`, `0x4e8c70`) on the task's
+/// work, whose partner bit the caller raises: back to `Spl_Auto`, looking at
+/// the player, the partner's `Type` and her saved life. Sherry is no longer
+/// lost.
+fn splc_ret(character: &mut Character, life: i16) {
+    character.work.routine = [1, 0, 0, 0];
+    character.work.neck.target = Some(0);
+    character.work.neck.flags = 0;
+    character.kind = (character.kind & 0xAFFF) | 0x400;
+    let sherry = matches!(character.id, 0x45 | 0x4F);
+    if let Some(partner) = character.partner.as_deref_mut() {
+        partner.life = life;
+        partner.max_life = PARTNER_LIFE;
+        if sherry {
+            partner.state &= !crate::partner2::STATE_LOST;
+        }
+    }
+}
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
@@ -748,7 +794,7 @@ impl Default for Re2State {
             sound_init: false,
             spl_pos_ck_timer: crate::partner2::SPL_POS_CK_START,
             nearest_dist: [0; 3],
-            partner_life: 200,
+            partner_life: PARTNER_LIFE,
             partner_poisoned: false,
         }
     }
@@ -782,7 +828,26 @@ impl Re2State {
             out.extend_from_slice(&word.to_le_bytes());
         }
         out.extend_from_slice(&self.files);
+        out.extend_from_slice(&self.partner_life.to_le_bytes());
+        out.push(u8::from(self.partner_poisoned));
         out
+    }
+
+    /// `Sce_heal_partner` (opcode 0x89, `0x4e8d70`): the partner's poison
+    /// goes, and her life, saved and in play, is 200 of 200.
+    pub fn heal_partner(&mut self) {
+        self.partner_poisoned = false;
+        self.partner_life = PARTNER_LIFE;
+        let partner = self
+            .characters
+            .0
+            .get_mut(SPLAYER_SLOT)
+            .and_then(|character| character.as_deref_mut())
+            .and_then(|character| character.partner.as_deref_mut());
+        if let Some(partner) = partner {
+            partner.life = PARTNER_LIFE;
+            partner.max_life = PARTNER_LIFE;
+        }
     }
 
     /// `St_file_set` (`0x5023B0`): put `file` in the first free slot of
@@ -806,6 +871,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_PARTNER
             && bytes.len() != SAVE_LEN_NO_FILES
             && bytes.len() != SAVE_LEN_NO_MAP
             && bytes.len() != SAVE_LEN_NO_CHOICE
@@ -877,6 +943,13 @@ impl Re2State {
         for (index, file) in self.files.iter_mut().enumerate() {
             *file = files.get(index).copied().unwrap_or(NO_FILE);
         }
+        // A save from before them has the new game's: 200, not poisoned.
+        let partner = bytes.get(SAVE_LEN_NO_PARTNER..).unwrap_or(&[]);
+        self.partner_life = match partner {
+            [low, high, ..] => i16::from_le_bytes([*low, *high]),
+            _ => PARTNER_LIFE,
+        };
+        self.partner_poisoned = partner.get(2).is_some_and(|&byte| byte & 1 != 0);
         Some(())
     }
 
@@ -2750,6 +2823,9 @@ impl Host for GameHost<'_> {
             }
             "plc_ret" if self.work_is_player(task) => {
                 crate::player2::plc_ret(&mut self.game.re2.player);
+                // `Plc_ret` clears the player's `Type` high nibble too (its
+                // Id is under 0x10), `KIND_NOT_MOVED` among it.
+                self.game.re2.player.kind = plc_ret_kind(0, self.game.re2.player.kind);
             }
             "plc_stop" if self.work_is_player(task) => {
                 crate::player2::plc_stop_player(&mut self.game.re2.player);
@@ -2781,8 +2857,26 @@ impl Host for GameHost<'_> {
             "plc_ret" if self.task_character(task).is_some() => {
                 if let Some(character) = self.task_character(task) {
                     crate::player2::plc_ret(&mut character.work);
+                    // A partner's live `Type` is `kind`, an enemy's is
+                    // `work.kind` (`sce_em_set`): `Plc_ret` clears +0x10f.
+                    character.kind = plc_ret_kind(character.id, character.kind);
+                    character.work.kind = plc_ret_kind(character.id, character.work.kind);
                 }
             }
+            "splc_sce" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    splc_sce(character);
+                }
+                self.game.re2.set_partner_bit(false);
+            }
+            "splc_ret" if self.task_character(task).is_some() => {
+                let life = self.game.re2.partner_life;
+                if let Some(character) = self.task_character(task) {
+                    splc_ret(character, life);
+                }
+                self.game.re2.set_partner_bit(true);
+            }
+            "heal_partner" => self.game.re2.heal_partner(),
             "plc_rot" if self.work_is_player(task) => {
                 let by = at(1) as i16;
                 match at(0) {
@@ -5057,6 +5151,143 @@ mod tests {
         );
         assert_eq!(old.banks[..SAVE_BANKS], state.banks[..SAVE_BANKS]);
         assert_eq!(old.vars[5], 77);
+    }
+
+    /// Sherry in `splayer_work` with `Type` `type_hi << 8`, the task's work.
+    fn place_sherry(game: &mut GameState, type_hi: i64) {
+        exec(
+            game,
+            "sce_em_set",
+            &[
+                0, 255, 69, 0, type_hi, 0, 32, 0, 255, -16641, 0, -23700, 2336, 0, 0,
+            ],
+        );
+        exec(game, "work_set", &[WK_SPLAYER, 0]);
+    }
+
+    fn splayer(game: &GameState) -> &Character {
+        game.re2.characters.0[SPLAYER_SLOT].as_deref().unwrap()
+    }
+
+    #[test]
+    fn plc_ret_hands_a_scene_sherry_to_spl_auto() {
+        let mut game = GameState::default();
+        place_sherry(&mut game, 0x50);
+        exec(&mut game, "plc_ret", &[]);
+        let sherry = splayer(&game);
+        assert_eq!(sherry.kind, 0);
+        assert_eq!(sherry.work.routine, [1, 0, 0, 0]);
+        assert!(sherry.partner.is_some());
+        assert_eq!(
+            plc_ret_kind(0x01, 0x5C12),
+            0x0C12,
+            "a player keeps the low nibble"
+        );
+    }
+
+    /// `Plc_ret` clears `Type`'s 0x4000 and 0x1000 on any work: on an enemy
+    /// that is `work.kind`, which `zombie2::kind()` reads (room 204's licker,
+    /// placed with 0x4510).
+    #[test]
+    fn plc_ret_clears_an_enemys_type_too() {
+        let mut game = GameState::default();
+        let licker = [
+            0, 1, 0x22, 16, 69, 0, 14, 0, 61, 32000, -5700, 32000, 1024, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        exec(&mut game, "work_set", &[WK_ENEMY, 1]);
+        exec(&mut game, "plc_ret", &[]);
+        let licker = game.re2.characters.0[1].as_ref().unwrap();
+        assert_eq!(licker.work.kind, 0x0510);
+        assert_eq!(licker.kind & 0x5000, 0);
+        // And the partner's, in both fields.
+        place_sherry(&mut game, 0x50);
+        exec(&mut game, "plc_ret", &[]);
+        let sherry = splayer(&game);
+        assert_eq!((sherry.kind, sherry.work.kind & 0x5000), (0, 0));
+    }
+
+    /// `Plc_ret` on the player clears `Type`'s high nibble, so a scene that
+    /// froze the player with `KIND_NOT_MOVED` hands it back to the pad.
+    #[test]
+    fn plc_ret_on_the_player_clears_its_type_high_nibble() {
+        let mut game = GameState::default();
+        game.re2.player.kind = crate::player2::KIND_NOT_MOVED | 0x0C00;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "plc_ret", &[]);
+        assert_eq!(game.re2.player.kind, 0x0C00);
+    }
+
+    #[test]
+    fn splc_sce_and_splc_ret_swap_her_between_script_and_partner() {
+        let mut game = GameState::default();
+        game.re2.partner_life = 120;
+        place_sherry(&mut game, 4);
+        game.re2.set_partner_bit(true);
+        if let Some(sherry) = game.re2.characters.0[SPLAYER_SLOT].as_deref_mut() {
+            sherry.work.routine = [1, 0, 0, 0];
+            sherry.partner.as_deref_mut().unwrap().state = crate::partner2::STATE_LOST;
+        }
+        exec(&mut game, "splc_sce", &[]);
+        assert!(!game.re2.partner_bit());
+        let sherry = splayer(&game);
+        assert_eq!(sherry.work.routine, [4, 6, 0, 0]);
+        assert_eq!(sherry.kind, 0x5000);
+        assert_eq!(
+            (sherry.work.neck.flags, sherry.work.neck.target),
+            (0x92, None)
+        );
+        let partner = sherry.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (-1, -1));
+        exec(&mut game, "splc_ret", &[]);
+        assert!(game.re2.partner_bit());
+        let sherry = splayer(&game);
+        assert_eq!(sherry.work.routine, [1, 0, 0, 0]);
+        assert_eq!(sherry.kind, 0x0400);
+        assert_eq!(
+            (sherry.work.neck.flags, sherry.work.neck.target),
+            (0, Some(0))
+        );
+        let partner = sherry.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (120, 200));
+        assert_eq!(partner.state & crate::partner2::STATE_LOST, 0, "not lost");
+    }
+
+    #[test]
+    fn heal_partner_restores_200() {
+        let mut game = GameState::default();
+        place_sherry(&mut game, 4);
+        game.re2.partner_life = 50;
+        game.re2.partner_poisoned = true;
+        if let Some(sherry) = game.re2.characters.0[SPLAYER_SLOT].as_deref_mut() {
+            sherry.partner.as_deref_mut().unwrap().life = 50;
+        }
+        exec(&mut game, "heal_partner", &[]);
+        assert_eq!(game.re2.partner_life, 200);
+        assert!(!game.re2.partner_poisoned);
+        let partner = splayer(&game).partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (200, 200));
+    }
+
+    #[test]
+    fn the_partner_life_survives_a_save() {
+        let state = Re2State {
+            partner_life: 77,
+            partner_poisoned: true,
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!((loaded.partner_life, loaded.partner_poisoned), (77, true));
+        // A save from before them: the new game's.
+        let mut old = Re2State {
+            partner_life: 5,
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_PARTNER]).unwrap();
+        assert_eq!((old.partner_life, old.partner_poisoned), (200, false));
     }
 
     #[test]

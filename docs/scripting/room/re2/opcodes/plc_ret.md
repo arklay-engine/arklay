@@ -28,9 +28,11 @@ standing) and `Neck_flg` 0, so the head follows the pose again.
 - **The player**: is back under the pad from the next tick. `plc_ret` does
   not clear `fg_stop`: a script that held the input with `set(2, 7, 1)` must
   also release it with `set(2, 7, 0)`.
-- **A character**: leaves the script's routine. The port has no `Spl_Auto`
-  yet, so a character handed back stands still rather than walking about on
-  its own.
+- **A character**: leaves the script's routine, and its `Type` loses `0x4000`
+  and `0x1000` (a player id's high byte keeps only its low nibble), an
+  enemy's as well as a scene character's. The routine is what sends Sherry to
+  `Spl_Auto` to follow the player, as at the end of her scene in room 21B; the port has no `Spl_Auto` for anyone else yet, so another
+  character handed back stands still.
 - **A room object or a work the engine does not model**: nothing happens, and
   the log notes `RE2 script: plc_ret is not modelled` once per run.
 

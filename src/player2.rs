@@ -61,11 +61,9 @@ const MOVE_JUMP_DOWN: u8 = 9;
 const MOVE_PUSH: u8 = 10;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
-/// `Plc_stop`'s routine, which no table entry animates.
-/// `Type`'s bit that gives a character to `Spl_Auto`, not to the scripts.
-const SPL_AUTO: u16 = 0x400;
 /// `Spl_Init`'s `Joint_move` late step.
 const SPL_INIT_STEP: u16 = 0x100;
+/// `Plc_stop`'s routine, which no table entry animates.
 const STOPPED_ROUTINE: [u8; 4] = [MODE_SCENARIO, 0x14, 0, 0];
 /// A frame word's top bit, which `get_null_pos` passes over.
 const FRAME_SKIPPED: u32 = 0x8000;
@@ -5897,7 +5895,8 @@ pub fn character_height(id: u8) -> u16 {
 /// its model's first clip, and which then waits for the script. The partner
 /// (`partner`, `Type`'s `0x400` with `fg_status`'s partner bit) keeps
 /// `Spl_Auto`'s routine, and `Spl_in45` has her look at the player before the
-/// head turns.
+/// head turns. `kind` is the `Type` after `Spl_Init` raised its bits: `0x4000`
+/// sends the character to `Spl_Scenario`.
 pub fn spl_init(
     work: &mut Work,
     player: &mut PlayerState,
@@ -5905,7 +5904,7 @@ pub fn spl_init(
     kind: u16,
     partner: bool,
 ) {
-    work.routine = if kind & SPL_AUTO == 0 {
+    work.routine = if kind & 0x4000 != 0 {
         [MODE_SCENARIO, 6, 0, 0]
     } else {
         [MODE_MOVE, 0, 0, 0]

@@ -1,0 +1,16 @@
+# Claire A in room 21B: Sherry's scene (event 33) from the load, its plc_ret handing her over at 1818, then a walk with her following (oracle/re2.md)
+344
+1900 up
+1980
+2100 left
+2164 up run
+2284
+2314 left
+2378 up run
+2438
+2500 right
+2532 up
+2700
+2760 up left
+2800 up
+2900

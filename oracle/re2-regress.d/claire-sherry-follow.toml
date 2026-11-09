@@ -28,3 +28,21 @@ setup = { pos = [-26159, 0, -18908], angle = 1024, health = 200, rnd = 6114, cam
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,fgscn,fgstat"
 expect = "match"
 record = "--start claire --warp 21B:-26159:0:-18908:1024:0 --flag 3:64 --flag 3:8 --flag 3:12 --life 200"
+
+[[run]]
+name = "sherry_21b_handover"
+room = "21B"
+player = 1
+character = 1
+sound = false
+ticks = 3000
+input = "sherry_21b_handover.txt"
+input_shift = 344
+setup = { pos = [-18460, 0, -22987], angle = 2048, health = 200, rnd = 6114, camera = 0, flags = [[3, 64], [3, 7], [6, 98], [8, 55], [3, 6], [3, 12]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,xavol"
+# The scene isn't ported yet (claire-21b-sherry-scenes): Claire's first ticks in it differ, and
+# the scene Sherry's follow-point words aren't modelled. From the scene's plc_ret on, every field
+# matches: tick 1818 is the first with her Type cleared from Spl_Init's 0x5000 to 0.
+compare_from = 1818
+expect = "match"
+record = "--start claire --warp 21B:-18460:0:-22987:2048:0 --flag 3:64 --flag 3:7 --flag 6:98 --flag 8:55 --flag 3:6 --flag 3:12 --life 200"
