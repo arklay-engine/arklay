@@ -41,4 +41,4 @@ Illustrative: the instruction's form only.
 
 ## See also
 
-- [`sce_heal`](sce_heal.md): the same for the player.
+- [`sce_heal`](sce_heal.md): the same for the player, not modelled.

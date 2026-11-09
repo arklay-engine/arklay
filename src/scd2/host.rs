@@ -2834,7 +2834,10 @@ impl Host for GameHost<'_> {
             "plc_ret" if self.task_character(task).is_some() => {
                 if let Some(character) = self.task_character(task) {
                     crate::player2::plc_ret(&mut character.work);
+                    // A partner's live `Type` is `kind`, an enemy's is
+                    // `work.kind` (`sce_em_set`): `Plc_ret` clears +0x10f.
                     character.kind = plc_ret_kind(character.id, character.kind);
+                    character.work.kind = plc_ret_kind(character.id, character.work.kind);
                 }
             }
             "splc_sce" if self.task_character(task).is_some() => {
@@ -4971,6 +4974,28 @@ mod tests {
             0x0C12,
             "a player keeps the low nibble"
         );
+    }
+
+    /// `Plc_ret` clears `Type`'s 0x4000 and 0x1000 on any work: on an enemy
+    /// that is `work.kind`, which `zombie2::kind()` reads (room 204's licker,
+    /// placed with 0x4510).
+    #[test]
+    fn plc_ret_clears_an_enemys_type_too() {
+        let mut game = GameState::default();
+        let licker = [
+            0, 1, 0x22, 16, 69, 0, 14, 0, 61, 32000, -5700, 32000, 1024, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        exec(&mut game, "work_set", &[WK_ENEMY, 1]);
+        exec(&mut game, "plc_ret", &[]);
+        let licker = game.re2.characters.0[1].as_ref().unwrap();
+        assert_eq!(licker.work.kind, 0x0510);
+        assert_eq!(licker.kind & 0x5000, 0);
+        // And the partner's, in both fields.
+        place_sherry(&mut game, 0x50);
+        exec(&mut game, "plc_ret", &[]);
+        let sherry = splayer(&game);
+        assert_eq!((sherry.kind, sherry.work.kind & 0x5000), (0, 0));
     }
 
     #[test]

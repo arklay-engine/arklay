@@ -1320,10 +1320,18 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         // `Spl_Init`: `Type`'s `0x400` makes the partner, and the scene's
         // Ada or Sherry stops being one.
         let partner = character.kind & SPL_AUTO != 0;
+        // Everyone takes `Type`'s 0x1000; a scene character also takes
+        // 0x4000, which sends it to `Spl_Scenario`, and the partner drops
+        // 0x1000 again.
+        character.kind |= 0x1000;
         if partner {
+            character.kind &= !0x1000;
             game.re2.set_partner_bit(true);
-        } else if matches!(character.id, 0x41 | 0x43 | 0x45 | 0x4F) {
-            game.re2.set_partner_bit(false);
+        } else {
+            character.kind |= 0x4000;
+            if matches!(character.id, 0x41 | 0x43 | 0x45 | 0x4F) {
+                game.re2.set_partner_bit(false);
+            }
         }
         let partner = partner && sherry && character.partner.is_some();
         player2::spl_init(
@@ -1834,9 +1842,25 @@ mod tests {
         spl(&mut game, &mut character, &tick);
         assert!(!game.re2.partner_bit());
         assert_eq!(character.work.routine[..2], [4, 6]);
+        assert_eq!(character.kind, 0x5000, "Spl_Init's 0x4000 and 0x1000");
         let partner = character.partner.as_deref().unwrap();
         assert_eq!((partner.life, partner.max_life), (-1, -1));
         assert_eq!(character.work.neck.flags, 0x92);
+    }
+
+    /// `Spl_Init` drops the partner's 0x1000 and sends anyone with 0x4000 to
+    /// `Spl_Scenario`, the partner too.
+    #[test]
+    fn spl_init_drops_the_partners_0x1000_and_0x4000_wins() {
+        let mut game = GameState::default();
+        let mut character = sherry(0x1400);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.kind, 0x400);
+        assert_eq!(character.work.routine[0], 1);
+        let mut character = sherry(0x4400);
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.work.routine[..2], [4, 6]);
     }
 
     #[test]

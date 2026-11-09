@@ -308,8 +308,22 @@ def judge_windows(windows, errors) -> tuple[list[str], list[str]]:
     return texts, problems
 
 
+def comparison_start(run: dict) -> tuple[int, str | None]:
+    """The reference tick the comparison starts at (`compare_from`, else `offset`), and why it can't be used, if it can't.
+
+    `compare_from` must lie in the run: at or past `offset` (before it, arklay's index would go negative) and before
+    `ticks` (at or past it, nothing would be compared)."""
+    offset = run.get("offset", 344)
+    start = run.get("compare_from", offset)
+    if start < offset:
+        return start, f"compare_from {start} is before the run's offset {offset}"
+    if start >= run["ticks"]:
+        return start, f"compare_from {start} is not before the run's last tick {run['ticks']}"
+    return start, None
+
+
 def self_test() -> int:
-    """The window judge on a synthetic list of frame errors."""
+    """The window judge on a synthetic list of frame errors, and `compare_from`'s bounds."""
     errors = [(1.0, 10), (3.0, 11), (0.2, 20), (0.4, 21), (9.0, 30)]
     texts, problems = judge_windows([[10, 11, 2.0], [20, 21, 0.25], [40, 50, 1.0]], errors)
     want_texts = ["10-11 2.00", "20-21 0.30"]
@@ -333,6 +347,11 @@ def self_test() -> int:
         return 1
     except SystemExit:
         pass
+    starts = [comparison_start({"ticks": 3000, **extra}) for extra in ({}, {"compare_from": 1818})]
+    bad = [comparison_start({"ticks": 3000, "compare_from": at})[1] for at in (343, 3000, 4000)]
+    if starts != [(344, None), (1818, None)] or None in bad:
+        print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
+        return 1
     print("re2-regress self-test ok")
     return 0
 
@@ -364,6 +383,11 @@ def run_one(run: dict, ctx: dict) -> dict:
 
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
+    compare_from, why = comparison_start(run)
+    if why:
+        result["text"] = why
+        result["problems"].append(why)
+        return result
     screen = run.get("ui", "game")
     if screen != "game":
         setup = None
@@ -429,14 +453,15 @@ def run_one(run: dict, ctx: dict) -> dict:
         drop_sound_3(ark_trace, ark_f)
     # `compare_from`: a reference tick past `offset` the comparison starts at, for a run whose
     # start isn't comparable yet (a scene not ported) but whose rest is.
-    start = run.get("compare_from", offset)
-    cmp = compare_traces(ref_f, ark_f, start, run["fields"], run.get("ignore", []), start - offset)
+    cmp = compare_traces(ref_f, ark_f, compare_from, run["fields"], run.get("ignore", []), compare_from - offset)
     ref_f.unlink()
     ark_f.unlink()
     text = trace_text(cmp)
-    if start != offset:
-        text += f" from tick {start}"
-    if cmp["ticks"] < ticks - (start - offset):
+    if compare_from != offset:
+        text += f" from tick {compare_from}"
+    if cmp["ticks"] == 0:
+        result["problems"].append("no ticks compared")
+    elif cmp["ticks"] < ticks - (compare_from - offset):
         # compare_pair stops at the shorter trace, so a short one would otherwise pass.
         result["problems"].append(f"only {cmp['ticks']} of {ticks} ticks compared (a trace ended early)")
     why = judge_trace(run, cmp)
