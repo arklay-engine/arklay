@@ -6580,27 +6580,24 @@ impl GameState {
                 self.tick_re2_crouch();
             }
         }
-        if self.transition.is_none() {
-            self.sce_at_check(player, PLAYER_AREA_MASK, false);
-        }
+        // `Sce_Door` returns 0, so a pressed door doesn't end `Sce_at`: the
+        // passive pass and the other callers' run on that tick too (a flag
+        // area set on it outlives the room change).
+        self.sce_at_check(player, PLAYER_AREA_MASK, false);
         // Then each enemy in play, each room object in play and the partner.
         for slot in 0..self.re2.characters.0.len() {
-            if slot != crate::scd2::host::SPLAYER_SLOT && self.transition.is_none() {
+            if slot != crate::scd2::host::SPLAYER_SLOT {
                 self.sce_at_check(AreaCaller::Character(slot), ENEMY_AREA_MASK, false);
             }
         }
         for index in 0..self.objects.records.len() {
-            if self.transition.is_none() {
-                self.sce_at_check(AreaCaller::Object(index), OBJECT_AREA_MASK, false);
-            }
+            self.sce_at_check(AreaCaller::Object(index), OBJECT_AREA_MASK, false);
         }
-        if self.transition.is_none() {
-            self.sce_at_check(
-                AreaCaller::Character(crate::scd2::host::SPLAYER_SLOT),
-                PARTNER_AREA_MASK,
-                false,
-            );
-        }
+        self.sce_at_check(
+            AreaCaller::Character(crate::scd2::host::SPLAYER_SLOT),
+            PARTNER_AREA_MASK,
+            false,
+        );
     }
 
     /// `Sce_at` on the ticks of the status screen's open that still show the
@@ -8476,6 +8473,11 @@ impl GameState {
             return false;
         };
         if door.re2.is_some() {
+            // The door a tick's walk queued first is the one taken; a later
+            // area on the same tick doesn't replace it.
+            if self.transition.is_some() {
+                return false;
+            }
             return self.try_re2_door(&door);
         }
         // The character-restriction test is inert for the two PC characters:

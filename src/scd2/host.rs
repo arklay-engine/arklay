@@ -2024,7 +2024,9 @@ impl GameHost<'_> {
             };
             params[6..].copy_from_slice(&kept);
         }
-        self.game.re2.gates[slot].sat = Some(at(2) as u8);
+        // `Sat = old & 0x80 | new`: the area's 0x80 bit survives the reset.
+        let kept_sat = self.game.re2.gates[slot].sat.unwrap_or(0) & 0x80;
+        self.game.re2.gates[slot].sat = Some(kept_sat | at(2) as u8);
         self.game.room_actions[slot] = Some(area_action(
             slot as u8,
             at(1) as u8,

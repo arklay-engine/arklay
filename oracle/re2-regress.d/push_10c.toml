@@ -51,9 +51,9 @@ input_shift = 344
 input_drop_early = true
 ticks = 1760
 frames = [360, 1759]
-# Measured: 0.01 a frame up to the jewel's press (the jewel scene, 4:39 at 993 to cut 9's end and object 0's fall, included), 0.89 for the jewel's question and item view (1194 to 1665, as in the item runs), 0.01 after; 0.31 in all. The windows hold the scene at 0.05, so a draw regression in it can't hide in the whole run's mean.
+# Measured: 0.01 a frame up to the jewel's press (the jewel scene, 4:39 at 993 to cut 9's end and object 0's fall, included), 0.89 for the jewel's question and item view (1194 to 1665, as in the item runs), 0.01 after; 0.31 in all. The windows hold the scene at 0.03 (the rest at 0.05), so a draw regression in it can't hide in the whole run's mean.
 frame_max_mean = 0.33
-frame_windows = [[360, 992, 0.05], [993, 1185, 0.05], [1186, 1193, 0.1], [1194, 1665, 0.95], [1666, 1759, 0.05]]
+frame_windows = [[360, 992, 0.05], [993, 1185, 0.03], [1186, 1193, 0.1], [1194, 1665, 0.95], [1666, 1759, 0.05]]
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,fgcom,om0,om1,om2,msg,inv"
 expect = "match"
 record = "--no-enemies --warp 10C:-20100:-3600:-13900:3072 --flag 4:38 --life 200"
@@ -67,9 +67,9 @@ input_shift = 344
 input_drop_early = true
 ticks = 2620
 frames = [360, 2619]
-# Measured: 0.01 a frame up to the jewel's press (the jewel scene, 4:39 at 1838 to object 0's fall, included), 0.89 for the jewel's question and item view (2039 to 2510, as in the item runs), 0.02 after; 0.20 in all. The windows hold the scene at 0.05, so a draw regression in it can't hide in the whole run's mean.
+# Measured: 0.01 a frame up to the jewel's press (the jewel scene, 4:39 at 1838 to object 0's fall, included), 0.89 for the jewel's question and item view (2039 to 2510, as in the item runs), 0.02 after; 0.20 in all. The windows hold the scene at 0.03 (the rest at 0.05), so a draw regression in it can't hide in the whole run's mean.
 frame_max_mean = 0.22
-frame_windows = [[360, 1837, 0.05], [1838, 2030, 0.05], [2031, 2038, 0.1], [2039, 2510, 0.95], [2511, 2619, 0.05]]
+frame_windows = [[360, 1837, 0.05], [1838, 2030, 0.03], [2031, 2038, 0.1], [2039, 2510, 0.95], [2511, 2619, 0.05]]
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,fgcom,om0,om1,om2,msg,inv"
 expect = "match"
 record = "--no-enemies --warp 10C:-21300:-3600:-10500:2048 --life 200"
