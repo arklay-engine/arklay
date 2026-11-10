@@ -132,6 +132,8 @@ pub struct Enemy {
     /// the rocket launcher, and its launcher damage is left `unknown`)
     /// (optional attribute; needs `open`).
     pub save: Option<i32>,
+    /// How a hit holds it (an optional `<react>` element): see [`React`].
+    pub react: Option<React>,
     /// A ranged attack the bot dodges ahead of time (an optional `<spit>`
     /// element): see [`Spit`].
     pub spit: Option<Spit>,
@@ -139,6 +141,19 @@ pub struct Enemy {
     /// `<kite>` element): see [`Kite`].
     pub kite: Option<Kite>,
     pub keeps: Vec<Keep>,
+}
+
+/// A monster's hit reaction (the hunter's: enemy/06 `behavior_dispatch` and
+/// `act_swipe`), which a shot timed to its end keeps it in: no hit lands
+/// during it, and its attack comes within ticks of its end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct React {
+    /// Ticks from the hit to the end of the reaction (`stun`).
+    pub stun: i32,
+    /// The `evade.0`th hit inside `evade.1` ticks of the first (counted to
+    /// the end of that hit's reaction) is followed by `evade.2` ticks out
+    /// of every aim (`hits`, `window`, `evade`: the hunter's sidestep).
+    pub evade: Option<(i32, i32, i32)>,
 }
 
 /// A spit the bot cannot react to once it flies (30C's Black Tiger: three
@@ -231,6 +246,9 @@ pub struct Weapon {
     pub headshot: Option<i32>,
     /// Beyond this distance a hit may do less damage.
     pub weak: Option<i32>,
+    /// Ticks from the fire press to the hit (optional attribute; a
+    /// projectile's flight has none).
+    pub lands: Option<i32>,
     /// Whether the aim direction must match the enemy's status bit.
     pub status_bit: bool,
     /// A hand weapon (the knife): no rounds, so it never runs dry, and it
@@ -504,6 +522,33 @@ fn parse_kite(node: Node<'_, '_>) -> Result<Kite> {
     Ok(kite)
 }
 
+fn parse_react(node: Node<'_, '_>) -> Result<React> {
+    check_attributes(node, &["stun", "hits", "window", "evade"])?;
+    check_leaf(node)?;
+    let stun: i32 = attr(node, "stun")?;
+    let parts = ["hits", "window", "evade"].map(|name| node.attribute(name).is_some());
+    let evade = if parts.contains(&true) {
+        if parts.contains(&false) {
+            bail!("{}: `hits`, `window` and `evade` go together", at(node));
+        }
+        Some((
+            attr(node, "hits")?,
+            attr(node, "window")?,
+            attr(node, "evade")?,
+        ))
+    } else {
+        None
+    };
+    if stun <= 0 || evade.is_some_and(|(hits, window, ticks)| hits < 1 || window <= 0 || ticks <= 0)
+    {
+        bail!(
+            "{}: needs stun > 0, hits >= 1, window > 0 and evade > 0",
+            at(node)
+        );
+    }
+    Ok(React { stun, evade })
+}
+
 fn parse_spit(node: Node<'_, '_>) -> Result<Spit> {
     check_attributes(
         node,
@@ -596,7 +641,15 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
     let mut keeps = Vec::new();
     let mut spit = None;
     let mut kite = None;
+    let mut react = None;
     for child in elements(node) {
+        if child.tag_name().name() == "react" {
+            if react.is_some() {
+                bail!("{}: one <react> per enemy", at(child));
+            }
+            react = Some(parse_react(child)?);
+            continue;
+        }
         if child.tag_name().name() == "kite" {
             if kite.is_some() {
                 bail!("{}: one <kite> per enemy", at(child));
@@ -693,6 +746,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         prefer,
         open,
         save,
+        react,
         spit,
         kite,
         keeps,
@@ -735,6 +789,7 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             "cadence",
             "headshot",
             "weak",
+            "lands",
             "status_bit",
             "melee",
             "staple",
@@ -751,6 +806,10 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
         cadence: distance(node, "cadence")?,
         headshot: distance(node, "headshot")?,
         weak: distance(node, "weak")?,
+        lands: match node.attribute("lands") {
+            Some(_) => distance(node, "lands")?,
+            None => None,
+        },
         status_bit: yes_no(node, "status_bit")?.unwrap_or(true),
         melee: match node.attribute("melee") {
             Some(_) => yes_no(node, "melee")? == Some(true),
@@ -804,6 +863,16 @@ impl Knowledge {
             row.set("open", enemy.open)?;
             row.set("head", enemy.head)?;
             row.set("save", enemy.save)?;
+            if let Some(react) = enemy.react {
+                let t = lua.create_table()?;
+                t.set("stun", react.stun)?;
+                if let Some((hits, window, ticks)) = react.evade {
+                    t.set("hits", hits)?;
+                    t.set("window", window)?;
+                    t.set("evade", ticks)?;
+                }
+                row.set("react", t)?;
+            }
             if let Some(spit) = enemy.spit {
                 row.set("spit_behavior", spit.behavior)?;
                 row.set("tell_behavior", spit.tell.0)?;
@@ -858,6 +927,7 @@ impl Knowledge {
             row.set("cadence", weapon.cadence)?;
             row.set("headshot", weapon.headshot)?;
             row.set("weak", weapon.weak)?;
+            row.set("lands", weapon.lands)?;
             row.set("status_bit", weapon.status_bit)?;
             row.set("melee", weapon.melee)?;
             row.set("staple", weapon.staple)?;
@@ -1065,6 +1135,68 @@ mod tests {
             .unwrap();
         let twice = text.replace("</enemy>", &format!("<kite{kite}/></enemy>"));
         assert!(parse(&twice).is_err());
+    }
+
+    #[test]
+    fn a_hit_reaction_and_a_shots_delay_are_optional() {
+        let text = r#"<knowledge format="1">
+            <weapon id="2" name="gun" near="650" side="1300" cadence="23" lands="6"
+                headshot="none" weak="none" status_bit="yes"/>
+            <enemy id="6" name="hunter" policy="fight" stand="torso" downed="none"
+                up="yes" reach="3000" grabs="yes" outrun="no" speed="240" health="111">
+                <react stun="20" hits="2" window="50" evade="10"/>
+                <keep weapon="2" min="1000" max="2000" damage="14"/>
+            </enemy>
+        </knowledge>"#;
+        let k = parse(text).unwrap();
+        assert_eq!(k.weapons[0].lands, Some(6));
+        assert_eq!(
+            k.enemies[0].react,
+            Some(React {
+                stun: 20,
+                evade: Some((2, 50, 10))
+            })
+        );
+        let plain = parse(
+            &text
+                .replace(r#" lands="6""#, "")
+                .replace(r#" hits="2" window="50" evade="10""#, ""),
+        )
+        .unwrap();
+        assert_eq!(plain.weapons[0].lands, None);
+        assert_eq!(
+            plain.enemies[0].react,
+            Some(React {
+                stun: 20,
+                evade: None
+            })
+        );
+        let none =
+            parse(&text.replace(r#"<react stun="20" hits="2" window="50" evade="10"/>"#, ""))
+                .unwrap();
+        assert_eq!(none.enemies[0].react, None);
+        // A part of the sidestep without the rest, a zero, a typo and two
+        // reactions all fail.
+        for (from, to) in [
+            (r#" window="50""#, ""),
+            (r#"stun="20""#, r#"stun="0""#),
+            (r#"hits="2""#, r#"hits="0""#),
+            (r#"evade="10""#, r#"evades="10""#),
+            ("<keep", r#"<react stun="20"/><keep"#),
+        ] {
+            assert!(parse(&text.replace(from, to)).is_err(), "{to}");
+        }
+        let lua = mlua::Lua::new();
+        let table = k.to_lua(&lua).unwrap();
+        lua.globals().set("k", table).unwrap();
+        let told: String = lua
+            .load(
+                "local r = k.enemies[6].react
+                 return r.stun .. ' ' .. r.hits .. ' ' .. r.window .. ' ' .. r.evade .. ' ' .. k.weapons[2].lands",
+            )
+            .eval()
+            .unwrap();
+        assert_eq!(told, "20 2 50 10 6");
     }
 
     #[test]

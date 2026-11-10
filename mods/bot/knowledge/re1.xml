@@ -50,15 +50,16 @@
        DEFAULT_RANGES slot 1 = 1300); the cone has no far limit. Cadence
        measured in the re1 bench: 23 ticks from a fire press to the weapon's
        return to the hold behaviour 0x13 (the bot's "cadence" log line, the
-       same in every room). -->
-  <weapon id="0x02" name="handgun" near="650" side="1300" cadence="23"
+       same in every room). lands: the hit shows on the target six ticks
+       after the press, for the shotgun too (the bot's trace, 10B and 308). -->
+  <weapon id="0x02" name="handgun" near="650" side="1300" cadence="23" lands="6"
           headshot="none" weak="none" status_bit="yes" staple="yes"/>
   <!-- Shotgun. near/side from the same test (slot 2 = 2600). headshot:
        zombie_reaction pops the head when displacement < 3000 with aim 0xC0
        (torso or up). weak: the shotgun post-hit gives 10 health back past
        9000. Cadence 37 ticks fire to fire (measured in 303, the bot's kite
        stops: the pump). -->
-  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="37"
+  <weapon id="0x03" name="shotgun" near="650" side="2600" cadence="37" lands="6"
           headshot="3000" weak="9000" status_bit="yes"/>
 
   <!-- Grenade launcher with explosive rounds (item 0x07, rounds 0x10:
@@ -192,10 +193,20 @@
        fired while the rounds the bosses need are left
        (BotTactics.saved_rounds); its band is the Tyrant's. The shotgun
        stays preferred: preferring the launcher sent the box loadout after
-       it from every stage and spent the bosses' rounds on hunters. -->
+       it from every stage and spent the bosses' rounds on hunters.
+       <react>: a hit holds it 20 ticks (state 2, act_swipe), in which no
+       other hit lands (the damage pipeline's hit_state gate); the tick after
+       it swipes when the player is inside 3000, and the claw lands six
+       ticks on. behavior_dispatch counts the hits and opens a 50-tick
+       window at the first: when a reaction ends with two counted inside
+       the window it sidesteps (behaviour 10: ten ticks with no aim bit)
+       and then swipes. So a shot pressed to land as the reaction ends
+       stops the swipe: the handgun's 23-tick cadence fits inside the 26
+       ticks from hit to claw, the shotgun's 37 does not. -->
   <enemy id="0x06" name="hunter" policy="fight" stand="torso" downed="none"
          up="yes" reach="3000" grabs="yes" outrun="unknown" speed="unknown" health="111"
          prefer="0x03">
+    <react stun="20" hits="2" window="50" evade="10"/>
     <keep weapon="0x02" min="3200" max="6000" damage="14"/>
     <keep weapon="0x03" min="1800" max="2800" damage="32"/>
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>

@@ -454,6 +454,16 @@ one is not held: any rounds it has go first (`BotTactics.pick_gun`), and
 the loadout takes it instead of a preferred weapon neither held nor boxed
 (303's Tyrant: four grenade hits bring it to the 200 health where Brad
 drops the rocket launcher). It needs a `<keep>` band.
+An optional `<react>` child gives a monster's hit reaction, for one whose
+attack comes within ticks of its end (the hunter): `stun` (ticks from a hit
+to the end of the reaction, in which no other hit lands) and, together and
+optional, `hits`, `window` and `evade` (after the `hits`th hit inside
+`window` ticks of the first it spends `evade` more ticks out of every aim:
+the hunter's sidestep). With the weapon's `lands` (ticks from the fire press
+to the hit) the bot presses fire while the reaction runs out, so the shot
+lands as it ends and stops the attack (`BotTactics.fire_early`); a gun
+without `lands` waits for the reaction to end, as before. No shot is fired
+at a target out of sight.
 An optional `<spit>` child marks a ranged attack that cannot be dodged
 once thrown (30C's Black Tiger): `behavior` (the spit's action behaviour),
 `tell` (`behaviour:state`, where the facing locks before a spit), `fan`
