@@ -1,0 +1,27 @@
+[[run]]
+name = "save_200_new"
+room = "200"
+# the save screen from room 200's typewriter: decide on "new file", the write, the label's reveal, the wait, the exit and the return (oracle/re2.md, "The save screen")
+setup_script = "typewriter_200_ribbon.lua"
+input = "save_200_new.txt"
+input_shift = 344
+ticks = 1100
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
+frames = [540, 1099]
+saves = true
+expect = { tick = 547, fields = ["sv"], note = "the save screen is RE 1's until the port of Mem_card and Card_access (#590): sv shows Cardaccess_init from 547, the first tick of the screen (docs/internals/deviations/re2.md, \"The typewriter\")" }
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "save_200_move"
+room = "200"
+# the save screen's cursor: down and up held wrap it every 4 ticks with the move cue, cancel leaves; a second Yes, then decide on "leave" (oracle/re2.md, "The save screen")
+setup_script = "typewriter_200_ribbon.lua"
+input = "save_200_move.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
+frames = [540, 1299]
+saves = true
+expect = { tick = 547, fields = ["sv"], note = "the save screen is RE 1's until the port of Mem_card and Card_access (#590): sv shows Cardaccess_init from 547, the first tick of the screen (docs/internals/deviations/re2.md, \"The typewriter\")" }
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

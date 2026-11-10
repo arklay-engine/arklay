@@ -136,6 +136,9 @@ pub struct TraceTick<'a> {
     /// RE2's game mode (`Game`), the oracle's `gm` (`gi`'s first value).
     /// arklay follows it only on the typewriter's path.
     pub re2_game_mode: Option<u8>,
+    /// RE2's save screen, the oracle's `sv` field: `-` while none runs
+    /// (`Mem_card` and `Card_access` aren't ported yet, so always `-`).
+    pub re2_save_screen: Option<String>,
     /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
     /// bytes) and the computer's state (`pc`, `-` without one).
     pub re2_computer: Option<String>,
@@ -370,6 +373,9 @@ impl TraceWriter {
         if let Some(mode) = tick.re2_game_mode {
             write!(self.out, " gm={mode}")?;
         }
+        if let Some(screen) = &tick.re2_save_screen {
+            write!(self.out, " sv={screen}")?;
+        }
         if let Some(fields) = &tick.re2_computer {
             write!(self.out, " {fields}")?;
         }
@@ -511,6 +517,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_save_screen: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -580,6 +587,7 @@ mod tests {
                 re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_save_screen: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -645,6 +653,7 @@ mod tests {
                 re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_save_screen: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -707,6 +716,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_save_screen: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -781,6 +791,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_save_screen: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -865,6 +876,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: Some("tw=4e9930,1,1".to_string()),
             re2_game_mode: Some(0),
+            re2_save_screen: Some("-".to_string()),
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -879,8 +891,9 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let lines: Vec<&str> = text.lines().collect();
         assert!(
-            lines[1]
-                .ends_with(" ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 snd=-")
+            lines[1].ends_with(
+                " ib=1 box=- msg=81 fgkey=0000000000000000 tw=4e9930,1,1 gm=0 sv=- snd=-"
+            )
         );
     }
 
@@ -928,6 +941,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_save_screen: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,

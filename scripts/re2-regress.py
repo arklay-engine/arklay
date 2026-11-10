@@ -839,6 +839,15 @@ def record_run(run: dict, args, refs: Path) -> int:
         command.append("--boot")
     if run.get("frames"):
         command += ["--shot-dir", str(dest / "frames"), "--shot-every", "1"]
+    # The save screen lists the save folder: it starts empty, or with another reference's saves.
+    if run.get("saves_from"):
+        source = refs / run["saves_from"] / "saves"
+        if not source.is_dir():
+            print(f"{name}: saves_from needs {source} (record {run['saves_from']} first)")
+            return 1
+        command += ["--saves", str(source)]
+    if run.get("saves"):
+        command += ["--keep-saves", str(dest / "saves")]
     command += choice_args(run) + shlex.split(run["record"])
     if not args.dry_run:
         dest.mkdir(parents=True, exist_ok=True)
@@ -864,6 +873,9 @@ def record_run(run: dict, args, refs: Path) -> int:
         f"trace_md5: {hashlib.md5(trace.read_bytes()).hexdigest()}",
         "command: " + " ".join(shlex.quote(part) for part in shown),
     ]
+    if run.get("saves"):
+        saves = sorted((dest / "saves").glob("*")) if (dest / "saves").is_dir() else []
+        meta += [f"save: {path.name} {hashlib.sha256(path.read_bytes()).hexdigest()}" for path in saves] or ["save: none"]
     (dest / "meta.txt").write_text("\n".join(meta) + "\n")
     print(f"{name}: recorded into {dest}")
     return 0

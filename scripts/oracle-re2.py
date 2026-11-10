@@ -264,10 +264,35 @@ def parse_input(path: Path | None) -> list[tuple[int, int]]:
     return sorted(entries, key=lambda entry: entry[0])
 
 
+# `--saves DIR`: the save folder a record starts with (the game's `savedata/`); empty without it.
+SAVES_FROM: Path | None = None
+
+
+def prepare_saves(tree: Path) -> None:
+    """Empty the game's save folder, or fill it from `--saves`: the save screen lists what is there, so a
+    record must not depend on the saves an earlier one left."""
+    saves = tree / "savedata"
+    if saves.exists():
+        shutil.rmtree(saves)
+    saves.mkdir(parents=True)
+    if SAVES_FROM is not None:
+        for source in sorted(SAVES_FROM.iterdir()):
+            if source.is_file():
+                shutil.copy2(source, saves / source.name)
+
+
+def keep_saves(tree: Path, dest: Path) -> None:
+    """Copy the save folder a record left to `--keep-saves`, with the files' times."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for source in sorted((tree / "savedata").iterdir()):
+        if source.is_file():
+            shutil.copy2(source, dest / source.name)
+
+
 def prepare_game(game: Path, work: Path, sound: bool = False) -> Path:
     """A writable copy of the install's settings, with links to its read-only data."""
     tree = work / "game"
-    (tree / "savedata").mkdir(parents=True, exist_ok=True)
+    prepare_saves(tree)
     for name in ("bio2 1.10.exe", "ddraw.dll", "data"):
         link = tree / name
         if link.is_symlink() or link.exists():
@@ -283,7 +308,7 @@ def prepare_game_windows(game: Path, work: Path, sound: bool = False) -> Path:
     A symbolic link needs a privilege on Windows, so the executable and Classic Rebirth's
     DLL are copied (they are small) and `data` is a junction to the install's."""
     tree = work / "game"
-    (tree / "savedata").mkdir(parents=True, exist_ok=True)
+    prepare_saves(tree)
     for name in ("bio2 1.10.exe", "ddraw.dll"):
         source, copy = game / name, tree / name
         if not copy.exists() or copy.read_bytes() != source.read_bytes():
@@ -869,6 +894,18 @@ ITEM_BOX_ENTRANCE = 0x98E542  # `Item_box_entrance`'s state; its object at 0x98E
 ITEM_BOX_OBJECT = 0x98E533
 BACK_ROUTINE = 0x98E794  # slot 2 of the back routines (`pG+0x82B4`), which `Game_loop` runs after `Sce_at`
 SAVE_PLACE = 0x98E9A7  # the save place `Sce_Save` copies from its area
+# The save screen (`Mem_card` 0x4C57E0, `Card_access` 0x4C58A0), task 1 of `TASKS` while it runs.
+TASK_1 = TASKS + 0x24  # its routine at +4, `Mem_card`'s step at +8, `Card_access`'s at +9, `Cardaccess_init`'s or `_exit`'s at +10
+MEM_CARD = 0x4C57E0
+CARD_STATE = 0x689A9C  # the mode in the low byte (0 save, 1 load), the state in the high byte
+CARD_CURSOR = 0x9864B4  # `Cursor`, the row under the bar
+CARD_TOP = 0x986390  # the list's first row shown
+CARD_ROWS = 0x986394  # the rows shown
+CARD_TIMER = 0x986388  # the move's and the reveal's timer
+CARD_CHOICE = 0x98638C  # the overwrite's choice
+CARD_TYPED = 0x689AA4  # the reveal's typed count
+CARD_SAVES = 0x663188  # `cnt0`: the folder's saves
+SAVE_COUNT = 0x98E9BC  # the low word: the saves made
 ITEM_BOX_LID = 0x689C90  # the lid's speed and its step (`0x689C98`)
 OBJECTS = 0x98A61C  # `pOm`: 0x1F8 bytes an object, the lid's turn at +0x78
 ITEM_BOX_PAGE = [0x691F61, 0x691F62, 0x691F63, 0x691F6C, 0x691F76, 0x691F84]
@@ -935,6 +972,25 @@ def map_flags_trace(game: Game) -> str:
 COMPUTER_TASK = 0x68A244  # task 1: +2 its sleep count, +4 its function, +8..+0xA R0..R2
 COMPUTER_WINDOWS = 0x4D1F50  # `Windows`, the function task 1 runs in game mode 7
 COMPUTER_WORK = 0x9800A0  # `pCom_work`: +0 col, +1 row, +0x2DC the frame's step
+
+
+def save_screen_trace(game: Game) -> str:
+    """The save screen while `Mem_card` runs (`sv=-` otherwise): `Card_access`'s step, init's or exit's step,
+    the state, the mode, the cursor, the top row, the rows, the timer, the choice, the typed count, the
+    folder's saves and the saves made."""
+    if game.u32(TASK_1 + 4) != MEM_CARD:
+        return "sv=-"
+    task = game.read(TASK_1, 0x14)
+    state = game.u32(CARD_STATE)
+    cursor, = game.i32s(CARD_CURSOR, 1)
+    top, rows = game.i32s(CARD_TOP, 2)
+    timer, = game.i32s(CARD_TIMER, 1)
+    typed, = game.i32s(CARD_TYPED, 1)
+    saves, = game.i32s(CARD_SAVES, 1)
+    return (
+        f"sv={task[9]},{task[10]},{state >> 24:x},{state & 0xFF},{cursor},{top},{rows},{timer},"
+        f"{game.u8(CARD_CHOICE)},{typed},{saves},{game.u16(SAVE_COUNT)}"
+    )
 
 
 def computer_trace(game: Game) -> str:
@@ -1064,6 +1120,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
     # Slot 2's back routine (`Sce_Save_backfunc` 0x4E9930 or `Item_box_entrance` 0x4E9A20), its state and the save place.
     fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
+    fields.append(save_screen_trace(game))
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
     fields.append(objects_trace(game))
@@ -1424,7 +1481,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
     sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     # A prefix keeps the audio driver it was made with.
-    session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
+    work = work.with_name(work.name + "-sound") if args.sound else work
+    session = Session(game_root(args), work, sound_out)
     session.wants_pictures = bool(args.shot_dir and args.shot_every)
     # Newlines as on Linux, so that the files are the same byte for byte.
     music_log = open(trace_path.with_suffix(".music"), "w", newline="\n") if args.sound else None
@@ -1550,6 +1608,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
     finally:
         session.close()
+    if args.keep_saves:
+        keep_saves(work / "game", Path(args.keep_saves))
 
 
 def read_pace(path: Path) -> dict[int, float]:
@@ -1869,6 +1929,10 @@ def main() -> int:
             help="set the player's life when play begins",
         )
         command.add_argument(
+            "--saves", default=None, metavar="DIR",
+            help="start with these files in the game's save folder (else it is empty)",
+        )
+        command.add_argument(
             "--pace", default=None, metavar="TICKS_LOG",
             help="with --sound, reach each tick no sooner than the recording whose .ticks log this is did",
         )
@@ -1881,6 +1945,10 @@ def main() -> int:
     command.add_argument(
         "--boot", action="store_true",
         help="trace from boot, the title included: --input's ticks count from boot, and no title route is played",
+    )
+    command.add_argument(
+        "--keep-saves", default=None, metavar="DIR",
+        help="copy the save folder the game left to DIR when the record ends",
     )
     command.set_defaults(func=record_command)
 
@@ -1935,6 +2003,9 @@ def main() -> int:
     for name in ("SIGTERM", "SIGHUP"):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), stop)
+    global SAVES_FROM
+    if getattr(args, "saves", None):
+        SAVES_FROM = Path(args.saves).resolve()
     for setting in getattr(args, "config", []):
         key, _, value = setting.partition("=")
         CONFIG_OVERRIDES[key.strip()] = value.strip()
